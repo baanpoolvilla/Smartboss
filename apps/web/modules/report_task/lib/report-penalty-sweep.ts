@@ -22,6 +22,7 @@ import type {
 } from "@/modules/report_task/store/report-feed-store";
 import type { ReportSubmissionLockSettings } from "@/modules/report_task/store/reminder-settings-store";
 import { graceEndWithinPeriod, type ScorePeriodConfig } from "@/lib/score-period";
+import { hasRetroSubmission } from "@/modules/report_task/lib/report-retro";
 
 /**
  * เฟส 2 ของ docs/spec-report-submission-rounds.md — sweep ที่ทำให้ "พลาดส่ง /
@@ -209,6 +210,8 @@ export function roundComplianceStatusServer(
     (r) => roundRunsOnDay(r, day) && resolveRoundSubmittersServer(r, topic.visibility, groups, users).includes(userId)
   );
   const roundPosts = postsForRoundServer(topic, userId, round, day, posts, attributionRounds(myRounds, rounds));
+  // ส่งย้อนหลังหลัง CEO อนุมัติ (report-retro.ts — โพสต์ผ่านการตรวจใน acceptRetroPosts แล้ว) — นับว่าส่งแล้ว
+  if (roundPosts.length === 0 && hasRetroSubmission(posts, topic.id, userId, round.id, day)) return "on-time";
   if (legacyOnly && roundPosts.length === 0) return "exempt";
   if (roundPosts.length > 0) {
     const onTime = roundPosts.some((p) => minutesOfDay(p.createdAt) <= cutoff || p.lateBadgeHidden);

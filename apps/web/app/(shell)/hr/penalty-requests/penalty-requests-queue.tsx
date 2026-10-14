@@ -18,7 +18,26 @@ interface PenaltyRequestItem {
   createdAt: string;
   decidedAt?: string;
   decidedBy?: string;
+  /** ขอส่งย้อนหลังที่อนุมัติแล้ว รอคนนั้นส่งรีพอต (คืนคะแนนเมื่อส่ง) */
+  awaitingPost?: boolean;
+  fulfilledAt?: string;
+  retroDeadline?: string;
   userName: string;
+}
+
+const fmtShort = new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
+/** สถานะหลังตัดสิน — ขอส่งย้อนหลังที่อนุมัติแล้วแยก "รอส่ง" / "ส่งแล้ว" */
+function decidedLabel(item: PenaltyRequestItem): { text: string; color: string } {
+  if (item.status !== "approved") return { text: "✕ ไม่อนุมัติ", color: "#B42318" };
+  if (!item.awaitingPost) return { text: "✓ อนุมัติแล้ว", color: "#15803D" };
+  if (item.fulfilledAt) return { text: `✓ ส่งย้อนหลังแล้ว ${fmtShort.format(new Date(item.fulfilledAt))} · คืนคะแนน`, color: "#15803D" };
+  const deadline = item.retroDeadline ? new Date(item.retroDeadline) : null;
+  if (deadline && new Date() >= deadline) return { text: "✕ ไม่ส่งภายในกำหนด · ยังโดนหัก", color: "#B42318" };
+  return {
+    text: `⏳ อนุมัติแล้ว · รอส่งรีพอต${deadline ? ` (ถึง ${fmtShort.format(new Date(deadline.getTime() - 60_000))})` : ""}`,
+    color: "#B54708",
+  };
 }
 
 const TYPE_LABEL: Record<PenaltyRequestItem["type"], string> = {
@@ -122,7 +141,7 @@ export function PenaltyRequestsQueue() {
                     onClick={() => decide(item.id, "approved")}
                     className="rounded-lg bg-[#16A34A] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#15803D] disabled:opacity-50"
                   >
-                    อนุมัติ — คืนคะแนน
+                    {item.type === "retroactive" ? "อนุมัติ — ให้ส่งย้อนหลัง" : "อนุมัติ — คืนคะแนน"}
                   </button>
                 </div>
               </div>
@@ -145,9 +164,9 @@ export function PenaltyRequestsQueue() {
                 </div>
                 <span
                   className="text-xs font-semibold whitespace-nowrap"
-                  style={{ color: item.status === "approved" ? "#15803D" : "#B42318" }}
+                  style={{ color: decidedLabel(item).color }}
                 >
-                  {item.status === "approved" ? "✓ อนุมัติแล้ว" : "✕ ไม่อนุมัติ"}
+                  {decidedLabel(item).text}
                 </span>
               </div>
             ))}

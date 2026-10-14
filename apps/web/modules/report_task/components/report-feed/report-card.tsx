@@ -1116,7 +1116,12 @@ export function ReportCard({
   // ป้ายรอบส่ง (ตรงเวลา/ส่งเกินกำหนด/ไม่นับ/หยุด-ลา) — คอมวางต่อท้ายแถวชื่อ·แผนก·เวลา
   // มือถือย้ายไปมุมขวาล่างแถวเดียวกับ "ตอบกลับ": ชื่อ+แผนก+เวลา+ป้ายรวมกัน ~340px
   // แต่จอมือถือเหลือที่ ~300px ล้น ส่วนแถว "ตอบกลับ" มีที่ว่างฝั่งขวาอยู่แล้ว
-  const roundBadge = post.excludeFromSubmission ? (
+  const roundBadge = post.retroFor ? (
+      // ส่งย้อนหลังหลัง CEO อนุมัติ (report-retro.ts) — นับเป็นรีพอตของวันที่ลืม ไม่ใช่วันที่โพสต์
+      <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0 text-[10px] leading-4 font-medium bg-violet-50 text-violet-700 border border-violet-200">
+        ส่งย้อนหลัง · รีพอตวันที่ {post.retroFor.day} · CEO อนุมัติ
+      </span>
+    ) : post.excludeFromSubmission ? (
       // Visible marker so "why is there no ตรงเวลา/สาย badge
       // here" has an obvious answer — the poster opted this one
       // out on purpose.

@@ -184,6 +184,13 @@ export interface ReportPost extends ReportPostFields {
    * scoring purposes. undefined/false for every normal post. */
   excludeFromSubmission?: boolean;
   /**
+   * รีพอตส่งย้อนหลังของวันที่ลืม หลัง CEO อนุมัติคำร้อง "ขอส่งย้อนหลัง" (report-retro.ts) — ส่งผ่านปุ่ม
+   * "ส่งย้อนหลัง" ในห้องเท่านั้น · คู่กับ excludeFromSubmission = true (ไม่นับเป็นรีพอตของวันที่โพสต์)
+   * แต่นับเป็นรีพอตของ `day`/`roundId` · ตัวหักคะแนนเชื่อเฉพาะโพสต์ที่ตรงกับคำร้องที่อนุมัติจริงและส่งก่อน
+   * 23:59 วันตัดรอบเกรด (acceptRetroPosts)
+   */
+  retroFor?: { requestId: string; day: string; roundId: string };
+  /**
    * Owner-only override that suppresses the ตรงเวลา/สาย badge on a post
    * that's genuinely a legitimate submission but got wrongly branded "ส่งช้า"
    * — typically an old post from before `roundTimeAtSubmission` existed,
@@ -558,7 +565,11 @@ interface ReportFeedStore {
   /** Per-viewer notification preference for one room — same "map keyed by
    * userId" pattern as toggleHiddenTopic/toggleFavoriteTopic. */
   setNotifyPreference: (topicId: string, userId: string, pref: "all" | "mentions" | "off") => void;
-  addPost: (topicId: string, authorId: string, data: ReportPostFields & { roundId?: string; roundTimeAtSubmission?: string; excludeFromSubmission?: boolean }) => void;
+  addPost: (
+    topicId: string,
+    authorId: string,
+    data: ReportPostFields & { roundId?: string; roundTimeAtSubmission?: string; excludeFromSubmission?: boolean; retroFor?: ReportPost["retroFor"] }
+  ) => void;
   editPost: (postId: string, data: ReportPostFields & { roundId?: string; excludeFromSubmission?: boolean }) => void;
   removePost: (id: string) => void;
   /** Records which Task a post was opened/converted into (see report-card.tsx's "เปิดเป็นงาน"). */

@@ -15,6 +15,8 @@ import type { RoutineDayOffRule } from "@/modules/report_task/store/routine-dayo
 import { defaultReminderSettings, type ReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
 import type { CalendarEvent } from "@/modules/report_task/types";
 import { claimSweep, releaseSweep } from "@/modules/report_task/lib/server/sweep-throttle";
+import { acceptRetroPosts, listPenaltyRequests, markRetroFulfilled } from "@/modules/report_task/lib/db/report-penalty-requests";
+import { writeOwnNotificationsForUsers } from "@/modules/report_task/lib/server/retro-notify";
 
 /**
  * หักคะแนน HR เมื่อพลาด/ส่งช้ารอบส่งรายงาน (category `report_missed`/`report_late`)
@@ -145,7 +147,9 @@ export async function runReportPenaltySweep(orgId: string, actorId: string | nul
   const reconcileFloorDay = localDateStr(new Date(Date.now() - REPORT_PENALTY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000));
 
   const topics = reportFeed?.topics ?? [];
-  const posts = reportFeed?.posts ?? [];
+  // ส่งย้อนหลังที่ CEO อนุมัติ (report-retro.ts) — เชื่อเฉพาะโพสต์ที่ตรงกับคำร้องจริง ส่งก่อนรอบเกรดของวันนั้นปิด
+  const scorePeriod = await loadScorePeriodConfig(orgId);
+  const { posts, retroRefIds, newlyFulfilled } = acceptRetroPosts(reportFeed?.posts ?? [], await listPenaltyRequests(orgId), scorePeriod);
   const groups = reportFeed?.submitterGroups ?? [];
   if (topics.length === 0 || users.length === 0) {
     return Response.json({ ok: true, changed: false });
@@ -176,7 +180,7 @@ export async function runReportPenaltySweep(orgId: string, actorId: string | nul
     // ตัดสินทั้งช่วง lookback เพื่อใช้ "คืน" — การหักใหม่ยังกรองด้วย notBeforeDay ในลูปข้างล่าง
     reconcileFloorDay < notBeforeDay ? reconcileFloorDay : notBeforeDay,
     // ส่งย้อนหลังได้ไม่เลย 23:59 ของวันตัดรอบเกรด — ไม่ส่ง = −2 ทันนับในรอบนั้น
-    await loadScorePeriodConfig(orgId)
+    scorePeriod
   );
 
   // "สถานะที่ควร active อยู่ตอนนี้" ต่อ refId — มาจาก candidates (พลาด/สาย)
@@ -272,8 +276,9 @@ export async function runReportPenaltySweep(orgId: string, actorId: string | nul
           occurredAt: original.occurredAt,
           refType: "report_round_undo",
           refId,
-          note:
-            targetCategory === null
+          note: retroRefIds.has(refId) && targetCategory === null
+            ? "คืนคะแนน: ส่งรีพอตย้อนหลังแล้ว (CEO อนุมัติคำร้อง)"
+            : targetCategory === null
               ? "ยกเลิก: วันนั้นมีวันลา/หยุด/ไม่ต้องส่งแล้ว"
               : "ยกเลิก: มีบันทึกคะแนนซ้ำสองสถานะสำหรับรอบเดียวกัน คืนคะแนนของฝั่งที่ไม่ตรงกับสถานะปัจจุบัน",
         });
@@ -343,6 +348,20 @@ export async function runReportPenaltySweep(orgId: string, actorId: string | nul
     const recorded = await tx.performanceEvent.createMany({ data: rows, skipDuplicates: true });
     return { changed: recorded.count > 0, performanceEvents: recorded.count };
   });
+
+  // คำร้องส่งย้อนหลังที่เพิ่งส่งรีพอต — บันทึกว่าส่งแล้ว (คิวคำร้อง) + แจ้งเจ้าตัวว่าได้คะแนนคืน
+  if (!dryRun && newlyFulfilled.length > 0) {
+    const done = await markRetroFulfilled(orgId, newlyFulfilled);
+    await writeOwnNotificationsForUsers(
+      orgId,
+      done.map((r) => ({
+        id: `notif-retro-fulfilled-${r.id}`,
+        userId: r.userId,
+        message: `ส่งรีพอตย้อนหลังของวันที่ ${r.day} แล้ว — คืนคะแนน ${Math.abs(r.points)} ให้แล้ว`,
+        link: "/hr/my-score",
+      }))
+    );
+  }
 
   return Response.json({ ok: true, ...result });
 }

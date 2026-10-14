@@ -1,4 +1,6 @@
 import { requireOrg, hasPermission, hasRole, isSuperAdmin } from "@smartboss/auth";
+import { retroSubmitDeadline } from "@/modules/report_task/lib/penalty-request-window";
+import { loadScorePeriodConfig } from "@/lib/score-period-config";
 
 import { ADMIN_PERMS } from "@/modules/admin/permissions";
 import { readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
@@ -34,7 +36,13 @@ export async function GET(request: Request) {
   const [all, users] = await Promise.all([listPenaltyRequests(session.orgId), listDirectory(session.orgId)]);
   const nameById = new Map(users.map((u) => [u.id, u.name] as const));
   const scoped = canSeeAll ? all : all.filter((r) => r.userId === session.userId || r.submittedBy === session.userId);
-  const items = scoped.map((r) => ({ ...r, userName: nameById.get(r.userId) ?? r.userId }));
+  const period = await loadScorePeriodConfig(session.orgId);
+  // ส่งย้อนหลังได้ถึงเมื่อไหร่ (ปุ่ม "ส่งย้อนหลัง" ในห้องรีพอต — retro-submit-banner.tsx)
+  const items = scoped.map((r) => ({
+    ...r,
+    userName: nameById.get(r.userId) ?? r.userId,
+    retroDeadline: retroSubmitDeadline(r.day, period).toISOString(),
+  }));
   return Response.json({ items });
 }
 

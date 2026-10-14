@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { TopicSidebar, TopicLogo, ALL_TOPICS_ID, PENDING_ID, MENTIONS_ID } from "@/modules/report_task/components/report-feed/topic-sidebar";
 import { ReportComposer } from "@/modules/report_task/components/report-feed/report-composer";
+import { RetroSubmitBanner } from "@/modules/report_task/components/report-feed/retro-submit-banner";
 import { mergedReportRoomFrequency, topicReportFrequency } from "@/modules/report_task/lib/report-frequency";
 import { ReportFeed } from "@/modules/report_task/components/report-feed/report-feed";
 import { OpenchatFeed } from "@/modules/report_task/components/report-feed/openchat-feed";
@@ -1560,6 +1561,7 @@ function ReportFeedPageInner() {
                           The key forces a fresh mount — and a fresh read —
                           whenever the resolved room id actually changes,
                           including this fallback-to-real handoff. */}
+                      <RetroSubmitBanner topic={activeTopic} />
                       <ReportComposer key={activeTopic.id} topic={activeTopic} />
                     </>
                   )}

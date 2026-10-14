@@ -3,6 +3,8 @@ import { requireOrg, hasRole, isSuperAdmin } from "@smartboss/auth";
 import { readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
 import { decidePenaltyRequest } from "@/modules/report_task/lib/db/report-penalty-requests";
 import type { AppNotification } from "@/modules/report_task/store/notification-store";
+import { retroSubmitDeadline } from "@/modules/report_task/lib/penalty-request-window";
+import { loadScorePeriodConfig } from "@/lib/score-period-config";
 
 /**
  * อนุมัติ/ไม่อนุมัติคำร้องขอแก้ไขคะแนน — **CEO เท่านั้น** (ยืนยันจากผู้ใช้ตรง ๆ
@@ -29,17 +31,30 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (result.error !== null) return Response.json({ error: result.error }, { status: 400 });
 
   const { data: existing, version } = await readStore<AppNotification[]>(session.orgId, NOTIFICATIONS_KEY);
+  const r = result.request;
+  const deadline = r.awaitingPost
+    ? retroSubmitDeadline(r.day, await loadScorePeriodConfig(session.orgId)).getTime() - 60_000
+    : 0;
+  const deadlineText = new Intl.DateTimeFormat("th-TH", {
+    timeZone: "Asia/Bangkok",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(deadline));
   const message =
-    body.decision === "approved"
-      ? `คำร้องขอแก้ไขคะแนนของคุณได้รับการอนุมัติแล้ว — คืนคะแนนให้แล้ว`
-      : `คำร้องขอแก้ไขคะแนนของคุณไม่ได้รับการอนุมัติ`;
+    body.decision !== "approved"
+      ? `คำร้องขอแก้ไขคะแนนของคุณไม่ได้รับการอนุมัติ`
+      : r.awaitingPost
+        ? `อนุมัติให้ส่งรีพอตย้อนหลังแล้ว (รีพอตวันที่ ${r.day}) — กดปุ่ม "ส่งย้อนหลัง" ในห้องรีพอต ภายใน ${deadlineText} ส่งแล้วถึงได้คะแนนคืน`
+        : `คำร้องขอแก้ไขคะแนนของคุณได้รับการอนุมัติแล้ว — คืนคะแนนให้แล้ว`;
   const fresh: AppNotification[] = [
     {
       id: `notif-penalty-decided-${result.request.id}`,
       userId: result.request.userId,
       byUserId: session.userId,
       message,
-      link: "/hr/employees?tab=score",
+      link: r.awaitingPost ? `/chat-report/report-feed?topic=${r.topicId}` : "/hr/employees?tab=score",
       createdAt: new Date().toISOString(),
       read: false,
     },

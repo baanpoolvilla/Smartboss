@@ -2,7 +2,9 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@smartboss/database";
 import { readStore, writeStore } from "./org-store";
-import { penaltyRequestOpen } from "../penalty-request-window";
+import { penaltyRequestOpen, retroSubmitDeadline } from "../penalty-request-window";
+import type { ScorePeriodConfig } from "@/lib/score-period";
+import type { ReportPost } from "@/modules/report_task/store/report-feed-store";
 import { loadScorePeriodConfig } from "@/lib/score-period-config";
 
 /**
@@ -45,6 +47,15 @@ export interface PenaltyRequest {
   createdAt: string;
   decidedAt?: string;
   decidedBy?: string;
+  /**
+   * "ขอส่งย้อนหลัง" ที่อนุมัติแล้ว (ตั้งแต่ 2026-10-14): ยังไม่คืนคะแนน รอให้คนนั้นส่งรีพอตผ่านปุ่ม "ส่งย้อนหลัง"
+   * ก่อน 23:59 วันตัดรอบ (retroSubmitDeadline) — ส่งแล้วตัวหักคะแนนคืนให้เอง (acceptRetroPosts)
+   * คำร้องเก่าที่อนุมัติก่อนหน้านี้ไม่มีฟิลด์นี้ = คืนไปแล้วตอนอนุมัติ
+   */
+  awaitingPost?: boolean;
+  /** ส่งรีพอตย้อนหลังแล้วเมื่อไหร่ / โพสต์ไหน — ตัวหักคะแนนบันทึกตอนเห็นโพสต์ */
+  fulfilledAt?: string;
+  fulfilledPostId?: string;
 }
 
 const KEY = "report-penalty-requests";
@@ -160,11 +171,14 @@ export async function decidePenaltyRequest(
       return { error: "รอบเกรดของวันนั้นปิดแล้ว (23:59 ของวันตัดรอบ) — อนุมัติคืนคะแนนไม่ได้แล้ว กดไม่อนุมัติเพื่อปิดคำร้อง" };
     }
 
+    // ขอส่งย้อนหลัง: อนุมัติ = ให้ไปส่งรีพอต ยังไม่คืนคะแนน ("อนุมัติแล้วให้คนนั้นไปส่งรีพอต")
+    const awaitsPost = decision === "approved" && found.type === "retroactive";
     const updated: PenaltyRequest = {
       ...found,
       status: decision,
       decidedAt: new Date().toISOString(),
       decidedBy,
+      ...(awaitsPost ? { awaitingPost: true } : {}),
     };
     const next = [...list];
     next[idx] = updated;
@@ -172,7 +186,7 @@ export async function decidePenaltyRequest(
     const result = await writeStore(orgId, KEY, next, version, decidedBy);
     if (!result.ok) continue; // ชนกับคนอื่น — อ่านใหม่แล้วลองอีกรอบ
 
-    if (decision === "approved") {
+    if (decision === "approved" && !awaitsPost) {
       // คืนคะแนนลงวันเดียวกับที่หักไป (ดู reports/sweep) — ไม่งั้นอนุมัติเดือนถัดไปแล้ว
       // เดือนที่โดนหักยังติดลบ ส่วนเดือนนี้ได้ +คะแนนลอย ๆ
       const original = await prisma.performanceEvent.findFirst({
@@ -213,4 +227,59 @@ export async function listCeoUserIds(orgId: string): Promise<string[]> {
     select: { id: true },
   });
   return users.map((u) => u.id);
+}
+
+/**
+ * โพสต์ส่งย้อนหลัง (ReportPost.retroFor) ที่เชื่อได้ — ตรงกับคำร้อง "ขอส่งย้อนหลัง" ที่ CEO อนุมัติ (คน/ห้อง/รอบ/วันตรงกัน)
+ * และส่งก่อน 23:59 วันตัดรอบเกรดของวันนั้น · โพสต์อื่นที่มี retroFor ถูกตัดฟิลด์นี้ทิ้ง (โพสต์ store ฝั่ง client เขียนเองได้)
+ * คืน posts ชุดที่กรองแล้วให้ตัวหักคะแนนใช้ + refId ของรอบที่ส่งย้อนหลังแล้ว + คำร้องที่เพิ่งส่ง (ยังไม่ได้บันทึกว่าส่งแล้ว)
+ */
+export function acceptRetroPosts(posts: ReportPost[], requests: PenaltyRequest[], period: ScorePeriodConfig) {
+  const byId = new Map(requests.map((r) => [r.id, r] as const));
+  const retroRefIds = new Set<string>();
+  const newlyFulfilled: { request: PenaltyRequest; postId: string }[] = [];
+  const accepted = posts.map((p) => {
+    if (!p.retroFor) return p;
+    const r = byId.get(p.retroFor.requestId);
+    const ok =
+      !!r &&
+      r.type === "retroactive" &&
+      r.status === "approved" &&
+      r.awaitingPost === true &&
+      r.userId === p.authorId &&
+      r.topicId === p.topicId &&
+      r.day === p.retroFor.day &&
+      r.roundId === p.retroFor.roundId &&
+      new Date(p.createdAt).getTime() < retroSubmitDeadline(r.day, period).getTime();
+    if (!ok || !r) return { ...p, retroFor: undefined };
+    retroRefIds.add(r.refId);
+    if (!r.fulfilledAt && !newlyFulfilled.some((f) => f.request.id === r.id)) newlyFulfilled.push({ request: r, postId: p.id });
+    return p;
+  });
+  return { posts: accepted, retroRefIds, newlyFulfilled };
+}
+
+/** บันทึกว่าคำร้องส่งย้อนหลังแล้ว (คิวคำร้องขึ้น "ส่งแล้ว") — คืนรายการที่บันทึกจริง */
+export async function markRetroFulfilled(
+  orgId: string,
+  items: { request: PenaltyRequest; postId: string }[]
+): Promise<PenaltyRequest[]> {
+  if (items.length === 0) return [];
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const { data: existing, version } = await readStore<PenaltyRequest[]>(orgId, KEY);
+    const list = existing ?? [];
+    const at = new Date().toISOString();
+    const done: PenaltyRequest[] = [];
+    const next = list.map((r) => {
+      const hit = items.find((i) => i.request.id === r.id);
+      if (!hit || r.fulfilledAt) return r;
+      const u = { ...r, fulfilledAt: at, fulfilledPostId: hit.postId };
+      done.push(u);
+      return u;
+    });
+    if (done.length === 0) return [];
+    const result = await writeStore(orgId, KEY, next, version);
+    if (result.ok) return done;
+  }
+  return [];
 }

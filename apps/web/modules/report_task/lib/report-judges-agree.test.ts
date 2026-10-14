@@ -41,6 +41,8 @@ const posts: ReportPost[] = [
   post("p1", "daily", "2026-09-25T09:03:00", "m"), // Morning สาย 3 นาที
   post("p2", "daily", "2026-09-25T17:05:00", "e"), // Evening ตรงเวลา
   post("p3", "weekly", "2026-09-27T08:37:00"), // Weekly ของ 25/09 ส่งตามหลัง 2 วัน (เผื่อเวลา 3 วัน)
+  // ส่งย้อนหลังรอบ Evening ของ 26/09 หลัง CEO อนุมัติ (report-retro.ts) — ไม่นับเป็นรีพอตของ 27/09
+  { ...post("p4", "daily", "2026-09-27T10:00:00"), excludeFromSubmission: true, retroFor: { requestId: "rq1", day: "2026-09-26", roundId: "e" } },
 ];
 
 const leaves: CalendarEvent[] = [
@@ -65,6 +67,8 @@ const cases: [string, ReportTopic, string, string, string][] = [
   ["25/09 Morning ส่ง 09:03", daily, "m", "2026-09-25", "late"],
   ["25/09 Evening ส่ง 17:05", daily, "e", "2026-09-25", "on-time"],
   ["26/09 Morning ไม่ส่ง", daily, "m", "2026-09-26", "missed"],
+  ["26/09 Evening ส่งย้อนหลัง (CEO อนุมัติ)", daily, "e", "2026-09-26", "on-time"],
+  ["27/09 Morning โพสต์ส่งย้อนหลังไม่นับเป็นของวันนี้", daily, "m", "2026-09-27", "missed"],
   ["22/09 Day-Off", daily, "m", "2026-09-22", "exempt"],
   ["24/09 WFH ไม่ส่ง (ยังต้องส่งรายงาน)", daily, "e", "2026-09-24", "missed"],
   ["21/09 วันหยุดบริษัท", daily, "m", "2026-09-21", "exempt"],

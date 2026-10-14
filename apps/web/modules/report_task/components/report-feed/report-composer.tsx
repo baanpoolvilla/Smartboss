@@ -21,6 +21,7 @@ import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
 import { Check, Clock, Lock, Maximize2, Minimize2, Send, SquarePen, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { uuid } from "@/modules/report_task/lib/uuid";
+import { useRetroSubmitStore } from "@/modules/report_task/store/retro-submit-store";
 
 function roundMinutesOf(time: string): number {
   const [h, m] = time.split(":").map(Number) as [number, number];
@@ -89,6 +90,11 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   // update/question that isn't "the report" itself, so it doesn't need to
   // be buried as a reply just to avoid getting scored.
   const [excludeFromSubmission, setExcludeFromSubmission] = useState(false);
+  // โหมดส่งย้อนหลัง — กด "ส่งย้อนหลัง" ที่แถบเหนือช่องนี้ (retro-submit-banner.tsx) หลัง CEO อนุมัติคำร้อง
+  const retroTarget = useRetroSubmitStore((s) => s.target);
+  const setRetroTarget = useRetroSubmitStore((s) => s.setTarget);
+  const retro = retroTarget && retroTarget.topicId === topic.id ? retroTarget : null;
+  const retroRound = retro ? (effectiveRoundsOf(topic).find((r) => r.id === retro.roundId) ?? null) : null;
 
   // Keeps sessionStorage in sync with every keystroke/attachment change so a
   // reload has something to restore — cleared once the draft is either
@@ -116,6 +122,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
     setTagIds([]);
     setSelectedRoundId(null);
     setExcludeFromSubmission(false);
+    setRetroTarget(null);
     setExpanded(false);
     setTall(false);
     if (typeof window !== "undefined") {
@@ -227,7 +234,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   // round's own photo requirement — that requirement exists to make sure
   // "the report" actually has evidence attached, and this post was just
   // declared not to be that.
-  const minImagesRequired = excludeFromSubmission ? 0 : (activeRound?.minImages ?? 0);
+  const minImagesRequired = retro ? (retroRound?.minImages ?? 0) : excludeFromSubmission ? 0 : (activeRound?.minImages ?? 0);
   const missingRequiredImage = photoCount(images) < minImagesRequired;
   // Hard "ปิดรับ" deadline — unlike a round's own `time` (which only ever
   // badges a late post), this actually blocks the submit button once passed.
@@ -237,7 +244,11 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   // regardless of the clock, so there's nothing here to lock.
   const lockSettings = useReminderSettingsStore((s) => s.settings.submissionLock);
   const hardCutoff = effectiveHardCutoffTime(topic, lockSettings);
-  const submissionLocked = !excludeFromSubmission && !viewerExemptToday && isPastHardCutoff(hardCutoff, nowMinutes);
+  // ส่งย้อนหลัง: ไม่ติดเวลาปิดรับของวันนี้ — ติดแค่กำหนดส่งย้อนหลัง (23:59 วันตัดรอบ)
+  const retroExpired = !!retro && now().getTime() >= new Date(retro.retroDeadline).getTime();
+  const submissionLocked = retro
+    ? retroExpired
+    : !excludeFromSubmission && !viewerExemptToday && isPastHardCutoff(hardCutoff, nowMinutes);
   function doSubmit() {
     const cleanSections = sections
       .map((s) => ({
@@ -246,6 +257,20 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
         bullets: s.bulletsText.split("\n").map((b) => b.trim()).filter(Boolean),
       }))
       .filter((s) => s.heading || s.bullets.length > 0);
+    if (retro) {
+      // ไม่นับเป็นรีพอตของวันนี้ (excludeFromSubmission) แต่นับเป็นของวัน/รอบที่ลืม (retroFor — report-retro.ts)
+      addPost(topic.id, viewingAsUserId, {
+        title: title.trim(),
+        sections: cleanSections,
+        images,
+        tagIds,
+        excludeFromSubmission: true,
+        retroFor: { requestId: retro.id, day: retro.day, roundId: retro.roundId },
+      });
+      toast.success("ส่งรีพอตย้อนหลังแล้ว — ระบบคืนคะแนนให้ภายในไม่กี่นาที");
+      reset();
+      return;
+    }
     addPost(topic.id, viewingAsUserId, {
       title: title.trim(),
       sections: cleanSections,
@@ -277,7 +302,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
     );
   }
 
-  if (!expanded) {
+  if (!expanded && !retro) {
     // A full-width, input-styled bar now, not a solid-green button off on
     // its own at the left — a colored CTA button reads as "an action to
     // take", when what's actually sitting here is the entry point to the
@@ -331,7 +356,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
           {/* 1 round today → same plain info line as before (no choice to
               make). 2+ rounds → the picker below takes over saying which
               round, so this line would just repeat it. */}
-          {!showRoundPicker && activeRound && (
+          {!retro && !showRoundPicker && activeRound && (
             <span className="flex items-center gap-1 text-[11px] font-medium text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2 py-0.5">
               <Clock className="h-3 w-3" />
               ตอนนี้อยู่ในรอบ &quot;{activeRound.label}&quot; ({activeRound.time})
@@ -345,7 +370,25 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
             ก่อนเวลา"), so the poster picks explicitly. Picking a round
             that's already past its own cutoff is allowed (ส่งย้อนหลัง) — it
             just badges late instead of blocking the post. */}
-        {showRoundPicker && (
+        {retro && (
+          <div role="status" className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-violet-300 bg-violet-50 px-3 py-2 text-xs text-violet-900">
+            <span className="min-w-0 flex-1">
+              กำลังส่งรีพอต<b>ย้อนหลัง</b>ของวันที่ {retro.day}
+              {retroRound ? ` รอบ "${retroRound.label}" (${retroRound.time})` : ""} · CEO อนุมัติแล้ว · ไม่นับเป็นรีพอตของวันนี้
+              {minImagesRequired > 0 && ` · ต้องแนบรูปอย่างน้อย ${minImagesRequired} รูป`}
+              {retroExpired && <b className="text-[var(--chart-red)]"> · เลยกำหนดส่งย้อนหลังแล้ว</b>}
+            </span>
+            <button
+              type="button"
+              onClick={() => setRetroTarget(null)}
+              className="rounded-full border border-violet-300 bg-white px-2 py-0.5 font-semibold text-violet-900 hover:bg-violet-100"
+            >
+              ไม่ส่งย้อนหลัง
+            </button>
+          </div>
+        )}
+
+        {!retro && showRoundPicker && (
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="flex items-center gap-1 text-xs text-[var(--ink-soft)] shrink-0">
               <Clock className="h-3.5 w-3.5" />
@@ -389,7 +432,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
           </div>
         )}
 
-        {(missedEarlierRounds.length > 0 || activeRoundLate) && activeRound && (
+        {!retro && (missedEarlierRounds.length > 0 || activeRoundLate) && activeRound && (
           <div role="status" className="flex flex-col gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
             {missedEarlierRounds.map((r) => (
               <div key={r.id} className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
@@ -428,7 +471,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
             way to tell from "ไม่นับเป็นการส่งรีพอต" alone that this is what
             it meant, since that phrase alone reads as neutral/technical
             rather than as a warning. */}
-        {todayCutoffs.length > 0 && (
+        {!retro && todayCutoffs.length > 0 && (
           <div className="w-fit">
             <label className="flex items-center gap-1.5 text-[11px] text-[var(--ink-soft)] cursor-pointer">
               <Checkbox

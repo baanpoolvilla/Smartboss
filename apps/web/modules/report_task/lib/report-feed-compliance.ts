@@ -13,6 +13,7 @@ import {
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
 import { useReportPenaltySettingsStore } from "@/modules/report_task/store/report-penalty-settings-store";
 import { graceEndWithinPeriod } from "@/lib/score-period";
+import { hasRetroSubmission } from "@/modules/report_task/lib/report-retro";
 import { photoCount } from "@/modules/report_task/lib/report-attachment-kind";
 import { lateCutoffFor } from "@/modules/report_task/lib/report-cutoff";
 import { localDateStr, now, todayIso } from "@/modules/report_task/lib/now";
@@ -228,6 +229,8 @@ export function roundComplianceStatus(
   if (!resolveRoundSubmitters(round, topic.visibility, groupsNow()).includes(userId)) return "exempt";
   const cutoff = roundMinutes(round);
   const roundPosts = postsForRound(topic, userId, round, day, posts);
+  // ส่งย้อนหลังหลัง CEO อนุมัติ (report-retro.ts) — นับว่าส่งแล้ว
+  if (roundPosts.length === 0 && hasRetroSubmission(posts, topic.id, userId, round.id, day)) return "on-time";
   if (legacyOnly && roundPosts.length === 0) return "exempt";
   if (roundPosts.length > 0) {
     // Same lateBadgeHidden allowance as dayComplianceStatus above — this is
