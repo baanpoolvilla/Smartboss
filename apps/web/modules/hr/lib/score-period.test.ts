@@ -63,28 +63,30 @@ describe("score period (cut off on the 25th)", () => {
     expect(scorePeriodOf(cfg, th("2026-11-25T23:59:59"))).toBe("2026-11");
   });
 
-  it("locked at 23:59 on the cutoff day: later human changes don't count anywhere; system judgements of that day get until the end of the next day", () => {
+  it("locked at 23:59 on the cutoff day: later human changes don't count anywhere; system judgements of that day count until the grade is ready", () => {
     const day25 = new Date("2026-11-25T00:00:00Z"); // วันทำงาน 25 พ.ย.
-    // ระบบหักขาดงานตอน 08:00 วันที่ 26 ⇒ ยังนับรอบ พ.ย.
-    expect(effectiveScorePeriodOf(cfg, day25, th("2026-11-26T08:00:00"), null)).toBe("2026-11");
-    // กะดึก 22:00–08:00 หัก 10:59 · 22:00–10:00 หัก 12:59 ⇒ ยังนับ · ระบบบันทึกหลัง 23:59 วันที่ 26 ⇒ ไม่นับ
-    expect(effectiveScorePeriodOf(cfg, day25, th("2026-11-26T10:59:00"), null)).toBe("2026-11");
-    expect(effectiveScorePeriodOf(cfg, day25, th("2026-11-26T12:59:00"), null)).toBe("2026-11");
-    expect(effectiveScorePeriodOf(cfg, day25, th("2026-11-27T00:30:00"), null)).toBeNull();
-    // คนอนุมัติ/คืนคะแนนก่อน 23:59 ⇒ นับ · หลังเที่ยงคืน ⇒ ไม่นับที่ไหนเลย
+    // ไม่มีกะข้ามคืน: รอบเก็บตก 00:05 ⇒ นับ · หลังพร้อมใช้ 00:30 ⇒ ไม่นับ (เช่น คืนคะแนนรอบ 08:00)
+    expect(effectiveScorePeriodOf(cfg, day25, th("2026-11-26T00:05:30"), null)).toBe("2026-11");
+    expect(effectiveScorePeriodOf(cfg, day25, th("2026-11-26T00:30:00"), null)).toBeNull();
+    expect(effectiveScorePeriodOf(cfg, day25, th("2026-11-26T08:00:00"), null)).toBeNull();
+    // กะดึก 22:00–08:00 หัก 10:59 ⇒ ยังนับ · ตั้งแต่ 11:30 ⇒ ไม่นับ
+    const night = { ...cfg, latestShiftEndMinutes: 1440 + 8 * 60 };
+    expect(effectiveScorePeriodOf(night, day25, th("2026-11-26T10:59:00"), null)).toBe("2026-11");
+    expect(effectiveScorePeriodOf(night, day25, th("2026-11-26T11:30:00"), null)).toBeNull();
+    // คนอนุมัติ/คืนคะแนนก่อน 23:59 ⇒ นับ · หลังเที่ยงคืน ⇒ ไม่นับที่ไหนเลย (แม้บริษัทมีกะดึก)
     expect(effectiveScorePeriodOf(cfg, day25, th("2026-11-25T23:30:00"), "ceo")).toBe("2026-11");
-    expect(effectiveScorePeriodOf(cfg, day25, th("2026-11-26T00:10:00"), "ceo")).toBeNull();
+    expect(effectiveScorePeriodOf(night, day25, th("2026-11-26T00:10:00"), "ceo")).toBeNull();
     expect(effectiveScorePeriodOf(cfg, day25, th("2026-12-03T14:00:00"), "ceo")).toBeNull();
   });
 
   it("tells when the grade is ready from the company's latest shift end", () => {
-    // ไม่มีกะข้ามคืน ⇒ 00:00 วันที่ 26
-    expect(scorePeriodReadyAt(cfg, "2026-11", null)).toEqual(th("2026-11-26T00:00:00"));
-    expect(scorePeriodReadyAt(cfg, "2026-11", 17 * 60)).toEqual(th("2026-11-26T00:00:00"));
-    // กะบ่าย 14:00–23:00 ⇒ หัก 01:59 ⇒ พร้อมใช้ 02:00 วันที่ 26
-    expect(scorePeriodReadyAt(cfg, "2026-11", 23 * 60)).toEqual(th("2026-11-26T02:00:00"));
-    // กะ 22:00–08:00 (end 1920) ⇒ หัก 10:59 ⇒ พร้อมใช้ 11:00 วันที่ 26
-    expect(scorePeriodReadyAt(cfg, "2026-11", 1440 + 8 * 60)).toEqual(th("2026-11-26T11:00:00"));
+    // ไม่มีกะข้ามคืน ⇒ หลังรอบเก็บตก 00:05 ⇒ 00:30 วันที่ 26
+    expect(scorePeriodReadyAt(cfg, "2026-11", null)).toEqual(th("2026-11-26T00:30:00"));
+    expect(scorePeriodReadyAt(cfg, "2026-11", 17 * 60)).toEqual(th("2026-11-26T00:30:00"));
+    expect(scorePeriodReadyAt({ ...cfg, latestShiftEndMinutes: 17 * 60 }, "2026-11")).toEqual(th("2026-11-26T00:30:00"));
+    // กะบ่าย 14:00–23:00 ⇒ หัก 01:59 ⇒ พร้อมใช้ 02:30 วันที่ 26
+    expect(scorePeriodReadyAt(cfg, "2026-11", 23 * 60)).toEqual(th("2026-11-26T02:30:00"));
+    // กะ 22:00–08:00 (end 1920) ⇒ หัก 10:59 ⇒ พร้อมใช้ 11:30 วันที่ 26
+    expect(scorePeriodReadyAt(cfg, "2026-11", 1440 + 8 * 60)).toEqual(th("2026-11-26T11:30:00"));
   });
 });
-

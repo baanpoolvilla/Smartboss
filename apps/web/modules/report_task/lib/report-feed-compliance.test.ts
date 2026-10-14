@@ -3,6 +3,13 @@ import { dayComplianceStatus, roundComplianceStatus } from "@/modules/report_tas
 import { effectiveRoundsOf } from "@/modules/report_task/lib/submission-rounds";
 import { users } from "@/modules/report_task/lib/directory";
 import type { ReportPost, ReportTopic, SubmissionRound } from "@/modules/report_task/store/report-feed-store";
+import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
+import type { User } from "@/modules/report_task/types";
+
+// คนในบริษัทโหลดจากเซิร์ฟเวอร์ (store เริ่มว่าง — แอปไม่มีคนตัวอย่างแล้ว) ⇒ ใส่คนในไดเรกทอรีของเทสต์นี้เอง
+useEmployeeStore.setState({
+  employees: [{ id: "usr-directory-01", name: "usr-directory-01", email: "dir@test", avatar: "", role: "", departmentId: "dep-a" } as User],
+});
 
 const userId = "test-user-rounds";
 const otherUserId = "test-user-someone-else";

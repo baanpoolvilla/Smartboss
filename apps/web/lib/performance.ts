@@ -376,7 +376,7 @@ function periodEventsWhere(config: ScorePeriodConfig, month: string, scoringStar
   const start = scoringStartDate && scoringStartDate > from ? scoringStartDate : from;
   return {
     occurredAt: { gte: start, lte: to },
-    // คน: ก่อน 23:59 ของวันตัดรอบ · ระบบ: เผื่อถึง 10:00 วันถัดไป (score-period.ts)
+    // คน: ก่อน 23:59 ของวันตัดรอบ · ระบบ: ถึงเวลาพร้อมใช้ (scorePeriodReadyAt — 00:30 หรือหลังกะดึกหักเสร็จ)
     OR: [
       { createdAt: { lt: scorePeriodCloseAt(config, month) } },
       { createdBy: null, createdAt: { lt: scorePeriodSystemCloseAt(config, month) } },

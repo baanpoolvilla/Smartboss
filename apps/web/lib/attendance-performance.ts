@@ -439,3 +439,18 @@ export async function dockFinishedShifts(
   const recorded = await recordPerformanceEvents(events);
   return { orgs: active, checked, recorded: recorded + reactivated };
 }
+
+/**
+ * คืนคะแนนลงเวลาที่ไม่ควรหักแล้ว (refundNoLongerValidDocks) แยกจาก dockAttendance — รอบเก็บตก 00:05 ของทุกคืน
+ * (cron task=score-final) · ใบลา/แก้เวลาที่ HR อนุมัติทันก่อน 23:59 ของวันตัดรอบ ต้องได้คืนก่อนเกรดพร้อมใช้ 00:30
+ * ถ้ารอรอบ 08:00 จะคืนหลังรอบปิดแล้วไม่ถูกนับ · ไม่หักใหม่ (dockAttendance ตอนเที่ยงคืนจะหักกะดึกที่ยังไม่จบผิด ๆ)
+ */
+export async function refundAttendanceDocks(): Promise<number> {
+  const orgs = await prisma.organization.findMany({ where: { isActive: true }, select: { id: true } });
+  if (orgs.length === 0) return 0;
+  const settingsByOrg = await loadPerformanceSettingsMap(orgs.map((o) => o.id));
+  const from = new Date();
+  from.setDate(from.getDate() - ATTENDANCE_LOOKBACK_DAYS);
+  const todayInThailand = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
+  return refundNoLongerValidDocks(from, todayInThailand, settingsByOrg);
+}

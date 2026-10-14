@@ -19,6 +19,11 @@ export interface ScorePeriodConfig {
    * ⇒ รอบแรกคือ 1 ต.ค. – 25 ต.ค. แล้วค่อยเป็น 26–25 ตามปกติ
    */
   calendarMonthsUntil?: string;
+  /**
+   * เวลาเลิกกะที่ช้าที่สุดของบริษัท (นาทีจากเที่ยงคืนของวันทำงาน · เกิน 1440 = เลิกวันถัดไป) — ไม่ได้เก็บใน store
+   * loadScorePeriodConfig อ่านจากกะที่ HR ตั้งไว้ให้ทุกครั้ง · ใช้หาเวลาพร้อมใช้/ปิดรับของระบบ (scorePeriodReadyAt)
+   */
+  latestShiftEndMinutes?: number | null;
 }
 
 /** เริ่มใช้รอบตัดวันที่ 25 ตั้งแต่เกรด ต.ค. 2569 (เจ้าของระบบสั่ง 2026-10-14) — ก.ย. 2569 ตัดเกรดแบบเดือนปฏิทินไปแล้ว */
@@ -133,10 +138,10 @@ export function normalizeScorePeriodConfig(raw: unknown): ScorePeriodConfig {
  * รอบปิด (ล็อก) — 23:59:59 ของวันตัดรอบ (เวลาไทย) สำหรับทุกอย่างที่ "คน" ทำ (อนุมัติคำร้อง หัวหน้าหัก/คืน)
  * ต้องแก้ให้ทันก่อนนั้น ("ต้องแก้ให้ทันวันที่ 25 เวลา 23.59")
  *
- * ยกเว้นการตัดสินอัตโนมัติของระบบ (createdBy ว่าง) เผื่อถึง 23:59 วันถัดไป — กะดึกของวันตัดรอบเลิกวันถัดไป
- * หักได้หลังเลิกกะ + 2 ชม. (dockFinishedShifts) เช่น 22:00–08:00 หัก 10:59 · 22:00–10:00 หัก 12:59
- * ถ้าไม่เผื่อ กะดึกที่ขาดงานวันที่ 25 จะไม่โดนหักเลย
- * บริษัทที่ไม่มีกะดึก ทุกอย่างหักเสร็จก่อน 23:59 อยู่แล้ว ช่วงเผื่อนี้จึงไม่มีอะไรเกิด
+ * การตัดสินอัตโนมัติของระบบ (createdBy ว่าง) ของวันตัดรอบเกิดหลังเที่ยงคืนได้ — ไม่ส่งรายงานวันที่ 25 เปลี่ยนจาก
+ * "ส่งช้า −1" เป็น "ไม่ส่ง −2" ตอนวันที่ 25 จบ · งานครบกำหนด 23:59 รู้ว่าเลยหลังเที่ยงคืน · กะดึกหักหลังเลิกกะ 2 ชม.
+ * ⇒ ระบบนับถึง "เวลาพร้อมใช้" (scorePeriodReadyAt) พอดี — หลังจากนั้นไม่มีอะไรเปลี่ยนอีกทั้งคนและระบบ
+ * (เวลาที่บอก HR ว่าพร้อมใช้ = เวลาที่ตัวเลขนิ่งจริง) · ไม่เกิน SYSTEM_JUDGEMENT_GRACE_MS หลังปิดรอบ
  */
 export const SYSTEM_JUDGEMENT_GRACE_MS = 24 * 60 * 60 * 1000;
 
@@ -145,9 +150,9 @@ export function scorePeriodCloseAt(config: ScorePeriodConfig, month: string): Da
   return new Date(scorePeriodRange(config, month).to.getTime() + 1);
 }
 
-/** เวลาปิดรอบสำหรับการตัดสินอัตโนมัติของระบบ (หลังวันตัดรอบจบ + เผื่อรอบ 08:00) */
+/** เวลาปิดรอบสำหรับการตัดสินอัตโนมัติของระบบ = เวลาพร้อมใช้ */
 export function scorePeriodSystemCloseAt(config: ScorePeriodConfig, month: string): Date {
-  return new Date(scorePeriodCloseAt(config, month).getTime() + SYSTEM_JUDGEMENT_GRACE_MS);
+  return scorePeriodReadyAt(config, month);
 }
 
 /**
@@ -175,24 +180,32 @@ export function isScorePeriodClosed(config: ScorePeriodConfig, at: Date, now: Da
 /** รอคะแนนลงเวลานิ่งหลังเลิกกะกี่ ms ก่อนหัก — ต้องตรงกับ SHIFT_SETTLE_MS ใน attendance-performance.ts */
 export const SHIFT_SETTLE_FOR_READY_MS = 2 * 60 * 60 * 1000;
 
+/** รอบเก็บตกของวันตัดรอบ (cron task=score-final 00:05) ทำเสร็จแน่ภายในกี่ ms หลังเที่ยงคืน */
+export const FINAL_RUN_DONE_MS = 30 * 60 * 1000;
+
 /**
- * เกรดของรอบ `month` พร้อมใช้ (นิ่ง เอาไปคิดเงินเดือนได้) ตอนไหน — หลังระบบหักคะแนนลงเวลาของวันตัดรอบครบ
- * `latestShiftEndMinutes` = เวลาเลิกกะที่ช้าที่สุดของบริษัท นับเป็นนาทีจากเที่ยงคืนของวันทำงาน
- * (shift_definitions.end_minutes · เกิน 1440 = เลิกวันถัดไป) · null = ไม่มีกะ/กะไม่ข้ามคืน
- *   - กะเลิกช้าสุด + 2 ชม. ยังไม่เลยเที่ยงคืน (หรือไม่มีกะ): รอบ 23:59 ของวันตัดรอบหักครบ ⇒ 00:00 วันถัดไป
- *   - เลยเที่ยงคืน (กะดึก หรือกะเลิกดึกอย่าง 23:00): รอบ :59 แรกหลังเลิกกะ + 2 ชม. ⇒ ชั่วโมงถัดไป
- *     (ไม่เกินเวลาเผื่อของระบบ)
+ * เกรดของรอบ `month` พร้อมใช้ (นิ่ง เอาไปคิดเงินเดือนได้) ตอนไหน — หลังระบบตัดสินของวันตัดรอบครบ
+ * `latestShiftEndMinutes` (ค่าเริ่มต้นจาก config) = เวลาเลิกกะที่ช้าที่สุดของบริษัท นับเป็นนาทีจากเที่ยงคืนของวันทำงาน
+ * (shift_definitions.end_minutes · เกิน 1440 = เลิกวันถัดไป) · null = ไม่มีกะ
+ *   - ทุกบริษัท: รอบเก็บตก 00:05 (งานเลยกำหนด/ไม่ส่งรายงานของวันตัดรอบ + คืนคะแนนใบลาที่อนุมัติทัน) ⇒ 00:30
+ *   - กะเลิกช้าสุด + 2 ชม. เลยเที่ยงคืน (กะดึก หรือกะเลิกดึกอย่าง 23:00): รอบ :59 แรกหลังจากนั้น ⇒ +31 นาที
+ *     เช่น 22:00–08:00 หัก 10:59 ⇒ 11:30 · ไม่เกิน SYSTEM_JUDGEMENT_GRACE_MS
  */
-export function scorePeriodReadyAt(config: ScorePeriodConfig, month: string, latestShiftEndMinutes: number | null): Date {
-  const lockAt = scorePeriodCloseAt(config, month); // 00:00 วันถัดจากวันตัดรอบ (เวลาไทย)
-  if (latestShiftEndMinutes === null) return lockAt;
-  const cutoffDayStart = lockAt.getTime() - 86_400_000;
-  const settle = cutoffDayStart + latestShiftEndMinutes * 60_000 + SHIFT_SETTLE_FOR_READY_MS;
-  // รอบ cron ที่นาที :59 แรกที่ไม่ก่อน settle แล้วบวก 1 นาทีให้รอบนั้นทำเสร็จ
-  const hour = 3_600_000;
-  const run = Math.ceil((settle - 59 * 60_000) / hour) * hour + 59 * 60_000;
-  const ready = Math.max(lockAt.getTime(), run + 60_000);
-  return new Date(Math.min(ready, scorePeriodSystemCloseAt(config, month).getTime()));
+export function scorePeriodReadyAt(
+  config: ScorePeriodConfig,
+  month: string,
+  latestShiftEndMinutes: number | null = config.latestShiftEndMinutes ?? null,
+): Date {
+  const lockAt = scorePeriodCloseAt(config, month).getTime(); // 00:00 วันถัดจากวันตัดรอบ (เวลาไทย)
+  let ready = lockAt + FINAL_RUN_DONE_MS;
+  if (latestShiftEndMinutes !== null) {
+    const settle = lockAt - 86_400_000 + latestShiftEndMinutes * 60_000 + SHIFT_SETTLE_FOR_READY_MS;
+    // รอบ cron ที่นาที :59 แรกที่ไม่ก่อน settle แล้วรอให้รอบนั้นทำเสร็จ (ปัดเป็น :30)
+    const hour = 3_600_000;
+    const run = Math.ceil((settle - 59 * 60_000) / hour) * hour + 59 * 60_000;
+    ready = Math.max(ready, run + 31 * 60_000);
+  }
+  return new Date(Math.min(ready, lockAt + SYSTEM_JUDGEMENT_GRACE_MS));
 }
 
 /** ถึงเวลานี้แล้วหรือยัง (ใช้ในหน้า server component — เลี่ยงเรียก Date.now() ตรงตอน render) */

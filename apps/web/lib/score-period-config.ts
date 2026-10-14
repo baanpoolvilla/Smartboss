@@ -11,8 +11,10 @@ import { withWorkforceTenant } from "@/modules/report_task/lib/db/workforce-cale
 const KEY = "score-period";
 
 export async function loadScorePeriodConfig(orgId: string): Promise<ScorePeriodConfig> {
-  const { data } = await readStore<unknown>(orgId, KEY);
-  return normalizeScorePeriodConfig(data);
+  const [{ data }, latestShiftEndMinutes] = await Promise.all([readStore<unknown>(orgId, KEY), loadLatestShiftEnd(orgId)]);
+  // กะที่เลิกช้าที่สุดติดไปด้วยทุกครั้ง — เวลาปิดรับของระบบ = เวลาพร้อมใช้ (score-period.ts) ต้องตรงกันทุกหน้า
+  // normalizeScorePeriodConfig ไม่เก็บค่านี้ ⇒ บันทึกกลับไม่ติดลง store
+  return { ...normalizeScorePeriodConfig(data), latestShiftEndMinutes };
 }
 
 export async function saveScorePeriodConfig(orgId: string, config: ScorePeriodConfig, userId: string): Promise<void> {
@@ -26,11 +28,11 @@ export async function saveScorePeriodConfig(orgId: string, config: ScorePeriodCo
 }
 
 /**
- * เกรดรอบ `month` ของบริษัทพร้อมใช้ตอนไหน (scorePeriodReadyAt) — ดูกะที่เลิกช้าที่สุดของบริษัท
- * จากกะที่ HR ตั้งไว้ในระบบบุคคล · อ่านไม่ได้ (ยังไม่มีข้อมูลฝั่ง HR) = ถือว่าไม่มีกะข้ามคืน
+ * เวลาเลิกกะที่ช้าที่สุดของบริษัท จากกะที่ HR ตั้งไว้ในระบบบุคคล (นาทีจากเที่ยงคืน · เกิน 1440 = ข้ามคืน)
+ * อ่านไม่ได้ (ยังไม่มีข้อมูลฝั่ง HR) = ถือว่าไม่มีกะ
  */
-export async function loadScorePeriodReadyAt(orgId: string, config: ScorePeriodConfig, month: string): Promise<Date> {
-  const latest = await withWorkforceTenant(orgId, (tx) =>
+async function loadLatestShiftEnd(orgId: string): Promise<number | null> {
+  return withWorkforceTenant(orgId, (tx) =>
     tx.$queryRaw<{ m: number | null }[]>`
       SELECT max(end_minutes)::int AS m
       FROM workforce.shift_definitions
@@ -39,6 +41,10 @@ export async function loadScorePeriodReadyAt(orgId: string, config: ScorePeriodC
   )
     .then((rows) => rows[0]?.m ?? null)
     .catch(() => null);
-  return scorePeriodReadyAt(config, month, latest);
 }
 
+/** เกรดรอบ `month` ของบริษัทพร้อมใช้ตอนไหน (scorePeriodReadyAt) — config จาก loadScorePeriodConfig มีกะติดมาแล้ว */
+export async function loadScorePeriodReadyAt(orgId: string, config: ScorePeriodConfig, month: string): Promise<Date> {
+  const latest = config.latestShiftEndMinutes !== undefined ? config.latestShiftEndMinutes : await loadLatestShiftEnd(orgId);
+  return scorePeriodReadyAt(config, month, latest);
+}

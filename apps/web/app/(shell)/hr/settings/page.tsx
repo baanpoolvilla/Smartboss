@@ -64,6 +64,12 @@ function dockTimeLabel(endMinutes: number): string {
   return `${hour}:59${day > 0 ? " วันถัดไป" : ""}`;
 }
 
+/** เกรดพร้อมใช้ตอนไหนเมื่อกะนี้เลิกช้าที่สุด — 30 นาทีหลังรอบที่หักกะนี้ (scorePeriodReadyAt ใน lib/score-period.ts) */
+function readyTimeLabel(endMinutes: number): string {
+  const runHour = Math.ceil((endMinutes + 120 - 59) / 60);
+  return `${String((runHour + 1) % 24).padStart(2, "0")}:30`;
+}
+
 function minutesToClock(minutes: number | null): string {
   if (minutes === null || minutes === undefined) return "—";
   const day = Math.floor(minutes / 1440);
@@ -160,12 +166,12 @@ export default async function HrSettingsPage() {
                   <>
                     <b>{latest.end_minutes > 1440 ? "มีกะข้ามคืน" : "มีกะเลิกดึก"}</b> — กะที่เลิกช้าที่สุดคือ &quot;{latest.name}&quot; เลิก{" "}
                     {minutesToClock(latest.end_minutes)} ระบบหักคะแนนกะนี้ตอน {dockTimeLabel(latest.end_minutes)} ⇒
-                    เกรดของแต่ละรอบพร้อมใช้คิดเงินเดือนหลังจากนั้น
+                    เกรดของแต่ละรอบพร้อมใช้คิดเงินเดือน {readyTimeLabel(latest.end_minutes)} น. ของวันถัดจากวันตัดรอบ
                   </>
                 ) : (
                   <>
                     <b>ไม่มีกะข้ามคืน</b>
-                    {latest ? ` — กะที่เลิกช้าที่สุดคือ "${latest.name}" เลิก ${minutesToClock(latest.end_minutes)}` : ""} ⇒ เกรดของแต่ละรอบพร้อมใช้คิดเงินเดือน 00:00 น. ของวันถัดจากวันตัดรอบ
+                    {latest ? ` — กะที่เลิกช้าที่สุดคือ "${latest.name}" เลิก ${minutesToClock(latest.end_minutes)}` : ""} ⇒ เกรดของแต่ละรอบพร้อมใช้คิดเงินเดือน 00:30 น. ของวันถัดจากวันตัดรอบ (หลังรอบเก็บตก 00:05)
                   </>
                 )}
                 <span className="block text-xs text-(--ink-soft)">

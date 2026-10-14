@@ -468,8 +468,11 @@ sudo crontab -e
 # กวาดคะแนนผลงานอีกรอบตอนเย็น ให้ผู้บริหารเห็นของวันนี้ก่อนเลิกงาน
 0 17 * * * bash /opt/smartboss/deploy/cron-run.sh performance >> /var/log/smartboss-cron.log 2>&1
 
-# หักคะแนนลงเวลาเมื่อกะจบ ทุกชั่วโมงที่นาที 59 — กะปกติ/ไม่มีกะจบภายใน 23:59 ของวันนั้น · กะดึกหลังเลิกกะ 2 ชม.
-59 * * * * bash /opt/smartboss/deploy/cron-run.sh attendance-shift-end >> /var/log/smartboss-cron.log 2>&1
+# งานคะแนนรายชั่วโมงที่นาที 59 — หักลงเวลาเมื่อกะจบ (กะปกติ/ไม่มีกะภายใน 23:59 · กะดึกหลังเลิกกะ 2 ชม.)
+# + หักคะแนนรายงาน/งานเลยกำหนดของทุกบริษัท ไม่ต้องรอให้มีคนเปิดเว็บ (ทันก่อนรอบเกรดปิด 23:59 วันตัดรอบ)
+59 * * * * bash /opt/smartboss/deploy/cron-run.sh score-hourly >> /var/log/smartboss-cron.log 2>&1
+# รอบเก็บตก 00:05 — ไม่ส่งรายงาน/งานเลยกำหนดของเมื่อวาน + คืนคะแนนใบลาที่อนุมัติทัน ⇒ เกรดวันตัดรอบพร้อมใช้ 00:30
+5 0 * * * bash /opt/smartboss/deploy/cron-run.sh score-final >> /var/log/smartboss-cron.log 2>&1
 
 # สำรองฐานข้อมูล 02:30 ทุกคืน
 30 2 * * * bash /opt/smartboss/deploy/backup.sh >> /var/log/smartboss-backup.log 2>&1
