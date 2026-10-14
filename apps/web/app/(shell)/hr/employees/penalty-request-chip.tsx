@@ -63,6 +63,8 @@ export interface PenaltyEventItem {
   restored?: boolean;
   /** สถานะคำร้องล่าสุดของรอบนี้ */
   requestStatus?: "pending" | "approved" | "rejected" | null;
+  /** ยื่นคำร้องได้ไหม — ได้ถึงสิ้นเดือนที่โดนหักเท่านั้น (penalty-request-window.ts) · ไม่มีค่า = ถือว่าได้ */
+  requestOpen?: boolean;
 }
 
 /**
@@ -146,7 +148,7 @@ export function PenaltyRequestDialog({
     );
   }
 
-  const selectable = items.filter((i) => !i.hasPendingRequest);
+  const selectable = items.filter((i) => !i.hasPendingRequest && i.requestOpen !== false);
 
   return (
     <Modal
@@ -178,7 +180,7 @@ export function PenaltyRequestDialog({
           <p className="text-sm text-(--ink-soft)">กำลังโหลด...</p>
         ) : selectable.length === 0 ? (
           <p className="text-sm text-(--ink-soft)">
-            ไม่มีรายการที่ยื่นคำร้องได้ — อาจถูกคืนคะแนนไปแล้ว หรือมีคำร้องรออยู่แล้วทุกรายการ
+            ไม่มีรายการที่ยื่นคำร้องได้ — อาจถูกคืนคะแนนไปแล้ว มีคำร้องรออยู่แล้ว หรือเป็นของเดือนที่ปิดรับคำร้องไปแล้ว (ยื่นได้ถึงสิ้นเดือนที่โดนหัก)
           </p>
         ) : (
           <div>

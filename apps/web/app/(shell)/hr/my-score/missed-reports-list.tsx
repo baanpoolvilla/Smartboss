@@ -80,6 +80,11 @@ export function MissedReportsList({ userId }: { userId: string }) {
             </span>
           ) : row.hasPendingRequest ? (
             <span className="shrink-0 text-xs font-medium text-(--tone-warn)">รอ CEO พิจารณา</span>
+          ) : row.requestOpen === false ? (
+            // เดือนต่อเดือน — ยื่นได้ถึงสิ้นเดือนที่โดนหัก (penalty-request-window.ts)
+            <span className="shrink-0 text-xs text-(--ink-soft)">
+              {row.requestStatus === "rejected" ? "ไม่อนุมัติ · " : ""}ปิดรับคำร้องเดือนนี้แล้ว
+            </span>
           ) : row.requestStatus === "rejected" ? (
             <span className="flex shrink-0 items-center gap-2">
               <span className="text-xs font-medium text-(--danger)">ไม่อนุมัติ</span>

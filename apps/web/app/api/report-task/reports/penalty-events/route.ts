@@ -7,6 +7,7 @@ import { listPenaltyRequests } from "@/modules/report_task/lib/db/report-penalty
 import { PERFORMANCE_CATEGORIES, type PerformanceCategory } from "@/lib/performance";
 import type { ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { effectiveRoundsOf } from "@/modules/report_task/lib/submission-rounds";
+import { penaltyRequestOpen } from "@/modules/report_task/lib/penalty-request-window";
 
 /**
  * รายการ event หักคะแนนรายงาน (report_missed/report_late) ที่ยัง active อยู่
@@ -36,7 +37,7 @@ export async function GET(request: Request) {
   const [events, undoRefIds, requests, { data: reportFeed }] = await Promise.all([
     prisma.performanceEvent.findMany({
       where: { orgId: session.orgId, userId, source: "report_task", refType: "report_round", category },
-      select: { refId: true, points: true, occurredAt: true },
+      select: { refId: true, points: true, occurredAt: true, createdAt: true },
       orderBy: { occurredAt: "desc" },
     }),
     prisma.performanceEvent
@@ -76,6 +77,8 @@ export async function GET(request: Request) {
         hasPendingRequest: pendingRefIds.has(e.refId!),
         restored: undoRefIds.has(e.refId!),
         requestStatus: latestRequest.get(e.refId!)?.status ?? null,
+        // ยื่นคำร้องได้ถึงสิ้นเดือนที่โดนหัก (penalty-request-window.ts)
+        requestOpen: penaltyRequestOpen(day, e.createdAt),
       };
     });
 
