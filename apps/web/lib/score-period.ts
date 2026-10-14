@@ -130,33 +130,42 @@ export function normalizeScorePeriodConfig(raw: unknown): ScorePeriodConfig {
 }
 
 /**
- * รอบปิด (ล็อก) ตอนไหน — 10:00 ของวันถัดจากวันตัดรอบ (เวลาไทย) เผื่อให้รอบ 08:00 หักคะแนนลงเวลา
- * ของวันตัดรอบเข้าทันก่อน · ปิดแล้วเกรดของรอบนั้นนิ่ง ใช้คิดเงินเดือนได้
+ * รอบปิด (ล็อก) — 23:59:59 ของวันตัดรอบ (เวลาไทย) สำหรับทุกอย่างที่ "คน" ทำ (อนุมัติคำร้อง หัวหน้าหัก/คืน)
+ * ต้องแก้ให้ทันก่อนนั้น ("ต้องแก้ให้ทันวันที่ 25 เวลา 23.59")
+ *
+ * ยกเว้นการตัดสินอัตโนมัติของระบบ (createdBy ว่าง) เผื่อถึง 10:00 วันถัดไป — ขาดงาน/ไม่ส่งรายงานของ
+ * วันตัดรอบรู้ผลแน่ได้หลังวันนั้นจบ (รอบ 08:00) ถ้าไม่เผื่อ คนที่ขาดงานวันที่ 25 จะไม่โดนหักเลย
  */
-export const PERIOD_CLOSE_GRACE_MS = 10 * 60 * 60 * 1000;
+export const SYSTEM_JUDGEMENT_GRACE_MS = 10 * 60 * 60 * 1000;
 
+/** เวลาปิดรอบสำหรับการแก้โดยคน */
 export function scorePeriodCloseAt(config: ScorePeriodConfig, month: string): Date {
-  return new Date(scorePeriodRange(config, month).to.getTime() + 1 + PERIOD_CLOSE_GRACE_MS);
+  return new Date(scorePeriodRange(config, month).to.getTime() + 1);
+}
+
+/** เวลาปิดรอบสำหรับการตัดสินอัตโนมัติของระบบ (หลังวันตัดรอบจบ + เผื่อรอบ 08:00) */
+export function scorePeriodSystemCloseAt(config: ScorePeriodConfig, month: string): Date {
+  return new Date(scorePeriodCloseAt(config, month).getTime() + SYSTEM_JUDGEMENT_GRACE_MS);
 }
 
 /**
- * คะแนนรายการนี้นับในรอบไหน — ปกติคือรอบของวันที่เกิดเรื่อง (occurredAt)
- * แต่ถ้าบันทึก (createdAt) หลังรอบนั้นปิดแล้ว (คืนคะแนน/อนุมัติคำร้อง/หักย้อนหลัง) ⇒ ไปลงรอบที่เปิดอยู่
- * ตอนบันทึกแทน ("ปรับจากรอบก่อน") ไม่แก้เกรดของรอบที่ปิดไปแล้ว — แบบเดียวกับระบบเงินเดือนทั่วไป
- * (ล็อกงวดแล้วปรับย้อนหลังในงวดถัดไป)
+ * คะแนนรายการนี้นับในรอบไหน — รอบของวันที่เกิดเรื่อง ถ้าบันทึกก่อนรอบนั้นปิด
+ * บันทึกหลังปิด ⇒ null = ไม่นับที่ไหนเลย · ล็อกแล้วจบ ไม่ย้ายไปรอบใหม่ (เกรดรอบใหม่จะไม่ตรงกับที่ทำจริง ไม่แฟร์)
+ * `createdBy` ว่าง = ระบบตัดสินเอง ได้เวลาเผื่อถึง scorePeriodSystemCloseAt
  */
-export function effectiveScorePeriodOf(config: ScorePeriodConfig, occurredAt: Date, createdAt: Date | null | undefined): string {
+export function effectiveScorePeriodOf(
+  config: ScorePeriodConfig,
+  occurredAt: Date,
+  createdAt: Date | null | undefined,
+  createdBy?: string | null,
+): string | null {
   const own = scorePeriodOf(config, occurredAt);
-  if (!createdAt || createdAt.getTime() < scorePeriodCloseAt(config, own).getTime()) return own;
-  // รอบที่เปิดอยู่ตอนบันทึก = รอบแรกที่ยังไม่ปิด ณ createdAt
-  let month = own;
-  for (let i = 0; i < 36 && createdAt.getTime() >= scorePeriodCloseAt(config, month).getTime(); i++) {
-    month = shiftPeriodMonth(month, 1);
-  }
-  return month;
+  if (!createdAt) return own;
+  const closeAt = createdBy ? scorePeriodCloseAt(config, own) : scorePeriodSystemCloseAt(config, own);
+  return createdAt.getTime() >= closeAt.getTime() ? null : own;
 }
 
-/** รายการนี้เป็น "ปรับจากรอบก่อน" ไหม (นับในรอบหลังวันที่เกิดเรื่อง) */
-export function isCarriedOver(config: ScorePeriodConfig, occurredAt: Date, createdAt: Date | null | undefined): boolean {
-  return effectiveScorePeriodOf(config, occurredAt, createdAt) !== scorePeriodOf(config, occurredAt);
+/** รอบของวันนั้นปิดรับการแก้โดยคนแล้วหรือยัง (เลย 23:59 ของวันตัดรอบ) */
+export function isScorePeriodClosed(config: ScorePeriodConfig, at: Date, now: Date = new Date()): boolean {
+  return now.getTime() >= scorePeriodCloseAt(config, scorePeriodOf(config, at)).getTime();
 }

@@ -4,7 +4,7 @@ import {
   effectiveScorePeriodOf,
   scorePeriodCloseAt,
   scorePeriodRange,
-  shiftPeriodMonth,
+  scorePeriodSystemCloseAt,
   type ScorePeriodConfig,
 } from "@/lib/score-period";
 
@@ -369,16 +369,18 @@ export function gradeColor(grade: string, order: string[]): string {
 }
 
 /**
- * เงื่อนไขดึงรายการที่ "อาจ" นับในรอบ `month` — เกิดในรอบนี้ หรือบันทึกระหว่างรอบนี้เปิด (ปรับจากรอบก่อน)
- * ผู้เรียกต้องกรองต่อด้วย effectiveScorePeriodOf (รายการที่เกิดในรอบนี้แต่บันทึกหลังปิดไปอยู่รอบถัดไป)
+ * รายการของรอบ `month` — เกิดในรอบนี้ และบันทึกก่อนรอบปิด (ล็อกแล้วจบ ไม่แก้ — effectiveScorePeriodOf)
  */
 function periodEventsWhere(config: ScorePeriodConfig, month: string, scoringStartDate: Date | null) {
   const { from, to } = scorePeriodRange(config, month);
-  const openedAt = scorePeriodCloseAt(config, shiftPeriodMonth(month, -1));
-  const closesAt = scorePeriodCloseAt(config, month);
+  const start = scoringStartDate && scoringStartDate > from ? scoringStartDate : from;
   return {
-    ...(scoringStartDate ? { occurredAt: { gte: scoringStartDate } } : {}),
-    OR: [{ occurredAt: { gte: from, lte: to } }, { createdAt: { gte: openedAt, lt: closesAt }, occurredAt: { lt: from } }],
+    occurredAt: { gte: start, lte: to },
+    // คน: ก่อน 23:59 ของวันตัดรอบ · ระบบ: เผื่อถึง 10:00 วันถัดไป (score-period.ts)
+    OR: [
+      { createdAt: { lt: scorePeriodCloseAt(config, month) } },
+      { createdBy: null, createdAt: { lt: scorePeriodSystemCloseAt(config, month) } },
+    ],
   };
 }
 
@@ -391,12 +393,11 @@ export function buildPeriodScorecards(orgId: string, config: ScorePeriodConfig, 
 /** รายการคะแนนของคนหนึ่งในรอบเกรด `month` — ชุดเดียวกับที่ buildPeriodScorecards นับ */
 export async function listUserPeriodEvents(orgId: string, userId: string, config: ScorePeriodConfig, month: string, limit = 1000) {
   const settings = await loadPerformanceSettings(orgId);
-  const rows = await prisma.performanceEvent.findMany({
+  return prisma.performanceEvent.findMany({
     where: { orgId, userId, ...periodEventsWhere(config, month, settings.scoringStartDate) },
     orderBy: { occurredAt: "desc" },
     take: limit,
   });
-  return rows.filter((e) => effectiveScorePeriodOf(config, e.occurredAt, e.createdAt) === month);
 }
 
 /**
@@ -409,7 +410,7 @@ export async function buildScorecards(
   orgId: string,
   from: Date,
   to: Date,
-  /** รอบเกรด (score-period.ts) — ใส่มา = นับตามรอบที่รายการลงจริง (บันทึกหลังรอบปิด ⇒ ไปรอบถัดไป) */
+  /** รอบเกรด (score-period.ts) — ใส่มา = นับเฉพาะที่บันทึกก่อนรอบปิด (ล็อกแล้วจบ) */
   period?: { config: ScorePeriodConfig; month: string },
 ): Promise<{ settings: PerformanceSettings; cards: UserScorecard[] }> {
   const settings = await loadPerformanceSettings(orgId);
@@ -429,9 +430,7 @@ export async function buildScorecards(
       select,
     }),
   ]);
-  const events = period
-    ? rawEvents.filter((e) => effectiveScorePeriodOf(period.config, e.occurredAt, e.createdAt) === period.month)
-    : rawEvents;
+  const events = rawEvents;
   const isReversed = reversedChecker(events);
 
   const byUser = new Map<string, UserScorecard>();
@@ -548,25 +547,16 @@ export async function buildUserMonthlyScores(
   const to = bounds(sorted[sorted.length - 1]!).to;
   const start = settings.scoringStartDate && settings.scoringStartDate > from ? settings.scoringStartDate : from;
   const events = await prisma.performanceEvent.findMany({
-    // รวมรายการที่บันทึกระหว่างช่วงนี้ด้วย (ปรับจากรอบก่อน — effectiveScorePeriodOf)
-    where: {
-      orgId,
-      userId,
-      OR: [
-        { occurredAt: { gte: start, lte: to } },
-        {
-          createdAt: { gte: scorePeriodCloseAt(period, shiftPeriodMonth(sorted[0]!, -1)), lt: scorePeriodCloseAt(period, sorted[sorted.length - 1]!) },
-          occurredAt: { lt: from, ...(settings.scoringStartDate ? { gte: settings.scoringStartDate } : {}) },
-        },
-      ],
-    },
-    select: { id: true, userId: true, category: true, occurredAt: true, createdAt: true, points: true, refType: true, refId: true },
+    // รายการที่บันทึกหลังรอบของมันปิดไม่นับ (effectiveScorePeriodOf → null)
+    where: { orgId, userId, occurredAt: { gte: start, lte: to } },
+    select: { id: true, userId: true, category: true, occurredAt: true, createdAt: true, createdBy: true, points: true, refType: true, refId: true },
   });
   const isReversed = reversedChecker(events);
 
   const sum = new Map<string, { points: number; count: number }>();
   for (const e of events) {
-    const key = effectiveScorePeriodOf(period, e.occurredAt, e.createdAt);
+    const key = effectiveScorePeriodOf(period, e.occurredAt, e.createdAt, e.createdBy);
+    if (key === null) continue;
     const cur = sum.get(key) ?? { points: 0, count: 0 };
     cur.points += Number(e.points);
     if (!isReversalEvent(e) && !isReversed(e)) cur.count += 1;

@@ -62,13 +62,15 @@ describe("score period (cut off on the 25th)", () => {
     expect(scorePeriodOf(cfg, th("2026-11-25T23:59:59"))).toBe("2026-11");
   });
 
-  it("a change recorded after the period closed goes to the open period, not back into the closed one", () => {
+  it("locked at 23:59 on the cutoff day: later human changes don't count anywhere; system judgements of that day get until 10:00", () => {
     const day25 = new Date("2026-11-25T00:00:00Z"); // วันทำงาน 25 พ.ย.
-    // หัก/คืนตอน 08:00 วันที่ 26 — ก่อนรอบปิด 10:00 ⇒ ยังอยู่รอบ พ.ย.
-    expect(effectiveScorePeriodOf(cfg, day25, th("2026-11-26T08:00:00"))).toBe("2026-11");
-    // คืนคะแนนวันที่ 3 ธ.ค. (รอบ พ.ย. ปิดแล้ว) ⇒ ปรับในรอบ ธ.ค.
-    expect(effectiveScorePeriodOf(cfg, day25, th("2026-12-03T14:00:00"))).toBe("2026-12");
-    // คืนคะแนนตอน ม.ค. ⇒ รอบ ม.ค.
-    expect(effectiveScorePeriodOf(cfg, day25, th("2027-01-05T09:00:00"))).toBe("2027-01");
+    // ระบบหักขาดงานตอน 08:00 วันที่ 26 ⇒ ยังนับรอบ พ.ย.
+    expect(effectiveScorePeriodOf(cfg, day25, th("2026-11-26T08:00:00"), null)).toBe("2026-11");
+    // ระบบบันทึกหลัง 10:00 ⇒ ไม่นับ
+    expect(effectiveScorePeriodOf(cfg, day25, th("2026-11-26T11:00:00"), null)).toBeNull();
+    // คนอนุมัติ/คืนคะแนนก่อน 23:59 ⇒ นับ · หลังเที่ยงคืน ⇒ ไม่นับที่ไหนเลย
+    expect(effectiveScorePeriodOf(cfg, day25, th("2026-11-25T23:30:00"), "ceo")).toBe("2026-11");
+    expect(effectiveScorePeriodOf(cfg, day25, th("2026-11-26T00:10:00"), "ceo")).toBeNull();
+    expect(effectiveScorePeriodOf(cfg, day25, th("2026-12-03T14:00:00"), "ceo")).toBeNull();
   });
 });

@@ -130,7 +130,7 @@ export default async function MyScorePage({
         // ช่วงเดียวกับที่คิดคะแนนเดือนนี้ — จำนวนในแต่ละหมวดกับรายการข้างในจึงตรงกัน
         // ดึงเสมอ (ไม่ใช่แค่ตอนมีหมวดที่ติดลบ) — หมวดที่ได้คืนคะแนนหมดแล้วยังต้องเห็นว่า "คืนแล้ว"
         const events = await listUserPeriodEvents(session.orgId, session.userId, period, month);
-        const details = await buildMyEventDetails(session.orgId, events, period);
+        const details = await buildMyEventDetails(session.orgId, events);
 
         return (
           <div className="flex flex-col gap-4">

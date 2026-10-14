@@ -101,8 +101,8 @@ export async function createPenaltyRequest(
   });
   if (!event) return { error: "ไม่พบรายการหักคะแนนนี้" };
   // รอบต่อรอบ — ยื่นได้ถึงวันตัดรอบเกรด (ปกติวันที่ 25) ของรอบที่โดนหัก (penalty-request-window.ts)
-  if (!penaltyRequestOpen(parsed.day, event.createdAt, await loadScorePeriodConfig(orgId))) {
-    return { error: "ปิดรับคำร้องของรอบนั้นแล้ว — ขอแก้คะแนนได้ถึงวันตัดรอบเกรดของรอบที่โดนหักเท่านั้น" };
+  if (!penaltyRequestOpen(parsed.day, await loadScorePeriodConfig(orgId))) {
+    return { error: "ปิดรับคำร้องของรอบนั้นแล้ว — ขอแก้คะแนนได้ถึง 23:59 ของวันตัดรอบเกรดเท่านั้น" };
   }
 
   const undone = await prisma.performanceEvent.findFirst({
@@ -155,6 +155,10 @@ export async function decidePenaltyRequest(
     if (idx === -1) return { error: "ไม่พบคำร้องนี้" };
     const found = list[idx]!;
     if (found.status !== "pending") return { error: "คำร้องนี้ถูกตัดสินไปแล้ว" };
+    // ล็อกแล้วจบ — รอบเกรดของวันนั้นปิดแล้ว (23:59 ของวันตัดรอบ) อนุมัติแล้วคะแนนไม่มีผล จึงไม่ให้อนุมัติ
+    if (decision === "approved" && !penaltyRequestOpen(found.day, await loadScorePeriodConfig(orgId))) {
+      return { error: "รอบเกรดของวันนั้นปิดแล้ว (23:59 ของวันตัดรอบ) — อนุมัติคืนคะแนนไม่ได้แล้ว กดไม่อนุมัติเพื่อปิดคำร้อง" };
+    }
 
     const updated: PenaltyRequest = {
       ...found,

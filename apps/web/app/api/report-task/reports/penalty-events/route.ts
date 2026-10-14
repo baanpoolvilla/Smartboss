@@ -80,7 +80,7 @@ export async function GET(request: Request) {
         restored: undoRefIds.has(e.refId!),
         requestStatus: latestRequest.get(e.refId!)?.status ?? null,
         // ยื่นคำร้องได้ถึงวันตัดรอบเกรดของรอบที่โดนหัก (penalty-request-window.ts)
-        requestOpen: penaltyRequestOpen(day, e.createdAt, period),
+        requestOpen: penaltyRequestOpen(day, period),
       };
     });
 

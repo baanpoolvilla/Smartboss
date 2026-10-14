@@ -7,7 +7,6 @@ import { readStore } from "@/modules/report_task/lib/db/org-store";
 import { effectiveRoundsOf } from "@/modules/report_task/lib/submission-rounds";
 import type { ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { eventDay } from "@/lib/performance";
-import { isCarriedOver, type ScorePeriodConfig } from "@/lib/score-period";
 
 /**
  * "หักจากอะไร" ของแต่ละรายการในหน้า "คะแนนของฉัน" — กดรายการแล้วเห็นต้นเรื่อง
@@ -74,8 +73,6 @@ async function myScansByDay(days: string[]): Promise<Map<string, TimeEvent[]>> {
 export async function buildMyEventDetails(
   orgId: string,
   events: DetailEvent[],
-  /** รอบเกรด — ใส่มา = บอก "ปรับจากรอบก่อน" ให้รายการที่บันทึกหลังรอบของวันนั้นปิดแล้ว */
-  period?: ScorePeriodConfig,
 ): Promise<Map<string, EventDetail>> {
   const details = new Map<string, EventDetail>();
   const attendanceDays = [
@@ -136,12 +133,6 @@ export async function buildMyEventDetails(
     }
 
     lines.push(e.createdBy ? `หักโดย ${actorName.get(e.createdBy) ?? "ผู้ดูแล"}` : "ระบบหักอัตโนมัติ");
-    // บันทึกหลังรอบของวันนั้นปิดแล้ว ⇒ นับในรอบนี้แทน (ไม่แก้เกรดของรอบที่ปิดไปแล้ว — score-period.ts)
-    if (period && e.createdAt && isCarriedOver(period, e.occurredAt, e.createdAt)) {
-      lines.unshift(
-        `ปรับจากรอบก่อน: เรื่องของวันที่ ${eventDay(e.occurredAt)} บันทึกหลังรอบนั้นปิดแล้ว จึงนับในรอบนี้ (เกรดรอบก่อนไม่เปลี่ยน)`,
-      );
-    }
     details.set(e.id, { lines, href, hrefLabel });
   }
   return details;
