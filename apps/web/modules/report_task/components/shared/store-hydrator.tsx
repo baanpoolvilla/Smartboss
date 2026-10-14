@@ -206,7 +206,7 @@ export function StoreHydrator() {
         apiKey="holidays"
         pollMs={SLOW_POLL_MS}
         store={useHolidayStore}
-        select={(s) => ({ holidays: s.holidays, selectedByUser: s.selectedByUser })}
+        select={(s) => ({ holidays: s.holidays, selectedByUser: s.selectedByUser, holidaysAreLeaveCredit: s.holidaysAreLeaveCredit })}
         // The server row is whatever was last saved — if it predates a fixed
         // Thai holiday being added to thai-holidays.ts (e.g. the 2026 dates),
         // it silently overwrites the code's up-to-date seed with a stale,
@@ -216,7 +216,12 @@ export function StoreHydrator() {
         apply={(s, slice) => {
           const existingIds = new Set(slice.holidays.map((h) => h.id));
           const missingBuiltIns = thaiHolidayEvents.filter((h) => !existingIds.has(h.id));
-          return { ...s, ...slice, holidays: [...slice.holidays, ...missingBuiltIns] };
+          return {
+            ...s,
+            ...slice,
+            holidays: [...slice.holidays, ...missingBuiltIns],
+            holidaysAreLeaveCredit: slice.holidaysAreLeaveCredit === true,
+          };
         }}
       />
       <ServerStoreSync

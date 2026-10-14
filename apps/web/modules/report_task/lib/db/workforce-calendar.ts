@@ -198,6 +198,25 @@ export async function listLeaveTypeCatalog(orgId: string): Promise<string[]> {
   return rows.map((r) => r.name);
 }
 
+/**
+ * บริษัทแปลงวันหยุดนักขัตฤกษ์เป็นสิทธิ์ Holiday สะสม (ประเภทลา accrues_from_holidays) หรือไม่
+ *
+ * ถ้าใช่ วันหยุดราชการไม่ใช่วันที่ทุกคนหยุดพร้อมกัน — แต่ละคนลง Holiday เองวันไหนก็ได้
+ * ⇒ ห้ามยกเว้นการส่งรายงานให้ทุกคนตามวันในปฏิทินวันหยุด (ยกเว้นเฉพาะคนที่ลงลาจริง)
+ */
+export async function orgHolidaysAreLeaveCredit(orgId: string): Promise<boolean> {
+  const rows = await withWorkforceTenant(orgId, (tx) =>
+    tx.$queryRaw<{ n: number }[]>`
+      SELECT 1 AS n
+      FROM workforce.leave_types
+      WHERE accrues_from_holidays IS TRUE
+        AND archived_at IS NULL
+      LIMIT 1
+    `
+  );
+  return rows.length > 0;
+}
+
 /** วันหยุดของบริษัทตามปฏิทินวันหยุดที่ตั้งไว้ในโมดูลบุคคล */
 export async function listHolidayEvents(
   orgId: string,

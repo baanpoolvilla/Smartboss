@@ -16,12 +16,13 @@ import { buildDateExemptions, type DateExemptions } from "@/modules/report_task/
 export function useReportComplianceExemptions(): DateExemptions {
   const leaves = useLeaveStore((s) => s.leaves);
   const holidays = useHolidayStore((s) => s.holidays);
+  const holidaysAreLeaveCredit = useHolidayStore((s) => s.holidaysAreLeaveCredit);
   const pickedDates = useRoutineDayOffStore((s) => s.pickedDates);
   const rules = useRoutineDayOffStore((s) => s.rules);
   const ruleExceptions = useRoutineDayOffStore((s) => s.ruleExceptions);
 
   return useMemo(
-    () => buildDateExemptions(leaves, holidays, { pickedDates, rules, ruleExceptions }),
-    [leaves, holidays, pickedDates, rules, ruleExceptions]
+    () => buildDateExemptions(leaves, holidays, { pickedDates, rules, ruleExceptions }, undefined, holidaysAreLeaveCredit),
+    [leaves, holidays, pickedDates, rules, ruleExceptions, holidaysAreLeaveCredit]
   );
 }

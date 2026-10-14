@@ -8,6 +8,7 @@ import {
   listLeaveEvents,
   listLeaveTypeCatalog,
   listOvertimeEvents,
+  orgHolidaysAreLeaveCredit,
 } from "@/modules/report_task/lib/db/workforce-calendar";
 
 /*
@@ -69,14 +70,17 @@ export async function readStorePayload(
 
   if (WORKFORCE_KEYS.has(key)) {
     const { from, to } = defaultRange();
+    if (key === "holidays") {
+      const [holidays, holidaysAreLeaveCredit] = await Promise.all([
+        listHolidayEvents(orgId, from, to),
+        orgHolidaysAreLeaveCredit(orgId),
+      ]);
+      // holidays store เก็บเป็น { holidays, selectedByUser, ... } ส่วน leaves/overtime เป็นอาร์เรย์ตรง ๆ
+      return { payload: { holidays, selectedByUser: {}, holidaysAreLeaveCredit }, version: 1 };
+    }
     const events =
-      key === "leaves"
-        ? await listLeaveEvents(orgId, from, to)
-        : key === "overtime"
-          ? await listOvertimeEvents(orgId, from, to)
-          : await listHolidayEvents(orgId, from, to);
-    // holidays store เก็บเป็น { holidays, selectedByUser } ส่วน leaves/overtime เป็นอาร์เรย์ตรง ๆ
-    return { payload: key === "holidays" ? { holidays: events, selectedByUser: {} } : events, version: 1 };
+      key === "leaves" ? await listLeaveEvents(orgId, from, to) : await listOvertimeEvents(orgId, from, to);
+    return { payload: events, version: 1 };
   }
 
   const { data, version } = await readStore<unknown>(orgId, key);

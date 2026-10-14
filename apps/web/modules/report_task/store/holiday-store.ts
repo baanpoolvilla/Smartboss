@@ -30,6 +30,8 @@ interface HolidayStore {
   holidays: CalendarEvent[];
   /** Which country-source tags each user has personally chosen to see on their own calendar — importing a country doesn't push it onto everyone else's. */
   selectedByUser: Record<string, string[]>;
+  /** true = บริษัทแปลงวันหยุดราชการเป็นสิทธิ์ Holiday ให้แต่ละคนลงเอง (ประเภทลา accrues_from_holidays ใน HR) — วันในปฏิทินวันหยุดจึงไม่ใช่วันที่ทุกคนหยุด ไม่ยกเว้นการส่งรายงานให้ทุกคน */
+  holidaysAreLeaveCredit: boolean;
   addHoliday: (h: CalendarEvent) => void;
   /** Bulk import (e.g. from a public-holiday API) — skips ids already present. */
   addManyHolidays: (items: CalendarEvent[]) => number;
@@ -75,6 +77,7 @@ export const useHolidayStore = create<HolidayStore>()(
   (set, get) => ({
       holidays: thaiHolidayEvents,
       selectedByUser: {},
+      holidaysAreLeaveCredit: false,
       addHoliday: (h) => set((s) => ({ holidays: [h, ...s.holidays] })),
       addManyHolidays: (items) => {
         const existingIds = new Set(get().holidays.map((h) => h.id));

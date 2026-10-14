@@ -19,4 +19,13 @@ describe("buildDateExemptions", () => {
     const ex = buildDateExemptions([leave({ type: "leave", title: "Work From Home", requiresReports: true })], [], noRoutine);
     expect(isExemptDate(ex, "u1", "2026-09-27")).toBe(false);
   });
+
+  it("exempts everyone on a public holiday, unless holidays are converted into Holiday leave credit", () => {
+    const holiday: CalendarEvent = { id: "hol-2026-10-13", title: "วันนวมินทรมหาราช", type: "holiday", start: "2026-10-13", end: "2026-10-14", allDay: true };
+    expect(isExemptDate(buildDateExemptions([], [holiday], noRoutine), "u1", "2026-10-13")).toBe(true);
+
+    const credit = buildDateExemptions([leave({ title: "Holiday", start: "2026-10-20", end: "2026-10-21" })], [holiday], noRoutine, 3, true);
+    expect(isExemptDate(credit, "u1", "2026-10-13")).toBe(false);
+    expect(isExemptDate(credit, "u1", "2026-10-20")).toBe(true);
+  });
 });

@@ -32,6 +32,12 @@ function eachDateExclusiveEnd(startIso: string, endIso: string): string[] {
  * how far back recurring rules get expanded; leave/holiday events and picked
  * dates are unbounded since they're already concrete dates, not a pattern to
  * walk.
+ *
+ * `holidaysAreLeaveCredit` — the company converts public holidays into a
+ * Holiday leave balance each person spends on a day of their own choosing
+ * (HR leave type `accrues_from_holidays`). The holiday calendar then isn't a
+ * day everyone is off, so it exempts nobody; only the Holiday leave someone
+ * actually logs does (via `leaves`).
  */
 export function buildDateExemptions(
   leaves: CalendarEvent[],
@@ -41,7 +47,8 @@ export function buildDateExemptions(
     rules: RoutineDayOffRule[];
     ruleExceptions: Record<string, string>;
   },
-  monthsBack = 3
+  monthsBack = 3,
+  holidaysAreLeaveCredit = false
 ): DateExemptions {
   const personalDates = new Map<string, Set<string>>();
 
@@ -75,7 +82,7 @@ export function buildDateExemptions(
   }
 
   const companyDates = new Set<string>();
-  for (const holiday of holidays) {
+  for (const holiday of holidaysAreLeaveCredit ? [] : holidays) {
     for (const date of eachDateExclusiveEnd(holiday.start, holiday.end)) companyDates.add(date);
   }
 
