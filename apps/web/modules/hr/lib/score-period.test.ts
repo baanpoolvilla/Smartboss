@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  scorePeriodReadyAt,
   DEFAULT_SCORE_PERIOD,
   effectiveScorePeriodOf,
   daysUntilCutoff,
@@ -75,4 +76,13 @@ describe("score period (cut off on the 25th)", () => {
     expect(effectiveScorePeriodOf(cfg, day25, th("2026-11-26T00:10:00"), "ceo")).toBeNull();
     expect(effectiveScorePeriodOf(cfg, day25, th("2026-12-03T14:00:00"), "ceo")).toBeNull();
   });
+
+  it("tells when the grade is ready from the company's latest shift end", () => {
+    // ไม่มีกะข้ามคืน ⇒ 00:00 วันที่ 26
+    expect(scorePeriodReadyAt(cfg, "2026-11", null)).toEqual(th("2026-11-26T00:00:00"));
+    expect(scorePeriodReadyAt(cfg, "2026-11", 17 * 60)).toEqual(th("2026-11-26T00:00:00"));
+    // กะ 22:00–08:00 (end 1920) ⇒ หัก 10:59 ⇒ พร้อมใช้ 11:00 วันที่ 26
+    expect(scorePeriodReadyAt(cfg, "2026-11", 1440 + 8 * 60)).toEqual(th("2026-11-26T11:00:00"));
+  });
 });
+

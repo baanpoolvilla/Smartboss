@@ -16,7 +16,7 @@ import { buildPeriodScorecards } from "@/lib/performance";
 import { monthDisplay, shiftMonth } from "@/lib/performance-month";
 import { CategoryChipsRow } from "./category-chips-row";
 import { resolveScorePeriodParam, scorePeriodOf, scorePeriodRange } from "@/lib/score-period";
-import { loadScorePeriodConfig } from "@/lib/score-period-config";
+import { loadScorePeriodConfig, loadScorePeriodReadyAt } from "@/lib/score-period-config";
 import { ScorePeriodNotice } from "@/components/score-period-notice";
 
 /**
@@ -73,7 +73,7 @@ export async function renderScoreTab(
 
   return (
     <div className="flex flex-col gap-4">
-      <ScorePeriodNotice period={period} />
+      <ScorePeriodNotice period={period} readyAt={await loadScorePeriodReadyAt(session.orgId, period, thisMonth)} />
       {criteriaLooksStrict && (
         <div className="flex flex-wrap items-start gap-3 rounded-(--radius-lg) border border-(--tone-warn)/35 bg-(--tone-warn)/10 p-4">
           <div className="min-w-0 flex-1">

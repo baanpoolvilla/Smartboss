@@ -10,7 +10,7 @@ import Link from "next/link";
 import { gradeColor, buildPeriodScorecards } from "@/lib/performance";
 import { monthDisplay, shiftMonth } from "@/lib/performance-month";
 import { resolveScorePeriodParam, scorePeriodOf } from "@/lib/score-period";
-import { loadScorePeriodConfig } from "@/lib/score-period-config";
+import { loadScorePeriodConfig, loadScorePeriodReadyAt } from "@/lib/score-period-config";
 import { ScorePeriodNotice } from "@/components/score-period-notice";
 
 /**
@@ -89,7 +89,10 @@ export default async function PerformancePage({
   return (
     <AppScaffold title="ผลงานรายคน" width="max-w-5xl" backHref="/admin">
       <div className="mb-4">
-        <ScorePeriodNotice period={period} />
+        <ScorePeriodNotice
+          period={period}
+          readyAt={await loadScorePeriodReadyAt(session.orgId, period, resolveScorePeriodParam(period, undefined))}
+        />
       </div>
       <Card className="mb-4 p-4">
         <div className="flex flex-wrap items-center justify-center gap-3">

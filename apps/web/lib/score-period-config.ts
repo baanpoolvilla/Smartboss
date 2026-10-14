@@ -1,7 +1,8 @@
 import "server-only";
 
 import { readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
-import { normalizeScorePeriodConfig, type ScorePeriodConfig } from "@/lib/score-period";
+import { normalizeScorePeriodConfig, scorePeriodReadyAt, type ScorePeriodConfig } from "@/lib/score-period";
+import { withWorkforceTenant } from "@/modules/report_task/lib/db/workforce-calendar";
 
 /**
  * วันตัดรอบคะแนนของบริษัท (score-period.ts) — เก็บใน store ของบริษัท คีย์ "score-period"
@@ -23,3 +24,21 @@ export async function saveScorePeriodConfig(orgId: string, config: ScorePeriodCo
   }
   throw new Error("บันทึกวันตัดรอบไม่สำเร็จ ลองใหม่อีกครั้ง");
 }
+
+/**
+ * เกรดรอบ `month` ของบริษัทพร้อมใช้ตอนไหน (scorePeriodReadyAt) — ดูกะที่เลิกช้าที่สุดของบริษัท
+ * จากกะที่ HR ตั้งไว้ในระบบบุคคล · อ่านไม่ได้ (ยังไม่มีข้อมูลฝั่ง HR) = ถือว่าไม่มีกะข้ามคืน
+ */
+export async function loadScorePeriodReadyAt(orgId: string, config: ScorePeriodConfig, month: string): Promise<Date> {
+  const latest = await withWorkforceTenant(orgId, (tx) =>
+    tx.$queryRaw<{ m: number | null }[]>`
+      SELECT max(end_minutes)::int AS m
+      FROM workforce.shift_definitions
+      WHERE status = 'ACTIVE' AND rest_day = false
+    `
+  )
+    .then((rows) => rows[0]?.m ?? null)
+    .catch(() => null);
+  return scorePeriodReadyAt(config, month, latest);
+}
+

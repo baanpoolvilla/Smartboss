@@ -12,7 +12,21 @@ function monthName(month: string): string {
  * ⚠ แจ้งวันตัดรอบเกรด (score-period.ts) — ขึ้นบนหน้าคะแนน กดแล้วกางอ่านกติกา
  * ใช้ <details> ล้วน ไม่ต้องมี JS ฝั่ง client
  */
-export function ScorePeriodNotice({ period, now = new Date() }: { period: ScorePeriodConfig; now?: Date }) {
+/** "26 พ.ย. 2569 00:00 น." ตามเวลาไทย */
+export function thaiDateTime(at: Date): string {
+  return `${at.toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", year: "numeric" })} ${at.toLocaleTimeString("th-TH", { timeZone: "Asia/Bangkok", hour: "2-digit", minute: "2-digit" })} น.`;
+}
+
+export function ScorePeriodNotice({
+  period,
+  readyAt,
+  now = new Date(),
+}: {
+  period: ScorePeriodConfig;
+  /** เกรดรอบปัจจุบันพร้อมใช้ (นิ่ง คิดเงินเดือนได้) — loadScorePeriodReadyAt */
+  readyAt?: Date;
+  now?: Date;
+}) {
   const current = scorePeriodOf(period, now);
   const next = shiftPeriodMonth(current, 1);
   const left = daysUntilCutoff(period, now);
@@ -35,6 +49,9 @@ export function ScorePeriodNotice({ period, now = new Date() }: { period: ScoreP
           <span className="block text-xs text-(--ink-soft)">
             รอบเกรด{monthName(current)}: {scorePeriodLabel(period, current)} · กดอ่านรายละเอียด
           </span>
+          {readyAt && (
+            <span className="block text-xs text-(--ink-soft)">เกรดรอบนี้พร้อมใช้คิดเงินเดือน: {thaiDateTime(readyAt)}</span>
+          )}
         </span>
       </summary>
       <ul className="mt-2 list-disc space-y-1 pl-9 text-xs leading-relaxed text-(--ink-soft)">
@@ -49,6 +66,10 @@ export function ScorePeriodNotice({ period, now = new Date() }: { period: ScoreP
           รอบปิดตอน 23:59 ของวันตัดรอบ คำร้องขอแก้คะแนน การอนุมัติ และการแก้เวลาลงเวลา ต้องทำให้ทันก่อนเวลานี้
         </li>
         <li>ปิดแล้วเกรดของรอบนั้นไม่เปลี่ยนอีก (ใช้คิดเงินเดือน) และไม่มีการย้ายไปปรับในรอบถัดไป</li>
+        <li>
+          เกรดพร้อมใช้ (นิ่ง เอาไปคิดเงินเดือนได้) เมื่อระบบหักคะแนนของวันตัดรอบครบ คิดจากกะที่เลิกช้าที่สุดของบริษัท
+          {readyAt ? ` รอบนี้คือ ${thaiDateTime(readyAt)}` : ""}
+        </li>
         <li>ระบบหักคะแนนลงเวลาเมื่อกะจบ กะปกติหักภายใน 23:59 ของวันนั้น ส่วนกะดึกที่เลิกเช้าวันถัดไป หักหลังเลิกกะและยังนับในรอบของวันที่เข้ากะ</li>
         <li>
           วันตัดรอบปกติคือวันที่ {period.cutoffDay} ของทุกเดือน เดือนที่ไม่มีวันนั้นตัดวันสุดท้ายของเดือนแทน บางเดือนฝ่ายบุคคลอาจเปลี่ยนวันได้

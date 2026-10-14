@@ -9,9 +9,9 @@ import { hasBreakdown, ScoreBreakdown } from "@/components/performance/score-bre
 import { buildMyEventDetails } from "@/lib/performance-details";
 import { monthDisplay, shiftMonth } from "@/lib/performance-month";
 import { MissedReportsList } from "./missed-reports-list";
-import { resolveScorePeriodParam, scorePeriodLabel, scorePeriodOf, scorePeriodRange } from "@/lib/score-period";
-import { loadScorePeriodConfig } from "@/lib/score-period-config";
-import { ScorePeriodNotice } from "@/components/score-period-notice";
+import { hasPassed, resolveScorePeriodParam, scorePeriodLabel, scorePeriodOf } from "@/lib/score-period";
+import { loadScorePeriodConfig, loadScorePeriodReadyAt } from "@/lib/score-period-config";
+import { ScorePeriodNotice, thaiDateTime } from "@/components/score-period-notice";
 
 /**
  * "คะแนนของฉัน" — ทุกคนเข้าได้ (HR_PERMS.access เดียวกับเมนู "ของฉัน")
@@ -54,7 +54,13 @@ export default async function MyScorePage({
         const card = cards.find((c) => c.userId === session.userId);
         const gradeOrder = settings.gradeThresholds.map(([g]) => g);
 
-        const notice = <ScorePeriodNotice period={period} />;
+        // เกรดพร้อมใช้ (นิ่ง คิดเงินเดือนได้) ตอนไหน — ของรอบปัจจุบัน (ป้าย ⚠) และของเดือนที่เลือกดู
+        const [currentReadyAt, monthReadyAt] = await Promise.all([
+          loadScorePeriodReadyAt(session.orgId, period, thisMonth),
+          loadScorePeriodReadyAt(session.orgId, period, month),
+        ]);
+        const notice = <ScorePeriodNotice period={period} readyAt={currentReadyAt} />;
+        const monthReady = hasPassed(monthReadyAt);
         const monthNav = (
           <div className="flex items-center justify-between gap-2">
             <Link
@@ -68,6 +74,16 @@ export default async function MyScorePage({
               {month === thisMonth ? `เดือนนี้ (${monthDisplay(month)})` : monthDisplay(month)}
               {/* รอบเกรดไม่ใช่เดือนปฏิทิน — บอกช่วงวันที่นับจริง */}
               <span className="block text-xs font-normal text-(--ink-soft)">{scorePeriodLabel(period, month)}</span>
+              <span
+                className="mt-0.5 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium"
+                style={
+                  monthReady
+                    ? { color: "var(--tone-ok)", backgroundColor: "var(--bg-soft)" }
+                    : { color: "var(--tone-warn)", backgroundColor: "var(--bg-soft)" }
+                }
+              >
+                {monthReady ? "✓ ปิดรอบแล้ว · พร้อมใช้คิดเงินเดือน" : `กำลังนับ · พร้อมใช้ ${thaiDateTime(monthReadyAt)}`}
+              </span>
             </p>
             {month < thisMonth ? (
               <Link
