@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { todayIso } from "@/modules/report_task/lib/now";
+import type { ScorePeriodConfig } from "@/lib/score-period";
 
 interface ReportPenaltySettingsStore {
   /**
@@ -35,6 +36,11 @@ interface ReportPenaltySettingsStore {
    * ตัวเองอยู่แล้วคือ hard cutoff ของห้อง ดู report-penalty-sweep.ts)
    */
   weeklyMonthlyGraceDays: number;
+  /**
+   * วันตัดรอบเกรดของบริษัท (อ่านอย่างเดียว — /api/report-task/score-period ใน store-hydrator.tsx)
+   * ช่วงส่งย้อนหลังข้างบนไม่เลยวันตัดรอบ (graceEndWithinPeriod) ให้แดชบอร์ดตัดสินตรงกับตัวหักคะแนน · null = ยังไม่โหลด
+   */
+  scorePeriod: ScorePeriodConfig | null;
   setEnabled: (v: boolean) => void;
   setWeeklyMonthlyGraceDays: (n: number) => void;
 }
@@ -46,6 +52,7 @@ export const useReportPenaltySettingsStore = create<ReportPenaltySettingsStore>(
   enabled: false,
   enabledSince: null,
   weeklyMonthlyGraceDays: 3,
+  scorePeriod: null,
   // ทุกครั้งที่เปิด (แม้จะเคยเปิดมาก่อนแล้วปิดแล้วเปิดใหม่) ตั้ง enabledSince
   // เป็นวันนี้เสมอ — กันไม่ให้ช่วงที่เคยปิดไว้ถูกแบ็คฟิลย้อนหลังตอนเปิดใหม่ด้วย
   setEnabled: (v) => set(v ? { enabled: true, enabledSince: todayIso() } : { enabled: false }),

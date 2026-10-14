@@ -12,6 +12,7 @@ import {
 } from "@/modules/report_task/lib/submission-rounds";
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
 import { useReportPenaltySettingsStore } from "@/modules/report_task/store/report-penalty-settings-store";
+import { graceEndWithinPeriod } from "@/lib/score-period";
 import { photoCount } from "@/modules/report_task/lib/report-attachment-kind";
 import { lateCutoffFor } from "@/modules/report_task/lib/report-cutoff";
 import { localDateStr, now, todayIso } from "@/modules/report_task/lib/now";
@@ -245,11 +246,12 @@ export function roundComplianceStatus(
      * แต่แดชบอร์ดไม่ ⇒ ส่ง Weekly ช้าไปวันสองวัน คะแนนบอก "สาย" แดชบอร์ดบอก "ไม่ส่ง"
      */
     if (roundFrequencyOf(round) !== "daily") {
-      const grace = useReportPenaltySettingsStore.getState().weeklyMonthlyGraceDays;
+      const { weeklyMonthlyGraceDays: grace, scorePeriod } = useReportPenaltySettingsStore.getState();
       if (grace > 0) {
         const end = new Date(`${day}T00:00:00`);
         end.setDate(end.getDate() + grace);
-        const graceEnd = localDateStr(end);
+        // ไม่เลยวันตัดรอบเกรด — ตรงกับตัวหักคะแนน (report-penalty-sweep.ts)
+        const graceEnd = graceEndWithinPeriod(scorePeriod, day, localDateStr(end));
         const rounds = effectiveRoundsOf(topic);
         const late = posts.some((p) => {
           if (p.topicId !== topic.id || p.authorId !== userId || p.excludeFromSubmission) return false;

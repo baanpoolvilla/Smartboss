@@ -1,4 +1,5 @@
 import "server-only";
+import { loadScorePeriodConfig } from "@/lib/score-period-config";
 import { prisma } from "@smartboss/database";
 
 import { loadPerformanceSettings, type PerformanceEventInput } from "@/lib/performance";
@@ -173,7 +174,9 @@ export async function runReportPenaltySweep(orgId: string, actorId: string | nul
     weeklyMonthlyGraceDays,
     REPORT_PENALTY_LOOKBACK_DAYS,
     // ตัดสินทั้งช่วง lookback เพื่อใช้ "คืน" — การหักใหม่ยังกรองด้วย notBeforeDay ในลูปข้างล่าง
-    reconcileFloorDay < notBeforeDay ? reconcileFloorDay : notBeforeDay
+    reconcileFloorDay < notBeforeDay ? reconcileFloorDay : notBeforeDay,
+    // ส่งย้อนหลังได้ไม่เลย 23:59 ของวันตัดรอบเกรด — ไม่ส่ง = −2 ทันนับในรอบนั้น
+    await loadScorePeriodConfig(orgId)
   );
 
   // "สถานะที่ควร active อยู่ตอนนี้" ต่อ refId — มาจาก candidates (พลาด/สาย)

@@ -77,6 +77,13 @@ export function StoreHydrator() {
     useRoomSettingsIntroStore.persist.rehydrate();
     useIdentityStore.persist.rehydrate();
     void Promise.resolve(useStickerUsageStore.persist.rehydrate()).then(syncStickerUsageFromServer);
+    // วันตัดรอบเกรด (อ่านอย่างเดียว) — ช่วงส่งรายงานย้อนหลังจบที่วันตัดรอบ ให้ตรงกับตัวหักคะแนน
+    void fetch("/api/report-task/score-period")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((scorePeriod) => {
+        if (scorePeriod) useReportPenaltySettingsStore.setState({ scorePeriod });
+      })
+      .catch(() => {});
   }, []);
 
   return (

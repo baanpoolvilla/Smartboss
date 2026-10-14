@@ -208,6 +208,19 @@ export function scorePeriodReadyAt(
   return new Date(Math.min(ready, lockAt + SYSTEM_JUDGEMENT_GRACE_MS));
 }
 
+/**
+ * วันสุดท้ายที่ส่งรายงานย้อนหลังได้ (รอบรายสัปดาห์/รายเดือน) — ไม่เลยวันตัดรอบของรอบที่วันครบกำหนดอยู่
+ * ("ตัดรอบส่งช้าได้ 23.59 ถ้าไม่ส่งเท่ากับขาดส่งเลย") ⇒ ครบกำหนด 24 ส่งย้อนหลัง 3 วัน = ส่งได้ถึง 25 (ไม่ใช่ 27)
+ * ไม่ส่งภายใน 23:59 วันที่ 25 = ไม่ส่ง −2 ตัดสินรอบเก็บตก 00:05 ทันนับในเกรดรอบนั้น · ส่งหลังจากนั้นไม่นับเป็นส่งช้า
+ * `config` null (ยังโหลดไม่เสร็จ) = ไม่ตัด
+ */
+export function graceEndWithinPeriod(config: ScorePeriodConfig | null | undefined, dueDay: string, graceEndDay: string): string {
+  if (!config) return graceEndDay;
+  const month = scorePeriodOf(config, new Date(`${dueDay}T12:00:00+07:00`));
+  const lastDay = bangkokDay(scorePeriodRange(config, month).to);
+  return graceEndDay > lastDay ? lastDay : graceEndDay;
+}
+
 /** ถึงเวลานี้แล้วหรือยัง (ใช้ในหน้า server component — เลี่ยงเรียก Date.now() ตรงตอน render) */
 export function hasPassed(at: Date, now: Date = new Date()): boolean {
   return now.getTime() >= at.getTime();

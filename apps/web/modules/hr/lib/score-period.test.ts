@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   scorePeriodReadyAt,
+  graceEndWithinPeriod,
   DEFAULT_SCORE_PERIOD,
   effectiveScorePeriodOf,
   daysUntilCutoff,
@@ -88,5 +89,20 @@ describe("score period (cut off on the 25th)", () => {
     expect(scorePeriodReadyAt(cfg, "2026-11", 23 * 60)).toEqual(th("2026-11-26T02:30:00"));
     // กะ 22:00–08:00 (end 1920) ⇒ หัก 10:59 ⇒ พร้อมใช้ 11:30 วันที่ 26
     expect(scorePeriodReadyAt(cfg, "2026-11", 1440 + 8 * 60)).toEqual(th("2026-11-26T11:30:00"));
+  });
+});
+
+describe("late weekly/monthly reports close at 23:59 on the cutoff day", () => {
+  it("caps the grace window at the cutoff day of the due day's period", () => {
+    // ครบกำหนด 24 พ.ย. ส่งย้อนหลัง 3 วัน (ถึง 27) ⇒ ส่งได้ถึง 25 เท่านั้น
+    expect(graceEndWithinPeriod(cfg, "2026-11-24", "2026-11-27")).toBe("2026-11-25");
+    // ครบกำหนด 25 ⇒ ส่งได้ถึง 25 วันเดียว
+    expect(graceEndWithinPeriod(cfg, "2026-11-25", "2026-11-28")).toBe("2026-11-25");
+    // ไม่ข้ามวันตัดรอบ ⇒ ไม่เปลี่ยน
+    expect(graceEndWithinPeriod(cfg, "2026-11-10", "2026-11-13")).toBe("2026-11-13");
+    // ครบกำหนด 26 = รอบใหม่ (ธ.ค.) ⇒ ไม่เปลี่ยน
+    expect(graceEndWithinPeriod(cfg, "2026-11-26", "2026-11-29")).toBe("2026-11-29");
+    // ยังไม่ได้โหลดค่า ⇒ ไม่ตัด
+    expect(graceEndWithinPeriod(null, "2026-11-24", "2026-11-27")).toBe("2026-11-27");
   });
 });

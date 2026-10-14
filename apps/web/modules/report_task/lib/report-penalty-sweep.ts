@@ -21,6 +21,7 @@ import type {
   SubmitterGroup,
 } from "@/modules/report_task/store/report-feed-store";
 import type { ReportSubmissionLockSettings } from "@/modules/report_task/store/reminder-settings-store";
+import { graceEndWithinPeriod, type ScorePeriodConfig } from "@/lib/score-period";
 
 /**
  * เฟส 2 ของ docs/spec-report-submission-rounds.md — sweep ที่ทำให้ "พลาดส่ง /
@@ -191,7 +192,9 @@ export function roundComplianceStatusServer(
   users: DirectoryUser[],
   exemptions: DateExemptions,
   lock: ReportSubmissionLockSettings,
-  weeklyMonthlyGraceDays: number
+  weeklyMonthlyGraceDays: number,
+  /** วันตัดรอบเกรด — ช่วงส่งย้อนหลังไม่เลยวันตัดรอบ (graceEndWithinPeriod) · null = ไม่ตัด */
+  scorePeriod: ScorePeriodConfig | null = null
 ): ComplianceStatus {
   if (!roundRunsOnDay(round, day)) return "exempt";
   // วันหยุดเก่าก่อนเปลี่ยนกติกา (เช่น 13/10/2569): ส่งช้า = −1 ตามปกติ · ไม่ส่ง = ไม่หัก (isLegacyHolidayOnly)
@@ -218,7 +221,7 @@ export function roundComplianceStatusServer(
     // — รอบรายวันไม่ได้อะไรตรงนี้ (เผื่อของรายวันคือ hard cutoff ข้างล่างซึ่ง
     // จบภายในวันเดียวกันอยู่แล้วเสมอ, ดูคอมเมนต์บนสุดของไฟล์เรื่องทำไมแยกกัน)
     if (roundFrequencyOf(round) !== "daily" && weeklyMonthlyGraceDays > 0) {
-      const graceEndDay = addDaysStr(day, weeklyMonthlyGraceDays);
+      const graceEndDay = graceEndWithinPeriod(scorePeriod, day, addDaysStr(day, weeklyMonthlyGraceDays));
       const gracePosts = postsInGraceWindowServer(topic, userId, round, day, graceEndDay, posts, rounds.length);
       if (gracePosts.length > 0) return "late"; // ส่งทันภายในช่วงเผื่อเวลา แม้เลย due date ไปแล้ว
       if (todayStr <= graceEndDay) return "pending"; // ยังอยู่ในช่วงเผื่อเวลา ยังไม่ตัดสิน ยังไม่หักคะแนน
@@ -277,7 +280,8 @@ export function computeReportPenaltyCandidates(
   lock: ReportSubmissionLockSettings,
   weeklyMonthlyGraceDays: number,
   lookbackDays: number,
-  notBeforeDay: string
+  notBeforeDay: string,
+  scorePeriod: ScorePeriodConfig | null = null
 ): ReportPenaltyCandidate[] {
   const tracked = trackedTopicsOf(topics);
   const out: ReportPenaltyCandidate[] = [];
@@ -291,7 +295,7 @@ export function computeReportPenaltyCandidates(
     for (const day of eachDay(startStr, endStr)) {
       for (const round of rounds) {
         for (const u of users) {
-          const status = roundComplianceStatusServer(topic, u.id, round, day, posts, groups, users, exemptions, lock, weeklyMonthlyGraceDays);
+          const status = roundComplianceStatusServer(topic, u.id, round, day, posts, groups, users, exemptions, lock, weeklyMonthlyGraceDays, scorePeriod);
           if (status !== "missed" && status !== "late") continue;
           out.push({
             userId: u.id,
