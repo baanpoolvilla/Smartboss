@@ -1,16 +1,29 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { canEditRecord, canEditReportTopic, canSeeReportTopic, canToggleOwnChecklistItem } from "@/modules/report_task/lib/permissions";
 import { useDepartmentStore } from "@/modules/report_task/store/department-store";
-import type { Department } from "@/modules/report_task/types";
+import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
+import type { Department, User } from "@/modules/report_task/types";
 
-// Fixtures from src/data/mock.ts: usr-01 heads dep-eng, usr-15 is the owner.
+// usr-01 heads dep-eng, usr-15 is the owner — fixtures of this test only (the app no longer ships demo people).
 const ENG_HEAD = "usr-01";
 const OTHER_ENG = "usr-02";
 const DESIGN_HEAD = "usr-04";
 const OWNER = "usr-15";
 
-// แผนกโหลดจากเซิร์ฟเวอร์แล้ว (store เริ่มว่าง) — ใส่แผนกที่เทสต์อ้างถึงเอง
+// แผนกและคนโหลดจากเซิร์ฟเวอร์ (store เริ่มว่าง) — ใส่ที่เทสต์อ้างถึงเอง
 beforeAll(() => {
+  const person = (id: string, departmentId: string, isOwner = false): User =>
+    ({ id, name: id, email: `${id}@test`, avatar: "", role: "", departmentId, ...(isOwner ? { isOwner } : {}) }) as User;
+  useEmployeeStore.setState({
+    employees: [
+      person("usr-01", "dep-eng"),
+      person("usr-02", "dep-eng"),
+      person("usr-03", "dep-eng"),
+      person("usr-04", "dep-design"),
+      person("usr-06", "dep-marketing"),
+      person("usr-15", "dep-eng", true),
+    ],
+  });
   useDepartmentStore.setState({
     departments: [
       { id: "dep-eng", name: "Engineering", headId: ENG_HEAD },

@@ -62,7 +62,8 @@ function loadDraft(topicId: string): StoredDraft | null {
 
 export function ReportComposer({ topic }: { topic: ReportTopic }) {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
-  const viewer = getUser(viewingAsUserId)!;
+  // ยังไม่มีชื่อตัวเองในรายชื่อ (เพิ่งเปิดหน้า รายชื่อจริงยังโหลดไม่เสร็จ) — แสดงว่างไปก่อน ไม่ให้หน้าพัง
+  const viewer = getUser(viewingAsUserId) ?? { name: "", avatar: "", avatarUrl: null };
   const addPost = useReportFeedStore((s) => s.addPost);
   const submitterGroups = useReportFeedStore((s) => s.submitterGroups);
   const allPosts = useReportFeedStore((s) => s.posts);

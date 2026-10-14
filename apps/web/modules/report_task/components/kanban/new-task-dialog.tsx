@@ -258,7 +258,8 @@ export function NewTaskDialog({
   const [creatingTopic, setCreatingTopic] = useState(false);
   const [newTopicName, setNewTopicName] = useState("");
   const leaveTypes = useLeaveTypeStore((s) => s.types);
-  const assignedByUser = getUser(viewingAsUserId)!;
+  // ยังไม่มีชื่อตัวเองในรายชื่อ (เพิ่งเปิดหน้า รายชื่อจริงยังโหลดไม่เสร็จ) — แสดงว่างไปก่อน ไม่ให้หน้าพัง
+  const assignedByUser = getUser(viewingAsUserId) ?? { name: "", avatar: "", avatarUrl: null };
   // Scheduling a meeting pulls other people's calendars into it — a
   // department head/owner call, not something a regular employee can do.
   const allowedTypes = canManage(viewingAsUserId) ? allowedTypesProp : allowedTypesProp.filter((t) => t !== "meeting");

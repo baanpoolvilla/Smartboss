@@ -2,28 +2,12 @@ import { create } from "zustand";
 import type { User } from "@/modules/report_task/types";
 import { uuid } from "@/modules/report_task/lib/uuid";
 
-// Seed matches the org chart data/mock.ts shipped with before this store
-// existed — first-run default only; once ServerStoreSync's GET resolves,
-// whatever's actually saved server-side wins (see server-store-sync.tsx).
-const defaultEmployees: User[] = [
-  { id: "usr-01", name: "สมชาย ศรีสุข", email: "somchai@easyboss.io", avatar: "สช", role: "หัวหน้าฝ่ายวิศวกรรม", departmentId: "dep-eng" },
-  { id: "usr-02", name: "นภัทร เจริญพร", email: "napat@easyboss.io", avatar: "นภ", role: "วิศวกร Frontend", departmentId: "dep-eng" },
-  { id: "usr-03", name: "กัญญา วัฒนา", email: "kanya@easyboss.io", avatar: "กว", role: "วิศวกร Backend", departmentId: "dep-eng" },
-  { id: "usr-04", name: "พิมพ์ชนก บุญมา", email: "pimchanok@easyboss.io", avatar: "พช", role: "หัวหน้าฝ่ายดีไซน์", departmentId: "dep-design" },
-  { id: "usr-05", name: "ธนวัฒน์ รุ่งเรือง", email: "thanawat@easyboss.io", avatar: "ธว", role: "โปรดักต์ดีไซเนอร์", departmentId: "dep-design" },
-  { id: "usr-06", name: "สุดา อินทรา", email: "suda@easyboss.io", avatar: "สด", role: "หัวหน้าฝ่ายการตลาด", departmentId: "dep-marketing" },
-  { id: "usr-07", name: "เอกภพ ชัยเจริญ", email: "ekapop@easyboss.io", avatar: "อภ", role: "นักวางกลยุทธ์คอนเทนต์", departmentId: "dep-marketing" },
-  { id: "usr-08", name: "รัชนี พงษ์ไพศาล", email: "ratchanee@easyboss.io", avatar: "รพ", role: "หัวหน้าฝ่ายขาย", departmentId: "dep-sales" },
-  { id: "usr-09", name: "วิชัย แซ่ตั้ง", email: "wichai@easyboss.io", avatar: "วช", role: "เจ้าหน้าที่ฝ่ายขาย", departmentId: "dep-sales" },
-  { id: "usr-10", name: "อารียา ทองดี", email: "areeya@easyboss.io", avatar: "อธ", role: "หัวหน้าฝ่ายปฏิบัติการ", departmentId: "dep-ops" },
-  { id: "usr-11", name: "ณัฐพงศ์ ศรีวิไล", email: "nattapong@easyboss.io", avatar: "ณศ", role: "นักวิเคราะห์ปฏิบัติการ", departmentId: "dep-ops" },
-  { id: "usr-12", name: "ชุติมา วงศ์ทอง", email: "chutima@easyboss.io", avatar: "ชว", role: "หัวหน้าฝ่ายบริการลูกค้า", departmentId: "dep-support" },
-  { id: "usr-13", name: "กิตติพัฒน์ เรืองศรี", email: "kittipat@easyboss.io", avatar: "กร", role: "เจ้าหน้าที่บริการลูกค้า", departmentId: "dep-support" },
-  { id: "usr-14", name: "บุษบา มณีรัตน์", email: "busaba@easyboss.io", avatar: "บม", role: "วิศวกร QA", departmentId: "dep-eng" },
-  // departmentId is cosmetic only here (not head of it, isOwner bypasses
-  // every department check) — every User needs one, so it points at eng.
-  { id: "usr-15", name: "อรุณ ไชยวัฒน์", email: "arun@easyboss.io", avatar: "อช", role: "CEO (เห็นทุกอย่าง)", departmentId: "dep-eng", isOwner: true },
-];
+// ว่างจนกว่ารายชื่อจริง (core.users ผ่าน ServerStoreSync "employees") จะโหลดเสร็จ — เดิมใส่รายชื่อ
+// ตัวอย่างของต้นทางไว้ 15 คน (usr-01..usr-15 เช่น "อรุณ ไชยวัฒน์ CEO") ซึ่งโผล่ในกล่อง @แท็ก
+// และรายการต่าง ๆ ของบริษัทจริงทุกครั้งที่เปิดก่อนโหลดเสร็จหรือโหลดไม่สำเร็จ ("ข้อมูล test ยังขึ้นอยู่")
+// ตัวเองถูกเติมเข้ามาทันทีที่ scaffold mount (report-task-scaffold.tsx) ส่วนจุดที่อ่านตัวเองก่อนนั้น
+// ต้องรับมือกับ getUser() ที่คืน undefined เอง
+const defaultEmployees: User[] = [];
 
 interface EmployeeStore {
   employees: User[];
