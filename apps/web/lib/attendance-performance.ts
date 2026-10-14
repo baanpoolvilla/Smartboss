@@ -10,6 +10,7 @@ import {
   type PerformanceEventInput,
 } from "@/lib/performance";
 import { recalculateAttendanceAllOrgs } from "@/lib/attendance-recalc";
+import { withWorkforceTenant } from "@/modules/report_task/lib/db/workforce-calendar";
 
 /**
  * ดึงผลลงเวลาจาก workforce มาเป็นคะแนนผลงาน
@@ -50,16 +51,7 @@ interface AttendanceRow {
  * เส้นแบ่งขาดงาน (ABSENCE_THRESHOLD_MINUTES) กับช่วงย้อนดู
  * (ATTENDANCE_LOOKBACK_DAYS) ตรึงไว้ตายตัว ไม่ตั้งค่าต่อบริษัท
  */
-export async function dockAttendance(
-  options: {
-    /**
-     * cron 23:59 ทุกคืน ส่ง "วันนี้" (ตามเวลาไทย ณ ตอนเริ่มรัน) มา ⇒ หัก "มาสาย" ของวันนี้ทันที
-     * ไม่ต้องรอ 08:00 พรุ่งนี้ (00:00 คือวันใหม่) · ขาดงาน/ลืมตอกบัตรรอรอบ 08:00 เพราะกะดึกข้ามคืน
-     * ยังไม่จบตอน 23:59 — 08:00 ยังทันก่อนรอบเกรดปิด 10:00 (score-period.ts) คะแนนลงวันทำงานเดิมเสมอ
-     */
-    today?: string;
-  } = {},
-): Promise<{
+export async function dockAttendance(): Promise<{
   scanned: number;
   recorded: number;
   refunded?: number;
@@ -114,10 +106,9 @@ export async function dockAttendance(
       ${from}::date, ${minLate}::int, ${ABSENCE_THRESHOLD_MINUTES}::int
     )
   `;
-  const rows = rawRows.filter((r) => {
-    const day = new Date(r.work_date).toISOString().slice(0, 10);
-    return options.today ? day === options.today : day < todayInThailand;
-  });
+  const rows = rawRows.filter(
+    (r) => new Date(r.work_date).toISOString().slice(0, 10) < todayInThailand,
+  );
 
   if (rows.length === 0) return { scanned: 0, recorded: 0, recalculated };
 
@@ -144,9 +135,6 @@ export async function dockAttendance(
     const day = new Date(r.work_date).toISOString().slice(0, 10);
 
     const verdict = classifyAttendanceDay(r, st, day);
-    // รอบ 23:59 หักเฉพาะ "มาสาย" (ตอกเข้าแล้ว รู้ผลแน่) — ขาดงาน/ลืมตอกบัตรรอรอบ 08:00 ซึ่งยังทันก่อนรอบเกรดปิด
-    // (10:00 — score-period.ts) กะดึกที่ยังทำงานอยู่ตอน 23:59 จึงไม่โดนหักขาดงานผิดแม้ชั่วคราว
-    if (options.today && (verdict !== "attendance_late" || r.missing_punch)) continue;
     if (verdict === "attendance_absent") {
       events.push({
         orgId,
@@ -353,4 +341,101 @@ async function refundNoLongerValidDocks(
   }
 
   return recordPerformanceEvents(refunds);
+}
+
+/**
+ * หักคะแนนลงเวลา "เมื่อกะจบ" — cron ทุกชั่วโมง (นาที :59, task=attendance-shift-end)
+ *
+ * ทำไม: รอบเกรดล็อก 23:59 ของวันตัดรอบ (score-period.ts) คะแนนของวันต้องมาเร็วที่สุดหลังกะจบ
+ * แต่จะหักตอนกะยังไม่จบไม่ได้ (ข้อมูลยังไม่นิ่ง — ดูคอมเมนต์ใน dockAttendance เรื่องขาดงานผิด ๆ)
+ * ⇒ ดูเวลาเลิกกะของแต่ละคนแต่ละวัน (scheduled_out_at) หักเมื่อเลิกกะแล้ว SHIFT_SETTLE_MS
+ *   - ไม่มีกะ / ไม่มีเวลาเลิกกะ = ถือว่าจบ 23:59 ของวันนั้น ⇒ หักรอบ 23:59
+ *   - กะปกติเลิก 17:00 ⇒ หักรอบ 19:59 · กะดึก 22:00–06:00 ⇒ หักรอบ 08:59 เช้าวันถัดไป (ไม่โดนหักผิดตอนเที่ยงคืน)
+ * บริษัทที่ไม่มีกะดึก ทุกอย่างของวันตัดรอบจบก่อน 23:59 พอดี · กะดึกของวันตัดรอบที่เลิกเช้าวันถัดไปยังนับรอบเดิม
+ * (ระบบได้เวลาเผื่อ — SYSTEM_JUDGEMENT_GRACE_MS)
+ *
+ * อ่านต่อบริษัทด้วย tenant context ของบริษัทนั้น (withWorkforceTenant) — ไม่ต้องเพิ่มฟังก์ชัน SECURITY DEFINER
+ * ดูแค่เมื่อวานกับวันนี้ เบาพอรันทุกชั่วโมง · รอบ 08:00 (dockAttendance) ยังเก็บตกวันก่อน ๆ + คืนคะแนน
+ * ที่ไม่ควรหักแล้วเหมือนเดิม · กันซ้ำด้วย refId เดิม
+ */
+const SHIFT_SETTLE_MS = 2 * 60 * 60 * 1000;
+
+interface ShiftDayRow extends AttendanceRow {
+  scheduled_out_at: Date | null;
+}
+
+export async function dockFinishedShifts(
+  now: Date = new Date(),
+): Promise<{ orgs: number; checked: number; recorded: number }> {
+  const bangkokDay = (offset: number) =>
+    new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date(now.getTime() + offset * 86_400_000));
+  const today = bangkokDay(0);
+  const yesterday = bangkokDay(-1);
+
+  await recalculateAttendanceAllOrgs({ from: yesterday, to: today }).catch((err) => {
+    console.error("[attendance] recalc before shift-end docking failed", err);
+  });
+
+  const orgs = await prisma.organization.findMany({ where: { isActive: true }, select: { id: true } });
+  const settingsByOrg = await loadPerformanceSettingsMap(orgs.map((o) => o.id));
+  const events: PerformanceEventInput[] = [];
+  let checked = 0;
+  let active = 0;
+
+  for (const org of orgs) {
+    const st = settingsByOrg.get(org.id);
+    if (!st || !st.enabled) continue;
+    active++;
+    let rows: ShiftDayRow[];
+    try {
+      rows = await withWorkforceTenant(org.id, (tx) =>
+        tx.$queryRaw<ShiftDayRow[]>`
+          SELECT p.subject AS user_id, ar.work_date, ar.late_minutes, ar.absence_minutes,
+                 (ar.actual_in_at IS NULL) <> (ar.actual_out_at IS NULL) AS missing_punch,
+                 ar.scheduled_out_at
+          FROM workforce.attendance_results ar
+          JOIN workforce.employments e ON e.id = ar.employment_id
+          JOIN workforce.principals p ON p.person_id = e.person_id
+          WHERE ar.is_current
+            AND ar.work_date BETWEEN ${yesterday}::date AND ${today}::date
+            AND ar.is_on_leave = false AND ar.is_holiday = false AND ar.is_rest_day = false
+            AND p.subject IS NOT NULL
+            AND (ar.late_minutes > 0 OR ar.absence_minutes > ${ABSENCE_THRESHOLD_MINUTES})
+        `,
+      );
+    } catch (err) {
+      // บริษัทที่ยังไม่มีข้อมูลฝั่ง HR — ข้าม
+      console.error("[attendance] shift-end lookup failed", org.id, err);
+      continue;
+    }
+
+    for (const r of rows) {
+      const day = new Date(r.work_date).toISOString().slice(0, 10);
+      // เลิกกะตามตาราง + 2 ชม. · ไม่มีเวลาเลิกกะ = 23:59 ของวันนั้น (เวลาไทย)
+      const settleAt = r.scheduled_out_at
+        ? new Date(r.scheduled_out_at).getTime() + SHIFT_SETTLE_MS
+        : new Date(`${day}T23:59:00+07:00`).getTime();
+      if (now.getTime() < settleAt) continue;
+      checked++;
+      const verdict = classifyAttendanceDay(r, st, day);
+      if (!verdict) continue;
+      events.push({
+        orgId: org.id,
+        userId: r.user_id,
+        source: "workforce",
+        category: verdict,
+        occurredAt: new Date(r.work_date),
+        refType: "attendance_day",
+        refId: `${r.user_id}:${day}`,
+        note:
+          verdict === "attendance_absent"
+            ? `ขาดงาน ${Math.round(Number(r.absence_minutes) / 60)} ชั่วโมง`
+            : `สาย ${Number(r.late_minutes)} นาที`,
+      });
+    }
+  }
+
+  const reactivated = await reactivateAutoRefunds(events);
+  const recorded = await recordPerformanceEvents(events);
+  return { orgs: active, checked, recorded: recorded + reactivated };
 }

@@ -5,7 +5,7 @@ import {
   notifyDuePmSchedules,
   notifyMissingExpenses,
 } from "@/modules/maintenance/data/cron";
-import { dockAttendance } from "@/lib/attendance-performance";
+import { dockAttendance, dockFinishedShifts } from "@/lib/attendance-performance";
 import { purgeExpiredChatMedia } from "@/modules/chat/data/media-retention";
 import { notifyLateArrivals } from "@/lib/attendance-late-alerts";
 import { postAttendanceToChat } from "@/lib/attendance-chat";
@@ -26,8 +26,8 @@ export const runtime = "nodejs";
  *   - เด้งเวลาเข้า/ออกงานเข้าห้องแชท "ระบบลงเวลา" ของแต่ละคน (?task=attendance-chat — crontab ทุกนาที
  *     แยกบรรทัด ดู docs/deploy.md · ไม่อยู่ใน all เพราะ all รันวันละครั้ง)
  *   - ดึงวันหยุดนักขัตฤกษ์จาก Google เข้าปฏิทินวันหยุดบริษัทของทุกบริษัท (?task=holidays — อยู่ใน all, &dryRun=1 ดูอย่างเดียว)
- *   - หักคะแนนลงเวลาของวันนี้ตอน 23:59 ทุกคืน (?task=attendance-nightly — crontab แยกบรรทัด 59 23 * * *
- *     ไม่อยู่ใน all · รอบ 08:00 ของ all/performance ยังตรวจซ้ำวันก่อนหน้าเหมือนเดิม)
+ *   - หักคะแนนลงเวลาเมื่อกะจบ ทุกชั่วโมง (?task=attendance-shift-end — crontab แยกบรรทัด 59 * * * *
+ *     ไม่มีกะ/กะปกติ = ภายใน 23:59 ของวันนั้น · กะดึก = หลังเลิกกะ 2 ชม. · ไม่อยู่ใน all)
  *   - ?task=all รันทั้งหมด
  * เรียกด้วย header `Authorization: Bearer $CRON_SECRET` หรือ `?key=$CRON_SECRET`
  * route นี้อยู่นอก auth ของ proxy จึงกันด้วย CRON_SECRET เท่านั้น →
@@ -70,11 +70,9 @@ export async function GET(req: NextRequest) {
   if (task === "chat-media" || task === "all") {
     Object.assign(result, { chatMedia: await purgeExpiredChatMedia({ dryRun: url.searchParams.get("dryRun") === "1" }) });
   }
-  if (task === "attendance-nightly") {
-    // 23:59 ทุกคืน — หักคะแนนลงเวลาของวันนี้ทันที ไม่รอ 08:00 พรุ่งนี้ (ดู dockAttendance)
-    // "วันนี้" จับไว้ตอนเริ่ม — งานคำนวณใหม่อาจเลยเที่ยงคืนไปแล้วตอนตัดสิน
-    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
-    Object.assign(result, { attendanceNightly: await dockAttendance({ today }) });
+  if (task === "attendance-shift-end") {
+    // ทุกชั่วโมง (:59) — หักคะแนนลงเวลาของคนที่กะจบแล้ว (dockFinishedShifts) · "ตอนนี้" จับไว้ตอนเริ่ม
+    Object.assign(result, { attendanceShiftEnd: await dockFinishedShifts(new Date()) });
   }
   if (task === "performance" || task === "all") {
     // สองแหล่ง: งานซ่อมบำรุงที่ปล่อยค้าง และผลลงเวลาจาก workforce

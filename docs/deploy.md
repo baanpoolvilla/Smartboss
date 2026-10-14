@@ -468,8 +468,8 @@ sudo crontab -e
 # กวาดคะแนนผลงานอีกรอบตอนเย็น ให้ผู้บริหารเห็นของวันนี้ก่อนเลิกงาน
 0 17 * * * bash /opt/smartboss/deploy/cron-run.sh performance >> /var/log/smartboss-cron.log 2>&1
 
-# หักคะแนนลงเวลาของวันนี้ตอน 23:59 ทุกคืน (00:00 = วันใหม่) — รอบ 08:00 ยังตรวจซ้ำให้ (กะดึกข้ามคืน)
-59 23 * * * bash /opt/smartboss/deploy/cron-run.sh attendance-nightly >> /var/log/smartboss-cron.log 2>&1
+# หักคะแนนลงเวลาเมื่อกะจบ ทุกชั่วโมงที่นาที 59 — กะปกติ/ไม่มีกะจบภายใน 23:59 ของวันนั้น · กะดึกหลังเลิกกะ 2 ชม.
+59 * * * * bash /opt/smartboss/deploy/cron-run.sh attendance-shift-end >> /var/log/smartboss-cron.log 2>&1
 
 # สำรองฐานข้อมูล 02:30 ทุกคืน
 30 2 * * * bash /opt/smartboss/deploy/backup.sh >> /var/log/smartboss-backup.log 2>&1
