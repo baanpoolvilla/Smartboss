@@ -1068,12 +1068,39 @@ export function NewTaskDialog({
           {/* Title (task/meeting) */}
           {itemType !== "leave" && itemType !== "dayoff" && (
             <Row icon={Type}>
-              <Input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder={itemType === "task" ? "เพิ่มชื่องาน" : "เพิ่มหัวข้อประชุม"}
-                className="text-base font-medium border-0 border-b border-[var(--line)] rounded-none px-0 shadow-none focus-visible:ring-0 focus-visible:border-[var(--brand-green)]"
-              />
+              <div className="flex items-center gap-3">
+                <Input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder={itemType === "task" ? "เพิ่มชื่องาน" : "เพิ่มหัวข้อประชุม"}
+                  className="min-w-0 flex-1 text-base font-medium border-0 border-b border-[var(--line)] rounded-none px-0 shadow-none focus-visible:ring-0 focus-visible:border-[var(--brand-green)]"
+                />
+                {itemType === "task" && (
+                  <label
+                    className={cn(
+                      "flex shrink-0 cursor-pointer items-center gap-1.5 text-xs font-medium",
+                      personalMode ? "text-[var(--brand-green-dark)]" : "text-[var(--ink-soft)]"
+                    )}
+                    title="งานส่วนตัว — เห็นเฉพาะคุณ ไม่มีผลกับคะแนน ยังเตือนตามกำหนดส่ง"
+                  >
+                    <Checkbox
+                      checked={personalMode}
+                      onCheckedChange={(v) => {
+                        setPersonalMode(!!v);
+                        if (v) {
+                          changeTaskMode("individual");
+                          setAssigneeIds([viewingAsUserId]);
+                        } else {
+                          setAssigneeIds([]);
+                        }
+                      }}
+                      aria-label="งานส่วนตัว"
+                    />
+                    <Lock className="h-3 w-3" />
+                    ส่วนตัว
+                  </label>
+                )}
+              </div>
             </Row>
           )}
 
@@ -1098,27 +1125,6 @@ export function NewTaskDialog({
             <>
               {/* เช็คลิสต์ (ไม่บังคับ) — อยู่ใต้รายละเอียดเสมอ (แบบธรรมดา) ไม่ย้ายไปมาตามโหมด */}
               {renderChecklistRow()}
-              <Row icon={Lock}>
-                <label className="flex w-fit cursor-pointer flex-wrap items-center gap-x-2 gap-y-0.5 py-1.5 text-sm">
-                  <Checkbox
-                    checked={personalMode}
-                    onCheckedChange={(v) => {
-                      setPersonalMode(!!v);
-                      if (v) {
-                        changeTaskMode("individual");
-                        setAssigneeIds([viewingAsUserId]);
-                      } else {
-                        setAssigneeIds([]);
-                      }
-                    }}
-                    aria-label="งานส่วนตัว"
-                  />
-                  <span className="font-medium">งานส่วนตัว</span>
-                  <span className={cn("text-xs", personalMode ? "text-[var(--brand-green-dark)]" : "text-[var(--ink-soft)]")}>
-                    {personalMode ? "เห็นเฉพาะคุณ · ไม่มีผลกับคะแนน · ยังเตือนตามกำหนดส่ง" : "เปิดไว้เตือนตัวเอง — ไม่มีผลกับคะแนน"}
-                  </span>
-                </label>
-              </Row>
               {!personalMode && (
               <Row icon={User}>
                 <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
