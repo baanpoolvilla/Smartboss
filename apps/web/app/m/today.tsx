@@ -250,6 +250,8 @@ async function compressPhoto(file: File): Promise<string> {
   }
 }
 
+const PROOFS_KEY = "sb-checkin-attempt-proofs";
+
 export function Today({
   userName,
   showFriendHint,
@@ -287,8 +289,30 @@ export function Today({
    * ลงเวลาเข้างานออกงานแน่ๆ") · ไม่แตะซ้ำภายใน ARM_MS = กลับเป็นปุ่มปกติเอง
    */
   const [armed, setArmed] = useState<"CLOCK_IN" | "CLOCK_OUT" | null>(null);
-  /** ความแม่นของ GPS ตอนกดล่าสุด — แนบไปกับ "แจ้งไอที" (checkin-issue-report.tsx) */
-  const [lastAccuracyM, setLastAccuracyM] = useState<number | null>(null);
+  /** ใบยืนยันการกดที่ไม่ผ่าน (เซิร์ฟเวอร์เซ็น) — หลักฐานว่ากดลงเวลาจริง แนบไปกับ "แจ้งไอที" (checkin-issue-report.tsx) */
+  // เก็บในเครื่องด้วย — รีเฟรช/ปิด LINE แล้วเปิดใหม่หลักฐานไม่หาย (ใบเซ็นไว้แล้ว แก้ในเครื่องก็ตรวจไม่ผ่าน
+  // เซิร์ฟเวอร์ไม่รับใบเกิน 3 วันเอง)
+  const [attemptProofs, setAttemptProofs] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(PROOFS_KEY) ?? "[]") as unknown;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- อ่านค่าที่เก็บไว้หลัง mount (server ไม่มี localStorage)
+      if (Array.isArray(saved)) setAttemptProofs(saved.filter((p): p is string => typeof p === "string").slice(-5));
+    } catch {
+      // เครื่องปิดที่เก็บข้อมูล — ใช้ได้เฉพาะรอบนี้
+    }
+  }, []);
+  const rememberProof = useCallback((proof: string) => {
+    setAttemptProofs((prev) => {
+      const next = [...prev, proof].slice(-5);
+      try {
+        localStorage.setItem(PROOFS_KEY, JSON.stringify(next));
+      } catch {
+        // เก็บไม่ได้ก็ยังอยู่ในหน้านี้
+      }
+      return next;
+    });
+  }, []);
   useEffect(() => {
     if (!armed) return;
     const timer = setTimeout(() => setArmed(null), ARM_MS);
@@ -327,7 +351,6 @@ export function Today({
       // ไม่ได้พิกัดก็ยังส่งไป — เซิร์ฟเวอร์เป็นคนตัดสิน (api/m/checkin gpsGate: ไม่มีพิกัด/นอกเขต = ลงไม่ได้
       // พร้อมเหตุผล) หน้าจอไม่ตัดสินเอง · ถ้าโดนปฏิเสธสิทธิ์ตำแหน่ง ต่อท้ายข้อความด้วยวิธีเปิด
       const { position, denied } = await getPosition();
-      setLastAccuracyM(position?.coords.accuracy ?? null);
       const help = denied ? ` — ${locationHelp()}` : "";
 
       setState("sending");
@@ -359,7 +382,11 @@ export function Today({
           decision?: string;
           riskFlags?: string[];
           distanceM?: number | null;
+          attemptProof?: string;
         };
+        // เก็บ 5 ใบล่าสุด
+        const proof = payload.attemptProof;
+        if (proof) rememberProof(proof);
 
         if (payload.code === "PHOTO_REQUIRED") {
           setPendingIntent(intent);
@@ -405,7 +432,7 @@ export function Today({
         setState("idle");
       }
     },
-    [reload],
+    [reload, rememberProof],
   );
 
   const events = data?.events ?? [];
@@ -568,8 +595,8 @@ export function Today({
 
       {isDesktop === false && (
         <CheckinIssueReport
+          proofs={attemptProofs}
           lastMessage={message && message.tone !== "ok" ? message.text : loadError}
-          accuracyM={lastAccuracyM}
         />
       )}
 

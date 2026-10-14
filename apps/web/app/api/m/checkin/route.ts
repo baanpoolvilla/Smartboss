@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getSession } from "@smartboss/auth";
 import { wfFetch, WorkforceError, WorkforceUnavailableError } from "@/modules/hr/lib/api";
 import { CHECKIN_PHOTO_ENABLED } from "@/modules/hr/lib/app-clock";
+import { signCheckinAttempt } from "@/modules/hr/lib/checkin-attempt-proof";
 
 export const runtime = "nodejs";
 
@@ -115,28 +116,42 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "ข้อมูลไม่ถูกต้อง" }, { status: 400 });
   }
   const input = parsed.data;
+  // ลงเวลาไม่ผ่านทุกกรณี — แนบใบยืนยัน (เวลาเซิร์ฟเวอร์ + พิกัด + เหตุผล ลงลายเซ็น) ไว้เป็นหลักฐานว่ากดจริง
+  // หน้าจอเก็บไว้ส่งไปกับ "ลงเวลาไม่ได้ · แจ้งไอที" (checkin-attempt-proof.ts)
+  const reject = (payload: { error: string; code?: string }, status: number) =>
+    NextResponse.json(
+      {
+        ...payload,
+        attemptProof: signCheckinAttempt({
+          userId: session.userId,
+          intent: input.intent,
+          latitude: input.latitude ?? null,
+          longitude: input.longitude ?? null,
+          accuracyM: input.accuracyM ?? null,
+          reason: payload.error,
+        }),
+      },
+      { status },
+    );
 
   // ระบบบุคคลรับคำขอได้ไม่เกิน 1MB (workforce bootstrap bodyLimit) — หน้าจอย่อรูปให้ต่ำกว่า ~600KB แล้ว
   // (app/m/today.tsx compressPhoto) ด่านนี้กันเครื่องที่ย่อไม่ได้ ให้ได้ข้อความที่อ่านรู้เรื่องแทน 413 ดิบ
   if (input.photoBase64 !== undefined && input.photoBase64.length > 1_000_000) {
-    return NextResponse.json(
-      { error: "รูปใหญ่เกินไป — ลองถ่ายใหม่ หรือปิดโหมดความละเอียดสูงของกล้อง" },
-      { status: 413 },
-    );
+    return reject({ error: "รูปใหญ่เกินไป — ลองถ่ายใหม่ หรือปิดโหมดความละเอียดสูงของกล้อง" }, 413);
   }
 
   // GPS ต้องตรงก่อนถึงจะบันทึก — ไม่ตรง = ไม่บันทึก บอกเหตุผลให้แก้แล้วกดใหม่ (ไม่มีคิวรอ HR ตรวจ)
   try {
     const gate = await gpsGate(input.latitude, input.longitude, input.accuracyM);
     if (gate !== null) {
-      return NextResponse.json({ code: "GPS_REJECTED", error: gate }, { status: 422 });
+      return reject({ code: "GPS_REJECTED", error: gate }, 422);
     }
   } catch (error) {
     if (error instanceof WorkforceUnavailableError) {
-      return NextResponse.json({ error: "ระบบบุคคลไม่พร้อมใช้งานชั่วคราว ลองใหม่อีกครั้ง" }, { status: 503 });
+      return reject({ error: "ระบบบุคคลไม่พร้อมใช้งานชั่วคราว ลองใหม่อีกครั้ง" }, 503);
     }
     if (error instanceof WorkforceError) {
-      return NextResponse.json({ error: error.displayMessage }, { status: error.status });
+      return reject({ error: error.displayMessage }, error.status);
     }
     throw error;
   }
@@ -211,24 +226,32 @@ export async function POST(req: NextRequest) {
       },
     );
 
+    const accepted = ["ACCEPTED", "ACCEPTED_WITH_WARNING", "PENDING_REVIEW"].includes(result.decision);
     return NextResponse.json({
       decision: result.decision,
       riskFlags: result.risk_flags,
       distanceM: result.distance_from_site_m,
       capturedAt: result.captured_at,
+      // ระบบบุคคลตัดสินไม่ผ่าน (ไม่นับเวลา) — ก็เป็นการกดที่ไม่ผ่าน ออกใบยืนยันเหมือนกัน
+      ...(accepted
+        ? {}
+        : {
+            attemptProof: signCheckinAttempt({
+              userId: session.userId,
+              intent: input.intent,
+              latitude: input.latitude ?? null,
+              longitude: input.longitude ?? null,
+              accuracyM: input.accuracyM ?? null,
+              reason: `ระบบบุคคลตัดสินไม่ผ่าน: ${(result.risk_flags ?? []).join(", ") || result.decision}`,
+            }),
+          }),
     });
   } catch (error) {
     if (error instanceof WorkforceUnavailableError) {
-      return NextResponse.json(
-        { error: "ระบบบุคคลไม่พร้อมใช้งานชั่วคราว ลองใหม่อีกครั้ง" },
-        { status: 503 },
-      );
+      return reject({ error: "ระบบบุคคลไม่พร้อมใช้งานชั่วคราว ลองใหม่อีกครั้ง" }, 503);
     }
     if (error instanceof WorkforceError) {
-      return NextResponse.json(
-        { error: error.displayMessage },
-        { status: error.status },
-      );
+      return reject({ error: error.displayMessage }, error.status);
     }
     throw error;
   }
