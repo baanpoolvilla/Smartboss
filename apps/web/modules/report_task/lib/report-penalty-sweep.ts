@@ -5,7 +5,7 @@ import {
   roundRunsOnDay,
   roundIgnoresDateExemptions,
   roundFrequencyOf,
-  attributePostToRound,
+  postsOfRound,
 } from "@/modules/report_task/lib/submission-rounds";
 import { trackedTopicsOf, iterationBounds, eachDay, type ComplianceStatus } from "@/modules/report_task/lib/report-feed-compliance";
 import { isExemptDate, type DateExemptions } from "@/modules/report_task/lib/report-feed-exemptions";
@@ -167,14 +167,14 @@ function postsForRoundServer(
   posts: ReportPost[],
   rounds: SubmissionRound[]
 ): ReportPost[] {
-  return posts.filter(
+  const dayPosts = posts.filter(
     (p) =>
       p.topicId === topic.id &&
       p.authorId === userId &&
       !p.excludeFromSubmission &&
-      localDateStr(new Date(p.createdAt)) === day &&
-      attributePostToRound(p, rounds)?.id === round.id
+      localDateStr(new Date(p.createdAt)) === day
   );
+  return postsOfRound(dayPosts, rounds, round.id);
 }
 
 /** เทียบเท่า `roundComplianceStatus` (report-feed-compliance.ts) — ตัดสินสถานะ

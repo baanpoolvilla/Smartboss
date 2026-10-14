@@ -1099,14 +1099,14 @@ export function TopicSidebar({
           .sort((a, b) => a.time.localeCompare(b.time))
           .map((r) => {
             const owesIt = viewerRoundIds.has(r.id);
-            const posted = posts.some(
+            const myPostsToday = posts.filter(
               (p) =>
                 p.topicId === t.id &&
                 p.authorId === viewingAsUserId &&
                 !p.excludeFromSubmission &&
-                localDateStr(new Date(p.createdAt)) === today &&
-                attributePostToRound(p, roundsToday)?.id === r.id
+                localDateStr(new Date(p.createdAt)) === today
             );
+            const posted = myPostsToday.some((p) => attributePostToRound(p, roundsToday, myPostsToday)?.id === r.id);
             const [h, m] = r.time.split(":").map(Number) as [number, number];
             const cutoffMinutes = h * 60 + m;
             const status: "posted" | "late" | "pending" | "na" = !owesIt

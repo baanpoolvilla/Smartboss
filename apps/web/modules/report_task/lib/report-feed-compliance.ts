@@ -6,7 +6,7 @@ import {
   roundIgnoresDateExemptions,
   effectiveRoundsOf,
   resolveRoundSubmitters,
-  attributePostToRound,
+  postsOfRound,
   roundFrequencyOf,
 } from "@/modules/report_task/lib/submission-rounds";
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
@@ -195,7 +195,7 @@ function roundMinutes(round: SubmissionRound): number {
  * instead ("2 รอบ = 2 การส่งแยกกัน", not one shared per-day bucket). */
 function postsForRound(topic: ReportTopic, userId: string, round: SubmissionRound, day: string, posts: ReportPost[]): ReportPost[] {
   const rounds = effectiveRoundsOf(topic);
-  return postsForDay(topic, userId, day, posts).filter((p) => attributePostToRound(p, rounds)?.id === round.id);
+  return postsOfRound(postsForDay(topic, userId, day, posts), rounds, round.id);
 }
 
 /**
@@ -770,7 +770,7 @@ export function todayComplianceSummary(
       for (const round of roundsForUserOnDay(topic, u.id, today, groups)) {
         if (exemptions && !roundIgnoresDateExemptions(round) && isExemptDate(exemptions, u.id, today)) continue;
         summary.totalTracked += 1;
-        const roundPosts = postsForDay(topic, u.id, today, posts).filter((p) => attributePostToRound(p, allRounds)?.id === round.id);
+        const roundPosts = postsOfRound(postsForDay(topic, u.id, today, posts), allRounds, round.id);
         if (roundPosts.length === 0) {
           summary.missingToday += 1;
           continue;
@@ -834,7 +834,7 @@ export function todayStatusEntries(
           roundLabel: round.label,
           roundTime: round.time,
         };
-        const roundPosts = postsForDay(topic, u.id, today, posts).filter((p) => attributePostToRound(p, allRounds)?.id === round.id);
+        const roundPosts = postsOfRound(postsForDay(topic, u.id, today, posts), allRounds, round.id);
         if (roundPosts.length === 0) {
           entries.push({ ...base, status: "missing" });
           continue;
@@ -864,7 +864,7 @@ export function pendingToday(topics: ReportTopic[], posts: ReportPost[], exempti
     for (const u of users) {
       for (const round of roundsForUserOnDay(topic, u.id, today, groups)) {
         if (exemptions && !roundIgnoresDateExemptions(round) && isExemptDate(exemptions, u.id, today)) continue;
-        const roundPosts = postsForDay(topic, u.id, today, posts).filter((p) => attributePostToRound(p, allRounds)?.id === round.id);
+        const roundPosts = postsOfRound(postsForDay(topic, u.id, today, posts), allRounds, round.id);
         if (roundPosts.length > 0) continue;
         entries.push({
           userId: u.id,

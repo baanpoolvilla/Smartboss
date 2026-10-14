@@ -288,7 +288,24 @@ export function ReportCard({
   // (`postDayCutoffs`) for posts with no `roundId` (made before this field
   // existed, or filed under a round that's since stopped applying to this
   // user/day) rather than badging nothing at all.
-  const explicitRound = post.roundId ? postDayCutoffs.filter((r) => r.id === post.roundId) : [];
+  const allPosts = useReportFeedStore((s) => s.posts);
+  // โพสต์ทั้งวันของคนนี้ในห้องนี้ — โพสต์ที่ไม่ได้เลือกรอบ (เช่นวันที่เคยถือเป็นวันหยุด กล่องโพสต์
+  // เลยไม่ให้เลือก) ตัดสินรอบจากทั้งวัน: เข้ารอบที่เลยเวลาแต่ยังค้างก่อน (attributePostToRound)
+  // ตัวเดียวกับที่แดชบอร์ด/ตัวหักคะแนนใช้ ป้ายกับคะแนนจึงตรงกัน
+  const authorDayPosts = allPosts.filter(
+    (p) =>
+      p.topicId === post.topicId &&
+      p.authorId === post.authorId &&
+      !p.excludeFromSubmission &&
+      localDateStr(new Date(p.createdAt)) === postDay
+  );
+  const guessedRound =
+    !post.roundId && !post.excludeFromSubmission ? attributePostToRound(post, postDayCutoffs, authorDayPosts) : null;
+  const explicitRound = post.roundId
+    ? postDayCutoffs.filter((r) => r.id === post.roundId)
+    : guessedRound
+      ? [guessedRound]
+      : [];
   // A poster exempt that day (approved leave/day-off/holiday — same
   // isExemptDate the dashboard's "ต้องส่งวันนี้" count already excludes them
   // from) had no real obligation to meet, so badging their voluntary post
@@ -337,7 +354,6 @@ export function ReportCard({
   // stop asserting either label, not to overstate it as on-time.
   const lateCutoff = post.lateBadgeHidden ? null : rawLateCutoff;
   const onTimeCutoff = !lateCutoff && !post.lateBadgeHidden ? onTimeCutoffFor(post.createdAt, roundCandidatesAtSubmission) : null;
-  const allPosts = useReportFeedStore((s) => s.posts);
   const weeklyMonthlyGraceDays = useReportPenaltySettingsStore((s) => s.weeklyMonthlyGraceDays);
   /*
    * รายงานรายสัปดาห์/รายเดือนที่ส่งตามหลังวันครบกำหนด (ภายใน "เผื่อเวลา") — วันที่โพสต์
@@ -402,7 +418,7 @@ export function ReportCard({
   // read as "the same round, again" and had its own ตรงเวลา/สาย badge wrongly
   // swallowed ("มีหลายรอบ...ก็ไม่ขึ้นเลยสิ มันต้องขึ้นรอบใครรอบมันสิ").
   function roundIdOf(p: ReportPost): string | null {
-    return p.excludeFromSubmission ? null : (attributePostToRound(p, postDayCutoffs)?.id ?? null);
+    return p.excludeFromSubmission ? null : (attributePostToRound(p, postDayCutoffs, authorDayPosts)?.id ?? null);
   }
   function isLateForRound(p: ReportPost, roundId: string): boolean {
     if (p.lateBadgeHidden) return false;

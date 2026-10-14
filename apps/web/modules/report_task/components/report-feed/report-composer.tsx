@@ -167,10 +167,12 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   // live off the store's own posts, so deleting that post is all it takes
   // for the round to reappear here — no separate "undo" state to track.
   const allRoundsForAttribution = effectiveRoundsOf(topic);
+  const myPostsToday = allPosts.filter(
+    (p) => p.topicId === topic.id && p.authorId === viewingAsUserId && !p.excludeFromSubmission && localDateStr(new Date(p.createdAt)) === today
+  );
   const fulfilledRoundIds = new Set(
-    allPosts
-      .filter((p) => p.topicId === topic.id && p.authorId === viewingAsUserId && !p.excludeFromSubmission && localDateStr(new Date(p.createdAt)) === today)
-      .map((p) => attributePostToRound(p, allRoundsForAttribution)?.id)
+    myPostsToday
+      .map((p) => attributePostToRound(p, allRoundsForAttribution, myPostsToday)?.id)
       .filter((id): id is string => !!id)
   );
   // Scoped to this poster specifically (roundsForUserOnDay), not every round

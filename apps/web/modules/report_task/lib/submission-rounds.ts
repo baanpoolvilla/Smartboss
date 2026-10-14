@@ -200,16 +200,72 @@ function timeToMinutes(time: string): number {
  * เดียวเลยไม่มี picker ให้เลือก) เดาจากเวลา: แบ่งวันด้วยเดดไลน์ของแต่ละรอบ
  * (เรียงเวลา) โพสต์เข้ารอบแรกที่ deadline ≥ เวลาโพสต์; ถ้าเลยทุกเดดไลน์แล้ว → รอบ
  * สุดท้าย (สาย) — ยังไงก็ต้องมีรอบให้ตัดสินว่า "สาย" ของรอบไหน ไม่ใช่ลอยไม่มีรอบเลย.
+ *
+ * `dayPosts` = โพสต์ทั้งวันของคนเดียวกันในห้องเดียวกัน (รวมตัวเอง ไม่รวมที่ "ไม่นับ") —
+ * ใส่มาเมื่อไหร่ โพสต์ที่ไม่มี roundId จะ "ตามรอบที่ค้าง" ก่อน: ถ้ามีรอบที่เลยเวลาแล้วแต่ยังไม่มี
+ * โพสต์ไหนของวันนั้น (ก่อนหน้าโพสต์นี้) นับให้ ⇒ เข้ารอบที่เก่าสุดนั้น (สาย) ไม่งั้นค่อยเดาจากเวลา
+ * ทำไม: เดาจากเวลาอย่างเดียว โพสต์เช้า 9:28 (เลยรอบเช้า 09:00) ไปเข้ารอบเย็น ⇒ รอบเช้า "ไม่ส่ง"
+ * และโพสต์เย็นจริงกลายเป็นซ้ำ ไม่ขึ้นป้าย (เจอจริง 13/10/2569: วันนั้นเคยถือเป็นวันหยุด
+ * กล่องโพสต์เลยไม่ให้เลือกรอบ ทุกโพสต์ไม่มี roundId)
  */
 export function attributePostToRound(
-  post: { createdAt: string; roundId?: string },
-  rounds: SubmissionRound[]
+  post: { id?: string; createdAt: string; roundId?: string },
+  rounds: SubmissionRound[],
+  dayPosts?: readonly { id: string; createdAt: string; roundId?: string }[]
 ): SubmissionRound | null {
   if (rounds.length === 0) return null;
   if (post.roundId) {
     const byId = rounds.find((r) => r.id === post.roundId);
     if (byId) return byId;
   }
+  if (dayPosts && post.id) {
+    const caught = catchUpRound(post as { id: string; createdAt: string }, rounds, dayPosts);
+    if (caught) return caught;
+  }
+  return attributeByTime(post, rounds);
+}
+
+/** โพสต์ของวันหนึ่ง (คนเดียว ห้องเดียว) ที่นับเข้ารอบ `roundId` — ใช้ attributePostToRound แบบดูทั้งวัน */
+export function postsOfRound<P extends { id: string; createdAt: string; roundId?: string }>(
+  dayPosts: readonly P[],
+  rounds: SubmissionRound[],
+  roundId: string
+): P[] {
+  return dayPosts.filter((p) => attributePostToRound(p, rounds, dayPosts)?.id === roundId);
+}
+
+/** โพสต์ที่ไม่มี roundId → รอบที่เลยเวลาแล้วแต่ยังค้างอยู่ ณ ตอนโพสต์ (เก่าสุดก่อน) หรือ null ถ้าไม่มีค้าง */
+function catchUpRound(
+  post: { id: string; createdAt: string },
+  rounds: SubmissionRound[],
+  dayPosts: readonly { id: string; createdAt: string; roundId?: string }[]
+): SubmissionRound | null {
+  const day = localDateStr(new Date(post.createdAt));
+  const running = rounds.filter((r) => roundRunsOnDay(r, day));
+  const sorted = [...(running.length > 0 ? running : rounds)].sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time));
+  const minutesOf = (iso: string) => {
+    const d = new Date(iso);
+    return d.getHours() * 60 + d.getMinutes();
+  };
+  // ไล่โพสต์ของวันตามลำดับเวลา จนถึงโพสต์นี้ — รอบที่ถูกนับไปแล้วไม่ค้าง
+  const ordered = [...dayPosts]
+    .filter((p) => localDateStr(new Date(p.createdAt)) === day)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  // เลือกรอบเองไว้ = รอบนั้นไม่ค้างทั้งวัน (ไม่ว่าจะโพสต์ก่อนหรือหลัง) — กันโพสต์อื่นแย่งรอบเดียวกัน
+  const fulfilled = new Set(ordered.filter((p) => p.roundId).map((p) => p.roundId!));
+  for (const p of ordered) {
+    if (p.roundId && sorted.some((r) => r.id === p.roundId)) continue;
+    const pMinutes = minutesOf(p.createdAt);
+    const overdue = sorted.find((r) => !fulfilled.has(r.id) && timeToMinutes(r.time) < pMinutes);
+    const round = overdue ?? attributeByTime(p, sorted);
+    if (p.id === post.id) return overdue ?? null;
+    if (round) fulfilled.add(round.id);
+  }
+  return null;
+}
+
+function attributeByTime(post: { createdAt: string }, rounds: SubmissionRound[]): SubmissionRound | null {
+  if (rounds.length === 0) return null;
   // จำกัดผู้ท้าชิงเหลือแค่รอบที่ "วิ่ง" ในวันนี้จริง ๆ ก่อนเดา — เดิมไม่กรอง
   // เพราะทุกรอบของทุกห้องวิ่งทุกวันเหมือนกันหมด (ไม่เคยผสม Daily กับ
   // Weekly/Monthly คนละความถี่กันในห้องเดียว) พอห้องเริ่มมีรอบความถี่ต่างกัน

@@ -773,12 +773,12 @@ function ReportFeedPageInner() {
     const visibleRounds = canSeeEveryRound ? rounds : rounds.filter((c) => myRoundIds.has(c.id));
     if (visibleRounds.length === 0) return [];
     const allRoundsToday = effectiveRoundsOf(activeTopic);
+    const myPostsToday = posts.filter(
+      (p) => p.topicId === activeTopic.id && p.authorId === viewingAsUserId && !p.excludeFromSubmission && localDateStr(new Date(p.createdAt)) === today
+    );
     const myPostedRoundIds = new Set(
-      posts
-        .filter(
-          (p) => p.topicId === activeTopic.id && p.authorId === viewingAsUserId && !p.excludeFromSubmission && localDateStr(new Date(p.createdAt)) === today
-        )
-        .map((p) => attributePostToRound(p, allRoundsToday)?.id)
+      myPostsToday
+        .map((p) => attributePostToRound(p, allRoundsToday, myPostsToday)?.id)
         .filter((id): id is string => !!id)
     );
     const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
