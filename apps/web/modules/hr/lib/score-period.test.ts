@@ -13,11 +13,11 @@ const cfg = DEFAULT_SCORE_PERIOD;
 const th = (iso: string) => new Date(`${iso}+07:00`);
 
 describe("score period (cut off on the 25th)", () => {
-  it("October's grade runs 26 Sep – 25 Oct, Thai time", () => {
-    const { from, to } = scorePeriodRange(cfg, "2026-10");
-    expect(from).toEqual(th("2026-09-26T00:00:00"));
-    expect(to).toEqual(new Date(th("2026-10-26T00:00:00").getTime() - 1));
-    expect(scorePeriodLabel(cfg, "2026-10")).toBe("26 ก.ย. – 25 ต.ค. 2569");
+  it("December's grade runs 26 Nov – 25 Dec, Thai time", () => {
+    const { from, to } = scorePeriodRange(cfg, "2026-12");
+    expect(from).toEqual(th("2026-11-26T00:00:00"));
+    expect(to).toEqual(new Date(th("2026-12-26T00:00:00").getTime() - 1));
+    expect(scorePeriodLabel(cfg, "2026-12")).toBe("26 พ.ย. – 25 ธ.ค. 2569");
   });
 
   it("the 25th belongs to this month, the 26th to the next", () => {
@@ -44,5 +44,12 @@ describe("score period (cut off on the 25th)", () => {
     const end = { cutoffDay: 30, overrides: {} };
     expect(scorePeriodLabel(end, "2027-02")).toBe("31 ม.ค. – 28 ก.พ. 2570");
     expect(scorePeriodLabel(end, "2027-03")).toBe("1 มี.ค. – 30 มี.ค. 2570");
+  });
+
+  it("the first period after the switch starts on the 1st (September was already graded by calendar month)", () => {
+    expect(scorePeriodLabel(cfg, "2026-09")).toBe("1 ก.ย. – 30 ก.ย. 2569");
+    expect(scorePeriodLabel(cfg, "2026-10")).toBe("1 ต.ค. – 25 ต.ค. 2569");
+    expect(scorePeriodLabel(cfg, "2026-11")).toBe("26 ต.ค. – 25 พ.ย. 2569");
+    expect(scorePeriodOf(cfg, th("2026-09-28T10:00:00"))).toBe("2026-09");
   });
 });

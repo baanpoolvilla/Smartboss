@@ -824,7 +824,7 @@ export async function saveScorePeriodAction(formData: FormData) {
     if (day !== cutoffDay) overrides[month] = day;
   }
 
-  const config = { cutoffDay, overrides };
+  const config = { cutoffDay, overrides, calendarMonthsUntil: previous.calendarMonthsUntil };
   await saveScorePeriodConfig(orgId, config, session.userId);
   await audit({ userId: session.userId, action: "SCORE_PERIOD_UPDATED", targetId: orgId, detail: config });
   revalidatePath("/admin/performance");

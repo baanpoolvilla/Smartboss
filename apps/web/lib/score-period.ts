@@ -13,9 +13,22 @@ export interface ScorePeriodConfig {
   cutoffDay: number;
   /** "YYYY-MM" → วันตัดรอบของเดือนนั้น (เฉพาะเดือนที่เปลี่ยน) */
   overrides: Record<string, number>;
+  /**
+   * เดือนนี้และก่อนหน้า = เดือนปฏิทินเต็ม (1 ถึงสิ้นเดือน) — เกรดของเดือนเหล่านั้นตัดไปแล้วก่อนเริ่มใช้รอบ 26–25
+   * ถ้าไม่มีค่านี้ รอบแรก (ต.ค.) จะเริ่ม 26 ก.ย. นับวันที่ 26–30 ก.ย. ซ้ำกับเกรด ก.ย. ที่ปิดไปแล้ว
+   * ⇒ รอบแรกคือ 1 ต.ค. – 25 ต.ค. แล้วค่อยเป็น 26–25 ตามปกติ
+   */
+  calendarMonthsUntil?: string;
 }
 
-export const DEFAULT_SCORE_PERIOD: ScorePeriodConfig = { cutoffDay: 25, overrides: {} };
+/** เริ่มใช้รอบตัดวันที่ 25 ตั้งแต่เกรด ต.ค. 2569 (เจ้าของระบบสั่ง 2026-10-14) — ก.ย. 2569 ตัดเกรดแบบเดือนปฏิทินไปแล้ว */
+export const SCORE_PERIOD_STARTS_AFTER = "2026-09";
+
+export const DEFAULT_SCORE_PERIOD: ScorePeriodConfig = {
+  cutoffDay: 25,
+  overrides: {},
+  calendarMonthsUntil: SCORE_PERIOD_STARTS_AFTER,
+};
 
 const THAI_MONTH = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
@@ -35,6 +48,7 @@ export function shiftPeriodMonth(month: string, delta: number): string {
 export function cutoffDayOf(config: ScorePeriodConfig, month: string): number {
   const [y, m] = parseMonth(month);
   const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  if (config.calendarMonthsUntil && month <= config.calendarMonthsUntil) return lastDay;
   const day = config.overrides[month] ?? config.cutoffDay;
   return Math.min(Math.max(1, Math.round(day)), lastDay);
 }
@@ -107,5 +121,10 @@ export function normalizeScorePeriodConfig(raw: unknown): ScorePeriodConfig {
       }
     }
   }
-  return { cutoffDay, overrides };
+  const calendarMonthsUntil =
+    typeof (value as { calendarMonthsUntil?: unknown }).calendarMonthsUntil === "string" &&
+    /^\d{4}-(0[1-9]|1[0-2])$/.test((value as { calendarMonthsUntil: string }).calendarMonthsUntil)
+      ? (value as { calendarMonthsUntil: string }).calendarMonthsUntil
+      : SCORE_PERIOD_STARTS_AFTER;
+  return { cutoffDay, overrides, calendarMonthsUntil };
 }
