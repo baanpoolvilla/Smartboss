@@ -34,11 +34,14 @@ export function useHolidayBalance(month: string, refreshKey: unknown): HolidayBa
   return loaded?.month === month ? loaded.items : [];
 }
 
-/** ช่องสถิติ "Holiday เหลือ" — หน้าตาเดียวกับช่อง วันลา / วันหยุดประจำ ข้าง ๆ */
-export function HolidayBalanceTile({ balance }: { balance: HolidayBalance }) {
+/** ช่องสถิติ "Holiday เหลือ" — หน้าตาเดียวกับช่อง วันลา / วันหยุดประจำ ข้าง ๆ · กดได้ = เปิดรายละเอียด (holiday-detail-dialog.tsx) */
+export function HolidayBalanceTile({ balance, onOpen }: { balance: HolidayBalance; onOpen?: () => void }) {
   return (
-    <div
-      className="rounded-lg bg-[var(--bg-soft)] px-3 py-2 text-center"
+    <button
+      type="button"
+      onClick={onOpen}
+      disabled={!onOpen}
+      className="rounded-lg bg-[var(--bg-soft)] px-3 py-2 text-center transition-colors enabled:hover:bg-[var(--accent)] enabled:cursor-pointer"
       title={
         balance.expiringDays > 0
           ? `${balance.expiringDays} วันต้องใช้ภายในเดือนนี้ ไม่งั้นถูกตัดทิ้ง`
@@ -52,6 +55,7 @@ export function HolidayBalanceTile({ balance }: { balance: HolidayBalance }) {
           หมดอายุสิ้นเดือน {balance.expiringDays} วัน
         </p>
       )}
-    </div>
+      {onOpen && <p className="text-[10px] font-medium text-[var(--brand-green-dark)]">ดูรายละเอียด ›</p>}
+    </button>
   );
 }

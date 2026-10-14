@@ -50,4 +50,17 @@ describe('holidayAvailability', () => {
     // เริ่มงาน ก.ย. — ไม่ได้สิทธิ์ของ ก.ค./ส.ค.
     expect(holidayAvailability({ from: '2026-09', to: '2026-10', grants, usage: new Map() }, '2026-10').available_days).toBe(3);
   });
+
+  it('grants ครบทุกเดือนในช่วงใช้ได้ รวมเดือนที่ใช้หมดแล้ว', () => {
+    const grants = new Map([['2026-12', 4], ['2027-01', 1]]);
+    const result = holidayAvailability(
+      { from: '2026-10', to: '2027-01', grants, usage: new Map([['2026-12', 4]]) },
+      '2027-01',
+    );
+    expect(result.grants).toEqual([
+      { month: '2026-12', granted_days: 4, remaining_days: 0, expires_month: '2027-02' },
+      { month: '2027-01', granted_days: 1, remaining_days: 1, expires_month: '2027-03' },
+    ]);
+  });
 });
+

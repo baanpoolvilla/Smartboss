@@ -68,6 +68,16 @@ function simulate(
   return { deficit, bucketsAt };
 }
 
+/** สิทธิ์ของแต่ละเดือนที่ยังอยู่ในช่วงใช้ได้ ณ เดือนที่ถาม — รวมเดือนที่ใช้หมดแล้วด้วย (หน้ารายละเอียด Holiday) */
+export interface HolidayGrant {
+  /** เดือนที่ได้สิทธิ์ */
+  month: string;
+  granted_days: number;
+  remaining_days: number;
+  /** เดือนสุดท้ายที่ยังใช้ได้ */
+  expires_month: string;
+}
+
 export interface HolidayLedgerInput {
   /** เดือนแรกที่เริ่มนับสิทธิ์ (เช่นเดือนที่เริ่มงาน) */
   from: string;
@@ -89,11 +99,11 @@ export interface HolidayLedgerInput {
 export function holidayAvailability(
   input: HolidayLedgerInput,
   month: string,
-): { available_days: number; buckets: HolidayBucket[] } {
+): { available_days: number; buckets: HolidayBucket[]; grants: HolidayGrant[] } {
   const from = monthIndex(input.from);
   const target = monthIndex(month);
   const to = Math.max(monthIndex(input.to), target);
-  if (target < from) return { available_days: 0, buckets: [] };
+  if (target < from) return { available_days: 0, buckets: [], grants: [] };
 
   const grantOf = (index: number): number => input.grants.get(monthOfIndex(index)) ?? 0;
   const run = (extra: number): Simulation =>
@@ -104,5 +114,18 @@ export function holidayAvailability(
   // ไล่ลงทีละครึ่งวัน (ลาครึ่งวันได้) จากยอดในถัง จนเจอจำนวนที่ไม่ทำให้เดือนไหนเกินเพิ่ม
   let available = Math.floor(buckets.reduce((sum, bucket) => sum + bucket.remaining_days, 0) * 2) / 2;
   while (available > 0 && run(available).deficit > base.deficit + 1e-9) available -= 0.5;
-  return { available_days: Math.max(0, available), buckets };
+  // buckets ตัดเดือนที่ใช้หมดแล้วทิ้ง — grants เก็บไว้ครบทุกเดือนในช่วงใช้ได้ คนดูจะเห็นว่า "ได้ 4 ใช้ไป 4"
+  const grants: HolidayGrant[] = [];
+  for (let month = Math.max(from, target - HOLIDAY_VALID_MONTHS + 1); month <= target; month += 1) {
+    const granted = grantOf(month);
+    if (granted <= 0) continue;
+    const left = buckets.find((bucket) => bucket.month === monthOfIndex(month))?.remaining_days ?? 0;
+    grants.push({
+      month: monthOfIndex(month),
+      granted_days: granted,
+      remaining_days: left,
+      expires_month: monthOfIndex(month + HOLIDAY_VALID_MONTHS - 1),
+    });
+  }
+  return { available_days: Math.max(0, available), buckets, grants };
 }

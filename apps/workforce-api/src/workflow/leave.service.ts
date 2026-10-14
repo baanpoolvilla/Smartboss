@@ -7,6 +7,7 @@ import { RequestContextService } from '../shared/request-context';
 import { CLOCK } from '../shared/tokens';
 import {
   holidayAvailability,
+  type HolidayGrant,
   monthIndex,
   monthOfIndex,
   type HolidayBucket,
@@ -507,7 +508,7 @@ export class LeaveService {
   ): Promise<{
     items: {
       leave_type_id: string;
-      months: { month: string; available_days: number; buckets: HolidayBucket[] }[];
+      months: { month: string; available_days: number; buckets: HolidayBucket[]; grants: HolidayGrant[] }[];
     }[];
   }> {
     if (monthIndex(toMonth) < monthIndex(fromMonth) || monthIndex(toMonth) - monthIndex(fromMonth) > 23) {

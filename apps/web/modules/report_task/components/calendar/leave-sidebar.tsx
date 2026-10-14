@@ -12,6 +12,7 @@ import { useLeaveStore } from "@/modules/report_task/store/leave-store";
 import { useLeaveTypeStore } from "@/modules/report_task/store/leave-type-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { HolidayBalanceTile, useHolidayBalance } from "./holiday-balance-tile";
+import { HolidayDetailDialog } from "./holiday-detail-dialog";
 import { useCalendarVisibilityStore } from "@/modules/report_task/store/calendar-visibility-store";
 import { useRoutineDayOffStore, type DayOffOrigin } from "@/modules/report_task/store/routine-dayoff-store";
 import {
@@ -133,6 +134,8 @@ export function LeaveSidebar({
   const targetMonth = newRoutineDate.slice(0, 7);
   // โหลดใหม่เมื่อเปลี่ยนเดือน และหลังปิดฟอร์มยื่นวันลา (เพิ่งใช้สิทธิ์ไป)
   const holidayBalances = useHolidayBalance(rangeMonthKey, submitLeaveOpen);
+  // กดช่อง "Holiday เหลือ" = เปิดรายละเอียดของประเภทนั้น
+  const [holidayDetailTypeId, setHolidayDetailTypeId] = useState<string | null>(null);
   const myQuota = quotaForDepartment(getUser(viewingAsUserId)?.departmentId, companyMonthlyQuota, departmentQuotas, useDepartmentOverrides);
 
   // Manual picks + every rule's expanded occurrences, both scoped to
@@ -573,7 +576,7 @@ export function LeaveSidebar({
             </div>
             {/* Holiday แบบสะสม — ยอดของตัวเองจากฝ่ายบุคคล มีเฉพาะบริษัทที่เปิดใช้ */}
             {holidayBalances.map((b) => (
-              <HolidayBalanceTile key={b.leaveTypeId} balance={b} />
+              <HolidayBalanceTile key={b.leaveTypeId} balance={b} onOpen={() => setHolidayDetailTypeId(b.leaveTypeId)} />
             ))}
           </div>
 
@@ -789,6 +792,13 @@ export function LeaveSidebar({
         </CardContent>
       </Card>
       <SubmitLeaveDialog open={submitLeaveOpen} onOpenChange={setSubmitLeaveOpen} />
+      <HolidayDetailDialog
+        open={holidayDetailTypeId !== null}
+        onOpenChange={(v) => !v && setHolidayDetailTypeId(null)}
+        month={rangeMonthKey}
+        leaveTypeId={holidayDetailTypeId ?? ""}
+        onBookHoliday={() => setSubmitLeaveOpen(true)}
+      />
     </>
   );
 }

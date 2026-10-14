@@ -145,6 +145,8 @@ export interface HolidayAllowance {
     month: string;
     available_days: number;
     buckets: { month: string; remaining_days: number; expires_month: string }[];
+    /** ทุกเดือนในช่วงใช้ได้ รวมที่ใช้หมดแล้ว — ระบบบุคคลรุ่นเก่าไม่มี */
+    grants?: { month: string; granted_days: number; remaining_days: number; expires_month: string }[];
   }[];
 }
 
