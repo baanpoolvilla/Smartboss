@@ -28,16 +28,21 @@ export function ScorePeriodForm({ period, orgId }: { period: ScorePeriodConfig; 
               name="cutoffDay"
               defaultValue={period.cutoffDay}
               min={1}
-              max={28}
+              max={31}
               required
               className={inputClass}
             />
           </Field>
         </div>
+        <p className="mt-1 text-xs text-(--ink-soft)">
+          ใช้วันนี้ทุกเดือน · เดือนที่ไม่มีวันนั้น (เช่น ตั้ง 30 แต่ ก.พ. มี 28 วัน) ตัดวันสุดท้ายของเดือนแทน
+        </p>
 
-        <p className="mt-4 mb-1 text-xs font-medium text-(--ink)">เปลี่ยนวันตัดรอบเฉพาะเดือน</p>
-        <p className="mb-2 text-xs text-(--ink-soft)">
-          เว้นว่าง = ใช้วันปกติ · เปลี่ยนแล้วรอบถัดไปเริ่มวันถัดจากวันนั้น · รอบที่ผ่านไปแล้วแก้ไม่ได้
+        {/* ตัวเลือกเสริม ซ่อนไว้ — ส่วนใหญ่ไม่ต้องใช้ · เปิดเองถ้ามีเดือนที่ตั้งไว้แล้ว */}
+        <details className="mt-4" open={months.some((m) => period.overrides[m] !== undefined)}>
+          <summary className="cursor-pointer text-xs font-medium text-(--ink)">เปลี่ยนวันตัดรอบเฉพาะบางเดือน (ไม่บังคับ)</summary>
+        <p className="mt-2 mb-2 text-xs text-(--ink-soft)">
+          เช่น เดือนที่ต้องปิดเงินเดือนเร็วขึ้น · เว้นว่าง = ใช้วันปกติ · เปลี่ยนแล้วรอบถัดไปเริ่มวันถัดจากวันนั้น · รอบที่ผ่านไปแล้วแก้ไม่ได้
         </p>
         <div className="flex flex-col gap-2">
           {months.map((month) => (
@@ -63,6 +68,7 @@ export function ScorePeriodForm({ period, orgId }: { period: ScorePeriodConfig; 
             </div>
           ))}
         </div>
+        </details>
 
         <div className="mt-4">
           <Button type="submit" size="sm">

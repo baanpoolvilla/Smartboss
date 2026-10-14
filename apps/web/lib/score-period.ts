@@ -9,7 +9,7 @@
  */
 
 export interface ScorePeriodConfig {
-  /** วันตัดรอบปกติของทุกเดือน 1–28 */
+  /** วันตัดรอบปกติของทุกเดือน 1–31 — เดือนที่ไม่มีวันนั้น (ตั้ง 31 แต่ ก.พ. มี 28) ใช้วันสุดท้ายของเดือนแทน */
   cutoffDay: number;
   /** "YYYY-MM" → วันตัดรอบของเดือนนั้น (เฉพาะเดือนที่เปลี่ยน) */
   overrides: Record<string, number>;
@@ -96,7 +96,7 @@ export function normalizeScorePeriodConfig(raw: unknown): ScorePeriodConfig {
   if (!raw || typeof raw !== "object") return DEFAULT_SCORE_PERIOD;
   const value = raw as { cutoffDay?: unknown; overrides?: unknown };
   const cutoffDay =
-    typeof value.cutoffDay === "number" && Number.isInteger(value.cutoffDay) && value.cutoffDay >= 1 && value.cutoffDay <= 28
+    typeof value.cutoffDay === "number" && Number.isInteger(value.cutoffDay) && value.cutoffDay >= 1 && value.cutoffDay <= 31
       ? value.cutoffDay
       : DEFAULT_SCORE_PERIOD.cutoffDay;
   const overrides: Record<string, number> = {};

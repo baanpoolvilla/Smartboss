@@ -806,8 +806,8 @@ export async function saveScorePeriodAction(formData: FormData) {
   const orgId = await resolveTargetOrgId(session, formData);
 
   const cutoffDay = Number(formData.get("cutoffDay"));
-  if (!Number.isInteger(cutoffDay) || cutoffDay < 1 || cutoffDay > 28) {
-    throw new Error("วันตัดรอบปกติต้องเป็นวันที่ 1–28");
+  if (!Number.isInteger(cutoffDay) || cutoffDay < 1 || cutoffDay > 31) {
+    throw new Error("วันตัดรอบปกติต้องเป็นวันที่ 1–31");
   }
   const previous = await loadScorePeriodConfig(orgId);
   const current = scorePeriodOf(previous, new Date());

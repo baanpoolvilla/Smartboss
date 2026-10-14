@@ -39,4 +39,10 @@ describe("score period (cut off on the 25th)", () => {
     expect(daysUntilCutoff(cfg, th("2026-10-20T10:00:00"))).toBe(5);
     expect(daysUntilCutoff(cfg, th("2026-10-25T10:00:00"))).toBe(0);
   });
+
+  it("a cutoff day the month doesn't have falls back to the month's last day", () => {
+    const end = { cutoffDay: 30, overrides: {} };
+    expect(scorePeriodLabel(end, "2027-02")).toBe("31 ม.ค. – 28 ก.พ. 2570");
+    expect(scorePeriodLabel(end, "2027-03")).toBe("1 มี.ค. – 30 มี.ค. 2570");
+  });
 });
