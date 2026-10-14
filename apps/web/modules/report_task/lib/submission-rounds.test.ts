@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attributePostToRound, postsOfRound } from "@/modules/report_task/lib/submission-rounds";
+import { attributePostToRound, attributionRounds, postsOfRound } from "@/modules/report_task/lib/submission-rounds";
 import type { SubmissionRound } from "@/modules/report_task/store/report-feed-store";
 
 const round = (id: string, time: string): SubmissionRound =>
@@ -32,5 +32,16 @@ describe("attributePostToRound with the day's posts", () => {
 
   it("without the day's posts it keeps the old time-only guess", () => {
     expect(attributePostToRound(post("a", "09:28"), rounds)?.id).toBe("evening");
+  });
+
+  it("another department's overdue round never takes the post (shared room, 13/10/2569)", () => {
+    const otherDeptMorning = round("other-morning", "09:00");
+    const myEvening = round("my-evening", "18:00");
+    const day = [post("a", "17:14")];
+    // ทุกรอบของห้อง: รอบเช้าของแผนกอื่น "ค้าง" อยู่ เลยแย่งโพสต์ไป — ผิด
+    expect(attributePostToRound(day[0]!, [otherDeptMorning, myEvening], day)?.id).toBe("other-morning");
+    // เฉพาะรอบของคนนี้: เข้ารอบเย็นของตัวเอง
+    const pool = attributionRounds([myEvening], [otherDeptMorning, myEvening]);
+    expect(attributePostToRound(day[0]!, pool, day)?.id).toBe("my-evening");
   });
 });

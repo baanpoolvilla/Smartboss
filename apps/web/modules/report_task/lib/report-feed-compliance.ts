@@ -7,6 +7,7 @@ import {
   effectiveRoundsOf,
   resolveRoundSubmitters,
   postsOfRound,
+  attributionRounds,
   roundFrequencyOf,
 } from "@/modules/report_task/lib/submission-rounds";
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
@@ -194,7 +195,7 @@ function roundMinutes(round: SubmissionRound): number {
  * `postsForDay`, which is what every round-level function below needs
  * instead ("2 รอบ = 2 การส่งแยกกัน", not one shared per-day bucket). */
 function postsForRound(topic: ReportTopic, userId: string, round: SubmissionRound, day: string, posts: ReportPost[]): ReportPost[] {
-  const rounds = effectiveRoundsOf(topic);
+  const rounds = attributionRounds(roundsForUserOnDay(topic, userId, day, groupsNow()), effectiveRoundsOf(topic));
   return postsOfRound(postsForDay(topic, userId, day, posts), rounds, round.id);
 }
 
@@ -767,10 +768,12 @@ export function todayComplianceSummary(
     if (today < localDateStr(new Date(topic.createdAt))) continue;
     const allRounds = effectiveRoundsOf(topic);
     for (const u of users) {
-      for (const round of roundsForUserOnDay(topic, u.id, today, groups)) {
+      const myRounds = roundsForUserOnDay(topic, u.id, today, groups);
+      const pool = attributionRounds(myRounds, allRounds);
+      for (const round of myRounds) {
         if (exemptions && !roundIgnoresDateExemptions(round) && isExemptDate(exemptions, u.id, today)) continue;
         summary.totalTracked += 1;
-        const roundPosts = postsOfRound(postsForDay(topic, u.id, today, posts), allRounds, round.id);
+        const roundPosts = postsOfRound(postsForDay(topic, u.id, today, posts), pool, round.id);
         if (roundPosts.length === 0) {
           summary.missingToday += 1;
           continue;
@@ -819,7 +822,9 @@ export function todayStatusEntries(
     if (today < localDateStr(new Date(topic.createdAt))) continue;
     const allRounds = effectiveRoundsOf(topic);
     for (const u of users) {
-      for (const round of roundsForUserOnDay(topic, u.id, today, groups)) {
+      const myRounds = roundsForUserOnDay(topic, u.id, today, groups);
+      const pool = attributionRounds(myRounds, allRounds);
+      for (const round of myRounds) {
         if (exemptions && !roundIgnoresDateExemptions(round) && isExemptDate(exemptions, u.id, today)) continue;
         const base = {
           userId: u.id,
@@ -834,7 +839,7 @@ export function todayStatusEntries(
           roundLabel: round.label,
           roundTime: round.time,
         };
-        const roundPosts = postsOfRound(postsForDay(topic, u.id, today, posts), allRounds, round.id);
+        const roundPosts = postsOfRound(postsForDay(topic, u.id, today, posts), pool, round.id);
         if (roundPosts.length === 0) {
           entries.push({ ...base, status: "missing" });
           continue;
@@ -862,9 +867,11 @@ export function pendingToday(topics: ReportTopic[], posts: ReportPost[], exempti
     if (today < localDateStr(new Date(topic.createdAt))) continue;
     const allRounds = effectiveRoundsOf(topic);
     for (const u of users) {
-      for (const round of roundsForUserOnDay(topic, u.id, today, groups)) {
+      const myRounds = roundsForUserOnDay(topic, u.id, today, groups);
+      const pool = attributionRounds(myRounds, allRounds);
+      for (const round of myRounds) {
         if (exemptions && !roundIgnoresDateExemptions(round) && isExemptDate(exemptions, u.id, today)) continue;
-        const roundPosts = postsOfRound(postsForDay(topic, u.id, today, posts), allRounds, round.id);
+        const roundPosts = postsOfRound(postsForDay(topic, u.id, today, posts), pool, round.id);
         if (roundPosts.length > 0) continue;
         entries.push({
           userId: u.id,

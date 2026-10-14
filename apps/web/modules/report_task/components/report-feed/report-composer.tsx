@@ -9,7 +9,7 @@ import { useReportFeedStore, type ReportPostImage, type ReportTopic } from "@/mo
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
 import { photoCount } from "@/modules/report_task/lib/report-attachment-kind";
-import { roundsForUserOnDay, attributePostToRound, effectiveRoundsOf } from "@/modules/report_task/lib/submission-rounds";
+import { roundsForUserOnDay, attributePostToRound, effectiveRoundsOf, attributionRounds } from "@/modules/report_task/lib/submission-rounds";
 import { effectiveHardCutoffTime, isPastHardCutoff } from "@/modules/report_task/lib/report-cutoff";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { isExemptDate } from "@/modules/report_task/lib/report-feed-exemptions";
@@ -166,7 +166,10 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   // ("ถ้าคนนั้นส่งไปแล้วต้องไม่มีให้เลือก...ยกเว้นยกเลิกโพสนั้นๆ"). Recomputed
   // live off the store's own posts, so deleting that post is all it takes
   // for the round to reappear here — no separate "undo" state to track.
-  const allRoundsForAttribution = effectiveRoundsOf(topic);
+  const allRoundsForAttribution = attributionRounds(
+    roundsForUserOnDay(topic, viewingAsUserId, today, submitterGroups),
+    effectiveRoundsOf(topic)
+  );
   const myPostsToday = allPosts.filter(
     (p) => p.topicId === topic.id && p.authorId === viewingAsUserId && !p.excludeFromSubmission && localDateStr(new Date(p.createdAt)) === today
   );

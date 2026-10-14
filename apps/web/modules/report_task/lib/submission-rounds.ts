@@ -225,6 +225,16 @@ export function attributePostToRound(
   return attributeByTime(post, rounds);
 }
 
+/**
+ * รอบที่ใช้จับคู่โพสต์ของคนหนึ่ง = เฉพาะรอบที่ "คนนั้น" ต้องส่งในวันนั้น ไม่ใช่ทุกรอบของห้อง
+ * ทำไม: ห้องรวมหลายแผนกมีรอบของแต่ละแผนกปนกัน เดาจากทุกรอบ โพสต์ไปตกรอบของแผนกอื่น
+ * (โดยเฉพาะรอบที่ "ค้าง" ซึ่งไม่ใช่ของเขา) ⇒ รอบของตัวเองกลายเป็น "ไม่ส่ง" ทั้งที่ป้ายบนโพสต์
+ * บอกตรงเวลา (เจอจริง 13/10/2569) · ไม่มีรอบของตัวเองเลย ใช้ทุกรอบแทน (ผลไม่ถูกนับอยู่แล้ว)
+ */
+export function attributionRounds(userRounds: SubmissionRound[], allRounds: SubmissionRound[]): SubmissionRound[] {
+  return userRounds.length > 0 ? userRounds : allRounds;
+}
+
 /** โพสต์ของวันหนึ่ง (คนเดียว ห้องเดียว) ที่นับเข้ารอบ `roundId` — ใช้ attributePostToRound แบบดูทั้งวัน */
 export function postsOfRound<P extends { id: string; createdAt: string; roundId?: string }>(
   dayPosts: readonly P[],

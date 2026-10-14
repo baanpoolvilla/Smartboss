@@ -6,6 +6,7 @@ import {
   roundIgnoresDateExemptions,
   roundFrequencyOf,
   postsOfRound,
+  attributionRounds,
 } from "@/modules/report_task/lib/submission-rounds";
 import { trackedTopicsOf, iterationBounds, eachDay, type ComplianceStatus } from "@/modules/report_task/lib/report-feed-compliance";
 import { isExemptDate, type DateExemptions } from "@/modules/report_task/lib/report-feed-exemptions";
@@ -198,7 +199,11 @@ export function roundComplianceStatusServer(
 
   const rounds = effectiveRoundsOf(topic);
   const cutoff = roundMinutes(round);
-  const roundPosts = postsForRoundServer(topic, userId, round, day, posts, rounds);
+  // จับคู่โพสต์เฉพาะในรอบที่คนนี้ต้องส่งวันนั้น — กติกาเดียวกับแดชบอร์ด (attributionRounds)
+  const myRounds = rounds.filter(
+    (r) => roundRunsOnDay(r, day) && resolveRoundSubmittersServer(r, topic.visibility, groups, users).includes(userId)
+  );
+  const roundPosts = postsForRoundServer(topic, userId, round, day, posts, attributionRounds(myRounds, rounds));
   if (roundPosts.length > 0) {
     const onTime = roundPosts.some((p) => minutesOfDay(p.createdAt) <= cutoff || p.lateBadgeHidden);
     return onTime ? "on-time" : "late";

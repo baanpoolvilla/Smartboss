@@ -41,7 +41,7 @@ import { uploadCompressedImage } from "@/modules/report_task/lib/image-resize";
 import { useIsMobile } from "@/modules/report_task/hooks/use-is-mobile";
 import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
 import { aboutMeCountInPost } from "@/modules/report_task/lib/report-feed-activity";
-import { roundsForUserOnDay, attributePostToRound, effectiveRoundsOf, roundRunsOnDay } from "@/modules/report_task/lib/submission-rounds";
+import { roundsForUserOnDay, attributePostToRound, effectiveRoundsOf, roundRunsOnDay, attributionRounds } from "@/modules/report_task/lib/submission-rounds";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { isExemptDate } from "@/modules/report_task/lib/report-feed-exemptions";
 import { todayIso, localDateStr } from "@/modules/report_task/lib/now";
@@ -1106,7 +1106,8 @@ export function TopicSidebar({
                 !p.excludeFromSubmission &&
                 localDateStr(new Date(p.createdAt)) === today
             );
-            const posted = myPostsToday.some((p) => attributePostToRound(p, roundsToday, myPostsToday)?.id === r.id);
+            const pool = attributionRounds(roundsForUserOnDay(t, viewingAsUserId, today, submitterGroups), roundsToday);
+            const posted = myPostsToday.some((p) => attributePostToRound(p, pool, myPostsToday)?.id === r.id);
             const [h, m] = r.time.split(":").map(Number) as [number, number];
             const cutoffMinutes = h * 60 + m;
             const status: "posted" | "late" | "pending" | "na" = !owesIt

@@ -30,7 +30,7 @@ import { useSettingsAccessStore } from "@/modules/report_task/store/settings-acc
 import { topicModeOf } from "@/modules/report_task/lib/report-topic-membership";
 import { RoomMembersDialog } from "@/modules/report_task/components/report-feed/room-members-dialog";
 import { currentCutoff, cutoffsOnDay } from "@/modules/report_task/lib/report-cutoff";
-import { roundsForUserOnDay, attributePostToRound, effectiveRoundsOf } from "@/modules/report_task/lib/submission-rounds";
+import { roundsForUserOnDay, attributePostToRound, effectiveRoundsOf, attributionRounds } from "@/modules/report_task/lib/submission-rounds";
 import { localDateStr } from "@/modules/report_task/lib/now";
 import { pendingToday, todayStatusEntries, type TodayStatusEntry } from "@/modules/report_task/lib/report-feed-compliance";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
@@ -772,7 +772,10 @@ function ReportFeedPageInner() {
     const canSeeEveryRound = canEditReportTopic(activeTopic.visibility, viewingAsUserId) || canManageTopics;
     const visibleRounds = canSeeEveryRound ? rounds : rounds.filter((c) => myRoundIds.has(c.id));
     if (visibleRounds.length === 0) return [];
-    const allRoundsToday = effectiveRoundsOf(activeTopic);
+    const allRoundsToday = attributionRounds(
+      roundsForUserOnDay(activeTopic, viewingAsUserId, today, submitterGroups),
+      effectiveRoundsOf(activeTopic)
+    );
     const myPostsToday = posts.filter(
       (p) => p.topicId === activeTopic.id && p.authorId === viewingAsUserId && !p.excludeFromSubmission && localDateStr(new Date(p.createdAt)) === today
     );
