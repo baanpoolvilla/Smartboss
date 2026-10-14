@@ -62,13 +62,14 @@ describe("score period (cut off on the 25th)", () => {
     expect(scorePeriodOf(cfg, th("2026-11-25T23:59:59"))).toBe("2026-11");
   });
 
-  it("locked at 23:59 on the cutoff day: later human changes don't count anywhere; system judgements of that day get until noon", () => {
+  it("locked at 23:59 on the cutoff day: later human changes don't count anywhere; system judgements of that day get until the end of the next day", () => {
     const day25 = new Date("2026-11-25T00:00:00Z"); // วันทำงาน 25 พ.ย.
     // ระบบหักขาดงานตอน 08:00 วันที่ 26 ⇒ ยังนับรอบ พ.ย.
     expect(effectiveScorePeriodOf(cfg, day25, th("2026-11-26T08:00:00"), null)).toBe("2026-11");
-    // กะดึกเลิก 06:00 หักรอบ 08:59 ⇒ ยังนับ · ระบบบันทึกหลังเที่ยง ⇒ ไม่นับ
-    expect(effectiveScorePeriodOf(cfg, day25, th("2026-11-26T08:59:00"), null)).toBe("2026-11");
-    expect(effectiveScorePeriodOf(cfg, day25, th("2026-11-26T12:30:00"), null)).toBeNull();
+    // กะดึก 22:00–08:00 หัก 10:59 · 22:00–10:00 หัก 12:59 ⇒ ยังนับ · ระบบบันทึกหลัง 23:59 วันที่ 26 ⇒ ไม่นับ
+    expect(effectiveScorePeriodOf(cfg, day25, th("2026-11-26T10:59:00"), null)).toBe("2026-11");
+    expect(effectiveScorePeriodOf(cfg, day25, th("2026-11-26T12:59:00"), null)).toBe("2026-11");
+    expect(effectiveScorePeriodOf(cfg, day25, th("2026-11-27T00:30:00"), null)).toBeNull();
     // คนอนุมัติ/คืนคะแนนก่อน 23:59 ⇒ นับ · หลังเที่ยงคืน ⇒ ไม่นับที่ไหนเลย
     expect(effectiveScorePeriodOf(cfg, day25, th("2026-11-25T23:30:00"), "ceo")).toBe("2026-11");
     expect(effectiveScorePeriodOf(cfg, day25, th("2026-11-26T00:10:00"), "ceo")).toBeNull();
