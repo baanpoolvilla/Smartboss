@@ -112,7 +112,7 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
 
   const wf =
     subjects.length === 0
-      ? { employments: [] as EmploymentRow[], results: [] as ResultRow[], leaves: [] as LeaveRow[], dayOffTypeId: null as string | null, shifts: [] as { id: string; name: string; start_minutes: number; end_minutes: number }[] }
+      ? { employments: [] as EmploymentRow[], results: [] as ResultRow[], leaves: [] as LeaveRow[], dayOffTypeId: null as string | null, shifts: [] as { id: string; name: string; start_minutes: number; end_minutes: number }[], firstIn: [] as { employment_id: string; day: string }[] }
       : await withWorkforceTenant(orgId, async (tx) => {
           // สัญญาจ้างที่ยังทำงานอยู่ของแต่ละคน + กะที่มีผลวันนี้ (ตารางประจำ — ทุกวันกะเดียวกัน ดู setRecurringPatternAction)
           // ผูกคนกับทะเบียนพนักงาน: principal.person_id (ที่ระบบบุคคลใช้ตอนลงเวลา) ก่อน ไม่มีค่อยเทียบอีเมล
@@ -145,7 +145,15 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
             workers.map((w) => w.email ?? ""),
           );
           const ids = employments.map((e) => e.employment_id);
-          if (ids.length === 0) return { employments, results: [], leaves: [], dayOffTypeId: null, shifts: [] };
+          if (ids.length === 0) return { employments, results: [], leaves: [], dayOffTypeId: null, shifts: [], firstIn: [] };
+          // วันแรกที่ลงเวลาจริงของแต่ละคน (ทั้งประวัติ) — ก่อนวันนั้นไม่นับ "ไม่มา" (ยังไม่เริ่มใช้ระบบ/ยังไม่เริ่มงาน)
+          const firstIn = await tx.$queryRawUnsafe<{ employment_id: string; day: string }[]>(
+            `SELECT employment_id::text AS employment_id, to_char(min(work_date), 'YYYY-MM-DD') AS day
+               FROM workforce.attendance_results
+              WHERE is_current AND actual_in_at IS NOT NULL AND employment_id = ANY($1::uuid[])
+              GROUP BY employment_id`,
+            ids,
+          );
           const results = await tx.$queryRawUnsafe<ResultRow[]>(
             `SELECT ar.employment_id::text AS employment_id, to_char(ar.work_date, 'YYYY-MM-DD') AS day,
                     to_char(ar.actual_in_at AT TIME ZONE 'Asia/Bangkok', 'HH24:MI') AS in_hm,
@@ -184,17 +192,20 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
             `SELECT id::text AS id, name, start_minutes, end_minutes FROM workforce.shift_definitions
               WHERE status = 'ACTIVE' AND rest_day = false ORDER BY start_minutes, name`,
           );
-          return { employments, results, leaves, dayOffTypeId: types[0]?.id ?? null, shifts };
+          return { employments, results, leaves, dayOffTypeId: types[0]?.id ?? null, shifts, firstIn };
         });
 
   const [{ list: ot }, { list: overrides }] = await Promise.all([readOt(orgId), readOverrides(orgId)]);
   const empBySubject = new Map(wf.employments.map((e) => [e.subject, e]));
+  const firstInByEmp = new Map(wf.firstIn.map((f) => [f.employment_id, f.day]));
 
   const rows: WorkerMonth[] = workers.map((w) => {
     const emp = empBySubject.get(w.userId) ?? null;
     const cells: Record<number, DayCell> = {};
     if (emp) {
       const res = new Map(wf.results.filter((r) => r.employment_id === emp.employment_id).map((r) => [r.day, r]));
+      // ยังไม่เคยลงเวลาเลย = ยังไม่เริ่ม ไม่นับไม่มาสักวัน · เริ่มแล้ว = นับตั้งแต่วันแรกที่ลงเวลา
+      const started = firstInByEmp.get(emp.employment_id) ?? null;
       for (let d = 1; d <= total; d++) {
         const date = `${month}-${String(d).padStart(2, "0")}`;
         const cell: DayCell = { s: "" };
@@ -219,7 +230,7 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
           cell.override = { reason: ov.reason, byName: ov.byName, at: ov.at };
         } else if (date < today) {
           // "ไม่มา" เฉพาะวันที่มีกะจริงในวันนั้น — ก่อนเริ่มกะ/ก่อนเริ่มงานไม่นับ (เจอจริง: 9–14 ต.ค. ขึ้นไม่มา ทั้งที่กะเริ่ม 15)
-          cell.s = r?.has_shift ? "n" : "";
+          cell.s = r?.has_shift && started !== null && date >= started ? "n" : "";
         }
         if (leave) {
           cell.leave = { id: leave.id, name: leave.type_name, dayOff: leave.is_day_off, byName: leave.by_name, at: new Date(leave.created_at).toISOString() };
@@ -230,6 +241,7 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
     }
     return {
       ...w,
+      startedOn: emp ? (firstInByEmp.get(emp.employment_id) ?? null) : null,
       employmentId: emp?.employment_id ?? null,
       employeeCode: emp?.employee_code ?? null,
       shiftId: emp?.shift_id ?? null,
@@ -329,7 +341,8 @@ export async function loadDay(orgId: string, date: string, now: Date = new Date(
     // วันก่อนหน้า: ไม่มา เฉพาะวันที่มีกะจริง (ก่อนเริ่มกะ = ไม่มีกะวันนั้น)
     else if (date < month.today) status = cell?.s === "n" ? "n" : "none";
     else if (date > month.today) status = "w";
-    else status = w.shiftEnd !== null && toMin(nowHm) > w.shiftEnd % 1440 ? "n" : "w";
+    // ยังไม่เคยลงเวลาเลย = ยังไม่เริ่ม — เลิกกะแล้วก็ยังไม่นับไม่มา
+    else status = w.startedOn !== null && w.shiftEnd !== null && toMin(nowHm) > w.shiftEnd % 1440 ? "n" : "w";
     const early =
       !!cell?.early ||
       (!cell?.ot && !!outAt && w.shiftEnd !== null && w.shiftEnd < 1440 && toMin(outAt) < w.shiftEnd && (date < month.today || mine.length > 1));
