@@ -6,6 +6,8 @@ import type {
   ChatAttachment,
   ChatChannelDetail,
   ChatChannelSummary,
+  ChatKeepCollectionDTO,
+  ChatKeepItemDTO,
   ChatMessageDTO,
   ChatNoteCommentDTO,
   ChatNoteDTO,
@@ -239,4 +241,46 @@ export function deleteNoteComment(noteId: string, commentId: string): Promise<{ 
 
 export function toggleNoteLike(noteId: string): Promise<{ likeUserIds: string[] }> {
   return send(`${note(noteId)}/like`, "POST");
+}
+
+// ─── Keep (แบบ LINE) ────────────────────────────────────────────────────────
+
+export interface KeepListResponse {
+  items: ChatKeepItemDTO[];
+  hasMore: boolean;
+  usedBytes: number;
+  quotaBytes: number;
+  collections: ChatKeepCollectionDTO[];
+}
+
+export function fetchKeep(opts: { tab?: string; q?: string; collection?: string; before?: string } = {}): Promise<KeepListResponse> {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(opts)) if (v) qs.set(k, v);
+  const s = qs.toString();
+  return fetch(`/api/chat/keep${s ? `?${s}` : ""}`, { cache: "no-store" }).then((r) => json(r));
+}
+
+/** ปุ่ม "Keep" ที่ข้อความ — added = 0 แปลว่าเก็บไว้แล้วก่อนหน้านี้ */
+export function keepMessage(channelId: string, messageId: string): Promise<{ added: number }> {
+  return send("/api/chat/keep", "POST", { channelId, messageId });
+}
+
+export function deleteKeepItem(id: string): Promise<{ ok: true }> {
+  return send(`/api/chat/keep/${encodeURIComponent(id)}`, "DELETE");
+}
+
+export function setKeepItemCollections(id: string, collectionIds: string[]): Promise<{ collectionIds: string[] }> {
+  return send(`/api/chat/keep/${encodeURIComponent(id)}`, "PATCH", { collectionIds });
+}
+
+export function createKeepCollection(name: string): Promise<ChatKeepCollectionDTO> {
+  return send("/api/chat/keep/collections", "POST", { name });
+}
+
+export function renameKeepCollection(id: string, name: string): Promise<{ ok: true }> {
+  return send(`/api/chat/keep/collections/${encodeURIComponent(id)}`, "PATCH", { name });
+}
+
+export function deleteKeepCollection(id: string): Promise<{ ok: true }> {
+  return send(`/api/chat/keep/collections/${encodeURIComponent(id)}`, "DELETE");
 }

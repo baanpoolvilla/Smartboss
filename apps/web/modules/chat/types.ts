@@ -123,6 +123,37 @@ export function isUserMessageKind(kind: string): boolean {
 /** ห้อง "🕐 ระบบลงเวลา" ส่วนตัวของแต่ละคน (lib/attendance-chat.ts) — id ขึ้นต้นด้วยนี้ */
 export const CLOCK_CHANNEL_PREFIX = "clock-";
 
+/** ห้อง "Keep Memo" (แชทกับตัวเอง แบบ LINE) ของแต่ละคน — id = keep-<userId> (data/keep.ts) */
+export const KEEP_CHANNEL_PREFIX = "keep-";
+export const KEEP_CHANNEL_NAME = "Keep Memo";
+export function isKeepChannelId(id: string): boolean {
+  return id.startsWith(KEEP_CHANNEL_PREFIX);
+}
+
+/** พื้นที่ Keep ต่อคน (เหมือน LINE) */
+export const KEEP_QUOTA_BYTES = 1024 * 1024 * 1024;
+
+export type ChatKeepKind = "text" | "link" | "image" | "video" | "audio" | "file";
+
+/** ของที่เก็บไว้ใน Keep (คลัง) — ของคนเดียว */
+export interface ChatKeepItemDTO {
+  id: string;
+  kind: ChatKeepKind;
+  body: string | null;
+  attachment: ChatAttachment | null;
+  size: number;
+  /** มาจากห้องไหน ใครส่ง — null = อัปโหลด/พิมพ์ในห้อง Keep Memo เอง */
+  source: { channelId: string | null; label: string | null; authorId: string | null; fromKeepMemo: boolean } | null;
+  collectionIds: string[];
+  createdAt: string;
+}
+
+export interface ChatKeepCollectionDTO {
+  id: string;
+  name: string;
+  count: number;
+}
+
 /**
  * ข้อความนี้นับเป็น "ยังไม่อ่าน" ไหม — ปกติเฉพาะข้อความที่คนพิมพ์ (ข้อความระบบเช่น "เพิ่มสมาชิก" ไม่นับ)
  * ยกเว้นห้องระบบลงเวลา ที่ทั้งห้องเป็นข้อความระบบ (เข้า/ออกงาน) — ไม่นับ = ไม่มีตัวเลขแดง ไม่มีใครรู้ว่ามีของใหม่

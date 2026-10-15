@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@smartboss/database";
 
 import { deleteFiles } from "@/lib/storage";
+import { keptUrls } from "./keep";
 import type { ChatAlbumDTO, ChatAlbumItemDTO, ChatAttachment } from "../types";
 import { getChannelAccess } from "./channels";
 import { ChatError, type ChatActor } from "./serialize";
@@ -182,9 +183,11 @@ export async function deleteOrphanFiles(orgId: string, urls: string[]): Promise<
     (await prisma.chatAlbumItem.findMany({ where: { orgId, OR: [{ url: { in: urls } }, { thumbUrl: { in: urls } }] }, select: { url: true, thumbUrl: true } }))
       .flatMap((i) => [i.url, i.thumbUrl])
   );
+  // มีคนเก็บไว้ใน Keep = ยังใช้อยู่ ห้ามลบ
+  const inKeep = await keptUrls(orgId, urls);
   const orphans: string[] = [];
   for (const url of urls) {
-    if (stillInAlbum.has(url)) continue;
+    if (stillInAlbum.has(url) || inKeep.has(url)) continue;
     const used = { OR: [{ attachments: { array_contains: [{ url }] } }, { attachments: { array_contains: [{ thumbUrl: url }] } }] };
     const [inMessage, inNote] = await Promise.all([
       prisma.chatMessage.findFirst({ where: { orgId, ...used }, select: { id: true } }),

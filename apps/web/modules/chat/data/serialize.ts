@@ -3,6 +3,7 @@ import { prisma } from "@smartboss/database";
 
 import type { ChatAttachment, ChatAttachmentKind, ChatMessageDTO, ChatNotePreview, ChatReactionDTO, ChatReplyPreview } from "../types";
 import { EXPIRING_KINDS, mediaExpiresAt } from "../lib/retention";
+import { isKeepChannelId } from "../types";
 
 /** ข้อผิดพลาดที่มีสถานะ HTTP — route แปลงเป็นคำตอบให้เอง (ดู lib/respond.ts) */
 export class ChatError extends Error {
@@ -130,9 +131,12 @@ export async function hydrateMessages(orgId: string, rows: MessageRow[]): Promis
       ? (await prisma.chatAlbumItem.findMany({ where: { orgId, url: { in: expiringUrls } }, select: { url: true } })).map((i) => i.url)
       : []
   );
+  // ห้อง Keep Memo ไม่หมดอายุ (media-retention.ts ข้าม) — ไม่ขึ้นป้ายเตือน
   const withExpiry = (row: MessageRow): ChatAttachment[] =>
     ((row.attachments as ChatAttachment[] | null) ?? []).map((a) =>
-      EXPIRING_KINDS.has(a.kind) && !a.expired && !kept.has(a.url) ? { ...a, expiresAt: mediaExpiresAt(row.createdAt).toISOString() } : a
+      EXPIRING_KINDS.has(a.kind) && !a.expired && !kept.has(a.url) && !isKeepChannelId(row.channelId)
+        ? { ...a, expiresAt: mediaExpiresAt(row.createdAt).toISOString() }
+        : a
     );
   const replies = new Map<string, ChatReplyPreview>(
     replyRows.map((r) => [

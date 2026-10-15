@@ -2,14 +2,15 @@
 
 import { memo, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertCircle, Clock, Copy, CornerUpLeft, Download, FileText, Hourglass, ImageOff, Megaphone, MicOff, MoreHorizontal, Pause, Play, RotateCw, SmilePlus, Trash2, X } from "lucide-react";
+import { AlertCircle, Bookmark, Clock, Copy, CornerUpLeft, Download, FileText, Hourglass, ImageOff, Megaphone, MicOff, MoreHorizontal, Pause, Play, RotateCw, SmilePlus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
 import { REACTION_CHIP_CLASS, ReactionPicker } from "@/components/emoji-picker";
 import { StickerImage } from "@/components/sticker-panel";
 
 import { sortReactionEmojis, useChatStore, type RoomMessage } from "../store/chat-store";
-import { CHAT_REACTION_EMOJIS, type ChatAttachment, type ChatUser } from "../types";
+import { CHAT_REACTION_EMOJIS, isKeepChannelId, type ChatAttachment, type ChatUser } from "../types";
+import { keepMessage } from "../lib/api";
 import { attachmentLabel, firstName, formatClock, formatDuration, formatFileSize } from "../lib/format";
 import { ChatAvatar } from "./chat-avatar";
 import { downloadUrl } from "./lightbox";
@@ -286,6 +287,11 @@ function ActionMenu({
 }) {
   const [confirmUnsend, setConfirmUnsend] = useState(false);
   useBackToClose(true, onClose);
+  const canKeep =
+    !message.deleted &&
+    !isKeepChannelId(message.channelId) &&
+    (message.kind === "note" ||
+      (message.kind === "text" && (!!message.body || message.attachments.some((a) => a.kind !== "sticker" && !a.expired && !!a.url))));
   // อีโมจิที่ฉันกดบ่อย/ล่าสุดขึ้นก่อน (นับจากเซิร์ฟเวอร์ — ข้ามเครื่อง/ออกเข้าใหม่ก็จำ)
   const reactionUsage = useChatStore((s) => s.reactionUsage);
   const reactionEmojis = sortReactionEmojis(CHAT_REACTION_EMOJIS, reactionUsage);
@@ -339,6 +345,22 @@ function ActionMenu({
             }}
           >
             <Copy className="h-4 w-4 text-(--ink-soft)" /> คัดลอก
+          </button>
+        )}
+        {/* เก็บลงคลัง Keep (แบบ LINE) — ห้อง Keep Memo เก็บให้อัตโนมัติอยู่แล้ว ไม่ต้องมีปุ่ม */}
+        {canKeep && (
+          <button
+            type="button"
+            className={item}
+            onClick={() => {
+              onClose();
+              keepMessage(message.channelId, message.id).then(
+                (r) => toast.success(r.added > 0 ? "บันทึกใน Keep แล้ว" : "อยู่ใน Keep แล้ว"),
+                (err) => toast.error(err instanceof Error ? err.message : "บันทึกใน Keep ไม่สำเร็จ")
+              );
+            }}
+          >
+            <Bookmark className="h-4 w-4 text-(--ink-soft)" /> Keep
           </button>
         )}
         {canPin && (

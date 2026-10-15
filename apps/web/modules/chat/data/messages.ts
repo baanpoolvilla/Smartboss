@@ -8,6 +8,7 @@ import { rateLimit } from "@smartboss/auth/ratelimit";
 import { type ChatAttachment, type ChatMessageDTO, type ChatReactionDTO } from "../types";
 import { broadcastToChannel, channelMemberIds, getChannelAccess, orgChannelId } from "./channels";
 import { ChatError, hydrateMessages, reactionsFor, type ChatActor } from "./serialize";
+import { autoKeepOwnMessage } from "./keep";
 
 export type { ChatAttachment, ChatMessageDTO };
 
@@ -196,6 +197,9 @@ export async function createMessage(
     }
     throw err;
   }
+
+  // ส่งเข้าห้อง Keep Memo ของตัวเอง = เก็บลงคลัง Keep ด้วย (ห้องอื่นไม่ทำอะไร)
+  await autoKeepOwnMessage(actor, channelId, row);
 
   // ผู้ส่งถือว่าอ่านถึงข้อความที่ตัวเองส่งแล้ว
   await prisma.chatReadState.upsert({

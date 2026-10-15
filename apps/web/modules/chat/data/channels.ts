@@ -8,7 +8,8 @@ import { publishToOrg, publishToUsers } from "@/lib/realtime/server";
 import { sendWebPush } from "@/lib/web-push";
 import { notifyUsers } from "@/modules/maintenance/data/notify";
 import { CHAT_ORG_CHANNEL_NAME } from "../constants";
-import { CLOCK_CHANNEL_PREFIX, type ChatChannelDetail, type ChatChannelSummary, type ChatRealtimeEvent } from "../types";
+import { CLOCK_CHANNEL_PREFIX, isKeepChannelId, type ChatChannelDetail, type ChatChannelSummary, type ChatRealtimeEvent } from "../types";
+import { ensureKeepChannel } from "./keep";
 import { ChatError, firstAttachmentKind, hydrateMessages, type ChatActor } from "./serialize";
 import { CHAT_PAGE_PATH } from "../constants";
 
@@ -308,6 +309,8 @@ export async function listChannelsForUser(orgId: string, userId: string): Promis
   const orgChanId = await ensureOrgChannel(orgId, userId);
   await syncDepartmentChannels(orgId, userId);
   await syncWorkerChannel(orgId, userId);
+  // ห้อง Keep Memo ของตัวเอง (แชทกับตัวเอง แบบ LINE) — สร้างให้ครั้งแรกที่เปิดแชท
+  await ensureKeepChannel(orgId, userId).catch((err) => console.error("[chat] ensure keep channel failed", err));
 
   const memberships = await prisma.chatChannelMember.findMany({
     where: { orgId, userId, channel: { archived: false } },
@@ -549,6 +552,8 @@ function requireManage(access: ChannelAccess) {
 
 function requireEditableMembers(access: ChannelAccess) {
   if (access.type !== "group") throw new ChatError("ห้องนี้เพิ่มหรือลบสมาชิกไม่ได้", 400);
+  // Keep Memo เป็นของคนเดียวเสมอ — เพิ่มคน/ออกจากห้องไม่ได้
+  if (isKeepChannelId(access.id)) throw new ChatError("Keep Memo เป็นห้องส่วนตัว เพิ่มหรือเอาสมาชิกออกไม่ได้", 400);
   if (access.departmentId) throw new ChatError("กลุ่มประจำแผนกซิงก์สมาชิกตามแผนกอัตโนมัติ — แก้ที่ข้อมูลพนักงานแทน", 400);
 }
 
@@ -560,7 +565,7 @@ const RENAMED_KEY = "chat-renamed-channels";
  * แอดมินกลุ่ม: กลุ่มที่สร้างเอง (กติกาเดิม) · แชทส่วนตัว (DM) และห้อง "ระบบลงเวลา" ตั้งชื่อไม่ได้
  */
 function canRename(actor: ChatActor, channel: { id: string; type: string; departmentId: string | null; createdById: string | null }, role: "admin" | "member"): boolean {
-  if (channel.type === "dm" || channel.id.startsWith(CLOCK_CHANNEL_PREFIX)) return false;
+  if (channel.type === "dm" || channel.id.startsWith(CLOCK_CHANNEL_PREFIX) || isKeepChannelId(channel.id)) return false;
   if (actor.isTopAdmin || actor.isChatAdmin) return true;
   if (channel.type !== "org" && channel.createdById === actor.userId) return true;
   return channel.type === "group" && !channel.departmentId && role === "admin";
@@ -598,7 +603,7 @@ function canChangeAvatar(
   actor: ChatActor,
   channel: { id: string; type: string; departmentId: string | null; createdById: string | null }
 ): boolean {
-  if (channel.type === "dm" || channel.id.startsWith(CLOCK_CHANNEL_PREFIX)) return false;
+  if (channel.type === "dm" || channel.id.startsWith(CLOCK_CHANNEL_PREFIX) || isKeepChannelId(channel.id)) return false;
   if (channel.type === "org" || channel.departmentId) return actor.isChatAdmin;
   return channel.createdById === actor.userId;
 }

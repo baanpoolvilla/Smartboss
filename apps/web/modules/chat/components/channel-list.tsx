@@ -1,12 +1,12 @@
 "use client";
 
 import { memo, useMemo, useState } from "react";
-import { BellOff, Building2, Clock, MoreHorizontal, Pin, Search, Settings, SquarePen, Users } from "lucide-react";
+import { BellOff, Bookmark, Building2, Clock, MoreHorizontal, Pin, Search, Settings, SquarePen, Users } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
 
 import { useChatStore } from "../store/chat-store";
-import { CLOCK_CHANNEL_PREFIX, type ChatChannelSummary, type ChatUser } from "../types";
+import { CLOCK_CHANNEL_PREFIX, isKeepChannelId, type ChatChannelSummary, type ChatUser } from "../types";
 import { channelPreview, channelTitle, formatListTime } from "../lib/format";
 import { updateChannel } from "../lib/api";
 import { ChatAvatar, OffBadge } from "./chat-avatar";
@@ -64,6 +64,14 @@ export function ChannelAvatar({
       </div>
     );
   }
+  // ห้อง Keep Memo (แชทกับตัวเอง) — ไอคอนบุ๊กมาร์กสีเขียวเสมอ
+  if (isKeepChannelId(channel.id)) {
+    return (
+      <div className={cn("flex shrink-0 items-center justify-center rounded-full bg-[#1fa463] text-white", size)} title="Keep Memo">
+        <Bookmark className="h-[48%] w-[48%] fill-white" />
+      </div>
+    );
+  }
   // รูปที่คนสร้างกลุ่ม / แอดมินแชทตั้งไว้ (room-info.tsx)
   if (channel.avatarUrl) {
     return <ChatAvatar name={channel.name ?? "กลุ่ม"} src={channel.avatarUrl} colorKey={channel.id} className={size} />;
@@ -99,7 +107,7 @@ const ChannelRow = memo(function ChannelRow({
   const setPrefsLocal = useChatStore((s) => s.setPrefsLocal);
   const title = channelTitle(channel, meId, users);
   const unread = channel.unreadCount > 0;
-  const memberCount = channel.type === "group" ? channel.memberIds.length : null;
+  const memberCount = channel.type === "group" && !isKeepChannelId(channel.id) ? channel.memberIds.length : null;
 
   const togglePref = (key: "pinned" | "muted") => {
     const value = !channel[key];
@@ -183,7 +191,16 @@ const ChannelRow = memo(function ChannelRow({
   );
 });
 
-export function ChannelList({ onSelect, onStartNew }: { onSelect: (id: string) => void; onStartNew: () => void }) {
+export function ChannelList({
+  onSelect,
+  onStartNew,
+  onOpenKeep,
+}: {
+  onSelect: (id: string) => void;
+  onStartNew: () => void;
+  /** เปิดคลัง Keep (ปุ่ม 🔖 บนหัวรายการ) */
+  onOpenKeep?: () => void;
+}) {
   const channels = useChatStore((s) => s.channels);
   const loaded = useChatStore((s) => s.channelsLoaded);
   const activeChannelId = useChatStore((s) => s.activeChannelId);
@@ -224,10 +241,21 @@ export function ChannelList({ onSelect, onStartNew }: { onSelect: (id: string) =
       <div className="flex items-center gap-2 px-4 pb-2 pt-3">
         <h2 className="text-lg font-bold text-(--ink)">แชท</h2>
         {unreadTotal > 0 && <span className="rounded-full bg-(--chat-accent) px-2 text-[11px] font-semibold text-white">{unreadTotal > 99 ? "99+" : unreadTotal}</span>}
+        {onOpenKeep && (
+          <button
+            type="button"
+            onClick={onOpenKeep}
+            className="ml-auto flex h-9 w-9 items-center justify-center rounded-full text-(--ink) hover:bg-(--bg-soft)"
+            aria-label="เปิด Keep"
+            title="Keep — ของที่เก็บไว้"
+          >
+            <Bookmark className="h-5 w-5" />
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setSettingsOpen(true)}
-          className="ml-auto flex h-9 w-9 items-center justify-center rounded-full text-(--ink) hover:bg-(--bg-soft)"
+          className={cn("flex h-9 w-9 items-center justify-center rounded-full text-(--ink) hover:bg-(--bg-soft)", !onOpenKeep && "ml-auto")}
           aria-label="ตั้งค่าแชท"
           title="ตั้งค่าแชท (เสียง แจ้งเตือน หน้าตา)"
         >

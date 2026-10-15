@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ChevronDown, ChevronUp, Info, Loader2, Megaphone, Phone, Search, Upload, X } from "lucide-react";
+import { ArrowLeft, Bookmark, ChevronDown, ChevronUp, Info, Loader2, Megaphone, Phone, Search, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
 
 import { useChatStore, type RoomMessage } from "../store/chat-store";
 import type { ChatAttachment, ChatChannelSummary, ChatMessageDTO } from "../types";
+import { isKeepChannelId } from "../types";
 import * as api from "../lib/api";
 import { attachmentLabel, channelTitle, formatDayLabel, formatClock, formatMessageTime } from "../lib/format";
 import { jumpToMessage } from "../lib/chat-actions";
@@ -116,7 +117,18 @@ function AnnouncementBar({ channelId, canManage, channelType }: { channelId: str
   );
 }
 
-export function ChatRoom({ channel, initialUnread, onBack }: { channel: ChatChannelSummary; initialUnread: number; onBack: () => void }) {
+export function ChatRoom({
+  channel,
+  initialUnread,
+  onBack,
+  onOpenKeep,
+}: {
+  channel: ChatChannelSummary;
+  initialUnread: number;
+  onBack: () => void;
+  /** ห้อง Keep Memo: ปุ่ม 🔖 บนหัวห้องเปิดคลัง Keep */
+  onOpenKeep?: () => void;
+}) {
   const users = useChatStore((s) => s.users);
   const onlineIds = useChatStore((s) => s.onlineIds);
   const meId = useChatStore((s) => s.meId);
@@ -149,7 +161,9 @@ export function ChatRoom({ channel, initialUnread, onBack }: { channel: ChatChan
           : (users[otherId ?? ""]?.departmentName ?? "")
       : channel.type === "org"
         ? `ทุกคนในบริษัท · ${Object.keys(users).length} คน`
-        : `${channel.memberIds.length} คน${channel.departmentId ? " · กลุ่มแผนก" : ""}`;
+        : isKeepChannelId(channel.id)
+          ? "เห็นคนเดียว · ส่งอะไรมาก็เก็บลง Keep ให้"
+          : `${channel.memberIds.length} คน${channel.departmentId ? " · กลุ่มแผนก" : ""}`;
 
   const mentionable = useMemo(() => {
     if (channel.type === "org") return Object.values(users);
@@ -223,6 +237,11 @@ export function ChatRoom({ channel, initialUnread, onBack }: { channel: ChatChan
               title="โทรด้วยเสียง"
             >
               <Phone className="h-5 w-5" />
+            </button>
+          )}
+          {onOpenKeep && isKeepChannelId(channel.id) && (
+            <button type="button" onClick={onOpenKeep} className="rounded-full p-2 text-[#1fa463] hover:bg-(--bg-soft)" aria-label="เปิดคลัง Keep" title="คลัง Keep">
+              <Bookmark className="h-5 w-5" />
             </button>
           )}
           <button type="button" onClick={() => setSearching((v) => !v)} className="rounded-full p-2 text-(--ink-soft) hover:bg-(--bg-soft)" aria-label="ค้นหาข้อความ" title="ค้นหาข้อความ">

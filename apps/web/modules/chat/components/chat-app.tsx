@@ -20,6 +20,7 @@ import { loadChannels, openChannel, useChatSync } from "../lib/chat-actions";
 import { ChannelList } from "./channel-list";
 import { ChatRoom } from "./chat-room";
 import { NewChatDialog } from "./new-chat-dialog";
+import { KeepLibrary } from "./keep-library";
 import { CHAT_BACKGROUNDS, CHAT_TEXT_SIZES, useChatPrefs, type ChatPrefs } from "../lib/prefs";
 import { loadLocalMedia } from "../lib/local-media";
 
@@ -95,6 +96,8 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
   const users = useChatStore((s) => s.users);
   const onlineIds = useChatStore((s) => s.onlineIds);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [keepOpen, setKeepOpen] = useState(false);
+  const openKeep = useCallback(() => setKeepOpen(true), []);
   const isMobile = useIsMobile();
   const prefs = useChatPrefs();
   // ตั้งค่าหน้าตาของผู้ใช้ → ตัวแปรสีของแชท (ใช้ทั้งในหน้าและในห้องที่ถูกวาดออกไปที่ <body> บนมือถือ)
@@ -216,7 +219,7 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
           activeChannel ? "hidden md:block" : "block",
         )}
       >
-        <ChannelList onSelect={select} onStartNew={() => setDialogOpen(true)} />
+        <ChannelList onSelect={select} onStartNew={() => setDialogOpen(true)} onOpenKeep={openKeep} />
       </div>
 
       {/* มือถือ: เข้าห้องแล้วเต็มจอแบบ LINE — ทับแถบบนและเมนูล่างของระบบ (เมนูล่าง z-40)
@@ -230,6 +233,7 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
               channel={activeChannel}
               initialUnread={initialUnread[activeChannel.id] ?? 0}
               onBack={back}
+              onOpenKeep={openKeep}
             />
           </div>,
           document.body,
@@ -247,6 +251,7 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
               channel={activeChannel}
               initialUnread={initialUnread[activeChannel.id] ?? 0}
               onBack={back}
+              onOpenKeep={openKeep}
             />
           ) : (
             <div className="chat-room-surface flex flex-1 flex-col items-center justify-center gap-3 bg-(--chat-room-bg) text-(--ink-soft)">
@@ -259,6 +264,16 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
             </div>
           )}
         </div>
+      )}
+
+      {keepOpen && (
+        <KeepLibrary
+          onClose={() => setKeepOpen(false)}
+          onOpenMemo={() => {
+            setKeepOpen(false);
+            navigateTo(`keep-${currentUser.id}`);
+          }}
+        />
       )}
 
       {dialogOpen && (

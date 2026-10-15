@@ -1,4 +1,5 @@
 import type { ChatAttachmentKind, ChatChannelSummary, ChatUser } from "../types";
+import { isKeepChannelId } from "../types";
 
 function timeOf(d: Date): string {
   return d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
@@ -80,13 +81,15 @@ export function channelTitle(channel: Pick<ChatChannelSummary, "type" | "name" |
 /** ข้อความสั้นใต้ชื่อห้องในรายการ */
 export function channelPreview(channel: ChatChannelSummary, meId: string, users: Record<string, ChatUser>): string {
   const last = channel.lastMessage;
-  if (!last) return channel.type === "org" ? "ห้องสำหรับทุกคนในบริษัท" : "ยังไม่มีข้อความ";
+  const keep = isKeepChannelId(channel.id);
+  if (!last) return channel.type === "org" ? "ห้องสำหรับทุกคนในบริษัท" : keep ? "ส่งข้อความ รูป ไฟล์ ไว้ใช้เอง เห็นคนเดียว" : "ยังไม่มีข้อความ";
   if (last.kind === "system") return last.body ?? "";
   const who = last.authorId === meId ? "คุณ" : firstName(users[last.authorId]?.name) || "สมาชิก";
   if (last.deleted) return `${who} ยกเลิกข้อความ`;
   if (last.kind === "note") return `${who} สร้างโน้ต: ${last.body?.replace(/\s+/g, " ") ?? ""}`;
   const text = last.body?.replace(/\s+/g, " ") || attachmentLabel(last.attachmentKind);
-  return channel.type === "dm" && last.authorId !== meId ? text : `${who}: ${text}`;
+  // Keep Memo มีแต่ของตัวเอง — ไม่ต้องขึ้น "คุณ:"
+  return (channel.type === "dm" && last.authorId !== meId) || keep ? text : `${who}: ${text}`;
 }
 
 /** true = วันเดียวกัน (ใช้คั่นวันในห้อง) */

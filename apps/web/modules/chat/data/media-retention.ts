@@ -5,6 +5,8 @@ import { crossOrg } from "@smartboss/database/cross-org";
 import { deleteFiles } from "@/lib/storage";
 import type { ChatAttachment } from "../types";
 import { CHAT_MEDIA_RETENTION_DAYS, CHAT_MEDIA_RETENTION_START, EXPIRING_KINDS } from "../lib/retention";
+import { isKeepChannelId } from "../types";
+import { keptUrls } from "./keep";
 
 /**
  * เก็บกวาดรูป/วิดีโอ/ข้อความเสียงในแชทที่หมดอายุ (lib/retention.ts) — รันทุกคืนจาก cron
@@ -12,6 +14,8 @@ import { CHAT_MEDIA_RETENTION_DAYS, CHAT_MEDIA_RETENTION_START, EXPIRING_KINDS }
  *
  * ต่อไฟล์แนบที่หมดอายุ:
  *   - อยู่ในอัลบั้ม (url หรือรูปย่อ) → ไม่แตะ เก็บถาวร
+ *   - ข้อความในห้อง Keep Memo → ไม่แตะ (เก็บถาวรแบบ LINE) · ไฟล์ที่มีคนเก็บใน Keep → ข้อความในห้องอื่นหมดอายุตามปกติ
+ *     แต่ไฟล์จริงไม่ถูกลบ (คลัง Keep ยังเปิดได้)
  *   - ไม่อยู่ → ลบไฟล์จริง (+ รูปย่อ) ออกจาก storage, ลบแถว chat.files (คืนโควตาพื้นที่ของบริษัท)
  *     แล้วเปลี่ยนไฟล์แนบในข้อความเป็นร่องรอย { expired: true, url: "" } — ข้อความตัวหนังสือยังอยู่
  * ไฟล์เดียวกันแนบอยู่ในข้อความอื่นที่ยังไม่หมดอายุ (API ส่ง url เดิมซ้ำได้) → ยังไม่ลบไฟล์
@@ -41,7 +45,7 @@ export async function purgeExpiredChatMedia(opts: { dryRun?: boolean } = {}): Pr
         },
         orderBy: { seq: "asc" },
         take: 200,
-        select: { id: true, orgId: true, seq: true, attachments: true },
+        select: { id: true, orgId: true, channelId: true, seq: true, attachments: true },
       })
     );
     if (rows.length === 0) break;
@@ -49,6 +53,7 @@ export async function purgeExpiredChatMedia(opts: { dryRun?: boolean } = {}): Pr
 
     for (const row of rows) {
       try {
+        if (isKeepChannelId(row.channelId)) continue;
         const atts = (row.attachments as ChatAttachment[] | null) ?? [];
         const due = atts.filter((a) => EXPIRING_KINDS.has(a.kind) && !a.expired && a.url);
         if (due.length === 0) continue;
@@ -81,6 +86,10 @@ export async function purgeExpiredChatMedia(opts: { dryRun?: boolean } = {}): Pr
           });
           if (!newer && !inAlbum.has(url)) toDelete.push(url);
         }
+
+        // ไฟล์ที่มีคนเก็บไว้ใน Keep — ห้ามลบไฟล์จริง
+        const inKeep = await keptUrls(row.orgId, toDelete);
+        for (let i = toDelete.length - 1; i >= 0; i--) if (inKeep.has(toDelete[i]!)) toDelete.splice(i, 1);
 
         const expiredUrls = new Set(expire.map((a) => a.url));
         const next = atts.map((a) => {

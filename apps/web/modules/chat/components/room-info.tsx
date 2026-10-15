@@ -7,6 +7,7 @@ import { cn } from "@smartboss/ui/cn";
 
 import { useChatStore } from "../store/chat-store";
 import type { ChatAttachment, ChatChannelSummary, ChatMessageDTO } from "../types";
+import { isKeepChannelId } from "../types";
 import * as api from "../lib/api";
 import { channelTitle, formatDayLabel, formatFileSize } from "../lib/format";
 import { loadChannels, loadDetail } from "../lib/chat-actions";
@@ -153,7 +154,9 @@ export function RoomInfo({
   const onlineIds = useChatStore((s) => s.onlineIds);
   const meId = useChatStore((s) => s.meId);
   const setPrefsLocal = useChatStore((s) => s.setPrefsLocal);
-  const [tab, setTab] = useState<Tab>(channel.type === "dm" ? "media" : "members");
+  // Keep Memo = ห้องของคนเดียว ไม่มีแท็บสมาชิก/ปุ่มเพิ่มคน/ออกจากกลุ่ม (เหมือน DM)
+  const isKeep = isKeepChannelId(channel.id);
+  const [tab, setTab] = useState<Tab>(channel.type === "dm" || isKeep ? "media" : "members");
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(channel.name ?? "");
   const [adding, setAdding] = useState(false);
@@ -166,7 +169,7 @@ export function RoomInfo({
 
   const title = channelTitle(channel, meId, users);
   const canManage = detail?.canManage ?? false;
-  const editableMembers = channel.type === "group" && !channel.departmentId;
+  const editableMembers = channel.type === "group" && !channel.departmentId && !isKeep;
   const allUsers = useMemo(() => Object.values(users).sort((a, b) => a.name.localeCompare(b.name, "th")), [users]);
 
   const members = useMemo(() => {
@@ -216,7 +219,7 @@ export function RoomInfo({
   const other = otherId ? users[otherId] : undefined;
 
   const tabs: { id: Tab; label: string }[] = [
-    ...(channel.type === "dm" ? [] : [{ id: "members" as const, label: `สมาชิก ${members.length}` }]),
+    ...(channel.type === "dm" || isKeep ? [] : [{ id: "members" as const, label: `สมาชิก ${members.length}` }]),
     { id: "note", label: "โน้ต" },
     { id: "album", label: "อัลบั้ม" },
     { id: "media", label: "รูป/วิดีโอ" },

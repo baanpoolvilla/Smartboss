@@ -332,3 +332,45 @@ model ChatCall {
   @@map("calls")
   @@schema("chat")
 }
+
+/// Keep (แบบ LINE) — ของที่ผู้ใช้เก็บไว้ส่วนตัว: ส่งเข้าห้อง Keep Memo (keep-<userId>) หรือกด "Keep" จากห้องอื่น
+/// เห็นแค่เจ้าของ · ไฟล์ที่อยู่ในนี้ไม่หมดอายุ (media-retention.ts ข้าม) · ลบข้อความต้นทางแล้วของในคลังยังอยู่
+model ChatKeepItem {
+  orgId           String   @map("org_id")
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  /// "text" | "link" | "image" | "video" | "audio" | "file"
+  kind            String
+  body            String?
+  /// ไฟล์เดียวต่อรายการ (ChatAttachment) — ข้อความที่มีหลายไฟล์ = หลายรายการ
+  attachment      Json?
+  /// ไบต์ที่นับเข้าพื้นที่ Keep ของคนนี้
+  size            Int      @default(0)
+  sourceChannelId String?  @map("source_channel_id")
+  sourceMessageId String?  @map("source_message_id")
+  sourceAuthorId  String?  @map("source_author_id")
+  /// ชื่อห้องต้นทาง ณ ตอนเก็บ (ห้องเปลี่ยนชื่อ/ถูกลบทีหลังก็ยังอ่านรู้เรื่อง)
+  sourceLabel     String?  @map("source_label")
+  /// กันเก็บซ้ำ — "<messageId>:<url|text>"
+  dedupeKey       String?  @map("dedupe_key")
+  collectionIds   String[] @default([]) @map("collection_ids")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, dedupeKey])
+  @@index([orgId, userId, createdAt])
+  @@map("keep_items")
+  @@schema("chat")
+}
+
+/// คอลเลกชันของ Keep (จัดกลุ่มของที่เก็บ) — ของคนเดียว
+model ChatKeepCollection {
+  orgId     String   @map("org_id")
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([orgId, userId])
+  @@map("keep_collections")
+  @@schema("chat")
+}
