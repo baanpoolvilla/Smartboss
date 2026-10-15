@@ -216,8 +216,10 @@ export function ChannelList({
   const filtered = useMemo(
     () =>
       channels.filter((c) => {
-        if (tab === "dm" && c.type !== "dm") return false;
-        if (tab === "group" && c.type === "dm") return false;
+        // Keep Memo (แชทกับตัวเอง) อยู่แท็บ "ส่วนตัว" ไม่ใช่ "กลุ่ม"
+        const personal = c.type === "dm" || isKeepChannelId(c.id);
+        if (tab === "dm" && !personal) return false;
+        if (tab === "group" && personal) return false;
         if (tab === "unread" && c.unreadCount === 0) return false;
         if (q && !channelTitle(c, meId, users).toLowerCase().includes(q)) return false;
         return true;

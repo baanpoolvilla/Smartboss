@@ -149,9 +149,9 @@ export function KeepLibrary({ onClose, onOpenMemo }: { onClose: () => void; onOp
 
   const sourceText = (item: ChatKeepItemDTO): string => {
     if (!item.source || item.source.fromKeepMemo) return "Keep Memo";
-    const who = item.source.authorId ? (users[item.source.authorId]?.name ?? "") : "";
-    const room = item.source.label ?? (who ? `แชทกับ ${who}` : "แชท");
-    return who && item.source.label ? `จาก ${room} · ${who}` : `จาก ${room}`;
+    const who = item.source.authorId ? (item.source.authorId === meId ? "คุณ" : (users[item.source.authorId]?.name ?? "")) : "";
+    const room = item.source.label ?? "แชท";
+    return who ? `จาก ${room} · ${who}` : `จาก ${room}`;
   };
 
   const used = data?.usedBytes ?? 0;

@@ -54,6 +54,36 @@ function useCustomBackground(prefs: ChatPrefs): string | null {
   return enabled ? url : null;
 }
 
+/**
+ * มือถือ (iPhone): คีย์บอร์ดขึ้นแล้ว Safari ไม่ย่อหน้าเว็บ แต่เลื่อนทั้งหน้าขึ้นไปให้เห็นช่องพิมพ์ ⇒ ห้องแชทที่สูงเต็มจอ
+ * โดนดันจนหัวห้องหลุดจอ ("คีย์บอร์ดดันแชทหาย") — แบบ LINE: ระหว่างคีย์บอร์ดเปิด ให้กรอบห้องพอดีพื้นที่ที่เห็นจริง
+ * (visualViewport) หัวห้องค้างบนสุด ช่องพิมพ์ติดเหนือคีย์บอร์ด รายการข้อความหดลง · คีย์บอร์ดปิด = กลับเต็มจอตามเดิม
+ * (วิธีเดียวกับหน้าคอมเมนต์ใน task-detail-sheet.tsx) · Android ย่อหน้าให้เองอยู่แล้ว vv.height = innerHeight → ไม่ทำอะไร
+ */
+function useKeyboardFit(enabled: boolean): React.CSSProperties | undefined {
+  const [fit, setFit] = useState<{ top: number; height: number } | null>(null);
+  useEffect(() => {
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    if (!enabled || !vv) return;
+    const update = () => {
+      if (vv.height >= window.innerHeight - 80) return setFit(null);
+      setFit({ top: Math.round(vv.offsetTop), height: Math.round(vv.height) });
+    };
+    const raf = requestAnimationFrame(update);
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+      cancelAnimationFrame(raf);
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+      setFit(null);
+    };
+  }, [enabled]);
+  if (!fit) return undefined;
+  // ส่วนที่เห็นถูกเลื่อนลงมาแล้ว = ไม่มีแถบสถานะด้านบนให้หลบ (pt safe-area) อีก
+  return { top: fit.top, bottom: "auto", height: fit.height, ...(fit.top > 0 ? { paddingTop: 0 } : {}) };
+}
+
 function isDesktop(): boolean {
   return (
     typeof window !== "undefined" &&
@@ -99,6 +129,7 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
   const [keepOpen, setKeepOpen] = useState(false);
   const openKeep = useCallback(() => setKeepOpen(true), []);
   const isMobile = useIsMobile();
+  const keyboardFit = useKeyboardFit(isMobile && Boolean(activeChannelId));
   const prefs = useChatPrefs();
   // ตั้งค่าหน้าตาของผู้ใช้ → ตัวแปรสีของแชท (ใช้ทั้งในหน้าและในห้องที่ถูกวาดออกไปที่ <body> บนมือถือ)
   const bgImage = useCustomBackground(prefs);
@@ -227,7 +258,7 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
           ถ้าวาดอยู่ข้างใน ต่อให้ตั้ง z สูงแค่ไหน เมนูล่างของระบบก็ยังทับห้องแชท */}
       {activeChannel && isMobile ? (
         createPortal(
-          <div style={themeStyle} className="chat-ui fixed inset-0 z-[45] flex h-dvh bg-(--bg) pt-[env(safe-area-inset-top)]">
+          <div style={{ ...themeStyle, ...keyboardFit }} className="chat-ui fixed inset-0 z-[45] flex h-dvh bg-(--bg) pt-[env(safe-area-inset-top)]">
             <ChatRoom
               key={activeChannel.id}
               channel={activeChannel}

@@ -175,6 +175,8 @@ export function MessageList({
     });
     const inner = el.firstElementChild;
     if (inner) ro.observe(inner);
+    // กรอบเองหดลง (คีย์บอร์ดมือถือขึ้น — chat-app useKeyboardFit) — ยังติดข้อความล่าสุด
+    ro.observe(el);
     return () => ro.disconnect();
   }, [channelId]);
 

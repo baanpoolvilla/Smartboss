@@ -11,6 +11,7 @@ import {
   type ChatKeepKind,
 } from "../types";
 import { getChannelAccess } from "./channels";
+import { deleteOrphanFiles } from "./albums";
 import { ChatError, type ChatActor } from "./serialize";
 
 /*
@@ -180,7 +181,16 @@ export async function keepMessage(actor: ChatActor, channelId: string, messageId
   }
   const drafts = draftsFrom(msg.id, body, attachments);
   if (drafts.length === 0) throw new ChatError("ข้อความนี้ไม่มีอะไรให้เก็บ (ไฟล์อาจหมดอายุแล้ว)", 400);
-  const label = access.type === "dm" ? null : access.name;
+  // แชทส่วนตัวไม่มีชื่อห้อง — ใช้ชื่ออีกฝั่ง ("แชทกับ ...") ไม่ใช่คนส่งข้อความ (อาจเป็นเราเอง)
+  let label = access.name;
+  if (access.type === "dm") {
+    const other = await prisma.chatChannelMember.findFirst({
+      where: { orgId: actor.orgId, channelId, userId: { not: actor.userId } },
+      select: { userId: true },
+    });
+    const user = other ? await prisma.user.findFirst({ where: { orgId: actor.orgId, id: other.userId }, select: { name: true } }) : null;
+    label = user ? `แชทกับ ${user.name}` : "แชทส่วนตัว";
+  }
   return { added: await insertDrafts(actor, drafts, { channelId, messageId, authorId: msg.authorId, label }) };
 }
 
@@ -255,10 +265,15 @@ async function ownItem(actor: ChatActor, id: string) {
   return row;
 }
 
-/** ลบออกจากคลัง — ไม่แตะข้อความต้นทาง · ไฟล์ที่ไม่มีใครใช้แล้วปล่อยให้งานเก็บกวาดตามอายุจัดการ */
+/**
+ * ลบออกจากคลัง — ไม่แตะข้อความต้นทาง · ไฟล์ที่ไม่มีใครใช้แล้ว (ไม่อยู่ใน Keep ของใคร ไม่อยู่ในอัลบั้ม/โน้ต
+ * และข้อความต้นทางหมดอายุไปแล้ว) ลบทิ้งด้วย ไม่งั้นค้างกินพื้นที่บริษัทตลอดไป
+ */
 export async function deleteKeepItem(actor: ChatActor, id: string): Promise<void> {
   await ownItem(actor, id);
-  await prisma.chatKeepItem.delete({ where: { id } });
+  const row = await prisma.chatKeepItem.delete({ where: { id }, select: { attachment: true } });
+  const att = row.attachment as ChatAttachment | null;
+  if (att?.url) await deleteOrphanFiles(actor.orgId, [att.url, ...(att.thumbUrl ? [att.thumbUrl] : [])]).catch(() => {});
 }
 
 export async function setKeepItemCollections(actor: ChatActor, id: string, collectionIds: unknown): Promise<string[]> {
