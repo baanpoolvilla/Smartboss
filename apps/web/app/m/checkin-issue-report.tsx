@@ -1,5 +1,6 @@
 "use client";
 
+import { useT } from "./worker-lang";
 import { useState } from "react";
 
 /**
@@ -8,6 +9,7 @@ import { useState } from "react";
  * กดลงเวลาจริงตอนกี่โมง อยู่ตรงไหน + ตำแหน่งตอนกดแจ้ง
  */
 export function CheckinIssueReport({ proofs, lastMessage }: { proofs: string[]; lastMessage: string | null }) {
+  const t = useT();
   const [state, setState] = useState<"idle" | "sending">("idle");
   const [sent, setSent] = useState<{ code: string; attempts: number; at: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,12 +48,12 @@ export function CheckinIssueReport({ proofs, lastMessage }: { proofs: string[]; 
         error?: string;
       };
       if (!response.ok || !payload.code) {
-        setError(payload.error ?? "ส่งเรื่องไม่สำเร็จ ลองใหม่อีกครั้ง");
+        setError(payload.error ?? t("issueFailed"));
         return;
       }
       setSent({ code: payload.code, attempts: payload.attempts ?? 0, at: payload.reportedAt ?? new Date().toISOString() });
     } catch {
-      setError("ส่งเรื่องไม่สำเร็จ เช็กอินเทอร์เน็ตแล้วลองใหม่");
+      setError(t("noInternet"));
     } finally {
       setState("idle");
     }
@@ -67,7 +69,7 @@ export function CheckinIssueReport({ proofs, lastMessage }: { proofs: string[]; 
             ? `แนบหลักฐานการกดลงเวลา ${sent.attempts} ครั้ง (เวลาและตำแหน่งจากเซิร์ฟเวอร์) · แจ้งเมื่อ ${time} น.`
             : `บันทึกเวลาที่แจ้ง ${time} น. และตำแหน่งตอนนี้ไว้แล้ว`}
         </span>
-        <span className="block text-xs text-(--ink-soft)">ไอทีจะตอบกลับทางแจ้งเตือน</span>
+        <span className="block text-xs text-(--ink-soft)">{t("issueSent")}</span>
       </div>
     );
   }
@@ -80,7 +82,7 @@ export function CheckinIssueReport({ proofs, lastMessage }: { proofs: string[]; 
         onClick={() => void send()}
         className="rounded-full border border-(--line) px-4 py-1.5 text-sm text-(--ink-soft) disabled:opacity-60"
       >
-        {state === "sending" ? "กำลังส่ง…" : "ลงเวลาไม่ได้ · แจ้งไอที"}
+        {state === "sending" ? t("issueSending") : t("issueButton")}
       </button>
       {error && <p className="text-xs text-(--danger)">{error}</p>}
     </div>

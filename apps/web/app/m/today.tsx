@@ -1,6 +1,8 @@
 "use client";
 
 import { MyMonthCard } from "./my-month-card";
+import { useT, useWorkerLang } from "./worker-lang";
+import type { WorkerTextKey } from "@/modules/daily_worker/i18n";
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { MapBoundary } from "./map-boundary";
@@ -23,7 +25,7 @@ const CheckinMap = dynamic(() => import("./checkin-map").then((m) => m.CheckinMa
   ssr: false,
   loading: () => (
     <div className="flex h-56 w-full items-center justify-center rounded-(--radius) border border-(--line) bg-(--bg-soft) text-sm text-(--ink-soft)">
-      กำลังโหลดแผนที่…
+      <MapLoadingText />
     </div>
   ),
 });
@@ -53,15 +55,21 @@ interface TodayData {
   shift?: { name: string; startMinutes: number; endMinutes: number; restDay: boolean } | null;
 }
 
+function MapLoadingText() {
+  return <>{useT()("mapLoading")}</>;
+}
+
+type T = ReturnType<typeof useT>;
+
 function hhmmOfMinutes(m: number): string {
   const v = ((m % 1440) + 1440) % 1440;
   return `${String(Math.floor(v / 60)).padStart(2, "0")}:${String(v % 60).padStart(2, "0")}`;
 }
 
-function durationLabel(minutes: number): string {
+function durationLabel(minutes: number, t: T): string {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
-  return h > 0 ? `${h} ชม.${m > 0 ? ` ${m} นาที` : ""}` : `${m} นาที`;
+  return h > 0 ? `${h} ${t("hours")}${m > 0 ? ` ${m} ${t("minutes")}` : ""}` : `${m} ${t("minutes")}`;
 }
 
 /**
@@ -71,6 +79,7 @@ function durationLabel(minutes: number): string {
  * เทียบกะเฉพาะกะของวันนี้ — ค้างจากกะข้ามคืนเมื่อวาน (carriedIn) ไม่บอกเวลากะ เดี๋ยวคิดผิดวัน
  */
 function ShiftClock({ shift, open, overnight }: { shift: TodayData["shift"]; open: boolean; overnight: boolean }) {
+  const t = useT();
   const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
     const tick = () => setNow(new Date());
@@ -91,28 +100,28 @@ function ShiftClock({ shift, open, overnight }: { shift: TodayData["shift"]; ope
     if (open) {
       hint =
         nowMin < end
-          ? { text: `ยังไม่ถึงเวลาเลิกงาน (${hhmmOfMinutes(end)}) · อีก ${durationLabel(end - nowMin)}`, tone: "warn" }
-          : { text: `ถึงเวลาเลิกงานแล้ว (${hhmmOfMinutes(end)}) · ออกงานได้`, tone: "ok" };
+          ? { text: t("beforeEnd", { time: hhmmOfMinutes(end), left: durationLabel(end - nowMin, t) }), tone: "warn" }
+          : { text: t("afterEnd", { time: hhmmOfMinutes(end) }), tone: "ok" };
     } else {
       hint =
         nowMin < start
-          ? { text: `เข้างาน ${hhmmOfMinutes(start)} · อีก ${durationLabel(start - nowMin)}`, tone: "soft" }
+          ? { text: t("beforeStart", { time: hhmmOfMinutes(start), left: durationLabel(start - nowMin, t) }), tone: "soft" }
           : nowMin < end
-            ? { text: `เลยเวลาเข้างาน (${hhmmOfMinutes(start)}) มา ${durationLabel(nowMin - start)}`, tone: "warn" }
+            ? { text: t("afterStart", { time: hhmmOfMinutes(start), late: durationLabel(nowMin - start, t) }), tone: "warn" }
             : null;
     }
   }
 
   return (
     <div className="flex flex-col items-center gap-1 rounded-2xl border border-(--line) bg-(--bg-soft) px-3 py-3 text-center">
-      <p className="text-xs text-(--ink-soft)">เวลาตอนนี้</p>
+      <p className="text-xs text-(--ink-soft)">{t("timeNow")}</p>
       <p className="text-4xl font-bold tabular-nums tracking-tight">{time}</p>
       {shift && !shift.restDay && (
         <p className="text-xs text-(--ink-soft)">
-          กะ{shift.name ? ` ${shift.name}` : ""} · {hhmmOfMinutes(shift.startMinutes)}–{hhmmOfMinutes(shift.endMinutes)}
+          {t("shift")}{shift.name ? ` ${shift.name}` : ""} · {hhmmOfMinutes(shift.startMinutes)}–{hhmmOfMinutes(shift.endMinutes)}
         </p>
       )}
-      {shift?.restDay && <p className="text-xs text-(--ink-soft)">วันนี้เป็นวันหยุดตามกะ</p>}
+      {shift?.restDay && <p className="text-xs text-(--ink-soft)">{t("restDayToday")}</p>}
       {hint && (
         <p
           className="mt-0.5 rounded-full px-3 py-1 text-xs font-semibold"
@@ -155,13 +164,14 @@ function TapSteps({ done }: { done: 0 | 1 }) {
   );
 }
 
-const INTENT_LABEL: Record<string, string> = {
-  CLOCK_IN: "เข้างาน",
-  CLOCK_OUT: "ออกงาน",
-  BREAK_START: "เริ่มพัก",
-  BREAK_END: "กลับจากพัก",
-  AUTO: "ลงเวลา",
+const INTENT_KEY: Record<string, WorkerTextKey> = {
+  CLOCK_IN: "clockIn",
+  CLOCK_OUT: "clockOut",
+  BREAK_START: "breakStart",
+  BREAK_END: "breakEnd",
+  AUTO: "clockAuto",
 };
+const intentLabel = (t: T, intent: string) => (INTENT_KEY[intent] ? t(INTENT_KEY[intent]!) : intent);
 
 // คำอธิบายธงความเสี่ยงอยู่ที่ modules/hr/lib/checkin-flags.ts (ใช้ร่วมกับหน้าคิวตรวจของ HR)
 
@@ -263,6 +273,8 @@ export function Today({
   /** การ์ด "เดือนนี้ของฉัน" ของคนงาน — ปิดในหน้าลงเวลาของโมดูลคนงาน (มีเมนู "เข้าออกของฉัน" แยกแล้ว) */
   showMyMonth?: boolean;
 }) {
+  const t = useT();
+  const lang = useWorkerLang();
   const [data, setData] = useState<TodayData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   /**
@@ -332,15 +344,16 @@ export function Today({
       };
       if (!response.ok) {
         setNoEmployment(payload.code === "NO_EMPLOYMENT");
-        setLoadError(payload.error ?? "โหลดข้อมูลไม่สำเร็จ");
+        setLoadError(lang === "th" ? (payload.error ?? t("loadFailed")) : t("loadFailed"));
         return;
       }
       setData(payload);
       setLoadError(null);
       setNoEmployment(false);
     } catch {
-      setLoadError("เชื่อมต่อไม่ได้ ตรวจสัญญาณอินเทอร์เน็ตแล้วลองใหม่");
+      setLoadError(t("noInternet"));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- ภาษาเปลี่ยน = โหลดหน้าใหม่ทั้งหน้าอยู่แล้ว
   }, []);
 
   useEffect(() => {
@@ -355,7 +368,7 @@ export function Today({
       // ไม่ได้พิกัดก็ยังส่งไป — เซิร์ฟเวอร์เป็นคนตัดสิน (api/m/checkin gpsGate: ไม่มีพิกัด/นอกเขต = ลงไม่ได้
       // พร้อมเหตุผล) หน้าจอไม่ตัดสินเอง · ถ้าโดนปฏิเสธสิทธิ์ตำแหน่ง ต่อท้ายข้อความด้วยวิธีเปิด
       const { position, denied } = await getPosition();
-      const help = denied ? ` — ${locationHelp()}` : "";
+      const help = denied ? ` — ${lang === "th" ? locationHelp() : t("locationOff")}` : "";
 
       setState("sending");
       try {
@@ -370,7 +383,7 @@ export function Today({
             body.photoBase64 = await compressPhoto(photo);
             body.photoContentType = "image/jpeg";
           } catch {
-            setMessage({ tone: "bad", text: "อ่านรูปไม่สำเร็จ ลองถ่ายใหม่อีกครั้ง" });
+            setMessage({ tone: "bad", text: t("photoFailed") });
             return;
           }
         }
@@ -395,20 +408,24 @@ export function Today({
         if (payload.code === "PHOTO_REQUIRED") {
           setPendingIntent(intent);
           setNeedsPhoto(true);
-          setMessage({ tone: "warn", text: "บริษัทกำหนดให้ถ่ายรูปตอนลงเวลา — กดปุ่ม \"ถ่ายรูป\" ด้านบน" });
+          setMessage({ tone: "warn", text: t("photoRequired") });
           return;
         }
         setNeedsPhoto(false);
 
         if (!response.ok) {
-          setMessage({ tone: "bad", text: (payload.error ?? "ลงเวลาไม่สำเร็จ") + help });
+          // ข้อความจากระบบเป็นภาษาไทย — ภาษาอื่นขึ้นข้อความของภาษานั้นก่อน แล้ววงเล็บเหตุผลจากระบบต่อท้าย
+          setMessage({
+            tone: "bad",
+            text: (lang === "th" ? (payload.error ?? t("clockFailed")) : `${t("clockFailed")}${payload.error ? ` (${payload.error})` : ""}`) + help,
+          });
           return;
         }
 
         const flags = (payload.riskFlags ?? []).map((f) => checkinFlagLabel(f));
         const distance =
           typeof payload.distanceM === "number"
-            ? ` (ห่างจากจุดที่ตั้งไว้ ${Math.round(payload.distanceM)} ม.)`
+            ? t("distance", { m: Math.round(payload.distanceM) })
             : "";
 
         // แถบล่าง (ปุ่มลงเวลาตรงกลาง) อยู่บนจอเดียวกัน — บอกให้อ่านสถานะใหม่
@@ -416,26 +433,27 @@ export function Today({
 
         // มีข้อสังเกตก็นับเวลาแล้ว (HR ไปถามเองถ้าแปลก ดูหน้า "ลงเวลาผิดปกติ") — พนักงานเห็นว่าบันทึกสำเร็จ
         if (payload.decision === "ACCEPTED" || payload.decision === "ACCEPTED_WITH_WARNING") {
-          setMessage({ tone: "ok", text: `บันทึก${INTENT_LABEL[intent]}เรียบร้อย${help}` });
+          setMessage({ tone: "ok", text: `${t("saved", { what: intentLabel(t, intent) })}${help}` });
         } else if (payload.decision === "PENDING_REVIEW") {
           setMessage({
             tone: "warn",
-            text: `บันทึกแล้ว รอฝ่ายบุคคลตรวจสอบ: ${flags.join(" · ")}${distance}${help}`,
+            text: `${t("pendingReview")}: ${flags.join(" · ")}${distance}${help}`,
           });
         } else {
           setMessage({
             tone: "bad",
-            text: `ลงเวลาไม่ผ่าน: ${flags.join(" · ")}${distance}${help}`,
+            text: `${t("rejected")}: ${flags.join(" · ")}${distance}${help}`,
           });
         }
 
         await reload();
       } catch {
-        setMessage({ tone: "bad", text: "ส่งข้อมูลไม่สำเร็จ ลองใหม่อีกครั้ง" });
+        setMessage({ tone: "bad", text: t("sendFailed") });
       } finally {
         setState("idle");
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t/lang คงที่ตลอดหน้า (เปลี่ยนภาษา = โหลดใหม่)
     [reload, rememberProof],
   );
 
@@ -452,7 +470,7 @@ export function Today({
   return (
     <div className="flex flex-1 flex-col gap-5 p-5 pt-8">
       <div>
-        <p className="text-sm text-(--ink-soft)">สวัสดี</p>
+        <p className="text-sm text-(--ink-soft)">{t("hello")}</p>
         <h1 className="text-xl font-bold">{data?.displayName ?? userName}</h1>
       </div>
 
@@ -477,15 +495,15 @@ export function Today({
 
       <div className="grid grid-cols-2 gap-3">
         {[
-          { label: "เข้างาน", event: firstIn },
-          { label: "ออกงาน", event: lastOut },
+          { label: t("clockIn"), event: firstIn },
+          { label: t("clockOut"), event: lastOut },
         ].map(({ label, event }) => (
           <div key={label} className="rounded-2xl border border-(--line) bg-(--bg-soft) p-3 text-center">
             <p className="text-xs text-(--ink-soft)">{label}</p>
             <p className="mt-1 text-3xl font-bold tabular-nums">{event ? timeOf(event.capturedAt) : "--:--"}</p>
-            {event && event === data?.carriedIn && <p className="mt-0.5 text-xs text-(--ink-soft)">เมื่อวาน</p>}
+            {event && event === data?.carriedIn && <p className="mt-0.5 text-xs text-(--ink-soft)">{t("yesterday")}</p>}
             {event && event.lateMinutes > 0 && (
-              <p className="mt-0.5 text-xs text-(--tone-warn)">สาย {event.lateMinutes} นาที</p>
+              <p className="mt-0.5 text-xs text-(--tone-warn)">{t("lateMin", { n: event.lateMinutes })}</p>
             )}
           </div>
         ))}
@@ -506,7 +524,7 @@ export function Today({
             onClick={() => photoInput.current?.click()}
             className="h-32 w-full rounded-2xl bg-(--app) text-2xl font-bold text-white"
           >
-            📷 ถ่ายรูปเพื่อ{INTENT_LABEL[pendingIntent]}
+            📷 {t("takePhotoFor", { what: intentLabel(t, pendingIntent) })}
           </button>
           <button
             type="button"
@@ -516,7 +534,7 @@ export function Today({
             }}
             className="text-sm text-(--ink-soft) underline"
           >
-            ยกเลิก
+            {t("cancel")}
           </button>
         </div>
       ) : (
@@ -538,18 +556,18 @@ export function Today({
           }`}
         >
           {noEmployment ? (
-            <span className="text-2xl">ยังลงเวลาไม่ได้</span>
+            <span className="text-2xl">{t("cannotClock")}</span>
           ) : state === "locating" ? (
-            <span className="text-2xl">กำลังหาตำแหน่ง…</span>
+            <span className="text-2xl">{t("locating")}</span>
           ) : state === "sending" ? (
-            <span className="text-2xl">กำลังบันทึก…</span>
+            <span className="text-2xl">{t("saving")}</span>
           ) : (
             <>
               <TapSteps done={armed === nextIntent ? 1 : 0} />
               {armed === nextIntent ? (
                 <>
-                  <span className="text-3xl">กดอีก 1 ครั้ง</span>
-                  <span className="text-base font-medium">เพื่อยืนยัน{INTENT_LABEL[nextIntent]}</span>
+                  <span className="text-3xl">{t("tapAgain")}</span>
+                  <span className="text-base font-medium">{t("toConfirm", { what: intentLabel(t, nextIntent) })}</span>
                   {/* แถบนับถอยหลัง — หมดแล้วปุ่มกลับเป็นแบบเดิม (ARM_MS) */}
                   <span
                     key={armed}
@@ -560,8 +578,8 @@ export function Today({
                 </>
               ) : (
                 <>
-                  <span className="text-4xl">{INTENT_LABEL[nextIntent]}</span>
-                  <span className="rounded-full bg-white/20 px-3 py-0.5 text-base font-medium">กด 2 ครั้ง เพื่อ{INTENT_LABEL[nextIntent]}</span>
+                  <span className="text-4xl">{intentLabel(t, nextIntent)}</span>
+                  <span className="rounded-full bg-white/20 px-3 py-0.5 text-base font-medium">{t("tapTwice", { what: intentLabel(t, nextIntent) })}</span>
                 </>
               )}
             </>
@@ -618,19 +636,17 @@ export function Today({
       )}
 
       <div>
-        <h2 className="mb-2 text-sm font-semibold text-(--ink-soft)">การลงเวลาวันนี้</h2>
+        <h2 className="mb-2 text-sm font-semibold text-(--ink-soft)">{t("todayLog")}</h2>
         {events.length === 0 ? (
-          <p className="text-sm text-(--ink-soft)">ยังไม่มีการลงเวลา</p>
+          <p className="text-sm text-(--ink-soft)">{t("noLogYet")}</p>
         ) : (
           <ul className="divide-y divide-(--line) rounded-(--radius) border border-(--line)">
             {events.map((event) => (
               <li key={event.id} className="flex items-center justify-between p-3">
-                <span className="text-sm">{INTENT_LABEL[event.intent] ?? event.intent}</span>
+                <span className="text-sm">{intentLabel(t, event.intent)}</span>
                 <span className="flex items-center gap-2">
                   {event.lateMinutes > 0 && (
-                    <span className="text-xs text-(--tone-warn)">
-                      สาย {event.lateMinutes} นาที
-                    </span>
+                    <span className="text-xs text-(--tone-warn)">{t("lateMin", { n: event.lateMinutes })}</span>
                   )}
                   <span className="text-base font-semibold tabular-nums">
                     {timeOf(event.capturedAt)}

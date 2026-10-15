@@ -38,6 +38,7 @@ import { ChatNotifyListener } from "@/modules/chat/components/chat-nav-badge";
 import { CallManager } from "@/modules/chat/components/call-manager";
 import { MarkReadOnRoute } from "@/modules/notifications/mark-read-on-route";
 import { ShellProvider, useShell, type ShellUser } from "./shell-context";
+import { WorkerLangToggle } from "@/modules/daily_worker/components/lang-toggle";
 import { useBackToClose, useBackToCloseOnTouch, whenHistorySettled } from "@/lib/back-to-close";
 
 export type { ShellUser };
@@ -177,6 +178,8 @@ function LauncherFrame({
               this explicitly ("ทุกหน้าต้องมีให้กดตัวแมลงเพื่อแจ้งนะ ทั้ง
               ระบบ"). Same reasoning applies to the report_task notification
               count below — this header needs its own copy of both. */}
+          {/* คนงาน: เลือกภาษา (พม่า/ไทย/อังกฤษ) มุมขวาบน */}
+          {user.workerLang && <WorkerLangToggle lang={user.workerLang} />}
           <InstallAppButton />
           <IssueReportBarButton />
           <ReportNotificationSync />

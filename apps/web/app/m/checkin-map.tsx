@@ -1,5 +1,6 @@
 "use client";
 
+import { useT } from "./worker-lang";
 import "leaflet/dist/leaflet.css";
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
@@ -44,7 +45,8 @@ const COLOR_APP = "#3B82F6";
 const COLOR_OK = "#16a34a";
 const COLOR_WARN = "#ea580c";
 
-function metersLabel(m: number): string {
+function metersLabel(m: number, t?: ReturnType<typeof useT>): string {
+  if (t) return m >= 1000 ? t("km", { n: (m / 1000).toFixed(1) }) : t("meters", { n: Math.round(m) });
   return m >= 1000 ? `${(m / 1000).toFixed(1)} กม.` : `${Math.round(m)} ม.`;
 }
 
@@ -78,6 +80,7 @@ function siteIcon(color: string): L.DivIcon {
 }
 
 export function CheckinMap() {
+  const t = useT();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const [state, setState] = useState<LoadState>({ kind: "loading" });
@@ -104,7 +107,7 @@ export function CheckinMap() {
       }
 
       if (!navigator.geolocation) {
-        if (!cancelled) setState({ kind: "error", message: "เครื่องนี้ไม่รองรับการระบุตำแหน่ง" });
+        if (!cancelled) setState({ kind: "error", message: t("noGeo") });
         return;
       }
 
@@ -118,7 +121,7 @@ export function CheckinMap() {
           setState(
             error.code === error.PERMISSION_DENIED
               ? { kind: "denied" }
-              : { kind: "error", message: "หาตำแหน่งไม่สำเร็จ ลองใหม่อีกครั้ง" },
+              : { kind: "error", message: t("geoFailed") },
           );
         },
         { enableHighAccuracy: true, timeout: 15_000 },
@@ -262,7 +265,7 @@ export function CheckinMap() {
             setState({ kind: "loading" });
             setRefreshKey((k) => k + 1);
           }}
-          aria-label="รีเฟรชตำแหน่ง"
+          aria-label={t("refreshLocation")}
           className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full bg-(--bg)/90 text-(--ink) shadow-(--shadow-card) backdrop-blur"
         >
           <RefreshCw className={`h-4 w-4 ${state.kind === "loading" ? "animate-spin" : ""}`} />
@@ -277,8 +280,8 @@ export function CheckinMap() {
           <LocateFixed className="h-4 w-4 shrink-0" />
           <span className="min-w-0 truncate">
             {nearest.distance <= nearest.site.radius_m + nearest.accuracy
-              ? `อยู่ในระยะของ ${nearest.site.name} — กดลงเวลาได้`
-              : `ห่างจาก ${nearest.site.name} ${metersLabel(nearest.distance)} (รัศมี ${metersLabel(nearest.site.radius_m)})`}
+              ? t("inRange", { site: nearest.site.name })
+              : t("outOfRange", { site: nearest.site.name, dist: metersLabel(nearest.distance, t), radius: metersLabel(nearest.site.radius_m, t) })}
           </span>
         </div>
       )}

@@ -9,6 +9,8 @@ import { InstallAppButton } from "@/components/shell/app-install";
 import { IssueReportBarButton } from "@/modules/report_task/components/issue-report/issue-report-bar-button";
 import { ReportNotificationSync } from "@/modules/report_task/components/shared/report-notification-sync";
 import { NotificationBellPopover } from "@/modules/report_task/components/shared/notification-bell-popover";
+import { useShell } from "@/components/shell/shell-context";
+import { WorkerLangToggle } from "@/modules/daily_worker/components/lang-toggle";
 
 /**
  * ปุ่มขวาสุดของ AppBar — NotificationBell + ปุ่มออกจากระบบ (พร้อมกล่องยืนยัน)
@@ -18,6 +20,7 @@ import { NotificationBellPopover } from "@/modules/report_task/components/shared
  */
 export function AppBarActions() {
   const [confirming, setConfirming] = useState(false);
+  const workerLang = useShell().user.workerLang ?? null;
   const [loading, setLoading] = useState(false);
 
   async function onLogout() {
@@ -38,6 +41,8 @@ export function AppBarActions() {
     <>
       {/* มือถือในเบราว์เซอร์มีหน้าจอติดตั้งเต็มจออยู่แล้ว (InstallGate) — แถบบนของโมดูล
           บนจอแคบมีไอคอนแน่นอยู่แล้ว ใส่เพิ่มจะเบียดชื่อหน้า จึงโชว์ตั้งแต่จอกลางขึ้นไป */}
+      {/* คนงาน: เลือกภาษา (พม่า/ไทย/อังกฤษ) มุมขวาบน */}
+      {workerLang && <WorkerLangToggle lang={workerLang} />}
       <InstallAppButton className="hidden sm:inline-flex" />
       <IssueReportBarButton />
       <ReportNotificationSync />

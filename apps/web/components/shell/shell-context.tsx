@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
+import type { WorkerLang } from "@/modules/daily_worker/i18n";
 
 export interface ShellUser {
   id: string;
@@ -8,6 +9,8 @@ export interface ShellUser {
   email: string;
   avatarUrl: string | null;
   roleLabel: string;
+  /** ภาษาหน้าจอของคนงาน (บทบาท WORKER) — null = ผู้ใช้ทั่วไป (ไทย ไม่มีปุ่มเลือกภาษา) */
+  workerLang?: WorkerLang | null;
 }
 
 interface ShellContextValue {

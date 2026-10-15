@@ -6,10 +6,15 @@ import { roleLabel } from "@/lib/roles";
 import { unreadCount } from "@/modules/maintenance/data/notify";
 import { getIssueConsoleAccess } from "@/modules/admin/data/issue-console-access";
 import { ADMIN_ISSUE_REPORT_CODE } from "@/modules/admin/issue-report-manifest";
+import { WORKER_ROLE_CODE } from "@/modules/daily_worker/permissions";
+import { WORKER_MENU_KEYS, WORKER_MODULE_KEYS, tr, type WorkerLang } from "@/modules/daily_worker/i18n";
+import { workerLangFor } from "@/modules/daily_worker/lang-server";
 
 export interface ShellNavUser {
   /** ใช้ฝั่งเบราว์เซอร์แยกของที่จำในเครื่องรายคน (เช่น อีโมจิที่ใช้ล่าสุด) — ไม่ใช่เส้นแบ่งสิทธิ์ */
   id: string;
+  /** ภาษาหน้าจอของคนงาน — null = ผู้ใช้ทั่วไป */
+  workerLang: WorkerLang | null;
   name: string;
   email: string;
   avatarUrl: string | null;
@@ -50,20 +55,36 @@ export const loadShellNav = cache(async (): Promise<ShellNav | null> => {
   const consoleAccess = await getIssueConsoleAccess({ userId: user.id, orgId: user.orgId, roles: user.roles });
   const supportStaff = consoleAccess?.kind === "home";
 
+  // คนงาน (WORKER): ชื่อโมดูล/เมนูตามภาษาที่เลือก (เริ่มต้นพม่า) · ผู้ใช้อื่นเหมือนเดิมทุกอย่าง
+  const workerLang = user.roles.includes(WORKER_ROLE_CODE) ? await workerLangFor(user.roles) : null;
+  const visible = getVisibleModules({
+    permissions: user.permissions,
+    roles: user.roles,
+    enabledCodes,
+    isSupportStaff: supportStaff,
+  }).filter((m) => m.id !== ADMIN_ISSUE_REPORT_CODE || consoleAccess !== null);
+  const modules =
+    workerLang === null
+      ? visible
+      : visible.map((m) => ({
+          ...m,
+          name: WORKER_MODULE_KEYS[m.id] ? tr(workerLang, WORKER_MODULE_KEYS[m.id]!) : m.name,
+          menus: m.menus.map((menu) => {
+            const key = WORKER_MENU_KEYS[menu.path] ?? (menu.path.endsWith("/chat") ? "menuChat" : menu.path.endsWith("/report-feed") ? "menuReport" : undefined);
+            return key ? { ...menu, label: tr(workerLang, key) } : menu;
+          }),
+        }));
+
   return {
     user: {
+      workerLang,
       id: user.id,
       name: user.name,
       email: user.email,
       avatarUrl: user.avatarUrl,
       roleLabel: roleLabel(user.roles),
     },
-    modules: getVisibleModules({
-      permissions: user.permissions,
-      roles: user.roles,
-      enabledCodes,
-      isSupportStaff: supportStaff,
-    }).filter((m) => m.id !== ADMIN_ISSUE_REPORT_CODE || consoleAccess !== null),
+    modules,
     unread: await unreadCount(user.id),
   };
 });

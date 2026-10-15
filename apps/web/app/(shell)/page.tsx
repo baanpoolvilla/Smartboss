@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@smartboss/auth";
 import { WORKER_ROLE_CODE } from "@/modules/daily_worker/permissions";
+import { WORKER_MODULE_KEYS, tr } from "@/modules/daily_worker/i18n";
 
 /** หน้าแรกของคนงาน — ลงเวลา (คนงานรายวัน) + แชท & รีพอต เท่านั้น */
 const WORKER_TILE_CODES = ["daily_worker", "chat_report"];
@@ -134,12 +135,25 @@ export default async function HomePage() {
   // คนงานรายวัน (บทบาท WORKER) — หน้าแรกเหลือแค่สองอย่างที่ใช้จริง ไม่มีการ์ด "เร็ว ๆ นี้" / เว็บของทีมอื่น
   const session = await getSession();
   if (session?.roles.includes(WORKER_ROLE_CODE)) {
-    const workerTiles = WORKER_TILE_CODES.map((code) => byCode.get(code)).filter((t): t is AppTile => !!t && !!t.href);
+    const lang = nav.user.workerLang ?? "my";
+    const workerTiles = WORKER_TILE_CODES.map((code) => byCode.get(code))
+      .filter((t): t is AppTile => !!t && !!t.href)
+      .map((t) => (WORKER_MODULE_KEYS[t.code] ? { ...t, name: tr(lang, WORKER_MODULE_KEYS[t.code]!) } : t));
+    const date = new Intl.DateTimeFormat(lang === "th" ? "th-TH" : lang === "en" ? "en-GB" : "my-MM", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      timeZone: "Asia/Bangkok",
+      ...(lang === "th" ? { calendar: "buddhist" } : {}),
+    }).format(new Date());
     return (
       <div className="mx-auto max-w-md">
         <header className="mb-8 text-center sm:mb-10">
-          <h1 className="text-2xl font-semibold text-(--ink)">สวัสดี, {firstName}</h1>
-          <p className="mt-1 text-sm text-(--ink-soft)">{thaiToday()}</p>
+          <h1 className="text-2xl font-semibold text-(--ink)">
+            {tr(lang, "hello")}, {firstName}
+          </h1>
+          <p className="mt-1 text-sm text-(--ink-soft)">{date}</p>
         </header>
         <div className="grid grid-cols-2 gap-x-4 gap-y-7">
           {workerTiles.map((tile) => (
