@@ -4,7 +4,7 @@ import { prisma } from "@smartboss/database";
 import { readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
 import { withWorkforceTenant } from "@/modules/report_task/lib/db/workforce-calendar";
 import { WORKER_ROLE_CODE } from "../permissions";
-import { daysInMonth, type DayCell, type MonthData, type OtEntry, type OverrideEntry, type WorkerMonth } from "./types";
+import { daysInMonth, minutesToHm, type DayCell, type MonthData, type OtEntry, type OverrideEntry, type WorkerMonth } from "./types";
 
 /**
  * ข้อมูลของโมดูลคนงานรายวัน — อ่านตรงจากตารางของ workforce ด้วย tenant context ของบริษัท (withWorkforceTenant)
@@ -212,6 +212,10 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
           cell.s = leave.is_day_off ? "o" : "l";
         } else if (r?.rest_day) {
           cell.s = "r";
+        } else if (ov) {
+          // ไม่ได้ลงเวลา (ลืมลง/ลงไม่ติด) แต่ผู้ดูแลยืนยันว่ามา พร้อมเหตุผล
+          cell.s = "m";
+          cell.override = { reason: ov.reason, byName: ov.byName, at: ov.at };
         } else if (date < today) {
           cell.s = emp.shift_id || r ? "n" : "";
         }
@@ -262,4 +266,83 @@ export async function loadMyMonth(orgId: string, userId: string, month: string) 
   const me = data.workers.find((w) => w.userId === userId);
   if (!me) return null;
   return { month, today: data.today, worker: me, summary: summarize(me) };
+}
+
+export interface DayRow {
+  userId: string;
+  name: string;
+  employeeCode: string | null;
+  employmentId: string | null;
+  shift: string | null;
+  inAt: string | null;
+  outAt: string | null;
+  /** วิธีลงเวลาครั้งแรก — MOBILE / DEVICE (สแกนนิ้ว) / อื่น ๆ */
+  source: string | null;
+  /** m=มา x=ขาด n=ไม่มา o=หยุด l=ลา r=หยุดกะ w=ยังไม่มา (วันนี้ ยังไม่ถึงเลิกกะ) ns=ยังไม่ผูกกะ */
+  status: "m" | "x" | "n" | "o" | "l" | "r" | "w" | "ns";
+  early: boolean;
+  cell: DayCell | null;
+}
+
+/**
+ * ลงเวลาของคนงานวันเดียว — เวลาเข้า/ออกอ่านจากการลงเวลาจริง (raw_time_events) ทันที ไม่ต้องรอระบบคำนวณผล
+ * สถานะใช้กติกาเดียวกับตาราง (เข้าหลังเวลาเข้ากะระดับนาที = ขาด · ออกก่อนเลิกกะ = กลับก่อน · OT ที่ลงไว้ไม่ดูเวลาออก)
+ */
+export async function loadDay(orgId: string, date: string, now: Date = new Date()) {
+  const month = await loadMonth(orgId, date.slice(0, 7), now);
+  const day = Number(date.slice(8, 10));
+  const ids = month.workers.map((w) => w.employmentId).filter((x): x is string => !!x);
+  const events =
+    ids.length === 0
+      ? []
+      : await withWorkforceTenant(orgId, (tx) =>
+          tx.$queryRawUnsafe<{ employment_id: string; hm: string; source_type: string }[]>(
+            `SELECT employment_id::text AS employment_id, source_type,
+                    to_char(captured_at AT TIME ZONE 'Asia/Bangkok', 'HH24:MI') AS hm
+               FROM workforce.raw_time_events
+              WHERE employment_id = ANY($1::uuid[]) AND status = 'ACCEPTED'
+                AND (captured_at AT TIME ZONE 'Asia/Bangkok')::date = $2::date
+              ORDER BY captured_at`,
+            ids,
+            date,
+          ),
+        ).catch(() => []);
+  const nowHm = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Bangkok", hour: "2-digit", minute: "2-digit", hour12: false }).format(now);
+  const toMin = (hm: string) => Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5));
+
+  const rows: DayRow[] = month.workers.map((w) => {
+    const cell = w.cells[day] ?? null;
+    const mine = events.filter((e) => e.employment_id === w.employmentId);
+    const inAt = cell?.inAt ?? mine[0]?.hm ?? null;
+    const outAt = cell?.outAt ?? (mine.length > 1 ? mine[mine.length - 1]!.hm : null);
+    const shift = w.shiftId ? `${minutesToHm(w.shiftStart)}–${minutesToHm(w.shiftEnd)}` : null;
+    let status: DayRow["status"];
+    if (cell?.s === "o" || cell?.s === "l" || cell?.s === "r") status = cell.s;
+    else if (cell?.override) status = "m";
+    else if (inAt) {
+      if (cell?.s === "m" || cell?.s === "x") status = cell.s;
+      else if (w.shiftStart === null) status = "m";
+      else status = toMin(inAt) > w.shiftStart % 1440 ? "x" : "m";
+    } else if (!w.shiftId) status = "ns";
+    else if (date < month.today) status = "n";
+    else if (date > month.today) status = "w";
+    else status = w.shiftEnd !== null && toMin(nowHm) > w.shiftEnd % 1440 ? "n" : "w";
+    const early =
+      !!cell?.early ||
+      (!cell?.ot && !!outAt && w.shiftEnd !== null && w.shiftEnd < 1440 && toMin(outAt) < w.shiftEnd && (date < month.today || mine.length > 1));
+    return {
+      userId: w.userId,
+      name: w.name,
+      employeeCode: w.employeeCode,
+      employmentId: w.employmentId,
+      shift,
+      inAt,
+      outAt,
+      source: mine[0]?.source_type ?? null,
+      status,
+      early,
+      cell,
+    };
+  });
+  return { date, today: month.today, rows, unlinkedUserIds: month.unlinkedUserIds };
 }

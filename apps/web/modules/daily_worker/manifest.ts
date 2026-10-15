@@ -16,6 +16,10 @@ export const dailyWorkerManifest: ModuleManifest = {
   basePath: "/daily-workers",
   icon: "HardHat",
   requiresModule: "hr",
-  menus: [{ label: "ตารางคนงาน", path: "/daily-workers", permission: DW_PERMS.view, icon: "CalendarDays" }],
+  menus: [
+    // แยกจาก "ภาพรวม" ของพนักงานประจำ — ใครมา/ไม่มา มากี่โมง กลับกี่โมง แก้ขาดเป็นมาได้ทันที
+    { label: "ลงเวลาวันนี้", path: "/daily-workers/today", permission: DW_PERMS.view, icon: "Clock" },
+    { label: "ตารางคนงาน", path: "/daily-workers", permission: DW_PERMS.view, icon: "CalendarDays" },
+  ],
   permissions: Object.values(DW_PERMS),
 };

@@ -397,7 +397,7 @@ export function WorkerRoster({ data, canManage, canOverride }: { data: MonthData
               ปิด
             </button>
           </div>
-          {canOverride && focusCell?.s === "x" && (
+          {canOverride && (focusCell?.s === "x" || focusCell?.s === "n") && (
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <input
                 id="dw-override-reason"

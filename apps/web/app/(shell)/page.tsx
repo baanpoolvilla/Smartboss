@@ -43,7 +43,7 @@ function thaiToday(): string {
  * เด้งไปแชทหรือรายงานตามสิทธิ์) ลิงก์ตรงไปเมนูแรกที่คนนี้เห็นเลย ไม่ต้องรอเซิร์ฟเวอร์
  * สองรอบ (รอบแรกได้แค่ "ไปที่อื่น") — เมนูถูกกรองตามสิทธิ์มาแล้วใน loadShellNav
  */
-const REDIRECT_ONLY_BASES = new Set(["chat_report", "hr"]);
+const REDIRECT_ONLY_BASES = new Set(["chat_report", "hr", "daily_worker"]);
 
 /** การ์ดโมดูล "งานขาย" / "การตลาด" → หน้ารายการเว็บของทีมนั้น (ถ้ามีเว็บอยู่ในกลุ่ม) */
 function externalAppsHref(moduleCode: string): string | undefined {
