@@ -12,6 +12,7 @@ export async function chatActor(): Promise<ChatActor> {
     orgId: session.orgId,
     userId: session.userId,
     isChatAdmin: hasPermission(session, CHAT_PERMS.manage),
+    isTopAdmin: ["CEO", "SUPER_ADMIN", "ADMIN"].some((r) => session.roles.includes(r)),
     canManageStickers: hasPermission(session, CHAT_PERMS.stickerManage),
   };
 }

@@ -19,6 +19,8 @@ export interface ChatActor {
   orgId: string;
   userId: string;
   isChatAdmin: boolean;
+  /** CEO / ผู้ดูแลระบบสูงสุด / ฝ่าย IT (ADMIN) — เปลี่ยนชื่อได้ทุกห้อง (ยกเว้นแชทส่วนตัว) */
+  isTopAdmin?: boolean;
   /** สิทธิ์ chat.sticker.manage — แยกจาก isChatAdmin: คนที่ดูแลสติกเกอร์ (IT/การตลาด) ไม่จำเป็นต้องคุมทุกห้อง */
   canManageStickers?: boolean;
 }

@@ -312,7 +312,7 @@ export function RoomInfo({
           ) : (
             <div className="flex items-center gap-1.5">
               <p className="text-lg font-semibold text-(--ink)">{title}</p>
-              {canManage && editableMembers && (
+              {(detail?.canRename ?? false) && (
                 <button type="button" onClick={() => setRenaming(true)} className="rounded-full p-1 text-(--ink-soft) hover:bg-(--bg-soft)" aria-label="เปลี่ยนชื่อกลุ่ม">
                   <Pencil className="h-4 w-4" />
                 </button>

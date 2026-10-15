@@ -64,7 +64,9 @@ export async function getChannelAccess(actor: ChatActor, channelId: string): Pro
     // คนงาน (บทบาท WORKER) ไม่อยู่ในห้องรวมทั้งบริษัท — คนอื่นเข้าได้ตามเดิม
     if (await isWorkerUser(actor.userId)) throw new ChatError("ไม่มีสิทธิ์เข้าห้องนี้", 403);
     await ensureOrgChannel(actor.orgId, actor.userId);
-    return { id: channelId, type: "org", name: CHAT_ORG_CHANNEL_NAME, departmentId: null, role: "member", canManage: actor.isChatAdmin };
+    // ชื่อจริงจาก DB — ห้องรวมทั้งบริษัทเปลี่ยนชื่อได้ (renameChannel) ค่าเริ่มต้นยังเป็น CHAT_ORG_CHANNEL_NAME
+    const row = await prisma.chatChannel.findUnique({ where: { id: channelId }, select: { name: true } });
+    return { id: channelId, type: "org", name: row?.name ?? CHAT_ORG_CHANNEL_NAME, departmentId: null, role: "member", canManage: actor.isChatAdmin };
   }
   const channel = await prisma.chatChannel.findFirst({
     where: { id: channelId, orgId: actor.orgId, archived: false },
@@ -151,6 +153,7 @@ export async function syncDepartmentChannels(orgId: string, actorId: string, for
     ]);
 
     const deptIds = new Set(departments.map((d) => d.id));
+    const renamed = new Set((await readStore<string[]>(orgId, RENAMED_KEY)).data ?? []);
     const byDept = new Map(channels.map((c) => [c.departmentId!, c]));
     const changed: string[] = [];
 
@@ -166,8 +169,9 @@ export async function syncDepartmentChannels(orgId: string, actorId: string, for
           select: { id: true, name: true, departmentId: true, archived: true, members: { select: { userId: true, role: true } } },
         });
         channel = created;
-      } else if (channel.name !== dept.name || channel.archived) {
-        await prisma.chatChannel.update({ where: { id: channel.id }, data: { name: dept.name, archived: false } });
+      } else if ((channel.name !== dept.name && !renamed.has(channel.id)) || channel.archived) {
+        // ตั้งชื่อกลุ่มเองแล้ว (renameChannel) = ไม่เขียนชื่อแผนกทับ
+        await prisma.chatChannel.update({ where: { id: channel.id }, data: { ...(renamed.has(channel.id) ? {} : { name: dept.name }), archived: false } });
         changed.push(channel.id);
       }
 
@@ -447,6 +451,11 @@ export async function getChannelDetail(actor: ChatActor, channelId: string): Pro
     readSeqs: Object.fromEntries(reads.map((r) => [r.userId, r.lastReadSeq!.toString()])),
     announcement: announcement ?? null,
     canManage: access.canManage,
+    canRename: canRename(
+      actor,
+      { id: channel.id, type: access.type, departmentId: channel.departmentId, createdById: access.type === "org" ? null : channel.createdById },
+      access.role,
+    ),
     canChangeAvatar: canChangeAvatar(actor, {
       id: channel.id,
       type: access.type,
@@ -543,13 +552,38 @@ function requireEditableMembers(access: ChannelAccess) {
   if (access.departmentId) throw new ChatError("กลุ่มประจำแผนกซิงก์สมาชิกตามแผนกอัตโนมัติ — แก้ที่ข้อมูลพนักงานแทน", 400);
 }
 
+/** ห้องที่ตั้งชื่อเองแล้ว (กลุ่มแผนก) — ซิงก์แผนกไม่เขียนชื่อแผนกทับ (store ของบริษัท) */
+const RENAMED_KEY = "chat-renamed-channels";
+
+/**
+ * ใครเปลี่ยนชื่อห้องได้ — CEO / ผู้ดูแลระบบสูงสุด / ฝ่าย IT (ADMIN) / แอดมินแชท: ทุกห้อง · คนสร้างห้อง: ห้องของตัวเอง
+ * แอดมินกลุ่ม: กลุ่มที่สร้างเอง (กติกาเดิม) · แชทส่วนตัว (DM) และห้อง "ระบบลงเวลา" ตั้งชื่อไม่ได้
+ */
+function canRename(actor: ChatActor, channel: { id: string; type: string; departmentId: string | null; createdById: string | null }, role: "admin" | "member"): boolean {
+  if (channel.type === "dm" || channel.id.startsWith(CLOCK_CHANNEL_PREFIX)) return false;
+  if (actor.isTopAdmin || actor.isChatAdmin) return true;
+  if (channel.type !== "org" && channel.createdById === actor.userId) return true;
+  return channel.type === "group" && !channel.departmentId && role === "admin";
+}
+
 export async function renameChannel(actor: ChatActor, channelId: string, name: string): Promise<void> {
   const access = await getChannelAccess(actor, channelId);
-  requireManage(access);
-  if (access.type !== "group" || access.departmentId) throw new ChatError("เปลี่ยนชื่อห้องนี้ไม่ได้", 400);
+  const row = await prisma.chatChannel.findFirst({ where: { id: channelId, orgId: actor.orgId }, select: { createdById: true } });
+  if (!canRename(actor, { id: channelId, type: access.type, departmentId: access.departmentId, createdById: row?.createdById ?? null }, access.role)) {
+    throw new ChatError("เปลี่ยนชื่อห้องนี้ไม่ได้", 403);
+  }
   const clean = name.trim().slice(0, 100);
   if (!clean) throw new ChatError("ตั้งชื่อกลุ่มก่อน", 400);
   await prisma.chatChannel.update({ where: { id: channelId }, data: { name: clean } });
+  // กลุ่มแผนก: จำไว้ว่าตั้งชื่อเองแล้ว ไม่ให้ซิงก์แผนกเขียนชื่อแผนกกลับ
+  if (access.departmentId) {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const { data, version } = await readStore<string[]>(actor.orgId, RENAMED_KEY);
+      const set = new Set(data ?? []);
+      set.add(channelId);
+      if ((await writeStore(actor.orgId, RENAMED_KEY, [...set], data === null ? null : version, actor.userId)).ok) break;
+    }
+  }
   const names = await userNames(actor.orgId, [actor.userId]);
   await postSystemMessage(actor.orgId, channelId, actor.userId, `${names.get(actor.userId) ?? "ผู้ใช้"} เปลี่ยนชื่อกลุ่มเป็น "${clean}"`);
   await broadcastToChannel(actor.orgId, channelId, { type: "chat.channel", channelId });
