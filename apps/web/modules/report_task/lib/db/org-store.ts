@@ -6,6 +6,7 @@ import { isTopicOn, topicForReportNotification } from "@/modules/notifications/p
 import { publishToOrg, publishToUsers } from "@/lib/realtime/server";
 
 import { fileForStoreKey, type StoreKey } from "./store-registry";
+import { absorbedIdSet, groupAttachmentNotifications } from "./attachment-notif-group";
 
 /**
  * ที่เก็บข้อมูลของโมดูลรายงานและงาน — Postgres แยกตามบริษัท
@@ -197,10 +198,16 @@ export async function writeOwnNotifications(
       ];
     }
 
+    // แนบไฟล์ทีละไฟล์ในงานเดิม = รวมเป็นแถวเดียว (attachment-notif-group.ts) — แจ้งเตือนแบบอื่นผ่านเหมือนเดิม
+    const absorbed = absorbedIdSet(stored);
+    const grouped = groupAttachmentNotifications(
+      sent.filter((n) => n.userId !== userId && !storedIds.has(n.id) && !absorbed.has(n.id as string)),
+      stored.filter((n) => n?.userId !== userId)
+    );
     const merged = [
-      ...myItems,
-      ...sent.filter((n) => n.userId !== userId && !storedIds.has(n.id)),
-      ...stored.filter((n) => n?.userId !== userId),
+      ...(absorbed.size > 0 ? myItems.filter((n) => !absorbed.has(n.id as string)) : myItems),
+      ...grouped.incoming,
+      ...grouped.stored,
     ];
     last = await writeStore(orgId, NOTIFICATIONS_KEY, merged, current.version || null, userId);
     if (last.ok) return last;
@@ -222,6 +229,7 @@ interface StoredNotification {
   link?: unknown;
   kind?: unknown;
   topicName?: unknown;
+  grouped?: unknown;
 }
 
 /** แถวที่เพิ่งเพิ่มในรอบนี้ → เด้งถึงผู้รับ */
@@ -241,7 +249,9 @@ function announceNewNotifications(orgId: string, beforeData: unknown, afterData:
         n.userId !== n.byUserId &&
         n.read !== true &&
         // "room_post" = สรุปทุกโพสต์ให้เจ้าของดูภาพรวม ไม่ใช่เรื่องถึงตัว — อยู่ในกระดิ่งแต่ไม่เด้ง
-        n.kind !== "room_post"
+        n.kind !== "room_post" &&
+        // แนบไฟล์ต่อในงานเดิม (รวมเข้าแถวเดิมแล้ว) — อันแรกเด้งไปแล้ว ไม่เด้งซ้ำทุกไฟล์
+        n.grouped !== true
     )
     // กันก้อนแปลก ๆ (เช่น เครื่องเก่าบันทึกทับ) ยิงเป็นร้อย — ของจริงต่อครั้งมีไม่กี่แถว
     .slice(0, 100);
