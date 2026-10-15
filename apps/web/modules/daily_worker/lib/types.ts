@@ -28,6 +28,8 @@ export interface WorkerMonth {
   shiftName: string | null;
   shiftStart: number | null;
   shiftEnd: number | null;
+  /** กะเริ่มมีผลวันข้างหน้า (ผูกไว้ล่วงหน้า) — null = มีผลแล้ว */
+  shiftFrom: string | null;
   /** key = วันที่ของเดือน (1–31) */
   cells: Record<number, DayCell>;
 }

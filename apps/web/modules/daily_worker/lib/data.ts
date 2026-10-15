@@ -52,6 +52,7 @@ export function bangkokToday(now: Date = new Date()): string {
 interface WorkerIdentity {
   userId: string;
   name: string;
+  email: string | null;
   departmentId: string | null;
   departmentName: string | null;
 }
@@ -59,10 +60,10 @@ interface WorkerIdentity {
 async function listWorkerUsers(orgId: string): Promise<WorkerIdentity[]> {
   const users = await prisma.user.findMany({
     where: { orgId, isActive: true, roles: { some: { role: { code: WORKER_ROLE_CODE } } } },
-    select: { id: true, name: true, departmentId: true, department: { select: { name: true } } },
+    select: { id: true, name: true, email: true, departmentId: true, department: { select: { name: true } } },
     orderBy: { name: "asc" },
   });
-  return users.map((u) => ({ userId: u.id, name: u.name, departmentId: u.departmentId, departmentName: u.department?.name ?? null }));
+  return users.map((u) => ({ userId: u.id, name: u.name, email: u.email, departmentId: u.departmentId, departmentName: u.department?.name ?? null }));
 }
 
 interface EmploymentRow {
@@ -73,6 +74,7 @@ interface EmploymentRow {
   shift_name: string | null;
   shift_start: number | null;
   shift_end: number | null;
+  shift_from: string | null;
 }
 interface ResultRow {
   employment_id: string;
@@ -111,24 +113,33 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
       ? { employments: [] as EmploymentRow[], results: [] as ResultRow[], leaves: [] as LeaveRow[], dayOffTypeId: null as string | null, shifts: [] as { id: string; name: string; start_minutes: number; end_minutes: number }[] }
       : await withWorkforceTenant(orgId, async (tx) => {
           // สัญญาจ้างที่ยังทำงานอยู่ของแต่ละคน + กะที่มีผลวันนี้ (ตารางประจำ — ทุกวันกะเดียวกัน ดู setRecurringPatternAction)
+          // ผูกคนกับทะเบียนพนักงาน: principal.person_id (ที่ระบบบุคคลใช้ตอนลงเวลา) ก่อน ไม่มีค่อยเทียบอีเมล
+          // (ผู้ใช้ที่ยังไม่เคย sync ไประบบบุคคล principal ยังไม่มี/ยังไม่ผูก person — เจอจริง 2026-10-15)
           const employments = await tx.$queryRawUnsafe<EmploymentRow[]>(
-            `SELECT DISTINCT ON (p.subject) p.subject, e.id::text AS employment_id, e.employee_code,
-                    s.id::text AS shift_id, s.name AS shift_name, s.start_minutes AS shift_start, s.end_minutes AS shift_end
-               FROM workforce.principals p
-               JOIN workforce.employments e ON e.person_id = p.person_id AND e.status <> 'TERMINATED'
+            `SELECT DISTINCT ON (u.subject) u.subject, e.id::text AS employment_id, e.employee_code,
+                    s.id::text AS shift_id, s.name AS shift_name, s.start_minutes AS shift_start, s.end_minutes AS shift_end, pat.shift_from
+               FROM unnest($1::text[], $3::text[]) AS u(subject, email)
+               LEFT JOIN workforce.principals p ON p.subject = u.subject
+               JOIN workforce.people pe
+                 ON pe.id = p.person_id OR (u.email <> '' AND lower(pe.email) = lower(u.email))
+               JOIN workforce.employments e ON e.person_id = pe.id AND e.status <> 'TERMINATED'
                LEFT JOIN LATERAL (
                  SELECT COALESCE(r.monday_shift_id, r.tuesday_shift_id, r.wednesday_shift_id, r.thursday_shift_id,
-                                 r.friday_shift_id, r.saturday_shift_id, r.sunday_shift_id) AS shift_id
+                                 r.friday_shift_id, r.saturday_shift_id, r.sunday_shift_id) AS shift_id,
+                        to_char(r.effective_from, 'YYYY-MM-DD') AS shift_from
                    FROM workforce.recurring_work_patterns r
-                  WHERE r.employment_id = e.id AND r.effective_from <= $2::date
-                    AND (r.effective_to IS NULL OR r.effective_to >= $2::date)
-                  ORDER BY r.effective_from DESC LIMIT 1
+                  WHERE r.employment_id = e.id AND (r.effective_to IS NULL OR r.effective_to >= $2::date)
+                  -- ตัวที่มีผลวันนี้ก่อน ไม่มีค่อยเอาตัวที่จะเริ่มเร็วที่สุด (ผูกกะไว้ให้เริ่มพรุ่งนี้ ไม่ใช่ "ยังไม่ผูกกะ")
+                  ORDER BY (r.effective_from <= $2::date) DESC,
+                           CASE WHEN r.effective_from <= $2::date THEN r.effective_from END DESC NULLS LAST,
+                           r.effective_from ASC
+                  LIMIT 1
                ) pat ON true
                LEFT JOIN workforce.shift_definitions s ON s.id = pat.shift_id
-              WHERE p.subject = ANY($1::text[])
-              ORDER BY p.subject, e.hired_on DESC`,
+              ORDER BY u.subject, (pe.id = p.person_id) DESC NULLS LAST, e.hired_on DESC`,
             subjects,
             today,
+            workers.map((w) => w.email ?? ""),
           );
           const ids = employments.map((e) => e.employment_id);
           if (ids.length === 0) return { employments, results: [], leaves: [], dayOffTypeId: null, shifts: [] };
@@ -217,6 +228,7 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
       shiftName: emp?.shift_name ?? null,
       shiftStart: emp?.shift_start ?? null,
       shiftEnd: emp?.shift_end ?? null,
+      shiftFrom: emp?.shift_from && emp.shift_from > today ? emp.shift_from : null,
       cells,
     };
   });

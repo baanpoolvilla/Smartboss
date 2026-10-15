@@ -159,7 +159,11 @@ export function WorkerRoster({ data, canManage, canOverride }: { data: MonthData
       {(noShift > 0 || noEmployment > 0) && (
         <div role="status" className="rounded-(--radius) border border-(--tone-warn)/40 bg-(--tone-warn)/10 px-3 py-2 text-sm text-(--ink)">
           {noShift > 0 && <b>มี {noShift} คนยังไม่ผูกกะ — ระบบตัดสินมา/ขาดไม่ได้ </b>}
-          {noEmployment > 0 && <span>· {noEmployment} คนยังไม่มีทะเบียนพนักงานในระบบบุคคล (ให้ HR เพิ่มก่อน)</span>}
+          {noEmployment > 0 && (
+            <span>
+              · {noEmployment} คนหาทะเบียนพนักงานไม่เจอ — อีเมลของบัญชีผู้ใช้ต้องตรงกับอีเมลในทะเบียนพนักงาน (HR → พนักงาน) แล้วกดบันทึกผู้ใช้คนนั้นที่หลังบ้านอีกครั้ง
+            </span>
+          )}
         </div>
       )}
 
@@ -246,7 +250,7 @@ export function WorkerRoster({ data, canManage, canOverride }: { data: MonthData
                     className={cn(
                       "border-b border-(--line) bg-(--bg-soft) px-0 py-1 font-semibold tabular-nums",
                       canManage && "cursor-pointer",
-                      d === todayDay ? "bg-(--app) text-white" : wdOf(d) === 0 || wdOf(d) === 6 ? "text-(--tone-danger)" : "text-(--ink-soft)",
+                      d === todayDay ? "bg-amber-600 text-white" : wdOf(d) === 0 || wdOf(d) === 6 ? "text-(--tone-danger)" : "text-(--ink-soft)",
                     )}
                   >
                     {WD[wdOf(d)]}
@@ -278,7 +282,14 @@ export function WorkerRoster({ data, canManage, canOverride }: { data: MonthData
                       </button>
                       <span className="block text-[11px] text-(--ink-soft)">
                         {w.employeeCode ?? "ไม่มีทะเบียน"} ·{" "}
-                        {w.shiftId ? `${minutesToHm(w.shiftStart)}–${minutesToHm(w.shiftEnd)}` : <span className="text-(--tone-warn)">ยังไม่ผูกกะ</span>}
+                        {w.shiftId ? (
+                          <>
+                            {minutesToHm(w.shiftStart)}–{minutesToHm(w.shiftEnd)}
+                            {w.shiftFrom && <span className="text-(--tone-warn)"> (เริ่ม {Number(w.shiftFrom.slice(8))}/{Number(w.shiftFrom.slice(5, 7))})</span>}
+                          </>
+                        ) : (
+                          <span className="text-(--tone-warn)">ยังไม่ผูกกะ</span>
+                        )}
                         {canManage && w.employmentId && (
                           <button
                             type="button"
