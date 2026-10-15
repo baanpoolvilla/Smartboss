@@ -1,4 +1,5 @@
 import { createElement } from "react";
+import { WORKER_ROLE_CODE } from "@/modules/daily_worker/permissions";
 import type { ModuleManifest } from "@/module-registry";
 import { NotifCountBadge } from "@/modules/notifications/notif-count-badge";
 
@@ -24,6 +25,8 @@ export const ISSUE_REPORT_SELF_CODE = "issue_report_self";
 export const issueReportSelfManifest: ModuleManifest = {
   id: ISSUE_REPORT_SELF_CODE,
   name: "แจ้งบัค",
+  // คนงานรายวัน (WORKER) ใช้แค่แชท & รีพอต กับคนงานรายวัน — โมดูลนี้ไม่ขึ้นให้คนงาน
+  hideForRoles: [WORKER_ROLE_CODE],
   color: "#dc2626",
   colorBg: "#fef2f2",
   basePath: ISSUE_REPORTS_BASE,

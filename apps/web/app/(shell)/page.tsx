@@ -1,5 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { getSession } from "@smartboss/auth";
+import { WORKER_ROLE_CODE } from "@/modules/daily_worker/permissions";
+
+/** หน้าแรกของคนงาน — ลงเวลา (คนงานรายวัน) + แชท & รีพอต เท่านั้น */
+const WORKER_TILE_CODES = ["daily_worker", "chat_report"];
 import type { LucideIcon } from "lucide-react";
 import { MODULE_CARDS, PRIMARY_MODULE_CODES, SECONDARY_FIRST_CODES } from "@/lib/modules";
 import { EXTERNAL_APP_GROUPS, appKey, appsInGroup, type ExternalAppGroup } from "@/lib/external-apps";
@@ -125,6 +130,25 @@ export default async function HomePage() {
   };
   // sort ของ JS คงลำดับเดิมของตัวที่เท่ากัน — ตัวที่ไม่อยู่ในรายการยังเรียงเหมือนเดิม
   const secondary = tiles.filter((t) => !primaryCodes.has(t.code)).sort((a, b) => rank(a.code) - rank(b.code));
+
+  // คนงานรายวัน (บทบาท WORKER) — หน้าแรกเหลือแค่สองอย่างที่ใช้จริง ไม่มีการ์ด "เร็ว ๆ นี้" / เว็บของทีมอื่น
+  const session = await getSession();
+  if (session?.roles.includes(WORKER_ROLE_CODE)) {
+    const workerTiles = WORKER_TILE_CODES.map((code) => byCode.get(code)).filter((t): t is AppTile => !!t && !!t.href);
+    return (
+      <div className="mx-auto max-w-md">
+        <header className="mb-8 text-center sm:mb-10">
+          <h1 className="text-2xl font-semibold text-(--ink)">สวัสดี, {firstName}</h1>
+          <p className="mt-1 text-sm text-(--ink-soft)">{thaiToday()}</p>
+        </header>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-7">
+          {workerTiles.map((tile) => (
+            <AppIcon key={tile.code} tile={tile} size="lg" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-5xl">

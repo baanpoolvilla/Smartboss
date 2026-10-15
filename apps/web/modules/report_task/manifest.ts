@@ -1,4 +1,5 @@
 import { createElement } from "react";
+import { WORKER_ROLE_CODE } from "@/modules/daily_worker/permissions";
 import type { ModuleManifest, ModuleMenuItem } from "@/module-registry";
 
 import { REPORT_TASK_BASE, REPORT_TASK_CODE } from "./constants";
@@ -40,6 +41,8 @@ const menus: ModuleMenuItem[] = navItems.map((item) => ({
 export const reportTaskManifest: ModuleManifest = {
   id: REPORT_TASK_CODE,
   name: "Project Management",
+  // คนงานรายวัน (WORKER) ใช้แค่แชท & รีพอต กับคนงานรายวัน — โมดูลนี้ไม่ขึ้นให้คนงาน
+  hideForRoles: [WORKER_ROLE_CODE],
   color: "#64748B",
   colorBg: "#F4F6F9",
   basePath: REPORT_TASK_BASE,

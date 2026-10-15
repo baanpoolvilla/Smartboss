@@ -62,6 +62,8 @@ export interface ModuleManifest {
    * โมดูลอื่น (code นี้) แทน เช่น "แจ้งบัค" ของ user ทั่วไปผูกกับ report_task
    */
   requiresModule?: string;
+  /** ซ่อนทั้งโมดูลจากผู้ใช้ที่ถือบทบาทเหล่านี้ (เช่นคนงาน WORKER ไม่เห็น Project Management) */
+  hideForRoles?: string[];
 }
 
 /**
@@ -119,6 +121,7 @@ export function getVisibleModules({
 
   return moduleRegistry
     .filter((m) => m.alwaysOn || enabled.has(m.requiresModule ?? m.id))
+    .filter((m) => !m.hideForRoles?.some((r) => roles.includes(r)))
     .map((m) => ({
       ...m,
       // ใช้ตัวตัดสินเดียวกับฝั่ง server (packages/auth/permissions.ts) เพื่อไม่ให้
