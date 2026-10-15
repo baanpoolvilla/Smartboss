@@ -1,4 +1,5 @@
 import "server-only";
+import { NOT_WORKER } from "@/lib/worker-role";
 import { DEPT_MENTION_PREFIX } from "../constants";
 import { isSingleEmoji } from "@/lib/emoji";
 import { prisma } from "@smartboss/database";
@@ -143,7 +144,7 @@ export async function createMessage(
     const userIds = wanted.filter((m) => m !== "all" && !m.startsWith(DEPT_MENTION_PREFIX) && m !== actor.userId);
     const valid =
       access.type === "org"
-        ? (await prisma.user.findMany({ where: { orgId: actor.orgId, isActive: true, id: { in: userIds } }, select: { id: true } })).map((u) => u.id)
+        ? (await prisma.user.findMany({ where: { orgId: actor.orgId, isActive: true, id: { in: userIds }, ...NOT_WORKER }, select: { id: true } })).map((u) => u.id)
         : userIds.filter((id) => memberIds.includes(id));
     // @แผนก — เก็บป้าย "dept:<id>" ไว้แสดงชื่อแผนก + กางเป็นรายชื่อคนในแผนกที่อยู่ในห้องนี้
     // (ทุกอย่างที่อ่าน mentions อยู่แล้ว — แจ้งเตือน, ตัวนับ "ถูกแท็ก", เด้งแม้ปิดเสียง — ใช้ได้เลย)
@@ -322,7 +323,8 @@ export async function listChannelMedia(
 export async function otherMemberIds(orgId: string, channelId: string, excludeUserId: string): Promise<string[]> {
   if (channelId === orgChannelId(orgId)) {
     const rows = await prisma.user.findMany({
-      where: { orgId, isActive: true, id: { not: excludeUserId } },
+      // คนงานไม่อยู่ในห้องรวมทั้งบริษัท — ไม่แจ้งเตือนคนงาน
+      where: { orgId, isActive: true, id: { not: excludeUserId }, ...NOT_WORKER },
       select: { id: true },
     });
     return rows.map((r) => r.id);

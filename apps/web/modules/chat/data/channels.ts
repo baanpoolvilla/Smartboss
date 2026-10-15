@@ -1,4 +1,5 @@
 import "server-only";
+import { isWorkerUser } from "@/lib/worker-role";
 import { prisma } from "@smartboss/database";
 
 import { publishToOrg, publishToUsers } from "@/lib/realtime/server";
@@ -58,6 +59,8 @@ interface ChannelAccess {
 /** ตรวจว่าผู้ใช้เข้าห้องนี้ได้ (และห้องอยู่บริษัทเดียวกัน) — ใช้ก่อนอ่าน/เขียนทุกครั้ง */
 export async function getChannelAccess(actor: ChatActor, channelId: string): Promise<ChannelAccess> {
   if (channelId === orgChannelId(actor.orgId)) {
+    // คนงาน (บทบาท WORKER) ไม่อยู่ในห้องรวมทั้งบริษัท — คนอื่นเข้าได้ตามเดิม
+    if (await isWorkerUser(actor.userId)) throw new ChatError("ไม่มีสิทธิ์เข้าห้องนี้", 403);
     await ensureOrgChannel(actor.orgId, actor.userId);
     return { id: channelId, type: "org", name: CHAT_ORG_CHANNEL_NAME, departmentId: null, role: "member", canManage: actor.isChatAdmin };
   }
@@ -218,7 +221,8 @@ export async function listChannelsForUser(orgId: string, userId: string): Promis
     where: { orgId, userId, channel: { archived: false } },
     select: { channelId: true },
   });
-  const channelIds = [orgChanId, ...memberships.map((m) => m.channelId)];
+  // คนงาน (บทบาท WORKER) ไม่เห็นห้องรวมทั้งบริษัท — เห็นแค่แชทส่วนตัว/กลุ่มที่ถูกเพิ่ม
+  const channelIds = [...((await isWorkerUser(userId)) ? [] : [orgChanId]), ...memberships.map((m) => m.channelId)];
 
   const [channels, allMembers, readStates] = await Promise.all([
     prisma.chatChannel.findMany({

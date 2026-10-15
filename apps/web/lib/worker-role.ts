@@ -21,3 +21,12 @@ export async function workerUserIds(userIds: readonly string[]): Promise<Set<str
   );
   return new Set(rows.map((r) => r.userId));
 }
+
+/** ผู้ใช้คนนี้เป็นคนงานไหม — ใช้กันคนงานออกจากห้องรวมทั้งบริษัทในแชท */
+export async function isWorkerUser(userId: string): Promise<boolean> {
+  const n = await prisma.userRole.count({ where: { userId, role: { code: WORKER_ROLE_CODE } } });
+  return n > 0;
+}
+
+/** เงื่อนไข Prisma ของ user ที่ "ไม่ใช่คนงาน" — ต่อท้าย where ได้เลย */
+export const NOT_WORKER = { NOT: { roles: { some: { role: { code: WORKER_ROLE_CODE } } } } } as const;

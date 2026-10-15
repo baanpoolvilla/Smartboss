@@ -1,6 +1,8 @@
 import { requireOrg } from "@smartboss/auth";
 
 import { clearPresenceIfIdle, subscribeUser, touchPresence, type RealtimeEvent } from "@/lib/realtime/server";
+import { isWorkerUser } from "@/lib/worker-role";
+import { orgChannelId } from "@/modules/chat/data/channels";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -20,6 +22,8 @@ export async function GET(request: Request) {
   const session = await requireOrg();
   const userId = session.userId;
   const encoder = new TextEncoder();
+  const worker = await isWorkerUser(userId);
+  const orgChan = orgChannelId(session.orgId);
 
   let cleanup = () => {};
   const stream = new ReadableStream<Uint8Array>({
@@ -39,6 +43,8 @@ export async function GET(request: Request) {
       touchPresence(userId);
 
       const unsubscribe = subscribeUser(userId, session.orgId, (event: RealtimeEvent) => {
+        // คนงานไม่อยู่ในห้องรวมทั้งบริษัท — ไม่ส่งเหตุการณ์ของห้องนั้น (ข้อความ/พิมพ์อยู่/อ่านแล้ว) ให้คนงาน
+        if (worker && (event as { channelId?: string }).channelId === orgChan) return;
         send(`data: ${JSON.stringify(event)}\n\n`);
       });
       // เป็น event จริง (ไม่ใช่ comment) ให้เบราว์เซอร์เห็น — เงียบเกิน ~60 วิ = ท่อตาย/ค้าง
