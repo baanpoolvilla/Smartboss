@@ -22,6 +22,8 @@ import {
 import { autoRecalculateAttendance } from "@/modules/hr/lib/auto-recalculate";
 import { getTimeEventOriginAction } from "./actions";
 import { formatDate } from "@/modules/hr/lib/labels";
+import { requireOrg } from "@smartboss/auth";
+import { workerEmploymentIds } from "@/modules/daily_worker/lib/data";
 
 /** ช่วงที่สั่งคำนวณย้อนหลัง — คงที่ทุกครั้ง ไม่ผูกกับวันที่กำลังดูอยู่ */
 const RECALC_DAYS = 30;
@@ -108,6 +110,16 @@ export async function renderTodayTab(
   // ตัวชี้ขาดว่าเข้าหน้านี้ได้ไหมคือกระดาน/Timeline ซึ่งทุกคนที่เข้าระบบเรียกได้
   if (board === null && timeline === null) {
     return <NoPermission what="การลงเวลา" />;
+  }
+
+  // คนงานรายวัน (บทบาท WORKER) ไม่แสดงที่นี่ — ดูที่โมดูล "คนงานรายวัน" ซึ่งใช้กติกาของคนงาน
+  // (ไม่งั้นคนเดียวกันขึ้นสถานะไม่ตรงกันสองหน้า) · พนักงานประจำแสดงเหมือนเดิมทุกอย่าง
+  const session = await requireOrg();
+  const workerIds = await workerEmploymentIds(session.orgId);
+  if (workerIds.size > 0) {
+    if (employments) employments.items = employments.items.filter((e) => !workerIds.has(e.id));
+    if (board) board.items = board.items.filter((a) => !workerIds.has(a.employment_id));
+    if (timeline) timeline.items = timeline.items.filter((t) => !workerIds.has(t.employment_id));
   }
 
   const arrivals = board?.items ?? [];

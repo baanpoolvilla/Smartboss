@@ -346,3 +346,24 @@ export async function loadDay(orgId: string, date: string, now: Date = new Date(
   });
   return { date, today: month.today, rows, unlinkedUserIds: month.unlinkedUserIds };
 }
+
+/**
+ * employment ของคนงานทั้งหมดในบริษัท — ใช้ซ่อนคนงานจากหน้า HR → ภาพรวม (ไปดูที่ "คนงานรายวัน" แทน)
+ * ผูกแบบเดียวกับตาราง: principal.person_id ก่อน ไม่มีค่อยเทียบอีเมล · อ่านไม่ได้ = ว่าง (หน้า HR แสดงทุกคนเหมือนเดิม)
+ */
+export async function workerEmploymentIds(orgId: string): Promise<Set<string>> {
+  const workers = await listWorkerUsers(orgId);
+  if (workers.length === 0) return new Set();
+  const rows = await withWorkforceTenant(orgId, (tx) =>
+    tx.$queryRawUnsafe<{ id: string }[]>(
+      `SELECT DISTINCT e.id::text AS id
+         FROM unnest($1::text[], $2::text[]) AS u(subject, email)
+         LEFT JOIN workforce.principals p ON p.subject = u.subject
+         JOIN workforce.people pe ON pe.id = p.person_id OR (u.email <> '' AND lower(pe.email) = lower(u.email))
+         JOIN workforce.employments e ON e.person_id = pe.id`,
+      workers.map((w) => w.userId),
+      workers.map((w) => w.email ?? ""),
+    ),
+  ).catch(() => []);
+  return new Set(rows.map((r) => r.id));
+}

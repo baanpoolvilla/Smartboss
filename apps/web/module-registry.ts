@@ -37,6 +37,8 @@ export interface ModuleMenuItem {
    * ใช้กับเมนูแจ้งบัคของคอนโซลรับเรื่อง ตัวหน้าเช็คสิทธิ์จริงซ้ำอีกชั้นที่ server
    */
   allowSupportStaff?: boolean;
+  /** ซ่อนเมนูนี้จากผู้ใช้ที่ถือบทบาทเหล่านี้ (เช่นคนงาน WORKER เห็นแค่ "ลงเวลา" ในระบบบุคคล) */
+  hideForRoles?: string[];
 }
 
 export interface ModuleManifest {
@@ -121,8 +123,9 @@ export function getVisibleModules({
       // เมนูโผล่มาแล้วกดเข้าไปโดนเด้งออก — SUPER_ADMIN ผ่านหมดยกเว้นกลุ่มเงินเดือน
       menus: m.menus.filter(
         (menu) =>
-          (isSupportStaff && menu.allowSupportStaff) ||
-          resolvePermission({ permissions, roles, permission: menu.permission })
+          !menu.hideForRoles?.some((r) => roles.includes(r)) &&
+          ((isSupportStaff && menu.allowSupportStaff) ||
+            resolvePermission({ permissions, roles, permission: menu.permission }))
       ),
     }))
     .filter((m) => m.menus.length > 0);
