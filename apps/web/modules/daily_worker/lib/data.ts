@@ -75,6 +75,7 @@ interface EmploymentRow {
   shift_start: number | null;
   shift_end: number | null;
   shift_from: string | null;
+  linked: boolean;
 }
 interface ResultRow {
   employment_id: string;
@@ -117,7 +118,8 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
           // (ผู้ใช้ที่ยังไม่เคย sync ไประบบบุคคล principal ยังไม่มี/ยังไม่ผูก person — เจอจริง 2026-10-15)
           const employments = await tx.$queryRawUnsafe<EmploymentRow[]>(
             `SELECT DISTINCT ON (u.subject) u.subject, e.id::text AS employment_id, e.employee_code,
-                    s.id::text AS shift_id, s.name AS shift_name, s.start_minutes AS shift_start, s.end_minutes AS shift_end, pat.shift_from
+                    s.id::text AS shift_id, s.name AS shift_name, s.start_minutes AS shift_start, s.end_minutes AS shift_end, pat.shift_from,
+                    COALESCE(pe.id = p.person_id, false) AS linked
                FROM unnest($1::text[], $3::text[]) AS u(subject, email)
                LEFT JOIN workforce.principals p ON p.subject = u.subject
                JOIN workforce.people pe
@@ -233,7 +235,8 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
     };
   });
 
-  return { month, days: total, today, workers: rows, dayOffTypeId: wf.dayOffTypeId, shifts: wf.shifts.map((s) => ({ id: s.id, name: s.name, start: s.start_minutes, end: s.end_minutes })) };
+  const unlinkedUserIds = wf.employments.filter((e) => !e.linked).map((e) => e.subject);
+  return { month, days: total, today, unlinkedUserIds, workers: rows, dayOffTypeId: wf.dayOffTypeId, shifts: wf.shifts.map((s) => ({ id: s.id, name: s.name, start: s.start_minutes, end: s.end_minutes })) };
 }
 
 /** สรุปของคนหนึ่งในเดือนนั้น — ใช้ทั้งตารางสรุปและหน้า "เดือนนี้ของฉัน" */

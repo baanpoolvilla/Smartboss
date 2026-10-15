@@ -6,6 +6,7 @@ import { DW_PERMS } from "@/modules/daily_worker/permissions";
 import { bangkokToday, loadMonth, summarize } from "@/modules/daily_worker/lib/data";
 import { hoursLabel, minutesToHm } from "@/modules/daily_worker/lib/types";
 import { WorkerRoster } from "@/modules/daily_worker/components/worker-roster";
+import { syncUserToWorkforce } from "@/modules/admin/data/user-guards";
 
 export const dynamic = "force-dynamic";
 
@@ -22,10 +23,18 @@ export default async function DailyWorkersPage({ searchParams }: { searchParams:
 
   const { month: raw } = await searchParams;
   const month = raw && /^\d{4}-(0[1-9]|1[0-2])$/.test(raw) ? raw : bangkokToday().slice(0, 7);
-  const data = await loadMonth(session.orgId, month).catch((error: unknown) => {
-    console.error("[daily-workers] load failed", error);
-    return null;
-  });
+  const load = () =>
+    loadMonth(session.orgId, month).catch((error: unknown) => {
+      console.error("[daily-workers] load failed", error);
+      return null;
+    });
+  let data = await load();
+  // คนงานที่บัญชียังไม่ผูกกับทะเบียน (อีเมลต่างกันแค่ตัวพิมพ์) — ผูกให้เลยครั้งเดียว ไม่ต้องให้แอดมินไปกดบันทึกผู้ใช้
+  // คนเหล่านี้ลงเวลาในมือถือได้ทันทีหลังผูก · คนที่ผูกแล้วไม่ถูกแตะ
+  if (data && data.unlinkedUserIds.length > 0) {
+    for (const userId of data.unlinkedUserIds) await syncUserToWorkforce(userId, session.orgId, session.userId);
+    data = await load();
+  }
 
   return (
     <AppScaffold title="คนงานรายวัน" width="max-w-none">

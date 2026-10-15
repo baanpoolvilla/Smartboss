@@ -4,6 +4,7 @@ import { wfFetch, WorkforceError, WorkforceUnavailableError } from "@/modules/hr
 import { localDateStr, todayIso } from "@/modules/hr/lib/date";
 import { CARRY_OVER_HOURS, clockState } from "@/modules/hr/lib/clock-state";
 import { withWorkforceTenant } from "@/modules/report_task/lib/db/workforce-calendar";
+import { syncUserToWorkforce } from "@/modules/admin/data/user-guards";
 
 export const runtime = "nodejs";
 
@@ -119,7 +120,13 @@ export async function GET() {
   const date = todayIso();
 
   try {
-    const me = await wfFetch<Me>("/me");
+    let me = await wfFetch<Me>("/me");
+    // ยังไม่ผูกกับทะเบียนพนักงาน — ลองผูกบัญชีนี้คนเดียวก่อน (อีเมลต่างกันแค่ตัวพิมพ์เล็ก/ใหญ่ เช่น joey@ กับ Joey@
+    // เคยผูกไม่ได้ ต้องให้แอดมินกดบันทึกผู้ใช้เอง) · คนที่ผูกแล้วไม่ผ่านทางนี้ ทำงานเหมือนเดิม
+    if (me.employment_id === null && session.orgId) {
+      await syncUserToWorkforce(session.userId, session.orgId, session.userId);
+      me = await wfFetch<Me>("/me");
+    }
     if (me.employment_id === null) {
       return NextResponse.json(
         {

@@ -36,6 +36,8 @@ export interface WorkerMonth {
 
 export interface MonthData {
   month: string;
+  /** คนงานที่เจอทะเบียนจากอีเมลแต่บัญชียังไม่ผูก — หน้าเว็บผูกให้เอง (syncUserToWorkforce) */
+  unlinkedUserIds: string[];
   days: number;
   today: string;
   workers: WorkerMonth[];

@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { prisma } from "@smartboss/database";
 
-import { wfFetch, WorkforceError } from "@/modules/hr/lib/api";
+import { wfFetch as wfFetchRaw, WorkforceError } from "@/modules/hr/lib/api";
+import { syncUserToWorkforce } from "@/modules/admin/data/user-guards";
 import { DW_PERMS } from "./permissions";
 import { loadMonth, OT_KEY, OVERRIDE_KEY, updateStoreList } from "./lib/data";
 import { otMinutes, type OtEntry, type OverrideEntry } from "./lib/types";
@@ -17,6 +18,25 @@ import { otMinutes, type OtEntry, type OverrideEntry } from "./lib/types";
  */
 
 type Result = { ok?: true; done?: number; skipped?: number; error?: string };
+
+/**
+ * เรียกระบบบุคคล — ถ้าโดน 403 (สิทธิ์ "จัดการคนงาน" ของคนกดยังไม่ถูกส่งไปฝั่งระบบบุคคล) ส่งสิทธิ์ของคนกดคนเดียว
+ * แล้วลองใหม่ครั้งเดียว ไม่ต้องให้แอดมินไปกดบันทึกผู้ใช้หรือรัน wf:sync เอง
+ */
+function makeWf() {
+  // ส่งสิทธิ์ไม่เกินครั้งเดียวต่อการกดหนึ่งครั้ง — คำขอที่ยิงพร้อมกันรอผลเดียวกันแล้วลองใหม่คนละครั้ง
+  let syncing: Promise<void> | null = null;
+  return async function wfFetch<T>(path: string, options: Parameters<typeof wfFetchRaw>[1] = {}): Promise<T> {
+    try {
+      return await wfFetchRaw<T>(path, options);
+    } catch (error) {
+      if (!(error instanceof WorkforceError) || error.status !== 403) throw error;
+      syncing ??= requireOrg().then((session) => syncUserToWorkforce(session.userId, session.orgId, session.userId));
+      await syncing;
+      return wfFetchRaw<T>(path, options);
+    }
+  };
+}
 
 async function guard(permission: string) {
   const session = await requireOrg();
@@ -57,6 +77,7 @@ async function inBatches<T>(items: T[], size: number, run: (item: T) => Promise<
  */
 export async function setDaysOffAction(input: { month: string; cells: { employmentId: string; day: number }[]; mode: "off" | "clear" }): Promise<Result> {
   try {
+    const wfFetch = makeWf();
     const session = await guard(DW_PERMS.manage);
     if (!/^\d{4}-\d{2}$/.test(input.month) || input.cells.length === 0) return { error: "ยังไม่ได้เลือกช่อง" };
     if (input.cells.length > 600) return { error: "เลือกได้ครั้งละไม่เกิน 600 ช่อง" };
@@ -195,6 +216,7 @@ const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "satur
 /** ผูกกะให้คนงาน — ทุกวันกะเดียวกัน (วันหยุดมาจากใบ Day-Off) แบบเดียวกับ setRecurringPatternAction ของ HR */
 export async function assignShiftAction(input: { employmentId: string; shiftId: string; from: string }): Promise<Result> {
   try {
+    const wfFetch = makeWf();
     await guard(DW_PERMS.manage);
     if (!input.employmentId || !input.shiftId || !DATE_RE.test(input.from)) return { error: "ข้อมูลไม่ครบ" };
     await wfFetch("/recurring-work-patterns", {
