@@ -22,6 +22,7 @@ import {
   deleteNotificationsByReference,
 } from "@/modules/maintenance/data/notify";
 import { getProperty } from "@/modules/maintenance/data/properties";
+import { getAsset } from "@/modules/maintenance/data/assets";
 import {
   workOrderAccess,
   canSeeWorkOrder,
@@ -549,4 +550,53 @@ export async function deleteWorkOrderAction(formData: FormData) {
   await deleteNotificationsByReference(id, "work_order");
   revalidatePath("/maintenance/work-orders");
   redirect("/maintenance/work-orders");
+}
+
+/**
+ * แก้บ้านของใบงาน (เลือกบ้านผิดตอนเปิดใบ) — ไม่ต้องสร้างใบใหม่
+ * ใครแก้ได้: สิทธิ์จัดการใบงาน หรือคนเปิดใบนี้ · ไม่ให้แก้เมื่อ
+ *   - ใบมาจากแผน PM (บ้านผูกกับแผน แก้ที่ใบจะหลุดจากแผน)
+ *   - มีค่าใช้จ่ายลงไว้แล้ว (ค่าใช้จ่ายแยกรายบ้าน ผูกบ้านเดิมไปแล้ว)
+ * อุปกรณ์ที่ผูกไว้ไม่อยู่ในบ้านใหม่ = เอาออก · บันทึกเป็นความคิดเห็นว่าเปลี่ยนจากบ้านไหนเป็นบ้านไหน
+ */
+export async function updateWorkOrderPropertiesAction(
+  workOrderId: string,
+  formData: FormData
+): Promise<{ error?: string }> {
+  const s = await requireOrg();
+  const wo = await getWorkOrder(s.orgId, workOrderId);
+  if (!wo || !canSeeWorkOrder(await workOrderAccess(s), wo)) return { error: "ไม่พบใบงาน" };
+  if (!hasPermission(s, MAINT_PERMS.workorderManage) && wo.createdBy !== s.userId) {
+    return { error: "ไม่มีสิทธิ์แก้บ้านของใบงานนี้" };
+  }
+  if (wo.autoCreated || wo.pmScheduleId || wo.pmScheduleIds.length > 0) {
+    return { error: "ใบงานจากแผน PM แก้บ้านไม่ได้ — แก้ที่แผน PM แทน" };
+  }
+  if ((await listExpenses(s.orgId, { workOrderId })).length > 0) {
+    return { error: "ใบงานนี้ลงค่าใช้จ่ายแล้ว — ลบค่าใช้จ่ายก่อนจึงจะแก้บ้านได้" };
+  }
+  const ids = [...new Set(formData.getAll("propertyIds").map(String).filter(Boolean))];
+  if (ids.length === 0) return { error: "เลือกอย่างน้อย 1 บ้าน" };
+  const props = await Promise.all(ids.map((id) => getProperty(s.orgId, id)));
+  if (props.some((p) => !p)) return { error: "ไม่พบบ้านที่เลือก" };
+
+  const before = [wo.propertyId, ...wo.additionalPropertyIds];
+  if (before.length === ids.length && before.every((id, i) => id === ids[i])) return {};
+  const [primary, ...additional] = ids;
+
+  let assetId = wo.assetId;
+  if (assetId) {
+    const asset = await getAsset(s.orgId, assetId);
+    if (!asset || !ids.includes(asset.propertyId)) assetId = null;
+  }
+  await updateWorkOrder(s.orgId, workOrderId, { propertyId: primary!, additionalPropertyIds: additional, assetId });
+
+  const nameOf = async (id: string) => (await getProperty(s.orgId, id))?.name ?? "-";
+  const fromNames = (await Promise.all(before.map(nameOf))).join(", ");
+  const toNames = props.map((p) => p!.name).join(", ");
+  await addWorkOrderComment(s.orgId, workOrderId, s.userId, `เปลี่ยนบ้าน: ${fromNames} → ${toNames}`);
+
+  revalidatePath(`/maintenance/work-orders/${workOrderId}`);
+  revalidatePath("/maintenance/work-orders");
+  return {};
 }

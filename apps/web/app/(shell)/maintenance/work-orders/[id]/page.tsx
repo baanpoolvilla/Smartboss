@@ -64,7 +64,9 @@ import {
   deleteCommentAction,
   deleteWorkOrderAction,
   generateUploadLinkAction,
+  updateWorkOrderPropertiesAction,
 } from "../actions";
+import { EditWorkOrderProperties } from "@/modules/maintenance/components/edit-work-order-properties";
 
 const STATUS_COLOR: Record<string, string> = {
   open: "#2563EB",
@@ -152,6 +154,13 @@ export default async function WorkOrderDetailPage({
   const uploadUrl = uploadLink ? `${proto}://${host}/u/${uploadLink.token}` : null;
 
   const hasExpense = expenses.length > 0;
+  // แก้บ้าน (เลือกผิดตอนเปิดใบ) — เงื่อนไขเดียวกับ updateWorkOrderPropertiesAction
+  const canEditProperties =
+    (canManage || wo.createdBy === session.userId) &&
+    !wo.autoCreated &&
+    !wo.pmScheduleId &&
+    wo.pmScheduleIds.length === 0 &&
+    !hasExpense;
   const pmForExpense =
     wo.status === "completed" && !hasExpense && wo.assetId
       ? await getPmScheduleIdForAsset(orgId, wo.assetId)
@@ -224,10 +233,21 @@ export default async function WorkOrderDetailPage({
         <InfoRow
           icon={<HomeIcon className="h-5 w-5" />}
           label="บ้าน"
-          value={[wo.propertyId, ...wo.additionalPropertyIds]
-            .map((pid) => propNames[pid] ?? "")
-            .filter(Boolean)
-            .join(", ")}
+          value={
+            <>
+              {[wo.propertyId, ...wo.additionalPropertyIds]
+                .map((pid) => propNames[pid] ?? "")
+                .filter(Boolean)
+                .join(", ")}
+              {canEditProperties && (
+                <EditWorkOrderProperties
+                  options={properties.map((p) => ({ id: p.id, label: p.name }))}
+                  selected={[wo.propertyId, ...wo.additionalPropertyIds]}
+                  action={updateWorkOrderPropertiesAction.bind(null, wo.id)}
+                />
+              )}
+            </>
+          }
         />
         {asset && (
           <InfoRow
