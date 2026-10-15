@@ -384,7 +384,8 @@ interface TaskStore {
   /** mentionIds: คนที่ถูก @แท็กในความคิดเห็น — ได้แจ้งเตือน "แท็กคุณ" แทนแจ้งเตือนความคิดเห็นทั่วไป */
   addComment: (taskId: string, message: string, authorId: string, attachments?: Attachment[], mentionIds?: string[]) => void;
   removeComment: (taskId: string, commentId: string) => void;
-  addAttachment: (taskId: string, attachment: Attachment) => void;
+  /** แนบไฟล์ทีละชุด (เลือกหลายไฟล์พร้อมกัน) — เพิ่มทีละไฟล์ได้ แต่แจ้งเตือนครั้งเดียวต่อชุด */
+  addAttachments: (taskId: string, attachments: Attachment[]) => void;
   removeAttachment: (taskId: string, attachmentId: string) => void;
   addChecklistItem: (taskId: string, text: string, ownerId: string) => void;
   /**
@@ -1075,27 +1076,31 @@ export const useTaskStore = create<TaskStore>((set) => ({
         t.id !== taskId ? t : { ...t, comments: t.comments.filter((c) => c.id !== commentId) }
       ),
     })),
-  addAttachment: (taskId, attachment) =>
+  addAttachments: (taskId, attachments) =>
     set((s) => ({
       tasks: s.tasks.map((t) => {
-        if (t.id !== taskId) return t;
+        if (t.id !== taskId || attachments.length === 0) return t;
         // แจ้งคนกลุ่มเดียวกับตอนมีคอมเมนต์ใหม่ (ดู addComment ข้างบน) — ไฟล์แนบ
         // ใหม่ที่ยังไม่มีใครเห็นก็ควรมีจุดแดงบนการ์ดเหมือนกัน ไม่ใช่แค่คอมเมนต์
+        // ชุดเดียวกัน = แจ้งครั้งเดียว (เดิมเด้งทีละไฟล์ รัวจนน่ารำคาญ)
         const recipients = Array.from(new Set([...t.assigneeIds, t.assignedById, ...t.comments.map((c) => c.authorId)]));
-        const actorName = getUser(attachment.uploadedBy)?.name ?? "มีคน";
+        const first = attachments[0]!;
+        const actorName = getUser(first.uploadedBy)?.name ?? "มีคน";
         useNotificationStore
           .getState()
           .notifyMany(
             recipients,
-            attachment.uploadedBy,
-            `${actorName} แนบไฟล์ "${attachment.name}" ในงาน "${t.title}"`,
+            first.uploadedBy,
+            attachments.length === 1
+              ? `${actorName} แนบไฟล์ "${first.name}" ในงาน "${t.title}"`
+              : `${actorName} แนบไฟล์ ${attachments.length} ไฟล์ ในงาน "${t.title}"`,
             undefined,
             `/report-task/tasks?task=${t.id}`,
             undefined,
             "task_attachment",
             t.id
           );
-        return { ...t, attachments: [...t.attachments, attachment] };
+        return { ...t, attachments: [...t.attachments, ...attachments] };
       }),
     })),
   removeAttachment: (taskId, attachmentId) =>

@@ -222,7 +222,7 @@ export function TaskDetailSheet({
   const reviseAllAssigneeDueDates = useTaskStore((s) => s.reviseAllAssigneeDueDates);
   const addComment = useTaskStore((s) => s.addComment);
   const removeComment = useTaskStore((s) => s.removeComment);
-  const addAttachment = useTaskStore((s) => s.addAttachment);
+  const addAttachments = useTaskStore((s) => s.addAttachments);
   const removeAttachment = useTaskStore((s) => s.removeAttachment);
   const addChecklistItem = useTaskStore((s) => s.addChecklistItem);
   const toggleChecklistItem = useTaskStore((s) => s.toggleChecklistItem);
@@ -586,14 +586,17 @@ export function TaskDetailSheet({
       toast.error(`แนบได้อีกแค่ ${remaining} ไฟล์ (จำกัด ${attachmentSettings.maxFilesPerTask} ไฟล์ต่องาน)`);
     }
     setTaskAttachUploading(true);
+    // อัปโหลดให้ครบทั้งชุดก่อน แล้วเพิ่มเข้างานทีเดียว ⇒ แจ้งเตือนครั้งเดียวต่อชุด
+    const uploaded = [];
     for (const file of picked) {
       try {
         const att = await uploadTaskAttachment(file, viewingAsUserId);
-        addAttachment(task.id, { ...att, role });
+        uploaded.push({ ...att, role });
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "อัปโหลดไฟล์ไม่สำเร็จ");
       }
     }
+    addAttachments(task.id, uploaded);
     setTaskAttachUploading(false);
   }
 
