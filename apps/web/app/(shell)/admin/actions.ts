@@ -23,6 +23,7 @@ import {
   syncWorkforceCompanyName,
 } from "@/lib/workforce-provisioning";
 import { assertManageableUser, syncUserToWorkforce } from "@/modules/admin/data/user-guards";
+import { DW_PERMS } from "@/modules/daily_worker/permissions";
 import {
   BASELINE_PERMS,
   ENABLED_MODULES,
@@ -449,10 +450,16 @@ export async function setRolePermissionsAction(formData: FormData) {
   const permissionIds = formData.getAll("permissionIds").map(String).filter(Boolean);
 
   // รับเฉพาะ id ที่มีจริงในแคตตาล็อก — กันค่าที่ยิงมั่วมาจากฟอร์ม
-  const valid = await prisma.permission.findMany({
+  const picked = await prisma.permission.findMany({
     where: { id: { in: permissionIds } },
-    select: { id: true },
+    select: { id: true, code: true },
   });
+  // คนงานรายวัน: จัดการ/แก้สถานะได้ = ต้องเห็นตารางด้วย (เมนูผูกกับสิทธิ์ดู) — ติ๊กให้เอง
+  const valid = [...picked];
+  if (picked.some((p) => p.code === DW_PERMS.manage || p.code === DW_PERMS.override) && !picked.some((p) => p.code === DW_PERMS.view)) {
+    const view = await prisma.permission.findUnique({ where: { code: DW_PERMS.view }, select: { id: true, code: true } });
+    if (view) valid.push(view);
+  }
 
   await prisma.$transaction([
     prisma.rolePermission.deleteMany({ where: { roleId } }),
@@ -468,6 +475,10 @@ export async function setRolePermissionsAction(formData: FormData) {
     targetId: roleId,
     detail: { count: valid.length },
   });
+  // ส่งสิทธิ์ใหม่ไปฝั่งระบบบุคคลให้ทุกคนที่ถือบทบาทนี้ — เดิมต้องรอแก้ผู้ใช้ทีละคน/รัน wf:sync
+  // (เช่น ให้ "จัดการวันหยุด/OT คนงาน" แล้วผู้ดูแลบ้านยังลงวันหยุดไม่ได้เพราะ workforce ยังไม่รู้)
+  const holders = await prisma.userRole.findMany({ where: { roleId }, select: { userId: true } });
+  for (const h of holders) await syncUserToWorkforce(h.userId, session.orgId, session.userId);
   revalidatePath(`/admin/roles/${roleId}`);
   revalidatePath("/admin/roles");
 }

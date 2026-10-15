@@ -1,4 +1,5 @@
 import "server-only";
+import { workerUserIds } from "@/lib/worker-role";
 import { loadScorePeriodConfig } from "@/lib/score-period-config";
 import { prisma } from "@smartboss/database";
 
@@ -297,6 +298,7 @@ export async function runReportPenaltySweep(orgId: string, actorId: string | nul
       }
     }
 
+    const workers = await workerUserIds(events.map((e) => e.userId));
     if (events.length === 0) {
       return dryRun ? { changed: false, dryRun: true, since: notBeforeDay, preview: [] } : { changed: false };
     }
@@ -306,6 +308,8 @@ export async function runReportPenaltySweep(orgId: string, actorId: string | nul
     // เช็คแล้วผ่านตั้งแต่ต้นฟังก์ชัน, scoringStartDate กรองย้อนหลังเผื่อบริษัท
     // ตั้งวันเริ่มนับคะแนนไว้เหมือนที่ recordPerformanceEvents ทำ
     const rows = events
+      // คนงาน (WORKER) ไม่คิดคะแนน — หักใหม่ไม่ได้ คืนของเดิมได้ (lib/worker-role.ts)
+      .filter((e) => e.refType === "report_round_undo" || !workers.has(e.userId))
       // การคืนคะแนนลงวันเดียวกับที่หักไป — ห้ามกรองด้วยวันเริ่มนับ (ดู recordPerformanceEvents)
       .filter((e) => e.refType === "report_round_undo" || !settings.scoringStartDate || e.occurredAt >= settings.scoringStartDate)
       .map((e) => ({

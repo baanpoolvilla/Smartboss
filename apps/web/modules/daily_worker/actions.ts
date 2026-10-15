@@ -1,0 +1,215 @@
+"use server";
+
+import { randomUUID } from "node:crypto";
+import { revalidatePath } from "next/cache";
+import { requireOrg, hasPermission } from "@smartboss/auth";
+import { prisma } from "@smartboss/database";
+
+import { wfFetch, WorkforceError } from "@/modules/hr/lib/api";
+import { DW_PERMS } from "./permissions";
+import { loadMonth, OT_KEY, OVERRIDE_KEY, updateStoreList } from "./lib/data";
+import { otMinutes, type OtEntry, type OverrideEntry } from "./lib/types";
+
+/**
+ * Server action ของโมดูลคนงานรายวัน — ตรวจสิทธิ์ Smartboss ทุกตัว (การซ่อนปุ่มไม่ใช่ security control)
+ * วันหยุด = ใบ Day-Off ของ workforce (ลงเวลา/รีพอต/หน้า HR รู้จักทันที ไม่ต้องลงสองที่)
+ * ฝั่ง workforce ผู้มีสิทธิ์จัดการคนงานได้ HR_OFFICER (mapSmartbossRoles) จึงเขียนใบให้คนอื่นได้
+ */
+
+type Result = { ok?: true; done?: number; skipped?: number; error?: string };
+
+async function guard(permission: string) {
+  const session = await requireOrg();
+  if (!hasPermission(session, permission)) throw new Error("ไม่มีสิทธิ์ดำเนินการนี้");
+  return session;
+}
+
+function message(error: unknown): string {
+  if (error instanceof WorkforceError) {
+    if (error.status === 403) return "ระบบบุคคลยังไม่รู้ว่าคุณมีสิทธิ์นี้ — ให้แอดมินกดบันทึกบทบาทของคุณอีกครั้ง แล้วลองใหม่";
+    return error.displayMessage;
+  }
+  return error instanceof Error ? error.message : "ทำไม่สำเร็จ";
+}
+
+async function nameOf(userId: string): Promise<string> {
+  const u = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+  return u?.name ?? "";
+}
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** ทำทีละไม่เกิน `size` คำขอพร้อมกัน — คนงานเยอะ ลงทีละหลายสิบช่อง */
+async function inBatches<T>(items: T[], size: number, run: (item: T) => Promise<boolean>): Promise<number> {
+  let ok = 0;
+  for (let i = 0; i < items.length; i += size) {
+    const results = await Promise.all(items.slice(i, i + size).map((x) => run(x).catch(() => false)));
+    ok += results.filter(Boolean).length;
+  }
+  return ok;
+}
+
+/**
+ * ลง/ยกเลิกวันหยุดให้คนงานหลายคนหลายวันพร้อมกัน
+ * ลงหยุด: ข้ามวันที่ลงเวลามาแล้ว และวันที่มีใบลาอยู่แล้ว · ไม่มีโควตา (ส่งจำนวนวันของเดือนสูงสุด 31)
+ * ยกเลิก: ยกเลิกเฉพาะใบ Day-Off (ใบลาประเภทอื่นแก้ที่ระบบบุคคล)
+ */
+export async function setDaysOffAction(input: { month: string; cells: { employmentId: string; day: number }[]; mode: "off" | "clear" }): Promise<Result> {
+  try {
+    const session = await guard(DW_PERMS.manage);
+    if (!/^\d{4}-\d{2}$/.test(input.month) || input.cells.length === 0) return { error: "ยังไม่ได้เลือกช่อง" };
+    if (input.cells.length > 600) return { error: "เลือกได้ครั้งละไม่เกิน 600 ช่อง" };
+    const data = await loadMonth(session.orgId!, input.month);
+    const byEmp = new Map(data.workers.filter((w) => w.employmentId).map((w) => [w.employmentId!, w]));
+
+    if (input.mode === "off") {
+      if (!data.dayOffTypeId) return { error: "ยังไม่มีประเภทวันหยุด (Day-Off) ในระบบบุคคล — ให้ HR สร้างประเภทการลาแบบอนุมัติอัตโนมัติก่อน" };
+      const todo = input.cells.filter((c) => {
+        const cell = byEmp.get(c.employmentId)?.cells[c.day];
+        return byEmp.has(c.employmentId) && !cell?.inAt && !cell?.leave;
+      });
+      const done = await inBatches(todo, 5, async (c) => {
+        const date = `${input.month}-${String(c.day).padStart(2, "0")}`;
+        const created = await wfFetch<{ id?: string; status?: string }>("/leave-requests", {
+          method: "POST",
+          body: {
+            employment_id: c.employmentId,
+            leave_type_id: data.dayOffTypeId,
+            starts_on: date,
+            ends_on: date,
+            total_minutes: 480,
+            reason: "ผู้ดูแลลงให้ (คนงานรายวัน)",
+            display_label: "หยุด",
+            // คนงานไม่มีโควตาวันหยุด — ผู้ดูแลจัดตามงานจริง
+            monthly_quota_days_override: 31,
+          },
+        });
+        if (created?.id && created.status === "SUBMITTED") {
+          await wfFetch(`/leave-requests/${created.id}/decide`, {
+            method: "POST",
+            body: { outcome: "APPROVED", reason: "ผู้ดูแลลงให้ (คนงานรายวัน)" },
+          });
+        }
+        return true;
+      });
+      revalidatePath("/daily-workers");
+      return { ok: true, done, skipped: input.cells.length - done };
+    }
+
+    const todo = input.cells
+      .map((c) => byEmp.get(c.employmentId)?.cells[c.day]?.leave)
+      .filter((l): l is NonNullable<typeof l> => !!l && l.dayOff);
+    const ids = [...new Set(todo.map((l) => l.id))];
+    const done = await inBatches(ids, 5, async (id) => {
+      await wfFetch(`/leave-requests/${id}/cancel-for`, { method: "POST", body: { reason: "ผู้ดูแลยกเลิกวันหยุด (คนงานรายวัน)" } });
+      return true;
+    });
+    revalidatePath("/daily-workers");
+    return { ok: true, done, skipped: input.cells.length - done };
+  } catch (error) {
+    return { error: message(error) };
+  }
+}
+
+/** ลง OT ให้คนงานหลายคนในวันเดียว — ผู้ดูแลใส่เวลาเริ่ม–จบ ระบบคิดชั่วโมงเอง · มีอยู่แล้ว = แทนที่ */
+export async function saveOtAction(input: { employmentIds: string[]; date: string; start: string; end: string; note: string }): Promise<Result> {
+  try {
+    const session = await guard(DW_PERMS.manage);
+    if (!DATE_RE.test(input.date) || !TIME_RE.test(input.start) || !TIME_RE.test(input.end)) return { error: "วันที่หรือเวลาไม่ถูกต้อง" };
+    if (input.employmentIds.length === 0) return { error: "ยังไม่ได้เลือกคนงาน" };
+    const minutes = otMinutes(input.start, input.end);
+    if (minutes > 16 * 60) return { error: "OT ยาวเกิน 16 ชั่วโมง ตรวจเวลาอีกครั้ง" };
+    const byName = await nameOf(session.userId);
+    const at = new Date().toISOString();
+    const ids = new Set(input.employmentIds);
+    await updateStoreList<OtEntry>(session.orgId!, OT_KEY, session.userId, (list) => [
+      ...list.filter((o) => !(o.date === input.date && ids.has(o.employmentId))),
+      ...[...ids].map((employmentId) => ({
+        id: randomUUID(),
+        employmentId,
+        date: input.date,
+        start: input.start,
+        end: input.end,
+        minutes,
+        note: input.note.trim().slice(0, 200),
+        byUserId: session.userId,
+        byName,
+        at,
+      })),
+    ]);
+    revalidatePath("/daily-workers");
+    return { ok: true, done: ids.size };
+  } catch (error) {
+    return { error: message(error) };
+  }
+}
+
+export async function deleteOtAction(input: { employmentId: string; date: string }): Promise<Result> {
+  try {
+    const session = await guard(DW_PERMS.manage);
+    await updateStoreList<OtEntry>(session.orgId!, OT_KEY, session.userId, (list) =>
+      list.filter((o) => !(o.employmentId === input.employmentId && o.date === input.date)),
+    );
+    revalidatePath("/daily-workers");
+    return { ok: true };
+  } catch (error) {
+    return { error: message(error) };
+  }
+}
+
+/** แก้ "ขาด" เป็น "มา" — ต้องใส่เหตุผล เก็บว่าใครแก้ เมื่อไหร่ */
+export async function setOverrideAction(input: { employmentId: string; date: string; reason: string }): Promise<Result> {
+  try {
+    const session = await guard(DW_PERMS.override);
+    const reason = input.reason.trim();
+    if (!reason) return { error: "ต้องใส่เหตุผล" };
+    if (!DATE_RE.test(input.date)) return { error: "วันที่ไม่ถูกต้อง" };
+    const byName = await nameOf(session.userId);
+    await updateStoreList<OverrideEntry>(session.orgId!, OVERRIDE_KEY, session.userId, (list) => [
+      ...list.filter((o) => !(o.employmentId === input.employmentId && o.date === input.date)),
+      { employmentId: input.employmentId, date: input.date, reason: reason.slice(0, 300), byUserId: session.userId, byName, at: new Date().toISOString() },
+    ]);
+    revalidatePath("/daily-workers");
+    return { ok: true };
+  } catch (error) {
+    return { error: message(error) };
+  }
+}
+
+export async function removeOverrideAction(input: { employmentId: string; date: string }): Promise<Result> {
+  try {
+    const session = await guard(DW_PERMS.override);
+    await updateStoreList<OverrideEntry>(session.orgId!, OVERRIDE_KEY, session.userId, (list) =>
+      list.filter((o) => !(o.employmentId === input.employmentId && o.date === input.date)),
+    );
+    revalidatePath("/daily-workers");
+    return { ok: true };
+  } catch (error) {
+    return { error: message(error) };
+  }
+}
+
+const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+
+/** ผูกกะให้คนงาน — ทุกวันกะเดียวกัน (วันหยุดมาจากใบ Day-Off) แบบเดียวกับ setRecurringPatternAction ของ HR */
+export async function assignShiftAction(input: { employmentId: string; shiftId: string; from: string }): Promise<Result> {
+  try {
+    await guard(DW_PERMS.manage);
+    if (!input.employmentId || !input.shiftId || !DATE_RE.test(input.from)) return { error: "ข้อมูลไม่ครบ" };
+    await wfFetch("/recurring-work-patterns", {
+      method: "POST",
+      body: {
+        employment_id: input.employmentId,
+        ...Object.fromEntries(WEEKDAYS.map((d) => [`${d}_shift_id`, input.shiftId])),
+        effective_from: input.from,
+        effective_to: null,
+        supersede_current: true,
+      },
+    });
+    revalidatePath("/daily-workers");
+    return { ok: true };
+  } catch (error) {
+    return { error: message(error) };
+  }
+}

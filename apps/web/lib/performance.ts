@@ -1,4 +1,6 @@
 import "server-only";
+import { workerUserIds } from "@/lib/worker-role";
+import { WORKER_ROLE_CODE } from "@/modules/daily_worker/permissions";
 import { prisma } from "@smartboss/database";
 import {
   effectiveScorePeriodOf,
@@ -225,6 +227,9 @@ export async function recordPerformanceEvents(
   const settingsByOrg = await loadPerformanceSettingsMap([
     ...new Set(events.map((e) => e.orgId)),
   ]);
+  // คนงาน (บทบาท WORKER) ไม่คิดคะแนนทุกเรื่อง — จุดเดียวที่เกือบทุกแหล่งผ่าน (lib/worker-role.ts)
+  // การคืนคะแนนยังผ่านได้ (คืนของที่หักไว้ก่อนเป็นคนงาน)
+  const workers = await workerUserIds(events.filter((e) => !isReversalEvent(e)).map((e) => e.userId));
 
   const rows = events
     .filter((e) => {
@@ -232,6 +237,7 @@ export async function recordPerformanceEvents(
       // ถ้ารายการนั้นอยู่ก่อนวันเริ่มนับ (ตั้งวันเริ่มนับทีหลัง) หรือบริษัทปิดระบบคะแนนไว้
       // แล้วกรองทิ้ง = หักค้างตลอดไป คืนไม่ได้ (กติกาเดียวกับคำร้องขอแก้ไขคะแนน)
       if (isReversalEvent(e)) return true;
+      if (workers.has(e.userId)) return false;
       const st = settingsByOrg.get(e.orgId);
       if (st?.enabled === false) return false;
       // จุดเดียวที่ทุก cron/โมดูลผ่าน — กันทั้ง cron ลงเวลาที่ย้อนดู 45 วัน และ sweep
@@ -421,7 +427,8 @@ export async function buildScorecards(
   } as const;
   const [users, rawEvents] = await Promise.all([
     prisma.user.findMany({
-      where: { orgId, isActive: true },
+      // คนงาน (WORKER) ไม่คิดคะแนน ไม่ขึ้นในหน้าคะแนน/เกรด/ค่าคอม (โมดูลคนงานรายวัน)
+      where: { orgId, isActive: true, NOT: { roles: { some: { role: { code: WORKER_ROLE_CODE } } } } },
       select: { id: true, name: true, email: true },
       orderBy: { name: "asc" },
     }),

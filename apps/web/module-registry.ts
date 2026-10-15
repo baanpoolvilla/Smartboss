@@ -8,6 +8,7 @@ import { chatManifest } from "@/modules/chat/manifest";
 import { companyFilesManifest } from "@/modules/company-files/manifest";
 import { exampleManifest } from "@/modules/example/manifest";
 import { hrManifest } from "@/modules/hr/manifest";
+import { dailyWorkerManifest } from "@/modules/daily_worker/manifest";
 import { maintenanceManifest } from "@/modules/maintenance/manifest";
 import { reportTaskManifest } from "@/modules/report_task/manifest";
 import { chatReportManifest } from "@/modules/report_task/chat-report-manifest";
@@ -73,6 +74,8 @@ export const moduleRegistry: ModuleManifest[] = [
   maintenanceManifest,
   // หน้าจออยู่ใน Smartboss แต่ข้อมูลมาจาก workforce API (โปรเซสแยก)
   hrManifest,
+  // คนงานรายวัน — เปิดตามโมดูลบุคคล เห็นเฉพาะคนที่มีสิทธิ์ (modules/daily_worker)
+  dailyWorkerManifest,
   // พอร์ตมาจากแอป easyboss-workspace ที่เคยรันเดี่ยว ๆ
   reportTaskManifest,
   // แชท + รายงาน — แยกออกจากรายงานและงานเป็นโมดูลหลักของตัวเอง (เปิดตาม report_task)

@@ -124,6 +124,12 @@ export const COMPANY_FILES_PERMS = ["company_files.access", "company_files.uploa
 export const ADS_PERMS = ["ads.access", "ads.setting.manage", "ads.admin"];
 
 /**
+ * โมดูลคนงานรายวัน (apps/web/modules/daily_worker/permissions.ts) — อยู่ในแคตตาล็อกใต้โมดูล hr
+ * ไม่ให้ ADMIN/CEO ตั้งแต่แรก ("จะได้ไม่รก" ติ๊กเพิ่มเองได้) · ไม่อยู่ใน BASELINE_PERMS
+ */
+export const DAILY_WORKER_PERMS = ["daily_worker.view", "daily_worker.manage", "daily_worker.override"];
+
+/**
  * สิทธิ์พื้นฐานที่ **ทุกบทบาทได้รับ** — คือคำตอบของกติกา "ทุกคนเห็นและเข้าถึงได้
  * ทุกโมดูล แต่สิทธิ์การใช้งานในแต่ละโมดูลต่างกัน"
  *
@@ -231,12 +237,15 @@ const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
     ...HR_PERMS.filter((p) => p !== "hr.payroll.approve"),
     // วันหยุด/ประเภทการลาบนปฏิทินทีมเป็นงานของฝ่ายบุคคลโดยตรง
     "report_task.calendar.manage",
+    ...DAILY_WORKER_PERMS,
   ],
   // งานการเงิน — ตัวเลขจัดซื้อและค่าใช้จ่ายของงานซ่อมบำรุงที่ไม่อยู่ในชุดพื้นฐาน
   ACCOUNTANT: [
     "maintenance.expense.view", "maintenance.expense.manage", "maintenance.po.view",
   ],
   CARETAKER: [
+    // ผู้ดูแลบ้านคุมคนงานหน้างาน — ลงวันหยุด/OT ให้คนงาน (โมดูลคนงานรายวัน)
+    ...DAILY_WORKER_PERMS,
     "maintenance.workorder.manage",
     "maintenance.asset.manage", "maintenance.pm.manage",
     "maintenance.po.view", "maintenance.expense.view",

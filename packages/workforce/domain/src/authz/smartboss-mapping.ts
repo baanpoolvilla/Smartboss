@@ -20,6 +20,8 @@ export const SMARTBOSS_PERMISSION = {
   payrollManage: 'hr.payroll.manage',
   payrollApprove: 'hr.payroll.approve',
   settingManage: 'hr.setting.manage',
+  /** โมดูลคนงานรายวัน — ลงวันหยุด/ผูกกะให้คนงาน (apps/web/modules/daily_worker/permissions.ts) */
+  dailyWorkerManage: 'daily_worker.manage',
 } as const;
 
 /** ตรงกับ SUPER_ADMIN_DENIED_PERMISSIONS ใน packages/auth/permissions.ts (แพ็กเกจนี้ import ข้ามไปไม่ได้) */
@@ -69,6 +71,12 @@ export function mapSmartbossRoles(input: RoleMappingInput): SystemRole[] {
   if (roleCodes.has('MANAGER')) granted.add('SUPERVISOR');
 
   if (has(SMARTBOSS_PERMISSION.employeeManage) || roleCodes.has('HR_OFFICER')) {
+    granted.add('HR_OFFICER');
+  }
+
+  // ผู้ดูแลคนงาน (เช่นผู้ดูแลบ้าน) ต้องเขียนใบวันหยุดและตารางกะของคนอื่นได้ — สิทธิ์นั้นอยู่ที่ HR_OFFICER ของ workforce
+  // workforce API ไม่เปิดสู่ภายนอก (เรียกผ่าน server action ของเว็บเท่านั้น) หน้าจอของเว็บยังคุมด้วยสิทธิ์ Smartboss ตามเดิม
+  if (has(SMARTBOSS_PERMISSION.dailyWorkerManage)) {
     granted.add('HR_OFFICER');
   }
 

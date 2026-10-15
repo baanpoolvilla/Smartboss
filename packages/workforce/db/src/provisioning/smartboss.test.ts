@@ -7,6 +7,11 @@ import { companies, principalRoleAssignments, principals, roles, tenants } from 
 import { mapSmartbossRoles, provisionPrincipal, provisionTenant } from './smartboss';
 
 describe('mapSmartbossRoles', () => {
+  it('ผู้ดูแลคนงาน (daily_worker.manage) ได้ HR_OFFICER เพื่อลงวันหยุด/ผูกกะให้คนงาน · สิทธิ์ดูอย่างเดียวไม่ได้', () => {
+    expect(mapSmartbossRoles({ roles: ['CARETAKER'], permissions: ['daily_worker.manage'] })).toContain('HR_OFFICER');
+    expect(mapSmartbossRoles({ roles: ['CEO'], permissions: ['daily_worker.view'] })).not.toContain('HR_OFFICER');
+  });
+
   it('ผู้ที่อนุมัติเงินเดือนได้ ต้องไม่ได้สิทธิ์จัดทำงวดด้วย (แยกหน้าที่)', () => {
     const result = mapSmartbossRoles({
       roles: ['CEO'],

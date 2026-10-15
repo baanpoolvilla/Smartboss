@@ -1,5 +1,6 @@
 "use client";
 
+import { MyMonthCard } from "./my-month-card";
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { MapBoundary } from "./map-boundary";
@@ -490,6 +491,9 @@ export function Today({
       {isDesktop === false && !noEmployment && (
         <ShiftClock shift={data?.shift ?? null} open={open} overnight={!!data?.carriedIn && open} />
       )}
+
+      {/* คนงาน (บทบาท WORKER) เห็นสรุปเดือนของตัวเอง — คนอื่นไม่ขึ้นอะไร */}
+      <MyMonthCard />
 
       {isDesktop !== false ? null : needsPhoto && state === "idle" ? (
         // แตะปุ่มนี้ = เปิดกล้องจากการแตะโดยตรง (iPhone ยอม) แล้วส่งรูปพร้อมลงเวลาทั้งก้อน

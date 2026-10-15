@@ -4,6 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import argon2 from "argon2";
 import {
   ADS_PERMS,
+  DAILY_WORKER_PERMS,
   CHAT_PERMS,
   COMPANY_FILES_PERMS,
   CORE_PERMS,
@@ -175,7 +176,7 @@ async function main() {
 
   await registerModulePerms("example", ["example.view", "example.manage"]);
   await registerModulePerms("maintenance", MAINT_PERMS);
-  await registerModulePerms("hr", HR_PERMS);
+  await registerModulePerms("hr", [...HR_PERMS, ...DAILY_WORKER_PERMS]);
   await registerModulePerms("chat", CHAT_PERMS);
   await registerModulePerms("company_files", COMPANY_FILES_PERMS);
   await registerModulePerms("ads", ADS_PERMS);
