@@ -11,16 +11,22 @@ import { Modal } from "./dialog";
  * ปุ่มเล็กและกลืนไปกับพื้นหลังจนกว่าจะเอาเมาส์ไปวาง เพราะการลบเป็นสิ่งที่
  * นาน ๆ ทำที ถ้าเด่นเท่าปุ่มอื่นจะกดโดนโดยไม่ตั้งใจบนมือถือ
  *
- * ⚠ รูปที่แนบมาถูกลบออกจาก storage ด้วย ไม่ใช่แค่ซ่อนแถว — กู้ไม่ได้
+ * ⚠ PO: รูปที่แนบมาถูกลบออกจาก storage ด้วย ไม่ใช่แค่ซ่อนแถว — กู้ไม่ได้
+ * ใบงาน (`logged`): มีบันทึกการลบในความคิดเห็น รูปเก็บไว้ให้คนจัดการใบงานดูย้อนหลัง
+ * `imageUrl` = ลบเฉพาะรูปนั้น ไม่ใช่ทั้งความคิดเห็น
  */
 export function CommentDeleteButton({
   commentId,
   action,
   hasImages,
+  imageUrl,
+  logged = false,
 }: {
   commentId: string;
   action: (formData: FormData) => void | Promise<void>;
   hasImages: boolean;
+  imageUrl?: string;
+  logged?: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -29,7 +35,7 @@ export function CommentDeleteButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="ลบความเห็นนี้"
+        aria-label={imageUrl ? "ลบรูปนี้" : "ลบความเห็นนี้"}
         className="shrink-0 rounded p-1 text-(--ink-soft) opacity-50 hover:bg-[#FEF2F2] hover:text-[#DC2626] hover:opacity-100"
       >
         <Trash2 className="h-3.5 w-3.5" />
@@ -37,7 +43,7 @@ export function CommentDeleteButton({
 
       {open && (
         <Modal
-          title="ลบความเห็น"
+          title={imageUrl ? "ลบรูป" : "ลบความเห็น"}
           onClose={() => setOpen(false)}
           actions={
             <>
@@ -51,6 +57,7 @@ export function CommentDeleteButton({
               </Button>
               <form action={action}>
                 <input type="hidden" name="commentId" value={commentId} />
+                {imageUrl && <input type="hidden" name="imageUrl" value={imageUrl} />}
                 <Button type="submit" variant="danger" size="sm">
                   ลบ
                 </Button>
@@ -58,11 +65,17 @@ export function CommentDeleteButton({
             </>
           }
         >
-          <p className="text-sm text-(--ink)">
-            ต้องการลบความเห็นนี้หรือไม่?
-            {hasImages && " รูปที่แนบมาจะถูกลบออกจากระบบด้วย"}
-            {"\n\n"}การดำเนินการนี้ไม่สามารถย้อนกลับได้
-          </p>
+          {logged ? (
+            <p className="text-sm text-(--ink)">
+              {imageUrl ? "ต้องการลบรูปนี้หรือไม่?" : "ต้องการลบความเห็นนี้หรือไม่?"} ระบบจะบันทึกไว้ในความคิดเห็นว่าใครลบ เมื่อไหร่
+            </p>
+          ) : (
+            <p className="text-sm text-(--ink)">
+              ต้องการลบความเห็นนี้หรือไม่?
+              {hasImages && " รูปที่แนบมาจะถูกลบออกจากระบบด้วย"}
+              {"\n\n"}การดำเนินการนี้ไม่สามารถย้อนกลับได้
+            </p>
+          )}
         </Modal>
       )}
     </>

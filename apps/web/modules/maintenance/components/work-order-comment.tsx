@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { UserCircle2, Pencil, X } from "lucide-react";
+import { UserCircle2, Pencil, X, History } from "lucide-react";
 import { Button } from "@smartboss/ui/components/button";
 import { PhotoStrip } from "./photos";
 import { CommentDeleteButton } from "./comment-delete-button";
@@ -21,7 +21,9 @@ export function WorkOrderComment({
   authorName,
   timeLabel,
   content,
-  imageUrl,
+  imageUrls,
+  kind,
+  canSeeRemoved = false,
   canEdit,
   canDelete,
   editAction,
@@ -31,15 +33,44 @@ export function WorkOrderComment({
   authorName: string;
   timeLabel: string;
   content: string;
-  imageUrl: string | null;
+  /** รูปทั้งหมดของความคิดเห็น (commentImages) · แถว log = รูปที่ถูกลบ */
+  imageUrls: string[];
+  /** "log" = บันทึกของระบบ (ลบรูป/ลบความคิดเห็น/เปลี่ยนบ้าน) — แสดงเป็นบรรทัดเทา ไม่มีปุ่มแก้/ลบ */
+  kind?: string | null;
+  /** เห็นรูปที่ถูกลบในบันทึก (คนจัดการใบงาน) */
+  canSeeRemoved?: boolean;
   canEdit: boolean;
   canDelete: boolean;
   editAction: Action;
   deleteAction: Action;
 }) {
   const [editing, setEditing] = useState(false);
+  const [showRemoved, setShowRemoved] = useState(false);
   // "📷" = คอมเมนต์ที่มีแต่รูป (ไม่มีข้อความ) — ไม่ต้องแสดงเป็นข้อความ
   const isPhotoOnly = content === "📷";
+
+  if (kind === "log") {
+    return (
+      <div className="flex flex-col gap-1 text-xs text-(--ink-soft)">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <History className="h-3.5 w-3.5" />
+          <b className="font-semibold">{authorName}</b>
+          <span className="min-w-0 break-words">{content}</span>
+          <span>· {timeLabel}</span>
+          {canSeeRemoved && imageUrls.length > 0 && (
+            <button type="button" onClick={() => setShowRemoved((v) => !v)} className="text-[#0F766E] underline-offset-2 hover:underline">
+              {showRemoved ? "ซ่อนรูปที่ลบ" : `ดูรูปที่ลบ (${imageUrls.length})`}
+            </button>
+          )}
+        </div>
+        {showRemoved && (
+          <div className="pl-5 opacity-80">
+            <PhotoStrip urls={imageUrls} size={96} />
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="group">
@@ -62,7 +93,8 @@ export function WorkOrderComment({
             <CommentDeleteButton
               commentId={commentId}
               action={deleteAction}
-              hasImages={!!imageUrl}
+              hasImages={imageUrls.length > 0}
+              logged
             />
           )}
           {editing && (
@@ -107,9 +139,19 @@ export function WorkOrderComment({
             <p className="whitespace-pre-wrap text-sm text-(--ink)">{content}</p>
           )
         )}
-        {imageUrl && (
-          <div className="mt-1.5">
-            <PhotoStrip urls={[imageUrl]} size={160} />
+        {imageUrls.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap gap-2">
+            {imageUrls.map((url, i) => (
+              <div key={`${url}-${i}`} className="relative">
+                <PhotoStrip urls={[url]} size={imageUrls.length > 1 ? 120 : 160} />
+                {/* ลบทีละรูป — ถามยืนยันก่อน มีบันทึกว่าใครลบ (deleteCommentAction + imageUrl) */}
+                {canDelete && !editing && (
+                  <span className="absolute right-1 top-1 rounded-full bg-white/90 shadow-sm">
+                    <CommentDeleteButton commentId={commentId} action={deleteAction} hasImages imageUrl={url} logged />
+                  </span>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>

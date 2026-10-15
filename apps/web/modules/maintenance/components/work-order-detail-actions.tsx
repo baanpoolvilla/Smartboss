@@ -412,52 +412,113 @@ export function ExternalUploadCard({
   );
 }
 
-/** กล่องเพิ่มความคิดเห็น + แนบรูป (ปุ่มรูป/กล้อง/ส่ง) */
+/** รูปต่อความคิดเห็นสูงสุด — ตรงกับฝั่งเซิร์ฟเวอร์ (addCommentAction / addPoCommentAction) */
+const MAX_COMMENT_IMAGES = 10;
+
+/**
+ * กล่องเพิ่มความคิดเห็น + แนบรูป (ปุ่มรูป/กล้อง/ส่ง)
+ *
+ * รูปที่เลือกเก็บใน state แล้วแนบตอนกดส่ง ("images") — เลือกเพิ่มกี่ครั้งก็ต่อท้าย ไม่ทับรูปเดิม
+ * (เดิมเป็น <input> สองช่องชื่อ "image" เลือกใหม่ = แทนรูปเดิม และเซิร์ฟเวอร์อ่านแค่ช่องแรก
+ * ถ่ายจากกล้องเลยหายเงียบ) · กด ✕ บนรูปเพื่อเอาออกก่อนส่ง · วาง/ลากรูปมาก็ต่อท้ายเหมือนกัน
+ */
 export function CommentComposer({ action }: { action: Action }) {
-  const [fileName, setFileName] = useState<string | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
+
+  function add(list: FileList | null) {
+    const picked = Array.from(list ?? []).filter((f) => f.type.startsWith("image/"));
+    if (picked.length === 0) return;
+    const room = MAX_COMMENT_IMAGES - files.length;
+    const take = picked.slice(0, Math.max(0, room));
+    setFiles((prev) => [...prev, ...take]);
+    setPreviews((prev) => [...prev, ...take.map((f) => URL.createObjectURL(f))]);
+  }
+
+  function removeAt(i: number) {
+    URL.revokeObjectURL(previews[i]!);
+    setFiles((prev) => prev.filter((_, j) => j !== i));
+    setPreviews((prev) => prev.filter((_, j) => j !== i));
+  }
+
+  function clear() {
+    previews.forEach((u) => URL.revokeObjectURL(u));
+    setFiles([]);
+    setPreviews([]);
+  }
+
+  const full = files.length >= MAX_COMMENT_IMAGES;
 
   return (
     <PasteDropFiles label="ปล่อยเพื่อแนบรูป">
-    <form action={action} className="flex flex-col gap-2">
-      {fileName && (
-        <div
-          className="flex items-center gap-2 rounded-(--radius) px-2.5 py-1.5 text-xs"
-          style={{ backgroundColor: "#EFF6FF", border: "1px solid #BFDBFE", color: "#1D4ED8" }}
-        >
-          <ImageIcon className="h-4 w-4" />
-          รูปที่เลือก 1 รูป
-          <span className="ml-auto truncate text-(--ink-soft)">{fileName}</span>
+    <form
+      action={(fd) => {
+        for (const f of files) fd.append("images", f);
+        clear();
+        return action(fd);
+      }}
+      className="flex flex-col gap-2"
+    >
+      {files.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex flex-wrap gap-2">
+            {previews.map((url, i) => (
+              <div key={url} className="relative h-16 w-16 overflow-hidden rounded-(--radius) border border-(--line)">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt={`รูปที่ ${i + 1}`} className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => removeAt(i)}
+                  aria-label={`เอารูปที่ ${i + 1} ออก`}
+                  className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+          <span className="text-xs text-(--ink-soft)">
+            รูปที่เลือก {files.length} รูป{full ? ` (ครบ ${MAX_COMMENT_IMAGES} รูปแล้ว)` : ""} · กด ✕ เพื่อเอาออก
+          </span>
         </div>
       )}
       <div className="flex items-end gap-2">
         <label
-          className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-(--radius) text-(--ink-soft) hover:bg-(--bg-soft)"
-          title="แนบรูป"
+          className={`flex h-10 w-10 items-center justify-center rounded-(--radius) text-(--ink-soft) hover:bg-(--bg-soft) ${full ? "pointer-events-none opacity-40" : "cursor-pointer"}`}
+          title="แนบรูป (เลือกได้หลายรูป)"
         >
           <ImageIcon
             className="h-5 w-5"
-            style={fileName ? { color: "#2563EB" } : undefined}
+            style={files.length > 0 ? { color: "#2563EB" } : undefined}
           />
+          {/* ไม่มี name — รูปไปกับฟอร์มผ่าน state ตอนส่ง (ดู action ข้างบน) */}
           <input
             type="file"
-            name="image"
             accept="image/*"
+            multiple
+            disabled={full}
             className="hidden"
-            onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
+            onChange={(e) => {
+              add(e.target.files);
+              e.target.value = ""; // เลือกรูปเดิมซ้ำได้
+            }}
           />
         </label>
         <label
-          className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-(--radius) text-(--ink-soft) hover:bg-(--bg-soft)"
+          className={`flex h-10 w-10 items-center justify-center rounded-(--radius) text-(--ink-soft) hover:bg-(--bg-soft) ${full ? "pointer-events-none opacity-40" : "cursor-pointer"}`}
           title="ถ่ายรูป"
         >
           <Camera className="h-5 w-5" />
           <input
             type="file"
-            name="image"
             accept="image/*"
             capture="environment"
+            disabled={full}
             className="hidden"
-            onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
+            onChange={(e) => {
+              add(e.target.files);
+              e.target.value = "";
+            }}
           />
         </label>
         <div className="flex-1">

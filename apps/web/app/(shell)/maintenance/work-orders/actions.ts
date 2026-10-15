@@ -13,7 +13,7 @@ import {
   deleteWorkOrder,
   addWorkOrderComment,
   updateWorkOrderComment,
-  deleteWorkOrderComment,
+  removeWorkOrderCommentLogged,
   moveWorkOrderProperties,
 } from "@/modules/maintenance/data/work-orders";
 import {
@@ -24,12 +24,13 @@ import {
 } from "@/modules/maintenance/data/notify";
 import { getProperty } from "@/modules/maintenance/data/properties";
 import { getAsset } from "@/modules/maintenance/data/assets";
+import { userNameMap } from "@/modules/maintenance/data/users";
 import {
   workOrderAccess,
   canSeeWorkOrder,
 } from "@/modules/maintenance/data/work-order-access";
-import { fmtThaiDate } from "@/modules/maintenance/lib/format";
-import { putFile, putFiles, deleteFiles } from "@/modules/maintenance/lib/storage";
+import { fmtThaiDate, fmtThaiDateTime } from "@/modules/maintenance/lib/format";
+import { putFiles, deleteFiles } from "@/modules/maintenance/lib/storage";
 import { isPastDay } from "@/modules/maintenance/lib/no-past-date";
 import { createUploadLink } from "@/modules/maintenance/data/external-upload";
 import { createExpensesForProperties, listExpenses } from "@/modules/maintenance/data/expenses";
@@ -50,6 +51,9 @@ import {
  * ทั้งที่ยังเหลือทั้งวันให้ทำ แล้วผู้รับผิดชอบโดนหักคะแนนผลงานฟรี ๆ
  * ส่วนการแสดงผลได้วันเดียวกันทั้งสองแบบ (16:59Z ยังเป็นวันเดิมในเขตเวลา UTC)
  */
+/** รูปต่อความคิดเห็นสูงสุด (ตรงกับ CommentComposer) */
+const MAX_COMMENT_IMAGES = 10;
+
 function parseDueDate(v: string | null | undefined): Date | null {
   if (!v) return null;
   const d = new Date(`${v}T23:59:59.999+07:00`);
@@ -427,20 +431,22 @@ export async function addCommentAction(workOrderId: string, formData: FormData) 
   if (!wo) return;
   if (!canSeeWorkOrder(await workOrderAccess(s), wo)) return;
   const content = String(formData.get("content") ?? "").trim();
-  const file = formData.get("image");
-  const imageUrl =
-    file instanceof File && file.size > 0
-      ? await putFile(`${s.orgId}/maintenance/comments`, file)
-      : null;
-  if (!content && !imageUrl) return;
+  // หลายรูปต่อความคิดเห็น ("images") — "image" = ฟอร์มรุ่นเก่าที่ยังเปิดค้างอยู่ (รูปเดียว)
+  const files = [...formData.getAll("images"), ...formData.getAll("image")]
+    .filter((f): f is File => f instanceof File && f.size > 0)
+    .slice(0, MAX_COMMENT_IMAGES);
+  const imageUrls = files.length > 0 ? await putFiles(`${s.orgId}/maintenance/comments`, files) : [];
+  if (!content && imageUrls.length === 0) return;
   // คอมเมนต์ที่มีแต่รูปเก็บ content เป็น 📷 เหมือนของเดิม (หน้าจอซ่อนข้อความนี้)
   await addWorkOrderComment(
     s.orgId,
     workOrderId,
     s.userId,
     content || "📷",
-    imageUrl
+    null,
+    { imageUrls }
   );
+  const photoText = imageUrls.length > 1 ? `ส่งรูปภาพ ${imageUrls.length} รูป` : "ส่งรูปภาพ";
 
   // แจ้งผู้เกี่ยวข้องเมื่อมีความคิดเห็นใหม่ (ยกเว้นคนที่พิมพ์เอง)
   {
@@ -452,10 +458,10 @@ export async function addCommentAction(workOrderId: string, formData: FormData) 
     targets.delete(s.userId);
     await notifyUsers(s.orgId, [...targets], {
       title: `💬 ความคิดเห็นใหม่: ${wo.title}`,
-      body: content || "ส่งรูปภาพ",
+      body: content || photoText,
       type: "work_order",
       referenceId: workOrderId,
-      line: `💬 ความคิดเห็นใหม่\n📝 ${wo.title}\n${content || "📷 ส่งรูปภาพ"}`,
+      line: `💬 ความคิดเห็นใหม่\n📝 ${wo.title}\n${content || `📷 ${photoText}`}`,
     });
   }
 
@@ -479,25 +485,38 @@ export async function editCommentAction(
   revalidatePath(`/maintenance/work-orders/${workOrderId}`);
 }
 
-/** ลบคอมเมนต์ — เจ้าของ หรือคนที่จัดการใบงานได้ · รูปที่แนบถูกลบจาก storage ด้วย */
+/**
+ * ลบคอมเมนต์ทั้งอัน หรือรูปเดียวในคอมเมนต์ (`imageUrl` ในฟอร์ม) — เจ้าของ หรือคนที่จัดการใบงานได้
+ * ทุกการลบมีบันทึก (แถว log ในความคิดเห็น: ใครลบ ของใคร เมื่อไหร่) · รูปที่ลบเก็บไว้ ไม่ลบจาก storage
+ * ให้คนจัดการใบงานเปิดดูย้อนหลังได้จากบันทึกนั้น
+ */
 export async function deleteCommentAction(
   workOrderId: string,
   formData: FormData
 ) {
   const s = await requireOrg();
   const commentId = String(formData.get("commentId") ?? "");
+  const imageUrl = String(formData.get("imageUrl") ?? "") || undefined;
   if (!commentId) return;
 
   const wo = await getWorkOrder(s.orgId, workOrderId);
   if (!wo || !canSeeWorkOrder(await workOrderAccess(s), wo)) return;
 
-  const images = await deleteWorkOrderComment(
+  await removeWorkOrderCommentLogged(
     s.orgId,
     commentId,
     s.userId,
-    hasPermission(s, MAINT_PERMS.workorderManage)
+    hasPermission(s, MAINT_PERMS.workorderManage),
+    async (row, removed, whole) => {
+      const author = row.userId ? ((await userNameMap(s.orgId, [row.userId]))[row.userId] ?? "ผู้ใช้") : "ผู้ใช้";
+      const of = `ของ ${author} (${fmtThaiDateTime(row.createdAt)})`;
+      if (imageUrl && !whole) return `ลบรูป 1 รูป จากความคิดเห็น${of}`;
+      const text = row.content === "📷" ? "" : `: "${row.content.length > 80 ? `${row.content.slice(0, 80)}…` : row.content}"`;
+      const pics = removed.length > 0 ? ` พร้อมรูป ${removed.length} รูป` : "";
+      return `ลบความคิดเห็น${of}${text}${pics}`;
+    },
+    imageUrl
   );
-  if (images.length > 0) await deleteFiles(images);
 
   revalidatePath(`/maintenance/work-orders/${workOrderId}`);
 }
@@ -593,7 +612,7 @@ export async function updateWorkOrderPropertiesAction(
   const nameOf = async (id: string) => (await getProperty(s.orgId, id))?.name ?? "-";
   const fromNames = (await Promise.all(before.map(nameOf))).join(", ");
   const toNames = props.map((p) => p!.name).join(", ");
-  await addWorkOrderComment(s.orgId, workOrderId, s.userId, `เปลี่ยนบ้าน: ${fromNames} → ${toNames}`);
+  await addWorkOrderComment(s.orgId, workOrderId, s.userId, `เปลี่ยนบ้าน: ${fromNames} → ${toNames}`, null, { kind: "log" });
 
   revalidatePath(`/maintenance/work-orders/${workOrderId}`);
   revalidatePath("/maintenance/work-orders");

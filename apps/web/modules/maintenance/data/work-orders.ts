@@ -289,7 +289,7 @@ export async function updateWorkOrderComment(
   content: string
 ): Promise<boolean> {
   const res = await prisma.workOrderComment.updateMany({
-    where: { id: commentId, orgId, userId },
+    where: { id: commentId, orgId, userId, kind: null },
     data: { content },
   });
   return res.count > 0;
@@ -316,15 +316,78 @@ export async function deleteWorkOrderComment(
   return row.imageUrl ? [row.imageUrl] : [];
 }
 
+/** รูปทั้งหมดของความคิดเห็น — แถวเก่าเก็บรูปเดียวใน imageUrl, แถวใหม่เก็บใน imageUrls */
+export function commentImages(c: { imageUrl: string | null; imageUrls: string[] }): string[] {
+  return [...(c.imageUrl ? [c.imageUrl] : []), ...c.imageUrls];
+}
+
+/**
+ * ลบความคิดเห็น/รูปในความคิดเห็นแบบมีบันทึก (แทน deleteWorkOrderComment ในหน้าใบงาน)
+ * - `imageUrl` = ลบเฉพาะรูปนั้น (ความคิดเห็นที่เหลือแต่ 📷 และไม่มีรูปแล้ว = ลบทั้งแถว) · ไม่ใส่ = ลบทั้งความคิดเห็น
+ * - เจ้าของลบของตัวเอง คนจัดการใบงานลบของใครก็ได้ (กติกาเดิม) · แถว log ลบไม่ได้
+ * - เขียนแถว log (kind "log") ว่าใครลบอะไรของใคร และเก็บ url รูปที่ลบไว้ในแถวนั้น — ไฟล์ไม่ถูกลบจาก storage
+ * คืนแถวที่ถูกแตะ (null = ไม่มีสิทธิ์/ไม่พบ)
+ */
+export async function removeWorkOrderCommentLogged(
+  orgId: string,
+  commentId: string,
+  actorId: string,
+  canManageAll: boolean,
+  logText: (row: { userId: string | null; content: string; createdAt: Date }, removed: string[], whole: boolean) => Promise<string>,
+  imageUrl?: string
+): Promise<{ workOrderId: string } | null> {
+  return prisma.$transaction(async (tx) => {
+    const row = await tx.workOrderComment.findFirst({
+      where: { id: commentId, orgId, kind: null, ...(canManageAll ? {} : { userId: actorId }) },
+    });
+    if (!row) return null;
+    const images = commentImages(row);
+    let removed: string[];
+    let whole: boolean;
+    if (imageUrl) {
+      if (!images.includes(imageUrl)) return null;
+      removed = [imageUrl];
+      const rest = images.filter((u) => u !== imageUrl);
+      whole = rest.length === 0 && row.content === "📷";
+      if (whole) await tx.workOrderComment.delete({ where: { id: row.id } });
+      else await tx.workOrderComment.update({ where: { id: row.id }, data: { imageUrl: null, imageUrls: rest } });
+    } else {
+      removed = images;
+      whole = true;
+      await tx.workOrderComment.delete({ where: { id: row.id } });
+    }
+    await tx.workOrderComment.create({
+      data: {
+        orgId,
+        workOrderId: row.workOrderId,
+        userId: actorId,
+        content: await logText(row, removed, whole),
+        imageUrls: removed,
+        kind: "log",
+      },
+    });
+    return { workOrderId: row.workOrderId };
+  });
+}
+
 export function addWorkOrderComment(
   orgId: string,
   workOrderId: string,
   userId: string | null,
   content: string,
-  imageUrl?: string | null
+  imageUrl?: string | null,
+  extra?: { imageUrls?: string[]; kind?: "log" }
 ) {
   return prisma.workOrderComment.create({
-    data: { orgId, workOrderId, userId, content, imageUrl: imageUrl ?? null },
+    data: {
+      orgId,
+      workOrderId,
+      userId,
+      content,
+      imageUrl: imageUrl ?? null,
+      imageUrls: extra?.imageUrls ?? [],
+      kind: extra?.kind ?? null,
+    },
   });
 }
 

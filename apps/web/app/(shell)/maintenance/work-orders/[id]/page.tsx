@@ -25,6 +25,7 @@ import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import {
   getWorkOrder,
   listWorkOrderComments,
+  commentImages,
 } from "@/modules/maintenance/data/work-orders";
 import { WorkOrderComment } from "@/modules/maintenance/components/work-order-comment";
 import { listProperties } from "@/modules/maintenance/data/properties";
@@ -498,7 +499,7 @@ export default async function WorkOrderDetailPage({
       <SectionCard
         className="mb-4"
         icon={<MessageSquare className="h-4 w-4 text-[#607D8B]" />}
-        title={`ความคิดเห็น (${comments.length})`}
+        title={`ความคิดเห็น (${comments.filter((c) => c.kind !== "log").length})`}
       >
         <div className="mb-3 flex flex-col">
           {comments.length === 0 ? (
@@ -520,7 +521,9 @@ export default async function WorkOrderDetailPage({
                   authorName={c.userId ? (names[c.userId] ?? "ผู้ใช้") : "ผู้ใช้"}
                   timeLabel={fmtThaiDateTime(c.createdAt)}
                   content={c.content}
-                  imageUrl={c.imageUrl}
+                  imageUrls={commentImages(c)}
+                  kind={c.kind}
+                  canSeeRemoved={canManage}
                   // แก้ได้เฉพาะคำพูดของตัวเอง · ลบได้ทั้งของตัวเองและ (ถ้าคุม
                   // ใบงานได้) ของคนอื่น — กติกาเดียวกับที่ action บังคับฝั่งเซิร์ฟเวอร์
                   canEdit={c.userId === session.userId}

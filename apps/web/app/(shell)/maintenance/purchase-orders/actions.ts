@@ -519,18 +519,18 @@ export async function addPoCommentAction(poId: string, formData: FormData) {
   const s = await requireOrg();
   if (!hasPermission(s, MAINT_PERMS.poView)) return;
   const content = String(formData.get("content") ?? "").trim();
-  const file = formData.get("image");
-  const imageUrl =
-    file instanceof File && file.size > 0
-      ? await putFile(`${s.orgId}/maintenance/purchase-orders`, file)
-      : null;
-  if (!content && !imageUrl) return;
+  // กล่องความคิดเห็นส่งได้หลายรูป ("images") — "image" = ฟอร์มรุ่นเก่าที่ยังเปิดค้างอยู่ (รูปเดียว)
+  const files = [...formData.getAll("images"), ...formData.getAll("image")]
+    .filter((f): f is File => f instanceof File && f.size > 0)
+    .slice(0, 10);
+  const imageUrls = await Promise.all(files.map((f) => putFile(`${s.orgId}/maintenance/purchase-orders`, f)));
+  if (!content && imageUrls.length === 0) return;
   await addPoComment(
     s.orgId,
     poId,
     s.userId,
     content || "📷",
-    imageUrl ? [imageUrl] : []
+    imageUrls
   );
   revalidatePath(`/maintenance/purchase-orders/${poId}`);
 }
