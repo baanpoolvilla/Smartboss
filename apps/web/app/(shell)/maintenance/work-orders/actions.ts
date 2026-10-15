@@ -14,6 +14,7 @@ import {
   addWorkOrderComment,
   updateWorkOrderComment,
   deleteWorkOrderComment,
+  moveWorkOrderProperties,
 } from "@/modules/maintenance/data/work-orders";
 import {
   notifyUser,
@@ -557,7 +558,7 @@ export async function deleteWorkOrderAction(formData: FormData) {
  * ใครแก้ได้: สิทธิ์จัดการใบงาน หรือคนเปิดใบนี้ · ไม่ให้แก้เมื่อ
  *   - ใบมาจากแผน PM (บ้านผูกกับแผน แก้ที่ใบจะหลุดจากแผน)
  *   - มีค่าใช้จ่ายลงไว้แล้ว (ค่าใช้จ่ายแยกรายบ้าน ผูกบ้านเดิมไปแล้ว)
- * อุปกรณ์ที่ผูกไว้ไม่อยู่ในบ้านใหม่ = เอาออก · บันทึกเป็นความคิดเห็นว่าเปลี่ยนจากบ้านไหนเป็นบ้านไหน
+ * PR/PO, คืนของ, ประวัติผู้รับเหมาของใบนี้ย้ายตาม (moveWorkOrderProperties) · อุปกรณ์ที่ผูกไว้ไม่อยู่ในบ้านใหม่ = เอาออก · บันทึกเป็นความคิดเห็นว่าเปลี่ยนจากบ้านไหนเป็นบ้านไหน
  */
 export async function updateWorkOrderPropertiesAction(
   workOrderId: string,
@@ -582,14 +583,12 @@ export async function updateWorkOrderPropertiesAction(
 
   const before = [wo.propertyId, ...wo.additionalPropertyIds];
   if (before.length === ids.length && before.every((id, i) => id === ids[i])) return {};
-  const [primary, ...additional] = ids;
-
   let assetId = wo.assetId;
   if (assetId) {
     const asset = await getAsset(s.orgId, assetId);
     if (!asset || !ids.includes(asset.propertyId)) assetId = null;
   }
-  await updateWorkOrder(s.orgId, workOrderId, { propertyId: primary!, additionalPropertyIds: additional, assetId });
+  await moveWorkOrderProperties(s.orgId, workOrderId, ids, assetId);
 
   const nameOf = async (id: string) => (await getProperty(s.orgId, id))?.name ?? "-";
   const fromNames = (await Promise.all(before.map(nameOf))).join(", ");
@@ -598,5 +597,6 @@ export async function updateWorkOrderPropertiesAction(
 
   revalidatePath(`/maintenance/work-orders/${workOrderId}`);
   revalidatePath("/maintenance/work-orders");
+  revalidatePath("/maintenance/purchase-orders");
   return {};
 }

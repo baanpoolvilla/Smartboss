@@ -327,3 +327,34 @@ export function addWorkOrderComment(
     data: { orgId, workOrderId, userId, content, imageUrl: imageUrl ?? null },
   });
 }
+
+/**
+ * เปลี่ยนบ้านของใบงาน (เลือกผิดตอนเปิดใบ) + ย้ายของที่ผูกใบงานนี้ไปบ้านใหม่ด้วยในก้าวเดียว:
+ * ใบสั่งซื้อ (PR/PO) ของใบนี้, รายการคืนของของใบสั่งซื้อพวกนั้น, ประวัติผู้รับเหมาของใบนี้
+ * — เฉพาะแถวที่ชี้บ้านที่ไม่อยู่ในรายการใหม่แล้ว ย้ายไปบ้านหลัก · ที่ไม่ได้ระบุบ้าน/ยังอยู่บ้านที่ยังเลือกอยู่ = คงเดิม
+ * รูป ความคิดเห็น ลิงก์ช่างนอก ผูกกับใบงาน (ไม่ใช่บ้าน) จึงตามไปเอง · ค่าใช้จ่ายตัวเรียกห้ามไว้ก่อนแล้ว
+ */
+export async function moveWorkOrderProperties(
+  orgId: string,
+  id: string,
+  propertyIds: string[],
+  assetId: string | null
+) {
+  const [primary, ...additional] = propertyIds;
+  const stale = { notIn: propertyIds };
+  await prisma.$transaction(async (tx) => {
+    await tx.workOrder.updateMany({
+      where: { orgId, id },
+      data: { propertyId: primary!, additionalPropertyIds: additional, assetId },
+    });
+    const pos = await tx.purchaseOrder.findMany({ where: { orgId, workOrderId: id }, select: { id: true } });
+    await tx.purchaseOrder.updateMany({ where: { orgId, workOrderId: id, propertyId: stale }, data: { propertyId: primary! } });
+    if (pos.length > 0) {
+      await tx.equipmentReturn.updateMany({
+        where: { orgId, purchaseOrderId: { in: pos.map((p) => p.id) }, propertyId: stale },
+        data: { propertyId: primary! },
+      });
+    }
+    await tx.contractorHistory.updateMany({ where: { orgId, workOrderId: id, propertyId: stale }, data: { propertyId: primary! } });
+  });
+}
