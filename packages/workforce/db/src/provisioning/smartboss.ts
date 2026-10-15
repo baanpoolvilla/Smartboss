@@ -158,10 +158,17 @@ export async function provisionPrincipal(
       const match = await tx
         .select({ id: people.id })
         .from(people)
-        // ไม่สนตัวพิมพ์เล็ก/ใหญ่ — ทะเบียนพนักงานพิมพ์ "Joey@…" บัญชีผู้ใช้ "joey@…" เคยไม่ถูกผูก
-        // (ลงเวลาไม่ได้ เพราะ /me ไม่มี employment) เจอจริง 2026-10-15
-        .where(sql`lower(${people.email}) = lower(${input.email})`);
-      const personId = match[0]?.id ?? null;
+        .where(eq(people.email, input.email));
+      let personId = match[0]?.id ?? null;
+      // ไม่เจอแบบตรงตัว ค่อยลองแบบไม่สนตัวพิมพ์ — เฉพาะเมื่อเจอคนเดียว ("Joey@…" กับ "joey@…" เคยไม่ถูกผูก
+      // → ลงเวลาไม่ได้ · เจอจริง 2026-10-15) คนที่ตรงตัวอยู่แล้วทำงานเหมือนเดิม
+      if (personId === null) {
+        const loose = await tx
+          .select({ id: people.id })
+          .from(people)
+          .where(sql`lower(${people.email}) = lower(${input.email})`);
+        if (loose.length === 1) personId = loose[0]!.id;
+      }
       if (personId !== null) {
         await tx.update(principals).set({ personId }).where(eq(principals.id, principalId));
       }

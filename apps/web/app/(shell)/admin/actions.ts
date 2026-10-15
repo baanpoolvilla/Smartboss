@@ -475,10 +475,6 @@ export async function setRolePermissionsAction(formData: FormData) {
     targetId: roleId,
     detail: { count: valid.length },
   });
-  // ส่งสิทธิ์ใหม่ไปฝั่งระบบบุคคลให้ทุกคนที่ถือบทบาทนี้ — เดิมต้องรอแก้ผู้ใช้ทีละคน/รัน wf:sync
-  // (เช่น ให้ "จัดการวันหยุด/OT คนงาน" แล้วผู้ดูแลบ้านยังลงวันหยุดไม่ได้เพราะ workforce ยังไม่รู้)
-  const holders = await prisma.userRole.findMany({ where: { roleId }, select: { userId: true } });
-  for (const h of holders) await syncUserToWorkforce(h.userId, session.orgId, session.userId);
   revalidatePath(`/admin/roles/${roleId}`);
   revalidatePath("/admin/roles");
 }

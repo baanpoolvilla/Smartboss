@@ -249,15 +249,27 @@ export async function syncWorkforcePrincipal(input: {
     // ผูกเข้ากับทะเบียนพนักงานด้วยอีเมล ถ้ามีคนตรงกัน — ไม่มีคู่ก็ถูกต้อง
     // (เช่นแอดมินระบบที่ไม่ได้ถูกขึ้นทะเบียนเป็นพนักงาน)
     if (input.email !== null && input.email !== "") {
-      await tx.$executeRaw`
+      const exact = await tx.$executeRaw`
         UPDATE workforce.principals p
            SET person_id = pe.id
           FROM workforce.people pe
          WHERE p.id = ${principalId}::uuid
            AND pe.tenant_id = ${input.orgId}::uuid
-           -- ไม่สนตัวพิมพ์เล็ก/ใหญ่ ("Joey@…" ในทะเบียน กับ "joey@…" ของบัญชี เคยไม่ถูกผูก → ลงเวลาไม่ได้)
-           AND lower(pe.email) = lower(${input.email})
+           AND pe.email = ${input.email}
       `;
+      // ไม่เจอแบบตรงตัว ค่อยลองแบบไม่สนตัวพิมพ์เล็ก/ใหญ่ — เฉพาะเมื่อเจอคนเดียว (ไม่เดาเมื่อมีซ้ำ)
+      // ("Joey@…" ในทะเบียน กับ "joey@…" ของบัญชี เคยไม่ถูกผูก → ลงเวลาไม่ได้ · เจอจริง 2026-10-15)
+      // คนที่ผูกแบบตรงตัวได้อยู่แล้วไม่ผ่านทางนี้ — ทำงานเหมือนเดิมทุกอย่าง
+      if (exact === 0) {
+        await tx.$executeRaw`
+          UPDATE workforce.principals p
+             SET person_id = (SELECT pe.id FROM workforce.people pe
+                               WHERE pe.tenant_id = ${input.orgId}::uuid AND lower(pe.email) = lower(${input.email}))
+           WHERE p.id = ${principalId}::uuid
+             AND (SELECT count(*) FROM workforce.people pe
+                   WHERE pe.tenant_id = ${input.orgId}::uuid AND lower(pe.email) = lower(${input.email})) = 1
+        `;
+      }
     }
 
     const roleRows = await tx.$queryRaw<{ id: string; code: string }[]>`
