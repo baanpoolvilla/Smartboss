@@ -166,7 +166,8 @@ export function RoomInfo({
 
   const title = channelTitle(channel, meId, users);
   const canManage = detail?.canManage ?? false;
-  const editableMembers = channel.type === "group" && !channel.departmentId;
+  // ห้องรวมคนงาน (workers-<orgId>) ซิงก์สมาชิกเองเหมือนกลุ่มแผนก
+  const editableMembers = channel.type === "group" && !channel.departmentId && !channel.id.startsWith("workers-");
   const allUsers = useMemo(() => Object.values(users).sort((a, b) => a.name.localeCompare(b.name, "th")), [users]);
 
   const members = useMemo(() => {
