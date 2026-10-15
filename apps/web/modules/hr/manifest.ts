@@ -27,7 +27,8 @@ export const hrManifest: ModuleManifest = {
   menus: [
     // เมนูแรก = หน้าที่เปิดมาเจอเมื่อกดเข้าระบบบุคคล (app/(shell)/page.tsx's REDIRECT_ONLY_BASES)
     // ลงเวลาของตัวเองอยู่ที่นี่ที่เดียว — เอาออกจากหน้าแรกของแอปแล้ว ("ให้ไปอยู่ใน HR เป็นหัวข้อนึง")
-    { label: "ลงเวลา", path: "/hr/clock", permission: HR_PERMS.access, icon: "Clock" },
+    // คนงาน (WORKER) ลงเวลาที่ "คนงานรายวัน → ลงเวลา" แทน — ระบบบุคคลจึงไม่ขึ้นให้คนงานเลย
+    { label: "ลงเวลา", path: "/hr/clock", permission: HR_PERMS.access, icon: "Clock", hideForRoles: [WORKER_ROLE_CODE] },
     {
       // เดิมชื่อ "หน้าหลัก" — ซ้ำกับปุ่ม "หน้าหลัก" (กลับหน้าแรกของแอป) ที่อยู่ข้างกันบนแถบล่าง
       label: "ภาพรวม",

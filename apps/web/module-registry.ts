@@ -39,6 +39,8 @@ export interface ModuleMenuItem {
   allowSupportStaff?: boolean;
   /** ซ่อนเมนูนี้จากผู้ใช้ที่ถือบทบาทเหล่านี้ (เช่นคนงาน WORKER เห็นแค่ "ลงเวลา" ในระบบบุคคล) */
   hideForRoles?: string[];
+  /** แสดงเมนูนี้เฉพาะผู้ใช้ที่ถือบทบาทเหล่านี้ (เช่น "ลงเวลา" ในโมดูลคนงานรายวัน ให้คนงานเท่านั้น) */
+  onlyForRoles?: string[];
 }
 
 export interface ModuleManifest {
@@ -124,6 +126,7 @@ export function getVisibleModules({
       menus: m.menus.filter(
         (menu) =>
           !menu.hideForRoles?.some((r) => roles.includes(r)) &&
+          (!menu.onlyForRoles || menu.onlyForRoles.some((r) => roles.includes(r))) &&
           ((isSupportStaff && menu.allowSupportStaff) ||
             resolvePermission({ permissions, roles, permission: menu.permission }))
       ),
