@@ -173,6 +173,17 @@ export function canSeeReportTopic(
   viewingAsUserId: string
 ): boolean {
   if (isOwner(viewingAsUserId)) return true;
+  // คนงานรายวัน (WORKER) — ไม่เห็นห้องที่เปิดให้ทุกคน เห็นเฉพาะห้องที่ใส่ชื่อเขา หรือแผนกของเขาไว้ตรง ๆ
+  // (เช่น "Worker บางแสน" / "Worker พัทยา") · คนอื่นใช้กติกาเดิมทุกอย่าง
+  const viewer = getUser(viewingAsUserId);
+  if (viewer?.isWorker) {
+    if (!visibility) return false;
+    if (visibility.userIds?.length) return visibility.userIds.includes(viewingAsUserId);
+    return (
+      (!!viewer.departmentId && !!visibility.departmentIds?.includes(viewer.departmentId)) ||
+      !!visibility.extraUserIds?.includes(viewingAsUserId)
+    );
+  }
   if (!visibility || (!visibility.managerOnly && !visibility.departmentIds?.length && !visibility.userIds?.length)) return true;
   if (visibility.userIds?.length) return visibility.userIds.includes(viewingAsUserId);
   if (visibility.managerOnly && !canManage(viewingAsUserId)) return false;

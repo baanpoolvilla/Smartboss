@@ -37,6 +37,12 @@ function canSeeTopic(
 ): boolean {
   const user = users.find((u) => u.id === userId);
   if (user?.isOwner) return true;
+  // คนงานรายวัน — เห็นเฉพาะห้องที่ใส่ชื่อ/แผนกไว้ตรง ๆ (เหมือน canSeeReportTopic)
+  if (user?.isWorker) {
+    if (!visibility) return false;
+    if (visibility.userIds?.length) return visibility.userIds.includes(userId);
+    return (!!user.departmentId && !!visibility.departmentIds?.includes(user.departmentId)) || !!visibility.extraUserIds?.includes(userId);
+  }
   if (!visibility || (!visibility.managerOnly && !visibility.departmentIds?.length && !visibility.userIds?.length)) return true;
   if (visibility.userIds?.length) return visibility.userIds.includes(userId);
   if (visibility.managerOnly && !viewerIsDeptHead) return false;

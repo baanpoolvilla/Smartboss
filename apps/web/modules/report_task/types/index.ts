@@ -42,6 +42,8 @@ export interface User {
   isOwner?: boolean;
   /** Holds the real CEO role (core) — can't be picked as a sticker recipient on a report post. */
   isCeo?: boolean;
+  /** คนงานรายวัน (role WORKER) — เห็นเฉพาะห้องรายงานที่ใส่ชื่อ/แผนกไว้ตรง ๆ */
+  isWorker?: boolean;
 }
 
 /**
