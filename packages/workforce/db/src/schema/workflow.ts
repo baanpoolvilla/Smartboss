@@ -92,6 +92,25 @@ export const leaveBalanceLedger = workforce.table(
   ],
 );
 
+/** สิทธิ์ Holiday ที่ HR เพิ่มให้รายคน — บวกกับสิทธิ์รายเดือนของบริษัทในเดือนนั้น (migration 0020) */
+export const leavePersonGrants = workforce.table(
+  'leave_person_grants',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id').notNull(),
+    companyId: uuid('company_id').notNull(),
+    employmentId: uuid('employment_id').notNull(),
+    leaveTypeId: uuid('leave_type_id').notNull(),
+    /** วันแรกของเดือน */
+    month: date('month').notNull(),
+    days: integer('days').notNull(),
+    reason: text('reason').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    createdBy: uuid('created_by'),
+  },
+  (table) => [index('leave_person_grants_lookup_idx').on(table.tenantId, table.leaveTypeId, table.employmentId)],
+);
+
 export const leaveRequests = workforce.table(
   'leave_requests',
   {

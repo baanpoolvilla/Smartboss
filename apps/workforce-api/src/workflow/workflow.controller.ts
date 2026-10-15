@@ -15,6 +15,7 @@ import {
   archiveLeaveTypeSchema,
   setHolidayAccrualSchema,
   setMonthAllowanceSchema,
+  addPersonGrantSchema,
   reopenTimesheetPeriodSchema,
   submitLeaveSchema,
   submitOvertimeSchema,
@@ -155,6 +156,18 @@ export class LeaveController {
     @Query('month') month: string,
   ): Promise<{ items: Record<string, unknown>[] }> {
     return this.service.listHolidayBalances(requireUuid(leaveTypeId, 'leaveTypeId'), requireMonth(month, 'month'));
+  }
+
+  /** HR เพิ่มวัน Holiday ให้คนหนึ่ง เป็นสิทธิ์ของเดือนหนึ่ง (เช่นวันหยุดก่อนเริ่มนับที่ยังไม่ได้ใช้) */
+  @Post('leave-types/:leaveTypeId/person-grants')
+  @HttpCode(201)
+  @RequirePermissions('workforce.leave.manage')
+  @Idempotent()
+  async addPersonGrant(
+    @Param('leaveTypeId') leaveTypeId: string,
+    @Body(zodPipe(addPersonGrantSchema)) body: z.infer<typeof addPersonGrantSchema>,
+  ): Promise<Record<string, unknown>> {
+    return this.service.addPersonGrant(requireUuid(leaveTypeId, 'leaveTypeId'), body);
   }
 
   /** HR กำหนดจำนวนวัน Holiday ของเดือนหนึ่งทับ (days = null กลับไปนับจากวันหยุดบริษัท) */

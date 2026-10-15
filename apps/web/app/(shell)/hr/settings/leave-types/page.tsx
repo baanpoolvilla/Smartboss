@@ -286,6 +286,7 @@ export default async function LeaveTypesSettingsPage({
                 ))}
               {canManage && accruing[0] && balances && (
                 <HolidayBalances
+                  leaveTypeId={accruing[0].id}
                   leaveTypeName={accruing[0].name}
                   month={balanceMonth}
                   year={year}

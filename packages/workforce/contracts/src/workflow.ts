@@ -53,6 +53,14 @@ export const setHolidayAccrualSchema = z.object({
 });
 
 /** จำนวนวัน Holiday ของเดือนหนึ่งที่ HR กำหนดทับ — days = null คือกลับไปนับจากปฏิทินวันหยุดบริษัท */
+/** HR เพิ่มวัน Holiday ให้คนหนึ่ง เป็นสิทธิ์ของเดือนหนึ่ง (YYYY-MM) */
+export const addPersonGrantSchema = z.object({
+  employment_id: uuidSchema,
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+  days: z.number().int().min(1).max(31),
+  reason: z.string().trim().min(1).max(300),
+});
+
 export const setMonthAllowanceSchema = z.object({
   month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
   days: z.number().int().min(0).max(31).nullable(),

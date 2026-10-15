@@ -1536,6 +1536,34 @@ export async function setHolidayModeAction(formData: FormData) {
  * HR กำหนดจำนวนวัน Holiday ของเดือนหนึ่งทับจำนวนวันหยุดบริษัท (บริษัทให้ไม่ตรงกับปฏิทิน)
  * ช่องว่าง = ลบค่าทับ กลับไปนับจากปฏิทินวันหยุดบริษัท
  */
+/** HR เพิ่มวัน Holiday ให้คนหนึ่ง เป็นสิทธิ์ของเดือนที่เลือก — ต้องมีเหตุผล (audit ฝั่งระบบบุคคล) */
+export async function addHolidayPersonGrantAction(formData: FormData): Promise<{ error?: string }> {
+  try {
+    await guard(HR_PERMS.settingManage);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "ไม่มีสิทธิ์ดำเนินการนี้" };
+  }
+  const leaveTypeId = String(formData.get("leave_type_id") ?? "");
+  const employmentId = String(formData.get("employment_id") ?? "");
+  const month = String(formData.get("month") ?? "");
+  const days = Number(formData.get("days") ?? 0);
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!leaveTypeId || !employmentId || !/^\d{4}-\d{2}$/.test(month)) return { error: "ข้อมูลไม่ครบ" };
+  if (!Number.isInteger(days) || days < 1 || days > 31) return { error: "จำนวนวันต้องเป็น 1–31" };
+  if (!reason) return { error: "ต้องใส่เหตุผล" };
+  try {
+    await wfFetch(`/leave-types/${leaveTypeId}/person-grants`, {
+      method: "POST",
+      body: { employment_id: employmentId, month, days, reason },
+    });
+  } catch (error) {
+    return { error: toMessage(error) };
+  }
+  revalidatePath("/hr/settings/leave-types");
+  revalidatePath("/hr");
+  return {};
+}
+
 export async function setMonthAllowanceAction(formData: FormData) {
   await guard(HR_PERMS.settingManage);
   const leaveTypeId = String(formData.get("leave_type_id") ?? "");

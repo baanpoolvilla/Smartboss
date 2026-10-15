@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Button } from "@smartboss/ui/components/button";
 import { DataTable, EmptyState, Pill, SectionCard, Td } from "@/modules/hr/components/ui";
 import type { HolidayBalanceRow } from "@/modules/hr/lib/api";
+import { AddHolidayDays } from "./add-holiday-days";
 
 const MONTH_NAMES = [
   "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
@@ -22,11 +23,14 @@ const shortOf = (month: string) => MONTH_SHORT[Number(month.slice(5, 7)) - 1];
  * เรียงคนที่มีวันใกล้หมดอายุขึ้นก่อน — กลุ่มที่ HR ต้องเตือนให้รีบใช้
  */
 export function HolidayBalances({
+  leaveTypeId,
   leaveTypeName,
   month,
   year,
   rows,
 }: {
+  /** มี = แสดงปุ่ม "+ เพิ่มวัน" รายคน */
+  leaveTypeId?: string;
   leaveTypeName: string;
   month: string;
   /** ปีของตารางสิทธิ์รายเดือนด้านบน — คงไว้ในลิงก์เปลี่ยนเดือนไม่ให้ตารางนั้นเด้งกลับปีปัจจุบัน */
@@ -62,7 +66,7 @@ export function HolidayBalances({
         {sorted.length === 0 ? (
           <EmptyState>ยังไม่มีพนักงานในทะเบียน</EmptyState>
         ) : (
-          <DataTable head={["พนักงาน", "ใช้ไปเดือนนี้", "เหลือลงได้", "มาจากสิทธิ์ของเดือน", "ต้องใช้ในเดือนนี้"]}>
+          <DataTable head={["พนักงาน", "ใช้ไปเดือนนี้", "เหลือลงได้", "มาจากสิทธิ์ของเดือน", "ต้องใช้ในเดือนนี้", ...(leaveTypeId ? [""] : [])]}>
             {sorted.map((r) => (
               <tr key={r.employment_id} className="border-b border-(--line) last:border-b-0">
                 <Td>
@@ -91,6 +95,11 @@ export function HolidayBalances({
                     <span className="text-(--ink-soft)">—</span>
                   )}
                 </Td>
+                {leaveTypeId && (
+                  <Td>
+                    <AddHolidayDays leaveTypeId={leaveTypeId} employmentId={r.employment_id} name={r.name} month={month} />
+                  </Td>
+                )}
               </tr>
             ))}
           </DataTable>

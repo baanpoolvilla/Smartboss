@@ -424,6 +424,63 @@ export class LeaveService {
     return byMonth;
   }
 
+  /** วัน Holiday ที่ HR เพิ่มให้รายคน: employment → (เดือน → วัน) */
+  private async personGrants(tx: Tx, leaveTypeId: string): Promise<Map<string, Map<string, number>>> {
+    const rows = await tx
+      .select({ employmentId: schema.leavePersonGrants.employmentId, month: schema.leavePersonGrants.month, days: schema.leavePersonGrants.days })
+      .from(schema.leavePersonGrants)
+      .where(eq(schema.leavePersonGrants.leaveTypeId, leaveTypeId));
+    const out = new Map<string, Map<string, number>>();
+    for (const row of rows) {
+      const m = out.get(row.employmentId) ?? new Map<string, number>();
+      const key = row.month.slice(0, 7);
+      m.set(key, (m.get(key) ?? 0) + row.days);
+      out.set(row.employmentId, m);
+    }
+    return out;
+  }
+
+  /** HR เพิ่มวัน Holiday ให้คนหนึ่ง (เป็นสิทธิ์ของเดือน `month`) — บันทึก audit พร้อมเหตุผล */
+  async addPersonGrant(
+    leaveTypeId: string,
+    input: { employment_id: string; month: string; days: number; reason: string },
+  ): Promise<Record<string, unknown>> {
+    return this.uow.run(async (uow) => {
+      const types = await uow.tx.select().from(schema.leaveTypes).where(eq(schema.leaveTypes.id, leaveTypeId)).limit(1);
+      const type = types[0];
+      if (type === undefined) throw AppError.notFound('leave type');
+      if (!type.accruesFromHolidays) throw AppError.validation('leave type does not accrue from holidays');
+      const emps = await uow.tx
+        .select({ id: schema.employments.id, companyId: schema.employments.companyId })
+        .from(schema.employments)
+        .where(eq(schema.employments.id, input.employment_id))
+        .limit(1);
+      if (emps[0] === undefined || emps[0].companyId !== type.companyId) throw AppError.notFound('employment');
+      const id = uuidv7();
+      await uow.tx.insert(schema.leavePersonGrants).values({
+        id,
+        tenantId: uow.tenantId,
+        companyId: type.companyId,
+        employmentId: input.employment_id,
+        leaveTypeId,
+        month: `${input.month}-01`,
+        days: input.days,
+        reason: input.reason,
+        createdBy: this.requestContext.requirePrincipal().principalId,
+      });
+      await uow.audit({
+        action: 'leave.type.person_grant',
+        resourceType: 'leave_type',
+        resourceId: leaveTypeId,
+        outcome: 'SUCCESS',
+        companyId: type.companyId,
+        reason: input.reason,
+        after: { employment_id: input.employment_id, month: input.month, days: input.days },
+      });
+      return { id, leave_type_id: leaveTypeId, ...input };
+    });
+  }
+
   /** สิทธิ์ Holiday ต่อเดือนของบริษัท: จำนวนที่ HR กำหนดทับ ถ้าไม่มีใช้จำนวนวันหยุดบริษัทของเดือนนั้น */
   private async holidayGrants(
     tx: Tx,
@@ -494,7 +551,9 @@ export class LeaveService {
       usage.set(month, (usage.get(month) ?? 0) + request.totalMinutes / 480);
       if (month > end) end = month;
     }
-    const grants = await this.holidayGrants(tx, employment.companyId, leaveTypeId, start, end);
+    const companyGrants = await this.holidayGrants(tx, employment.companyId, leaveTypeId, start, end);
+    // + วันที่ HR เพิ่มให้คนนี้ (leave_person_grants) — ไม่มี = เหมือนเดิม
+    const grants = withPersonGrants(companyGrants, (await this.personGrants(tx, leaveTypeId)).get(employment.id));
     return { from: start, to: end, grants, usage };
   }
 
@@ -622,6 +681,7 @@ export class LeaveService {
         if (requestMonth > lastMonth) lastMonth = requestMonth;
       }
       const grants = await this.holidayGrants(uow.tx, type.companyId, leaveTypeId, firstMonth, lastMonth);
+      const personGrants = await this.personGrants(uow.tx, leaveTypeId);
 
       const items = [];
       for (const employment of employments) {
@@ -632,7 +692,8 @@ export class LeaveService {
         );
         // ใบที่ลงไว้ก่อนเดือนเริ่มนับของคนนี้ไม่นำมาคิด เหมือน holidayLedger
         const usage = new Map([...(usageOf.get(employment.id) ?? [])].filter(([usedIn]) => usedIn >= from));
-        const { available_days, buckets } = holidayAvailability({ from, to: lastMonth, grants, usage }, month);
+        const mine = withPersonGrants(grants, personGrants.get(employment.id));
+        const { available_days, buckets } = holidayAvailability({ from, to: lastMonth, grants: mine, usage }, month);
         items.push({
           employment_id: employment.id,
           available_days,
@@ -1576,4 +1637,12 @@ export class LeaveService {
     });
   }
 
+}
+
+/** สิทธิ์รายเดือนของบริษัท + ที่ HR เพิ่มให้คนนี้ — ไม่มีของรายคน = ใช้ map เดิม (ไม่เปลี่ยนอะไร) */
+function withPersonGrants(company: Map<string, number>, person: Map<string, number> | undefined): Map<string, number> {
+  if (!person || person.size === 0) return company;
+  const merged = new Map(company);
+  for (const [month, days] of person) merged.set(month, (merged.get(month) ?? 0) + days);
+  return merged;
 }
