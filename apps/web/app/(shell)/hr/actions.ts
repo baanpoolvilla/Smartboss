@@ -461,6 +461,22 @@ export async function saveCommissionWeightsAction(formData: FormData) {
   revalidatePath("/hr/employees");
 }
 
+/** แก้ประเภทการจ้าง (รายเดือน/รายวัน/รายชั่วโมง) — ไม่แตะอัตราค่าจ้างที่ตั้งไว้ (แท็บค่าจ้างแยกกัน) */
+export async function updateEmploymentTypeAction(formData: FormData) {
+  await guard(HR_PERMS.employeeManage);
+  const employmentId = String(formData.get("employment_id") ?? "");
+  const employmentType = String(formData.get("employment_type") ?? "");
+  if (!employmentId || !["MONTHLY", "DAILY", "HOURLY"].includes(employmentType)) throw new Error("ข้อมูลไม่ครบ");
+
+  try {
+    await wfFetch(`/employments/${employmentId}`, { method: "PATCH", body: { employment_type: employmentType } });
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+  revalidatePath(`/hr/employees/${employmentId}`);
+  revalidatePath("/hr/employees");
+}
+
 export async function terminateEmploymentAction(formData: FormData) {
   await guard(HR_PERMS.employeeManage);
   const employmentId = String(formData.get("employment_id") ?? "");

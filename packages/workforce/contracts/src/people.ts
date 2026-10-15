@@ -70,6 +70,11 @@ export const createEmploymentSchema = z.object({
   time_zone: timeZoneSchema.default('Asia/Bangkok'),
 });
 
+/** แก้ประเภทการจ้าง (รายเดือน/รายวัน/…) ของสัญญาจ้างที่มีอยู่ — เดิมตั้งได้ตอนสร้างเท่านั้น */
+export const updateEmploymentSchema = z.object({
+  employment_type: employmentTypeSchema,
+});
+
 export const terminateEmploymentSchema = z.object({
   terminated_on: isoDateSchema,
   reason: z.string().trim().min(1).max(500),
@@ -178,6 +183,7 @@ export const listCompensationQuerySchema = cursorPaginationSchema.extend({
 export type CreatePersonInput = z.infer<typeof createPersonSchema>;
 export type Person = z.infer<typeof personSchema>;
 export type CreateEmploymentInput = z.infer<typeof createEmploymentSchema>;
+export type UpdateEmploymentInput = z.infer<typeof updateEmploymentSchema>;
 export type Employment = z.infer<typeof employmentSchema>;
 export type CreateAssignmentInput = z.infer<typeof createAssignmentSchema>;
 export type Assignment = z.infer<typeof assignmentSchema>;

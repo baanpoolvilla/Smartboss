@@ -206,9 +206,11 @@ export async function renderTodayTab(
     if (todayAssignmentByEmployment.has(e.id)) {
       shiftId = todayAssignmentByEmployment.get(e.id) ?? null;
     } else {
+      // ตารางประจำที่มีผล "วันที่กำลังดู" — ไม่ใช่แค่ตัวที่ยังเปิดอยู่ ไม่งั้นตารางที่ตั้งให้เริ่มพรุ่งนี้
+      // ถูกเอามาใช้กับวันนี้ คนที่ยังไม่มีกะวันนี้ขึ้น "ขาดงาน" (เจอจริง: ผูกกะเริ่ม 16/10 แต่ 15/10 ขึ้นขาดงาน)
       const open = patternByEmployment
         .get(e.id)
-        ?.items.find((p) => p.effective_to === null);
+        ?.items.find((p) => p.effective_from <= viewDate && (p.effective_to === null || p.effective_to >= viewDate));
       shiftId = open ? open[todayDowField].id : null;
     }
     const leaveName = leaveByEmployment.get(e.id);

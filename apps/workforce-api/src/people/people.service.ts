@@ -247,6 +247,35 @@ export class PeopleService {
     });
   }
 
+  /** แก้ประเภทการจ้าง — ไม่แตะอัตราค่าจ้าง (compensation มี pay_basis ของตัวเอง) */
+  async updateEmployment(id: string, input: { employment_type: string }): Promise<Employment> {
+    return this.uow.run(async (uow) => {
+      const before = await this.loadEmploymentInScope(uow, id);
+      if (before.employmentType === input.employment_type) {
+        return toEmployment(before, await this.nameFormat(uow.tx));
+      }
+      const after = await this.repository.updateEmployment(uow.tx, id, {
+        employmentType: input.employment_type,
+      });
+      if (after === undefined) throw AppError.notFound('employment');
+
+      await uow.audit({
+        action: 'people.employment.update',
+        resourceType: 'employment',
+        resourceId: id,
+        resourceVersion: after.version,
+        outcome: 'SUCCESS',
+        companyId: after.companyId,
+        before: toEmploymentAudit(before),
+        after: toEmploymentAudit(after),
+      });
+
+      const withPerson = await this.repository.findEmploymentById(uow.tx, id);
+      if (withPerson === undefined) throw AppError.notFound('employment');
+      return toEmployment(withPerson, await this.nameFormat(uow.tx));
+    });
+  }
+
   async terminateEmployment(
     id: string,
     input: { terminated_on: string; reason: string },

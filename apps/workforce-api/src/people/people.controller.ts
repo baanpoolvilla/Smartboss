@@ -6,6 +6,7 @@ import {
   listEmploymentsQuerySchema,
   listPeopleQuerySchema,
   terminateEmploymentSchema,
+  updateEmploymentSchema,
   updatePersonSchema,
   type Assignment,
   type CreateAssignmentInput,
@@ -13,6 +14,7 @@ import {
   type CreatePersonInput,
   type Employment,
   type Person,
+  type UpdateEmploymentInput,
 } from '@workforce/contracts';
 import type { z } from 'zod';
 import { requireUuid } from '../organization/organization.controller';
@@ -89,6 +91,15 @@ export class PeopleController {
   @RequirePermissions('workforce.people.read')
   async getEmployment(@Param('employmentId') employmentId: string): Promise<Employment> {
     return this.service.getEmployment(requireUuid(employmentId, 'employmentId'));
+  }
+
+  @Patch('employments/:employmentId')
+  @RequirePermissions('workforce.people.manage')
+  async updateEmployment(
+    @Param('employmentId') employmentId: string,
+    @Body(zodPipe(updateEmploymentSchema)) body: UpdateEmploymentInput,
+  ): Promise<Employment> {
+    return this.service.updateEmployment(requireUuid(employmentId, 'employmentId'), body);
   }
 
   @Post('employments/:employmentId/terminate')

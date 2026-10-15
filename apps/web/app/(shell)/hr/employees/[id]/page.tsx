@@ -39,6 +39,7 @@ import {
   addCompensationRateAction,
   deleteEnrollmentsAction,
   terminateEmploymentAction,
+  updateEmploymentTypeAction,
   updateEmployeeNameAction,
 } from "../../actions";
 import { AssignShiftForm, type CurrentPattern } from "../../settings/assign-shift-form";
@@ -418,10 +419,32 @@ export default async function EmployeeDetailPage({
               </div>
               <Row label="ชื่อ-นามสกุล" value={employment.full_name} />
               <Row label="ชื่อที่แสดง" value={employment.display_name} />
-              <Row
-                label="ประเภทการจ้าง"
-                value={employmentTypeLabel(employment.employment_type)}
-              />
+              {canManage ? (
+                // แก้ได้ที่นี่ (เดิมตั้งได้ตอนเพิ่มพนักงานเท่านั้น) — อัตราค่าจ้างตั้งแยกที่แท็บค่าจ้าง
+                <form action={updateEmploymentTypeAction} className="flex flex-wrap items-center gap-2 py-1.5">
+                  <input type="hidden" name="employment_id" value={employment.id} />
+                  <span className="w-32 shrink-0 text-sm text-(--ink-soft)">ประเภทการจ้าง</span>
+                  <select
+                    id="employment-type"
+                    name="employment_type"
+                    defaultValue={employment.employment_type}
+                    className={`${inputClass} w-40`}
+                    aria-label="ประเภทการจ้าง"
+                  >
+                    <option value="MONTHLY">รายเดือน</option>
+                    <option value="DAILY">รายวัน</option>
+                    <option value="HOURLY">รายชั่วโมง</option>
+                  </select>
+                  <Button type="submit" size="sm" variant="outline">
+                    บันทึก
+                  </Button>
+                </form>
+              ) : (
+                <Row
+                  label="ประเภทการจ้าง"
+                  value={employmentTypeLabel(employment.employment_type)}
+                />
+              )}
               <Row label="วันเริ่มงาน" value={formatDate(employment.hired_on)} />
               {employment.terminated_on && (
                 <Row
