@@ -213,14 +213,16 @@ export async function syncDepartmentChannels(orgId: string, actorId: string, for
   }
 }
 
-// ─── ห้องรวมพนักงานและคนงาน ─────────────────────────────────────────────
+// ─── ทีมหน้างาน (ห้องรวมพนักงานและคนงาน) ─────────────────────────────────────────────
 
 /** ห้องรวมพนักงานและคนงาน — id คงที่ต่อบริษัท · สมาชิกเพิ่มเอง + แก้เองได้แบบกลุ่ม LINE */
 export const WORKER_CHANNEL_PREFIX = "workers-";
 export function workerChannelId(orgId: string): string {
   return `${WORKER_CHANNEL_PREFIX}${orgId}`;
 }
-const WORKER_CHANNEL_NAME = "ห้องรวมพนักงานและคนงาน";
+const WORKER_CHANNEL_NAME = "ทีมหน้างาน";
+/** ชื่อเริ่มต้นของรุ่นก่อน — เปลี่ยนเป็นชื่อปัจจุบันให้ครั้งเดียว · ชื่อที่ตั้งเองไม่แตะ */
+const OLD_WORKER_CHANNEL_NAMES = new Set(["ห้องรวมคนงาน", "ห้องรวมพนักงานและคนงาน"]);
 /** คนที่ถูกเอาออก/ออกเอง — ระบบไม่เพิ่มกลับให้อีก (store ของบริษัท) · เพิ่มกลับด้วยมือ = ลบออกจากรายการนี้ */
 const WORKER_ROOM_EXCLUDED_KEY = "chat-worker-room-excluded";
 const gw = globalThis as unknown as { __chatWorkerSyncAt?: Map<string, number> };
@@ -264,9 +266,11 @@ export async function syncWorkerChannel(orgId: string, actorId: string, force = 
     const memberIds = new Set(users.map((u) => u.id).filter((u) => !out.has(u)));
     if (!channel) {
       await prisma.chatChannel.create({ data: { id, orgId, type: "group", name: WORKER_CHANNEL_NAME, createdById: actorId } });
-    } else if (channel.archived || channel.name === "ห้องรวมคนงาน") {
-      // ชื่อเดิมของรุ่นแรก (คนงานล้วน) → ชื่อใหม่ครั้งเดียว · ชื่อที่ตั้งเองไม่แตะ
-      await prisma.chatChannel.update({ where: { id }, data: { archived: false, ...(channel.name === "ห้องรวมคนงาน" ? { name: WORKER_CHANNEL_NAME } : {}) } });
+    } else if (channel.archived || OLD_WORKER_CHANNEL_NAMES.has(channel.name ?? "")) {
+      await prisma.chatChannel.update({
+        where: { id },
+        data: { archived: false, ...(OLD_WORKER_CHANNEL_NAMES.has(channel.name ?? "") ? { name: WORKER_CHANNEL_NAME } : {}) },
+      });
     }
     const current = new Map((channel?.members ?? []).map((m) => [m.userId, m.role]));
     const activeIds = new Set(users.map((u) => u.id));
