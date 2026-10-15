@@ -60,6 +60,14 @@ export const maintenanceManifest: ModuleManifest = {
     // หน้านี้เหลือเฉพาะตั้งค่า LINE ของโมดูล จึงเปลี่ยนชื่อให้ตรงกับสิ่งที่ทำจริง
     { label: "ตั้งค่าโมดูล", path: "/maintenance/settings", permission: MAINT_PERMS.admin, icon: "Settings" },
     { label: "Log LINE", path: "/maintenance/settings/line-log", permission: MAINT_PERMS.admin, icon: "History" },
+    // ใครทำอะไรในโมดูลนี้ เมื่อไหร่ — Super admin / CEO เท่านั้น (หน้าเช็คซ้ำ ดู activity-log/page.tsx)
+    {
+      label: "Log การใช้งาน",
+      path: "/maintenance/settings/activity-log",
+      permission: MAINT_PERMS.access,
+      onlyForRoles: ["SUPER_ADMIN", "CEO"],
+      icon: "ScrollText",
+    },
   ],
   permissions: Object.values(MAINT_PERMS),
 };

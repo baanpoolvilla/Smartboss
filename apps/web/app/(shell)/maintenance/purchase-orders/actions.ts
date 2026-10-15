@@ -23,6 +23,27 @@ import {
   returnStatusMeta,
 } from "@/modules/maintenance/data/equipment-returns";
 import { createExpense } from "@/modules/maintenance/data/expenses";
+import { logActivity, type ActivityKind } from "@/modules/maintenance/data/activity";
+
+/** บันทึกการใช้งาน (เมนู Log การใช้งาน) ของ PR/PO นี้ — ไม่ throw */
+function poLog(
+  s: { orgId: string; userId: string },
+  po: { id: string; code: string; title: string },
+  action: ActivityKind,
+  summary: string,
+  detail?: Record<string, unknown>,
+  entity: "purchase_order" | "return" = "purchase_order"
+) {
+  return logActivity(s.orgId, {
+    userId: s.userId,
+    entity,
+    entityId: po.id,
+    entityCode: po.code,
+    action,
+    summary: `${summary} ${po.code} "${po.title}"`,
+    detail,
+  });
+}
 import { getWorkOrder } from "@/modules/maintenance/data/work-orders";
 import {
   workOrderAccess,
@@ -135,6 +156,15 @@ export async function createPoAction(formData: FormData) {
     poCreatedAt: openPo ? now : null,
   });
   if (duplicate && prImageUrls.length > 0) await deleteFiles(prImageUrls).catch(() => 0);
+  if (!duplicate) {
+    await poLog(
+      s,
+      created,
+      "create",
+      openPo ? "เปิด PO (ข้ามอนุมัติ)" : isEmergency ? "เปิด PR ฉุกเฉิน (ซื้อแล้ว)" : "เปิด PR",
+      { items, workOrderId: linkedWo?.id ?? null, poAssignedTo }
+    );
+  }
 
   // กดซ้ำ = ใบเดิม แจ้งไปแล้วตอนเปิดครั้งแรก
   if (!duplicate) {
@@ -273,6 +303,7 @@ export async function approveNormalAction(formData: FormData) {
     poCreatedBy: s.userId,
     poCreatedAt: new Date(),
   });
+  if (changed && po) await poLog(s, po, "status", "อนุมัติ", { assignee });
   if (changed && assignee && po) {
     await notifyUser(s.orgId, assignee, {
       title: `📦 ได้รับมอบ PO: ${po.title}`,
@@ -308,6 +339,7 @@ export async function approveEmergencyAction(formData: FormData) {
     receivedAt: new Date(),
   });
   if (changed) {
+    await poLog(s, po, "status", `อนุมัติ PR ฉุกเฉิน ยอด ฿${Number(po.totalPrice).toLocaleString()}`);
     await poExpense(s.orgId, po, Number(po.totalPrice), s.userId, "(ฉุกเฉิน)");
     await notifyPoParties(s.orgId, po, [po.createdBy], s.userId, {
       emoji: "✅",
@@ -330,6 +362,7 @@ export async function rejectAction(formData: FormData) {
   // ยกเลิก = แจ้งคนเปิด PR + คนที่ถูกมอบให้ไปซื้อ (ถ้าอนุมัติไปแล้ว) — เดิมเงียบ
   // คนซื้ออาจออกไปซื้อของที่ถูกยกเลิกไปแล้ว
   if (changed && po) {
+    await poLog(s, po, "status", po.status === "pending" ? "ไม่อนุมัติ" : "ยกเลิก", { from: po.status });
     await notifyPoParties(s.orgId, po, [po.createdBy, po.poAssignedTo], s.userId, {
       emoji: "❌",
       text: po.status === "pending" ? "PR ไม่ได้รับอนุมัติ" : "PO ถูกยกเลิก",
@@ -415,6 +448,7 @@ export async function confirmOrderAction(formData: FormData) {
     redirect("/maintenance/purchase-orders");
   }
   await poExpense(s.orgId, po, total, s.userId);
+  await poLog(s, po, "status", `สั่งซื้อแล้ว ยอด ฿${total.toLocaleString()}`, { items, receiver, receipts: urls.length });
 
   // แจ้งคนรับของ เว้นแต่เขาคือคนกดสั่งซื้อเอง (จะได้ไม่เตือนตัวเอง)
   if (receiver && receiver !== s.userId) {
@@ -463,6 +497,7 @@ export async function receiveAction(formData: FormData) {
   });
   if (!changed && urls.length > 0) await deleteFiles(urls).catch(() => 0);
   if (changed) {
+    await poLog(s, po, "status", `รับของ${urls.length > 0 ? ` (ใบเสร็จ ${urls.length} รูป)` : ""}`);
     await notifyPoParties(s.orgId, po, [po.createdBy, po.poCreatedBy, po.poAssignedTo], s.userId, {
       emoji: "📥",
       text: "รับของแล้ว",
@@ -505,6 +540,7 @@ export async function selfReceiveAction(formData: FormData) {
   });
   if (changed) {
     await poExpense(s.orgId, po, total, s.userId, "(ซื้อเอง)");
+    await poLog(s, po, "status", `ซื้อเองและรับของ ยอด ฿${total.toLocaleString()}`, { items });
     await notifyPoParties(s.orgId, po, [po.createdBy, po.poCreatedBy, po.poAssignedTo], s.userId, {
       emoji: "📥",
       text: "ซื้อและรับของแล้ว",
@@ -532,6 +568,16 @@ export async function addPoCommentAction(poId: string, formData: FormData) {
     content || "📷",
     imageUrls
   );
+  const commented = await getPurchaseOrder(s.orgId, poId);
+  if (commented) {
+    await poLog(
+      s,
+      commented,
+      "comment",
+      `แสดงความคิดเห็น${content ? ` "${content.length > 60 ? `${content.slice(0, 60)}…` : content}"` : ""}${imageUrls.length > 0 ? ` (รูป ${imageUrls.length} รูป)` : ""} ใน`,
+      { content, images: imageUrls.length }
+    );
+  }
   revalidatePath(`/maintenance/purchase-orders/${poId}`);
 }
 
@@ -554,6 +600,8 @@ export async function deletePoCommentAction(poId: string, formData: FormData) {
     hasPermission(s, MAINT_PERMS.poApprove) || hasPermission(s, MAINT_PERMS.admin)
   );
   if (images.length > 0) await deleteFiles(images);
+  const commented = await getPurchaseOrder(s.orgId, poId);
+  if (commented) await poLog(s, commented, "delete", `ลบความคิดเห็น${images.length > 0 ? ` (พร้อมรูป ${images.length} รูป)` : ""} ใน`, { commentId });
 
   revalidatePath(`/maintenance/purchase-orders/${poId}`);
 }
@@ -563,7 +611,9 @@ export async function deletePoAction(formData: FormData) {
   if (!isSuperAdmin(s)) throw new Error("เฉพาะผู้ดูแลระบบสูงสุดเท่านั้น");
   const id = String(formData.get("id") ?? "");
   if (!id) return;
+  const doomed = await getPurchaseOrder(s.orgId, id);
   await deletePurchaseOrder(s.orgId, id);
+  if (doomed) await poLog(s, doomed, "delete", "ลบใบสั่งซื้อ", { status: doomed.status, total: Number(doomed.totalPrice) });
   // เก็บกวาดแจ้งเตือนของ PO นี้ด้วย เดียวกับที่ deleteWorkOrderAction ทำ (ดู
   // deleteNotificationsByReference's doc)
   await deleteNotificationsByReference(id, "purchase_order");
@@ -610,6 +660,7 @@ export async function createReturnAction(formData: FormData) {
     imageUrls,
     createdBy: s.userId,
   });
+  await poLog(s, po, "create", `แจ้งคืนของ${itemName ? ` "${itemName}"` : ""} ของ`, { reason, images: imageUrls.length }, "return");
 
   // คืนของ = คนที่ซื้อของชิ้นนี้มาต้องรู้ เขาเป็นคนติดต่อร้าน/เคลมกับร้าน
   // (poAssignedTo = คนที่ถูกมอบไปซื้อ, orderedBy = คนกดสั่งซื้อจริง) + คนเปิด PR
@@ -651,6 +702,14 @@ export async function setReturnStatusAction(formData: FormData) {
   if (before && before.status !== status) {
     const po = await getPurchaseOrder(s.orgId, before.purchaseOrderId);
     if (po) {
+      await poLog(
+        s,
+        po,
+        "status",
+        `เรื่องคืนของ${before.itemName ? ` "${before.itemName}"` : ""}: ${returnStatusMeta(before.status).label} → ${returnStatusMeta(status).label} ของ`,
+        { returnId: id, note },
+        "return"
+      );
       await notifyPoParties(s.orgId, po, [before.createdBy, ...poBuyers(po)], s.userId, {
         emoji: status === "cancelled" ? "❌" : status === "resolved" ? "✅" : "↩️",
         text: `เรื่องคืนของ: ${returnStatusMeta(status).label}`,
@@ -675,6 +734,7 @@ export async function deleteReturnAction(formData: FormData) {
   if (before) {
     const po = await getPurchaseOrder(s.orgId, before.purchaseOrderId);
     if (po) {
+      await poLog(s, po, "delete", `ลบเรื่องคืนของ${before.itemName ? ` "${before.itemName}"` : ""} ของ`, { returnId: id, reason: before.reason }, "return");
       await notifyPoParties(s.orgId, po, [before.createdBy, ...poBuyers(po)], s.userId, {
         emoji: "🗑️",
         text: "ลบเรื่องคืนของแล้ว",

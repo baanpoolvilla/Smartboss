@@ -135,3 +135,7 @@ export async function createExpensesForProperties(
 export async function deleteExpense(orgId: string, id: string) {
   await prisma.expense.deleteMany({ where: { orgId, id } });
 }
+
+export function getExpense(orgId: string, id: string) {
+  return prisma.expense.findFirst({ where: { orgId, id } });
+}

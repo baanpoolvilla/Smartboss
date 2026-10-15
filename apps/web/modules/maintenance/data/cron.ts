@@ -5,6 +5,7 @@ import { crossOrg } from "@smartboss/database/cross-org";
 import { nextWorkOrderCode } from "@/lib/document-code";
 import { fmtThaiDate } from "@/modules/maintenance/lib/format";
 import { notifyUser, notifyUsers, propertyCaretaker } from "@/modules/maintenance/data/notify";
+import { logActivity } from "@/modules/maintenance/data/activity";
 import {
   loadPerformanceSettingsMap,
   recordPerformanceEvents,
@@ -79,9 +80,9 @@ export async function generateWorkOrdersForDuePms(): Promise<{
         },
         select: { id: true },
       });
-      if (again) return false;
+      if (again) return null;
       const code = await nextWorkOrderCode(tx, pm.orgId);
-      await tx.workOrder.create({
+      return tx.workOrder.create({
         data: {
           orgId: pm.orgId,
           code,
@@ -103,9 +104,20 @@ export async function generateWorkOrdersForDuePms(): Promise<{
           autoCreated: true,
         },
       });
-      return true;
     });
-    if (made) created++;
+    if (made) {
+      created++;
+      await logActivity(pm.orgId, {
+        userId: null,
+        actorLabel: "ระบบ (PM ครบกำหนด)",
+        entity: "work_order",
+        entityId: made.id,
+        entityCode: made.code,
+        action: "create",
+        summary: `เปิดใบงานอัตโนมัติจาก PM ${made.code} "${made.title}"`,
+        detail: { pmScheduleId: pm.id },
+      });
+    }
   }
 
   return { due: duePms.length, created };

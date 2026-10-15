@@ -8,7 +8,9 @@ import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import {
   createExpensesForProperties,
   deleteExpense,
+  getExpense,
 } from "@/modules/maintenance/data/expenses";
+import { logActivity } from "@/modules/maintenance/data/activity";
 import { findWorkOrderForPmExpense, getWorkOrder } from "@/modules/maintenance/data/work-orders";
 import { getPmSchedule } from "@/modules/maintenance/data/pm";
 import { putFile, deleteFiles } from "@/modules/maintenance/lib/storage";
@@ -77,6 +79,8 @@ async function saveExpense(
   let propertyIds: (string | null)[] = [null];
   let workOrderId: string | null = null;
   let pmScheduleId: string | null = null;
+  /** ใบงาน/PM ที่ผูก — ไว้เขียนบันทึกการใช้งานให้คนอ่านรู้เรื่อง */
+  let target = "";
 
   if (d.costType === "work_order") {
     if (!d.workOrderId) return { error: "กรุณาเลือกใบงาน" };
@@ -84,12 +88,14 @@ async function saveExpense(
     if (!wo) return { error: "ไม่พบใบงานนี้ — อาจถูกลบไปแล้ว" };
     workOrderId = wo.id;
     propertyIds = [wo.propertyId, ...wo.additionalPropertyIds];
+    target = `${wo.code ?? ""} "${wo.title}"`;
   } else {
     if (!d.pmScheduleId) return { error: "กรุณาเลือกรายการ PM" };
     const pm = await getPmSchedule(s.orgId, d.pmScheduleId);
     if (!pm) return { error: "ไม่พบรายการ PM นี้ — อาจถูกลบไปแล้ว" };
     pmScheduleId = pm.id;
     propertyIds = [pm.propertyId ?? null];
+    target = `PM "${pm.title}"`;
     /*
      * มาจากปุ่ม "เพิ่มค่าใช้จ่าย" บนหน้าใบงานที่อุปกรณ์มี PM (?workOrderId=…&pmScheduleId=…)
      * ฟอร์มสลับเป็นประเภท PM ให้เอง — ต้องผูกใบงานด้วย ไม่งั้นค่าใช้จ่ายไปอยู่ที่ PM อย่างเดียว
@@ -137,6 +143,19 @@ async function saveExpense(
   });
   // คำขอซ้ำ — รูปใบเสร็จที่เพิ่งอัปโหลดมากับคำขอนี้ไม่มีรายการไหนใช้
   if (!saved && receiptUrl) await deleteFiles([receiptUrl]).catch(() => 0);
+  if (saved) {
+    await logActivity(s.orgId, {
+      userId: s.userId,
+      entity: "expense",
+      entityId: workOrderId ?? pmScheduleId,
+      entityCode: target || null,
+      action: "create",
+      summary: isNoExpense
+        ? `บันทึกว่าไม่มีค่าใช้จ่าย ${target}`
+        : `บันทึกค่าใช้จ่าย ฿${amount.toLocaleString()} ${target}${propertyIds.length > 1 ? ` (${propertyIds.length} บ้าน)` : ""}`,
+      detail: { amount, paidBy: d.paidBy, description: d.description ?? null, receipt: !!receiptUrl, propertyIds },
+    });
+  }
 
   revalidatePath("/maintenance/expenses");
   // ใบงานที่เพิ่งผูกต้องย้ายออกจาก "ยังไม่บันทึกค่าใช้จ่าย" ทันทีที่กลับไปดู ไม่ค้างของเก่า
@@ -156,6 +175,20 @@ export async function deleteExpenseAction(formData: FormData) {
   }
   const id = String(formData.get("id") ?? "");
   if (!id) return;
+  const before = await getExpense(s.orgId, id);
   await deleteExpense(s.orgId, id);
+  if (before) {
+    const wo = before.workOrderId ? await getWorkOrder(s.orgId, before.workOrderId) : null;
+    const target = wo ? `${wo.code ?? ""} "${wo.title}"` : "";
+    await logActivity(s.orgId, {
+      userId: s.userId,
+      entity: "expense",
+      entityId: before.workOrderId ?? before.pmScheduleId,
+      entityCode: target || null,
+      action: "delete",
+      summary: `ลบค่าใช้จ่าย ฿${Number(before.amount).toLocaleString()}${before.description ? ` "${before.description}"` : ""} ${target}`.trim(),
+      detail: { amount: Number(before.amount), description: before.description, propertyId: before.propertyId },
+    });
+  }
   revalidatePath("/maintenance/expenses");
 }

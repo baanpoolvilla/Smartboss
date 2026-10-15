@@ -10,12 +10,15 @@ import {
   updateProperty,
   deleteProperty,
   setPropertyCategory,
+  getProperty,
 } from "@/modules/maintenance/data/properties";
+import { logActivity, type ActivityKind } from "@/modules/maintenance/data/activity";
 import {
   createCategory,
   renameCategory,
   deleteCategory,
   moveCategory,
+  categoryNameById,
 } from "@/modules/maintenance/data/categories";
 
 const schema = z.object({
@@ -28,12 +31,33 @@ const schema = z.object({
   categoryId: z.string().trim().optional(),
 });
 
-async function requirePropManage(): Promise<string> {
+/** ผ่านสิทธิ์แล้วคืน orgId + คนกด (ไว้บันทึกการใช้งาน) */
+async function requirePropManage(): Promise<{ orgId: string; userId: string }> {
   const s = await requireOrg();
   if (!hasPermission(s, MAINT_PERMS.propertyManage)) {
     throw new Error("ไม่มีสิทธิ์จัดการบ้าน");
   }
-  return s.orgId;
+  return { orgId: s.orgId, userId: s.userId };
+}
+
+function propLog(
+  who: { orgId: string; userId: string },
+  entity: "property" | "category",
+  id: string | null,
+  name: string | null,
+  action: ActivityKind,
+  summary: string,
+  detail?: Record<string, unknown>
+) {
+  return logActivity(who.orgId, {
+    userId: who.userId,
+    entity,
+    entityId: id,
+    entityCode: name,
+    action,
+    summary: name ? `${summary} "${name}"` : summary,
+    detail,
+  });
 }
 
 function parseForm(formData: FormData) {
@@ -49,7 +73,8 @@ function parseForm(formData: FormData) {
 }
 
 export async function createPropertyAction(formData: FormData) {
-  const orgId = await requirePropManage();
+  const who = await requirePropManage();
+  const { orgId } = who;
   const parsed = parseForm(formData);
   if (!parsed.success) return;
   const d = parsed.data;
@@ -62,15 +87,18 @@ export async function createPropertyAction(formData: FormData) {
     notes: d.notes ?? null,
     categoryId: d.categoryId || null,
   });
+  await propLog(who, "property", null, d.name, "create", "เพิ่มบ้าน", d);
   revalidatePath("/maintenance/properties");
   redirect("/maintenance/properties");
 }
 
 export async function updatePropertyAction(id: string, formData: FormData) {
-  const orgId = await requirePropManage();
+  const who = await requirePropManage();
+  const { orgId } = who;
   const parsed = parseForm(formData);
   if (!parsed.success) return;
   const d = parsed.data;
+  const before = await getProperty(orgId, id);
   await updateProperty(orgId, id, {
     name: d.name,
     caretakerId: d.caretakerId || null,
@@ -80,15 +108,24 @@ export async function updatePropertyAction(id: string, formData: FormData) {
     notes: d.notes ?? null,
     categoryId: d.categoryId || null,
   });
+  await propLog(who, "property", id, d.name, "update", before && before.name !== d.name ? `แก้ไขบ้าน "${before.name}" →` : "แก้ไขบ้าน", {
+    before: before
+      ? { name: before.name, caretakerId: before.caretakerId, address: before.address, ownerName: before.ownerName, ownerContact: before.ownerContact, notes: before.notes, categoryId: before.categoryId }
+      : null,
+    after: d,
+  });
   revalidatePath("/maintenance/properties");
   redirect(`/maintenance/properties/${id}`);
 }
 
 export async function deletePropertyAction(formData: FormData) {
-  const orgId = await requirePropManage();
+  const who = await requirePropManage();
+  const { orgId } = who;
   const id = String(formData.get("id") ?? "");
   if (!id) return;
+  const before = await getProperty(orgId, id);
   await deleteProperty(orgId, id);
+  await propLog(who, "property", id, before?.name ?? null, "delete", "ลบบ้าน");
   revalidatePath("/maintenance/properties");
   redirect("/maintenance/properties");
 }
@@ -106,46 +143,59 @@ function revalidateCategoryPages() {
 }
 
 export async function createCategoryAction(formData: FormData) {
-  const orgId = await requirePropManage();
+  const who = await requirePropManage();
+  const { orgId } = who;
   const name = String(formData.get("displayName") ?? "").trim().slice(0, 100);
   if (!name) return;
   await createCategory(orgId, name);
+  await propLog(who, "category", null, name, "create", "เพิ่มหมวดบ้าน");
   revalidateCategoryPages();
 }
 
 export async function renameCategoryAction(formData: FormData) {
-  const orgId = await requirePropManage();
+  const who = await requirePropManage();
+  const { orgId } = who;
   const id = String(formData.get("id") ?? "");
   const name = String(formData.get("displayName") ?? "").trim().slice(0, 100);
   if (!id || !name) return;
+  const old = (await categoryNameById(orgId))[id];
   await renameCategory(orgId, id, name);
+  await propLog(who, "category", id, name, "update", old ? `เปลี่ยนชื่อหมวด "${old}" →` : "เปลี่ยนชื่อหมวด");
   revalidateCategoryPages();
 }
 
 /** ลบหมวด — บ้านในหมวดไม่หายตาม แค่กลับไปกอง "ยังไม่จัดหมวด" (FK เป็น SET NULL) */
 export async function deleteCategoryAction(formData: FormData) {
-  const orgId = await requirePropManage();
+  const who = await requirePropManage();
+  const { orgId } = who;
   const id = String(formData.get("id") ?? "");
   if (!id) return;
+  const old = (await categoryNameById(orgId))[id] ?? null;
   await deleteCategory(orgId, id);
+  await propLog(who, "category", id, old, "delete", "ลบหมวดบ้าน");
   revalidateCategoryPages();
 }
 
 export async function moveCategoryAction(formData: FormData) {
-  const orgId = await requirePropManage();
+  const who = await requirePropManage();
+  const { orgId } = who;
   const id = String(formData.get("id") ?? "");
   const dir = formData.get("dir") === "up" ? "up" : "down";
   if (!id) return;
   await moveCategory(orgId, id, dir);
+  await propLog(who, "category", id, (await categoryNameById(orgId))[id] ?? null, "update", dir === "up" ? "เลื่อนหมวดขึ้น" : "เลื่อนหมวดลง");
   revalidateCategoryPages();
 }
 
 /** ย้ายบ้านเข้าหมวด จากหน้ารายชื่อบ้านโดยตรง (ไม่ต้องเข้าหน้าแก้ไข) */
 export async function setPropertyCategoryAction(formData: FormData) {
-  const orgId = await requirePropManage();
+  const who = await requirePropManage();
+  const { orgId } = who;
   const id = String(formData.get("propertyId") ?? "");
   const categoryId = String(formData.get("categoryId") ?? "") || null;
   if (!id) return;
   await setPropertyCategory(orgId, id, categoryId);
+  const cat = categoryId ? ((await categoryNameById(orgId))[categoryId] ?? "-") : "ยังไม่จัดหมวด";
+  await propLog(who, "property", id, (await getProperty(orgId, id))?.name ?? null, "update", `ย้ายไปหมวด "${cat}":`, { categoryId });
   revalidateCategoryPages();
 }

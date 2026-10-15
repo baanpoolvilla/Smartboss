@@ -13,7 +13,10 @@ import {
   deletePmSchedule,
   schedulePmNextVisit,
   updatePmSchedule,
+  getPmSchedule,
 } from "@/modules/maintenance/data/pm";
+import { getProperty } from "@/modules/maintenance/data/properties";
+import { logActivity, type ActivityKind } from "@/modules/maintenance/data/activity";
 import { getAsset } from "@/modules/maintenance/data/assets";
 import { roundsPerYearOptions } from "@/modules/maintenance/lib/pm-schedule";
 import { deleteNotificationsByReference } from "@/modules/maintenance/data/notify";
@@ -30,6 +33,29 @@ async function requirePmManage(): Promise<string> {
   }
   return s.orgId;
 }
+
+/** บันทึกการใช้งาน (เมนู Log การใช้งาน) ของแผน PM — ไม่ throw */
+async function pmLog(
+  orgId: string,
+  pm: { id: string | null; title: string; propertyId?: string | null },
+  action: ActivityKind,
+  summary: string,
+  detail?: Record<string, unknown>
+) {
+  const session = await requireOrg();
+  const house = pm.propertyId ? (await getProperty(orgId, pm.propertyId))?.name : null;
+  await logActivity(orgId, {
+    userId: session.userId,
+    entity: "pm",
+    entityId: pm.id,
+    entityCode: pm.title,
+    action,
+    summary: `${summary} "${pm.title}"${house ? ` บ้าน ${house}` : ""}`,
+    detail,
+  });
+}
+
+const fmtDay = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : "-");
 
 const createSchema = z.object({
   propertyId: z.string().min(1, "เลือกบ้าน"),
@@ -111,12 +137,18 @@ export async function createPmAction(formData: FormData) {
         propertyId: asset.propertyId,
         assetId,
       });
+      await pmLog(orgId, { id: null, title: `${d.title} · ${asset.name}`, propertyId: asset.propertyId }, "create", "สร้างแผน PM", {
+        frequency, nextDueDate: d.nextDueDate, mode: d.mode, assignedTo: d.assignedTo || null,
+      });
     }
   } else {
     await createPmSchedule(orgId, {
       ...base,
       propertyId: d.propertyId,
       assetId: d.assetId || null,
+    });
+    await pmLog(orgId, { id: null, title: d.title, propertyId: d.propertyId }, "create", "สร้างแผน PM", {
+      frequency, nextDueDate: d.nextDueDate, mode: d.mode, assignedTo: d.assignedTo || null,
     });
   }
 
@@ -144,7 +176,7 @@ export async function updatePmAction(formData: FormData) {
   const assignedTo = String(formData.get("assignedTo") ?? "").trim();
   const before = await prisma.pmSchedule.findFirst({
     where: { orgId, id },
-    select: { nextDueDate: true, frequency: true, assignedTo: true },
+    select: { nextDueDate: true, frequency: true, assignedTo: true, title: true, propertyId: true },
   });
 
   await updatePmSchedule(orgId, id, {
@@ -179,6 +211,12 @@ export async function updatePmAction(formData: FormData) {
           : undefined,
     },
   });
+  await pmLog(orgId, { id, title: title || before?.title || "-", propertyId: before?.propertyId }, "update", "แก้ไขแผน PM", {
+    nextDueDate: dueChanged ? { from: fmtDay(before?.nextDueDate), to: nextDueDate } : undefined,
+    frequency: frequency && frequency !== before?.frequency ? { from: before?.frequency ?? null, to: frequency } : undefined,
+    assignedTo: (assignedTo || null) !== (before?.assignedTo ?? null) ? { from: before?.assignedTo ?? null, to: assignedTo || null } : undefined,
+    title: title && before && title !== before.title ? { from: before.title, to: title } : undefined,
+  });
 
   revalidatePath("/maintenance/pm");
 }
@@ -187,8 +225,10 @@ export async function completePmAction(formData: FormData) {
   const orgId = await requirePmManage();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
+  const pm = await getPmSchedule(orgId, id);
   await completePmSchedule(orgId, id);
   await closeAutoWorkOrdersOfPm(orgId, id, "done");
+  if (pm) await pmLog(orgId, pm, "status", `ปิดรอบ PM (กำหนด ${fmtDay(pm.nextDueDate)})`);
   const session = await requireOrg();
   await audit({ userId: session.userId, action: "PM_ROUND_CLOSED", targetId: id });
   revalidatePath("/maintenance/pm");
@@ -202,6 +242,8 @@ export async function scheduleNextAction(formData: FormData) {
   if (!id || !date) return;
   if (isPastDay(date)) throw new Error("วันนัดครั้งถัดไปย้อนหลังไม่ได้");
   await schedulePmNextVisit(orgId, id, parseDate(date));
+  const pm = await getPmSchedule(orgId, id);
+  if (pm) await pmLog(orgId, pm, "update", `นัดครั้งถัดไป ${date}`);
   revalidatePath("/maintenance/pm");
 }
 
@@ -209,8 +251,10 @@ export async function deletePmAction(formData: FormData) {
   const orgId = await requirePmManage();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
+  const pm = await getPmSchedule(orgId, id);
   await closeAutoWorkOrdersOfPm(orgId, id, "cancelled");
   await deletePmSchedule(orgId, id);
+  if (pm) await pmLog(orgId, pm, "delete", "ลบแผน PM");
   revalidatePath("/maintenance/work-orders");
   // referenceId ของแจ้งเตือน "pm" ยังคือ pm.id เดิม (ดู cron.ts's
   // notifyDuePmSchedules) แม้ลิงก์จะพาไปหน้ารายการรวมเสมอ (maintenanceHrefFor

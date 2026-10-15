@@ -404,3 +404,26 @@ model LineNotificationLog {
   @@map("line_notification_logs")
   @@schema("maintenance")
 }
+
+/// บันทึกการใช้งานโมดูลแจ้งซ่อมบำรุง — ใครทำอะไร กับอะไร เมื่อไหร่ (หน้า /maintenance/settings/activity-log)
+model MaintenanceActivity {
+  id         String   @id @default(uuid())
+  orgId      String   @map("org_id")
+  /// null = ระบบ/ช่างภายนอก (ดู actorLabel)
+  userId     String?  @map("user_id")
+  actorLabel String?  @map("actor_label")
+  /// work_order | purchase_order | property | category | asset | expense | pm | contractor | return | settings
+  entity     String
+  entityId   String?  @map("entity_id")
+  /// เลขเอกสาร/ชื่อที่คนอ่านรู้เรื่อง ณ ตอนนั้น (WO-2569-0323, ชื่อบ้าน)
+  entityCode String?  @map("entity_code")
+  action     String
+  summary    String
+  detail     Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([orgId, createdAt])
+  @@index([orgId, entity, entityId])
+  @@map("activity_logs")
+  @@schema("maintenance")
+}

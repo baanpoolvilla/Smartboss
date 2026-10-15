@@ -10,7 +10,9 @@ import {
   updateContractor,
   deleteContractor,
   createContractorHistory,
+  getContractor,
 } from "@/modules/maintenance/data/contractors";
+import { logActivity, type ActivityKind } from "@/modules/maintenance/data/activity";
 
 const schema = z.object({
   name: z.string().trim().min(1, "กรอกชื่อ").max(200),
@@ -25,12 +27,31 @@ const schema = z.object({
   notes: z.string().trim().max(1000).optional(),
 });
 
-async function requireContractorManage(): Promise<string> {
+async function requireContractorManage(): Promise<{ orgId: string; userId: string }> {
   const s = await requireOrg();
   if (!hasPermission(s, MAINT_PERMS.contractorManage)) {
     throw new Error("ไม่มีสิทธิ์จัดการผู้รับเหมา");
   }
-  return s.orgId;
+  return { orgId: s.orgId, userId: s.userId };
+}
+
+function contractorLog(
+  who: { orgId: string; userId: string },
+  id: string | null,
+  name: string,
+  action: ActivityKind,
+  summary: string,
+  detail?: Record<string, unknown>
+) {
+  return logActivity(who.orgId, {
+    userId: who.userId,
+    entity: "contractor",
+    entityId: id,
+    entityCode: name,
+    action,
+    summary: `${summary} "${name}"`,
+    detail,
+  });
 }
 
 function parse(formData: FormData) {
@@ -66,32 +87,46 @@ function toInput(d: z.infer<typeof schema>) {
 }
 
 export async function createContractorAction(formData: FormData) {
-  const orgId = await requireContractorManage();
+  const who = await requireContractorManage();
+  const { orgId } = who;
   const parsed = parse(formData);
   if (!parsed.success) return;
   await createContractor(orgId, toInput(parsed.data));
+  await contractorLog(who, null, parsed.data.name, "create", "เพิ่ม Contact", toInput(parsed.data));
   revalidatePath("/maintenance/contractors");
 }
 
 export async function updateContractorAction(id: string, formData: FormData) {
-  const orgId = await requireContractorManage();
+  const who = await requireContractorManage();
+  const { orgId } = who;
   const parsed = parse(formData);
   if (!parsed.success) return;
+  const before = await getContractor(orgId, id);
   await updateContractor(orgId, id, toInput(parsed.data));
+  await contractorLog(who, id, parsed.data.name, "update", "แก้ไข Contact", {
+    before: before
+      ? { name: before.name, phone: before.phone, email: before.email, specialty: before.specialty, companyName: before.companyName, zone: before.zone, category: before.category, notes: before.notes }
+      : null,
+    after: toInput(parsed.data),
+  });
   revalidatePath(`/maintenance/contractors/${id}`);
 }
 
 export async function deleteContractorAction(formData: FormData) {
-  const orgId = await requireContractorManage();
+  const who = await requireContractorManage();
+  const { orgId } = who;
   const id = String(formData.get("id") ?? "");
   if (!id) return;
+  const before = await getContractor(orgId, id);
   await deleteContractor(orgId, id);
+  if (before) await contractorLog(who, id, before.name, "delete", "ลบ Contact");
   revalidatePath("/maintenance/contractors");
   redirect("/maintenance/contractors");
 }
 
 export async function addHistoryAction(contractorId: string, formData: FormData) {
-  const orgId = await requireContractorManage();
+  const who = await requireContractorManage();
+  const { orgId } = who;
   const description = String(formData.get("description") ?? "").trim();
   const amountRaw = String(formData.get("amount") ?? "").trim();
   const dateRaw = String(formData.get("workDate") ?? "").trim();
@@ -105,5 +140,7 @@ export async function addHistoryAction(contractorId: string, formData: FormData)
     workDate: dateRaw ? new Date(dateRaw + "T00:00:00.000Z") : null,
     rating: rating != null && Number.isFinite(rating) ? rating : null,
   });
+  const c = await getContractor(orgId, contractorId);
+  await contractorLog(who, contractorId, c?.name ?? "-", "create", `เพิ่มประวัติงาน${description ? ` "${description.slice(0, 60)}"` : ""}${amount ? ` ฿${amount.toLocaleString()}` : ""} ของ`, { description, amount, workDate: dateRaw || null, rating });
   revalidatePath(`/maintenance/contractors/${contractorId}`);
 }

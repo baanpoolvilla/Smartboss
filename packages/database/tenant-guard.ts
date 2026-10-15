@@ -40,7 +40,7 @@ export const TENANT_SCOPED_MODELS = new Set<string>([
   "Asset", "Contractor", "ContractorHistory", "EquipmentReturn", "Expense",
   "LineConfig", "LineNotificationLog", "PmSchedule", "Property", "PropertyCategory",
   "PurchaseOrder", "PurchaseOrderComment", "WorkOrder", "WorkOrderComment",
-  "WorkOrderExternalPhoto", "WorkOrderUploadLink",
+  "WorkOrderExternalPhoto", "WorkOrderUploadLink", "MaintenanceActivity",
   // ads (Google Ads Report)
   "AdsAccount", "AdsCampaign", "AdsAdGroup", "AdsCampaignDaily", "AdsAdGroupDaily",
   "AdsKeywordDaily", "AdsSearchTermDaily", "AdsKpiBenchmark", "AdsAnalysisSetting",

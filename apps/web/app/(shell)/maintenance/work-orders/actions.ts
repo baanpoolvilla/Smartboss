@@ -25,6 +25,28 @@ import {
 import { getProperty } from "@/modules/maintenance/data/properties";
 import { getAsset } from "@/modules/maintenance/data/assets";
 import { userNameMap } from "@/modules/maintenance/data/users";
+import { logActivity, type ActivityKind } from "@/modules/maintenance/data/activity";
+
+/** บันทึกการใช้งาน (เมนู Log การใช้งาน) ของใบงานนี้ — ไม่ throw */
+function woLog(
+  s: { orgId: string; userId: string },
+  wo: { id: string; code: string | null; title: string },
+  action: ActivityKind,
+  summary: string,
+  detail?: Record<string, unknown>
+) {
+  return logActivity(s.orgId, {
+    userId: s.userId,
+    entity: "work_order",
+    entityId: wo.id,
+    entityCode: wo.code,
+    action,
+    summary: `${summary} ${wo.code ?? ""} "${wo.title}"`.replace(/\s+/g, " ").trim(),
+    detail,
+  });
+}
+
+const clip = (t: string, n = 120) => (t.length > n ? `${t.slice(0, n)}…` : t);
 import {
   workOrderAccess,
   canSeeWorkOrder,
@@ -141,6 +163,8 @@ export async function createWorkOrderAction(formData: FormData) {
     wo.id,
   );
 
+  await woLog(s, wo, "create", "สร้างใบงาน", { propertyIds: d.propertyIds, assignedTo, cc, priority: d.priority, photos: photoUrls.length });
+
   // แจ้งเตือนผู้รับผิดชอบ + CC (in-app + LINE)
   const notifyTargets = new Set<string>([...(assignedTo ? [assignedTo] : []), ...cc]);
   for (const uid of notifyTargets) {
@@ -206,6 +230,11 @@ export async function updateStatusAction(formData: FormData) {
   // ยกเลิกใบงานจาก PM = ข้ามรอบนั้น ไม่งั้น cron สร้างใบเดิมขึ้นมาใหม่ทุกเช้า (ดู skipPmSchedule)
   if (changed && status === "cancelled" && !pmAlreadyAdvanced) await skipLinkedPm(s.orgId, wo);
   if (changed) await notifyStatusChanged(s.orgId, wo, status, s.userId);
+  if (changed) {
+    const from = STATUS_TEXT[wo.status]?.label ?? wo.status;
+    const to = STATUS_TEXT[status]?.label ?? status;
+    await woLog(s, wo, "status", `เปลี่ยนสถานะ ${from} → ${to}`, { from: wo.status, to: status });
+  }
 
   revalidatePath(`/maintenance/work-orders/${id}`);
   revalidatePath("/maintenance/work-orders");
@@ -349,6 +378,13 @@ export async function completeWorkOrderAction(formData: FormData) {
     names.map((name, i) => ({ name: name.trim(), price: (prices[i] ?? "").trim() })),
     s.userId
   );
+  await woLog(
+    s,
+    wo,
+    "status",
+    `ยืนยันงานเสร็จ${afterPhotoUrls.length > 0 ? ` (รูปหลังแก้ไข ${afterPhotoUrls.length} รูป)` : ""}${recorded ? " + ลงค่าใช้จ่ายจากประมาณการ" : ""}`,
+    { notes: notes || null, afterPhotos: afterPhotoUrls.length, expenseRecorded: recorded }
+  );
 
   revalidatePath(`/maintenance/work-orders/${id}`);
   revalidatePath("/maintenance/work-orders");
@@ -447,6 +483,13 @@ export async function addCommentAction(workOrderId: string, formData: FormData) 
     { imageUrls }
   );
   const photoText = imageUrls.length > 1 ? `ส่งรูปภาพ ${imageUrls.length} รูป` : "ส่งรูปภาพ";
+  await woLog(
+    s,
+    wo,
+    "comment",
+    `แสดงความคิดเห็น${content ? ` "${clip(content, 60)}"` : ""}${imageUrls.length > 0 ? ` (รูป ${imageUrls.length} รูป)` : ""} ใน`,
+    { content, images: imageUrls.length }
+  );
 
   // แจ้งผู้เกี่ยวข้องเมื่อมีความคิดเห็นใหม่ (ยกเว้นคนที่พิมพ์เอง)
   {
@@ -481,7 +524,9 @@ export async function editCommentAction(
   const wo = await getWorkOrder(s.orgId, workOrderId);
   if (!wo || !canSeeWorkOrder(await workOrderAccess(s), wo)) return;
 
-  await updateWorkOrderComment(s.orgId, commentId, s.userId, content);
+  if (await updateWorkOrderComment(s.orgId, commentId, s.userId, content)) {
+    await woLog(s, wo, "comment", `แก้ความคิดเห็นเป็น "${clip(content, 60)}" ใน`, { commentId, content });
+  }
   revalidatePath(`/maintenance/work-orders/${workOrderId}`);
 }
 
@@ -502,7 +547,8 @@ export async function deleteCommentAction(
   const wo = await getWorkOrder(s.orgId, workOrderId);
   if (!wo || !canSeeWorkOrder(await workOrderAccess(s), wo)) return;
 
-  await removeWorkOrderCommentLogged(
+  let logLine = "";
+  const removed = await removeWorkOrderCommentLogged(
     s.orgId,
     commentId,
     s.userId,
@@ -510,13 +556,14 @@ export async function deleteCommentAction(
     async (row, removed, whole) => {
       const author = row.userId ? ((await userNameMap(s.orgId, [row.userId]))[row.userId] ?? "ผู้ใช้") : "ผู้ใช้";
       const of = `ของ ${author} (${fmtThaiDateTime(row.createdAt)})`;
-      if (imageUrl && !whole) return `ลบรูป 1 รูป จากความคิดเห็น${of}`;
+      if (imageUrl && !whole) return (logLine = `ลบรูป 1 รูป จากความคิดเห็น${of}`);
       const text = row.content === "📷" ? "" : `: "${row.content.length > 80 ? `${row.content.slice(0, 80)}…` : row.content}"`;
       const pics = removed.length > 0 ? ` พร้อมรูป ${removed.length} รูป` : "";
-      return `ลบความคิดเห็น${of}${text}${pics}`;
+      return (logLine = `ลบความคิดเห็น${of}${text}${pics}`);
     },
     imageUrl
   );
+  if (removed) await woLog(s, wo, "delete", `${logLine} ใน`, { commentId, imageUrl: imageUrl ?? null });
 
   revalidatePath(`/maintenance/work-orders/${workOrderId}`);
 }
@@ -534,6 +581,7 @@ export async function updateCompletionNotesAction(
   if (!canManage && !isOwnJob) return;
   const notes = String(formData.get("completionNotes") ?? "").trim();
   await updateWorkOrder(s.orgId, workOrderId, { completionNotes: notes || null });
+  await woLog(s, wo, "update", "แก้หมายเหตุจบงาน", { from: wo.completionNotes, to: notes || null });
   revalidatePath(`/maintenance/work-orders/${workOrderId}`);
 }
 
@@ -549,6 +597,7 @@ export async function generateUploadLinkAction(formData: FormData) {
     throw new Error("ไม่มีสิทธิ์");
   }
   await createUploadLink(s.orgId, id);
+  await woLog(s, wo, "other", "สร้างลิงก์ให้ช่างภายนอกส่งรูป");
   revalidatePath(`/maintenance/work-orders/${id}`);
 }
 
@@ -564,6 +613,7 @@ export async function deleteWorkOrderAction(formData: FormData) {
   const wo = await getWorkOrder(s.orgId, id);
   if (wo && (wo.status === "open" || wo.status === "in_progress") && wo.completedAt === null) await skipLinkedPm(s.orgId, wo);
   await deleteWorkOrder(s.orgId, id);
+  if (wo) await woLog(s, wo, "delete", "ลบใบงาน", { status: wo.status, propertyId: wo.propertyId });
   // เก็บกวาดแจ้งเตือนของใบงานนี้ด้วย ไม่งั้นกระดิ่งค้างชี้ไปใบงานที่ไม่มีแล้ว
   // (ดู deleteNotificationsByReference's doc — บั๊กคลาสเดียวกับที่ report_task
   // เจอกับ removeTaskNotifications)
@@ -613,6 +663,7 @@ export async function updateWorkOrderPropertiesAction(
   const fromNames = (await Promise.all(before.map(nameOf))).join(", ");
   const toNames = props.map((p) => p!.name).join(", ");
   await addWorkOrderComment(s.orgId, workOrderId, s.userId, `เปลี่ยนบ้าน: ${fromNames} → ${toNames}`, null, { kind: "log" });
+  await woLog(s, wo, "update", `เปลี่ยนบ้าน ${fromNames} → ${toNames} ของ`, { from: before, to: ids });
 
   revalidatePath(`/maintenance/work-orders/${workOrderId}`);
   revalidatePath("/maintenance/work-orders");

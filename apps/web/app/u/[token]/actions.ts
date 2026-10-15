@@ -7,6 +7,7 @@ import {
   registerExternalNote,
   getUploadContext,
 } from "@/modules/maintenance/data/external-upload";
+import { logActivity } from "@/modules/maintenance/data/activity";
 
 export async function uploadExternalAction(token: string, formData: FormData) {
   const ctx = await getUploadContext(token);
@@ -24,6 +25,18 @@ export async function uploadExternalAction(token: string, formData: FormData) {
     for (const [i, url] of urls.entries()) {
       await registerExternalPhoto(token, url, i === 0 ? note : null);
     }
+  }
+
+  if (urls.length > 0 || note.trim()) {
+    await logActivity(ctx.orgId, {
+      userId: null,
+      actorLabel: "ช่างภายนอก (ลิงก์ส่งรูป)",
+      entity: "work_order",
+      entityId: ctx.workOrderId,
+      action: "comment",
+      summary: `ช่างภายนอกส่ง${urls.length > 0 ? `รูป ${urls.length} รูป` : "ข้อความ"}${note.trim() ? ` "${note.trim().slice(0, 60)}"` : ""} ใบงาน "${ctx.title}"`,
+      detail: { photos: urls.length, note: note.trim() || null },
+    });
   }
 
   revalidatePath(`/u/${token}`);
