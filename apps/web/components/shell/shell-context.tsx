@@ -36,6 +36,11 @@ export function ShellProvider({
  * ให้ AppBar ของโมดูล (เช่น กระดิ่งแจ้งเตือน) ใช้ข้อมูลชุดเดียวกับ Shell
  * โดยไม่ต้อง query ซ้ำในทุกหน้า — Shell โหลดมาแล้วครั้งเดียวที่ layout
  */
+/** เหมือน useShell แต่ไม่โยน error นอก <ShellProvider> (คอมโพเนนต์ที่ใช้ได้ทั้งในและนอก shell) */
+export function useShellOptional(): ShellContextValue | null {
+  return useContext(ShellContext);
+}
+
 export function useShell(): ShellContextValue {
   const value = useContext(ShellContext);
   if (!value) throw new Error("useShell ต้องอยู่ภายใน <ShellProvider>");

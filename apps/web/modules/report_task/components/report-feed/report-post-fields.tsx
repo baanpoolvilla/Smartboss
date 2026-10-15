@@ -1,5 +1,6 @@
 "use client";
 
+import { useWorkerUi } from "@/modules/daily_worker/components/use-worker-ui";
 import { useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { departments, users } from "@/modules/report_task/lib/directory";
@@ -115,6 +116,8 @@ export function ReportPostFields({
    * เฉพาะคอม — มือถือไม่มี Shift บนแป้น Enter ยังขึ้นบรรทัดใหม่ตามเดิม · ไม่ส่ง (ฟอร์มแก้ไขโพสต์) = Enter ขึ้นบรรทัด */
   onEnterSubmit?: () => void;
 }) {
+  // คนงาน: placeholder/ปุ่มตามภาษาที่เลือก · คนอื่นไทยเหมือนเดิม
+  const { t: wt } = useWorkerUi();
   const maxVideoMB = useAttachmentSettingsStore((s) => s.settings.maxVideoMB);
   const maxImages = useAttachmentSettingsStore((s) => s.settings.maxImagesPerReportPost);
   const editableRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -673,8 +676,8 @@ export function ReportPostFields({
       }}
     >
       <Input
-        aria-label="หัวข้อรีพอต"
-        placeholder="หัวข้อรีพอต เช่น สรุปอัปเดตประจำสัปดาห์"
+        aria-label={wt("reportTitle")}
+        placeholder={wt("reportTitlePh")}
         value={title}
         onChange={(e) => onTitleChange(e.target.value)}
         onKeyDown={(e) => {
@@ -789,7 +792,7 @@ export function ReportPostFields({
                 role="textbox"
                 aria-multiline="true"
                 aria-label={s.heading ? `เนื้อหา: ${s.heading}` : "เนื้อหารายงาน"}
-                data-placeholder="พิมพ์แต่ละบรรทัด = แต่ละบูลเล็ต, ลากห้องจากแถบด้านซ้ายมาวางเพื่อแท็กได้เลย"
+                data-placeholder={wt("reportBodyPh")}
                 onInput={(e) => syncFromEditor(s.id, e.currentTarget)}
                 onKeyDown={(e) => handleEditorKeyDown(s.id, e)}
                 onKeyUp={(e) => syncActiveFormat(s.id, e.currentTarget)}
@@ -889,7 +892,7 @@ export function ReportPostFields({
           <AttachMenu
             onFiles={onFilesSelected}
             disabled={busy || images.length >= maxImages}
-            label={busy ? "กำลังแนบไฟล์..." : "แนบไฟล์"}
+            label={busy ? wt("attaching") : wt("attachFile")}
             className="h-8 rounded-md border border-input px-3 gap-1.5 text-sm shadow-xs disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground"
           />
         </span>

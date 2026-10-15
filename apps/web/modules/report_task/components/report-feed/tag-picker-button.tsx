@@ -1,5 +1,6 @@
 "use client";
 
+import { useWorkerUi } from "@/modules/daily_worker/components/use-worker-ui";
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { useReportTagStore } from "@/modules/report_task/store/report-tag-store";
@@ -30,6 +31,7 @@ export function TagPickerButton({ tagIds, onChange }: { tagIds: string[]; onChan
     onChange(tagIds.includes(id) ? tagIds.filter((x) => x !== id) : [...tagIds, id]);
   }
 
+  const { t: wt } = useWorkerUi();
   return (
     <>
       <Popover open={open} onOpenChange={setOpen}>
@@ -47,7 +49,7 @@ export function TagPickerButton({ tagIds, onChange }: { tagIds: string[]; onChan
               aria-label="ติดแท็กโพสต์นี้"
             >
               {hasSelection ? <TagIcon className="h-3.5 w-3.5 shrink-0" /> : <Tag className="h-3.5 w-3.5 shrink-0" />}
-              <span className="truncate">{hasSelection ? selected.map((t) => t.name).join(", ") : "ติดแท็ก"}</span>
+              <span className="truncate">{hasSelection ? selected.map((t) => t.name).join(", ") : wt("addTag")}</span>
               <ChevronDown className="h-3 w-3 opacity-60 shrink-0" />
             </button>
           }

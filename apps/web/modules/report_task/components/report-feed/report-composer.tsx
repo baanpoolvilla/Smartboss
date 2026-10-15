@@ -22,6 +22,7 @@ import { Check, Clock, Lock, Maximize2, Minimize2, Send, SquarePen, TriangleAler
 import { toast } from "sonner";
 import { uuid } from "@/modules/report_task/lib/uuid";
 import { useRetroSubmitStore } from "@/modules/report_task/store/retro-submit-store";
+import { useWorkerUi } from "@/modules/daily_worker/components/use-worker-ui";
 
 function roundMinutesOf(time: string): number {
   const [h, m] = time.split(":").map(Number) as [number, number];
@@ -63,6 +64,8 @@ function loadDraft(topicId: string): StoredDraft | null {
 
 export function ReportComposer({ topic }: { topic: ReportTopic }) {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
+  // คนงาน: ข้อความบนฟอร์มตามภาษาที่เลือก (พม่า/ไทย/อังกฤษ) · คนอื่นไทยเหมือนเดิม
+  const { lang, t: wt } = useWorkerUi();
   // ยังไม่มีชื่อตัวเองในรายชื่อ (เพิ่งเปิดหน้า รายชื่อจริงยังโหลดไม่เสร็จ) — แสดงว่างไปก่อน ไม่ให้หน้าพัง
   const viewer = getUser(viewingAsUserId) ?? { name: "", avatar: "", avatarUrl: null };
   const addPost = useReportFeedStore((s) => s.addPost);
@@ -321,7 +324,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--brand-green-dark)]">
             <SquarePen className="h-3.5 w-3.5" />
           </span>
-          <span className="flex-1 text-sm text-[var(--ink-soft)]">เขียนรายงานหรือข้อความ...</span>
+          <span className="flex-1 text-sm text-[var(--ink-soft)]">{wt("writeReport")}</span>
           <Send className="h-4 w-4 shrink-0 text-[var(--ink-faint)]" />
         </button>
       </div>
@@ -359,8 +362,8 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
           {!retro && !showRoundPicker && activeRound && (
             <span className="flex items-center gap-1 text-[11px] font-medium text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2 py-0.5">
               <Clock className="h-3 w-3" />
-              ตอนนี้อยู่ในรอบ &quot;{activeRound.label}&quot; ({activeRound.time})
-              {minImagesRequired > 0 && ` · ต้องแนบรูปอย่างน้อย ${minImagesRequired} รูป`}
+              {wt("currentRound")} &quot;{activeRound.label}&quot; ({activeRound.time})
+              {minImagesRequired > 0 && ` · ${wt("minPhotos", { n: minImagesRequired })}`}
             </span>
           )}
         </div>
@@ -392,7 +395,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="flex items-center gap-1 text-xs text-[var(--ink-soft)] shrink-0">
               <Clock className="h-3.5 w-3.5" />
-              ส่งของรอบไหน?
+              {wt("whichRound")}
             </span>
             {todayCutoffs.map((r) => {
               const late = nowMinutes > roundMinutesOf(r.time);
@@ -424,11 +427,11 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
                   )}
                 >
                   {selected ? <Check className="h-3 w-3 shrink-0" strokeWidth={3} /> : late && <TriangleAlert className="h-3 w-3 shrink-0" />}
-                  {r.label} ({r.time}){late && <b className="font-semibold">&nbsp;· สาย</b>}
+                  {r.label} ({r.time}){late && <b className="font-semibold">&nbsp;· {wt("late")}</b>}
                 </button>
               );
             })}
-            {minImagesRequired > 0 && <span className="text-xs text-[var(--ink-soft)]">· ต้องแนบรูปอย่างน้อย {minImagesRequired} รูป</span>}
+            {minImagesRequired > 0 && <span className="text-xs text-[var(--ink-soft)]">· {wt("minPhotos", { n: minImagesRequired })}</span>}
           </div>
         )}
 
@@ -453,9 +456,13 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
             {activeRoundLate && (
               <div className="flex items-center gap-1.5">
                 <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
-                <span>
-                  โพสต์นี้จะนับเป็น<b>ส่งสาย</b>ของ &quot;{activeRound.label}&quot; — เลยเวลา {activeRound.time} แล้ว
-                </span>
+                {lang === "th" ? (
+                  <span>
+                    โพสต์นี้จะนับเป็น<b>ส่งสาย</b>ของ &quot;{activeRound.label}&quot; — เลยเวลา {activeRound.time} แล้ว
+                  </span>
+                ) : (
+                  <span>{wt("lateRoundWarn", { round: activeRound.label, time: activeRound.time })}</span>
+                )}
               </div>
             )}
           </div>
@@ -479,7 +486,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
                 onCheckedChange={(v) => setExcludeFromSubmission(v === true)}
                 className="h-3.5 w-3.5"
               />
-              โพสต์นี้ไม่ใช่รีพอตของวันนี้ (เช่น ถาม/แจ้งอัปเดตเฉยๆ)
+              {wt("notTodayReport")}
             </label>
             {excludeFromSubmission && (
               <p className="mt-1 pl-5 text-[10.5px] text-[var(--chart-red)]">
@@ -519,22 +526,22 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
           className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)]"
         >
           {tall ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          <span className="hidden sm:inline">{tall ? "ย่อ" : "ขยาย"}</span>
+          <span className="hidden sm:inline">{tall ? wt("collapse") : wt("expand")}</span>
         </button>
         {/* คอมเท่านั้น (มือถือ Enter = ขึ้นบรรทัด) — บอกให้รู้ว่า Enter โพสต์เลย */}
-        <span className="mr-auto hidden min-w-0 truncate text-[11px] text-[var(--ink-faint)] [@media(hover:hover)]:inline">Enter โพสต์ · Shift+Enter ขึ้นบรรทัดใหม่</span>
+        <span className="mr-auto hidden min-w-0 truncate text-[11px] text-[var(--ink-faint)] [@media(hover:hover)]:inline">{wt("enterHint")}</span>
         {/* P3 — why the button's disabled, not just that it is. */}
         {!busy && (!title.trim() || missingRequiredImage || submissionLocked) && (
           <p className="min-w-0 truncate text-xs text-[var(--ink-soft)]">
             {submissionLocked
-              ? `ปิดรับรายงานของวันนี้แล้ว (หลัง ${hardCutoff} น.) — ส่งได้อีกทีพรุ่งนี้`
+              ? wt("closedToday", { time: hardCutoff ?? "" })
               : !title.trim()
-                ? "ต้องมีหัวข้อ"
-                : `ต้องแนบรูปอีก ${minImagesRequired - photoCount(images)} รูป`}
+                ? wt("needTitle")
+                : wt("needPhotos", { n: minImagesRequired - photoCount(images) })}
           </p>
         )}
         <Button data-tour="composer-cancel" variant="ghost" size="lg" onClick={reset} className="text-[var(--ink-soft)]">
-          ยกเลิก
+          {wt("cancel")}
         </Button>
         <Button
           size="lg"
@@ -545,14 +552,14 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
             submissionLocked
               ? `ปิดรับรายงานของวันนี้แล้ว (หลัง ${hardCutoff} น.)`
               : !title.trim()
-                ? "ต้องมีหัวข้อ"
+                ? wt("needTitle")
                 : missingRequiredImage
-                  ? `ต้องแนบรูปอีก ${minImagesRequired - photoCount(images)} รูป`
+                  ? wt("needPhotos", { n: minImagesRequired - photoCount(images) })
                   : undefined
           }
         >
           <Send className="h-4 w-4" />
-          โพสต์ {/* Ctrl/⌘+Enter also submits (P4) — see the keydown handler on the title input below. */}
+          {wt("post")} {/* Ctrl/⌘+Enter also submits (P4) — see the keydown handler on the title input below. */}
         </Button>
       </div>
     </div>
