@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { uuidv7, type SystemRole } from '@workforce/domain';
 import type { Db } from '../client';
 import { withTenant } from '../client';
@@ -158,7 +158,9 @@ export async function provisionPrincipal(
       const match = await tx
         .select({ id: people.id })
         .from(people)
-        .where(eq(people.email, input.email));
+        // ไม่สนตัวพิมพ์เล็ก/ใหญ่ — ทะเบียนพนักงานพิมพ์ "Joey@…" บัญชีผู้ใช้ "joey@…" เคยไม่ถูกผูก
+        // (ลงเวลาไม่ได้ เพราะ /me ไม่มี employment) เจอจริง 2026-10-15
+        .where(sql`lower(${people.email}) = lower(${input.email})`);
       const personId = match[0]?.id ?? null;
       if (personId !== null) {
         await tx.update(principals).set({ personId }).where(eq(principals.id, principalId));

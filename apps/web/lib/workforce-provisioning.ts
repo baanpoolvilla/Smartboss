@@ -255,7 +255,8 @@ export async function syncWorkforcePrincipal(input: {
           FROM workforce.people pe
          WHERE p.id = ${principalId}::uuid
            AND pe.tenant_id = ${input.orgId}::uuid
-           AND pe.email = ${input.email}
+           -- ไม่สนตัวพิมพ์เล็ก/ใหญ่ ("Joey@…" ในทะเบียน กับ "joey@…" ของบัญชี เคยไม่ถูกผูก → ลงเวลาไม่ได้)
+           AND lower(pe.email) = lower(${input.email})
       `;
     }
 
