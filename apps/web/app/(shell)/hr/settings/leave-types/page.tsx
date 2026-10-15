@@ -1,4 +1,6 @@
 import { HrPage } from "@/modules/hr/components/hr-page";
+import { requireOrg } from "@smartboss/auth";
+import { workerEmploymentIds } from "@/modules/daily_worker/lib/data";
 import { SettingsSubnav } from "@/modules/hr/components/design-kit";
 import { HR_PERMS } from "@/modules/hr/permissions";
 import {
@@ -69,6 +71,7 @@ export default async function LeaveTypesSettingsPage({
         // ประเภทที่นับสิทธิ์จากวันหยุดบริษัท (Holiday) — แต่ละอันมีตารางสิทธิ์รายเดือนให้ HR แก้
         const accruing = (leaveTypes?.items ?? []).filter((t) => t.accrues_from_holidays);
         // ยอดคงเหลือรายคนของประเภทที่สะสม — ชื่อพนักงานจับคู่จากทะเบียน (API คืนแค่ employment_id)
+        const workerIds = await workerEmploymentIds((await requireOrg()).orgId);
         const [balances, employments] = accruing[0]
           ? await Promise.all([
               wfTry<{ items: HolidayBalanceRow[] }>(`/leave-types/${accruing[0].id}/holiday-balances?month=${balanceMonth}`),
@@ -290,7 +293,8 @@ export default async function LeaveTypesSettingsPage({
                   leaveTypeName={accruing[0].name}
                   month={balanceMonth}
                   year={year}
-                  rows={balances.items.map((b) => ({
+                  // คนงานรายวัน (WORKER) ไม่มีวัน Holiday — ไม่แสดงในตารางนี้ (วันหยุดคนงานผู้ดูแลลงให้ที่โมดูลคนงานรายวัน)
+                  rows={balances.items.filter((b) => !workerIds.has(b.employment_id)).map((b) => ({
                     ...b,
                     name: personOf.get(b.employment_id)?.display_name || personOf.get(b.employment_id)?.full_name || "ไม่ทราบชื่อ",
                     code: personOf.get(b.employment_id)?.employee_code ?? "",

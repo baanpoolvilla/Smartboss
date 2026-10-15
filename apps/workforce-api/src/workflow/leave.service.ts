@@ -6,6 +6,7 @@ import { UnitOfWork } from '../infrastructure/unit-of-work';
 import { RequestContextService } from '../shared/request-context';
 import { CLOCK } from '../shared/tokens';
 import {
+  HOLIDAY_VALID_MONTHS,
   holidayAvailability,
   type HolidayGrant,
   monthIndex,
@@ -553,8 +554,9 @@ export class LeaveService {
     }
     const companyGrants = await this.holidayGrants(tx, employment.companyId, leaveTypeId, start, end);
     // + วันที่ HR เพิ่มให้คนนี้ (leave_person_grants) — ไม่มี = เหมือนเดิม
-    const grants = withPersonGrants(companyGrants, (await this.personGrants(tx, leaveTypeId)).get(employment.id));
-    return { from: start, to: end, grants, usage };
+    const person = (await this.personGrants(tx, leaveTypeId)).get(employment.id);
+    const grants = withPersonGrants(onlyFrom(companyGrants, start), person);
+    return { from: earliestWithPersonGrants(start, toMonth, person), to: end, grants, usage };
   }
 
   /**
@@ -692,8 +694,12 @@ export class LeaveService {
         );
         // ใบที่ลงไว้ก่อนเดือนเริ่มนับของคนนี้ไม่นำมาคิด เหมือน holidayLedger
         const usage = new Map([...(usageOf.get(employment.id) ?? [])].filter(([usedIn]) => usedIn >= from));
-        const mine = withPersonGrants(grants, personGrants.get(employment.id));
-        const { available_days, buckets } = holidayAvailability({ from, to: lastMonth, grants: mine, usage }, month);
+        const person = personGrants.get(employment.id);
+        const mine = withPersonGrants(onlyFrom(grants, from), person);
+        const { available_days, buckets } = holidayAvailability(
+          { from: earliestWithPersonGrants(from, month, person), to: lastMonth, grants: mine, usage },
+          month,
+        );
         items.push({
           employment_id: employment.id,
           available_days,
@@ -1645,4 +1651,24 @@ function withPersonGrants(company: Map<string, number>, person: Map<string, numb
   const merged = new Map(company);
   for (const [month, days] of person) merged.set(month, (merged.get(month) ?? 0) + days);
   return merged;
+}
+
+/** สิทธิ์ของบริษัทเฉพาะตั้งแต่เดือนเริ่มนับ — ค่าที่ HR กำหนดทับของเดือนก่อนหน้านั้นไม่นับ (เหมือนเดิม) */
+function onlyFrom(grants: Map<string, number>, from: string): Map<string, number> {
+  return new Map([...grants].filter(([month]) => month >= from));
+}
+
+/**
+ * เดือนแรกที่ต้องเริ่มคิด — ปกติ = `start` · ถ้า HR เพิ่มวันให้คนนี้เป็นสิทธิ์ของเดือนก่อนเริ่มนับ (เช่นวันแม่ ส.ค.
+ * ก่อนเปิดระบบ ต.ค.) และยังไม่หมดอายุ ณ เดือนที่ดู ให้เริ่มคิดจากเดือนนั้น ⇒ วันนั้นหมดอายุตามเดือนของมันเอง
+ * (ส.ค. → ใช้ได้ถึงสิ้น ต.ค.) · สิทธิ์บริษัท/ใบลาก่อน `start` ยังไม่ถูกนับเหมือนเดิม (onlyFrom + เงื่อนไขของใบ)
+ */
+function earliestWithPersonGrants(start: string, viewMonth: string, person: Map<string, number> | undefined): string {
+  if (!person) return start;
+  let earliest = monthIndex(start);
+  for (const month of person.keys()) {
+    const i = monthIndex(month);
+    if (i < earliest && monthIndex(viewMonth) - i < HOLIDAY_VALID_MONTHS) earliest = i;
+  }
+  return monthOfIndex(earliest);
 }
