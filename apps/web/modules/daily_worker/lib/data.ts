@@ -86,6 +86,7 @@ interface ResultRow {
   early: boolean;
   rest_day: boolean;
   worked_minutes: number;
+  has_shift: boolean;
 }
 interface LeaveRow {
   id: string;
@@ -153,7 +154,7 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
                        AND date_trunc('minute', ar.actual_in_at) > ar.scheduled_in_at) AS late,
                     (ar.actual_out_at IS NOT NULL AND ar.scheduled_out_at IS NOT NULL
                        AND date_trunc('minute', ar.actual_out_at) < ar.scheduled_out_at) AS early,
-                    ar.is_rest_day AS rest_day, ar.worked_minutes
+                    ar.is_rest_day AS rest_day, ar.worked_minutes, (ar.shift_id IS NOT NULL) AS has_shift
                FROM workforce.attendance_results ar
               WHERE ar.is_current AND ar.employment_id = ANY($1::uuid[])
                 AND ar.work_date BETWEEN $2::date AND $3::date`,
@@ -217,7 +218,8 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
           cell.s = "m";
           cell.override = { reason: ov.reason, byName: ov.byName, at: ov.at };
         } else if (date < today) {
-          cell.s = emp.shift_id || r ? "n" : "";
+          // "ไม่มา" เฉพาะวันที่มีกะจริงในวันนั้น — ก่อนเริ่มกะ/ก่อนเริ่มงานไม่นับ (เจอจริง: 9–14 ต.ค. ขึ้นไม่มา ทั้งที่กะเริ่ม 15)
+          cell.s = r?.has_shift ? "n" : "";
         }
         if (leave) {
           cell.leave = { id: leave.id, name: leave.type_name, dayOff: leave.is_day_off, byName: leave.by_name, at: new Date(leave.created_at).toISOString() };
@@ -279,7 +281,7 @@ export interface DayRow {
   /** วิธีลงเวลาครั้งแรก — MOBILE / DEVICE (สแกนนิ้ว) / อื่น ๆ */
   source: string | null;
   /** m=มา x=ขาด n=ไม่มา o=หยุด l=ลา r=หยุดกะ w=ยังไม่มา (วันนี้ ยังไม่ถึงเลิกกะ) ns=ยังไม่ผูกกะ */
-  status: "m" | "x" | "n" | "o" | "l" | "r" | "w" | "ns";
+  status: "m" | "x" | "n" | "o" | "l" | "r" | "w" | "ns" | "none";
   early: boolean;
   cell: DayCell | null;
 }
@@ -324,7 +326,8 @@ export async function loadDay(orgId: string, date: string, now: Date = new Date(
       else if (w.shiftStart === null) status = "m";
       else status = toMin(inAt) > w.shiftStart % 1440 ? "x" : "m";
     } else if (!w.shiftId) status = "ns";
-    else if (date < month.today) status = "n";
+    // วันก่อนหน้า: ไม่มา เฉพาะวันที่มีกะจริง (ก่อนเริ่มกะ = ไม่มีกะวันนั้น)
+    else if (date < month.today) status = cell?.s === "n" ? "n" : "none";
     else if (date > month.today) status = "w";
     else status = w.shiftEnd !== null && toMin(nowHm) > w.shiftEnd % 1440 ? "n" : "w";
     const early =

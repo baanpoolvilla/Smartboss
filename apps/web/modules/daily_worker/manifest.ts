@@ -20,6 +20,8 @@ export const dailyWorkerManifest: ModuleManifest = {
   menus: [
     // คนงาน: ลงเวลาที่นี่ที่เดียว (หน้าเดียวกับ HR → ลงเวลา) — เมนูนี้ขึ้นเฉพาะคนงาน ผู้ดูแลไม่เห็น
     { label: "ลงเวลา", path: "/daily-workers/clock", permission: HR_PERMS.access, icon: "Clock", onlyForRoles: [WORKER_ROLE_CODE] },
+    // คนงาน: เข้า–ออกของตัวเองทั้งเดือน แยกจากหน้าลงเวลา
+    { label: "เข้าออกของฉัน", path: "/daily-workers/me", permission: HR_PERMS.access, icon: "CalendarDays", onlyForRoles: [WORKER_ROLE_CODE] },
     // แยกจาก "ภาพรวม" ของพนักงานประจำ — ใครมา/ไม่มา มากี่โมง กลับกี่โมง แก้ขาดเป็นมาได้ทันที
     { label: "ลงเวลาวันนี้", path: "/daily-workers/today", permission: DW_PERMS.view, icon: "Clock" },
     { label: "ตารางคนงาน", path: "/daily-workers", permission: DW_PERMS.view, icon: "CalendarDays" },

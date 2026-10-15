@@ -24,6 +24,7 @@ const STATUS: Record<string, { text: string; cls: string }> = {
   l: { text: "ลา", cls: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-200" },
   r: { text: "หยุดตามกะ", cls: "bg-(--bg-soft) text-(--ink-soft)" },
   ns: { text: "ยังไม่ผูกกะ", cls: "bg-(--tone-warn)/12 text-(--tone-warn)" },
+  none: { text: "ไม่มีกะวันนั้น", cls: "bg-(--bg-soft) text-(--ink-soft)" },
 };
 
 function shiftDate(date: string, delta: number) {

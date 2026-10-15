@@ -20,7 +20,7 @@ export default async function DailyWorkerClockPage() {
       width="max-w-lg"
       load={async () => {
         const me = await prisma.user.findUnique({ where: { id: session.userId }, select: { name: true } });
-        return <Today userName={me?.name ?? ""} showFriendHint={false} />;
+        return <Today userName={me?.name ?? ""} showFriendHint={false} showMyMonth={false} />;
       }}
     />
   );

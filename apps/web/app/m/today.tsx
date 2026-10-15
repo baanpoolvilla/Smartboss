@@ -256,9 +256,12 @@ const PROOFS_KEY = "sb-checkin-attempt-proofs";
 export function Today({
   userName,
   showFriendHint,
+  showMyMonth = true,
 }: {
   userName: string;
   showFriendHint: boolean;
+  /** การ์ด "เดือนนี้ของฉัน" ของคนงาน — ปิดในหน้าลงเวลาของโมดูลคนงาน (มีเมนู "เข้าออกของฉัน" แยกแล้ว) */
+  showMyMonth?: boolean;
 }) {
   const [data, setData] = useState<TodayData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -493,7 +496,7 @@ export function Today({
       )}
 
       {/* คนงาน (บทบาท WORKER) เห็นสรุปเดือนของตัวเอง — คนอื่นไม่ขึ้นอะไร */}
-      <MyMonthCard />
+      {showMyMonth && <MyMonthCard />}
 
       {isDesktop !== false ? null : needsPhoto && state === "idle" ? (
         // แตะปุ่มนี้ = เปิดกล้องจากการแตะโดยตรง (iPhone ยอม) แล้วส่งรูปพร้อมลงเวลาทั้งก้อน
