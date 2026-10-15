@@ -1,5 +1,6 @@
 import "server-only";
-import { DW_PERMS, WORKER_ROLE_CODE } from "@/modules/daily_worker/permissions";
+import { WORKER_ROLE_CODE } from "@/modules/daily_worker/permissions";
+import { readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
 import { isWorkerUser } from "@/lib/worker-role";
 import { prisma } from "@smartboss/database";
 
@@ -212,20 +213,36 @@ export async function syncDepartmentChannels(orgId: string, actorId: string, for
   }
 }
 
-// ─── ห้องรวมคนงาน ─────────────────────────────────────────────────────────
+// ─── ห้องรวมพนักงานและคนงาน ─────────────────────────────────────────────
 
-/** ห้องรวมคนงาน — id คงที่ต่อบริษัท (เหมือนห้องรวมทั้งบริษัท) · สมาชิกซิงก์เอง ไม่ต้องเพิ่มทีละคน */
+/** ห้องรวมพนักงานและคนงาน — id คงที่ต่อบริษัท · สมาชิกเพิ่มเอง + แก้เองได้แบบกลุ่ม LINE */
 export const WORKER_CHANNEL_PREFIX = "workers-";
 export function workerChannelId(orgId: string): string {
   return `${WORKER_CHANNEL_PREFIX}${orgId}`;
 }
-const WORKER_CHANNEL_NAME = "ห้องรวมคนงาน";
+const WORKER_CHANNEL_NAME = "ห้องรวมพนักงานและคนงาน";
+/** คนที่ถูกเอาออก/ออกเอง — ระบบไม่เพิ่มกลับให้อีก (store ของบริษัท) · เพิ่มกลับด้วยมือ = ลบออกจากรายการนี้ */
+const WORKER_ROOM_EXCLUDED_KEY = "chat-worker-room-excluded";
 const gw = globalThis as unknown as { __chatWorkerSyncAt?: Map<string, number> };
 
+async function readExcluded(orgId: string): Promise<{ list: string[]; version: number }> {
+  const { data, version } = await readStore<string[]>(orgId, WORKER_ROOM_EXCLUDED_KEY);
+  return { list: data ?? [], version };
+}
+async function changeExcluded(orgId: string, actorId: string, change: (list: Set<string>) => void): Promise<void> {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const { data, version } = await readStore<string[]>(orgId, WORKER_ROOM_EXCLUDED_KEY);
+    const set = new Set(data ?? []);
+    change(set);
+    const r = await writeStore(orgId, WORKER_ROOM_EXCLUDED_KEY, [...set], data === null ? null : version, actorId);
+    if (r.ok) return;
+  }
+}
+
 /**
- * ห้องรวมคนงาน — คนงาน (บทบาท WORKER) ไม่อยู่ในห้องรวมทั้งบริษัท จึงมีห้องรวมของตัวเอง
- * สมาชิก = คนงานที่ active ทุกคน + ผู้ดูแลคนงาน (สิทธิ์ daily_worker.manage เช่นผู้ดูแลบ้าน/HR) เป็นแอดมินห้อง
- * มีคนงานใหม่ = เข้าห้องเอง · คนงานออก/เปลี่ยนบทบาท = ออกจากห้องเอง (แบบเดียวกับห้องรวมทั้งบริษัท)
+ * ห้องรวมพนักงานและคนงาน — คนงาน (WORKER) ไม่อยู่ในห้องรวมทั้งบริษัท ห้องนี้จึงรวมทุกคนไว้ด้วยกัน
+ * สมาชิก = ผู้ใช้ที่ active ทุกคน (พนักงาน + คนงาน) ยกเว้นคนที่ถูกเอาออก/ออกเอง (ไม่เพิ่มกลับให้)
+ * คนใหม่ = เข้าห้องเอง · ปิดบัญชี = ออกเอง · แอดมินห้อง = CEO / ผู้ดูแลระบบสูงสุด (เพิ่ม/เอาออก/ตั้งแอดมินได้แบบกลุ่ม LINE)
  * ยังไม่มีคนงานเลย = ยังไม่สร้างห้อง · ทำจริงไม่เกินนาทีละครั้งต่อบริษัทต่อโปรเซส
  */
 export async function syncWorkerChannel(orgId: string, actorId: string, force = false): Promise<void> {
@@ -235,26 +252,29 @@ export async function syncWorkerChannel(orgId: string, actorId: string, force = 
   cache.set(orgId, Date.now());
   try {
     const id = workerChannelId(orgId);
-    const [workers, managers, channel] = await Promise.all([
-      prisma.user.findMany({ where: { orgId, isActive: true, roles: { some: { role: { code: WORKER_ROLE_CODE } } } }, select: { id: true } }),
-      prisma.user.findMany({
-        where: { orgId, isActive: true, roles: { some: { role: { permissions: { some: { permission: { code: DW_PERMS.manage } } } } } } },
-        select: { id: true },
-      }),
-      prisma.chatChannel.findFirst({ where: { id, orgId }, select: { id: true, archived: true, members: { select: { userId: true, role: true } } } }),
+    const [users, channel, excluded] = await Promise.all([
+      prisma.user.findMany({ where: { orgId, isActive: true }, select: { id: true, roles: { select: { role: { select: { code: true } } } } } }),
+      prisma.chatChannel.findFirst({ where: { id, orgId }, select: { id: true, name: true, archived: true, members: { select: { userId: true, role: true } } } }),
+      readExcluded(orgId),
     ]);
-    if (workers.length === 0 && !channel) return;
-    const adminIds = new Set(managers.map((m) => m.id));
-    const memberIds = new Set([...workers.map((w) => w.id), ...adminIds]);
+    const hasWorker = users.some((u) => u.roles.some((r) => r.role.code === WORKER_ROLE_CODE));
+    if (!hasWorker && !channel) return;
+    const out = new Set(excluded.list);
+    const adminIds = new Set(users.filter((u) => u.roles.some((r) => r.role.code === "CEO" || r.role.code === "SUPER_ADMIN")).map((u) => u.id));
+    const memberIds = new Set(users.map((u) => u.id).filter((u) => !out.has(u)));
     if (!channel) {
       await prisma.chatChannel.create({ data: { id, orgId, type: "group", name: WORKER_CHANNEL_NAME, createdById: actorId } });
-    } else if (channel.archived) {
-      await prisma.chatChannel.update({ where: { id }, data: { archived: false } });
+    } else if (channel.archived || channel.name === "ห้องรวมคนงาน") {
+      // ชื่อเดิมของรุ่นแรก (คนงานล้วน) → ชื่อใหม่ครั้งเดียว · ชื่อที่ตั้งเองไม่แตะ
+      await prisma.chatChannel.update({ where: { id }, data: { archived: false, ...(channel.name === "ห้องรวมคนงาน" ? { name: WORKER_CHANNEL_NAME } : {}) } });
     }
     const current = new Map((channel?.members ?? []).map((m) => [m.userId, m.role]));
+    const activeIds = new Set(users.map((u) => u.id));
     const toAdd = [...memberIds].filter((u) => !current.has(u));
-    const toRemove = [...current.keys()].filter((u) => !memberIds.has(u));
-    const toRole = [...memberIds].filter((u) => current.has(u) && (current.get(u) === "admin") !== adminIds.has(u));
+    // เอาออกเองเฉพาะคนที่ปิดบัญชีแล้ว — คนที่ถูกเอาออกด้วยมือหายไปจาก current อยู่แล้ว
+    const toRemove = [...current.keys()].filter((u) => !activeIds.has(u));
+    // CEO/ผู้ดูแลสูงสุดเป็นแอดมินเสมอ · คนที่ถูกตั้งเป็นแอดมินด้วยมือไม่ถูกปลด
+    const toAdmin = [...adminIds].filter((u) => current.has(u) && current.get(u) !== "admin");
     if (toAdd.length > 0) {
       await prisma.chatChannelMember.createMany({
         data: toAdd.map((userId) => ({ channelId: id, userId, orgId, role: adminIds.has(userId) ? "admin" : "member" })),
@@ -262,10 +282,10 @@ export async function syncWorkerChannel(orgId: string, actorId: string, force = 
       });
     }
     if (toRemove.length > 0) await prisma.chatChannelMember.deleteMany({ where: { orgId, channelId: id, userId: { in: toRemove } } });
-    for (const userId of toRole) {
-      await prisma.chatChannelMember.update({ where: { channelId_userId: { channelId: id, userId } }, data: { role: adminIds.has(userId) ? "admin" : "member" } });
+    for (const userId of toAdmin) {
+      await prisma.chatChannelMember.update({ where: { channelId_userId: { channelId: id, userId } }, data: { role: "admin" } });
     }
-    if (toAdd.length || toRemove.length || toRole.length || !channel) {
+    if (toAdd.length || toRemove.length || toAdmin.length || !channel) {
       publishToUsers([...new Set([...memberIds, ...toRemove])], { type: "chat.channel", channelId: id });
     }
   } catch (err) {
@@ -516,7 +536,6 @@ function requireManage(access: ChannelAccess) {
 
 function requireEditableMembers(access: ChannelAccess) {
   if (access.type !== "group") throw new ChatError("ห้องนี้เพิ่มหรือลบสมาชิกไม่ได้", 400);
-  if (access.id.startsWith(WORKER_CHANNEL_PREFIX)) throw new ChatError("ห้องรวมคนงานเพิ่มสมาชิกเอง (คนงานทุกคน + ผู้ดูแลคนงาน) — แก้ที่บทบาทของผู้ใช้แทน", 400);
   if (access.departmentId) throw new ChatError("กลุ่มประจำแผนกซิงก์สมาชิกตามแผนกอัตโนมัติ — แก้ที่ข้อมูลพนักงานแทน", 400);
 }
 
@@ -576,6 +595,10 @@ export async function addMembers(actor: ChatActor, channelId: string, userIds: s
   requireEditableMembers(access);
   const existing = new Set(await channelMemberIds(actor.orgId, channelId));
   const toAdd = (await activeOrgUserIds(actor.orgId, userIds)).filter((id) => !existing.has(id));
+  // ห้องรวมพนักงานและคนงาน: เพิ่มกลับด้วยมือ = ไม่อยู่ในรายชื่อที่ถูกเอาออกแล้ว
+  if (channelId.startsWith(WORKER_CHANNEL_PREFIX) && toAdd.length > 0) {
+    await changeExcluded(actor.orgId, actor.userId, (set) => toAdd.forEach((id) => set.delete(id)));
+  }
   if (toAdd.length === 0) return;
   if (existing.size + toAdd.length > MAX_GROUP_MEMBERS) throw new ChatError(`กลุ่มมีสมาชิกได้ไม่เกิน ${MAX_GROUP_MEMBERS} คน`, 400);
 
@@ -603,6 +626,10 @@ export async function removeMember(actor: ChatActor, channelId: string, userId: 
 
   const before = members.map((m) => m.userId);
   await prisma.chatChannelMember.delete({ where: { channelId_userId: { channelId, userId } } });
+  // ห้องรวมพนักงานและคนงาน: ถูกเอาออก/ออกเอง = ระบบไม่เพิ่มกลับให้อีก
+  if (channelId.startsWith(WORKER_CHANNEL_PREFIX)) {
+    await changeExcluded(actor.orgId, actor.userId, (set) => set.add(userId));
+  }
 
   // แอดมินคนสุดท้ายออก → ยกคนที่อยู่นานสุดขึ้นเป็นแอดมินแทน กลุ่มจะได้ไม่ไร้คนดูแล
   const rest = members.filter((m) => m.userId !== userId);
