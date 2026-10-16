@@ -212,7 +212,7 @@ export function roundComplianceStatusServer(
   );
   const roundPosts = postsForRoundServer(topic, userId, round, day, posts, attributionRounds(myRounds, rounds));
   // ระบบล่มช่วงกำหนดส่งรอบนี้ (report-outage.ts) — ตรงกับแดชบอร์ด ไม่หักคะแนน
-  if (roundInOutage(round, day)) return roundPosts.length > 0 ? "on-time" : "exempt";
+  if (roundInOutage(round, day)) return "on-time";
   // ส่งย้อนหลังหลัง CEO อนุมัติ (report-retro.ts — โพสต์ผ่านการตรวจใน acceptRetroPosts แล้ว) — นับว่าส่งแล้ว
   if (roundPosts.length === 0 && hasRetroSubmission(posts, topic.id, userId, round.id, day)) return "on-time";
   if (legacyOnly && roundPosts.length === 0) return "exempt";
