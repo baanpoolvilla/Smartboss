@@ -121,7 +121,8 @@ export function ReportReply({
           // still rendered as a tall, wide card ("ใหญ่มากกินไปแทบครึ่งหน้า").
           "min-w-0 flex-1 rounded-lg sm:rounded-xl px-2 py-1.5 sm:px-2.5 sm:py-2 border transition-colors duration-500",
           targeted
-            ? "bg-sky-50 border-sky-400 shadow-[inset_4px_0_0_var(--color-sky-500)]"
+            ? // พื้นฟ้าอย่างเดียว — แถบฟ้าซ้ายอยู่ที่ตัวโพสต์แล้ว ใส่ซ้ำตรงนี้จะเป็นกรอบซ้อนกัน
+              "bg-sky-100 border-transparent dark:bg-sky-950/60"
             : flashed
             ? "bg-[var(--accent)] border-[var(--brand-green)]/40"
             : isOwn
@@ -303,12 +304,12 @@ export function ReportReply({
         {quoted && (
           <button
             onClick={() => onJumpToQuote(quoted.id)}
-            className="mt-1 mb-1.5 flex items-center gap-1.5 max-w-full rounded-md bg-[var(--bg-soft)] hover:bg-[var(--accent)] border-l-[3px] border-[var(--brand-green)]/50 pl-2 pr-2.5 py-1.5 text-xs text-left transition-colors"
+            className="mt-1 mb-1.5 flex items-center gap-1.5 max-w-full rounded-md bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-950/60 border-l-4 border-red-500 pl-2 pr-2.5 py-1.5 text-xs text-left transition-colors"
             aria-label={`ไปดูข้อความที่ ${quotedAuthor?.name ?? "ผู้ใช้"} ${quoted.id === postQuote.id ? "โพสต์" : "แสดงความคิดเห็น"} ไว้`}
           >
-            <CornerUpLeft className="h-3 w-3 shrink-0 text-[var(--ink-soft)]" />
+            <CornerUpLeft className="h-3 w-3 shrink-0 text-red-600 dark:text-red-400" />
             <span className="min-w-0 truncate">
-              <span className="font-semibold text-[var(--ink)]">{quotedAuthor?.name ?? "ความคิดเห็นที่ถูกลบ"}</span>
+              <span className="font-semibold text-red-700 dark:text-red-300">{quotedAuthor?.name ?? "ความคิดเห็นที่ถูกลบ"}</span>
               {quoted.body && <span className="text-[var(--ink-soft)]">: {quotePreview(quoted.body)}</span>}
             </span>
           </button>

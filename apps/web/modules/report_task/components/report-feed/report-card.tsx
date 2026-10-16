@@ -235,6 +235,7 @@ export function ReportCard({
   onOpenTask?: (taskId: string) => void;
 }) {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
+  const replyTargeted = !!highlighted && !!highlightReplyId && post.replies.some((r) => r.id === highlightReplyId);
   const maxImages = useAttachmentSettingsStore((s) => s.settings.maxImagesPerReportPost);
   const toggleReaction = useReportFeedStore((s) => s.toggleReaction);
   const addStickerReaction = useReportFeedStore((s) => s.addStickerReaction);
@@ -1209,7 +1210,8 @@ export function ReportCard({
         mentionsMe && "bg-amber-50 hover:bg-amber-50",
         flashTargetId === post.id && "bg-[var(--accent)] border-[var(--brand-green)]/40",
         // เปิดมาจากแจ้งเตือน/ลิงก์ — สีฟ้าค้างไว้จนกว่าจะเปลี่ยนห้องหรือออกจากหน้า (ต่างจากเหลืองของ "แท็กถึงเรา")
-        highlighted && "bg-sky-50 hover:bg-sky-50",
+        // แจ้งเตือนชี้ไปที่ความคิดเห็น — โพสต์เหลือแค่แถบฟ้าซ้าย (พื้นฟ้าอยู่ที่ความคิดเห็นแทน ไม่ซ้อนกัน แบบ Discord)
+        highlighted && !replyTargeted && "bg-sky-50 hover:bg-sky-50",
         // Unread keeps its own accent, now as a ring around the whole card
         // (a plain border-l reads oddly once the corners are rounded).
         isUnread && "ring-2 ring-[var(--chart-blue)]/70 ring-offset-0"
@@ -1938,10 +1940,10 @@ export function ReportCard({
           <>
             {roundBadge && !badgeInHeader && <div className="flex justify-end">{roundBadge}</div>}
             {replyingTo && (
-              <div className="flex items-start gap-2 pl-2.5 pr-2 py-2 rounded-lg bg-[var(--accent)] border-l-4 border-[var(--brand-green)]">
-                <Quote className="h-3.5 w-3.5 shrink-0 mt-0.5 text-[var(--brand-green-dark)]" />
+              <div className="flex items-start gap-2 pl-2.5 pr-2 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 border-l-4 border-red-500">
+                <Quote className="h-3.5 w-3.5 shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--brand-green-dark)]">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-red-700 dark:text-red-300">
                     {quoteKind === "quote" ? "กำลังอ้างอิงโพสต์นี้" : "กำลังตอบกลับความคิดเห็น"}
                   </p>
                   <p className="text-xs truncate">
