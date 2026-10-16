@@ -143,7 +143,8 @@ export interface ChatKeepItemDTO {
   attachment: ChatAttachment | null;
   size: number;
   /** มาจากห้องไหน ใครส่ง — null = อัปโหลด/พิมพ์ในห้อง Keep Memo เอง */
-  source: { channelId: string | null; label: string | null; authorId: string | null; fromKeepMemo: boolean } | null;
+  /** messageId = ข้อความต้นฉบับ (กด "ไปที่ข้อความต้นฉบับ" ใน Keep) */
+  source: { channelId: string | null; messageId: string | null; label: string | null; authorId: string | null; fromKeepMemo: boolean } | null;
   collectionIds: string[];
   createdAt: string;
 }

@@ -16,7 +16,7 @@ import { cn } from "@smartboss/ui/cn";
 import { useChatStore } from "../store/chat-store";
 import type { ChatUser } from "../types";
 import { createGroupChannel, startDm } from "../lib/api";
-import { loadChannels, openChannel, useChatSync } from "../lib/chat-actions";
+import { jumpToMessage, loadChannels, openChannel, useChatSync } from "../lib/chat-actions";
 import { ChannelList } from "./channel-list";
 import { ChatRoom } from "./chat-room";
 import { NewChatDialog } from "./new-chat-dialog";
@@ -303,6 +303,26 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
           onOpenMemo={() => {
             setKeepOpen(false);
             navigateTo(`keep-${currentUser.id}`);
+          }}
+          onJumpToSource={(channelId, messageId) => {
+            // ห้องที่ออกไปแล้ว/ถูกลบ — ไม่มีในรายการห้องของเรา เข้าไปดูไม่ได้
+            if (!useChatStore.getState().channels.some((c) => c.id === channelId)) {
+              toast.message("คุณไม่ได้อยู่ในห้องนี้แล้ว");
+              return;
+            }
+            setKeepOpen(false);
+            navigateTo(channelId);
+            void (async () => {
+              // รอห้องเปิดและโหลดหน้าล่าสุดเสร็จก่อน (effect URL → ห้อง) ค่อยกระโดด
+              // ไม่งั้นหน้าล่าสุดที่โหลดเสร็จทีหลังจะทับหน้าที่กระโดดไป
+              for (let i = 0; i < 50; i++) {
+                const s = useChatStore.getState();
+                const room = s.rooms[channelId];
+                if (s.activeChannelId === channelId && room && !room.fromCache) break;
+                await new Promise((r) => setTimeout(r, 100));
+              }
+              await jumpToMessage(channelId, messageId);
+            })();
           }}
         />
       )}

@@ -7,6 +7,7 @@ import {
   Bookmark,
   Check,
   Copy,
+  CornerUpLeft,
   Download,
   ExternalLink,
   FileText,
@@ -74,7 +75,21 @@ function firstUrl(text: string | null): string | null {
  * คลัง Keep (แบบ LINE) — ของที่เก็บไว้ทั้งหมดของตัวเอง: แท็บตามประเภท, ค้นหา, คอลเลกชัน,
  * ส่งต่อเข้าห้องแชท, ลบ · เปิดจากปุ่ม 🔖 บนหัวรายการแชท หรือหัวห้อง Keep Memo
  */
-export function KeepLibrary({ onClose, onOpenMemo }: { onClose: () => void; onOpenMemo: () => void }) {
+/** มีข้อความต้นฉบับในห้องแชทให้กลับไปดูไหม — ของที่พิมพ์/อัปโหลดในห้อง Keep Memo เองไม่มี */
+function canJump(item: ChatKeepItemDTO): boolean {
+  return !!(item.source?.channelId && item.source.messageId && !item.source.fromKeepMemo);
+}
+
+export function KeepLibrary({
+  onClose,
+  onOpenMemo,
+  onJumpToSource,
+}: {
+  onClose: () => void;
+  onOpenMemo: () => void;
+  /** "ไปที่ข้อความต้นฉบับ" — ปิด Keep แล้วเปิดห้องนั้น เลื่อนไปที่ข้อความ */
+  onJumpToSource?: (channelId: string, messageId: string) => void;
+}) {
   useBackToClose(true, onClose);
   const users = useChatStore((s) => s.users);
   const meId = useChatStore((s) => s.meId);
@@ -89,6 +104,7 @@ export function KeepLibrary({ onClose, onOpenMemo }: { onClose: () => void; onOp
   const [forwarding, setForwarding] = useState<ChatKeepItemDTO | null>(null);
   const [collecting, setCollecting] = useState<ChatKeepItemDTO | null>(null);
   const [lightbox, setLightbox] = useState<number | null>(null);
+  const [reading, setReading] = useState<ChatKeepItemDTO | null>(null);
   const [newCollection, setNewCollection] = useState<string | null>(null);
   const [editCollection, setEditCollection] = useState<ChatKeepCollectionDTO | null>(null);
 
@@ -153,6 +169,13 @@ export function KeepLibrary({ onClose, onOpenMemo }: { onClose: () => void; onOp
     const room = item.source.label ?? "แชท";
     return who ? `จาก ${room} · ${who}` : `จาก ${room}`;
   };
+
+  const jump = onJumpToSource
+    ? (item: ChatKeepItemDTO) => {
+        if (!canJump(item)) return;
+        onJumpToSource(item.source!.channelId!, item.source!.messageId!);
+      }
+    : null;
 
   const used = data?.usedBytes ?? 0;
   const quota = data?.quotaBytes ?? 1;
@@ -313,7 +336,11 @@ export function KeepLibrary({ onClose, onOpenMemo }: { onClose: () => void; onOp
                 <li key={item.id} className="flex items-center gap-3 px-4 py-2.5">
                   <ItemThumb item={item} onOpen={() => setLightbox(media.indexOf(item))} />
                   <div className="min-w-0 flex-1">
-                    <ItemMain item={item} />
+                    <ItemMain
+                      item={item}
+                      onOpenMedia={() => setLightbox(media.indexOf(item))}
+                      onRead={() => setReading(item)}
+                    />
                     <p className="mt-0.5 truncate text-[11.5px] text-(--ink-soft)">
                       {sourceText(item)} · {when(item.createdAt)}
                       {item.collectionIds.length > 0 &&
@@ -344,6 +371,16 @@ export function KeepLibrary({ onClose, onOpenMemo }: { onClose: () => void; onOp
           onForward={() => setForwarding(menuFor)}
           onCollect={() => setCollecting(menuFor)}
           onDelete={() => void remove(menuFor)}
+          onJump={jump && canJump(menuFor) ? () => jump(menuFor) : undefined}
+        />
+      )}
+
+      {reading && (
+        <ItemReader
+          item={reading}
+          source={sourceText(reading)}
+          onClose={() => setReading(null)}
+          onJump={jump && canJump(reading) ? () => jump(reading) : undefined}
         />
       )}
 
@@ -419,7 +456,7 @@ function ItemThumb({ item, onOpen }: { item: ChatKeepItemDTO; onOpen: () => void
   return <span className={cn(box, "bg-(--bg-soft) text-[15px] font-semibold text-(--ink-soft)")}>Aa</span>;
 }
 
-function ItemMain({ item }: { item: ChatKeepItemDTO }) {
+function ItemMain({ item, onOpenMedia, onRead }: { item: ChatKeepItemDTO; onOpenMedia: () => void; onRead: () => void }) {
   if (item.attachment && (item.kind === "file" || item.kind === "audio")) {
     return (
       <a href={downloadUrl(item.attachment)} className="block truncate text-sm font-medium text-(--ink) hover:underline">
@@ -428,8 +465,13 @@ function ItemMain({ item }: { item: ChatKeepItemDTO }) {
       </a>
     );
   }
+  // กดตรงชื่อก็เปิดได้ ไม่ต้องเล็งที่รูปเล็กอย่างเดียว
   if (item.kind === "image" || item.kind === "video") {
-    return <p className="truncate text-sm font-medium text-(--ink)">{item.kind === "image" ? "รูปภาพ" : "วิดีโอ"}</p>;
+    return (
+      <button type="button" onClick={onOpenMedia} className="block w-full truncate text-left text-sm font-medium text-(--ink) hover:underline">
+        {item.kind === "image" ? "รูปภาพ" : "วิดีโอ"}
+      </button>
+    );
   }
   const url = item.kind === "link" ? firstUrl(item.body) : null;
   if (url) {
@@ -439,7 +481,64 @@ function ItemMain({ item }: { item: ChatKeepItemDTO }) {
       </a>
     );
   }
-  return <p className="line-clamp-3 whitespace-pre-wrap break-words text-sm text-(--ink)">{item.body}</p>;
+  // ข้อความ — แถวโชว์ 3 บรรทัด กดเปิดอ่านเต็ม
+  return (
+    <button type="button" onClick={onRead} className="block w-full text-left">
+      <span className="line-clamp-3 whitespace-pre-wrap break-words text-sm text-(--ink)">{item.body}</span>
+    </button>
+  );
+}
+
+/** อ่านข้อความที่เก็บไว้แบบเต็ม (แถวในรายการตัดเหลือ 3 บรรทัด) */
+function ItemReader({ item, source, onClose, onJump }: { item: ChatKeepItemDTO; source: string; onClose: () => void; onJump?: () => void }) {
+  useBackToClose(true, onClose);
+  return createPortal(
+    <div className="chat-ui fixed inset-0 z-[75] flex items-end justify-center bg-black/30 sm:items-center sm:p-4" onClick={onClose}>
+      <div
+        className="flex max-h-[85dvh] w-full flex-col rounded-t-2xl bg-(--bg) pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-2xl sm:max-w-lg sm:rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-label="ข้อความที่เก็บไว้"
+      >
+        <div className="flex items-center gap-2 border-b border-(--line) px-4 py-3">
+          <p className="min-w-0 flex-1 truncate text-[12.5px] text-(--ink-soft)">
+            {source} · {when(item.createdAt)}
+          </p>
+          <button type="button" onClick={onClose} className="rounded-full p-1.5 text-(--ink-soft) hover:bg-(--bg-soft)" aria-label="ปิด">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <p className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words px-4 py-3 text-[15px] leading-relaxed text-(--ink)">{item.body}</p>
+        <div className="flex flex-wrap gap-2 border-t border-(--line) px-4 pt-3">
+          <button
+            type="button"
+            onClick={() =>
+              navigator.clipboard?.writeText(item.body ?? "").then(
+                () => toast.success("คัดลอกแล้ว"),
+                () => toast.error("คัดลอกไม่สำเร็จ")
+              )
+            }
+            className="inline-flex items-center gap-1.5 rounded-full border border-(--line) px-3 py-1.5 text-sm text-(--ink) hover:bg-(--bg-soft)"
+          >
+            <Copy className="h-4 w-4 text-(--ink-soft)" /> คัดลอก
+          </button>
+          {onJump && (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onJump();
+              }}
+              className="inline-flex items-center gap-1.5 rounded-full border border-(--line) px-3 py-1.5 text-sm text-(--ink) hover:bg-(--bg-soft)"
+            >
+              <CornerUpLeft className="h-4 w-4 text-(--ink-soft)" /> ไปที่ข้อความต้นฉบับ
+            </button>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
 }
 
 function ItemMenu({
@@ -448,12 +547,14 @@ function ItemMenu({
   onForward,
   onCollect,
   onDelete,
+  onJump,
 }: {
   item: ChatKeepItemDTO;
   onClose: () => void;
   onForward: () => void;
   onCollect: () => void;
   onDelete: () => void;
+  onJump?: () => void;
 }) {
   const [confirm, setConfirm] = useState(false);
   useBackToClose(true, onClose);
@@ -462,6 +563,11 @@ function ItemMenu({
   return createPortal(
     <div className="chat-ui fixed inset-0 z-[75] flex items-end justify-center bg-black/30 sm:items-center" onClick={onClose}>
       <div className="w-full rounded-t-2xl bg-(--bg) p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-2xl sm:max-w-xs sm:rounded-2xl" onClick={(e) => e.stopPropagation()} role="menu">
+        {onJump && (
+          <button type="button" className={row} onClick={() => { onClose(); onJump(); }}>
+            <CornerUpLeft className="h-4 w-4 text-(--ink-soft)" /> ไปที่ข้อความต้นฉบับ
+          </button>
+        )}
         <button type="button" className={row} onClick={() => { onClose(); onForward(); }}>
           <Send className="h-4 w-4 text-(--ink-soft)" /> ส่งต่อไปที่แชท
         </button>

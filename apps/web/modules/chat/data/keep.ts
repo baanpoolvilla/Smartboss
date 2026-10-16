@@ -205,6 +205,7 @@ function toDTO(r: {
   attachment: unknown;
   size: number;
   sourceChannelId: string | null;
+  sourceMessageId: string | null;
   sourceAuthorId: string | null;
   sourceLabel: string | null;
   collectionIds: string[];
@@ -217,7 +218,9 @@ function toDTO(r: {
     body: r.body,
     attachment: (r.attachment as ChatAttachment | null) ?? null,
     size: r.size,
-    source: r.sourceChannelId || r.sourceLabel ? { channelId: r.sourceChannelId, label: r.sourceLabel, authorId: r.sourceAuthorId, fromKeepMemo } : null,
+    source: r.sourceChannelId || r.sourceLabel
+      ? { channelId: r.sourceChannelId, messageId: r.sourceMessageId, label: r.sourceLabel, authorId: r.sourceAuthorId, fromKeepMemo }
+      : null,
     collectionIds: r.collectionIds,
     createdAt: r.createdAt.toISOString(),
   };
