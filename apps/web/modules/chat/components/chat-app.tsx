@@ -21,6 +21,7 @@ import { ChannelList } from "./channel-list";
 import { ChatRoom } from "./chat-room";
 import { NewChatDialog } from "./new-chat-dialog";
 import { KeepLibrary } from "./keep-library";
+import { whenHistorySettled } from "@/lib/back-to-close";
 import { CHAT_BACKGROUNDS, CHAT_TEXT_SIZES, useChatPrefs, type ChatPrefs } from "../lib/prefs";
 import { loadLocalMedia } from "../lib/local-media";
 
@@ -311,18 +312,22 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
               return;
             }
             setKeepOpen(false);
-            navigateTo(channelId);
-            void (async () => {
-              // รอห้องเปิดและโหลดหน้าล่าสุดเสร็จก่อน (effect URL → ห้อง) ค่อยกระโดด
-              // ไม่งั้นหน้าล่าสุดที่โหลดเสร็จทีหลังจะทับหน้าที่กระโดดไป
-              for (let i = 0; i < 50; i++) {
-                const s = useChatStore.getState();
-                const room = s.rooms[channelId];
-                if (s.activeChannelId === channelId && room && !room.fromCache) break;
-                await new Promise((r) => setTimeout(r, 100));
-              }
-              await jumpToMessage(channelId, messageId);
-            })();
+            // ปิดเมนู + ปิด Keep = ถอยประวัติ 2 ช่อง (back-to-close) ซึ่งทำงานทีหลังแบบ async
+            // ถ้าเปลี่ยนห้องก่อนมันถอยเสร็จ การถอยจะลบการเปลี่ยนห้องทิ้ง ("กดแล้วไม่ไปไหน")
+            whenHistorySettled(() => {
+              navigateTo(channelId);
+              void (async () => {
+                // รอห้องเปิดและโหลดหน้าล่าสุดเสร็จก่อน (effect URL → ห้อง) ค่อยกระโดด
+                // ไม่งั้นหน้าล่าสุดที่โหลดเสร็จทีหลังจะทับหน้าที่กระโดดไป
+                for (let i = 0; i < 50; i++) {
+                  const s = useChatStore.getState();
+                  const room = s.rooms[channelId];
+                  if (s.activeChannelId === channelId && room && !room.fromCache) break;
+                  await new Promise((r) => setTimeout(r, 100));
+                }
+                await jumpToMessage(channelId, messageId);
+              })();
+            });
           }}
         />
       )}
