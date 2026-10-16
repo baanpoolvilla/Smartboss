@@ -21,7 +21,8 @@ import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { unreadTaskAttachmentCounts, unreadTaskCommentCounts } from "@/modules/report_task/lib/task-comment-activity";
-import { MessageSquare, Paperclip, History, SmilePlus, SearchCheck, Check, Circle, Star, Clock, Eye, Lock } from "lucide-react";
+import { MessageSquare, Paperclip, History, SmilePlus, SearchCheck, Check, Circle, Star, Clock, Eye, Lock, Repeat } from "lucide-react";
+import { describeRule, freqLabel, totalOccurrences } from "@/modules/report_task/lib/task-recurrence";
 import { isPersonalTask } from "@/modules/report_task/lib/personal-task";
 import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
 import { StickerConfirmDialog } from "@/modules/report_task/components/shared/sticker-confirm-dialog";
@@ -427,6 +428,19 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
             </span>
           )}
           <DueDateBadge task={task} />
+          {task.recurrence && (
+            <span
+              className="inline-flex items-center gap-0.5 h-5 rounded-md px-1.5 text-[10px] font-semibold bg-violet-100 text-violet-700 whitespace-nowrap dark:bg-violet-950/60 dark:text-violet-300"
+              title={`งานทำซ้ำ · ${describeRule(task.recurrence.rule)}`}
+            >
+              <Repeat className="h-2.5 w-2.5" />
+              {freqLabel(task.recurrence.rule)} · รอบ {task.recurrence.occurrence}
+              {(() => {
+                const total = totalOccurrences(task.recurrence.rule);
+                return total ? `/${total}` : "";
+              })()}
+            </span>
+          )}
           {/* งานส่วนตัว (เปิดให้ตัวเอง) — เห็นเฉพาะเจ้าของ ไม่มีผลกับคะแนน (personal-task.ts) */}
           {isPersonalTask(task) && (
             <span

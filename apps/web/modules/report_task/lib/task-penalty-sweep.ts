@@ -21,6 +21,10 @@ export interface PenaltySweepNotification {
   recipients: string[];
   byUserId: string;
   message: string;
+  /** แจ้งเตือนรอบใหม่ของงานทำซ้ำ — กดแล้วเปิดงาน (การหักคะแนนเดิมไม่ใส่) */
+  link?: string;
+  taskId?: string;
+  kind?: "task_assigned";
 }
 
 export interface PenaltySweepResult {

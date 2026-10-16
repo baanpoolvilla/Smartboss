@@ -38,6 +38,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/c
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { TimePickerField } from "@/modules/report_task/components/shared/time-picker-field";
 import { PenaltyChip } from "@/modules/report_task/components/shared/penalty-chip";
+import { TaskRecurrenceSection } from "@/modules/report_task/components/kanban/task-recurrence-section";
+import { canManageSeries } from "@/modules/report_task/lib/task-recurrence";
 import { canEditRecord, canRemoveReaction, canReviewTask, canSeePenaltyStatus, canToggleOwnChecklistItem } from "@/modules/report_task/lib/permissions";
 import { useTaskReviewSettingsStore } from "@/modules/report_task/store/task-review-settings-store";
 import { todayIso } from "@/modules/report_task/lib/now";
@@ -212,6 +214,7 @@ export function TaskDetailSheet({
   const setStartDate = useTaskStore((s) => s.setStartDate);
   const setDueTime = useTaskStore((s) => s.setDueTime);
   const removeTask = useTaskStore((s) => s.removeTask);
+  const stopRecurrence = useTaskStore((s) => s.stopRecurrence);
   const setAssignees = useTaskStore((s) => s.setAssignees);
   const setMainAssignee = useTaskStore((s) => s.setMainAssignee);
   const reviseDueDate = useTaskStore((s) => s.reviseDueDate);
@@ -551,7 +554,9 @@ export function TaskDetailSheet({
   function confirmDelete() {
     if (!task) return;
     onOpenChange(false);
-    removeTask(task.id);
+    // งานทำซ้ำ: ลบเฉย ๆ แล้ว sweep จะสร้างรอบนี้กลับมาใหม่ — ลบพร้อมหยุดทั้งชุด
+    if (task.recurrence) stopRecurrence(task.id, true, viewingAsUserId);
+    else removeTask(task.id);
     toast.success(`ลบงาน "${task.title}" แล้ว`);
   }
 
@@ -1281,6 +1286,21 @@ export function TaskDetailSheet({
           )}
 
           <Separator />
+
+          {task.recurrence && (
+            <>
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold">ทำซ้ำ</h4>
+                <TaskRecurrenceSection
+                  task={task}
+                  canManage={canManageSeries(task, viewingAsUserId, owner, canEditMain)}
+                  actorId={viewingAsUserId}
+                  onLeave={() => onOpenChange(false)}
+                />
+              </div>
+              <Separator />
+            </>
+          )}
 
           {/* Missed-deadline dock — a status, not a sticker. Every task is
               docked automatically the instant it goes overdue, nothing for
@@ -2343,6 +2363,7 @@ export function TaskDetailSheet({
             <AlertDialogTitle>ลบงานนี้?</AlertDialogTitle>
             <AlertDialogDescription>
               ลบงาน &quot;{task.title}&quot; ออกจากระบบ — ย้อนกลับไม่ได้
+              {task.recurrence && " · เป็นงานทำซ้ำ: จะหยุดทำซ้ำทั้งชุดด้วย (ถ้าแค่อยากข้ามรอบนี้ ใช้ปุ่ม \"ข้ามรอบนี้\")"}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

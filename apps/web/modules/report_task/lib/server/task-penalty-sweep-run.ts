@@ -7,6 +7,8 @@ import { readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
 import { readTasks, writeTasks } from "@/modules/report_task/lib/db/task-repo";
 import { LATE_PENALTY_POINTS, sweepAutoPenalties } from "@/modules/report_task/lib/task-penalty-sweep";
 import type { ActivityItem, Task } from "@/modules/report_task/types";
+import { prisma } from "@smartboss/database";
+import { bangkokToday, formatThaiDate, spawnDueRounds, type SpawnedRound } from "@/modules/report_task/lib/task-recurrence";
 import type { AppNotification } from "@/modules/report_task/store/notification-store";
 import { claimSweep, releaseSweep } from "@/modules/report_task/lib/server/sweep-throttle";
 
@@ -44,9 +46,37 @@ export async function runTaskPenaltySweep(orgId: string, actorId: string | null)
       ? Math.round(configuredPoints)
       : LATE_PENALTY_POINTS;
 
-  const result = sweepAutoPenalties(tasks, latePenaltyPoints);
+  // งานทำซ้ำ — สร้างรอบที่ถึงเวลาขึ้นบอร์ดก่อน แล้วค่อยหักคะแนนรวมกันในรอบเดียว
+  // (ไม่มีชุดทำซ้ำเลย = ไม่ query อะไรเพิ่ม พฤติกรรมเดิมเป๊ะ)
+  let spawned: SpawnedRound[] = [];
+  if (tasks.some((t) => t.recurrence && !t.recurrence.stopped)) {
+    const ids = new Set(tasks.flatMap((t) => (t.recurrence ? t.assigneeIds : [])));
+    const active = await prisma.user.findMany({ where: { orgId, isActive: true, id: { in: [...ids] } }, select: { id: true } });
+    spawned = spawnDueRounds(
+      tasks,
+      bangkokToday(),
+      () => ({ taskId: `task-${randomUUID()}`, checklistId: () => `task-chk-${randomUUID()}` }),
+      new Date().toISOString(),
+      new Set(active.map((u) => u.id))
+    );
+  }
+  const allTasks = spawned.length > 0 ? [...spawned.map((s) => s.task), ...tasks] : tasks;
+
+  const swept = sweepAutoPenalties(allTasks, latePenaltyPoints);
+  const result = { ...swept, changed: swept.changed || spawned.length > 0 };
   if (!result.changed) {
     return Response.json({ ok: true, changed: false });
+  }
+  for (const s of spawned) {
+    const t = s.task;
+    const round = `รอบที่ ${t.recurrence!.occurrence}`;
+    const due = formatThaiDate(t.dueDate, false) + (t.dueTime ? ` ${t.dueTime}` : "");
+    result.logs.push({ userId: t.assignedById, action: "สร้างงานรอบใหม่ (ทำซ้ำ)", target: t.title, taskId: t.id, detail: `${round} · ส่งภายใน ${due}` });
+    result.notifications.push(
+      s.noAssignees
+        ? { recipients: [t.assignedById], byUserId: "system", message: `งานทำซ้ำ "${t.title}" ${round} ไม่มีผู้รับผิดชอบเหลืออยู่ (ลาออก/ปิดบัญชี) — มอบหมายใหม่ด้วย`, link: `/report-task/tasks?task=${t.id}`, taskId: t.id }
+        : { recipients: t.assigneeIds, byUserId: "system", message: `งาน "${t.title}" ${round} มาแล้ว · ส่งภายใน ${due}`, link: `/report-task/tasks?task=${t.id}`, taskId: t.id, kind: "task_assigned" }
+    );
   }
 
   const saved = await writeTasks(orgId, result.tasks, version, actorId);
@@ -83,6 +113,9 @@ export async function runTaskPenaltySweep(orgId: string, actorId: string | null)
         userId,
         byUserId: n.byUserId,
         message: n.message,
+        ...(n.link ? { link: n.link } : {}),
+        ...(n.taskId ? { taskId: n.taskId } : {}),
+        ...(n.kind ? { kind: n.kind } : {}),
         createdAt: new Date().toISOString(),
         read: false,
       }))

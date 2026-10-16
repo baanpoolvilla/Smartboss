@@ -51,7 +51,9 @@ import { expandRule, projectedRoutineQuotaTotal, quotaForDepartment, weekdayLabe
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
-import type { Attachment, CalendarEvent, ChecklistItem, LeaveType, Task, TaskPriority } from "@/modules/report_task/types";
+import type { Attachment, CalendarEvent, ChecklistItem, LeaveType, Task, TaskPriority, TaskRecurrenceRule } from "@/modules/report_task/types";
+import { describeRule, formatThaiDate, occurrenceDate, templateFromTask, validateRule } from "@/modules/report_task/lib/task-recurrence";
+import { defaultRecurrenceRule, RecurrenceFields, RecurrencePreview } from "@/modules/report_task/components/kanban/recurrence-fields";
 import { cn } from "@/modules/report_task/lib/utils";
 import { todayIso } from "@/modules/report_task/lib/now";
 import { isPersonalTask } from "@/modules/report_task/lib/personal-task";
@@ -293,6 +295,10 @@ export function NewTaskDialog({
   const [startDate, setStartDate] = useState(initialDate);
   const [dueDate, setDueDate] = useState(initialDate);
   const [dueTime, setDueTime] = useState("");
+  // งานทำซ้ำ — ปิดไว้ = งานครั้งเดียวแบบเดิมทุกอย่าง
+  const [repeatOn, setRepeatOn] = useState(false);
+  const [repeatRule, setRepeatRule] = useState<TaskRecurrenceRule | null>(null);
+  const effectiveRule: TaskRecurrenceRule = { ...(repeatRule ?? defaultRecurrenceRule(startDate)), anchor: startDate };
   // Hidden behind "+ ใส่เวลา" by default — most tasks don't set one, so it
   // stays out of the way until asked for. `dueTime` already being set (rare
   // here since this dialog always starts blank, but kept for consistency)
@@ -589,6 +595,8 @@ export function NewTaskDialog({
     setDayoffRecurring(false);
     setDayoffWeekdays(new Set());
     setDayoffUntil("");
+    setRepeatOn(false);
+    setRepeatRule(null);
   }
 
   async function createTask() {
@@ -611,6 +619,8 @@ export function NewTaskDialog({
             )
           )
         : {};
+    // ทำซ้ำ: กำหนดส่งรอบแรกมาจากตาราง ไม่ใช่ช่อง "กำหนดส่ง"
+    const firstDue = repeatOn ? (occurrenceDate(effectiveRule, 1) ?? dueDate) : dueDate;
     const task: Task = {
       // Two people creating a task in the same millisecond would otherwise
       // collide, and with the file-backed store's whole-collection
@@ -628,8 +638,8 @@ export function NewTaskDialog({
       assignedById: viewingAsUserId,
       departmentIds: derivedDepartmentIds,
       startDate: new Date(startDate).toISOString(),
-      dueDate: new Date(dueDate).toISOString(),
-      originalDueDate: new Date(dueDate).toISOString(),
+      dueDate: new Date(firstDue).toISOString(),
+      originalDueDate: new Date(firstDue).toISOString(),
       ...(dueTime ? { dueTime } : {}),
       ...(Object.keys(assigneeDueDates).length > 0 ? { assigneeDueDates } : {}),
       attachments,
@@ -643,8 +653,11 @@ export function NewTaskDialog({
       createdAt: now,
       updatedAt: now,
     };
+    if (repeatOn) {
+      task.recurrence = { seriesId: task.id, occurrence: 1, rule: effectiveRule, template: templateFromTask(task) };
+    }
     addTask(task);
-    toast.success("สร้างงานเรียบร้อยแล้ว");
+    toast.success(repeatOn ? `สร้างงานทำซ้ำแล้ว · ${describeRule(effectiveRule)}` : "สร้างงานเรียบร้อยแล้ว");
     onCreated?.(task.id);
   }
 
@@ -832,9 +845,16 @@ export function NewTaskDialog({
       toast.error("กรุณาเลือกผู้รับผิดชอบอย่างน้อย 1 คน");
       return;
     }
-    if (itemType === "task" && dueDate < startDate) {
+    if (itemType === "task" && !repeatOn && dueDate < startDate) {
       toast.error("กำหนดส่งต้องไม่ก่อนวันเริ่มต้น");
       return;
+    }
+    if (itemType === "task" && repeatOn) {
+      const err = validateRule(effectiveRule);
+      if (err) {
+        toast.error(`ตั้งค่าทำซ้ำ: ${err}`);
+        return;
+      }
     }
     if (itemType === "meeting" && !meetAllDay && meetEnd <= meetStart) {
       toast.error("เวลาสิ้นสุดต้องหลังเวลาเริ่ม");
@@ -1347,6 +1367,33 @@ export function NewTaskDialog({
                     >
                       <Clock className="h-3 w-3" />+ ใส่เวลา
                     </button>
+                  )}
+                </div>
+              </Row>
+
+              <Row icon={Repeat}>
+                <div className="space-y-2">
+                  <label
+                    className={cn(
+                      "flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 transition-colors",
+                      repeatOn ? "border-[var(--brand-green)] bg-[var(--accent)]" : "border-[var(--line)] bg-[var(--bg-soft)]"
+                    )}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold">ทำซ้ำ</p>
+                      <p className="text-[11px] text-[var(--ink-soft)]">
+                        {repeatOn
+                          ? `รอบแรกส่ง ${formatThaiDate(occurrenceDate(effectiveRule, 1) ?? startDate)} · ช่อง "กำหนดส่ง" ด้านบนไม่ใช้`
+                          : "สร้างงานรอบถัดไปให้อัตโนมัติ เช่น ส่งรายงานทุกเดือน"}
+                      </p>
+                    </div>
+                    <Switch checked={repeatOn} onCheckedChange={(v) => setRepeatOn(!!v)} aria-label="ทำซ้ำ" />
+                  </label>
+                  {repeatOn && (
+                    <div className="grid gap-3 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+                      <RecurrenceFields rule={effectiveRule} onChange={setRepeatRule} />
+                      <RecurrencePreview rule={effectiveRule} dueTime={dueTime || undefined} />
+                    </div>
                   )}
                 </div>
               </Row>

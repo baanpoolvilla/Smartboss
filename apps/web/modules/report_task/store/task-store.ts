@@ -10,7 +10,17 @@ import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useTaskReviewSettingsStore } from "@/modules/report_task/store/task-review-settings-store";
 import { deriveCompletedAssigneeIds, isDoneByRule, isTaskFullyDone } from "@/modules/report_task/lib/task-completion";
 import { reactionRecipients } from "@/modules/report_task/lib/sticker-target";
-import type { Attachment, ChecklistItem, Task, TaskPriority, TaskStatus } from "@/modules/report_task/types";
+import type { Attachment, ChecklistItem, Task, TaskPriority, TaskRecurrenceRule, TaskStatus } from "@/modules/report_task/types";
+import {
+  bangkokToday,
+  buildRoundTask,
+  describeRule,
+  formatThaiDate,
+  latestOfSeries,
+  occurrenceDate,
+  scheduledDate,
+  templateFromTask,
+} from "@/modules/report_task/lib/task-recurrence";
 import { uuid } from "@/modules/report_task/lib/uuid";
 import { isPersonalTask } from "@/modules/report_task/lib/personal-task";
 
@@ -362,6 +372,14 @@ interface TaskStore {
   selectTask: (id: string | null) => void;
   addTask: (task: Task) => void;
   removeTask: (taskId: string) => void;
+  /** งานทำซ้ำ: ข้ามรอบนี้ (ลบ ไม่หักคะแนน) แล้วเอารอบถัดไปขึ้นบอร์ดทันที — คืน id รอบใหม่ (null = ไม่มีรอบถัดไป) */
+  skipRecurringRound: (taskId: string, actorId: string) => string | null;
+  /** งานทำซ้ำ: หยุดสร้างรอบใหม่ทั้งชุด · deleteThis = ลบรอบนี้ด้วย */
+  stopRecurrence: (taskId: string, deleteThis: boolean, actorId: string) => void;
+  /** งานทำซ้ำ: เปลี่ยนตาราง (มีผลตั้งแต่รอบถัดไป) */
+  updateRecurrence: (taskId: string, rule: TaskRecurrenceRule, actorId: string) => void;
+  /** งานทำซ้ำ: เลื่อนวันของรอบ n ที่ยังไม่ขึ้นบอร์ด · date null = กลับเป็นวันตามตาราง */
+  setRoundDate: (taskId: string, n: number, date: string | null, actorId: string) => void;
   updateTask: (taskId: string, patch: Partial<Task>) => void;
   /** Title/description edit, committed as one logged action (not per
    * keystroke — the UI stages both in local draft state and only calls this
@@ -441,7 +459,7 @@ const defaultFilters: TaskFilters = {
   quickView: "all",
 };
 
-export const useTaskStore = create<TaskStore>((set) => ({
+export const useTaskStore = create<TaskStore>((set, get) => ({
   tasks: [],
   loaded: false,
   filters: defaultFilters,
@@ -846,6 +864,98 @@ export const useTaskStore = create<TaskStore>((set) => ({
     }
     set((s) => ({ tasks: [task, ...s.tasks] }));
   },
+  skipRecurringRound: (taskId, actorId) => {
+    const s = get();
+    const cur = s.tasks.find((x) => x.id === taskId);
+    if (!cur?.recurrence) return null;
+    const latest = latestOfSeries(s.tasks, cur.recurrence.seriesId) ?? cur;
+    const rec = latest.recurrence!;
+    // รอบถัดไปที่ยังไม่มีงาน และกำหนดส่งยังไม่ผ่าน — ขึ้นบอร์ดทันที (ไม่รอถึงวันขึ้นบอร์ด)
+    const today = bangkokToday();
+    let n = Math.max(rec.occurrence, cur.recurrence.occurrence) + 1;
+    let due = occurrenceDate(rec.rule, n);
+    while (due && due < today) due = occurrenceDate(rec.rule, ++n);
+    const next =
+      due && !rec.stopped
+        ? buildRoundTask(latest, n, due, { taskId: `task-${uuid()}`, checklistId: () => `task-chk-${uuid()}` }, new Date().toISOString())
+        : null;
+    logActivity(actorId, "ข้ามรอบงานทำซ้ำ", cur.title, cur.id, `รอบที่ ${cur.recurrence.occurrence}${next ? ` → รอบที่ ${n} ขึ้นบอร์ดแล้ว` : " (ไม่มีรอบถัดไป)"}`);
+    useNotificationStore.getState().removeTaskNotifications(taskId);
+    if (next && next.assigneeIds.length > 0) {
+      const actorName = getUser(actorId)?.name ?? "หัวหน้า";
+      useNotificationStore
+        .getState()
+        .notifyMany(
+          next.assigneeIds,
+          actorId,
+          `${actorName} ข้ามรอบงาน "${next.title}" — รอบที่ ${n} มาแล้ว · ส่งภายใน ${formatThaiDate(due!, false)}`,
+          undefined,
+          `/report-task/tasks?task=${next.id}`,
+          undefined,
+          "task_assigned",
+          next.id
+        );
+    }
+    set((st) => ({ tasks: [...(next ? [next] : []), ...st.tasks.filter((x) => x.id !== taskId)] }));
+    return next?.id ?? null;
+  },
+  stopRecurrence: (taskId, deleteThis, actorId) =>
+    set((s) => {
+      const cur = s.tasks.find((x) => x.id === taskId);
+      if (!cur?.recurrence) return {};
+      const seriesId = cur.recurrence.seriesId;
+      logActivity(actorId, deleteThis ? "ลบรอบนี้และหยุดทำซ้ำ" : "หยุดทำซ้ำ", cur.title, cur.id, `รอบที่ ${cur.recurrence.occurrence}`);
+      if (deleteThis) useNotificationStore.getState().removeTaskNotifications(taskId);
+      const now = new Date().toISOString();
+      return {
+        tasks: s.tasks
+          .filter((x) => !(deleteThis && x.id === taskId))
+          .map((x) =>
+            x.recurrence?.seriesId === seriesId ? { ...x, recurrence: { ...x.recurrence, stopped: true }, updatedAt: now } : x
+          ),
+      };
+    }),
+  updateRecurrence: (taskId, rule, actorId) =>
+    set((s) => {
+      const cur = s.tasks.find((x) => x.id === taskId);
+      if (!cur?.recurrence) return {};
+      const latest = latestOfSeries(s.tasks, cur.recurrence.seriesId) ?? cur;
+      logActivity(actorId, "แก้การทำซ้ำ", cur.title, cur.id, describeRule(rule));
+      const now = new Date().toISOString();
+      return {
+        tasks: s.tasks.map((x) =>
+          x.id === latest.id
+            ? { ...x, recurrence: { ...x.recurrence!, rule, stopped: false, template: templateFromTask(x) }, updatedAt: now }
+            : x
+        ),
+      };
+    }),
+  setRoundDate: (taskId, n, date, actorId) =>
+    set((s) => {
+      const cur = s.tasks.find((x) => x.id === taskId);
+      if (!cur?.recurrence) return {};
+      const latest = latestOfSeries(s.tasks, cur.recurrence.seriesId) ?? cur;
+      const rule = latest.recurrence!.rule;
+      const overrides = { ...(rule.dateOverrides ?? {}) };
+      if (date && date !== scheduledDate(rule, n)) overrides[String(n)] = date;
+      else delete overrides[String(n)];
+      logActivity(actorId, "แก้วันรอบงานทำซ้ำ", cur.title, cur.id, `รอบที่ ${n} → ${formatThaiDate(date ?? scheduledDate(rule, n) ?? "")}${date ? "" : " (กลับเป็นวันปกติ)"}`);
+      const now = new Date().toISOString();
+      return {
+        tasks: s.tasks.map((x) =>
+          x.id === latest.id
+            ? {
+                ...x,
+                recurrence: {
+                  ...x.recurrence!,
+                  rule: { ...rule, dateOverrides: Object.keys(overrides).length ? overrides : undefined },
+                },
+                updatedAt: now,
+              }
+            : x
+        ),
+      };
+    }),
   removeTask: (taskId) =>
     set((s) => {
       const t = s.tasks.find((x) => x.id === taskId);

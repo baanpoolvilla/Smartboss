@@ -256,8 +256,69 @@ export interface Task {
    * from that filter's point of view, being the assigner and being a manual
    * watcher both just mean "this task is on my radar." */
   watcherIds?: string[];
+  /** งานทำซ้ำ — มีเฉพาะงานที่ติ๊ก "ทำซ้ำ" (ดู lib/task-recurrence.ts) ไม่มี = งานครั้งเดียวแบบเดิม */
+  recurrence?: TaskRecurrence;
   createdAt: string;
   updatedAt: string;
+}
+
+/** ตั้งค่าการทำซ้ำของงาน — ทุกรอบในชุดถือสำเนาไว้ รอบล่าสุดคือตัวที่ระบบใช้สร้างรอบถัดไป */
+export interface TaskRecurrenceRule {
+  freq: "daily" | "weekly" | "monthly" | "yearly";
+  /** ทุก N วัน/สัปดาห์/เดือน/ปี */
+  interval: number;
+  /** daily: ไม่นับเสาร์-อาทิตย์ */
+  skipWeekends?: boolean;
+  /** weekly: 0 = อาทิตย์ … 6 = เสาร์ */
+  weekdays?: number[];
+  /** monthly: วันที่ X · วันสุดท้ายของเดือน · "วันจันทร์แรก" */
+  monthlyMode?: "date" | "last" | "nth";
+  /** monthly "date" / yearly — 1-31 (เดือนที่ไม่มีวันนั้นใช้วันสุดท้ายแทน) */
+  monthDay?: number;
+  /** monthly "nth": 1-4 หรือ -1 = สุดท้าย */
+  nth?: number;
+  nthWeekday?: number;
+  /** yearly: 0 = ม.ค. … 11 = ธ.ค. */
+  yearMonth?: number;
+  /** งานขึ้นบอร์ดก่อนกำหนดส่งกี่วัน */
+  leadDays: number;
+  /** วันแรกที่เริ่มนับรอบ (YYYY-MM-DD) */
+  anchor: string;
+  /** วันแรกที่ตารางนี้สร้างได้คือรอบที่เท่าไหร่ — ไม่มี = 1 · "แก้การทำซ้ำ" กลางทางตั้งเป็นรอบถัดไป
+   * และย้าย anchor ไปหลังรอบล่าสุด ⇒ ตารางใหม่ต่อจากรอบเดิมพอดี ไม่ข้าม/ไม่ซ้ำ */
+  startOccurrence?: number;
+  /** เลื่อนวันรายรอบ (กดแก้วันที่ของรอบที่ยังไม่ขึ้นบอร์ด) — key = เลขรอบ, value = YYYY-MM-DD */
+  dateOverrides?: Record<string, string>;
+  end: { mode: "never" } | { mode: "date"; until: string } | { mode: "count"; count: number };
+}
+
+/** สิ่งที่รอบใหม่ก๊อปมา — คอมเมนต์/สถานะ/คะแนนไม่ก๊อป แต่ละรอบเริ่มใหม่ */
+export interface TaskRecurrenceTemplate {
+  title: string;
+  description: string;
+  priority: TaskPriority;
+  taskMode: "individual" | "group";
+  assigneeIds: string[];
+  mainAssigneeId?: string;
+  completionRule?: "all" | "any";
+  assignedById: string;
+  departmentIds: string[];
+  dueTime?: string;
+  checklist: { text: string; ownerId: string }[];
+  attachments: Attachment[];
+  projectTopicId?: string;
+  showChecklistOnCard: boolean;
+}
+
+export interface TaskRecurrence {
+  /** ทุกรอบในชุดเดียวกันใช้ค่าเดียวกัน (= id ของรอบแรก) */
+  seriesId: string;
+  /** รอบที่เท่าไหร่ (เริ่ม 1) — นับตามตาราง ไม่ใช่ตามจำนวนงานที่สร้างจริง */
+  occurrence: number;
+  rule: TaskRecurrenceRule;
+  template: TaskRecurrenceTemplate;
+  /** หยุดทำซ้ำแล้ว — ไม่สร้างรอบใหม่อีก */
+  stopped?: boolean;
 }
 
 export type CalendarEventType = "task" | "leave" | "meeting" | "holiday" | "google" | "dayoff" | "todo" | "ot";
