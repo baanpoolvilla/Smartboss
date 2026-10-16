@@ -368,6 +368,63 @@ export class AttendanceRepository {
     return out;
   }
 
+  /**
+   * เวลาที่เพิ่มผ่านคำขอแก้เวลาที่อนุมัติแล้ว (ADD_PUNCH) ของวันหนึ่ง ทั้งบริษัท — ให้กระดานลงเวลาเห็นด้วย
+   * เดิมกระดานอ่านแค่สแกนดิบ ⇒ คนที่ลืมสแกนออกแล้วแก้เวลาเรียบร้อย ยังขึ้น "ออก --:--"
+   * และคนที่ไม่มีสแกนเลยแต่แก้เวลาครบ ยังขึ้น "ขาดงาน" ทั้งที่ผลลงเวลาถูกแล้ว
+   */
+  async listBoardAdjustmentPunches(
+    tx: Tx,
+    workDate: string,
+  ): Promise<
+    {
+      employmentId: string;
+      companyId: string;
+      timeZone: string;
+      displayName: string;
+      employeeCode: string;
+      punchAt: string;
+      eventIntent: string | null;
+    }[]
+  > {
+    const rows = await tx
+      .select({
+        employmentId: schema.timeEventAdjustments.employmentId,
+        companyId: schema.timeEventAdjustments.companyId,
+        timeZone: schema.employments.timeZone,
+        employeeCode: schema.employments.employeeCode,
+        firstName: schema.people.firstName,
+        lastName: schema.people.lastName,
+        preferredName: schema.people.preferredName,
+        punchAt: schema.timeEventAdjustments.punchAt,
+        eventIntent: schema.timeEventAdjustments.eventIntent,
+      })
+      .from(schema.timeEventAdjustments)
+      .innerJoin(schema.employments, eq(schema.employments.id, schema.timeEventAdjustments.employmentId))
+      .innerJoin(schema.people, eq(schema.people.id, schema.employments.personId))
+      .where(
+        and(
+          eq(schema.timeEventAdjustments.workDate, workDate),
+          eq(schema.timeEventAdjustments.status, 'APPROVED'),
+          eq(schema.timeEventAdjustments.adjustmentType, 'ADD_PUNCH'),
+          sql`${schema.timeEventAdjustments.punchAt} is not null`,
+        ),
+      );
+
+    return rows.map((row) => {
+      const preferred = (row.preferredName ?? '').trim();
+      return {
+        employmentId: row.employmentId,
+        companyId: row.companyId,
+        timeZone: row.timeZone,
+        displayName: preferred === '' ? `${row.firstName} ${row.lastName ?? ''}`.trim() : preferred,
+        employeeCode: row.employeeCode,
+        punchAt: new Date(row.punchAt!).toISOString(),
+        eventIntent: row.eventIntent,
+      };
+    });
+  }
+
   async listApprovedAdjustments(
     tx: Tx,
     employmentId: string,

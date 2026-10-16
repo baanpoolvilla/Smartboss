@@ -23,6 +23,7 @@ import type {
 import type { ReportSubmissionLockSettings } from "@/modules/report_task/store/reminder-settings-store";
 import { graceEndWithinPeriod, type ScorePeriodConfig } from "@/lib/score-period";
 import { hasRetroSubmission } from "@/modules/report_task/lib/report-retro";
+import { roundInOutage } from "@/modules/report_task/lib/report-outage";
 
 /**
  * เฟส 2 ของ docs/spec-report-submission-rounds.md — sweep ที่ทำให้ "พลาดส่ง /
@@ -210,6 +211,8 @@ export function roundComplianceStatusServer(
     (r) => roundRunsOnDay(r, day) && resolveRoundSubmittersServer(r, topic.visibility, groups, users).includes(userId)
   );
   const roundPosts = postsForRoundServer(topic, userId, round, day, posts, attributionRounds(myRounds, rounds));
+  // ระบบล่มช่วงกำหนดส่งรอบนี้ (report-outage.ts) — ตรงกับแดชบอร์ด ไม่หักคะแนน
+  if (roundInOutage(round, day)) return roundPosts.length > 0 ? "on-time" : "exempt";
   // ส่งย้อนหลังหลัง CEO อนุมัติ (report-retro.ts — โพสต์ผ่านการตรวจใน acceptRetroPosts แล้ว) — นับว่าส่งแล้ว
   if (roundPosts.length === 0 && hasRetroSubmission(posts, topic.id, userId, round.id, day)) return "on-time";
   if (legacyOnly && roundPosts.length === 0) return "exempt";

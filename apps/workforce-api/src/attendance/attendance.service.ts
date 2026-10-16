@@ -85,6 +85,30 @@ export class AttendanceService {
     return this.uow.run(async (uow) => {
       const rows = await this.repository.listBoardScans(uow.tx, workDate);
 
+      // เวลาที่แก้แล้ว (อนุมัติ) นับเป็นการลงเวลาบนกระดานด้วย — เวลาออกที่เพิ่มให้ขึ้นเป็นเวลาออก
+      // และคนที่ไม่มีสแกนจริงเลยแต่มีเวลาที่แก้แล้ว ก็มีแถวบนกระดาน (ไม่ขึ้น "ขาดงาน")
+      const added = await this.repository.listBoardAdjustmentPunches(uow.tx, workDate);
+      for (const punch of added) {
+        const row = rows.find((r) => r.employmentId === punch.employmentId);
+        if (row === undefined) {
+          rows.push({
+            employmentId: punch.employmentId,
+            companyId: punch.companyId,
+            timeZone: punch.timeZone,
+            displayName: punch.displayName,
+            employeeCode: punch.employeeCode,
+            firstAt: punch.punchAt,
+            lastAt: punch.punchAt,
+            scanCount: 1,
+          });
+          continue;
+        }
+        const at = new Date(punch.punchAt).getTime();
+        if (punch.eventIntent !== 'CLOCK_IN' && at > new Date(row.lastAt).getTime()) row.lastAt = punch.punchAt;
+        if (punch.eventIntent !== 'CLOCK_OUT' && at < new Date(row.firstAt).getTime()) row.firstAt = punch.punchAt;
+        row.scanCount += 1;
+      }
+
       const items: Record<string, unknown>[] = [];
       for (const row of rows) {
         const { shiftId } = await this.repository.resolveShiftId(

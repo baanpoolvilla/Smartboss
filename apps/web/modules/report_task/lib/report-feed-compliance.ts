@@ -18,6 +18,7 @@ import { photoCount } from "@/modules/report_task/lib/report-attachment-kind";
 import { lateCutoffFor } from "@/modules/report_task/lib/report-cutoff";
 import { localDateStr, now, todayIso } from "@/modules/report_task/lib/now";
 import { isExemptDate, isLegacyHolidayOnly, type DateExemptions } from "@/modules/report_task/lib/report-feed-exemptions";
+import { roundInOutage } from "@/modules/report_task/lib/report-outage";
 import type { ReportPost, ReportTopic, SubmissionRound } from "@/modules/report_task/store/report-feed-store";
 
 /**
@@ -229,6 +230,8 @@ export function roundComplianceStatus(
   if (!resolveRoundSubmitters(round, topic.visibility, groupsNow()).includes(userId)) return "exempt";
   const cutoff = roundMinutes(round);
   const roundPosts = postsForRound(topic, userId, round, day, posts);
+  // ระบบล่มช่วงกำหนดส่งรอบนี้ (report-outage.ts) — ส่งแล้ว = ตรงเวลา · ไม่ได้ส่ง = ไม่นับ
+  if (roundInOutage(round, day)) return roundPosts.length > 0 ? "on-time" : "exempt";
   // ส่งย้อนหลังหลัง CEO อนุมัติ (report-retro.ts) — นับว่าส่งแล้ว
   if (roundPosts.length === 0 && hasRetroSubmission(posts, topic.id, userId, round.id, day)) return "on-time";
   if (legacyOnly && roundPosts.length === 0) return "exempt";
