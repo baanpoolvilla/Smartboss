@@ -785,15 +785,18 @@ export function todayComplianceSummary(
       const pool = attributionRounds(myRounds, allRounds);
       for (const round of myRounds) {
         if (exemptions && !roundIgnoresDateExemptions(round) && isExemptDate(exemptions, u.id, today)) continue;
-        summary.totalTracked += 1;
         const roundPosts = postsOfRound(postsForDay(topic, u.id, today, posts), pool, round.id);
+        // ระบบล่มช่วงกำหนดส่ง (report-outage.ts) — ไม่ได้ส่ง = ไม่นับ · ส่งแล้ว = ตรงเวลา
+        const outage = roundInOutage(round, today);
+        if (outage && roundPosts.length === 0) continue;
+        summary.totalTracked += 1;
         if (roundPosts.length === 0) {
           summary.missingToday += 1;
           continue;
         }
         summary.postedToday += 1;
         const cutoff = roundMinutes(round);
-        if (!roundPosts.some((p) => minutesOfDay(p.createdAt) <= cutoff || p.lateBadgeHidden)) summary.lateToday += 1;
+        if (!outage && !roundPosts.some((p) => minutesOfDay(p.createdAt) <= cutoff || p.lateBadgeHidden)) summary.lateToday += 1;
       }
     }
   }
@@ -853,12 +856,15 @@ export function todayStatusEntries(
           roundTime: round.time,
         };
         const roundPosts = postsOfRound(postsForDay(topic, u.id, today, posts), pool, round.id);
+        // ระบบล่มช่วงกำหนดส่ง (report-outage.ts) — ไม่ได้ส่ง = ไม่ขึ้นในรายการ · ส่งแล้ว = ตรงเวลา
+        const outage = roundInOutage(round, today);
+        if (outage && roundPosts.length === 0) continue;
         if (roundPosts.length === 0) {
           entries.push({ ...base, status: "missing" });
           continue;
         }
         const cutoff = roundMinutes(round);
-        const onTime = roundPosts.some((p) => minutesOfDay(p.createdAt) <= cutoff || p.lateBadgeHidden);
+        const onTime = outage || roundPosts.some((p) => minutesOfDay(p.createdAt) <= cutoff || p.lateBadgeHidden);
         entries.push({ ...base, status: onTime ? "posted" : "late" });
       }
     }
@@ -884,6 +890,8 @@ export function pendingToday(topics: ReportTopic[], posts: ReportPost[], exempti
       const pool = attributionRounds(myRounds, allRounds);
       for (const round of myRounds) {
         if (exemptions && !roundIgnoresDateExemptions(round) && isExemptDate(exemptions, u.id, today)) continue;
+        // ระบบล่มช่วงกำหนดส่ง (report-outage.ts) — ไม่ต้องส่ง ไม่ขึ้นใน "ยังไม่ส่งวันนี้"
+        if (roundInOutage(round, today)) continue;
         const roundPosts = postsOfRound(postsForDay(topic, u.id, today, posts), pool, round.id);
         if (roundPosts.length > 0) continue;
         entries.push({
