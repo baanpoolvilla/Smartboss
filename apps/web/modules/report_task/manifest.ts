@@ -22,6 +22,7 @@ import { TaskReviewNavBadge } from "./components/shared/task-review-nav-badge";
 const MENU_PERMISSION: Record<string, string> = {
   [REPORT_TASK_BASE]: REPORT_TASK_PERMS.access,
   [`${REPORT_TASK_BASE}/tasks`]: REPORT_TASK_PERMS.taskView,
+  [`${REPORT_TASK_BASE}/projects`]: REPORT_TASK_PERMS.taskView,
   [`${REPORT_TASK_BASE}/calendar`]: REPORT_TASK_PERMS.calendarView,
   [`${REPORT_TASK_BASE}/activity-log`]: REPORT_TASK_PERMS.activityView,
   [`${REPORT_TASK_BASE}/settings`]: REPORT_TASK_PERMS.settingManage,

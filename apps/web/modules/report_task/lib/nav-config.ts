@@ -1,5 +1,6 @@
 import {
   CalendarDays,
+  GanttChart,
   KanbanSquare,
   LayoutDashboard,
   ScrollText,
@@ -37,6 +38,7 @@ export const navItems: NavItem[] = [
   { href: REPORT_TASK_BASE, label: "แดชบอร์ด", icon: LayoutDashboard, iconName: "LayoutDashboard" },
   // แชท + รายงาน ย้ายไปเป็นโมดูล "Chat & Report" ของตัวเองแล้ว (chat-report-manifest.ts)
   { href: `${REPORT_TASK_BASE}/tasks`, label: "งาน / Kanban", icon: KanbanSquare, iconName: "KanbanSquare" },
+  { href: `${REPORT_TASK_BASE}/projects`, label: "โปรเจกต์", icon: GanttChart, iconName: "GanttChart" },
   { href: `${REPORT_TASK_BASE}/calendar`, label: "ปฏิทิน", icon: CalendarDays, iconName: "CalendarDays" },
   // "แจ้งปัญหาระบบ" dropped from the main menu entirely — filing an issue is
   // only ever the 🐛 button anywhere in the app now (IssueReportBarButton),

@@ -1,0 +1,602 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from "react";
+import { toast } from "sonner";
+
+import { getUser } from "@/modules/report_task/lib/directory";
+import {
+  cascadePlan,
+  conflictsOf,
+  dayNum,
+  earliestAfter,
+  keepGapPlan,
+  lateImpact,
+  shiftDays,
+  dayToIso,
+  wouldCycle,
+  ymdOfDay,
+  type ItemMove,
+  type TimelineItem,
+} from "@/modules/report_task/lib/project-schedule";
+import { cn } from "@/modules/report_task/lib/utils";
+import { useIdentityStore } from "@/modules/report_task/store/identity-store";
+import { useProjectStore } from "@/modules/report_task/store/project-store";
+import { useTaskStore } from "@/modules/report_task/store/task-store";
+import type { Project } from "@/modules/report_task/types";
+import { fmtDay, PersonDot, STATE_COLOR, STATE_LABEL, TH_MONTH_SHORT } from "./project-ui";
+
+const ZOOM = { day: 30, week: 14, month: 5 } as const;
+type Zoom = keyof typeof ZOOM;
+const ROW = 38;
+const HEAD = 46;
+
+type Row = { kind: "group"; key: string; name: string; items: TimelineItem[] } | { kind: "item"; item: TimelineItem };
+
+/**
+ * Timeline ของโปรเจกต์ (แบบ Asana Timeline/Gantt รวมเป็นหน้าเดียว)
+ * - ลากแถบ = เลื่อนวัน · ลากขอบขวา = ยืด/หด · ลากจุดกลมท้ายแถบไปวางบนอีกงาน = งานนั้นต้องรองานนี้
+ * - ลากงานได้เฉพาะเจ้าของโปรเจกต์/CEO (canPlan) — บันทึกเป็นการเลื่อนกำหนดส่ง (rescheduleTask)
+ * - Milestone เป็นของโปรเจกต์ — คนที่แก้โปรเจกต์ได้ (canEdit) ลากได้
+ * - จอสัมผัสไม่ลาก (นิ้วลากแล้วหน้าจอเลื่อนแทน) — กดแถบแล้วใช้ปุ่ม −/+ วัน ในแผงรายละเอียด
+ */
+export function ProjectTimeline({
+  project,
+  items,
+  today,
+  holidays,
+  canEdit,
+  canPlan,
+  onOpenTask,
+  onAddTask,
+}: {
+  project: Project;
+  items: TimelineItem[];
+  today: string;
+  holidays: Set<string>;
+  canEdit: boolean;
+  canPlan: boolean;
+  onOpenTask: (taskId: string) => void;
+  onAddTask: (sectionId: string) => void;
+}) {
+  const rescheduleTask = useTaskStore((s) => s.rescheduleTask);
+  const setTaskProject = useTaskStore((s) => s.setTaskProject);
+  const updateMilestone = useProjectStore((s) => s.updateMilestone);
+  const addMilestone = useProjectStore((s) => s.addMilestone);
+  const removeMilestone = useProjectStore((s) => s.removeMilestone);
+  const updateProject = useProjectStore((s) => s.updateProject);
+  const [zoom, setZoom] = useState<Zoom>("day");
+  const [groupBy, setGroupBy] = useState<"section" | "person">("section");
+  const [sel, setSel] = useState<string | null>(null);
+  const [coarse, setCoarse] = useState(false);
+  const [tipHidden, setTipHidden] = useState(true);
+  const rightRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const W = ZOOM[zoom];
+
+  // อ่านค่าของเครื่องหลัง mount (ฝั่งเซิร์ฟเวอร์ไม่รู้) — กัน hydration ไม่ตรงกัน
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCoarse(window.matchMedia("(pointer: coarse)").matches);
+    try { setTipHidden(localStorage.getItem("project-timeline-tip") === "1"); } catch { setTipHidden(false); }
+  }, []);
+
+  // ช่วงวันที่แสดง: ก่อนงานแรก 3 วัน ถึงหลังงานสุดท้าย/วันเสร็จเป้าหมาย 7 วัน
+  const [lo, hi] = useMemo(() => {
+    const starts = items.map((i) => dayNum(i.start)).concat(dayNum(project.startDate), dayNum(today));
+    const ends = items.map((i) => dayNum(i.end)).concat(dayNum(project.endDate), dayNum(today));
+    return [Math.min(...starts) - 3, Math.max(...ends) + 7];
+  }, [items, project.startDate, project.endDate, today]);
+
+  const rows = useMemo<Row[]>(() => {
+    const out: Row[] = [];
+    if (groupBy === "person") {
+      const by = new Map<string, TimelineItem[]>();
+      for (const i of items) {
+        const k = i.kind === "milestone" ? "◆" : (i.assigneeIds[0] ?? "-");
+        by.set(k, [...(by.get(k) ?? []), i]);
+      }
+      for (const [k, its] of by) {
+        out.push({ kind: "group", key: k, name: k === "◆" ? "Milestone" : (getUser(k)?.name ?? "ยังไม่มีผู้รับผิดชอบ"), items: its });
+        its.forEach((item) => out.push({ kind: "item", item }));
+      }
+      return out;
+    }
+    const known = new Set(project.sections.map((s) => s.id));
+    for (const s of project.sections) {
+      const its = items.filter((i) => i.sectionId === s.id || (!known.has(i.sectionId) && s.id === project.sections[0]?.id));
+      out.push({ kind: "group", key: s.id, name: s.name, items: its });
+      its.forEach((item) => out.push({ kind: "item", item }));
+    }
+    return out;
+  }, [items, groupBy, project.sections]);
+
+  const width = (hi - lo + 1) * W;
+  const height = HEAD + rows.length * ROW;
+  const rowIndex = useMemo(() => new Map(rows.flatMap((r, i) => (r.kind === "item" ? [[r.item.id, i] as const] : []))), [rows]);
+  const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
+
+  // ── สถานะการลาก (เก็บใน ref ไม่ re-render ทุกพิกเซล) ──
+  const [preview, setPreview] = useState<{ id: string; start: string; end: string } | null>(null);
+  const [linkLine, setLinkLine] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const drag = useRef<{ item: TimelineItem; x0: number; resize: boolean; moved: boolean; start: string; end: string } | null>(null);
+  const link = useRef<{ from: string; x: number; y: number } | null>(null);
+
+  const geo = (i: TimelineItem, override?: { start: string; end: string }) => {
+    const s = override?.start ?? i.start, e = override?.end ?? i.end;
+    const y = HEAD + (rowIndex.get(i.id) ?? 0) * ROW;
+    if (i.kind === "milestone") { const c = (dayNum(s) - lo) * W + W / 2; return { x1: c - 9, x2: c + 9, y: y + ROW / 2, left: c - 8, w: 16 }; }
+    const x = (dayNum(s) - lo) * W;
+    return { x1: x, x2: (dayNum(e) - lo + 1) * W, y: y + ROW / 2, left: x + 1, w: Math.max((dayNum(e) - dayNum(s) + 1) * W - 2, 8) };
+  };
+
+  const canDrag = (i: TimelineItem) => !coarse && (i.kind === "milestone" ? canEdit : canPlan) && i.state !== "done";
+
+  // ── นำการเปลี่ยนวันไปใช้จริง ──
+  function applyMove(m: ItemMove, why: string) {
+    if (m.kind === "milestone") updateMilestone(project.id, m.id, { date: m.start });
+    else rescheduleTask(m.id, dayToIso(m.start), dayToIso(m.end), why, meId());
+  }
+  const meId = currentUserId;
+  function commitMove(item: TimelineItem, start: string, end: string) {
+    const delta = dayNum(start) - dayNum(item.start);
+    applyMove({ id: item.id, kind: item.kind, start, end }, `เลื่อนจาก Timeline โปรเจกต์ "${project.name}"`);
+    const next = items.map((i) => (i.id === item.id ? { ...i, start, end } : i));
+    let extra = "";
+    if (project.shiftMode === "keep" && delta !== 0) {
+      const plan = keepGapPlan(next, item.id, delta);
+      plan.forEach((m) => applyMove(m, `เลื่อนตาม "${item.name}" (รักษาระยะห่าง)`));
+      if (plan.length) extra = ` · งานที่รออยู่เลื่อนตาม ${plan.length} รายการ`;
+    } else if (project.shiftMode === "auto" && conflictsOf(next).length) {
+      const plan = cascadePlan(next);
+      plan.forEach((m) => applyMove(m, `เลื่อนตาม "${item.name}"`));
+      if (plan.length) extra = ` · งานที่รออยู่เลื่อนตาม ${plan.length} รายการ`;
+    }
+    toast.success(`"${item.name}" → ${fmtDay(start)}${item.kind === "task" ? ` – ${fmtDay(end)}` : ""}${extra}`);
+  }
+
+  function addDependency(fromId: string, toId: string) {
+    const to = byId.get(toId), from = byId.get(fromId);
+    if (!to || !from || fromId === toId) return;
+    if (to.deps.includes(fromId)) { toast.message("ตั้งไว้อยู่แล้ว"); return; }
+    if (wouldCycle(items, fromId, toId)) { toast.error("ตั้งไม่ได้ — จะกลายเป็นรอกันวนไปมา"); return; }
+    setDeps(to, [...to.deps, fromId]);
+    toast.success(`"${to.name}" ต้องรอ "${from.name}" แล้ว`);
+  }
+  function setDeps(it: TimelineItem, deps: string[]) {
+    if (it.kind === "milestone") updateMilestone(project.id, it.id, { dependsOn: deps });
+    else setTaskProject(it.id, { projectId: project.id, sectionId: it.sectionId, dependsOn: deps }, meId());
+  }
+
+  function onPointerDown(e: RPointerEvent<HTMLDivElement>) {
+    const el = (e.target as HTMLElement).closest<HTMLElement>("[data-bar]");
+    if (!el) return;
+    const item = byId.get(el.dataset.bar!);
+    if (!item) return;
+    if ((e.target as HTMLElement).closest("[data-cn]") && canEdit && !coarse) {
+      const g = geo(item);
+      link.current = { from: item.id, x: g.x2, y: g.y };
+      canvasRef.current?.setPointerCapture(e.pointerId);
+      e.preventDefault();
+      return;
+    }
+    if (!canDrag(item)) return;
+    drag.current = { item, x0: e.clientX, resize: !!(e.target as HTMLElement).closest("[data-rz]"), moved: false, start: item.start, end: item.end };
+    canvasRef.current?.setPointerCapture(e.pointerId);
+  }
+  function onPointerMove(e: RPointerEvent<HTMLDivElement>) {
+    if (link.current) {
+      const r = canvasRef.current!.getBoundingClientRect();
+      setLinkLine({ x1: link.current.x, y1: link.current.y, x2: e.clientX - r.left, y2: e.clientY - r.top });
+      return;
+    }
+    const d = drag.current;
+    if (!d) return;
+    const dd = Math.round((e.clientX - d.x0) / W);
+    if (dd !== 0) d.moved = true;
+    const it = d.item;
+    if (d.resize && it.kind === "task") {
+      const ne = Math.max(dayNum(it.start), dayNum(it.end) + dd);
+      d.start = it.start; d.end = ymdOfDay(ne);
+    } else {
+      d.start = shiftDays(it.start, dd); d.end = shiftDays(it.end, dd);
+    }
+    setPreview({ id: it.id, start: d.start, end: d.end });
+  }
+  function onPointerUp(e: RPointerEvent<HTMLDivElement>) {
+    if (link.current) {
+      const from = link.current.from;
+      link.current = null;
+      setLinkLine(null);
+      const target = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest<HTMLElement>("[data-bar]");
+      if (target?.dataset.bar) addDependency(from, target.dataset.bar);
+      return;
+    }
+    const d = drag.current;
+    drag.current = null;
+    setPreview(null);
+    if (!d) return;
+    if (d.moved && (d.start !== d.item.start || d.end !== d.item.end)) { commitMove(d.item, d.start, d.end); setSel(d.item.id); }
+    else setSel((s) => (s === d.item.id ? null : d.item.id));
+  }
+
+  // ── ชน/เลยกำหนด ──
+  const conflicts = conflictsOf(items);
+  const impact = lateImpact(items);
+
+  useEffect(() => {
+    // เปิดมาเลื่อนไปที่วันนี้
+    const el = rightRef.current;
+    if (el) el.scrollLeft = Math.max(0, (dayNum(today) - lo) * W - 200);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.id, zoom]);
+
+  const selItem = sel ? byId.get(sel) : undefined;
+
+  return (
+    <div className="space-y-3">
+      {!tipHidden && (
+        <div className="flex items-start gap-3 rounded-xl bg-sky-50 px-3 py-2.5 text-sm dark:bg-sky-950/40">
+          <span>💡</span>
+          <div className="min-w-0 flex-1">
+            <b>3 อย่างที่ทำได้ใน Timeline</b>
+            <ol className="ml-4 list-decimal text-[13px]">
+              <li>ลากแถบ = เลื่อนวัน · ลากขอบขวา = ยืด/หดวัน {canPlan ? "" : "(เฉพาะเจ้าของโปรเจกต์/CEO)"}</li>
+              <li>ลากจุดกลมท้ายแถบ ไปวางบนอีกงาน = งานนั้นต้องรองานนี้</li>
+              <li>กดแถบ = ดูรายละเอียด / เปิดงาน</li>
+            </ol>
+          </div>
+          <button
+            type="button"
+            className="shrink-0 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 py-1 text-xs"
+            onClick={() => { setTipHidden(true); try { localStorage.setItem("project-timeline-tip", "1"); } catch {} }}
+          >
+            เข้าใจแล้ว
+          </button>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="inline-flex rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-0.5">
+          {(["day", "week", "month"] as Zoom[]).map((z) => (
+            <button key={z} type="button" onClick={() => setZoom(z)} aria-pressed={zoom === z}
+              className={cn("rounded-md px-3 py-1 text-xs", zoom === z ? "bg-[var(--bg)] font-semibold shadow-sm" : "text-[var(--ink-soft)]")}>
+              {{ day: "วัน", week: "สัปดาห์", month: "เดือน" }[z]}
+            </button>
+          ))}
+        </div>
+        <button type="button" className="rounded-lg border border-[var(--line)] px-3 py-1 text-xs hover:bg-[var(--bg-soft)]"
+          onClick={() => { if (rightRef.current) rightRef.current.scrollTo({ left: Math.max(0, (dayNum(today) - lo) * W - 200), behavior: "smooth" }); }}>
+          ไปที่วันนี้
+        </button>
+        {canEdit && (
+          <>
+            <button type="button" className="rounded-lg border border-[var(--line)] px-3 py-1 text-xs hover:bg-[var(--bg-soft)]" onClick={() => onAddTask(project.sections[0]?.id ?? "")}>+ งาน</button>
+            <button type="button" className="rounded-lg border border-[var(--line)] px-3 py-1 text-xs hover:bg-[var(--bg-soft)]"
+              onClick={() => {
+                const id = addMilestone(project.id, { name: "Milestone ใหม่", date: shiftDays(today, 7), sectionId: project.sections[project.sections.length - 1]?.id ?? "" });
+                setSel(id);
+                toast.success("เพิ่ม Milestone แล้ว · แก้ชื่อ/วันได้ในแผงด้านล่าง");
+              }}>
+              + Milestone
+            </button>
+          </>
+        )}
+        <details className="relative">
+          <summary className="cursor-pointer list-none rounded-lg border border-[var(--line)] px-3 py-1 text-xs hover:bg-[var(--bg-soft)]">ตัวเลือก ⚙</summary>
+          <div className="absolute left-0 top-[calc(100%+6px)] z-20 grid w-max max-w-[86vw] gap-2 rounded-xl border border-[var(--line)] bg-[var(--bg)] p-3 text-xs shadow-xl">
+            <span className="text-[var(--ink-soft)]">จัดกลุ่มแถว</span>
+            <div className="inline-flex w-max rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-0.5">
+              {(["section", "person"] as const).map((g) => (
+                <button key={g} type="button" onClick={() => setGroupBy(g)} aria-pressed={groupBy === g}
+                  className={cn("rounded-md px-3 py-1", groupBy === g ? "bg-[var(--bg)] font-semibold shadow-sm" : "text-[var(--ink-soft)]")}>
+                  {g === "section" ? "ตามช่วงงาน" : "ตามคน"}
+                </button>
+              ))}
+            </div>
+            <span className="text-[var(--ink-soft)]">เมื่อเลื่อนงาน {canPlan ? "" : "(ตั้งได้เฉพาะเจ้าของโปรเจกต์)"}</span>
+            <select disabled={!canPlan} value={project.shiftMode} onChange={(e) => updateProject(project.id, { shiftMode: e.target.value as Project["shiftMode"] })}
+              className="rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-base sm:text-xs">
+              <option value="ask">ถามก่อนเลื่อนงานที่รออยู่</option>
+              <option value="auto">เลื่อนงานที่รออยู่ตามทันที</option>
+              <option value="keep">เลื่อนตาม + รักษาระยะห่างเดิม</option>
+            </select>
+          </div>
+        </details>
+        <div className="ml-auto hidden flex-wrap gap-3 text-[11px] text-[var(--ink-soft)] sm:flex">
+          {(["done", "doing", "todo", "late"] as const).map((k) => (
+            <span key={k} className="inline-flex items-center gap-1"><i className="inline-block h-2 w-3.5 rounded-sm" style={{ background: STATE_COLOR[k] }} />{STATE_LABEL[k]}</span>
+          ))}
+          <span className="inline-flex items-center gap-1"><i className="inline-block h-2 w-2 rotate-45 rounded-[1px]" style={{ background: "var(--chart-violet)" }} />Milestone</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-[150px_minmax(0,1fr)] overflow-hidden rounded-xl border border-[var(--line)] sm:grid-cols-[240px_minmax(0,1fr)]">
+        {/* ซ้าย: ชื่อแถว */}
+        <div className="z-[2] min-w-0 border-r border-[var(--line)] bg-[var(--bg)]">
+          <div className="flex items-end border-b border-[var(--line)] px-2.5 pb-1.5 text-xs font-semibold text-[var(--ink-soft)]" style={{ height: HEAD }}>
+            {groupBy === "section" ? "งาน / ช่วงงาน" : "งาน / คน"}
+          </div>
+          {rows.map((r) =>
+            r.kind === "group" ? (
+              <div key={`g-${r.key}`} className="flex items-center gap-2 border-b border-[var(--line)] bg-[var(--bg-soft)] px-2.5 text-xs font-bold text-[var(--ink-soft)]" style={{ height: ROW }}>
+                <span className="min-w-0 flex-1 truncate">{r.name}</span>
+                {canEdit && groupBy === "section" && (
+                  <button type="button" className="rounded px-1 text-[var(--ink-soft)] hover:bg-[var(--bg)]" title="เพิ่มงานในช่วงนี้" onClick={() => onAddTask(r.key)}>＋</button>
+                )}
+              </div>
+            ) : (
+              <button key={r.item.id} type="button" onClick={() => setSel(r.item.id)}
+                className={cn("flex w-full items-center gap-2 border-b border-[var(--line)]/60 px-2.5 text-left hover:bg-[var(--bg-soft)]", sel === r.item.id && "bg-[var(--accent)]")}
+                style={{ height: ROW }}>
+                {r.item.kind === "milestone" ? <span style={{ color: "var(--chart-violet)" }}>◆</span> : r.item.assigneeIds[0] ? <PersonDot userId={r.item.assigneeIds[0]} size={20} /> : <span className="w-5" />}
+                <span className={cn("min-w-0 flex-1 truncate text-[13px]", r.item.state === "done" && "text-[var(--ink-soft)] line-through")}>{r.item.name}</span>
+              </button>
+            )
+          )}
+        </div>
+
+        {/* ขวา: แถบเวลา */}
+        <div ref={rightRef} className="relative overflow-x-auto">
+          <div ref={canvasRef} className="relative" style={{ width, height }}
+            onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
+            {Array.from({ length: hi - lo + 1 }, (_, k) => {
+              const d = lo + k, s = ymdOfDay(d), dt = new Date(d * 864e5), dow = dt.getUTCDay(), x = k * W;
+              const hol = holidays.has(s), we = dow === 0 || dow === 6;
+              const showDay = zoom === "day" || (zoom === "week" && dow === 1) || (zoom === "month" && (dt.getUTCDate() === 1 || dt.getUTCDate() === 15));
+              return (
+                <div key={d}>
+                  {(hol || (we && zoom !== "month")) && (
+                    <div className="absolute bottom-0" title={hol ? "วันหยุดบริษัท" : undefined}
+                      style={{ left: x, width: W, top: HEAD, background: hol ? "repeating-linear-gradient(135deg, var(--bg-soft) 0 4px, var(--line) 4px 5px)" : "var(--bg-soft)" }} />
+                  )}
+                  {(dt.getUTCDate() === 1 || k === 0) && (
+                    <div className="absolute top-1 whitespace-nowrap border-l border-[var(--line)] pl-1 text-xs font-bold" style={{ left: x }}>
+                      {TH_MONTH_SHORT[dt.getUTCMonth()]} {dt.getUTCFullYear() + 543}
+                    </div>
+                  )}
+                  {showDay && (
+                    <div className="absolute top-6 text-[10.5px] tabular-nums text-[var(--ink-soft)]" style={{ left: x, width: zoom === "day" ? W : 40, textAlign: zoom === "day" ? "center" : "left" }}>
+                      {dt.getUTCDate()}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            <div className="absolute inset-x-0 border-b border-[var(--line)]" style={{ top: HEAD - 1 }} />
+            {/* เส้นวันนี้ */}
+            <div className="pointer-events-none absolute bottom-0 z-[3] w-0.5" style={{ left: (dayNum(today) - lo) * W + W / 2, top: 20, background: "var(--chart-red)" }}>
+              <span className="absolute -top-0.5 left-1 whitespace-nowrap text-[10px] font-bold" style={{ color: "var(--chart-red)" }}>วันนี้</span>
+            </div>
+
+            {rows.map((r, idx) => {
+              const y = HEAD + idx * ROW;
+              if (r.kind === "group") {
+                if (!r.items.length) return null;
+                const a = Math.min(...r.items.map((i) => dayNum(i.start))), b = Math.max(...r.items.map((i) => dayNum(i.end)));
+                return <div key={`gs-${r.key}`} className="absolute h-1.5 rounded bg-[var(--line)]" style={{ left: (a - lo) * W, width: (b - a + 1) * W, top: y + 16 }} />;
+              }
+              const it = r.item;
+              const pv = preview?.id === it.id ? preview : undefined;
+              const g = geo(it, pv);
+              const draggable = canDrag(it);
+              if (it.kind === "milestone") {
+                return (
+                  <div key={it.id}>
+                    <div data-bar={it.id} title={`${it.name} · ${fmtDay(pv?.start ?? it.start)}`}
+                      className={cn("absolute z-[2] h-4 w-4 rotate-45 rounded-[2px]", draggable ? "cursor-grab" : "cursor-pointer", sel === it.id && "outline outline-2 outline-offset-2 outline-[var(--ink)]")}
+                      style={{ left: g.left, top: y + 11, background: it.state === "done" ? STATE_COLOR.done : it.state === "late" ? STATE_COLOR.late : "var(--chart-violet)" }}>
+                      {canEdit && !coarse && <span data-cn="1" className="absolute -right-4 top-0.5 h-2.5 w-2.5 -rotate-45 cursor-crosshair rounded-full border-2 border-[var(--ink)] bg-[var(--bg)] opacity-0 hover:opacity-100" />}
+                    </div>
+                    <div className="pointer-events-none absolute z-[2] whitespace-nowrap text-[11.5px] font-semibold" style={{ left: g.left + 26, top: y + 10 }}>
+                      {it.name} · {fmtDay(pv?.start ?? it.start)}
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <div key={it.id} data-bar={it.id} title={`${it.name} · ${fmtDay(pv?.start ?? it.start)} – ${fmtDay(pv?.end ?? it.end)}`}
+                  className={cn("group absolute z-[2] flex select-none items-center gap-1 rounded-md px-1.5 text-[11.5px] font-semibold text-white shadow-sm",
+                    draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer", sel === it.id && "outline outline-2 outline-offset-1 outline-[var(--ink)]")}
+                  style={{ left: g.left, width: g.w, top: y + 8, height: 22, background: STATE_COLOR[it.state], touchAction: draggable ? "none" : "auto" }}>
+                  {it.pct !== undefined && it.state !== "done" && <span className="pointer-events-none absolute inset-y-0 left-0 rounded-l-md bg-white/25" style={{ width: `${it.pct}%` }} />}
+                  <span className="relative truncate">{g.w > 70 ? it.name : ""}</span>
+                  {draggable && <span data-rz="1" className="absolute inset-y-0 right-0 w-2 cursor-ew-resize" />}
+                  {canEdit && !coarse && (
+                    <span data-cn="1" title="ลากไปวางบนงานที่ต้องรองานนี้"
+                      className="absolute -right-4 top-1/2 h-2.5 w-2.5 -translate-y-1/2 cursor-crosshair rounded-full border-2 border-[var(--ink)] bg-[var(--bg)] opacity-0 group-hover:opacity-100" />
+                  )}
+                </div>
+              );
+            })}
+
+            {/* เส้นงานที่ต้องรอ */}
+            <svg className="pointer-events-none absolute left-0 top-0 z-[1] overflow-visible" width={width} height={height}>
+              <defs>
+                <marker id="pt-ah" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="var(--ink-soft)" /></marker>
+                <marker id="pt-ahr" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="var(--chart-red)" /></marker>
+              </defs>
+              {items.flatMap((it) =>
+                it.deps.map((d) => {
+                  const pre = byId.get(d);
+                  if (!pre || !rowIndex.has(it.id) || !rowIndex.has(pre.id)) return null;
+                  const a = geo(pre, preview?.id === pre.id ? preview : undefined), b = geo(it, preview?.id === it.id ? preview : undefined);
+                  const bad = dayNum(preview?.id === it.id ? preview.start : it.start) < (preview?.id === pre.id ? dayNum(preview.end) + (pre.kind === "milestone" ? 0 : 1) : earliestAfter(pre));
+                  const path = b.x1 - 6 > a.x2 + 6
+                    ? `M${a.x2},${a.y} H${Math.min(b.x1 - 8, a.x2 + 14)} V${b.y} H${b.x1 - 2}`
+                    : `M${a.x2},${a.y} H${a.x2 + 8} V${(a.y + b.y) / 2} H${b.x1 - 10} V${b.y} H${b.x1 - 2}`;
+                  return <path key={`${d}>${it.id}`} d={path} fill="none" stroke={bad ? "var(--chart-red)" : "var(--ink-soft)"} strokeWidth={bad ? 2 : 1.3} opacity={bad ? 1 : 0.55} markerEnd={`url(#${bad ? "pt-ahr" : "pt-ah"})`} />;
+                })
+              )}
+              {linkLine && <path d={`M${linkLine.x1},${linkLine.y1} L${linkLine.x2},${linkLine.y2}`} stroke="var(--brand-green)" strokeWidth={2} strokeDasharray="5 4" fill="none" />}
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      {conflicts.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl bg-red-50 px-3 py-2.5 text-[13px] text-red-700 dark:bg-red-950/40 dark:text-red-300">
+          <span>⚠ <b>{conflicts.length} งานเริ่มก่อนงานที่ต้องรอเสร็จ:</b> {conflicts.map(([a, b]) => `${b.name} (รอ ${a.name})`).join(", ")}</span>
+          {canPlan && (
+            <button type="button" className="ml-auto rounded-lg border border-red-200 bg-[var(--bg)] px-3 py-1 text-xs text-[var(--ink)] dark:border-red-900"
+              onClick={() => { const plan = cascadePlan(items); plan.forEach((m) => applyMove(m, "เลื่อนตามงานที่ต้องรอ (Timeline)")); toast.success(`เลื่อนงานที่ต่อกันแล้ว ${plan.length} รายการ · แจ้งผู้รับผิดชอบแล้ว`); }}>
+              เลื่อนงานที่ต่อกันตาม
+            </button>
+          )}
+        </div>
+      ) : impact.late.length > 0 ? (
+        <div className="rounded-xl bg-red-50 px-3 py-2.5 text-[13px] text-red-700 dark:bg-red-950/40 dark:text-red-300">
+          ⚠ <b>{impact.late.map((l) => l.name).join(", ")}</b> เลยกำหนดแล้ว
+          {impact.affected.length > 0 && <> · มีงานรออยู่ {impact.affected.length} รายการ{impact.affected.some((a) => a.kind === "milestone") && <> รวม Milestone <b>{impact.affected.filter((a) => a.kind === "milestone").map((a) => a.name).join(", ")}</b></>}</>}
+        </div>
+      ) : null}
+
+      {selItem && (
+        <ItemDetail
+          key={selItem.id}
+          project={project}
+          item={selItem}
+          items={items}
+          canEdit={canEdit}
+          canPlan={canPlan}
+          today={today}
+          onClose={() => setSel(null)}
+          onOpenTask={onOpenTask}
+          onMove={(start, end) => commitMove(selItem, start, end)}
+          onSetDeps={(deps) => setDeps(selItem, deps)}
+          onRemoveMilestone={() => { removeMilestone(project.id, selItem.id); setSel(null); toast.success("ลบ Milestone แล้ว"); }}
+          onUpdateMilestone={(patch) => updateMilestone(project.id, selItem.id, patch)}
+        />
+      )}
+    </div>
+  );
+}
+
+function ItemDetail({
+  project,
+  item,
+  items,
+  canEdit,
+  canPlan,
+  today,
+  onClose,
+  onOpenTask,
+  onMove,
+  onSetDeps,
+  onRemoveMilestone,
+  onUpdateMilestone,
+}: {
+  project: Project;
+  item: TimelineItem;
+  items: TimelineItem[];
+  canEdit: boolean;
+  canPlan: boolean;
+  today: string;
+  onClose: () => void;
+  onOpenTask: (id: string) => void;
+  onMove: (start: string, end: string) => void;
+  onSetDeps: (deps: string[]) => void;
+  onRemoveMilestone: () => void;
+  onUpdateMilestone: (patch: { name?: string; date?: string; doneAt?: string | undefined; sectionId?: string }) => void;
+}) {
+  const byId = new Map(items.map((i) => [i.id, i]));
+  const waiting = items.filter((i) => i.deps.includes(item.id));
+  const canMove = item.state !== "done" && (item.kind === "milestone" ? canEdit : canPlan);
+  const step = (startDelta: number, endDelta: number) => {
+    const s = shiftDays(item.start, startDelta), e = shiftDays(item.end, endDelta);
+    if (dayNum(e) < dayNum(s)) return;
+    onMove(s, e);
+  };
+  const stepBtn = "h-9 w-9 rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] text-base disabled:opacity-40";
+  return (
+    <div className="grid gap-3 rounded-xl border border-[var(--line)] bg-[var(--bg-soft)] p-3.5">
+      <div className="flex flex-wrap items-center gap-2">
+        {item.kind === "milestone" && canEdit ? (
+          <input defaultValue={item.name} onBlur={(e) => e.target.value.trim() && e.target.value !== item.name && onUpdateMilestone({ name: e.target.value.trim() })}
+            className="min-w-0 flex-1 rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-base font-semibold sm:text-sm" />
+        ) : (
+          <h3 className="m-0 min-w-0 flex-1 text-base font-semibold">{item.kind === "milestone" ? "◆ " : ""}{item.name}</h3>
+        )}
+        <span className="rounded-full px-2 py-0.5 text-xs font-semibold text-white" style={{ background: STATE_COLOR[item.state] }}>{STATE_LABEL[item.state]}</span>
+        <button type="button" onClick={onClose} className="rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 py-1 text-xs">ปิด</button>
+      </div>
+      <dl className="grid grid-cols-[110px_minmax(0,1fr)] gap-x-3 gap-y-2 text-[13.5px]">
+        <dt className="text-[var(--ink-soft)]">ช่วงงาน</dt>
+        <dd className="m-0">
+          {item.kind === "milestone" && canEdit ? (
+            <select value={item.sectionId} onChange={(e) => onUpdateMilestone({ sectionId: e.target.value })} className="rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-0.5 text-base sm:text-sm">
+              {project.sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          ) : (project.sections.find((s) => s.id === item.sectionId)?.name ?? "—")}
+        </dd>
+        {item.kind === "task" && (
+          <>
+            <dt className="text-[var(--ink-soft)]">ผู้รับผิดชอบ</dt>
+            <dd className="m-0 flex flex-wrap gap-2">{item.assigneeIds.map((id) => <span key={id} className="inline-flex items-center gap-1.5"><PersonDot userId={id} size={20} />{getUser(id)?.name}</span>)}</dd>
+          </>
+        )}
+        <dt className="text-[var(--ink-soft)]">{item.kind === "milestone" ? "วันที่" : "วันเริ่ม"}</dt>
+        <dd className="m-0 flex items-center gap-2">
+          {canMove && <button type="button" className={stepBtn} aria-label="เร็วขึ้น 1 วัน" onClick={() => step(-1, item.kind === "milestone" ? -1 : 0)}>−</button>}
+          <b className="min-w-24 text-center tabular-nums">{fmtDay(item.start, true)}</b>
+          {canMove && <button type="button" className={stepBtn} aria-label="ช้าลง 1 วัน" onClick={() => step(1, item.kind === "milestone" ? 1 : 0)}>+</button>}
+        </dd>
+        {item.kind === "task" && (
+          <>
+            <dt className="text-[var(--ink-soft)]">กำหนดส่ง</dt>
+            <dd className="m-0 flex items-center gap-2">
+              {canMove && <button type="button" className={stepBtn} aria-label="ส่งเร็วขึ้น 1 วัน" onClick={() => step(0, -1)}>−</button>}
+              <b className="min-w-24 text-center tabular-nums">{fmtDay(item.end, true)}</b>
+              {canMove && <button type="button" className={stepBtn} aria-label="ส่งช้าลง 1 วัน" onClick={() => step(0, 1)}>+</button>}
+              <span className="text-xs text-[var(--ink-soft)]">({dayNum(item.end) - dayNum(item.start) + 1} วัน)</span>
+            </dd>
+          </>
+        )}
+        <dt className="text-[var(--ink-soft)]">ต้องรอ</dt>
+        <dd className="m-0 flex flex-wrap items-center gap-1.5">
+          {item.deps.map((d) => (
+            <span key={d} className="inline-flex items-center gap-1 rounded-full border border-[var(--line)] bg-[var(--bg)] px-2 py-0.5 text-xs">
+              {byId.get(d)?.name ?? "—"}
+              {canEdit && <button type="button" aria-label="เลิกรอ" className="text-[var(--ink-soft)]" onClick={() => onSetDeps(item.deps.filter((x) => x !== d))}>✕</button>}
+            </span>
+          ))}
+          {canEdit && (
+            <select value="" onChange={(e) => e.target.value && onSetDeps([...item.deps, e.target.value])}
+              className="rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-0.5 text-base sm:text-xs">
+              <option value="">+ เพิ่มงานที่ต้องรอ</option>
+              {items.filter((x) => x.id !== item.id && !item.deps.includes(x.id) && !wouldCycle(items, x.id, item.id)).map((x) => (
+                <option key={x.id} value={x.id}>{x.kind === "milestone" ? "◆ " : ""}{x.name}</option>
+              ))}
+            </select>
+          )}
+          {!item.deps.length && !canEdit && "—"}
+        </dd>
+        <dt className="text-[var(--ink-soft)]">งานที่รออยู่</dt>
+        <dd className="m-0">{waiting.length ? waiting.map((w) => w.name).join(", ") : "—"}</dd>
+      </dl>
+      <div className="flex flex-wrap gap-2">
+        {item.kind === "task" ? (
+          <button type="button" onClick={() => onOpenTask(item.id)} className="rounded-lg bg-[var(--brand-green)] px-3 py-1.5 text-sm font-semibold text-white">เปิดงาน (ความคิดเห็น ไฟล์ เช็คลิสต์)</button>
+        ) : (
+          canEdit && (
+            <>
+              <button type="button" onClick={() => onUpdateMilestone({ doneAt: item.milestone?.doneAt ? undefined : new Date().toISOString() })}
+                className="rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 py-1.5 text-sm">
+                {item.milestone?.doneAt ? "ยกเลิกว่าถึงแล้ว" : "✓ ถึง Milestone นี้แล้ว"}
+              </button>
+              <button type="button" onClick={onRemoveMilestone} className="rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 py-1.5 text-sm text-red-600">ลบ Milestone</button>
+            </>
+          )
+        )}
+        {!canMove && item.state !== "done" && item.kind === "task" && (
+          <span className="self-center text-xs text-[var(--ink-soft)]">เลื่อนวันได้เฉพาะเจ้าของโปรเจกต์/CEO · ผู้รับผิดชอบกด &quot;ขอเลื่อน&quot; ในหน้างาน</span>
+        )}
+      </div>
+      {item.state === "late" && dayNum(item.end) < dayNum(today) && <p className="m-0 text-xs text-red-600">เลยกำหนดมา {dayNum(today) - dayNum(item.end)} วัน</p>}
+    </div>
+  );
+}
+
+/** id ผู้ใช้ที่กำลังใช้งาน (อ่านตรงจาก store ตอนกด ไม่ต้อง subscribe) */
+function currentUserId(): string {
+  return useIdentityStore.getState().viewingAsUserId;
+}

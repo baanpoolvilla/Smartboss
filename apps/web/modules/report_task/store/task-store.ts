@@ -10,7 +10,7 @@ import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useTaskReviewSettingsStore } from "@/modules/report_task/store/task-review-settings-store";
 import { deriveCompletedAssigneeIds, isDoneByRule, isTaskFullyDone } from "@/modules/report_task/lib/task-completion";
 import { reactionRecipients } from "@/modules/report_task/lib/sticker-target";
-import type { Attachment, ChecklistItem, Task, TaskPriority, TaskRecurrenceRule, TaskStatus } from "@/modules/report_task/types";
+import type { Attachment, ChecklistItem, Task, TaskPriority, TaskProjectLink, TaskRecurrenceRule, TaskStatus } from "@/modules/report_task/types";
 import {
   bangkokToday,
   buildRoundTask,
@@ -378,6 +378,11 @@ interface TaskStore {
   stopRecurrence: (taskId: string, deleteThis: boolean, actorId: string) => void;
   /** งานทำซ้ำ: เปลี่ยนตาราง (มีผลตั้งแต่รอบถัดไป) */
   updateRecurrence: (taskId: string, rule: TaskRecurrenceRule, actorId: string) => void;
+  /** โปรเจกต์: ผูก/ย้าย/ถอดงานออกจากโปรเจกต์ (ช่วงงาน + งานที่ต้องรอ) */
+  setTaskProject: (taskId: string, link: TaskProjectLink | null, actorId: string) => void;
+  /** โปรเจกต์: เลื่อนวันจาก Timeline — กำหนดส่งเปลี่ยน = บันทึกเป็นการเลื่อนกำหนด (มีประวัติ) แบบ reviseDueDate
+   * ต่างตรงที่ย้อนให้เร็วขึ้นได้ (วางแผนใหม่) แต่ไม่ย้อนไปก่อนวันนี้ · คนเรียกต้องเช็คสิทธิ์เอง (เจ้าของโปรเจกต์/CEO) */
+  rescheduleTask: (taskId: string, startDate: string, dueDate: string, reason: string, actorId: string) => void;
   /** งานทำซ้ำ: เลื่อนวันของรอบ n ที่ยังไม่ขึ้นบอร์ด · date null = กลับเป็นวันตามตาราง */
   setRoundDate: (taskId: string, n: number, date: string | null, actorId: string) => void;
   updateTask: (taskId: string, patch: Partial<Task>) => void;
@@ -927,6 +932,67 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
           x.id === latest.id
             ? { ...x, recurrence: { ...x.recurrence!, rule, stopped: false, template: templateFromTask(x) }, updatedAt: now }
             : x
+        ),
+      };
+    }),
+  setTaskProject: (taskId, link, actorId) =>
+    set((s) => {
+      const t = s.tasks.find((x) => x.id === taskId);
+      if (!t) return {};
+      if ((t.project?.projectId ?? null) !== (link?.projectId ?? null)) {
+        logActivity(actorId, link ? "เพิ่มงานเข้าโปรเจกต์" : "เอางานออกจากโปรเจกต์", t.title, t.id);
+      }
+      return {
+        tasks: s.tasks.map((x) => {
+          if (x.id === taskId) {
+            if (!link) { const { project: _p, ...rest } = x; return { ...rest, updatedAt: new Date().toISOString() }; }
+            return { ...x, project: link, updatedAt: new Date().toISOString() };
+          }
+          // ถอดออกจากโปรเจกต์ → งานอื่นที่รองานนี้อยู่เลิกรอ
+          if (!link && x.project?.dependsOn?.includes(taskId)) {
+            return { ...x, project: { ...x.project, dependsOn: x.project.dependsOn.filter((d) => d !== taskId) } };
+          }
+          return x;
+        }),
+      };
+    }),
+  rescheduleTask: (taskId, startDate, dueDate, reason, actorId) =>
+    set((s) => {
+      const t = s.tasks.find((x) => x.id === taskId);
+      if (!t) return {};
+      const today = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);
+      const newDue = dueDate.slice(0, 10) < today && t.dueDate.slice(0, 10) >= today ? `${today}T00:00:00.000Z` : dueDate;
+      const dueChanged = newDue.slice(0, 10) !== t.dueDate.slice(0, 10);
+      const startChanged = startDate.slice(0, 10) !== t.startDate.slice(0, 10);
+      if (!dueChanged && !startChanged) return {};
+      const now = new Date().toISOString();
+      if (dueChanged) {
+        logActivity(actorId, "แก้ไขกำหนดส่ง", t.title, t.id, `${formatShortDate(t.dueDate)} → ${formatShortDate(newDue)} · ${reason}`);
+        const actorName = getUser(actorId)?.name ?? "มีคน";
+        useNotificationStore
+          .getState()
+          .notifyMany(t.assigneeIds, actorId, `${actorName} ปรับกำหนดส่งงาน "${t.title}" เป็น ${formatShortDate(newDue)} — ${reason}`, undefined, `/report-task/tasks?task=${t.id}`);
+      } else {
+        logActivity(actorId, "เปลี่ยนวันเริ่มต้น", t.title, t.id, `${formatShortDate(t.startDate)} → ${formatShortDate(startDate)}`);
+      }
+      return {
+        tasks: s.tasks.map((x) =>
+          x.id !== taskId
+            ? x
+            : {
+                ...x,
+                startDate: startDate > newDue ? newDue : startDate,
+                dueDate: newDue,
+                ...(dueChanged
+                  ? {
+                      revisions: [
+                        ...x.revisions,
+                        { revisionNumber: x.revisions.length + 1, previousDate: x.dueDate, newDate: newDue, reason, revisedBy: actorId, revisedAt: now },
+                      ],
+                    }
+                  : {}),
+                updatedAt: now,
+              }
         ),
       };
     }),

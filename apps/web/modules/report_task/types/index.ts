@@ -258,6 +258,8 @@ export interface Task {
   watcherIds?: string[];
   /** งานทำซ้ำ — มีเฉพาะงานที่ติ๊ก "ทำซ้ำ" (ดู lib/task-recurrence.ts) ไม่มี = งานครั้งเดียวแบบเดิม */
   recurrence?: TaskRecurrence;
+  /** อยู่ในโปรเจกต์ไหน ช่วงงานไหน และต้องรออะไร (ดู store/project-store.ts) — ไม่มี = งานทั่วไปบนบอร์ด */
+  project?: TaskProjectLink;
   createdAt: string;
   updatedAt: string;
 }
@@ -319,6 +321,101 @@ export interface TaskRecurrence {
   template: TaskRecurrenceTemplate;
   /** หยุดทำซ้ำแล้ว — ไม่สร้างรอบใหม่อีก */
   stopped?: boolean;
+}
+
+/* ───────────── โปรเจกต์ + Timeline (แบบ Asana) ───────────── */
+
+export interface TaskProjectLink {
+  projectId: string;
+  sectionId: string;
+  /** ต้องรออะไรเสร็จก่อนถึงเริ่มได้ — id ของงาน หรือ Milestone ในโปรเจกต์เดียวกัน */
+  dependsOn?: string[];
+}
+
+/** สถานะโปรเจกต์ 6 แบบ เหมือน Asana: On track / At risk / Off track / On hold / Complete / Dropped */
+export type ProjectStatus = "ok" | "risk" | "late" | "hold" | "done" | "dropped";
+
+export interface ProjectSection {
+  id: string;
+  name: string;
+}
+
+/** Milestone เป็นของโปรเจกต์ ไม่ใช่งานบนบอร์ด — ไม่มีผู้รับผิดชอบ ไม่หักคะแนน */
+export interface ProjectMilestone {
+  id: string;
+  name: string;
+  /** YYYY-MM-DD */
+  date: string;
+  sectionId: string;
+  dependsOn?: string[];
+  doneAt?: string;
+}
+
+export interface ProjectStatusUpdate {
+  id: string;
+  status: ProjectStatus;
+  text: string;
+  by: string;
+  at: string;
+}
+
+export interface ProjectMember {
+  userId: string;
+  /** เจ้าของ = คุมแผน ลากเลื่อนกำหนดส่งได้ · แก้ได้ = เพิ่ม/แก้งาน · ดูอย่างเดียว */
+  role: "owner" | "editor" | "viewer";
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  ownerId: string;
+  members: ProjectMember[];
+  /** YYYY-MM-DD */
+  startDate: string;
+  /** วันเสร็จเป้าหมาย YYYY-MM-DD */
+  endDate: string;
+  sections: ProjectSection[];
+  milestones: ProjectMilestone[];
+  updates: ProjectStatusUpdate[];
+  /** เลื่อนงานแล้วชนงานที่รออยู่: ถามก่อน / เลื่อนตามทันที / เลื่อนตาม + รักษาระยะห่างเดิม */
+  shiftMode: "ask" | "auto" | "keep";
+  /** ปิดโปรเจกต์ด้วยมือ (เสร็จแล้ว/ยกเลิก/พักไว้) — ไม่มี = คิดจากงาน + อัปเดตล่าสุด */
+  closedStatus?: "done" | "dropped" | "hold";
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectTemplateItem {
+  key: string;
+  sectionKey: string;
+  name: string;
+  /** ตำแหน่งที่ทำ (เลือกคนตอนสร้างโปรเจกต์) — Milestone ไม่มี */
+  role: string;
+  /** เริ่มวันที่เท่าไหร่ของโปรเจกต์ (0 = วันแรก) */
+  off: number;
+  /** กี่วัน (Milestone = 0) */
+  dur: number;
+  milestone: boolean;
+  dependsOn: string[];
+  description: string;
+  checklist: string[];
+}
+
+export interface ProjectTemplate {
+  id: string;
+  name: string;
+  description: string;
+  /** นับเฉพาะวันทำงาน (ข้ามเสาร์–อาทิตย์ + วันหยุดบริษัท) */
+  workdays: boolean;
+  /** วางวันจากวันเริ่ม หรือนับถอยหลังจากวันเสร็จ */
+  anchor: "start" | "end";
+  sections: { key: string; name: string }[];
+  items: ProjectTemplateItem[];
+  usedCount: number;
+  createdBy: string;
+  updatedAt: string;
 }
 
 export type CalendarEventType = "task" | "leave" | "meeting" | "holiday" | "google" | "dayoff" | "todo" | "ot";

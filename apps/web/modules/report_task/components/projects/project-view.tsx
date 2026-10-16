@@ -1,0 +1,408 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
+
+import { NewTaskDialog } from "@/modules/report_task/components/kanban/new-task-dialog";
+import { TaskCard } from "@/modules/report_task/components/kanban/task-card";
+import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-detail-sheet";
+import { useTaskSheetParam } from "@/modules/report_task/hooks/use-task-sheet-param";
+import { getUser, users } from "@/modules/report_task/lib/directory";
+import { canEditProject, canPlanProject, canSeeProject } from "@/modules/report_task/lib/project-access";
+import {
+  PROJECT_STATUS_META,
+  dayNum,
+  lateImpact,
+  progressOf,
+  projectStatusOf,
+  suggestLate,
+  templateFromProject,
+  timelineItems,
+} from "@/modules/report_task/lib/project-schedule";
+import { uuid } from "@/modules/report_task/lib/uuid";
+import { cn } from "@/modules/report_task/lib/utils";
+import { useIdentityStore } from "@/modules/report_task/store/identity-store";
+import { useProjectStore } from "@/modules/report_task/store/project-store";
+import { useTaskStore } from "@/modules/report_task/store/task-store";
+import type { Project, ProjectStatus } from "@/modules/report_task/types";
+import { ProjectTimeline } from "./project-timeline";
+import { PCT_HELP, PersonDot, ProgressBar, ProjectStatusChip, STATE_COLOR, STATE_LABEL, fmtDay, todayBkk, useCompanyHolidays } from "./project-ui";
+import { ROLE_OF_DEFAULT } from "./project-roles";
+
+type Tab = "timeline" | "overview" | "list" | "board" | "updates";
+const TABS: { id: Tab; label: string }[] = [
+  { id: "timeline", label: "Timeline" },
+  { id: "overview", label: "ภาพรวม" },
+  { id: "list", label: "รายการ" },
+  { id: "board", label: "บอร์ด" },
+  { id: "updates", label: "อัปเดตสถานะ" },
+];
+
+export function ProjectView({ projectId }: { projectId: string }) {
+  const router = useRouter();
+  const me = useIdentityStore((s) => s.viewingAsUserId);
+  const project = useProjectStore((s) => s.projects.find((p) => p.id === projectId));
+  const upsertTemplate = useProjectStore((s) => s.upsertTemplate);
+  const tasks = useTaskStore((s) => s.tasks);
+  const setTaskProject = useTaskStore((s) => s.setTaskProject);
+  const { openTaskId, open: openTask, close: closeTask } = useTaskSheetParam();
+  const holidays = useCompanyHolidays();
+  const today = todayBkk();
+  // เปิดหน้ามือถือ (จอแคบ) เจอ "รายการ" ก่อน — อ่านง่ายกว่า Timeline บนจอเล็ก
+  const [tab, setTab] = useState<Tab>(() => (typeof window !== "undefined" && window.innerWidth < 640 ? "list" : "timeline"));
+  const [newTaskSection, setNewTaskSection] = useState<string | null>(null);
+
+  const items = useMemo(() => (project ? timelineItems(project, tasks, today) : []), [project, tasks, today]);
+
+  if (!project) {
+    return (
+      <div className="grid place-items-center gap-3 py-20 text-center text-[var(--ink-soft)]">
+        <p>ไม่พบโปรเจกต์นี้ หรือถูกลบไปแล้ว</p>
+        <Link href="/report-task/projects" className="text-sm font-semibold text-[var(--brand-green-dark)]">‹ กลับหน้ารวมโปรเจกต์</Link>
+      </div>
+    );
+  }
+  if (!canSeeProject(project, me)) {
+    return <p className="py-20 text-center text-[var(--ink-soft)]">คุณไม่ได้อยู่ในโปรเจกต์นี้</p>;
+  }
+  const canEdit = canEditProject(project, me);
+  const canPlan = canPlanProject(project, me);
+  const status = projectStatusOf(project, items);
+  const pct = progressOf(items);
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-2">
+        <Link href="/report-task/projects" className="text-xs text-[var(--ink-soft)] hover:text-[var(--ink)]">‹ โปรเจกต์ทั้งหมด</Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="m-0 text-xl font-bold">{project.name}</h1>
+          <ProjectStatusChip status={status} />
+          <span className="text-xs text-[var(--ink-soft)]">
+            {fmtDay(project.startDate)} – {fmtDay(project.endDate, true)} · เจ้าของ {getUser(project.ownerId)?.name ?? "—"} · {pct}% เสร็จ
+            <span className="ml-1 inline-grid h-4 w-4 cursor-help place-items-center rounded-full border border-[var(--ink-soft)] text-[10px]" title={PCT_HELP} tabIndex={0}>?</span>
+          </span>
+          <div className="ml-auto flex flex-wrap gap-2">
+            {canEdit && (
+              <button type="button" className="rounded-lg border border-[var(--line)] px-3 py-1.5 text-xs hover:bg-[var(--bg-soft)]"
+                onClick={() => {
+                  const t = templateFromProject(project, items, (uid) => ROLE_OF_DEFAULT(uid), () => `tpl-${uuid()}`, me);
+                  upsertTemplate(t);
+                  toast.success("บันทึกเป็นแม่แบบแล้ว · แก้ต่อได้ที่หน้าแม่แบบ");
+                  router.push(`/report-task/projects/templates?t=${t.id}`);
+                }}>
+                บันทึกเป็นแม่แบบ
+              </button>
+            )}
+            {canPlan && <ProjectSettingsButton project={project} />}
+          </div>
+        </div>
+        {suggestLate(project, items) && (
+          <p className="m-0 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+            ระบบเห็นว่ามีงานเลยกำหนดที่กระทบ Milestone แต่สถานะล่าสุดยังเป็น &quot;ตามแผน&quot; — ลองอัปเดตสถานะ
+          </p>
+        )}
+      </div>
+
+      <div role="tablist" className="flex gap-1 overflow-x-auto border-b border-[var(--line)]">
+        {TABS.map((t) => (
+          <button key={t.id} role="tab" type="button" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
+            className={cn("whitespace-nowrap border-b-2 px-3 py-2 text-sm", tab === t.id ? "border-[var(--brand-green)] font-bold text-[var(--brand-green-dark)]" : "border-transparent text-[var(--ink-soft)]")}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "timeline" && (
+        <ProjectTimeline project={project} items={items} today={today} holidays={holidays} canEdit={canEdit} canPlan={canPlan}
+          onOpenTask={(id) => openTask(id)} onAddTask={(sec) => setNewTaskSection(sec || project.sections[0]?.id || "")} />
+      )}
+      {tab === "overview" && <Overview project={project} items={items} pct={pct} today={today} />}
+      {tab === "list" && <ListTab project={project} items={items} onOpen={(id) => openTask(id)} />}
+      {tab === "board" && <BoardTab items={items} onOpen={(id) => openTask(id)} />}
+      {tab === "updates" && <UpdatesTab project={project} canEdit={canEdit} />}
+
+      <TaskDetailSheet taskId={openTaskId} onOpenChange={(o) => !o && closeTask()} />
+      {newTaskSection !== null && (
+        <NewTaskDialog
+          open
+          onOpenChange={(o) => !o && setNewTaskSection(null)}
+          allowedTypes={["task"]}
+          defaultDate={today}
+          onCreated={(taskId) => {
+            setTaskProject(taskId, { projectId: project.id, sectionId: newTaskSection || project.sections[0]?.id || "", dependsOn: [] }, me);
+            setNewTaskSection(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function Overview({ project, items, pct, today }: { project: Project; items: ReturnType<typeof timelineItems>; pct: number; today: string }) {
+  const tasksOnly = items.filter((i) => i.kind === "task");
+  const n = (s: string) => tasksOnly.filter((i) => i.state === s).length;
+  const latest = [...project.updates].sort((a, b) => b.at.localeCompare(a.at))[0];
+  const miles = items.filter((i) => i.kind === "milestone");
+  const C = 2 * Math.PI * 34;
+  const { late, affected } = lateImpact(items);
+  return (
+    <div className="grid gap-3 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+      <div className="grid content-start gap-3">
+        <section className="rounded-xl border border-[var(--line)] p-4">
+          <h3 className="m-0 mb-1 text-sm font-semibold">เป้าหมาย</h3>
+          <p className="m-0 whitespace-pre-wrap text-sm">{project.description || "—"}</p>
+        </section>
+        <section className="grid gap-3 rounded-xl border border-[var(--line)] p-4">
+          <div className="flex items-center gap-4">
+            <svg width="84" height="84" viewBox="0 0 84 84" aria-label={`ความคืบหน้า ${pct}%`}>
+              <circle cx="42" cy="42" r="34" fill="none" stroke="var(--bg-soft)" strokeWidth="9" />
+              <circle cx="42" cy="42" r="34" fill="none" stroke="var(--brand-green)" strokeWidth="9" strokeLinecap="round" strokeDasharray={`${(C * pct) / 100} ${C}`} transform="rotate(-90 42 42)" />
+              <text x="42" y="47" textAnchor="middle" fontSize="17" fontWeight="700" fill="var(--ink)">{pct}%</text>
+            </svg>
+            <div>
+              <b>ความคืบหน้า</b>
+              <p className="m-0 text-xs text-[var(--ink-soft)]">{PCT_HELP}</p>
+              <p className="m-0 text-xs text-[var(--ink-soft)]">เหลือ {Math.max(0, dayNum(project.endDate) - dayNum(today))} วันถึงวันเสร็จเป้าหมาย</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {(["done", "doing", "late", "todo"] as const).map((k) => (
+              <div key={k} className="rounded-lg bg-[var(--bg-soft)] p-2.5">
+                <b className="block text-2xl tabular-nums" style={k === "late" ? { color: STATE_COLOR.late } : undefined}>{n(k)}</b>
+                <span className="text-xs text-[var(--ink-soft)]">{STATE_LABEL[k]}</span>
+              </div>
+            ))}
+          </div>
+          {late.length > 0 && (
+            <p className="m-0 text-xs text-red-600">
+              เลยกำหนด: {late.map((l) => l.name).join(", ")}{affected.length ? ` · มีงานรออยู่ ${affected.length} รายการ` : ""}
+            </p>
+          )}
+        </section>
+      </div>
+      <div className="grid content-start gap-3">
+        <section className="rounded-xl border border-[var(--line)] p-4">
+          <h3 className="m-0 mb-2 text-sm font-semibold">สถานะล่าสุด</h3>
+          {latest ? <UpdatePost u={latest} /> : <p className="m-0 text-sm text-[var(--ink-soft)]">ยังไม่มีอัปเดต</p>}
+        </section>
+        <section className="rounded-xl border border-[var(--line)] p-4">
+          <h3 className="m-0 mb-2 text-sm font-semibold">Milestone</h3>
+          {miles.length ? (
+            <ul className="m-0 grid list-none gap-2 p-0">
+              {miles.map((m) => (
+                <li key={m.id} className="flex items-center gap-2.5 text-sm">
+                  <span className="h-2.5 w-2.5 rotate-45 rounded-[2px]" style={{ background: m.state === "done" ? STATE_COLOR.done : m.state === "late" ? STATE_COLOR.late : "var(--chart-violet)" }} />
+                  {m.name}
+                  <span className="ml-auto whitespace-nowrap tabular-nums text-[var(--ink-soft)]">{fmtDay(m.start)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : <p className="m-0 text-sm text-[var(--ink-soft)]">ยังไม่มี Milestone</p>}
+        </section>
+        <section className="rounded-xl border border-[var(--line)] p-4">
+          <h3 className="m-0 mb-2 text-sm font-semibold">สมาชิก</h3>
+          <div className="flex flex-wrap gap-2.5">
+            {[{ userId: project.ownerId, role: "owner" as const }, ...project.members.filter((m) => m.userId !== project.ownerId)].map((m) => (
+              <span key={m.userId} className="inline-flex items-center gap-1.5 text-[13px]">
+                <PersonDot userId={m.userId} size={22} />
+                {getUser(m.userId)?.name}
+                <span className="text-[11px] text-[var(--ink-soft)]">{{ owner: "เจ้าของ", editor: "แก้ได้", viewer: "ดูอย่างเดียว" }[m.role]}</span>
+              </span>
+            ))}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function ListTab({ project, items, onOpen }: { project: Project; items: ReturnType<typeof timelineItems>; onOpen: (id: string) => void }) {
+  const byId = new Map(items.map((i) => [i.id, i]));
+  return (
+    <div className="overflow-x-auto rounded-xl border border-[var(--line)]">
+      <table className="w-full min-w-[640px] border-collapse text-[13.5px]">
+        <thead>
+          <tr className="text-left text-xs text-[var(--ink-soft)]">
+            {["งาน", "ผู้รับผิดชอบ", "เริ่ม", "ส่ง", "สถานะ", "ต้องรอ"].map((h) => <th key={h} className="border-b border-[var(--line)] px-3 py-2 font-semibold">{h}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {project.sections.map((s) => {
+            const its = items.filter((i) => i.sectionId === s.id);
+            return [
+              <tr key={`s-${s.id}`}><td colSpan={6} className="bg-[var(--bg-soft)] px-3 py-1.5 text-xs font-bold text-[var(--ink-soft)]">{s.name} · {its.length}</td></tr>,
+              ...its.map((i) => (
+                <tr key={i.id} className={cn("border-b border-[var(--line)]/60", i.kind === "task" && "cursor-pointer hover:bg-[var(--bg-soft)]")} onClick={() => i.kind === "task" && onOpen(i.id)}>
+                  <td className="px-3 py-2">{i.kind === "milestone" ? "◆ " : ""}{i.name}</td>
+                  <td className="px-3 py-2">{i.assigneeIds.length ? <span className="inline-flex items-center gap-1.5"><PersonDot userId={i.assigneeIds[0]!} size={20} /><span className="text-xs">{getUser(i.assigneeIds[0]!)?.name}{i.assigneeIds.length > 1 ? ` +${i.assigneeIds.length - 1}` : ""}</span></span> : "—"}</td>
+                  <td className="px-3 py-2 tabular-nums">{fmtDay(i.start)}</td>
+                  <td className="px-3 py-2 tabular-nums">{i.kind === "milestone" ? "—" : fmtDay(i.end)}</td>
+                  <td className="px-3 py-2"><span className="rounded-full px-2 py-0.5 text-xs font-semibold text-white" style={{ background: STATE_COLOR[i.state] }}>{STATE_LABEL[i.state]}</span></td>
+                  <td className="px-3 py-2 text-xs text-[var(--ink-soft)]">{i.deps.map((d) => byId.get(d)?.name).filter(Boolean).join(", ") || "—"}</td>
+                </tr>
+              )),
+            ];
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function BoardTab({ items, onOpen }: { items: ReturnType<typeof timelineItems>; onOpen: (id: string) => void }) {
+  const tasks = items.filter((i) => i.kind === "task" && i.task).map((i) => i.task!);
+  const cols: { key: string; label: string; list: typeof tasks }[] = [
+    { key: "todo", label: "ต้องทำ", list: tasks.filter((t) => t.status === "todo") },
+    { key: "in_progress", label: "กำลังทำ", list: tasks.filter((t) => t.status === "in_progress") },
+    { key: "done", label: "เสร็จแล้ว", list: tasks.filter((t) => t.status === "done") },
+  ];
+  return (
+    <div className="space-y-2">
+      <p className="m-0 text-xs text-[var(--ink-soft)]">การ์ดชุดเดียวกับบอร์ดงานหลัก — เปลี่ยนสถานะ/ติ๊กเช็คลิสต์ที่นี่ ที่บอร์ดงานก็เปลี่ยนตาม</p>
+      <div className="grid gap-3 md:grid-cols-3">
+        {cols.map((c) => (
+          <div key={c.key} className="grid content-start gap-2 rounded-xl bg-[var(--bg-soft)] p-2.5">
+            <div className="flex justify-between text-xs font-semibold text-[var(--ink-soft)]"><span>{c.label}</span><span>{c.list.length}</span></div>
+            {c.list.map((t) => <TaskCard key={t.id} task={t} onOpen={onOpen} />)}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function UpdatePost({ u }: { u: Project["updates"][number] }) {
+  const tone = PROJECT_STATUS_META[u.status].tone;
+  const border = { ok: "border-green-500", risk: "border-amber-500", late: "border-red-500", info: "border-sky-500", muted: "border-slate-400" }[tone];
+  return (
+    <div className={cn("grid gap-1 border-l-4 pl-3", border)}>
+      <div className="flex flex-wrap items-center gap-2">
+        <ProjectStatusChip status={u.status} />
+        <span className="text-xs text-[var(--ink-soft)]">{getUser(u.by)?.name ?? "—"} · {new Date(u.at).toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+      </div>
+      <p className="m-0 whitespace-pre-wrap text-sm">{u.text}</p>
+    </div>
+  );
+}
+
+function UpdatesTab({ project, canEdit }: { project: Project; canEdit: boolean }) {
+  const me = useIdentityStore((s) => s.viewingAsUserId);
+  const addUpdate = useProjectStore((s) => s.addUpdate);
+  const [st, setSt] = useState<ProjectStatus>("ok");
+  const [text, setText] = useState("");
+  const list = [...project.updates].sort((a, b) => b.at.localeCompare(a.at));
+  return (
+    <div className="grid max-w-3xl gap-4">
+      {canEdit && (
+        <div className="grid gap-2.5 rounded-xl border border-[var(--line)] p-3.5">
+          <b className="text-sm">อัปเดตสถานะประจำสัปดาห์</b>
+          <div className="flex flex-wrap gap-1.5">
+            {(Object.keys(PROJECT_STATUS_META) as ProjectStatus[]).map((k) => (
+              <button key={k} type="button" onClick={() => setSt(k)} aria-pressed={st === k}
+                className={cn("rounded-full border px-3 py-1 text-xs", st === k ? "border-[var(--ink)] font-bold" : "border-[var(--line)] text-[var(--ink-soft)]")}>
+                {PROJECT_STATUS_META[k].label}
+              </button>
+            ))}
+          </div>
+          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4} placeholder="สัปดาห์นี้ทำอะไรไปแล้ว ติดอะไร ต้องการให้ใครช่วย"
+            className="w-full rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 py-2 text-base sm:text-sm" />
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-[var(--ink-soft)]">{st === "done" || st === "dropped" || st === "hold" ? "สถานะนี้จะปิดโปรเจกต์ (เปิดใหม่ได้ด้วยอัปเดตครั้งถัดไป)" : ""}</span>
+            <button type="button" className="ml-auto rounded-lg bg-[var(--brand-green)] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50" disabled={!text.trim()}
+              onClick={() => { addUpdate(project.id, st, text.trim(), me); setText(""); toast.success("โพสต์อัปเดตแล้ว"); }}>
+              โพสต์อัปเดต
+            </button>
+          </div>
+        </div>
+      )}
+      {list.length ? list.map((u) => <UpdatePost key={u.id} u={u} />) : <p className="text-sm text-[var(--ink-soft)]">ยังไม่มีอัปเดต</p>}
+    </div>
+  );
+}
+
+/** ตั้งค่าโปรเจกต์ (เจ้าของ/CEO): ชื่อ เป้าหมาย วัน สมาชิก ช่วงงาน ลบโปรเจกต์ */
+function ProjectSettingsButton({ project }: { project: Project }) {
+  const router = useRouter();
+  const updateProject = useProjectStore((s) => s.updateProject);
+  const removeProject = useProjectStore((s) => s.removeProject);
+  const addSection = useProjectStore((s) => s.addSection);
+  const renameSection = useProjectStore((s) => s.renameSection);
+  const removeSection = useProjectStore((s) => s.removeSection);
+  const tasks = useTaskStore((s) => s.tasks);
+  const setTaskProject = useTaskStore((s) => s.setTaskProject);
+  const me = useIdentityStore((s) => s.viewingAsUserId);
+  const [open, setOpen] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const field = "w-full rounded-lg border border-[var(--line)] bg-[var(--bg)] px-2.5 py-1.5 text-base sm:text-sm";
+  const memberIds = new Set(project.members.map((m) => m.userId));
+  return (
+    <>
+      <button type="button" className="rounded-lg border border-[var(--line)] px-3 py-1.5 text-xs hover:bg-[var(--bg-soft)]" onClick={() => setOpen(true)}>ตั้งค่าโปรเจกต์</button>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 sm:items-center sm:p-4" onClick={() => setOpen(false)}>
+          <div className="grid max-h-[90dvh] w-full gap-3 overflow-y-auto rounded-t-2xl bg-[var(--bg)] p-4 shadow-2xl sm:max-w-xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="ตั้งค่าโปรเจกต์">
+            <div className="flex items-center"><b>ตั้งค่าโปรเจกต์</b><button type="button" className="ml-auto px-2" onClick={() => setOpen(false)} aria-label="ปิด">✕</button></div>
+            <label className="grid gap-1 text-xs text-[var(--ink-soft)]">ชื่อโปรเจกต์<input className={field} defaultValue={project.name} onBlur={(e) => e.target.value.trim() && updateProject(project.id, { name: e.target.value.trim() })} /></label>
+            <label className="grid gap-1 text-xs text-[var(--ink-soft)]">เป้าหมาย / ขอบเขต<textarea className={field} rows={3} defaultValue={project.description} onBlur={(e) => updateProject(project.id, { description: e.target.value })} /></label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="grid gap-1 text-xs text-[var(--ink-soft)]">วันเริ่ม<input type="date" className={field} defaultValue={project.startDate} onChange={(e) => e.target.value && updateProject(project.id, { startDate: e.target.value })} /></label>
+              <label className="grid gap-1 text-xs text-[var(--ink-soft)]">วันเสร็จเป้าหมาย<input type="date" className={field} defaultValue={project.endDate} onChange={(e) => e.target.value && updateProject(project.id, { endDate: e.target.value })} /></label>
+            </div>
+            <div className="grid gap-1.5">
+              <span className="text-xs text-[var(--ink-soft)]">สมาชิก</span>
+              {project.members.filter((m) => m.userId !== project.ownerId).map((m) => (
+                <div key={m.userId} className="flex items-center gap-2 text-sm">
+                  <PersonDot userId={m.userId} size={22} />{getUser(m.userId)?.name}
+                  <select className="ml-auto rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-0.5 text-base sm:text-xs" value={m.role}
+                    onChange={(e) => updateProject(project.id, { members: project.members.map((x) => (x.userId === m.userId ? { ...x, role: e.target.value as "editor" | "viewer" } : x)) })}>
+                    <option value="editor">แก้ได้</option><option value="viewer">ดูอย่างเดียว</option>
+                  </select>
+                  <button type="button" className="text-[var(--ink-soft)]" aria-label="เอาออก" onClick={() => updateProject(project.id, { members: project.members.filter((x) => x.userId !== m.userId) })}>✕</button>
+                </div>
+              ))}
+              <select className={field} value="" onChange={(e) => e.target.value && updateProject(project.id, { members: [...project.members, { userId: e.target.value, role: "editor" }] })}>
+                <option value="">+ เพิ่มสมาชิก</option>
+                {users.filter((u) => !memberIds.has(u.id) && u.id !== project.ownerId).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            </div>
+            <div className="grid gap-1.5">
+              <span className="text-xs text-[var(--ink-soft)]">ช่วงงาน</span>
+              {project.sections.map((s) => (
+                <div key={s.id} className="flex items-center gap-2">
+                  <input className={field} defaultValue={s.name} onBlur={(e) => e.target.value.trim() && renameSection(project.id, s.id, e.target.value.trim())} />
+                  <button type="button" className="text-[var(--ink-soft)]" aria-label="ลบช่วงงาน" disabled={project.sections.length <= 1}
+                    onClick={() => {
+                      const fallback = project.sections.find((x) => x.id !== s.id)!;
+                      tasks.filter((t) => t.project?.projectId === project.id && t.project.sectionId === s.id)
+                        .forEach((t) => setTaskProject(t.id, { ...t.project!, sectionId: fallback.id }, me));
+                      removeSection(project.id, s.id);
+                    }}>✕</button>
+                </div>
+              ))}
+              <button type="button" className="w-max rounded-lg border border-[var(--line)] px-3 py-1 text-xs" onClick={() => addSection(project.id, "ช่วงใหม่")}>+ ช่วงงาน</button>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 border-t border-[var(--line)] pt-3">
+              {confirmDel ? (
+                <button type="button" className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-semibold text-white"
+                  onClick={() => {
+                    tasks.filter((t) => t.project?.projectId === project.id).forEach((t) => setTaskProject(t.id, null, me));
+                    removeProject(project.id);
+                    toast.success("ลบโปรเจกต์แล้ว · งานยังอยู่บนบอร์ดงาน");
+                    router.push("/report-task/projects");
+                  }}>
+                  ยืนยันลบโปรเจกต์ (งานยังอยู่บนบอร์ด)
+                </button>
+              ) : (
+                <button type="button" className="rounded-lg border border-[var(--line)] px-3 py-1.5 text-sm text-red-600" onClick={() => setConfirmDel(true)}>ลบโปรเจกต์</button>
+              )}
+              <button type="button" className="ml-auto rounded-lg bg-[var(--brand-green)] px-4 py-1.5 text-sm font-semibold text-white" onClick={() => setOpen(false)}>เสร็จ</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+

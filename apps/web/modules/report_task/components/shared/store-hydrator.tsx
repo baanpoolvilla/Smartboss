@@ -23,6 +23,7 @@ import { useHolidayStore } from "@/modules/report_task/store/holiday-store";
 import { thaiHolidayEvents } from "@/modules/report_task/data/thai-holidays";
 import { useLeaveTypeStore } from "@/modules/report_task/store/leave-type-store";
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
+import { useProjectStore } from "@/modules/report_task/store/project-store";
 import { useReportFeedStore, normalizeReportFeedSlice } from "@/modules/report_task/store/report-feed-store";
 import { useReportTagStore } from "@/modules/report_task/store/report-tag-store";
 import { useIssueReportStore, migrateIssueStoreSlice, extractV1RecipientDepartmentIds } from "@/modules/report_task/store/issue-report-store";
@@ -237,6 +238,20 @@ export function StoreHydrator() {
         store={useLeaveTypeStore}
         select={(s) => s.types}
         apply={(s, types) => ({ ...s, types })}
+      />
+      {/* โปรเจกต์ + Timeline — ตัวโปรเจกต์ (ช่วงงาน/Milestone/สมาชิก/อัปเดต) · ตัวงานอยู่ใน tasks */}
+      <ServerStoreSync
+        apiKey="projects"
+        store={useProjectStore}
+        select={(s) => s.projects}
+        apply={(s, projects) => ({ ...s, projects })}
+      />
+      <ServerStoreSync
+        apiKey="project-templates"
+        pollMs={SLOW_POLL_MS}
+        store={useProjectStore}
+        select={(s) => s.templates}
+        apply={(s, templates) => ({ ...s, templates })}
       />
       <ServerStoreSync
         apiKey="project-topics"

@@ -47,6 +47,9 @@ export const STORE_KEYS = {
   "settings-access": "stores/settings-access.json",
   stickers: "stores/stickers.json",
   "project-topics": "stores/project-topics.json",
+  // โปรเจกต์ + Timeline (ของ Smartboss เพิ่มเอง) — ตัวงานอยู่ในตาราง tasks (task.project) ที่นี่เก็บแค่ตัวโปรเจกต์/แม่แบบ
+  projects: "stores/projects.json",
+  "project-templates": "stores/project-templates.json",
   "report-tags": "stores/report-tags.json",
   "attachment-settings": "stores/attachment-settings.json",
   "reminder-settings": "stores/reminder-settings.json",

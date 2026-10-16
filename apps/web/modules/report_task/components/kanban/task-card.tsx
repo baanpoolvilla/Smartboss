@@ -23,6 +23,28 @@ import { useNotificationStore } from "@/modules/report_task/store/notification-s
 import { unreadTaskAttachmentCounts, unreadTaskCommentCounts } from "@/modules/report_task/lib/task-comment-activity";
 import { MessageSquare, Paperclip, History, SmilePlus, SearchCheck, Check, Circle, Star, Clock, Eye, Lock, Repeat } from "lucide-react";
 import { describeRule, freqLabel, totalOccurrences } from "@/modules/report_task/lib/task-recurrence";
+import { useProjectStore } from "@/modules/report_task/store/project-store";
+
+/** ป้ายบอกว่างานนี้อยู่โปรเจกต์ไหน ช่วงไหน — กดแล้วไปที่ Timeline ของโปรเจกต์ (ไม่เปิดการ์ด) */
+function ProjectChip({ projectId, sectionId }: { projectId: string; sectionId: string }) {
+  const name = useProjectStore((s) => {
+    const p = s.projects.find((x) => x.id === projectId);
+    if (!p) return null;
+    const sec = p.sections.find((x) => x.id === sectionId)?.name;
+    return sec ? `${p.name} · ${sec}` : p.name;
+  });
+  if (!name) return null;
+  return (
+    <a
+      href={`/report-task/projects/${projectId}`}
+      onClick={(e) => e.stopPropagation()}
+      className="inline-flex h-5 max-w-[180px] items-center gap-0.5 truncate rounded-md bg-[var(--accent)] px-1.5 text-[10px] font-semibold text-[var(--brand-green-dark)] hover:underline"
+      title={`โปรเจกต์: ${name}`}
+    >
+      ◧ <span className="truncate">{name}</span>
+    </a>
+  );
+}
 import { isPersonalTask } from "@/modules/report_task/lib/personal-task";
 import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
 import { StickerConfirmDialog } from "@/modules/report_task/components/shared/sticker-confirm-dialog";
@@ -428,6 +450,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
             </span>
           )}
           <DueDateBadge task={task} />
+          {task.project && <ProjectChip projectId={task.project.projectId} sectionId={task.project.sectionId} />}
           {task.recurrence && (
             <span
               className="inline-flex items-center gap-0.5 h-5 rounded-md px-1.5 text-[10px] font-semibold bg-violet-100 text-violet-700 whitespace-nowrap dark:bg-violet-950/60 dark:text-violet-300"
