@@ -44,6 +44,7 @@ import {
   type ReportTopic,
 } from "@/modules/report_task/store/report-feed-store";
 import { cutoffsOnDay, lateCutoffFor, minImagesNow, onTimeCutoffFor } from "@/modules/report_task/lib/report-cutoff";
+import { roundInOutage } from "@/modules/report_task/lib/report-outage";
 import { roundIgnoresDateExemptions, roundsForUserOnDay, attributePostToRound, effectiveRoundsOf, roundFrequencyOf } from "@/modules/report_task/lib/submission-rounds";
 import { useReportPenaltySettingsStore } from "@/modules/report_task/store/report-penalty-settings-store";
 import { isExemptDate } from "@/modules/report_task/lib/report-feed-exemptions";
@@ -354,8 +355,12 @@ export function ReportCard({
   // badges outright rather than falling through to "ตรงเวลา" once lateCutoff
   // is nulled out, since the post genuinely wasn't on time; the point is to
   // stop asserting either label, not to overstate it as on-time.
-  const lateCutoff = post.lateBadgeHidden ? null : rawLateCutoff;
-  const onTimeCutoff = !lateCutoff && !post.lateBadgeHidden ? onTimeCutoffFor(post.createdAt, roundCandidatesAtSubmission) : null;
+  // ระบบล่มช่วงกำหนดส่งของรอบนี้ (report-outage.ts) — โพสต์ตอนระบบกลับมาไม่นับว่าสาย ขึ้นเป็นตรงเวลาของรอบนั้น
+  // (ตรงกับแดชบอร์ด/คะแนน ที่ roundComplianceStatus นับรอบช่วงล่มที่ส่งมาแล้วว่าตรงเวลา)
+  const outageCutoff = rawLateCutoff && roundInOutage(rawLateCutoff, postDay) ? rawLateCutoff : null;
+  const lateCutoff = post.lateBadgeHidden || outageCutoff ? null : rawLateCutoff;
+  const onTimeCutoff =
+    outageCutoff ?? (!lateCutoff && !post.lateBadgeHidden ? onTimeCutoffFor(post.createdAt, roundCandidatesAtSubmission) : null);
   const weeklyMonthlyGraceDays = useReportPenaltySettingsStore((s) => s.weeklyMonthlyGraceDays);
   /*
    * รายงานรายสัปดาห์/รายเดือนที่ส่งตามหลังวันครบกำหนด (ภายใน "เผื่อเวลา") — วันที่โพสต์
