@@ -25,7 +25,7 @@ import { useTaskStore } from "@/modules/report_task/store/task-store";
 import type { Project } from "@/modules/report_task/types";
 import { fmtDay, PersonDot, STATE_COLOR, STATE_LABEL, TH_MONTH_SHORT } from "./project-ui";
 
-const ZOOM = { day: 30, week: 14, month: 5 } as const;
+const ZOOM = { day: 30, week: 14, month: 5, quarter: 2 } as const;
 type Zoom = keyof typeof ZOOM;
 const ROW = 38;
 const HEAD = 46;
@@ -41,7 +41,7 @@ type Row = { kind: "group"; key: string; name: string; items: TimelineItem[] } |
  */
 export function ProjectTimeline({
   project,
-  items,
+  items: allItems,
   today,
   holidays,
   canEdit,
@@ -59,6 +59,7 @@ export function ProjectTimeline({
   onAddTask: (sectionId: string) => void;
 }) {
   const rescheduleTask = useTaskStore((s) => s.rescheduleTask);
+  const items = allItems;
   const setTaskProject = useTaskStore((s) => s.setTaskProject);
   const updateMilestone = useProjectStore((s) => s.updateMilestone);
   const addMilestone = useProjectStore((s) => s.addMilestone);
@@ -66,6 +67,7 @@ export function ProjectTimeline({
   const updateProject = useProjectStore((s) => s.updateProject);
   const [zoom, setZoom] = useState<Zoom>("day");
   const [groupBy, setGroupBy] = useState<"section" | "person">("section");
+  const [hideDone, setHideDone] = useState(false);
   const [sel, setSel] = useState<string | null>(null);
   const [coarse, setCoarse] = useState(false);
   const [tipHidden, setTipHidden] = useState(true);
@@ -89,6 +91,7 @@ export function ProjectTimeline({
 
   const rows = useMemo<Row[]>(() => {
     const out: Row[] = [];
+    const items = hideDone ? allItems.filter((i) => i.state !== "done") : allItems;
     if (groupBy === "person") {
       const by = new Map<string, TimelineItem[]>();
       for (const i of items) {
@@ -108,7 +111,7 @@ export function ProjectTimeline({
       its.forEach((item) => out.push({ kind: "item", item }));
     }
     return out;
-  }, [items, groupBy, project.sections]);
+  }, [allItems, groupBy, project.sections, hideDone]);
 
   const width = (hi - lo + 1) * W;
   const height = HEAD + rows.length * ROW;
@@ -257,10 +260,10 @@ export function ProjectTimeline({
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-0.5">
-          {(["day", "week", "month"] as Zoom[]).map((z) => (
+          {(["day", "week", "month", "quarter"] as Zoom[]).map((z) => (
             <button key={z} type="button" onClick={() => setZoom(z)} aria-pressed={zoom === z}
               className={cn("rounded-md px-3 py-1 text-xs", zoom === z ? "bg-[var(--bg)] font-semibold shadow-sm" : "text-[var(--ink-soft)]")}>
-              {{ day: "วัน", week: "สัปดาห์", month: "เดือน" }[z]}
+              {{ day: "วัน", week: "สัปดาห์", month: "เดือน", quarter: "ไตรมาส" }[z]}
             </button>
           ))}
         </div>
@@ -293,6 +296,7 @@ export function ProjectTimeline({
                 </button>
               ))}
             </div>
+            <label className="flex items-center gap-1.5"><input type="checkbox" checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} className="accent-[var(--brand-green)]" />ซ่อนงานที่เสร็จแล้ว</label>
             <span className="text-[var(--ink-soft)]">เมื่อเลื่อนงาน {canPlan ? "" : "(ตั้งได้เฉพาะเจ้าของโปรเจกต์)"}</span>
             <select disabled={!canPlan} value={project.shiftMode} onChange={(e) => updateProject(project.id, { shiftMode: e.target.value as Project["shiftMode"] })}
               className="rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-base sm:text-xs">
@@ -345,7 +349,7 @@ export function ProjectTimeline({
               const showDay = zoom === "day" || (zoom === "week" && dow === 1) || (zoom === "month" && (dt.getUTCDate() === 1 || dt.getUTCDate() === 15));
               return (
                 <div key={d}>
-                  {(hol || (we && zoom !== "month")) && (
+                  {(hol || (we && zoom !== "month" && zoom !== "quarter")) && (
                     <div className="absolute bottom-0" title={hol ? "วันหยุดบริษัท" : undefined}
                       style={{ left: x, width: W, top: HEAD, background: hol ? "repeating-linear-gradient(135deg, var(--bg-soft) 0 4px, var(--line) 4px 5px)" : "var(--bg-soft)" }} />
                   )}

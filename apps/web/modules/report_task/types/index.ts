@@ -380,6 +380,8 @@ export interface Project {
   updates: ProjectStatusUpdate[];
   /** เลื่อนงานแล้วชนงานที่รออยู่: ถามก่อน / เลื่อนตามทันที / เลื่อนตาม + รักษาระยะห่างเดิม */
   shiftMode: "ask" | "auto" | "keep";
+  /** ห้องแชทของโปรเจกต์ (แท็บ "ข้อความ") — สร้างครั้งแรกที่มีคนกดเปิดคุย */
+  chatChannelId?: string;
   /** ปิดโปรเจกต์ด้วยมือ (เสร็จแล้ว/ยกเลิก/พักไว้) — ไม่มี = คิดจากงาน + อัปเดตล่าสุด */
   closedStatus?: "done" | "dropped" | "hold";
   createdBy: string;

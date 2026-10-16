@@ -6,7 +6,6 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { NewTaskDialog } from "@/modules/report_task/components/kanban/new-task-dialog";
-import { TaskCard } from "@/modules/report_task/components/kanban/task-card";
 import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-detail-sheet";
 import { useTaskSheetParam } from "@/modules/report_task/hooks/use-task-sheet-param";
 import { getUser, users } from "@/modules/report_task/lib/directory";
@@ -28,15 +27,21 @@ import { useProjectStore } from "@/modules/report_task/store/project-store";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import type { Project, ProjectStatus } from "@/modules/report_task/types";
 import { ProjectTimeline } from "./project-timeline";
-import { PCT_HELP, PersonDot, ProgressBar, ProjectStatusChip, STATE_COLOR, STATE_LABEL, fmtDay, todayBkk, useCompanyHolidays } from "./project-ui";
+import { BoardTab, CalendarTab, DashboardTab, FilesTab, ListTab, MessagesTab } from "./project-tabs";
+import { PCT_HELP, PersonDot, ProjectStatusChip, STATE_COLOR, STATE_LABEL, fmtDay, todayBkk, useCompanyHolidays } from "./project-ui";
 import { ROLE_OF_DEFAULT } from "./project-roles";
 
-type Tab = "timeline" | "overview" | "list" | "board" | "updates";
+// มุมมองเดียวกับ Asana: Overview · List · Board · Timeline(+Gantt) · Calendar · Dashboard · Messages · Files (+ อัปเดตสถานะ)
+type Tab = "timeline" | "overview" | "list" | "board" | "calendar" | "dashboard" | "messages" | "files" | "updates";
 const TABS: { id: Tab; label: string }[] = [
-  { id: "timeline", label: "Timeline" },
   { id: "overview", label: "ภาพรวม" },
   { id: "list", label: "รายการ" },
   { id: "board", label: "บอร์ด" },
+  { id: "timeline", label: "Timeline" },
+  { id: "calendar", label: "ปฏิทิน" },
+  { id: "dashboard", label: "แดชบอร์ด" },
+  { id: "messages", label: "ข้อความ" },
+  { id: "files", label: "ไฟล์" },
   { id: "updates", label: "อัปเดตสถานะ" },
 ];
 
@@ -120,7 +125,11 @@ export function ProjectView({ projectId }: { projectId: string }) {
       )}
       {tab === "overview" && <Overview project={project} items={items} pct={pct} today={today} />}
       {tab === "list" && <ListTab project={project} items={items} onOpen={(id) => openTask(id)} />}
-      {tab === "board" && <BoardTab items={items} onOpen={(id) => openTask(id)} />}
+      {tab === "board" && <BoardTab project={project} items={items} canEdit={canEdit} onOpen={(id) => openTask(id)} />}
+      {tab === "calendar" && <CalendarTab items={items} today={today} onOpen={(id) => openTask(id)} />}
+      {tab === "dashboard" && <DashboardTab project={project} items={items} today={today} onOpen={(id) => openTask(id)} />}
+      {tab === "messages" && <MessagesTab project={project} canEdit={canEdit} />}
+      {tab === "files" && <FilesTab items={items} onOpen={(id) => openTask(id)} />}
       {tab === "updates" && <UpdatesTab project={project} canEdit={canEdit} />}
 
       <TaskDetailSheet taskId={openTaskId} onOpenChange={(o) => !o && closeTask()} />
@@ -213,61 +222,6 @@ function Overview({ project, items, pct, today }: { project: Project; items: Ret
             ))}
           </div>
         </section>
-      </div>
-    </div>
-  );
-}
-
-function ListTab({ project, items, onOpen }: { project: Project; items: ReturnType<typeof timelineItems>; onOpen: (id: string) => void }) {
-  const byId = new Map(items.map((i) => [i.id, i]));
-  return (
-    <div className="overflow-x-auto rounded-xl border border-[var(--line)]">
-      <table className="w-full min-w-[640px] border-collapse text-[13.5px]">
-        <thead>
-          <tr className="text-left text-xs text-[var(--ink-soft)]">
-            {["งาน", "ผู้รับผิดชอบ", "เริ่ม", "ส่ง", "สถานะ", "ต้องรอ"].map((h) => <th key={h} className="border-b border-[var(--line)] px-3 py-2 font-semibold">{h}</th>)}
-          </tr>
-        </thead>
-        <tbody>
-          {project.sections.map((s) => {
-            const its = items.filter((i) => i.sectionId === s.id);
-            return [
-              <tr key={`s-${s.id}`}><td colSpan={6} className="bg-[var(--bg-soft)] px-3 py-1.5 text-xs font-bold text-[var(--ink-soft)]">{s.name} · {its.length}</td></tr>,
-              ...its.map((i) => (
-                <tr key={i.id} className={cn("border-b border-[var(--line)]/60", i.kind === "task" && "cursor-pointer hover:bg-[var(--bg-soft)]")} onClick={() => i.kind === "task" && onOpen(i.id)}>
-                  <td className="px-3 py-2">{i.kind === "milestone" ? "◆ " : ""}{i.name}</td>
-                  <td className="px-3 py-2">{i.assigneeIds.length ? <span className="inline-flex items-center gap-1.5"><PersonDot userId={i.assigneeIds[0]!} size={20} /><span className="text-xs">{getUser(i.assigneeIds[0]!)?.name}{i.assigneeIds.length > 1 ? ` +${i.assigneeIds.length - 1}` : ""}</span></span> : "—"}</td>
-                  <td className="px-3 py-2 tabular-nums">{fmtDay(i.start)}</td>
-                  <td className="px-3 py-2 tabular-nums">{i.kind === "milestone" ? "—" : fmtDay(i.end)}</td>
-                  <td className="px-3 py-2"><span className="rounded-full px-2 py-0.5 text-xs font-semibold text-white" style={{ background: STATE_COLOR[i.state] }}>{STATE_LABEL[i.state]}</span></td>
-                  <td className="px-3 py-2 text-xs text-[var(--ink-soft)]">{i.deps.map((d) => byId.get(d)?.name).filter(Boolean).join(", ") || "—"}</td>
-                </tr>
-              )),
-            ];
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function BoardTab({ items, onOpen }: { items: ReturnType<typeof timelineItems>; onOpen: (id: string) => void }) {
-  const tasks = items.filter((i) => i.kind === "task" && i.task).map((i) => i.task!);
-  const cols: { key: string; label: string; list: typeof tasks }[] = [
-    { key: "todo", label: "ต้องทำ", list: tasks.filter((t) => t.status === "todo") },
-    { key: "in_progress", label: "กำลังทำ", list: tasks.filter((t) => t.status === "in_progress") },
-    { key: "done", label: "เสร็จแล้ว", list: tasks.filter((t) => t.status === "done") },
-  ];
-  return (
-    <div className="space-y-2">
-      <p className="m-0 text-xs text-[var(--ink-soft)]">การ์ดชุดเดียวกับบอร์ดงานหลัก — เปลี่ยนสถานะ/ติ๊กเช็คลิสต์ที่นี่ ที่บอร์ดงานก็เปลี่ยนตาม</p>
-      <div className="grid gap-3 md:grid-cols-3">
-        {cols.map((c) => (
-          <div key={c.key} className="grid content-start gap-2 rounded-xl bg-[var(--bg-soft)] p-2.5">
-            <div className="flex justify-between text-xs font-semibold text-[var(--ink-soft)]"><span>{c.label}</span><span>{c.list.length}</span></div>
-            {c.list.map((t) => <TaskCard key={t.id} task={t} onOpen={onOpen} />)}
-          </div>
-        ))}
       </div>
     </div>
   );
