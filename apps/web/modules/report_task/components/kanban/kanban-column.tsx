@@ -83,7 +83,7 @@ export interface BoardColumn {
   entries?: BoardEntry[];
 }
 
-const PAGE_SIZE = 6;
+const PAGE_SIZE = 10; // ผู้ใช้ขอ 17/10/2569: แต่ละคอลัมน์โชว์ 10 ใบก่อน (เดิม 6) แล้วกด "แสดงเพิ่มเติม" แบบเดิม
 // <640px shows fewer cards up front — a full-width column already fills the
 // screen with just a few, so 6 was several screens of scrolling before
 // "แสดงเพิ่มเติม" ever showed up.
