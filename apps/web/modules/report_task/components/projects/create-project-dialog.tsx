@@ -37,20 +37,19 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
   const tpl = templates.find((t) => t.id === tplId);
   const roles = useMemo(() => [...new Set((tpl?.items ?? []).filter((i) => !i.milestone).map((i) => i.role || "ทีมงาน"))], [tpl]);
   const [roleMap, setRoleMap] = useState<Record<string, string>>({});
-  // เดาคนจากตำแหน่ง/แผนก — เดาไม่ได้ให้เว้นว่างให้เลือกเอง (เดิมใส่เจ้าของโปรเจกต์แทนเงียบ ๆ งานเลยไปตกที่แอดมิน)
-  const personFor = (role: string) => roleMap[role] ?? guessPersonForRole(role, "");
+  // เดาคนจากตำแหน่ง/แผนก — เดาไม่ได้ใส่เจ้าของโปรเจกต์ (ปกติ = คนสร้างเอง) ไว้ก่อน เปลี่ยนได้
+  const guessed = (role: string) => guessPersonForRole(role, "");
+  const personFor = (role: string) => roleMap[role] ?? (guessed(role) || ownerId);
   const creating = useRef(false);
 
   // แม่แบบนับถอยหลัง: วันเริ่มคำนวณจากวันเสร็จ
   const effStart = tpl?.anchor === "end" ? templateStartFromEnd(tpl, end, holidays) : start;
   const effEnd = tpl ? templateDate(tpl, effStart, tpl.items.length ? Math.max(...tpl.items.map(templateEnd)) : 0, holidays) : end;
   const tooLate = tpl?.anchor === "end" && effStart < today;
-  // ตรวจก่อนสร้าง: ตำแหน่งที่ยังไม่มีคน · งานที่กำหนดส่งก่อนวันนี้ (สร้างปุ๊บเลยกำหนด โดนหักคะแนนทันที) · จบเกินวันเสร็จเป้าหมาย
-  const missingRoles = roles.filter((r) => !personFor(r));
+  // ตรวจก่อนสร้าง: งานที่กำหนดส่งก่อนวันนี้ (สร้างปุ๊บเลยกำหนด โดนหักคะแนนทันที) · จบเกินวันเสร็จเป้าหมาย
   const pastDue = (tpl?.items ?? []).filter((i) => !i.milestone && templateDate(tpl!, effStart, templateEnd(i), holidays) < today);
   const overEnd = !!tpl && tpl.anchor === "start" && effEnd > end;
   const blocked = !name.trim() ? "ใส่ชื่อโปรเจกต์ก่อน"
-    : missingRoles.length ? `เลือกคนทำ: ${missingRoles.join(", ")}`
     : pastDue.length ? `มี ${pastDue.length} งานกำหนดส่งก่อนวันนี้ (${pastDue.slice(0, 3).map((i) => i.name).join(", ")}${pastDue.length > 3 ? " …" : ""}) — ${tpl?.anchor === "end" ? "เลื่อนวันเสร็จออกไป" : "เลื่อนวันเริ่มเป็นวันนี้หรือหลังจากนี้"}`
     : "";
 
@@ -176,10 +175,12 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
                 {roles.map((r) => (
                   <div key={r} className="flex items-center gap-2">
                     <span className="w-28 shrink-0 text-xs">{r}</span>
-                    <select className={cn(field, !personFor(r) && "border-red-500 text-red-600")} value={personFor(r)} onChange={(e) => setRoleMap({ ...roleMap, [r]: e.target.value })} aria-label={`คนทำตำแหน่ง ${r}`}>
-                      <option value="" disabled>— เลือกคน —</option>
-                      {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-                    </select>
+                    <span className="grid min-w-0 flex-1 gap-0.5">
+                      <select className={field} value={personFor(r)} onChange={(e) => setRoleMap({ ...roleMap, [r]: e.target.value })} aria-label={`คนทำตำแหน่ง ${r}`}>
+                        {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                      </select>
+                      {!roleMap[r] && !guessed(r) && <span className="text-[11px] text-[var(--ink-soft)]">ไม่เจอคนตำแหน่งนี้ ใส่เป็นเจ้าของโปรเจกต์ไว้ก่อน</span>}
+                    </span>
                   </div>
                 ))}
                 <span className="text-xs text-[var(--ink-soft)]">จะสร้างงาน {tpl.items.filter((i) => !i.milestone).length} งานบนบอร์ดงาน + {tpl.items.filter((i) => i.milestone).length} Milestone · จบประมาณ {fmtDay(effEnd, true)}</span>
