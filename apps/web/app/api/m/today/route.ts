@@ -54,6 +54,38 @@ async function hasShift(orgId: string | null | undefined, employmentId: string, 
   }
 }
 
+/**
+ * เวลาเข้า/ออกที่ HR เพิ่มให้แล้ว (คำขอแก้เวลาที่อนุมัติ, ADD_PUNCH) ของคนนี้ในวันนั้น — ในรูปเดียวกับ /time-events
+ * อ่านไม่ได้ = ไม่มี (ปุ่มทำงานแบบเดิมจากสแกนจริงล้วน)
+ */
+async function addedPunches(orgId: string | null | undefined, employmentId: string, workDate: string): Promise<TimeEvent[]> {
+  if (!orgId) return [];
+  try {
+    const rows = await withWorkforceTenant(orgId, (tx) =>
+      tx.$queryRaw<{ id: string; punch_at: Date; event_intent: string | null }[]>`
+        SELECT a.id::text, a.punch_at, a.event_intent::text
+        FROM workforce.time_event_adjustments a
+        WHERE a.employment_id = ${employmentId}::uuid
+          AND a.work_date = ${workDate}::date
+          AND a.status = 'APPROVED'
+          AND a.adjustment_type = 'ADD_PUNCH'
+          AND a.punch_at IS NOT NULL
+      `
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      employment_id: employmentId,
+      captured_at: new Date(r.punch_at).toISOString(),
+      event_intent: r.event_intent ?? "AUTO",
+      source_type: "ADJUSTMENT",
+      late_minutes: 0,
+    }));
+  } catch (error) {
+    console.error("[m/today] addedPunches lookup failed", error);
+    return [];
+  }
+}
+
 export interface TodayShift {
   name: string;
   /** นาทีนับจากเที่ยงคืน (เวลาไทย) — end ≤ start = กะข้ามคืน เลิกวันถัดไป */
@@ -154,10 +186,18 @@ export async function GET() {
     const mineOf = (items: TimeEvent[]) =>
       items
         .filter((event) => event.employment_id === me.employment_id)
-        .sort((a, b) => a.captured_at.localeCompare(b.captured_at))
+        .sort((a, b) => new Date(a.captured_at).getTime() - new Date(b.captured_at).getTime())
         .map(toEvent);
-    const mine = mineOf(timeline.items);
-    const prev = clockState(mineOf(prevTimeline.items));
+    // เวลาที่แก้แล้ว (ADD_PUNCH อนุมัติ) นับด้วย — /time-events คืนแค่สแกนจริง ⇒ คนที่ HR เพิ่ม "เข้า 08:00"
+    // ให้ (เช่นวันเซิร์ฟเวอร์ล่ม 16 ต.ค. 69) กดออกครั้งแรกกลายเป็น "เข้างาน" สาย ต้องกดอีกรอบถึงออก
+    const [added, prevAdded] = await Promise.all([
+      addedPunches(session.orgId, me.employment_id, date),
+      addedPunches(session.orgId, me.employment_id, yesterday),
+    ]);
+    const withAdded = (items: TimeEvent[], extra: TimeEvent[]) =>
+      extra.length === 0 ? items : [...items, ...extra];
+    const mine = mineOf(withAdded(timeline.items, added));
+    const prev = clockState(mineOf(withAdded(prevTimeline.items, prevAdded)));
     // ยังค้างอยู่ในงานจากเมื่อวาน และเข้ามาไม่นานเกินกะหนึ่ง = กะข้ามคืน (นานกว่านั้น = ลืมกดออก)
     const carriedIn =
       prev.openedBy !== null &&
