@@ -24,6 +24,20 @@ export function useUnreadCommentMap(): Map<string, number> {
   return useMemo(() => unreadTaskCommentCounts(notifications, me), [notifications, me]);
 }
 export const sumUnread = (tasks: Task[], map: Map<string, number>) => tasks.reduce((n, t) => n + (map.get(t.id) ?? 0), 0);
+
+/** เวลาคอมเมนต์ล่าสุดที่ยังไม่อ่าน แยกตามงาน — ใช้เรียงการ์ดที่มีคอมเมนต์ใหม่ขึ้นบนสุด (ใหม่สุดก่อน) */
+function useUnreadCommentLatest(): Map<string, string> {
+  const notifications = useNotificationStore((s) => s.notifications);
+  const me = useIdentityStore((s) => s.viewingAsUserId);
+  return useMemo(() => {
+    const m = new Map<string, string>();
+    for (const n of notifications) {
+      if (n.userId !== me || n.read || n.kind !== "task_comment" || !n.taskId) continue;
+      if ((m.get(n.taskId) ?? "") < n.createdAt) m.set(n.taskId, n.createdAt);
+    }
+    return m;
+  }, [notifications, me]);
+}
 import type { LucideIcon } from "lucide-react";
 
 export interface BoardColumn {
@@ -173,7 +187,16 @@ export function KanbanColumn({
   // (useShowMore/ShowMoreToggle), not a one-way "keep clicking to add more"
   // with no way back.
   const isMobile = useIsMobile();
-  const entries: BoardEntry[] = column.entries ?? column.tasks.map((task) => ({ type: "task", task }));
+  const baseEntries: BoardEntry[] = column.entries ?? column.tasks.map((task) => ({ type: "task", task }));
+  // การ์ดที่มีคอมเมนต์ยังไม่อ่าน "เด้ง" ขึ้นบนสุด (คอมเมนต์ใหม่สุดก่อน) ที่เหลือเรียงตามเดิม —
+  // เปิดอ่านแล้ว (แจ้งเตือนถูกทำว่าอ่านแล้ว) การ์ดกลับไปอยู่ตำแหน่งเดิมเอง (ผู้ใช้ขอ 17/10/2569)
+  const unreadLatest = useUnreadCommentLatest();
+  const entries = useMemo(() => {
+    const lastOf = (e: BoardEntry) => (e.type === "task" ? unreadLatest.get(e.task.id) ?? "" : "");
+    if (!baseEntries.some((e) => lastOf(e))) return baseEntries;
+    const fresh = baseEntries.filter((e) => lastOf(e)).sort((a, b) => lastOf(b).localeCompare(lastOf(a)));
+    return [...fresh, ...baseEntries.filter((e) => !lastOf(e))];
+  }, [baseEntries, unreadLatest]);
   const { visible: visibleEntries, remaining, expanded, toggle } = useShowMore(entries, isMobile ? MOBILE_PAGE_SIZE : PAGE_SIZE);
 
   return (
