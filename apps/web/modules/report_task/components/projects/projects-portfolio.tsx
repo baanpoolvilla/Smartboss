@@ -28,12 +28,12 @@ export function ProjectsPortfolio() {
 
   const rows = useMemo(() => {
     return projects
-      .filter((p) => canSeeProject(p, me))
+      .filter((p) => canSeeProject(p, me, tasks))
       .map((p) => {
         const items = timelineItems(p, tasks, today);
         return { p, status: projectStatusOf(p, items), pct: progressOf(items), next: nextMilestoneOf(items), count: items.filter((i) => i.kind === "task").length };
       })
-      .filter((r) => (filter === "all" ? true : filter === "mine" ? !!memberRole(r.p, me) : !["done", "dropped"].includes(r.status)))
+      .filter((r) => (filter === "all" ? true : filter === "mine" ? !!memberRole(r.p, me) || tasks.some((t) => t.project?.projectId === r.p.id && t.assigneeIds.includes(me)) : !["done", "dropped"].includes(r.status)))
       .sort((a, b) => a.p.endDate.localeCompare(b.p.endDate));
   }, [projects, tasks, me, filter, today]);
 

@@ -16,7 +16,7 @@ import type { Attachment, Project, TaskStatus } from "@/modules/report_task/type
 import { addChannelMembers, createGroupChannel, fetchMessages, sendMessage } from "@/modules/chat/lib/api";
 import { CHAT_PAGE_PATH } from "@/modules/chat/constants";
 import type { ChatMessageDTO } from "@/modules/chat/types";
-import { PersonDot, STATE_COLOR, STATE_LABEL, TH_MONTH_SHORT, fmtDay } from "./project-ui";
+import { PersonDot, STATE_COLOR, STATE_LABEL, TH_MONTH_SHORT, ensureProjectMembers, fmtDay } from "./project-ui";
 
 const seg = (on: boolean) => cn("rounded-md px-3 py-1 text-xs", on ? "bg-[var(--bg)] font-semibold shadow-sm" : "text-[var(--ink-soft)]");
 const segWrap = "inline-flex rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-0.5";
@@ -113,8 +113,8 @@ export function ListTab({ project, items, canEdit = false, canPlan = false, onOp
                     {canEdit && i.kind === "task" && i.assigneeIds.length <= 1 ? (
                       <span className="inline-flex items-center gap-1.5">
                         {i.assigneeIds[0] ? <PersonDot userId={i.assigneeIds[0]} size={20} /> : null}
-                        <select className={cellInput} value={i.assigneeIds[0] ?? ""} aria-label="ผู้รับผิดชอบ" onChange={(e) => setAssignees(i.id, e.target.value ? [e.target.value] : [])}>
-                          <option value="">— ไม่มี —</option>
+                        <select className={cellInput} value={i.assigneeIds[0] ?? ""} aria-label="ผู้รับผิดชอบ" onChange={(e) => { if (!e.target.value) return; setAssignees(i.id, [e.target.value]); ensureProjectMembers(project.id, [e.target.value], me); }}>
+                          {!i.assigneeIds.length && <option value="" disabled>— เลือกคน —</option>}
                           {[...new Set([...teamIds, ...i.assigneeIds])].map((id) => <option key={id} value={id}>{getUser(id)?.name ?? id}</option>)}
                         </select>
                       </span>

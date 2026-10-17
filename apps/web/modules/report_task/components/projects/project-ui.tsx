@@ -7,6 +7,9 @@ import { PROJECT_STATUS_META, dayNum } from "@/modules/report_task/lib/project-s
 import { cn } from "@/modules/report_task/lib/utils";
 import { useHolidayStore } from "@/modules/report_task/store/holiday-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
+import { useProjectStore } from "@/modules/report_task/store/project-store";
+import { addChannelMembers, removeChannelMember } from "@/modules/chat/lib/api";
+import { toast } from "sonner";
 import type { ProjectStatus } from "@/modules/report_task/types";
 
 /** แจ้งคนที่ถูกเพิ่มเข้าโปรเจกต์ (แบบ Asana "added you to project") — ข้ามคนที่กดเอง */
@@ -14,6 +17,28 @@ export function notifyAddedToProject(project: { id: string; name: string }, user
   if (!userIds.length) return;
   const actor = getUser(actorId)?.name ?? "มีคน";
   useNotificationStore.getState().notifyMany(userIds, actorId, `${actor} เพิ่มคุณเข้าโปรเจกต์ "${project.name}"`, undefined, `/report-task/projects/${project.id}`);
+}
+
+/** เพิ่ม/เอาสมาชิกออกจากโปรเจกต์ → ทำตามในห้องแชทโปรเจกต์ด้วย (ถ้ามีห้องแล้ว) — ทำไม่ได้ก็แค่บอก ไม่ย้อนการเปลี่ยนสมาชิก */
+export function syncChatMember(project: { chatChannelId?: string }, userId: string, op: "add" | "remove") {
+  const ch = project.chatChannelId;
+  if (!ch) return;
+  (op === "add" ? addChannelMembers(ch, [userId]) : removeChannelMember(ch, userId)).catch(() => {
+    toast.error(op === "add" ? "เพิ่มเข้าห้องแชทโปรเจกต์ไม่ได้ — กด \"ดึงสมาชิกโปรเจกต์เข้าห้อง\" ในแท็บข้อความ" : "เอาออกจากห้องแชทโปรเจกต์ไม่ได้ — ให้แอดมินห้องเอาออกในหน้าแชท");
+  });
+}
+
+/** มอบงานในโปรเจกต์ให้คนที่ยังไม่ใช่สมาชิก → เพิ่มเป็นสมาชิก "แก้ได้" ให้เลย (เหมือนตอนสร้างจากแม่แบบ) + แจ้ง + เข้าห้องแชท */
+export function ensureProjectMembers(projectId: string, userIds: string[], actorId: string) {
+  const p = useProjectStore.getState().projects.find((x) => x.id === projectId);
+  if (!p) return;
+  const have = new Set([p.ownerId, ...p.members.map((m) => m.userId)]);
+  const fresh = [...new Set(userIds)].filter((id) => id && !have.has(id));
+  if (!fresh.length) return;
+  useProjectStore.getState().updateProject(p.id, { members: [...p.members, ...fresh.map((userId) => ({ userId, role: "editor" as const }))] });
+  // แจ้ง "เพิ่มเข้าโปรเจกต์" ไม่ซ้ำกับแจ้ง "มอบหมายงาน" ที่ตัวงานส่งเอง
+  notifyAddedToProject(p, fresh, actorId);
+  fresh.forEach((id) => syncChatMember(p, id, "add"));
 }
 
 const TH_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];

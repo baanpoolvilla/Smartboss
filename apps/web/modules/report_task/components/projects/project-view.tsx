@@ -28,9 +28,8 @@ import { useTaskStore } from "@/modules/report_task/store/task-store";
 import type { Project, ProjectStatus } from "@/modules/report_task/types";
 import { ProjectTimeline } from "./project-timeline";
 import { BoardTab, CalendarTab, DashboardTab, FilesTab, ListTab, MessagesTab } from "./project-tabs";
-import { PCT_HELP, PersonDot, ProjectStatusChip, STATE_COLOR, STATE_LABEL, fmtDay, notifyAddedToProject, todayBkk, useCompanyHolidays } from "./project-ui";
+import { PCT_HELP, PersonDot, ProjectStatusChip, STATE_COLOR, STATE_LABEL, fmtDay, ensureProjectMembers, notifyAddedToProject, syncChatMember, todayBkk, useCompanyHolidays } from "./project-ui";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
-import { addChannelMembers, removeChannelMember } from "@/modules/chat/lib/api";
 import { ROLE_OF_DEFAULT } from "./project-roles";
 
 // มุมมองเดียวกับ Asana: Overview · List · Board · Timeline(+Gantt) · Calendar · Dashboard · Messages · Files (+ อัปเดตสถานะ)
@@ -71,7 +70,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
       </div>
     );
   }
-  if (!canSeeProject(project, me)) {
+  if (!canSeeProject(project, me, tasks)) {
     return <p className="py-20 text-center text-[var(--ink-soft)]">คุณไม่ได้อยู่ในโปรเจกต์นี้</p>;
   }
   const canEdit = canEditProject(project, me);
@@ -143,6 +142,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
           defaultDate={today}
           onCreated={(taskId) => {
             setTaskProject(taskId, { projectId: project.id, sectionId: newTaskSection || project.sections[0]?.id || "", dependsOn: [] }, me);
+            ensureProjectMembers(project.id, useTaskStore.getState().tasks.find((t) => t.id === taskId)?.assigneeIds ?? [], me);
             setNewTaskSection(null);
           }}
         />
@@ -353,15 +353,6 @@ function UpdatesTab({ project, canEdit }: { project: Project; canEdit: boolean }
   );
 }
 
-/** เพิ่ม/เอาสมาชิกออกจากโปรเจกต์ → ทำตามในห้องแชทโปรเจกต์ด้วย (ถ้ามีห้องแล้ว) — ทำไม่ได้ก็แค่บอก ไม่ย้อนการเปลี่ยนสมาชิก */
-function syncChatMember(project: Project, userId: string, op: "add" | "remove") {
-  const ch = project.chatChannelId;
-  if (!ch) return;
-  (op === "add" ? addChannelMembers(ch, [userId]) : removeChannelMember(ch, userId)).catch(() => {
-    toast.error(op === "add" ? "เพิ่มเข้าห้องแชทโปรเจกต์ไม่ได้ — กด \"ดึงสมาชิกโปรเจกต์เข้าห้อง\" ในแท็บข้อความ" : "เอาออกจากห้องแชทโปรเจกต์ไม่ได้ — ให้แอดมินห้องเอาออกในหน้าแชท");
-  });
-}
-
 /** ตั้งค่าโปรเจกต์ (เจ้าของ/CEO): ชื่อ เป้าหมาย วัน สมาชิก ช่วงงาน ลบโปรเจกต์ */
 function ProjectSettingsButton({ project }: { project: Project }) {
   const router = useRouter();
@@ -390,6 +381,21 @@ function ProjectSettingsButton({ project }: { project: Project }) {
               <label className="grid gap-1 text-xs text-[var(--ink-soft)]">วันเริ่ม<input type="date" className={field} defaultValue={project.startDate} onChange={(e) => e.target.value && updateProject(project.id, { startDate: e.target.value })} /></label>
               <label className="grid gap-1 text-xs text-[var(--ink-soft)]">วันเสร็จเป้าหมาย<input type="date" className={field} defaultValue={project.endDate} onChange={(e) => e.target.value && updateProject(project.id, { endDate: e.target.value })} /></label>
             </div>
+            <label className="grid gap-1 text-xs text-[var(--ink-soft)]">เจ้าของโปรเจกต์ (คุมแผน เลื่อนกำหนดส่งได้)
+              <select className={field} value={project.ownerId}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  if (!next || next === project.ownerId) return;
+                  // เจ้าของเดิมยังอยู่ต่อเป็นสมาชิก "แก้ได้" · เจ้าของใหม่ไม่ซ้ำในรายชื่อสมาชิก
+                  const members = [...project.members.filter((m) => m.userId !== next && m.userId !== project.ownerId), { userId: project.ownerId, role: "editor" as const }];
+                  updateProject(project.id, { ownerId: next, members });
+                  useNotificationStore.getState().notifyMany([next], me, `${getUser(me)?.name ?? "มีคน"} ตั้งให้คุณเป็นเจ้าของโปรเจกต์ "${project.name}"`, undefined, `/report-task/projects/${project.id}`);
+                  if (!memberIds.has(next)) syncChatMember(project, next, "add");
+                  toast.success(`เปลี่ยนเจ้าของเป็น ${getUser(next)?.name ?? ""} แล้ว`);
+                }}>
+                {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            </label>
             <div className="grid gap-1.5">
               <span className="text-xs text-[var(--ink-soft)]">สมาชิก</span>
               {project.members.filter((m) => m.userId !== project.ownerId).map((m) => (
