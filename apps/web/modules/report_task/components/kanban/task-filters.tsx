@@ -395,7 +395,7 @@ export function TaskFilters({
               <GanttChart className="h-4 w-4 shrink-0" />
               <SelectValue placeholder="โปรเจกต์"><span className="truncate">{projectLabel}</span></SelectValue>
             </SelectTrigger>
-            <SelectContent alignItemWithTrigger={false}>
+            <SelectContent alignItemWithTrigger={false} className="w-auto max-w-[min(90vw,360px)]">
               <SelectItem value="all">ทุกงาน</SelectItem>
               <SelectItem value="none">ไม่รวมงานโปรเจกต์</SelectItem>
               {projectChoices.map((p) => (
@@ -669,7 +669,7 @@ export function TaskFilters({
             <span className="text-[13.5px] font-medium text-[var(--ink)]">โปรเจกต์</span>
             <MobileFieldValue active={filters.projectId !== "all"}>{projectLabel}</MobileFieldValue>
           </SelectTrigger>
-          <SelectContent alignItemWithTrigger={false}>
+          <SelectContent alignItemWithTrigger={false} className="w-auto max-w-[min(90vw,360px)]">
               <SelectItem value="all">ทุกงาน</SelectItem>
               <SelectItem value="none">ไม่รวมงานโปรเจกต์</SelectItem>
               {projectChoices.map((p) => (
