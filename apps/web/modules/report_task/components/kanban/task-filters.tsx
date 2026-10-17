@@ -67,7 +67,7 @@ const defaultFilters = {
   preset: "all",
   customFrom: "",
   customTo: "",
-  projectId: "all",
+  projectId: "none",
 } as const;
 
 /** จำนวนตัวกรองที่ตั้งอยู่ — เลขบนปุ่ม "ตัวกรอง" ของมือถือ (ปุ่มอยู่บนแถบหัวของหน้า ไม่ได้อยู่ในคอมโพเนนต์นี้) */
@@ -118,7 +118,7 @@ export function TaskFilters({
     [allProjects, viewingAsUserId, allTasks]
   );
   const projectLabel =
-    filters.projectId === "all" ? "ทุกงาน" : filters.projectId === "none" ? "ไม่รวมงานโปรเจกต์" : (allProjects.find((p) => p.id === filters.projectId)?.name ?? "โปรเจกต์");
+    filters.projectId === "all" ? "ทุกงาน รวมโปรเจกต์" : filters.projectId === "none" ? "งานทั่วไป" : (allProjects.find((p) => p.id === filters.projectId)?.name ?? "โปรเจกต์");
   const [ownNewTaskOpen, setOwnNewTaskOpen] = useState(false);
   // Mobile-only (<640px) — the 5 fields below collapse into this one button,
   // opened as a bottom sheet, instead of the full row (see the render below).
@@ -388,16 +388,16 @@ export function TaskFilters({
         </Select>
       </FilterField>
 
-      {(projectChoices.length > 0 || filters.projectId !== "all") && (
+      {(projectChoices.length > 0 || filters.projectId !== "none") && (
         <FilterField label="โปรเจกต์">
           <Select value={filters.projectId} onValueChange={(v) => v && setFilters({ projectId: v })}>
-            <SelectTrigger className={filterFieldTriggerClass(filters.projectId !== "all", "min-w-[150px] max-w-[220px]")}>
+            <SelectTrigger className={filterFieldTriggerClass(filters.projectId !== "none", "min-w-[150px] max-w-[220px]")}>
               <GanttChart className="h-4 w-4 shrink-0" />
               <SelectValue placeholder="โปรเจกต์"><span className="truncate">{projectLabel}</span></SelectValue>
             </SelectTrigger>
             <SelectContent alignItemWithTrigger={false} className="w-auto max-w-[min(90vw,360px)]">
-              <SelectItem value="all">ทุกงาน</SelectItem>
-              <SelectItem value="none">ไม่รวมงานโปรเจกต์</SelectItem>
+              <SelectItem value="none">งานทั่วไป (ไม่รวมโปรเจกต์)</SelectItem>
+              <SelectItem value="all">ทุกงาน รวมงานโปรเจกต์</SelectItem>
               {projectChoices.map((p) => (
                 <SelectItem key={p.id} value={p.id}>📁 {p.name}</SelectItem>
               ))}
@@ -662,16 +662,16 @@ export function TaskFilters({
         </SelectContent>
       </Select>
 
-      {(projectChoices.length > 0 || filters.projectId !== "all") && (
+      {(projectChoices.length > 0 || filters.projectId !== "none") && (
         <Select value={filters.projectId} onValueChange={(v) => v && setFilters({ projectId: v })}>
-          <SelectTrigger className={mobileFieldRowTriggerClass(filters.projectId !== "all")}>
-            <MobileFieldIcon icon={GanttChart} active={filters.projectId !== "all"} />
+          <SelectTrigger className={mobileFieldRowTriggerClass(filters.projectId !== "none")}>
+            <MobileFieldIcon icon={GanttChart} active={filters.projectId !== "none"} />
             <span className="text-[13.5px] font-medium text-[var(--ink)]">โปรเจกต์</span>
-            <MobileFieldValue active={filters.projectId !== "all"}>{projectLabel}</MobileFieldValue>
+            <MobileFieldValue active={filters.projectId !== "none"}>{projectLabel}</MobileFieldValue>
           </SelectTrigger>
           <SelectContent alignItemWithTrigger={false} className="w-auto max-w-[min(90vw,360px)]">
-              <SelectItem value="all">ทุกงาน</SelectItem>
-              <SelectItem value="none">ไม่รวมงานโปรเจกต์</SelectItem>
+              <SelectItem value="none">งานทั่วไป (ไม่รวมโปรเจกต์)</SelectItem>
+              <SelectItem value="all">ทุกงาน รวมงานโปรเจกต์</SelectItem>
               {projectChoices.map((p) => (
                 <SelectItem key={p.id} value={p.id}>📁 {p.name}</SelectItem>
               ))}

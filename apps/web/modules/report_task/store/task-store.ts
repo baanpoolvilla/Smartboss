@@ -464,7 +464,8 @@ const defaultFilters: TaskFilters = {
   customFrom: "",
   customTo: "",
   quickView: "all",
-  projectId: "all",
+  // งานโปรเจกต์อยู่หน้าโปรเจกต์ ไม่ปนบนบอร์ดงาน — เลือก "ทุกงาน" ในตัวกรองเพื่อดูรวม
+  projectId: "none",
 };
 
 export const useTaskStore = create<TaskStore>((set, get) => ({

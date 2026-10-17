@@ -1,5 +1,8 @@
 "use client";
 
+import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-detail-sheet";
+import { useTaskSheetParam } from "@/modules/report_task/hooks/use-task-sheet-param";
+import { MyProjectTasks } from "./my-project-tasks";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -25,6 +28,7 @@ export function ProjectsPortfolio() {
   const tasks = useTaskStore((s) => s.tasks);
   const [filter, setFilter] = useState<"active" | "all" | "mine">("active");
   const [creating, setCreating] = useState(false);
+  const { openTaskId, open: openTask, close: closeTask } = useTaskSheetParam();
   const today = todayBkk();
 
   const rows = useMemo(() => {
@@ -68,6 +72,8 @@ export function ProjectsPortfolio() {
           )}
         </div>
       </div>
+
+      {ready && <MyProjectTasks onOpen={(id) => openTask(id)} />}
 
       {!ready ? (
         <p className="py-20 text-center text-sm text-[var(--ink-soft)]">กำลังโหลดโปรเจกต์…</p>
@@ -125,6 +131,7 @@ export function ProjectsPortfolio() {
           </div>
         </>
       )}
+      <TaskDetailSheet taskId={openTaskId} onOpenChange={(o) => !o && closeTask()} />
       {creating && <CreateProjectDialog onClose={() => setCreating(false)} onCreated={(id) => router.push(`/report-task/projects/${id}`)} />}
     </div>
   );
