@@ -330,6 +330,14 @@ export interface TaskProjectLink {
   sectionId: string;
   /** ต้องรออะไรเสร็จก่อนถึงเริ่มได้ — id ของงาน หรือ Milestone ในโปรเจกต์เดียวกัน */
   dependsOn?: string[];
+  /** วิธีรอของแต่ละงานใน dependsOn (ไม่มี = เริ่มหลังงานนั้นเสร็จ ไม่ต้องรอเพิ่ม) */
+  depRules?: Record<string, ProjectDepRule>;
+}
+
+/** วิธีรองานก่อนหน้า — type "ss" = เริ่มพร้อมกันได้ (นับจากวันที่งานนั้นเริ่ม) · lag = รอเพิ่มอีกกี่วัน (วันปฏิทิน) */
+export interface ProjectDepRule {
+  type?: "ss";
+  lag?: number;
 }
 
 /** สถานะโปรเจกต์ 6 แบบ เหมือน Asana: On track / At risk / Off track / On hold / Complete / Dropped */
@@ -348,6 +356,7 @@ export interface ProjectMilestone {
   date: string;
   sectionId: string;
   dependsOn?: string[];
+  depRules?: Record<string, ProjectDepRule>;
   doneAt?: string;
 }
 

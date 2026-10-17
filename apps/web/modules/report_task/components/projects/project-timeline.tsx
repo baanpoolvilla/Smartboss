@@ -11,6 +11,7 @@ import {
   earliestAfter,
   keepGapPlan,
   lateImpact,
+  depRuleLabel,
   shiftDays,
   dayToIso,
   wouldCycle,
@@ -22,7 +23,7 @@ import { cn } from "@/modules/report_task/lib/utils";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useProjectStore } from "@/modules/report_task/store/project-store";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
-import type { Project } from "@/modules/report_task/types";
+import type { Project, ProjectDepRule } from "@/modules/report_task/types";
 import { fmtDay, PersonDot, STATE_COLOR, STATE_LABEL, TH_MONTH_SHORT } from "./project-ui";
 
 const ZOOM = { day: 30, week: 14, month: 5, quarter: 2, half: 1, year: 0.5 } as const;
@@ -165,9 +166,11 @@ export function ProjectTimeline({
     setDeps(to, [...to.deps, fromId]);
     toast.success(`"${to.name}" ต้องรอ "${from.name}" แล้ว`);
   }
-  function setDeps(it: TimelineItem, deps: string[]) {
-    if (it.kind === "milestone") updateMilestone(project.id, it.id, { dependsOn: deps });
-    else setTaskProject(it.id, { projectId: project.id, sectionId: it.sectionId, dependsOn: deps }, meId());
+  function setDeps(it: TimelineItem, deps: string[], rules: Record<string, ProjectDepRule> = it.depRules) {
+    // เก็บเฉพาะวิธีรอของงานที่ยังรออยู่ และที่ไม่ใช่แบบปกติ
+    const depRules = Object.fromEntries(Object.entries(rules).filter(([k, v]) => deps.includes(k) && (v.type || v.lag)));
+    if (it.kind === "milestone") updateMilestone(project.id, it.id, { dependsOn: deps, depRules });
+    else setTaskProject(it.id, { ...it.task?.project, projectId: project.id, sectionId: it.sectionId, dependsOn: deps, depRules }, meId());
   }
 
   function onPointerDown(e: RPointerEvent<HTMLDivElement>) {
@@ -425,11 +428,19 @@ export function ProjectTimeline({
                   const pre = byId.get(d);
                   if (!pre || !rowIndex.has(it.id) || !rowIndex.has(pre.id)) return null;
                   const a = geo(pre, preview?.id === pre.id ? preview : undefined), b = geo(it, preview?.id === it.id ? preview : undefined);
-                  const bad = dayNum(preview?.id === it.id ? preview.start : it.start) < (preview?.id === pre.id ? dayNum(preview.end) + (pre.kind === "milestone" ? 0 : 1) : earliestAfter(pre));
+                  const rule = it.depRules[d];
+                  const bad = dayNum(preview?.id === it.id ? preview.start : it.start) < earliestAfter(preview?.id === pre.id ? { ...pre, start: preview.start, end: preview.end } : pre, rule);
+                  const lag = Math.max(0, Math.round(rule?.lag ?? 0));
+                  const tag = lag ? <text key={`${d}>${it.id}-t`} x={b.x1 - 4} y={b.y - 7} textAnchor="end" fontSize="10" fontWeight="700" fill={bad ? "var(--chart-red)" : "var(--ink-soft)"}>+{lag}ว</text> : null;
+                  // เริ่มพร้อมกันได้: ลากเส้นจาก "หัว" งานก่อนหน้า ไปหัวงานนี้
+                  if (rule?.type === "ss") {
+                    const left = Math.min(a.x1, b.x1) - 10;
+                    return [<path key={`${d}>${it.id}`} d={`M${a.x1},${a.y} H${left} V${b.y} H${b.x1 - 2}`} fill="none" stroke={bad ? "var(--chart-red)" : "var(--ink-soft)"} strokeWidth={bad ? 2 : 1.3} strokeDasharray="4 3" opacity={bad ? 1 : 0.7} markerEnd={`url(#${bad ? "pt-ahr" : "pt-ah"})`} />, tag];
+                  }
                   const path = b.x1 - 6 > a.x2 + 6
                     ? `M${a.x2},${a.y} H${Math.min(b.x1 - 8, a.x2 + 14)} V${b.y} H${b.x1 - 2}`
                     : `M${a.x2},${a.y} H${a.x2 + 8} V${(a.y + b.y) / 2} H${b.x1 - 10} V${b.y} H${b.x1 - 2}`;
-                  return <path key={`${d}>${it.id}`} d={path} fill="none" stroke={bad ? "var(--chart-red)" : "var(--ink-soft)"} strokeWidth={bad ? 2 : 1.3} opacity={bad ? 1 : 0.55} markerEnd={`url(#${bad ? "pt-ahr" : "pt-ah"})`} />;
+                  return [<path key={`${d}>${it.id}`} d={path} fill="none" stroke={bad ? "var(--chart-red)" : "var(--ink-soft)"} strokeWidth={bad ? 2 : 1.3} opacity={bad ? 1 : 0.55} markerEnd={`url(#${bad ? "pt-ahr" : "pt-ah"})`} />, tag];
                 })
               )}
               {linkLine && <path d={`M${linkLine.x1},${linkLine.y1} L${linkLine.x2},${linkLine.y2}`} stroke="var(--brand-green)" strokeWidth={2} strokeDasharray="5 4" fill="none" />}
@@ -468,6 +479,7 @@ export function ProjectTimeline({
           onOpenTask={onOpenTask}
           onMove={(start, end) => commitMove(selItem, start, end)}
           onSetDeps={(deps) => setDeps(selItem, deps)}
+          onSetRule={(d, rule) => setDeps(selItem, selItem.deps, { ...selItem.depRules, [d]: rule })}
           onRemoveMilestone={() => { removeMilestone(project.id, selItem.id); setSel(null); toast.success("ลบ Milestone แล้ว"); }}
           onUpdateMilestone={(patch) => updateMilestone(project.id, selItem.id, patch)}
         />
@@ -487,6 +499,7 @@ function ItemDetail({
   onOpenTask,
   onMove,
   onSetDeps,
+  onSetRule,
   onRemoveMilestone,
   onUpdateMilestone,
 }: {
@@ -500,6 +513,7 @@ function ItemDetail({
   onOpenTask: (id: string) => void;
   onMove: (start: string, end: string) => void;
   onSetDeps: (deps: string[]) => void;
+  onSetRule: (depId: string, rule: ProjectDepRule) => void;
   onRemoveMilestone: () => void;
   onUpdateMilestone: (patch: { name?: string; date?: string; doneAt?: string | undefined; sectionId?: string }) => void;
 }) {
@@ -558,12 +572,35 @@ function ItemDetail({
         )}
         <dt className="text-[var(--ink-soft)]">ต้องรอ</dt>
         <dd className="m-0 flex flex-wrap items-center gap-1.5">
-          {item.deps.map((d) => (
-            <span key={d} className="inline-flex items-center gap-1 rounded-full border border-[var(--line)] bg-[var(--bg)] px-2 py-0.5 text-xs">
-              {byId.get(d)?.name ?? "—"}
-              {canEdit && <button type="button" aria-label="เลิกรอ" className="text-[var(--ink-soft)]" onClick={() => onSetDeps(item.deps.filter((x) => x !== d))}>✕</button>}
-            </span>
-          ))}
+          {item.deps.map((d) => {
+            const rule = item.depRules[d] ?? {};
+            const pre = byId.get(d);
+            return (
+              <span key={d} className="inline-flex flex-wrap items-center gap-1.5 rounded-xl border border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-xs">
+                <b className="font-semibold">{pre?.name ?? "—"}</b>
+                {canEdit ? (
+                  <>
+                    {/* วิธีรอ: หลังเสร็จ (ปกติ) / เริ่มพร้อมกันได้ — Milestone ไม่มีช่วงเวลา เลยมีแค่แบบปกติ */}
+                    {pre?.kind === "task" && (
+                      <select aria-label="วิธีรอ" value={rule.type ?? "fs"} onChange={(e) => onSetRule(d, { ...rule, type: e.target.value === "ss" ? "ss" : undefined })}
+                        className="rounded-md border border-[var(--line)] bg-[var(--bg)] px-1 py-0.5 text-base sm:text-xs">
+                        <option value="fs">เริ่มหลังเสร็จ</option>
+                        <option value="ss">เริ่มพร้อมกันได้</option>
+                      </select>
+                    )}
+                    <label className="inline-flex items-center gap-1 text-[var(--ink-soft)]">
+                      + รอ
+                      <input type="number" min={0} max={365} inputMode="numeric" aria-label="รอเพิ่มกี่วัน" value={rule.lag ?? 0}
+                        onChange={(e) => onSetRule(d, { ...rule, lag: Math.min(365, Math.max(0, Math.round(Number(e.target.value) || 0))) || undefined })}
+                        className="w-12 rounded-md border border-[var(--line)] bg-[var(--bg)] px-1 py-0.5 text-center text-base tabular-nums sm:text-xs" />
+                      วัน
+                    </label>
+                    <button type="button" aria-label="เลิกรอ" className="text-[var(--ink-soft)]" onClick={() => onSetDeps(item.deps.filter((x) => x !== d))}>✕</button>
+                  </>
+                ) : depRuleLabel(rule) ? <span className="text-[var(--ink-soft)]">({depRuleLabel(rule)})</span> : null}
+              </span>
+            );
+          })}
           {canEdit && (
             <select value="" onChange={(e) => e.target.value && onSetDeps([...item.deps, e.target.value])}
               className="rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-0.5 text-base sm:text-xs">

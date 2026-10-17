@@ -15,6 +15,7 @@ import { prisma } from "@smartboss/database";
 import { claimSweep, releaseSweep } from "@/modules/report_task/lib/server/sweep-throttle";
 import { runReportPenaltySweep } from "@/modules/report_task/lib/server/report-penalty-sweep-run";
 import { runTaskPenaltySweep } from "@/modules/report_task/lib/server/task-penalty-sweep-run";
+import { remindProjectStatusUpdates } from "@/modules/report_task/lib/server/project-reminders";
 
 export const runtime = "nodejs";
 
@@ -35,6 +36,7 @@ export const runtime = "nodejs";
  *     + รอบหักคะแนนรายงาน/งานเลยกำหนดของทุกบริษัท ไม่ต้องรอให้มีคนเปิดเว็บ
  *   - รอบเก็บตกของวัน (?task=score-final — crontab 5 0 * * * · ไม่อยู่ใน all): เหมือน score-hourly + คืนคะแนนลงเวลา
  *     ที่ไม่ควรหักแล้ว ⇒ ของวันตัดรอบครบก่อนเกรดพร้อมใช้ 00:30 (score-period.ts scorePeriodReadyAt)
+ *   - เตือนเจ้าของโปรเจกต์อัปเดตสถานะทุกวันศุกร์ (?task=project-reminders — อยู่ใน all, &force=1 รันวันอื่นได้)
  *   - ?task=all รันทั้งหมด
  * เรียกด้วย header `Authorization: Bearer $CRON_SECRET` หรือ `?key=$CRON_SECRET`
  * route นี้อยู่นอก auth ของ proxy จึงกันด้วย CRON_SECRET เท่านั้น →
@@ -149,6 +151,15 @@ export async function GET(req: NextRequest) {
   }
   if (task === "ot-pending" || task === "all") {
     Object.assign(result, { otPending: await notifyPendingOvertime() });
+  }
+  // วันศุกร์: เตือนเจ้าของโปรเจกต์ที่ยังไม่อัปเดตสถานะสัปดาห์นี้ (วันอื่นข้ามเอง · &force=1 รันได้ทุกวัน)
+  if (task === "project-reminders" || task === "all") {
+    try {
+      Object.assign(result, { projectReminders: await remindProjectStatusUpdates({ force: url.searchParams.get("force") === "1" }) });
+    } catch (error) {
+      console.error("[cron] project reminders", error);
+      Object.assign(result, { projectReminders: { error: error instanceof Error ? error.message : String(error) } });
+    }
   }
 
   return NextResponse.json(result);

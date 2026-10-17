@@ -1,5 +1,6 @@
 import type {
   Project,
+  ProjectDepRule,
   ProjectMilestone,
   ProjectStatus,
   ProjectTemplate,
@@ -46,6 +47,8 @@ export interface TimelineItem {
   state: ItemState;
   assigneeIds: string[];
   deps: string[];
+  /** วิธีรอของแต่ละ dep — ไม่มี key = เริ่มหลังเสร็จ */
+  depRules: Record<string, ProjectDepRule>;
   /** งานที่กำลังทำ: % ของเช็คลิสต์ที่ติ๊กแล้ว */
   pct?: number;
   task?: Task;
@@ -72,6 +75,7 @@ export function timelineItems(project: Project, tasks: Task[], today: string): T
       state,
       assigneeIds: t.assigneeIds,
       deps: t.project!.dependsOn ?? [],
+      depRules: t.project!.depRules ?? {},
       pct: t.checklist.length ? Math.round((doneItems / t.checklist.length) * 100) : undefined,
       task: t,
     });
@@ -87,6 +91,7 @@ export function timelineItems(project: Project, tasks: Task[], today: string): T
       state: m.doneAt ? "done" : m.date < today ? "late" : "todo",
       assigneeIds: [],
       deps: m.dependsOn ?? [],
+      depRules: m.depRules ?? {},
       milestone: m,
     });
   }
@@ -105,16 +110,26 @@ export function progressOf(items: TimelineItem[]): number {
   return total ? Math.round((got / total) * 100) : 0;
 }
 
-/** วันแรกที่งานนี้เริ่มได้ ถ้าต้องรอ pre — รองานปกติ: วันถัดจากวันจบ · รอ Milestone: วันเดียวกันได้ */
-export function earliestAfter(pre: Pick<TimelineItem, "kind" | "end">): number {
-  return dayNum(pre.end) + (pre.kind === "milestone" ? 0 : 1);
+/** วันแรกที่งานนี้เริ่มได้ ถ้าต้องรอ pre — รองานปกติ: วันถัดจากวันจบ · รอ Milestone: วันเดียวกันได้
+ *  rule.type "ss" = เริ่มได้ตั้งแต่วันที่ pre เริ่ม · rule.lag = บวกอีกกี่วัน */
+export function earliestAfter(pre: Pick<TimelineItem, "kind" | "start" | "end">, rule?: ProjectDepRule): number {
+  const lag = Math.max(0, Math.round(rule?.lag ?? 0));
+  if (rule?.type === "ss") return dayNum(pre.start) + lag;
+  return dayNum(pre.end) + (pre.kind === "milestone" ? 0 : 1) + lag;
+}
+
+/** คำอธิบายสั้น ๆ ของวิธีรอ — "" = แบบปกติ (เริ่มหลังเสร็จ) */
+export function depRuleLabel(rule?: ProjectDepRule): string {
+  const lag = Math.max(0, Math.round(rule?.lag ?? 0));
+  if (rule?.type === "ss") return lag ? `เริ่มหลังงานนี้เริ่ม ${lag} วัน` : "เริ่มพร้อมกันได้";
+  return lag ? `รอ ${lag} วันหลังเสร็จ` : "";
 }
 
 /** คู่ [งานที่ต้องรอ, งานที่เริ่มก่อนงานนั้นเสร็จ] */
 export function conflictsOf(items: TimelineItem[]): [TimelineItem, TimelineItem][] {
   const by = new Map(items.map((i) => [i.id, i]));
   const out: [TimelineItem, TimelineItem][] = [];
-  for (const i of items) for (const d of i.deps) { const pre = by.get(d); if (pre && dayNum(i.start) < earliestAfter(pre)) out.push([pre, i]); }
+  for (const i of items) for (const d of i.deps) { const pre = by.get(d); if (pre && dayNum(i.start) < earliestAfter(pre, i.depRules[d])) out.push([pre, i]); }
   return out;
 }
 
@@ -138,7 +153,7 @@ export function cascadePlan(items: TimelineItem[]): ItemMove[] {
     for (const i of cur.values()) for (const d of i.deps) {
       const pre = cur.get(d);
       if (!pre || i.state === "done") continue;
-      const need = earliestAfter(pre);
+      const need = earliestAfter(pre, i.depRules[d]);
       if (dayNum(i.start) < need) {
         const len = dayNum(i.end) - dayNum(i.start);
         i.start = ymdOfDay(need);

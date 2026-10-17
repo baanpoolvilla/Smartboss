@@ -30,6 +30,7 @@ import { ProjectTimeline } from "./project-timeline";
 import { BoardTab, CalendarTab, DashboardTab, FilesTab, ListTab, MessagesTab } from "./project-tabs";
 import { PCT_HELP, PersonDot, ProjectStatusChip, STATE_COLOR, STATE_LABEL, fmtDay, notifyAddedToProject, todayBkk, useCompanyHolidays } from "./project-ui";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
+import { addChannelMembers, removeChannelMember } from "@/modules/chat/lib/api";
 import { ROLE_OF_DEFAULT } from "./project-roles";
 
 // มุมมองเดียวกับ Asana: Overview · List · Board · Timeline(+Gantt) · Calendar · Dashboard · Messages · Files (+ อัปเดตสถานะ)
@@ -352,6 +353,15 @@ function UpdatesTab({ project, canEdit }: { project: Project; canEdit: boolean }
   );
 }
 
+/** เพิ่ม/เอาสมาชิกออกจากโปรเจกต์ → ทำตามในห้องแชทโปรเจกต์ด้วย (ถ้ามีห้องแล้ว) — ทำไม่ได้ก็แค่บอก ไม่ย้อนการเปลี่ยนสมาชิก */
+function syncChatMember(project: Project, userId: string, op: "add" | "remove") {
+  const ch = project.chatChannelId;
+  if (!ch) return;
+  (op === "add" ? addChannelMembers(ch, [userId]) : removeChannelMember(ch, userId)).catch(() => {
+    toast.error(op === "add" ? "เพิ่มเข้าห้องแชทโปรเจกต์ไม่ได้ — กด \"ดึงสมาชิกโปรเจกต์เข้าห้อง\" ในแท็บข้อความ" : "เอาออกจากห้องแชทโปรเจกต์ไม่ได้ — ให้แอดมินห้องเอาออกในหน้าแชท");
+  });
+}
+
 /** ตั้งค่าโปรเจกต์ (เจ้าของ/CEO): ชื่อ เป้าหมาย วัน สมาชิก ช่วงงาน ลบโปรเจกต์ */
 function ProjectSettingsButton({ project }: { project: Project }) {
   const router = useRouter();
@@ -389,13 +399,17 @@ function ProjectSettingsButton({ project }: { project: Project }) {
                     onChange={(e) => updateProject(project.id, { members: project.members.map((x) => (x.userId === m.userId ? { ...x, role: e.target.value as "editor" | "viewer" } : x)) })}>
                     <option value="editor">แก้ได้</option><option value="viewer">ดูอย่างเดียว</option>
                   </select>
-                  <button type="button" className="text-[var(--ink-soft)]" aria-label="เอาออก" onClick={() => updateProject(project.id, { members: project.members.filter((x) => x.userId !== m.userId) })}>✕</button>
+                  <button type="button" className="text-[var(--ink-soft)]" aria-label="เอาออก" onClick={() => {
+                    updateProject(project.id, { members: project.members.filter((x) => x.userId !== m.userId) });
+                    syncChatMember(project, m.userId, "remove");
+                  }}>✕</button>
                 </div>
               ))}
               <select className={field} value="" onChange={(e) => {
                   if (!e.target.value) return;
                   updateProject(project.id, { members: [...project.members, { userId: e.target.value, role: "editor" }] });
                   notifyAddedToProject(project, [e.target.value], me);
+                  syncChatMember(project, e.target.value, "add");
                 }}>
                 <option value="">+ เพิ่มสมาชิก</option>
                 {users.filter((u) => !memberIds.has(u.id) && u.id !== project.ownerId).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}

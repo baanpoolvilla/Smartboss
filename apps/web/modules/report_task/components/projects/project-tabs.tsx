@@ -6,7 +6,7 @@ import { toast } from "sonner";
 
 import { TaskCard } from "@/modules/report_task/components/kanban/task-card";
 import { getUser } from "@/modules/report_task/lib/directory";
-import { dayNum, dayToIso, ymdOfDay, type TimelineItem } from "@/modules/report_task/lib/project-schedule";
+import { dayNum, dayToIso, depRuleLabel, ymdOfDay, type TimelineItem } from "@/modules/report_task/lib/project-schedule";
 import { uuid } from "@/modules/report_task/lib/uuid";
 import { cn } from "@/modules/report_task/lib/utils";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
@@ -138,7 +138,7 @@ export function ListTab({ project, items, canEdit = false, canPlan = false, onOp
                     ) : <span className="px-1">{fmtDay(i.end)}</span>}
                   </td>
                   <td className="px-3 py-2"><span className="rounded-full px-2 py-0.5 text-xs font-semibold text-white" style={{ background: STATE_COLOR[i.state] }}>{STATE_LABEL[i.state]}</span></td>
-                  <td className="px-3 py-2 text-xs text-[var(--ink-soft)]">{i.deps.map((d) => byId.get(d)?.name).filter(Boolean).join(", ") || "—"}</td>
+                  <td className="px-3 py-2 text-xs text-[var(--ink-soft)]">{i.deps.filter((d) => byId.has(d)).map((d) => { const l = depRuleLabel(i.depRules[d]); return `${byId.get(d)!.name}${l ? ` (${l})` : ""}`; }).join(", ") || "—"}</td>
                 </tr>
               )),
             ])}

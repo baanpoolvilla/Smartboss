@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { depRuleLabel } from "@/modules/report_task/lib/project-schedule";
 import { useProjectStore } from "@/modules/report_task/store/project-store";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import type { Task } from "@/modules/report_task/types";
@@ -13,7 +14,7 @@ export function TaskProjectInfo({ task }: { task: Task }) {
   const tasks = useTaskStore((s) => s.tasks);
   if (!project) return null;
   const nameOf = (id: string) => tasks.find((t) => t.id === id)?.title ?? project.milestones.find((m) => m.id === id)?.name ?? "—";
-  const waitingOn = (link.dependsOn ?? []).map(nameOf);
+  const waitingOn = (link.dependsOn ?? []).map((d) => { const l = depRuleLabel(link.depRules?.[d]); return l ? `${nameOf(d)} (${l})` : nameOf(d); });
   const waiting = [
     ...tasks.filter((t) => t.project?.dependsOn?.includes(task.id)).map((t) => t.title),
     ...project.milestones.filter((m) => m.dependsOn?.includes(task.id)).map((m) => `◆ ${m.name}`),
