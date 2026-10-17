@@ -21,7 +21,7 @@ import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { unreadTaskAttachmentCounts, unreadTaskCommentCounts } from "@/modules/report_task/lib/task-comment-activity";
-import { MessageSquare, Paperclip, History, SmilePlus, SearchCheck, Check, Circle, Star, Clock, Eye, Lock, Repeat } from "lucide-react";
+import { MessageSquare, Paperclip, SmilePlus, SearchCheck, Check, Circle, Star, Clock, Eye, Lock, Repeat } from "lucide-react";
 import { describeRule, freqLabel, totalOccurrences } from "@/modules/report_task/lib/task-recurrence";
 import { ParentTaskLink, SubtaskCountChip } from "@/modules/report_task/components/kanban/subtasks-section";
 import { useProjectStore } from "@/modules/report_task/store/project-store";
@@ -267,10 +267,19 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
               <TooltipContent>แก้ไขกำหนดส่ง {task.revisions.length} ครั้ง — ควรตรวจสอบ</TooltipContent>
             </Tooltip>
           )}
-          {task.revisions.length > 0 && !suspicious && (
-            <span className="flex items-center gap-0.5 text-[10px] font-medium text-[var(--ink)]">
-              <History className="h-3 w-3" />
-              {task.revisions.length}
+          {/* คอมเมนต์อยู่มุมขวาบน แทนตัวนับ "แก้กำหนดส่งกี่ครั้ง" (เอาออกตามที่ผู้ใช้ขอ 17/10/2569 — ประวัติเลื่อนวันยังดูได้ในหน้างาน) */}
+          {task.comments.length > 0 && (
+            <span
+              className={cn(
+                "relative flex items-center gap-0.5 text-[11px] font-medium",
+                unreadComments > 0 && "font-semibold text-(--danger)"
+              )}
+              title={unreadComments > 0 ? `มีความคิดเห็นใหม่ที่ยังไม่ได้อ่าน ${unreadComments} รายการ` : "ความคิดเห็น"}
+            >
+              <MessageSquare className="h-3.5 w-3.5" /> {task.comments.length}
+              {unreadComments > 0 && (
+                <span className="absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-(--danger)" />
+              )}
             </span>
           )}
         </div>
@@ -489,20 +498,6 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
           {onOpen && isShared && Object.keys(task.penalties ?? {}).length > 0 && (
             <span className="flex items-center gap-0.5 h-5 rounded-md px-1.5 text-[10px] font-semibold bg-red-600 text-white" title="มีคนถูกหักคะแนน">
               −{Object.values(task.penalties ?? {}).reduce((sum, p) => sum + Math.abs(p.points), 0)}
-            </span>
-          )}
-          {task.comments.length > 0 && (
-            <span
-              className={cn(
-                "relative flex items-center gap-0.5 text-[11px] font-medium",
-                unreadComments > 0 && "font-semibold text-(--danger)"
-              )}
-              title={unreadComments > 0 ? `มีความคิดเห็นใหม่ที่ยังไม่ได้อ่าน ${unreadComments} รายการ` : "ความคิดเห็น"}
-            >
-              <MessageSquare className="h-3.5 w-3.5" /> {task.comments.length}
-              {unreadComments > 0 && (
-                <span className="absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-(--danger)" />
-              )}
             </span>
           )}
           {task.attachments.length > 0 && (
