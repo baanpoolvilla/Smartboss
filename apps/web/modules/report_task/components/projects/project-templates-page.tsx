@@ -115,7 +115,7 @@ function TemplateEditor({ t, canEdit, onChange, onDuplicate, onDelete }: {
     }
     return false;
   };
-  const field = "w-full min-w-0 rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-base sm:text-[13px] disabled:opacity-70";
+  const field = "w-full min-w-0 rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-base sm:text-[13px] disabled:opacity-70 text-[var(--ink)]";
   const last = templateSpan(t);
   const back = t.anchor === "end";
   const s0 = back ? templateStartFromEnd(t, endSample, holidays) : startSample;

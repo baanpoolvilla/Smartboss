@@ -308,7 +308,7 @@ function KeyResources({ project, canEdit }: { project: Project; canEdit: boolean
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
   const list = project.resources ?? [];
-  const field = "w-full min-w-0 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-2.5 py-1.5 text-base sm:text-sm";
+  const field = "w-full min-w-0 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-2.5 py-1.5 text-base sm:text-sm text-[var(--ink)]";
   function add() {
     let u = url.trim();
     if (!u) return;
@@ -433,7 +433,7 @@ function ProjectSettingsButton({ project }: { project: Project }) {
   const me = useIdentityStore((s) => s.viewingAsUserId);
   const [open, setOpen] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
-  const field = "w-full rounded-lg border border-[var(--line)] bg-[var(--bg)] px-2.5 py-1.5 text-base sm:text-sm";
+  const field = "w-full rounded-lg border border-[var(--line)] bg-[var(--bg)] px-2.5 py-1.5 text-base sm:text-sm text-[var(--ink)]";
   const memberIds = new Set(project.members.map((m) => m.userId));
   return (
     <>
@@ -445,8 +445,8 @@ function ProjectSettingsButton({ project }: { project: Project }) {
             <label className="grid gap-1 text-xs text-[var(--ink-soft)]">ชื่อโปรเจกต์<input className={field} defaultValue={project.name} onBlur={(e) => e.target.value.trim() && updateProject(project.id, { name: e.target.value.trim() })} /></label>
             <label className="grid gap-1 text-xs text-[var(--ink-soft)]">เป้าหมาย / ขอบเขต<textarea className={field} rows={3} defaultValue={project.description} onBlur={(e) => updateProject(project.id, { description: e.target.value })} /></label>
             <div className="grid grid-cols-2 gap-2">
-              <label className="grid gap-1 text-xs text-[var(--ink-soft)]">วันเริ่ม<DatePickerField value={project.startDate} onChange={(v) => v && updateProject(project.id, { startDate: v })} /></label>
-              <label className="grid gap-1 text-xs text-[var(--ink-soft)]">วันเสร็จเป้าหมาย<DatePickerField value={project.endDate} minDate={project.startDate} onChange={(v) => v && updateProject(project.id, { endDate: v })} /></label>
+              <label className="grid gap-1 text-xs text-[var(--ink-soft)]">วันเริ่ม<DatePickerField className="text-[var(--ink)]" value={project.startDate} onChange={(v) => v && updateProject(project.id, { startDate: v })} /></label>
+              <label className="grid gap-1 text-xs text-[var(--ink-soft)]">วันเสร็จเป้าหมาย<DatePickerField className="text-[var(--ink)]" value={project.endDate} minDate={project.startDate} onChange={(v) => v && updateProject(project.id, { endDate: v })} /></label>
             </div>
             <label className="grid gap-1 text-xs text-[var(--ink-soft)]">เจ้าของโปรเจกต์ (คุมแผน เลื่อนกำหนดส่งได้)
               <select className={field} value={project.ownerId}

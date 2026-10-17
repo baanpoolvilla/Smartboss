@@ -123,7 +123,7 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
     onCreated(pid);
   }
 
-  const field = "w-full min-w-0 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-2.5 py-1.5 text-base sm:text-sm";
+  const field = "w-full min-w-0 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-2.5 py-1.5 text-base sm:text-sm text-[var(--ink)]";
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 sm:items-center sm:p-4" onClick={onClose}>
       <div className="grid max-h-[92dvh] w-full gap-4 overflow-y-auto rounded-t-2xl bg-[var(--bg)] p-4 shadow-2xl sm:max-w-3xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="สร้างโปรเจกต์">
@@ -135,12 +135,12 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
             <div className="grid grid-cols-2 gap-2">
               <label className="grid gap-1 text-xs text-[var(--ink-soft)]">วันเริ่ม
                 {tpl?.anchor === "end" ? (
-                  <span className={cn(field, "opacity-60")}>{fmtDay(effStart, true)} (คำนวณจากวันเสร็จ)</span>
+                  <span className={cn(field, "text-[var(--ink)]")}>{fmtDay(effStart, true)} <span className="text-[var(--ink-soft)]">(คำนวณจากวันเสร็จ)</span></span>
                 ) : (
-                  <DatePickerField value={effStart} minDate={tpl?.items.length ? today : undefined} onChange={(v) => v && setStart(v)} />
+                  <DatePickerField className="text-[var(--ink)]" value={effStart} minDate={tpl?.items.length ? today : undefined} onChange={(v) => v && setStart(v)} />
                 )}
               </label>
-              <label className="grid gap-1 text-xs text-[var(--ink-soft)]">วันเสร็จเป้าหมาย<DatePickerField value={end} minDate={effStart} onChange={(v) => v && setEnd(v)} /></label>
+              <label className="grid gap-1 text-xs text-[var(--ink-soft)]">วันเสร็จเป้าหมาย<DatePickerField className="text-[var(--ink)]" value={end} minDate={effStart} onChange={(v) => v && setEnd(v)} /></label>
             </div>
             {tpl?.anchor === "end" && (
               <p className={cn("m-0 text-xs", tooLate ? "font-bold text-red-600" : "text-[var(--brand-green-dark)]")}>
