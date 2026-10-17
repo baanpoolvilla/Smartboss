@@ -285,6 +285,8 @@ export function buildRoundTask(
     completedAssigneeIds: [],
     showChecklistOnCard: t.showChecklistOnCard,
     ...(t.projectTopicId ? { projectTopicId: t.projectTopicId } : {}),
+    // งานวนที่อยู่ในโปรเจกต์ — รอบใหม่อยู่ช่วงงานเดิม (ไม่ก๊อปงานที่ต้องรอ เพราะผูกกับรอบเก่า)
+    ...(from.project ? { project: { projectId: from.project.projectId, sectionId: from.project.sectionId, dependsOn: [] } } : {}),
     recurrence: { ...rec, occurrence: n, rule: { ...rec.rule }, template: { ...t } },
     createdAt: nowIso,
     updatedAt: nowIso,

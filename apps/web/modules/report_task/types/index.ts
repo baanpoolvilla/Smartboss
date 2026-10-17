@@ -365,6 +365,14 @@ export interface ProjectMember {
   role: "owner" | "editor" | "viewer";
 }
 
+export interface ProjectResource {
+  id: string;
+  title: string;
+  url: string;
+  by: string;
+  at: string;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -384,6 +392,8 @@ export interface Project {
   chatChannelId?: string;
   /** ปิดโปรเจกต์ด้วยมือ (เสร็จแล้ว/ยกเลิก/พักไว้) — ไม่มี = คิดจากงาน + อัปเดตล่าสุด */
   closedStatus?: "done" | "dropped" | "hold";
+  /** ลิงก์สำคัญที่ปักไว้หน้าภาพรวม (แบบ Asana "Key resources") */
+  resources?: ProjectResource[];
   createdBy: string;
   createdAt: string;
   updatedAt: string;

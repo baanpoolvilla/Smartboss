@@ -6,7 +6,7 @@ import { toast } from "sonner";
 
 import { TaskCard } from "@/modules/report_task/components/kanban/task-card";
 import { getUser } from "@/modules/report_task/lib/directory";
-import { dayNum, ymdOfDay, type TimelineItem } from "@/modules/report_task/lib/project-schedule";
+import { dayNum, dayToIso, ymdOfDay, type TimelineItem } from "@/modules/report_task/lib/project-schedule";
 import { uuid } from "@/modules/report_task/lib/uuid";
 import { cn } from "@/modules/report_task/lib/utils";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
@@ -27,7 +27,30 @@ const selectCls = "rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py
 type SortKey = "due" | "start" | "person" | "status" | "name";
 const STATE_ORDER: Record<string, number> = { late: 0, doing: 1, todo: 2, done: 3 };
 
-export function ListTab({ project, items, onOpen }: { project: Project; items: TimelineItem[]; onOpen: (id: string) => void }) {
+/** ช่องแก้ชื่องานในตาราง — กด Enter/คลิกที่อื่นเพื่อบันทึก, Esc ยกเลิก */
+function InlineName({ item, onSave }: { item: TimelineItem; onSave: (name: string) => void }) {
+  const [v, setV] = useState(item.name);
+  const [prev, setPrev] = useState(item.name);
+  if (prev !== item.name) { setPrev(item.name); setV(item.name); }
+  return (
+    <input value={v} onChange={(e) => setV(e.target.value)} onClick={(e) => e.stopPropagation()}
+      onBlur={() => { const t = v.trim(); if (t && t !== item.name) onSave(t); else setV(item.name); }}
+      onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { setV(item.name); setTimeout(() => (e.target as HTMLInputElement).blur()); } }}
+      aria-label="ชื่องาน"
+      className={cn("w-full min-w-0 rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-[var(--line)] focus:border-[var(--brand-green)] focus:outline-none", item.state === "done" && "text-[var(--ink-soft)] line-through")} />
+  );
+}
+
+const cellInput = "rounded border border-transparent bg-transparent px-1 py-0.5 text-base tabular-nums hover:border-[var(--line)] focus:border-[var(--brand-green)] focus:outline-none sm:text-[13px]";
+
+export function ListTab({ project, items, canEdit = false, canPlan = false, onOpen }: { project: Project; items: TimelineItem[]; canEdit?: boolean; canPlan?: boolean; onOpen: (id: string) => void }) {
+  const me = useIdentityStore((s) => s.viewingAsUserId);
+  const saveTaskDetails = useTaskStore((s) => s.saveTaskDetails);
+  const setAssignees = useTaskStore((s) => s.setAssignees);
+  const rescheduleTask = useTaskStore((s) => s.rescheduleTask);
+  const updateMilestone = useProjectStore((s) => s.updateMilestone);
+  const teamIds = [...new Set([project.ownerId, ...project.members.map((m) => m.userId)])];
+  const why = "แก้จากหน้ารายการโปรเจกต์";
   const [group, setGroup] = useState<"section" | "none">("section");
   const [sort, setSort] = useState<SortKey>("due");
   const [hideDone, setHideDone] = useState(false);
@@ -61,6 +84,7 @@ export function ListTab({ project, items, onOpen }: { project: Project; items: T
         </select>
         <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} className="accent-[var(--brand-green)]" />ซ่อนที่เสร็จแล้ว</label>
       </div>
+      {canEdit && <p className="m-0 text-xs text-[var(--ink-soft)]">แก้ชื่อ{canPlan ? " วัน" : ""} และคนรับผิดชอบได้ในตารางเลย · กด ↗ เพื่อเปิดรายละเอียดงาน{!canPlan ? " · เลื่อนวันได้เฉพาะเจ้าของโปรเจกต์" : ""}</p>}
       <div className="overflow-x-auto rounded-xl border border-[var(--line)]">
         <table className="w-full min-w-[640px] border-collapse text-[13.5px]">
           <thead>
@@ -72,11 +96,47 @@ export function ListTab({ project, items, onOpen }: { project: Project; items: T
             {groups.map((g) => [
               g.name ? <tr key={`g-${g.key}`}><td colSpan={6} className="bg-[var(--bg-soft)] px-3 py-1.5 text-xs font-bold text-[var(--ink-soft)]">{g.name} · {g.rows.length}</td></tr> : null,
               ...g.rows.map((i) => (
-                <tr key={i.id} className={cn("border-b border-[var(--line)]/60", i.kind === "task" && "cursor-pointer hover:bg-[var(--bg-soft)]")} onClick={() => i.kind === "task" && onOpen(i.id)}>
-                  <td className={cn("px-3 py-2", i.state === "done" && "text-[var(--ink-soft)] line-through")}>{i.kind === "milestone" ? "◆ " : ""}{i.name}</td>
-                  <td className="px-3 py-2">{i.assigneeIds.length ? <span className="inline-flex items-center gap-1.5"><PersonDot userId={i.assigneeIds[0]!} size={20} /><span className="text-xs">{getUser(i.assigneeIds[0]!)?.name}{i.assigneeIds.length > 1 ? ` +${i.assigneeIds.length - 1}` : ""}</span></span> : "—"}</td>
-                  <td className="px-3 py-2 tabular-nums">{fmtDay(i.start)}</td>
-                  <td className="px-3 py-2 tabular-nums">{i.kind === "milestone" ? "—" : fmtDay(i.end)}</td>
+                <tr key={i.id} className={cn("border-b border-[var(--line)]/60", i.kind === "task" && "cursor-pointer hover:bg-[var(--bg-soft)]")} onClick={() => i.kind === "task" && !canEdit && onOpen(i.id)}>
+                  <td className="px-2 py-1.5">
+                    {canEdit && i.kind === "task" ? (
+                      <div className="flex items-center gap-1">
+                        <InlineName item={i} onSave={(t) => saveTaskDetails(i.id, t, i.task?.description ?? "", me)} />
+                        <button type="button" className="shrink-0 rounded px-1.5 text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)]" aria-label={`เปิดงาน ${i.name}`} title="เปิดรายละเอียดงาน" onClick={(e) => { e.stopPropagation(); onOpen(i.id); }}>↗</button>
+                      </div>
+                    ) : canEdit && i.kind === "milestone" ? (
+                      <div className="flex items-center gap-1">◆<InlineName item={i} onSave={(t) => updateMilestone(project.id, i.id, { name: t })} /></div>
+                    ) : (
+                      <span className={cn("px-1", i.state === "done" && "text-[var(--ink-soft)] line-through")}>{i.kind === "milestone" ? "◆ " : ""}{i.name}</span>
+                    )}
+                  </td>
+                  <td className="px-2 py-1.5" onClick={(e) => canEdit && e.stopPropagation()}>
+                    {canEdit && i.kind === "task" && i.assigneeIds.length <= 1 ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        {i.assigneeIds[0] ? <PersonDot userId={i.assigneeIds[0]} size={20} /> : null}
+                        <select className={cellInput} value={i.assigneeIds[0] ?? ""} aria-label="ผู้รับผิดชอบ" onChange={(e) => setAssignees(i.id, e.target.value ? [e.target.value] : [])}>
+                          <option value="">— ไม่มี —</option>
+                          {[...new Set([...teamIds, ...i.assigneeIds])].map((id) => <option key={id} value={id}>{getUser(id)?.name ?? id}</option>)}
+                        </select>
+                      </span>
+                    ) : i.assigneeIds.length ? (
+                      <span className="inline-flex items-center gap-1.5"><PersonDot userId={i.assigneeIds[0]!} size={20} /><span className="text-xs">{getUser(i.assigneeIds[0]!)?.name}{i.assigneeIds.length > 1 ? ` +${i.assigneeIds.length - 1}` : ""}</span></span>
+                    ) : "—"}
+                  </td>
+                  <td className="px-2 py-1.5 tabular-nums" onClick={(e) => canEdit && e.stopPropagation()}>
+                    {canPlan && i.kind === "task" && i.state !== "done" ? (
+                      <input type="date" className={cellInput} value={i.start} max={i.end} aria-label="วันเริ่ม"
+                        onChange={(e) => e.target.value && rescheduleTask(i.id, dayToIso(e.target.value), i.task!.dueDate, why, me)} />
+                    ) : canEdit && i.kind === "milestone" && i.state !== "done" ? (
+                      <input type="date" className={cellInput} value={i.start} aria-label="วัน Milestone"
+                        onChange={(e) => e.target.value && updateMilestone(project.id, i.id, { date: e.target.value })} />
+                    ) : <span className="px-1">{fmtDay(i.start)}</span>}
+                  </td>
+                  <td className="px-2 py-1.5 tabular-nums" onClick={(e) => canEdit && e.stopPropagation()}>
+                    {i.kind === "milestone" ? "—" : canPlan && i.state !== "done" ? (
+                      <input type="date" className={cellInput} value={i.end} min={i.start} aria-label="กำหนดส่ง"
+                        onChange={(e) => e.target.value && rescheduleTask(i.id, i.task!.startDate, dayToIso(e.target.value), why, me)} />
+                    ) : <span className="px-1">{fmtDay(i.end)}</span>}
+                  </td>
                   <td className="px-3 py-2"><span className="rounded-full px-2 py-0.5 text-xs font-semibold text-white" style={{ background: STATE_COLOR[i.state] }}>{STATE_LABEL[i.state]}</span></td>
                   <td className="px-3 py-2 text-xs text-[var(--ink-soft)]">{i.deps.map((d) => byId.get(d)?.name).filter(Boolean).join(", ") || "—"}</td>
                 </tr>

@@ -12,7 +12,7 @@ import { useProjectStore } from "@/modules/report_task/store/project-store";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import type { Project, ProjectMilestone, Task } from "@/modules/report_task/types";
 import { guessPersonForRole } from "./project-roles";
-import { fmtDay, todayBkk, useCompanyHolidays } from "./project-ui";
+import { fmtDay, notifyAddedToProject, todayBkk, useCompanyHolidays } from "./project-ui";
 
 /**
  * สร้างโปรเจกต์ — เริ่มเปล่า หรือจากแม่แบบ (ช่วงงาน + งาน + Milestone + งานที่ต้องรอ + คำอธิบาย/เช็คลิสต์)
@@ -94,6 +94,7 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
     };
     addProject(project);
     newTasks.forEach((t) => addTask(t));
+    notifyAddedToProject(project, [ownerId, ...members.map((m) => m.userId)], me);
     if (tpl) upsertTemplate({ ...tpl, usedCount: tpl.usedCount + 1 });
     toast.success(`สร้างโปรเจกต์แล้ว${newTasks.length ? ` · สร้างงาน ${newTasks.length} งานบนบอร์ดงานให้` : ""}`);
     onClose();

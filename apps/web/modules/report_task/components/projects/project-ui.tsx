@@ -6,7 +6,15 @@ import { getUser } from "@/modules/report_task/lib/directory";
 import { PROJECT_STATUS_META, dayNum } from "@/modules/report_task/lib/project-schedule";
 import { cn } from "@/modules/report_task/lib/utils";
 import { useHolidayStore } from "@/modules/report_task/store/holiday-store";
+import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import type { ProjectStatus } from "@/modules/report_task/types";
+
+/** แจ้งคนที่ถูกเพิ่มเข้าโปรเจกต์ (แบบ Asana "added you to project") — ข้ามคนที่กดเอง */
+export function notifyAddedToProject(project: { id: string; name: string }, userIds: string[], actorId: string) {
+  if (!userIds.length) return;
+  const actor = getUser(actorId)?.name ?? "มีคน";
+  useNotificationStore.getState().notifyMany(userIds, actorId, `${actor} เพิ่มคุณเข้าโปรเจกต์ "${project.name}"`, undefined, `/report-task/projects/${project.id}`);
+}
 
 const TH_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 export const TH_MONTH_SHORT = TH_MONTHS;

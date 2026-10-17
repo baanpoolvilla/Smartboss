@@ -25,7 +25,7 @@ import { useTaskStore } from "@/modules/report_task/store/task-store";
 import type { Project } from "@/modules/report_task/types";
 import { fmtDay, PersonDot, STATE_COLOR, STATE_LABEL, TH_MONTH_SHORT } from "./project-ui";
 
-const ZOOM = { day: 30, week: 14, month: 5, quarter: 2 } as const;
+const ZOOM = { day: 30, week: 14, month: 5, quarter: 2, half: 1, year: 0.5 } as const;
 type Zoom = keyof typeof ZOOM;
 const ROW = 38;
 const HEAD = 46;
@@ -260,10 +260,10 @@ export function ProjectTimeline({
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-0.5">
-          {(["day", "week", "month", "quarter"] as Zoom[]).map((z) => (
+          {(["day", "week", "month", "quarter", "half", "year"] as Zoom[]).map((z) => (
             <button key={z} type="button" onClick={() => setZoom(z)} aria-pressed={zoom === z}
               className={cn("rounded-md px-3 py-1 text-xs", zoom === z ? "bg-[var(--bg)] font-semibold shadow-sm" : "text-[var(--ink-soft)]")}>
-              {{ day: "วัน", week: "สัปดาห์", month: "เดือน", quarter: "ไตรมาส" }[z]}
+              {{ day: "วัน", week: "สัปดาห์", month: "เดือน", quarter: "ไตรมาส", half: "ครึ่งปี", year: "ปี" }[z]}
             </button>
           ))}
         </div>
@@ -349,13 +349,14 @@ export function ProjectTimeline({
               const showDay = zoom === "day" || (zoom === "week" && dow === 1) || (zoom === "month" && (dt.getUTCDate() === 1 || dt.getUTCDate() === 15));
               return (
                 <div key={d}>
-                  {(hol || (we && zoom !== "month" && zoom !== "quarter")) && (
+                  {(hol || (we && (zoom === "day" || zoom === "week"))) && (
                     <div className="absolute bottom-0" title={hol ? "วันหยุดบริษัท" : undefined}
                       style={{ left: x, width: W, top: HEAD, background: hol ? "repeating-linear-gradient(135deg, var(--bg-soft) 0 4px, var(--line) 4px 5px)" : "var(--bg-soft)" }} />
                   )}
-                  {(dt.getUTCDate() === 1 || k === 0) && (
+                  {(dt.getUTCDate() === 1 || k === 0) && (zoom !== "year" || dt.getUTCMonth() % 3 === 0 || k === 0) && (
                     <div className="absolute top-1 whitespace-nowrap border-l border-[var(--line)] pl-1 text-xs font-bold" style={{ left: x }}>
-                      {TH_MONTH_SHORT[dt.getUTCMonth()]} {dt.getUTCFullYear() + 543}
+                      {/* ซูมไกล (ครึ่งปี/ปี) เดือนแคบ — ใส่ปีเฉพาะมกราคม/คอลัมน์แรก ไม่ให้ตัวหนังสือทับกัน */}
+                      {TH_MONTH_SHORT[dt.getUTCMonth()]}{zoom !== "half" && zoom !== "year" || dt.getUTCMonth() === 0 || k === 0 ? ` ${dt.getUTCFullYear() + 543}` : ""}
                     </div>
                   )}
                   {showDay && (

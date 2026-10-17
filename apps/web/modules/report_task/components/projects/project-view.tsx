@@ -28,7 +28,8 @@ import { useTaskStore } from "@/modules/report_task/store/task-store";
 import type { Project, ProjectStatus } from "@/modules/report_task/types";
 import { ProjectTimeline } from "./project-timeline";
 import { BoardTab, CalendarTab, DashboardTab, FilesTab, ListTab, MessagesTab } from "./project-tabs";
-import { PCT_HELP, PersonDot, ProjectStatusChip, STATE_COLOR, STATE_LABEL, fmtDay, todayBkk, useCompanyHolidays } from "./project-ui";
+import { PCT_HELP, PersonDot, ProjectStatusChip, STATE_COLOR, STATE_LABEL, fmtDay, notifyAddedToProject, todayBkk, useCompanyHolidays } from "./project-ui";
+import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { ROLE_OF_DEFAULT } from "./project-roles";
 
 // มุมมองเดียวกับ Asana: Overview · List · Board · Timeline(+Gantt) · Calendar · Dashboard · Messages · Files (+ อัปเดตสถานะ)
@@ -123,8 +124,8 @@ export function ProjectView({ projectId }: { projectId: string }) {
         <ProjectTimeline project={project} items={items} today={today} holidays={holidays} canEdit={canEdit} canPlan={canPlan}
           onOpenTask={(id) => openTask(id)} onAddTask={(sec) => setNewTaskSection(sec || project.sections[0]?.id || "")} />
       )}
-      {tab === "overview" && <Overview project={project} items={items} pct={pct} today={today} />}
-      {tab === "list" && <ListTab project={project} items={items} onOpen={(id) => openTask(id)} />}
+      {tab === "overview" && <Overview project={project} items={items} pct={pct} today={today} canEdit={canEdit} />}
+      {tab === "list" && <ListTab project={project} items={items} canEdit={canEdit} canPlan={canPlan} onOpen={(id) => openTask(id)} />}
       {tab === "board" && <BoardTab project={project} items={items} canEdit={canEdit} onOpen={(id) => openTask(id)} />}
       {tab === "calendar" && <CalendarTab items={items} today={today} onOpen={(id) => openTask(id)} />}
       {tab === "dashboard" && <DashboardTab project={project} items={items} today={today} onOpen={(id) => openTask(id)} />}
@@ -149,7 +150,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
   );
 }
 
-function Overview({ project, items, pct, today }: { project: Project; items: ReturnType<typeof timelineItems>; pct: number; today: string }) {
+function Overview({ project, items, pct, today, canEdit }: { project: Project; items: ReturnType<typeof timelineItems>; pct: number; today: string; canEdit: boolean }) {
   const tasksOnly = items.filter((i) => i.kind === "task");
   const n = (s: string) => tasksOnly.filter((i) => i.state === s).length;
   const latest = [...project.updates].sort((a, b) => b.at.localeCompare(a.at))[0];
@@ -163,6 +164,7 @@ function Overview({ project, items, pct, today }: { project: Project; items: Ret
           <h3 className="m-0 mb-1 text-sm font-semibold">เป้าหมาย</h3>
           <p className="m-0 whitespace-pre-wrap text-sm">{project.description || "—"}</p>
         </section>
+        <KeyResources project={project} canEdit={canEdit} />
         <section className="grid gap-3 rounded-xl border border-[var(--line)] p-4">
           <div className="flex items-center gap-4">
             <svg width="84" height="84" viewBox="0 0 84 84" aria-label={`ความคืบหน้า ${pct}%`}>
@@ -193,7 +195,10 @@ function Overview({ project, items, pct, today }: { project: Project; items: Ret
       </div>
       <div className="grid content-start gap-3">
         <section className="rounded-xl border border-[var(--line)] p-4">
-          <h3 className="m-0 mb-2 text-sm font-semibold">สถานะล่าสุด</h3>
+          <div className="mb-2 flex items-center gap-2">
+            <h3 className="m-0 text-sm font-semibold">สถานะล่าสุด</h3>
+            <span className="ml-auto"><AskUpdateButton project={project} /></span>
+          </div>
           {latest ? <UpdatePost u={latest} /> : <p className="m-0 text-sm text-[var(--ink-soft)]">ยังไม่มีอัปเดต</p>}
         </section>
         <section className="rounded-xl border border-[var(--line)] p-4">
@@ -224,6 +229,76 @@ function Overview({ project, items, pct, today }: { project: Project; items: Ret
         </section>
       </div>
     </div>
+  );
+}
+
+/** ลิงก์สำคัญ (Asana "Key resources") — ปักลิงก์เอกสาร/ไดรฟ์/แบบบ้าน ไว้หน้าภาพรวม */
+function KeyResources({ project, canEdit }: { project: Project; canEdit: boolean }) {
+  const me = useIdentityStore((s) => s.viewingAsUserId);
+  const updateProject = useProjectStore((s) => s.updateProject);
+  const [adding, setAdding] = useState(false);
+  const [title, setTitle] = useState("");
+  const [url, setUrl] = useState("");
+  const list = project.resources ?? [];
+  const field = "w-full min-w-0 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-2.5 py-1.5 text-base sm:text-sm";
+  function add() {
+    let u = url.trim();
+    if (!u) return;
+    if (!/^https?:\/\//i.test(u)) u = `https://${u}`;
+    try { new URL(u); } catch { toast.error("ลิงก์ไม่ถูกต้อง"); return; }
+    const t = title.trim() || new URL(u).hostname;
+    updateProject(project.id, { resources: [...list, { id: uuid(), title: t, url: u, by: me, at: new Date().toISOString() }] });
+    setTitle(""); setUrl(""); setAdding(false);
+  }
+  if (!list.length && !canEdit) return null;
+  return (
+    <section className="rounded-xl border border-[var(--line)] p-4">
+      <div className="mb-2 flex items-center">
+        <h3 className="m-0 text-sm font-semibold">ลิงก์สำคัญ</h3>
+        {canEdit && !adding && <button type="button" className="ml-auto text-xs font-semibold text-[var(--brand-green-dark)]" onClick={() => setAdding(true)}>+ เพิ่มลิงก์</button>}
+      </div>
+      {list.length > 0 && (
+        <ul className="m-0 grid list-none gap-1.5 p-0">
+          {list.map((r) => (
+            <li key={r.id} className="flex items-center gap-2 text-sm">
+              <span aria-hidden>🔗</span>
+              <a href={r.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate text-[var(--brand-green-dark)] hover:underline" title={r.url}>{r.title}</a>
+              {canEdit && (
+                <button type="button" className="px-1 text-[var(--ink-soft)]" aria-label={`เอาลิงก์ ${r.title} ออก`}
+                  onClick={() => updateProject(project.id, { resources: list.filter((x) => x.id !== r.id) })}>✕</button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {!list.length && !adding && <p className="m-0 text-xs text-[var(--ink-soft)]">ปักลิงก์ที่ทีมต้องเปิดบ่อย เช่น แบบบ้าน ใบเสนอราคา โฟลเดอร์รูป</p>}
+      {adding && (
+        <div className="mt-2 grid gap-2">
+          <input className={field} placeholder="ชื่อ เช่น แบบบ้าน HS3" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <input className={field} placeholder="วางลิงก์ https://…" value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} autoFocus />
+          <div className="flex justify-end gap-2">
+            <button type="button" className="rounded-lg px-3 py-1 text-xs" onClick={() => setAdding(false)}>ยกเลิก</button>
+            <button type="button" className="rounded-lg bg-[var(--brand-green)] px-3 py-1 text-xs font-semibold text-white disabled:opacity-50" disabled={!url.trim()} onClick={add}>เพิ่ม</button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** ขอให้เจ้าของโปรเจกต์อัปเดตสถานะ (Asana "Ask for update") — เจ้าของเองไม่เห็นปุ่ม */
+function AskUpdateButton({ project }: { project: Project }) {
+  const me = useIdentityStore((s) => s.viewingAsUserId);
+  if (me === project.ownerId || project.closedStatus) return null;
+  return (
+    <button type="button" className="rounded-lg border border-[var(--line)] px-2.5 py-1 text-xs hover:bg-[var(--bg-soft)]"
+      onClick={() => {
+        const name = getUser(me)?.name ?? "มีคน";
+        useNotificationStore.getState().notifyMany([project.ownerId], me, `${name} ขอให้อัปเดตสถานะโปรเจกต์ "${project.name}"`, undefined, `/report-task/projects/${project.id}`);
+        toast.success(`ส่งคำขอให้ ${getUser(project.ownerId)?.name ?? "เจ้าของ"} แล้ว`);
+      }}>
+      🔔 ขอให้อัปเดต
+    </button>
   );
 }
 
@@ -271,6 +346,7 @@ function UpdatesTab({ project, canEdit }: { project: Project; canEdit: boolean }
           </div>
         </div>
       )}
+      <div className="flex"><span className="ml-auto"><AskUpdateButton project={project} /></span></div>
       {list.length ? list.map((u) => <UpdatePost key={u.id} u={u} />) : <p className="text-sm text-[var(--ink-soft)]">ยังไม่มีอัปเดต</p>}
     </div>
   );
@@ -316,7 +392,11 @@ function ProjectSettingsButton({ project }: { project: Project }) {
                   <button type="button" className="text-[var(--ink-soft)]" aria-label="เอาออก" onClick={() => updateProject(project.id, { members: project.members.filter((x) => x.userId !== m.userId) })}>✕</button>
                 </div>
               ))}
-              <select className={field} value="" onChange={(e) => e.target.value && updateProject(project.id, { members: [...project.members, { userId: e.target.value, role: "editor" }] })}>
+              <select className={field} value="" onChange={(e) => {
+                  if (!e.target.value) return;
+                  updateProject(project.id, { members: [...project.members, { userId: e.target.value, role: "editor" }] });
+                  notifyAddedToProject(project, [e.target.value], me);
+                }}>
                 <option value="">+ เพิ่มสมาชิก</option>
                 {users.filter((u) => !memberIds.has(u.id) && u.id !== project.ownerId).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
