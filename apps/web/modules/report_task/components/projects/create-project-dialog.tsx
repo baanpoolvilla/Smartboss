@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { departmentIdsOf, users } from "@/modules/report_task/lib/directory";
@@ -37,15 +37,27 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
   const tpl = templates.find((t) => t.id === tplId);
   const roles = useMemo(() => [...new Set((tpl?.items ?? []).filter((i) => !i.milestone).map((i) => i.role || "ทีมงาน"))], [tpl]);
   const [roleMap, setRoleMap] = useState<Record<string, string>>({});
-  const personFor = (role: string) => roleMap[role] ?? guessPersonForRole(role, ownerId);
+  // เดาคนจากตำแหน่ง/แผนก — เดาไม่ได้ให้เว้นว่างให้เลือกเอง (เดิมใส่เจ้าของโปรเจกต์แทนเงียบ ๆ งานเลยไปตกที่แอดมิน)
+  const personFor = (role: string) => roleMap[role] ?? guessPersonForRole(role, "");
+  const creating = useRef(false);
 
   // แม่แบบนับถอยหลัง: วันเริ่มคำนวณจากวันเสร็จ
   const effStart = tpl?.anchor === "end" ? templateStartFromEnd(tpl, end, holidays) : start;
   const effEnd = tpl ? templateDate(tpl, effStart, tpl.items.length ? Math.max(...tpl.items.map(templateEnd)) : 0, holidays) : end;
   const tooLate = tpl?.anchor === "end" && effStart < today;
+  // ตรวจก่อนสร้าง: ตำแหน่งที่ยังไม่มีคน · งานที่กำหนดส่งก่อนวันนี้ (สร้างปุ๊บเลยกำหนด โดนหักคะแนนทันที) · จบเกินวันเสร็จเป้าหมาย
+  const missingRoles = roles.filter((r) => !personFor(r));
+  const pastDue = (tpl?.items ?? []).filter((i) => !i.milestone && templateDate(tpl!, effStart, templateEnd(i), holidays) < today);
+  const overEnd = !!tpl && tpl.anchor === "start" && effEnd > end;
+  const blocked = !name.trim() ? "ใส่ชื่อโปรเจกต์ก่อน"
+    : missingRoles.length ? `เลือกคนทำ: ${missingRoles.join(", ")}`
+    : pastDue.length ? `มี ${pastDue.length} งานกำหนดส่งก่อนวันนี้ (${pastDue.slice(0, 3).map((i) => i.name).join(", ")}${pastDue.length > 3 ? " …" : ""}) — ${tpl?.anchor === "end" ? "เลื่อนวันเสร็จออกไป" : "เลื่อนวันเริ่มเป็นวันนี้หรือหลังจากนี้"}`
+    : "";
 
   function create() {
-    if (!name.trim()) { toast.error("ใส่ชื่อโปรเจกต์ก่อน"); return; }
+    if (blocked) { toast.error(blocked); return; }
+    if (creating.current) return; // กันกดสองครั้งแล้วได้โปรเจกต์ซ้ำ
+    creating.current = true;
     const now = new Date().toISOString();
     const pid = `proj-${uuid()}`;
     const secId = new Map<string, string>();
@@ -117,13 +129,18 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
             <label className="grid gap-1 text-xs text-[var(--ink-soft)]">เป้าหมาย / ขอบเขต<textarea className={field} rows={3} value={desc} onChange={(e) => setDesc(e.target.value)} /></label>
             <div className="grid grid-cols-2 gap-2">
               <label className="grid gap-1 text-xs text-[var(--ink-soft)]">วันเริ่ม
-                <input type="date" className={cn(field, tpl?.anchor === "end" && "opacity-60")} value={effStart} disabled={tpl?.anchor === "end"} onChange={(e) => e.target.value && setStart(e.target.value)} />
+                <input type="date" className={cn(field, tpl?.anchor === "end" && "opacity-60")} value={effStart} min={tpl?.items.length ? today : undefined} disabled={tpl?.anchor === "end"} onChange={(e) => e.target.value && setStart(e.target.value)} />
               </label>
               <label className="grid gap-1 text-xs text-[var(--ink-soft)]">วันเสร็จเป้าหมาย<input type="date" className={field} value={end} onChange={(e) => e.target.value && setEnd(e.target.value)} /></label>
             </div>
             {tpl?.anchor === "end" && (
               <p className={cn("m-0 text-xs", tooLate ? "font-bold text-red-600" : "text-[var(--brand-green-dark)]")}>
                 {tooLate ? `⚠ เวลาไม่พอ — แม่แบบนี้ต้องเริ่ม ${fmtDay(effStart)} (ผ่านมาแล้ว ${Math.round((Date.parse(today) - Date.parse(effStart)) / 864e5)} วัน) · เลื่อนวันเสร็จ หรือตัดงานบางอย่างออกทีหลัง` : `แม่แบบนี้นับถอยหลังจากวันเสร็จ → ต้องเริ่ม ${fmtDay(effStart, true)}`}
+              </p>
+            )}
+            {overEnd && (
+              <p className="m-0 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                ⚠ งานตามแม่แบบจบ {fmtDay(effEnd, true)} เกินวันเสร็จเป้าหมาย {Math.round((Date.parse(effEnd) - Date.parse(end)) / 864e5)} วัน · ถ้าสร้างเลย วันเสร็จเป้าหมายจะเป็น {fmtDay(effEnd, true)} (หรือเลื่อนวันเริ่มให้เร็วขึ้น)
               </p>
             )}
             <label className="grid gap-1 text-xs text-[var(--ink-soft)]">เจ้าของโปรเจกต์ (คุมแผน เลื่อนกำหนดส่งได้)
@@ -159,7 +176,8 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
                 {roles.map((r) => (
                   <div key={r} className="flex items-center gap-2">
                     <span className="w-28 shrink-0 text-xs">{r}</span>
-                    <select className={field} value={personFor(r)} onChange={(e) => setRoleMap({ ...roleMap, [r]: e.target.value })}>
+                    <select className={cn(field, !personFor(r) && "border-red-500 text-red-600")} value={personFor(r)} onChange={(e) => setRoleMap({ ...roleMap, [r]: e.target.value })} aria-label={`คนทำตำแหน่ง ${r}`}>
+                      <option value="" disabled>— เลือกคน —</option>
                       {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
                     </select>
                   </div>
@@ -169,9 +187,10 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
             )}
           </div>
         </div>
-        <div className="flex justify-end gap-2 border-t border-[var(--line)] pt-3">
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[var(--line)] pt-3">
+          {blocked && <span className="mr-auto text-xs text-red-600">{blocked}</span>}
           <button type="button" className="rounded-lg border border-[var(--line)] px-4 py-1.5 text-sm" onClick={onClose}>ยกเลิก</button>
-          <button type="button" className="rounded-lg bg-[var(--brand-green)] px-4 py-1.5 text-sm font-semibold text-white" onClick={create}>สร้างโปรเจกต์</button>
+          <button type="button" className="rounded-lg bg-[var(--brand-green)] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50" disabled={!!blocked} onClick={create}>สร้างโปรเจกต์</button>
         </div>
       </div>
     </div>
