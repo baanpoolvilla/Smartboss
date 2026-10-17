@@ -23,6 +23,7 @@ import { useNotificationStore } from "@/modules/report_task/store/notification-s
 import { unreadTaskAttachmentCounts, unreadTaskCommentCounts } from "@/modules/report_task/lib/task-comment-activity";
 import { MessageSquare, Paperclip, History, SmilePlus, SearchCheck, Check, Circle, Star, Clock, Eye, Lock, Repeat } from "lucide-react";
 import { describeRule, freqLabel, totalOccurrences } from "@/modules/report_task/lib/task-recurrence";
+import { ParentTaskLink, SubtaskCountChip } from "@/modules/report_task/components/kanban/subtasks-section";
 import { useProjectStore } from "@/modules/report_task/store/project-store";
 
 /** ป้ายบอกว่างานนี้อยู่โปรเจกต์ไหน ช่วงไหน — กดแล้วไปที่ Timeline ของโปรเจกต์ (ไม่เปิดการ์ด) */
@@ -451,6 +452,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
           )}
           <DueDateBadge task={task} />
           {task.project && <ProjectChip projectId={task.project.projectId} sectionId={task.project.sectionId} />}
+          {task.parentId ? <ParentTaskLink parentId={task.parentId} /> : <SubtaskCountChip taskId={task.id} />}
           {task.recurrence && (
             <span
               className="inline-flex items-center gap-0.5 h-5 rounded-md px-1.5 text-[10px] font-semibold bg-violet-100 text-violet-700 whitespace-nowrap dark:bg-violet-950/60 dark:text-violet-300"

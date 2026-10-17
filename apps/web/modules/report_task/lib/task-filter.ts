@@ -21,6 +21,8 @@ export interface TaskFilterState {
   customFrom: string;
   customTo: string;
   quickView: QuickView;
+  /** โปรเจกต์: "all" (ไม่กรอง ค่าเริ่มต้น) · "none" = เฉพาะงานที่ไม่อยู่ในโปรเจกต์ · id = เฉพาะโปรเจกต์นั้น */
+  projectId?: string;
 }
 
 /** Shared board/grid/penalty filter predicate — one source of truth. */
@@ -41,6 +43,9 @@ export function matchesTaskFilters(task: Task, filters: TaskFilterState): boolea
   )
     return false;
   if (filters.priority !== "all" && task.priority !== filters.priority) return false;
+  if (filters.projectId && filters.projectId !== "all") {
+    if (filters.projectId === "none" ? !!task.project : task.project?.projectId !== filters.projectId) return false;
+  }
   if (filters.penalty !== "all") {
     const overdue = dueUrgency(task) === "overdue";
     if (filters.penalty === "overdue" && !overdue) return false;

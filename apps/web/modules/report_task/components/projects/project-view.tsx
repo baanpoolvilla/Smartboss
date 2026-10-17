@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { CalendarDays, ChartColumn, Flag, GanttChart, LayoutGrid, List, MessageSquare, Paperclip, SquareKanban, type LucideIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -37,16 +38,16 @@ import { ROLE_OF_DEFAULT } from "./project-roles";
 type Tab = "timeline" | "overview" | "list" | "board" | "calendar" | "dashboard" | "messages" | "files" | "updates";
 // แท็บหลักโชว์ตลอด ที่เหลืออยู่ใต้ "เพิ่มเติม ▾" — 9 แท็บเรียงกันบนมือถือต้องเลื่อนหา คนทั่วไปงง
 const PRIMARY_TABS: Tab[] = ["overview", "list", "board", "timeline", "messages"];
-const TABS: { id: Tab; label: string }[] = [
-  { id: "overview", label: "ภาพรวม" },
-  { id: "list", label: "รายการ" },
-  { id: "board", label: "บอร์ด" },
-  { id: "timeline", label: "แผนเวลา" },
-  { id: "calendar", label: "ปฏิทิน" },
-  { id: "dashboard", label: "แดชบอร์ด" },
-  { id: "messages", label: "ข้อความ" },
-  { id: "files", label: "ไฟล์" },
-  { id: "updates", label: "อัปเดตสถานะ" },
+const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
+  { id: "overview", label: "ภาพรวม", icon: LayoutGrid },
+  { id: "list", label: "รายการ", icon: List },
+  { id: "board", label: "บอร์ด", icon: SquareKanban },
+  { id: "timeline", label: "แผนเวลา", icon: GanttChart },
+  { id: "calendar", label: "ปฏิทิน", icon: CalendarDays },
+  { id: "dashboard", label: "แดชบอร์ด", icon: ChartColumn },
+  { id: "messages", label: "ข้อความ", icon: MessageSquare },
+  { id: "files", label: "ไฟล์", icon: Paperclip },
+  { id: "updates", label: "อัปเดตสถานะ", icon: Flag },
 ];
 
 export function ProjectView({ projectId }: { projectId: string }) {
@@ -92,18 +93,30 @@ export function ProjectView({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-3">
-      <div className="space-y-2">
-        <Link href="/report-task/projects" className="text-xs text-[var(--ink-soft)] hover:text-[var(--ink)]">‹ โปรเจกต์ทั้งหมด</Link>
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="m-0 text-xl font-bold">{project.name}</h1>
-          <ProjectStatusChip status={status} />
-          <span className="text-xs text-[var(--ink-soft)]">
-            {fmtDay(project.startDate)} – {fmtDay(project.endDate, true)} · เจ้าของ {getUser(project.ownerId)?.name ?? "—"} · {pct}% เสร็จ
-            <span className="ml-1 inline-grid h-4 w-4 cursor-help place-items-center rounded-full border border-[var(--ink-soft)] text-[10px]" title={PCT_HELP} tabIndex={0}>?</span>
-          </span>
-          <div className="ml-auto flex flex-wrap gap-2">
+      <div className="space-y-3">
+        <Link href="/report-task/projects" className="text-[13px] text-[var(--ink-soft)] hover:text-[var(--ink)]">‹ โปรเจกต์ทั้งหมด</Link>
+        <div className="flex flex-wrap items-start gap-3">
+          <div className="grid min-w-0 flex-[1_1_320px] gap-2">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="m-0 min-w-0 break-words text-xl font-bold leading-tight sm:text-2xl">{project.name}</h1>
+              <ProjectStatusChip status={status} />
+            </div>
+            {/* แยกข้อมูลเป็นก้อน อ่านทีละอย่าง — เดิมยัดบรรทัดเดียวตัวเล็ก */}
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[13px] text-[var(--ink-soft)]">
+              <span className="inline-flex items-center gap-1.5"><PersonDot userId={project.ownerId} size={20} /><span className="text-[var(--ink)]">{getUser(project.ownerId)?.name ?? "—"}</span> เจ้าของ</span>
+              <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-4 w-4" />{fmtDay(project.startDate)} – {fmtDay(project.endDate, true)}</span>
+              <span>{project.closedStatus ? "ปิดแล้ว" : dayNum(project.endDate) >= dayNum(today) ? `เหลือ ${dayNum(project.endDate) - dayNum(today)} วัน` : `เลยวันเสร็จมา ${dayNum(today) - dayNum(project.endDate)} วัน`}</span>
+              <span className="inline-flex items-center gap-2" title={PCT_HELP}>
+                <span className="h-2 w-28 overflow-hidden rounded-full bg-[var(--bg-soft)] ring-1 ring-[var(--line)]">
+                  <span className="block h-full rounded-full bg-[var(--brand-green)]" style={{ width: `${pct}%` }} />
+                </span>
+                <b className="tabular-nums text-[var(--ink)]">{pct}%</b> เสร็จ
+              </span>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 max-sm:w-full">
             {canEdit && (
-              <button type="button" className="rounded-lg border border-[var(--line)] px-3 py-1.5 text-xs hover:bg-[var(--bg-soft)] disabled:opacity-50" disabled={!templatesReady}
+              <button type="button" className="h-9 rounded-lg border border-[var(--line)] px-3.5 text-[13px] hover:bg-[var(--bg-soft)] disabled:opacity-50" disabled={!templatesReady}
                 onClick={() => {
                   const t = templateFromProject(project, items, (uid) => ROLE_OF_DEFAULT(uid), () => `tpl-${uuid()}`, me);
                   upsertTemplate(t);
@@ -127,7 +140,8 @@ export function ProjectView({ projectId }: { projectId: string }) {
         <div role="tablist" className="flex min-w-0 gap-1 overflow-x-auto">
           {TABS.filter((t) => PRIMARY_TABS.includes(t.id)).map((t) => (
             <button key={t.id} role="tab" type="button" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
-              className={cn("whitespace-nowrap border-b-2 px-3 py-2 text-sm", tab === t.id ? "border-[var(--brand-green)] font-bold text-[var(--brand-green-dark)]" : "border-transparent text-[var(--ink-soft)]")}>
+              className={cn("inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3.5 py-2.5 text-[14px] transition-colors", tab === t.id ? "border-[var(--brand-green)] font-bold text-[var(--brand-green-dark)]" : "border-transparent text-[var(--ink-soft)] hover:text-[var(--ink)]")}>
+              <t.icon className="h-4 w-4" />
               {t.label}
             </button>
           ))}
@@ -180,7 +194,8 @@ function MoreTabs({ tab, onPick }: { tab: Tab; onPick: (t: Tab) => void }) {
   return (
     <div className="relative shrink-0">
       <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)}
-        className={cn("whitespace-nowrap border-b-2 px-3 py-2 text-sm", active ? "border-[var(--brand-green)] font-bold text-[var(--brand-green-dark)]" : "border-transparent text-[var(--ink-soft)]")}>
+        className={cn("inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3.5 py-2.5 text-[14px]", active ? "border-[var(--brand-green)] font-bold text-[var(--brand-green-dark)]" : "border-transparent text-[var(--ink-soft)] hover:text-[var(--ink)]")}>
+        {active && <active.icon className="h-4 w-4" />}
         {active ? active.label : "เพิ่มเติม"} ▾
       </button>
       {open && (
@@ -189,7 +204,8 @@ function MoreTabs({ tab, onPick }: { tab: Tab; onPick: (t: Tab) => void }) {
           <div className="absolute right-0 top-full z-30 mt-1 grid w-max min-w-40 rounded-xl border border-[var(--line)] bg-[var(--bg)] p-1 shadow-xl">
             {rest.map((t) => (
               <button key={t.id} type="button" onClick={() => { onPick(t.id); setOpen(false); }}
-                className={cn("rounded-lg px-3 py-2 text-left text-sm hover:bg-[var(--bg-soft)]", tab === t.id && "font-bold text-[var(--brand-green-dark)]")}>
+                className={cn("inline-flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-[var(--bg-soft)]", tab === t.id && "font-bold text-[var(--brand-green-dark)]")}>
+                <t.icon className="h-4 w-4 text-[var(--ink-soft)]" />
                 {t.label}
               </button>
             ))}
@@ -237,7 +253,7 @@ function Overview({ project, items, pct, today, canEdit }: { project: Project; i
           <div className="flex items-center gap-4">
             <svg width="84" height="84" viewBox="0 0 84 84" aria-label={`ความคืบหน้า ${pct}%`}>
               <circle cx="42" cy="42" r="34" fill="none" stroke="var(--bg-soft)" strokeWidth="9" />
-              <circle cx="42" cy="42" r="34" fill="none" stroke="var(--brand-green)" strokeWidth="9" strokeLinecap="round" strokeDasharray={`${(C * pct) / 100} ${C}`} transform="rotate(-90 42 42)" />
+              {pct > 0 && <circle cx="42" cy="42" r="34" fill="none" stroke="var(--brand-green)" strokeWidth="9" strokeLinecap="round" strokeDasharray={`${(C * pct) / 100} ${C}`} transform="rotate(-90 42 42)" />}
               <text x="42" y="47" textAnchor="middle" fontSize="17" fontWeight="700" fill="var(--ink)">{pct}%</text>
             </svg>
             <div>
@@ -437,7 +453,7 @@ function ProjectSettingsButton({ project }: { project: Project }) {
   const memberIds = new Set(project.members.map((m) => m.userId));
   return (
     <>
-      <button type="button" className="rounded-lg border border-[var(--line)] px-3 py-1.5 text-xs hover:bg-[var(--bg-soft)]" onClick={() => setOpen(true)}>ตั้งค่าโปรเจกต์</button>
+      <button type="button" className="h-9 rounded-lg border border-[var(--line)] px-3.5 text-[13px] hover:bg-[var(--bg-soft)]" onClick={() => setOpen(true)}>⚙ ตั้งค่าโปรเจกต์</button>
       {open && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 sm:items-center sm:p-4" onClick={() => setOpen(false)}>
           <div className="grid max-h-[90dvh] w-full gap-3 overflow-y-auto rounded-t-2xl bg-[var(--bg)] p-4 shadow-2xl sm:max-w-xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="ตั้งค่าโปรเจกต์">

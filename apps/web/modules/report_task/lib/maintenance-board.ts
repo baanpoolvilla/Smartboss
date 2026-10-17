@@ -74,6 +74,8 @@ export function matchesMaintenanceFilters(item: MaintenanceBoardItem, filters: T
     if (dept !== filters.departmentId) return false;
   }
   if (filters.priority !== "all" && item.priority !== filters.priority) return false;
+  // ใบซ่อมไม่อยู่ในโปรเจกต์ — เลือกดูโปรเจกต์ไหนก็ไม่ขึ้น (ส่วน "ไม่รวมงานโปรเจกต์" ยังขึ้นตามเดิม)
+  if (filters.projectId && filters.projectId !== "all" && filters.projectId !== "none") return false;
   if (filters.penalty !== "all") {
     // หักคะแนน/รอหักเป็นเรื่องของงาน — ใบซ่อมมีแค่ "เลยกำหนด"
     if (filters.penalty !== "overdue" || !item.overdue) return false;

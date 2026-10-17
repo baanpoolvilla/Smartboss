@@ -117,3 +117,31 @@ export const STATE_COLOR: Record<string, string> = {
   late: "var(--chart-red)",
 };
 export const STATE_LABEL: Record<string, string> = { done: "เสร็จ", doing: "กำลังทำ", todo: "ยังไม่เริ่ม", late: "เลยกำหนด" };
+
+/** ป้ายสถานะ — พื้นอ่อน ตัวเข้ม (เดิมพื้นทึบตัวขาว "ยังไม่เริ่ม" เป็นเทาอ่านยาก ทุกแถวดูเหมือนกัน) */
+const STATE_PILL: Record<string, string> = {
+  done: "bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-300",
+  doing: "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300",
+  todo: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+  late: "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300",
+};
+const STATE_ICON: Record<string, string> = { done: "✓", doing: "▶", todo: "○", late: "!" };
+export function StatePill({ state }: { state: string }) {
+  return (
+    <span className={cn("inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold", STATE_PILL[state])}>
+      <span aria-hidden className="text-[10px]">{STATE_ICON[state]}</span>
+      {STATE_LABEL[state]}
+    </span>
+  );
+}
+
+/** สีแถบบนแผนเวลา — ยังไม่เริ่ม = ฟ้าอ่อนขอบชัด ตัวหนังสือเข้ม (อ่านง่ายกว่าแถบเทาตัวขาว) */
+export function barStyle(state: string): { background: string; color: string; border: string } {
+  if (state === "todo")
+    return {
+      background: "color-mix(in srgb, var(--chart-blue) 16%, var(--bg))",
+      color: "var(--ink)",
+      border: "1px solid color-mix(in srgb, var(--chart-blue) 55%, var(--bg))",
+    };
+  return { background: STATE_COLOR[state] ?? "var(--chart-gray)", color: "#fff", border: "1px solid transparent" };
+}

@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { TaskCard } from "@/modules/report_task/components/kanban/task-card";
 import { getUser } from "@/modules/report_task/lib/directory";
-import { dayNum, dayToIso, depRuleLabel, ymdOfDay, type TimelineItem } from "@/modules/report_task/lib/project-schedule";
+import { dayNum, dayToIso, depRuleLabel, isTopLevel, withSubtasks, ymdOfDay, type TimelineItem } from "@/modules/report_task/lib/project-schedule";
 import { uuid } from "@/modules/report_task/lib/uuid";
 import { cn } from "@/modules/report_task/lib/utils";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
@@ -17,7 +17,7 @@ import type { Attachment, Project, TaskStatus } from "@/modules/report_task/type
 import { addChannelMembers, createGroupChannel, fetchMessages, sendMessage } from "@/modules/chat/lib/api";
 import { CHAT_PAGE_PATH } from "@/modules/chat/constants";
 import type { ChatMessageDTO } from "@/modules/chat/types";
-import { PersonDot, STATE_COLOR, STATE_LABEL, TH_MONTH_SHORT, ensureProjectMembers, fmtDay } from "./project-ui";
+import { PersonDot, STATE_COLOR, STATE_LABEL, StatePill, TH_MONTH_SHORT, ensureProjectMembers, fmtDay } from "./project-ui";
 
 const seg = (on: boolean) => cn("rounded-md px-3 py-1 text-xs", on ? "bg-[var(--bg)] font-semibold shadow-sm" : "text-[var(--ink-soft)]");
 const segWrap = "inline-flex rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-0.5";
@@ -38,12 +38,12 @@ function InlineName({ item, onSave }: { item: TimelineItem; onSave: (name: strin
       onBlur={() => { const t = v.trim(); if (t && t !== item.name) onSave(t); else setV(item.name); }}
       onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { setV(item.name); setTimeout(() => (e.target as HTMLInputElement).blur()); } }}
       aria-label="ชื่องาน"
-      className={cn("w-full min-w-0 rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-[var(--line)] focus:border-[var(--brand-green)] focus:outline-none", item.state === "done" && "text-[var(--ink-soft)] line-through")} />
+      className={cn("w-full min-w-0 rounded-md border-0 bg-transparent px-1.5 py-1 text-[14px] font-medium text-[var(--ink)] outline-none hover:ring-1 hover:ring-[var(--line)] focus:bg-[var(--bg)] focus:ring-2 focus:ring-[var(--brand-green)]", item.state === "done" && "font-normal text-[var(--ink-soft)] line-through")} />
   );
 }
 
-const dateCell = "h-8 w-[132px] border-transparent bg-transparent px-1.5 text-[13px] hover:border-[var(--line)]";
-const cellInput = "rounded border border-transparent bg-transparent px-1 py-0.5 text-base tabular-nums hover:border-[var(--line)] focus:border-[var(--brand-green)] focus:outline-none sm:text-[13px]";
+const dateCell = "h-8 w-[128px] border-0 bg-transparent px-1.5 text-[13px] text-[var(--ink)] hover:ring-1 hover:ring-[var(--line)]";
+const cellInput = "max-w-[150px] rounded-md border-0 bg-transparent px-1 py-1 text-base text-[var(--ink)] tabular-nums outline-none hover:ring-1 hover:ring-[var(--line)] focus:ring-2 focus:ring-[var(--brand-green)] sm:text-[13px]";
 
 export function ListTab({ project, items, canEdit = false, canPlan = false, onOpen }: { project: Project; items: TimelineItem[]; canEdit?: boolean; canPlan?: boolean; onOpen: (id: string) => void }) {
   const me = useIdentityStore((s) => s.viewingAsUserId);
@@ -68,9 +68,12 @@ export function ListTab({ project, items, canEdit = false, canPlan = false, onOp
       if (sort === "person") return (getUser(a.assigneeIds[0] ?? "")?.name ?? "~").localeCompare(getUser(b.assigneeIds[0] ?? "")?.name ?? "~", "th");
       return a.end.localeCompare(b.end);
     });
+  // งานย่อยต่อท้ายงานหลัก (เรียง/กรองที่งานหลัก) — งานย่อยที่งานหลักถูกกรองออกยังขึ้นเป็นแถวปกติ
+  const shownIds = new Set(shown.map((i) => i.id));
+  const tops = shown.filter((i) => isTopLevel(i, shownIds));
   const groups = group === "section"
-    ? project.sections.map((s) => ({ key: s.id, name: s.name, rows: shown.filter((i) => i.sectionId === s.id) }))
-    : [{ key: "all", name: "", rows: shown }];
+    ? project.sections.map((s) => ({ key: s.id, name: s.name, rows: withSubtasks(tops.filter((i) => i.sectionId === s.id), shown) }))
+    : [{ key: "all", name: "", rows: withSubtasks(tops, shown) }];
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -86,27 +89,63 @@ export function ListTab({ project, items, canEdit = false, canPlan = false, onOp
         </select>
         <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} className="accent-[var(--brand-green)]" />ซ่อนที่เสร็จแล้ว</label>
       </div>
-      {canEdit && <p className="m-0 text-xs text-[var(--ink-soft)]">แก้ชื่อ{canPlan ? " วัน" : ""} และคนรับผิดชอบได้ในตารางเลย · กด ↗ เพื่อเปิดรายละเอียดงาน{!canPlan ? " · เลื่อนวันได้เฉพาะเจ้าของโปรเจกต์" : ""}</p>}
-      <div className="overflow-x-auto rounded-xl border border-[var(--line)]">
-        <table className="w-full min-w-[640px] border-collapse text-[13.5px]">
+      {canEdit && <p className="m-0 hidden text-xs text-[var(--ink-soft)] sm:block">แก้ชื่อ{canPlan ? " วัน" : ""} และคนรับผิดชอบได้ในตารางเลย · กด ↗ เพื่อเปิดรายละเอียดงาน{!canPlan ? " · เลื่อนวันได้เฉพาะเจ้าของโปรเจกต์" : ""}</p>}
+      {/* มือถือ: การ์ด กดแล้วเปิดงาน */}
+      <div className="grid gap-4 sm:hidden">
+        {groups.map((g) => (
+          <div key={`m-${g.key}`} className="grid gap-2">
+            {g.name && <b className="text-[15px]">{g.name} <span className="ml-1 rounded-full bg-[var(--bg-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--ink-soft)]">{g.rows.length}</span></b>}
+            {g.rows.map((i) => {
+              const sub = !!i.parentId && shownIds.has(i.parentId);
+              return (
+                <button key={i.id} type="button" onClick={() => i.kind === "task" && onOpen(i.id)}
+                  className={cn("grid gap-1.5 rounded-xl border border-[var(--line)] bg-[var(--bg)] p-3 text-left", sub && "ml-5", i.state === "late" && "border-red-300 bg-red-50/60 dark:border-red-900 dark:bg-red-950/20")}>
+                  <span className="flex items-start gap-2">
+                    {sub && <span className="text-[var(--ink-soft)]">↳</span>}
+                    {i.kind === "milestone" && <span style={{ color: "var(--chart-violet)" }}>◆</span>}
+                    <span className={cn("min-w-0 flex-1 text-[15px] font-semibold leading-snug", i.state === "done" && "font-normal text-[var(--ink-soft)] line-through")}>{i.name}</span>
+                    <StatePill state={i.state} />
+                  </span>
+                  <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[var(--ink-soft)]">
+                    {i.assigneeIds[0] && <span className="inline-flex items-center gap-1.5"><PersonDot userId={i.assigneeIds[0]} size={20} />{getUser(i.assigneeIds[0])?.name}{i.assigneeIds.length > 1 ? ` +${i.assigneeIds.length - 1}` : ""}</span>}
+                    <span className="tabular-nums">{i.kind === "milestone" ? fmtDay(i.start) : `${fmtDay(i.start)} → ${fmtDay(i.end)}`}</span>
+                  </span>
+                  {i.deps.some((d) => byId.has(d)) && (
+                    <span className="text-[12px] text-[var(--ink-soft)]">รอ: {i.deps.filter((d) => byId.has(d)).map((d) => byId.get(d)!.name).join(", ")}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+      <div className="hidden overflow-x-auto rounded-xl border border-[var(--line)] bg-[var(--bg)] sm:block">
+        <table className="w-full min-w-[720px] border-collapse text-[13.5px]">
           <thead>
-            <tr className="text-left text-xs text-[var(--ink-soft)]">
-              {["งาน", "ผู้รับผิดชอบ", "เริ่ม", "ส่ง", "สถานะ", "ต้องรอ"].map((h) => <th key={h} className="border-b border-[var(--line)] px-3 py-2 font-semibold">{h}</th>)}
+            <tr className="bg-[var(--bg-soft)] text-left text-[12px] text-[var(--ink-soft)]">
+              {["งาน", "ผู้รับผิดชอบ", "เริ่ม", "ส่ง", "สถานะ", "ต้องรอ"].map((h) => <th key={h} className="border-b border-[var(--line)] px-3 py-2.5 font-semibold">{h}</th>)}
             </tr>
           </thead>
           <tbody>
             {groups.map((g) => [
-              g.name ? <tr key={`g-${g.key}`}><td colSpan={6} className="bg-[var(--bg-soft)] px-3 py-1.5 text-xs font-bold text-[var(--ink-soft)]">{g.name} · {g.rows.length}</td></tr> : null,
+              g.name ? (
+                <tr key={`g-${g.key}`}>
+                  <td colSpan={6} className="border-b border-[var(--line)] px-3 pb-1.5 pt-4 text-[14px] font-bold text-[var(--ink)]">
+                    {g.name} <span className="ml-1 rounded-full bg-[var(--bg-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--ink-soft)]">{g.rows.length}</span>
+                  </td>
+                </tr>
+              ) : null,
               ...g.rows.map((i) => (
-                <tr key={i.id} className={cn("border-b border-[var(--line)]/60", i.kind === "task" && "cursor-pointer hover:bg-[var(--bg-soft)]")} onClick={() => i.kind === "task" && onOpen(i.id)}>
+                <tr key={i.id} className={cn("border-b border-[var(--line)]/50 transition-colors", i.kind === "task" && "cursor-pointer hover:bg-[var(--bg-soft)]", i.state === "late" && "bg-red-50/60 dark:bg-red-950/20")} onClick={() => i.kind === "task" && onOpen(i.id)}>
                   <td className="min-w-52 px-2 py-1.5">
                     {canEdit && i.kind === "task" ? (
-                      <div className="flex items-center gap-1">
+                      <div className={cn("flex items-center gap-1", i.parentId && shownIds.has(i.parentId) && "pl-5")}>
+                        {i.parentId && shownIds.has(i.parentId) && <span className="text-[var(--ink-soft)]" aria-label="งานย่อย">↳</span>}
                         <InlineName item={i} onSave={(t) => saveTaskDetails(i.id, t, i.task?.description ?? "", me)} />
                         <button type="button" className="shrink-0 rounded px-1.5 text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)]" aria-label={`เปิดงาน ${i.name}`} title="เปิดรายละเอียดงาน" onClick={(e) => { e.stopPropagation(); onOpen(i.id); }}>↗</button>
                       </div>
                     ) : canEdit && i.kind === "milestone" ? (
-                      <div className="flex items-center gap-1">◆<InlineName item={i} onSave={(t) => updateMilestone(project.id, i.id, { name: t })} /></div>
+                      <div className="flex items-center gap-1"><span style={{ color: "var(--chart-violet)" }}>◆</span><InlineName item={i} onSave={(t) => updateMilestone(project.id, i.id, { name: t })} /></div>
                     ) : (
                       <span className={cn("px-1", i.state === "done" && "text-[var(--ink-soft)] line-through")}>{i.kind === "milestone" ? "◆ " : ""}{i.name}</span>
                     )}
@@ -136,7 +175,7 @@ export function ListTab({ project, items, canEdit = false, canPlan = false, onOp
                       <DatePickerField className={dateCell} value={i.end} minDate={i.start} onChange={(v) => v && rescheduleTask(i.id, i.task!.startDate, dayToIso(v), why, me)} />
                     ) : <span className="px-1">{fmtDay(i.end)}</span>}
                   </td>
-                  <td className="px-3 py-2"><span className="rounded-full px-2 py-0.5 text-xs font-semibold text-white" style={{ background: STATE_COLOR[i.state] }}>{STATE_LABEL[i.state]}</span></td>
+                  <td className="px-3 py-2"><StatePill state={i.state} /></td>
                   <td className="px-3 py-2 text-xs text-[var(--ink-soft)]">{i.deps.filter((d) => byId.has(d)).map((d) => { const l = depRuleLabel(i.depRules[d]); return `${byId.get(d)!.name}${l ? ` (${l})` : ""}`; }).join(", ") || "—"}</td>
                 </tr>
               )),
@@ -156,7 +195,8 @@ export function BoardTab({ project, items, canEdit, onOpen }: { project: Project
   const moveTask = useTaskStore((s) => s.moveTask);
   const [by, setBy] = useState<"section" | "status">("section");
   const [over, setOver] = useState<string | null>(null);
-  const tasks = items.filter((i) => i.kind === "task" && i.task).map((i) => i.task!);
+  // บอร์ดโชว์งานหลัก — งานย่อยดูจาก "งานย่อย n/m" บนการ์ด (กดเปิดงานหลักเห็นครบ)
+  const tasks = items.filter((i) => i.kind === "task" && i.task && !i.parentId).map((i) => i.task!);
   const cols =
     by === "section"
       ? project.sections.map((s) => ({ key: s.id, label: s.name, list: tasks.filter((t) => t.project?.sectionId === s.id) }))

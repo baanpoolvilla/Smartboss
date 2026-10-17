@@ -309,6 +309,8 @@ interface TaskFilters {
   customFrom: string;
   customTo: string;
   quickView: QuickView;
+  /** โปรเจกต์ — ดู TaskFilterState.projectId (lib/task-filter.ts) */
+  projectId: string;
 }
 
 interface TaskStore {
@@ -462,6 +464,7 @@ const defaultFilters: TaskFilters = {
   customFrom: "",
   customTo: "",
   quickView: "all",
+  projectId: "all",
 };
 
 export const useTaskStore = create<TaskStore>((set, get) => ({
@@ -1031,7 +1034,16 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       // ลบไปแล้ว ("ลบงานไปแล้วแต่ทำไมแจ้งเตือนยังขึ้น") — ดู notification-store.ts's
       // removeTaskNotifications เรื่อง doc ว่าจับคู่ยังไง
       useNotificationStore.getState().removeTaskNotifications(taskId);
-      return { tasks: s.tasks.filter((x) => x.id !== taskId) };
+      // งานย่อยของงานที่ลบ — เหลือเป็นงานธรรมดา (ไม่ลบตาม งานที่มอบให้คนอื่นไม่ควรหายเงียบ ๆ)
+      return {
+        tasks: s.tasks
+          .filter((x) => x.id !== taskId)
+          .map((x) => {
+            if (x.parentId !== taskId) return x;
+            const { parentId: _p, ...rest } = x;
+            return rest;
+          }),
+      };
     }),
   updateTask: (taskId, patch) =>
     set((s) => ({

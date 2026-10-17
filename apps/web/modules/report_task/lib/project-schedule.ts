@@ -49,8 +49,10 @@ export interface TimelineItem {
   deps: string[];
   /** วิธีรอของแต่ละ dep — ไม่มี key = เริ่มหลังเสร็จ */
   depRules: Record<string, ProjectDepRule>;
-  /** งานที่กำลังทำ: % ของเช็คลิสต์ที่ติ๊กแล้ว */
+  /** งานที่กำลังทำ: % ของเช็คลิสต์ที่ติ๊กแล้ว (มีงานย่อย = % งานย่อยที่เสร็จ) */
   pct?: number;
+  /** งานย่อยของงานไหน — แสดงซ้อนใต้งานหลัก */
+  parentId?: string;
   task?: Task;
   milestone?: ProjectMilestone;
 }
@@ -77,8 +79,16 @@ export function timelineItems(project: Project, tasks: Task[], today: string): T
       deps: t.project!.dependsOn ?? [],
       depRules: t.project!.depRules ?? {},
       pct: t.checklist.length ? Math.round((doneItems / t.checklist.length) * 100) : undefined,
+      ...(t.parentId ? { parentId: t.parentId } : {}),
       task: t,
     });
+  }
+  // งานหลักที่มีงานย่อย: % = งานย่อยที่เสร็จแล้ว (แทนเช็คลิสต์)
+  const kidsOf = new Map<string, TimelineItem[]>();
+  for (const i of out) if (i.parentId) kidsOf.set(i.parentId, [...(kidsOf.get(i.parentId) ?? []), i]);
+  for (const i of out) {
+    const kids = kidsOf.get(i.id);
+    if (kids?.length && i.state !== "done") i.pct = Math.round((kids.filter((k) => k.state === "done").length / kids.length) * 100);
   }
   for (const m of project.milestones) {
     out.push({
@@ -98,11 +108,26 @@ export function timelineItems(project: Project, tasks: Task[], today: string): T
   return out.sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
 }
 
+/** งานหลัก (ไม่ใช่งานย่อย หรือเป็นงานย่อยที่งานหลักไม่อยู่ในรายการนี้) */
+export function isTopLevel(i: Pick<TimelineItem, "parentId">, ids: Set<string>): boolean {
+  return !i.parentId || !ids.has(i.parentId);
+}
+
+/** เรียงงานย่อยต่อท้ายงานหลักของมัน — top = งานหลักที่จะแสดง (เรียง/กรองมาแล้ว) · all = ทุกแถวที่มี */
+export function withSubtasks(top: TimelineItem[], all: TimelineItem[]): TimelineItem[] {
+  const ids = new Set(all.map((i) => i.id));
+  const kids = new Map<string, TimelineItem[]>();
+  for (const i of all) if (i.parentId && ids.has(i.parentId)) kids.set(i.parentId, [...(kids.get(i.parentId) ?? []), i]);
+  return top.flatMap((i) => [i, ...(kids.get(i.id) ?? [])]);
+}
+
 /** % ความคืบหน้า — ถ่วงตามจำนวนวันของงาน (งาน 10 วันนับมากกว่างาน 1 วัน) งานที่กำลังทำนับตาม % เช็คลิสต์ */
 export function progressOf(items: TimelineItem[]): number {
   let total = 0, got = 0;
+  const ids = new Set(items.map((i) => i.id));
   for (const i of items) {
-    if (i.kind !== "task") continue;
+    // งานย่อยนับรวมอยู่ใน % ของงานหลักแล้ว — ไม่นับซ้ำ
+    if (i.kind !== "task" || (i.parentId && ids.has(i.parentId))) continue;
     const len = dayNum(i.end) - dayNum(i.start) + 1;
     total += len;
     got += i.state === "done" ? len : (len * (i.pct ?? 0)) / 100;

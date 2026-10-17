@@ -40,6 +40,7 @@ import { TimePickerField } from "@/modules/report_task/components/shared/time-pi
 import { PenaltyChip } from "@/modules/report_task/components/shared/penalty-chip";
 import { TaskRecurrenceSection } from "@/modules/report_task/components/kanban/task-recurrence-section";
 import { TaskProjectInfo } from "@/modules/report_task/components/projects/task-project-info";
+import { SubtasksSection } from "@/modules/report_task/components/kanban/subtasks-section";
 import { canManageSeries } from "@/modules/report_task/lib/task-recurrence";
 import { canEditRecord, canRemoveReaction, canReviewTask, canSeePenaltyStatus, canToggleOwnChecklistItem } from "@/modules/report_task/lib/permissions";
 import { useTaskReviewSettingsStore } from "@/modules/report_task/store/task-review-settings-store";
@@ -1294,6 +1295,8 @@ export function TaskDetailSheet({
               <Separator />
             </>
           )}
+
+          <SubtasksSection task={task} />
 
           {task.recurrence && (
             <>

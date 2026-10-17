@@ -260,6 +260,9 @@ export interface Task {
   recurrence?: TaskRecurrence;
   /** อยู่ในโปรเจกต์ไหน ช่วงงานไหน และต้องรออะไร (ดู store/project-store.ts) — ไม่มี = งานทั่วไปบนบอร์ด */
   project?: TaskProjectLink;
+  /** งานย่อยของงานไหน (id งานหลัก) — งานย่อยเป็นงานปกติทุกอย่าง (ขึ้นบอร์ดคนรับ แจ้งเตือน หักคะแนน)
+   *  แค่แสดงซ้อนใต้งานหลัก · ลึกชั้นเดียว (งานย่อยไม่มีงานย่อยอีก) · ดู lib/subtasks.ts */
+  parentId?: string;
   createdAt: string;
   updatedAt: string;
 }

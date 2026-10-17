@@ -16,6 +16,8 @@ import {
   dayToIso,
   wouldCycle,
   ymdOfDay,
+  isTopLevel,
+  withSubtasks,
   type ItemMove,
   type TimelineItem,
 } from "@/modules/report_task/lib/project-schedule";
@@ -24,7 +26,7 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useProjectStore } from "@/modules/report_task/store/project-store";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import type { Project, ProjectDepRule } from "@/modules/report_task/types";
-import { fmtDay, PersonDot, STATE_COLOR, STATE_LABEL, TH_MONTH_SHORT } from "./project-ui";
+import { barStyle, fmtDay, PersonDot, STATE_COLOR, STATE_LABEL, StatePill, TH_MONTH_SHORT } from "./project-ui";
 
 const ZOOM = { day: 30, week: 14, month: 5, quarter: 2, half: 1, year: 0.5 } as const;
 type Zoom = keyof typeof ZOOM;
@@ -106,8 +108,11 @@ export function ProjectTimeline({
       return out;
     }
     const known = new Set(project.sections.map((s) => s.id));
+    const ids = new Set(items.map((i) => i.id));
     for (const s of project.sections) {
-      const its = items.filter((i) => i.sectionId === s.id || (!known.has(i.sectionId) && s.id === project.sections[0]?.id));
+      // งานย่อยแสดงซ้อนใต้งานหลัก (อยู่ช่วงเดียวกับงานหลักเสมอ แม้งานหลักถูกย้ายช่วงทีหลัง)
+      const top = items.filter((i) => isTopLevel(i, ids) && (i.sectionId === s.id || (!known.has(i.sectionId) && s.id === project.sections[0]?.id)));
+      const its = withSubtasks(top, items);
       out.push({ kind: "group", key: s.id, name: s.name, items: its });
       its.forEach((item) => out.push({ kind: "item", item }));
     }
@@ -265,19 +270,19 @@ export function ProjectTimeline({
         <div className="inline-flex rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-0.5">
           {(["day", "week", "month", "quarter", "half", "year"] as Zoom[]).map((z) => (
             <button key={z} type="button" onClick={() => setZoom(z)} aria-pressed={zoom === z}
-              className={cn("rounded-md px-3 py-1 text-xs", zoom === z ? "bg-[var(--bg)] font-semibold shadow-sm" : "text-[var(--ink-soft)]")}>
+              className={cn("rounded-md px-3 py-1 text-[13px]", zoom === z ? "bg-[var(--bg)] font-semibold shadow-sm" : "text-[var(--ink-soft)]")}>
               {{ day: "วัน", week: "สัปดาห์", month: "เดือน", quarter: "ไตรมาส", half: "ครึ่งปี", year: "ปี" }[z]}
             </button>
           ))}
         </div>
-        <button type="button" className="rounded-lg border border-[var(--line)] px-3 py-1 text-xs hover:bg-[var(--bg-soft)]"
+        <button type="button" className="h-8 rounded-lg border border-[var(--line)] px-3 text-[13px] hover:bg-[var(--bg-soft)]"
           onClick={() => { if (rightRef.current) rightRef.current.scrollTo({ left: Math.max(0, (dayNum(today) - lo) * W - 200), behavior: "smooth" }); }}>
           ไปที่วันนี้
         </button>
         {canEdit && (
           <>
-            <button type="button" className="rounded-lg border border-[var(--line)] px-3 py-1 text-xs hover:bg-[var(--bg-soft)]" onClick={() => onAddTask(project.sections[0]?.id ?? "")}>+ งาน</button>
-            <button type="button" className="rounded-lg border border-[var(--line)] px-3 py-1 text-xs hover:bg-[var(--bg-soft)]"
+            <button type="button" className="h-8 rounded-lg border border-[var(--line)] px-3 text-[13px] hover:bg-[var(--bg-soft)]" onClick={() => onAddTask(project.sections[0]?.id ?? "")}>+ งาน</button>
+            <button type="button" className="h-8 rounded-lg border border-[var(--line)] px-3 text-[13px] hover:bg-[var(--bg-soft)]"
               onClick={() => {
                 const id = addMilestone(project.id, { name: "จุดสำคัญใหม่", date: shiftDays(today, 7), sectionId: project.sections[project.sections.length - 1]?.id ?? "" });
                 setSel(id);
@@ -292,7 +297,7 @@ export function ProjectTimeline({
             onClick={() => { setTipHidden(false); try { localStorage.removeItem("project-timeline-tip"); } catch {} }}>?</button>
         )}
         <details className="relative">
-          <summary className="cursor-pointer list-none rounded-lg border border-[var(--line)] px-3 py-1 text-xs hover:bg-[var(--bg-soft)]">ตัวเลือก ⚙</summary>
+          <summary className="inline-flex h-8 cursor-pointer list-none items-center rounded-lg border border-[var(--line)] px-3 text-[13px] hover:bg-[var(--bg-soft)]">ตัวเลือก ⚙</summary>
           <div className="absolute left-0 top-[calc(100%+6px)] z-20 grid w-max max-w-[86vw] gap-2 rounded-xl border border-[var(--line)] bg-[var(--bg)] p-3 text-xs shadow-xl">
             <span className="text-[var(--ink-soft)]">จัดกลุ่มแถว</span>
             <div className="inline-flex w-max rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-0.5">
@@ -323,14 +328,14 @@ export function ProjectTimeline({
           </div>
         </details>
         <div className="ml-auto hidden flex-wrap gap-3 text-[11px] text-[var(--ink-soft)] sm:flex">
-          {(["done", "doing", "todo", "late"] as const).map((k) => (
-            <span key={k} className="inline-flex items-center gap-1"><i className="inline-block h-2 w-3.5 rounded-sm" style={{ background: STATE_COLOR[k] }} />{STATE_LABEL[k]}</span>
+          {(["todo", "doing", "done", "late"] as const).map((k) => (
+            <span key={k} className="inline-flex items-center gap-1"><i className="inline-block h-2.5 w-4 rounded-sm" style={{ background: barStyle(k).background, border: barStyle(k).border }} />{STATE_LABEL[k]}</span>
           ))}
           <span className="inline-flex items-center gap-1"><i className="inline-block h-2 w-2 rotate-45 rounded-[1px]" style={{ background: "var(--chart-violet)" }} />จุดสำคัญ</span>
         </div>
       </div>
 
-      <div className="grid grid-cols-[150px_minmax(0,1fr)] overflow-hidden rounded-xl border border-[var(--line)] sm:grid-cols-[240px_minmax(0,1fr)]">
+      <div className="grid grid-cols-[150px_minmax(0,1fr)] overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--bg)] sm:grid-cols-[270px_minmax(0,1fr)]">
         {/* ซ้าย: ชื่อแถว */}
         <div className="z-[2] min-w-0 border-r border-[var(--line)] bg-[var(--bg)]">
           <div className="flex items-end border-b border-[var(--line)] px-2.5 pb-1.5 text-xs font-semibold text-[var(--ink-soft)]" style={{ height: HEAD }}>
@@ -338,7 +343,7 @@ export function ProjectTimeline({
           </div>
           {rows.map((r) =>
             r.kind === "group" ? (
-              <div key={`g-${r.key}`} className="flex items-center gap-2 border-b border-[var(--line)] bg-[var(--bg-soft)] px-2.5 text-xs font-bold text-[var(--ink-soft)]" style={{ height: ROW }}>
+              <div key={`g-${r.key}`} className="flex items-center gap-2 border-b border-[var(--line)] bg-[var(--bg-soft)] px-3 text-[13px] font-bold text-[var(--ink)]" style={{ height: ROW }}>
                 <span className="min-w-0 flex-1 truncate">{r.name}</span>
                 {canEdit && groupBy === "section" && (
                   <button type="button" className="rounded px-1 text-[var(--ink-soft)] hover:bg-[var(--bg)]" title="เพิ่มงานในช่วงนี้" onClick={() => onAddTask(r.key)}>＋</button>
@@ -348,8 +353,9 @@ export function ProjectTimeline({
               <button key={r.item.id} type="button" onClick={() => setSel(r.item.id)}
                 className={cn("flex w-full items-center gap-2 border-b border-[var(--line)]/60 px-2.5 text-left hover:bg-[var(--bg-soft)]", sel === r.item.id && "bg-[var(--accent)]")}
                 style={{ height: ROW }}>
+                {r.item.parentId && groupBy === "section" && <span className="-mr-1 pl-3 text-[var(--ink-soft)]" aria-label="งานย่อย">↳</span>}
                 {r.item.kind === "milestone" ? <span style={{ color: "var(--chart-violet)" }}>◆</span> : r.item.assigneeIds[0] ? <PersonDot userId={r.item.assigneeIds[0]} size={20} /> : <span className="w-5" />}
-                <span className={cn("min-w-0 flex-1 truncate text-[13px]", r.item.state === "done" && "text-[var(--ink-soft)] line-through")}>{r.item.name}</span>
+                <span className={cn("min-w-0 flex-1 truncate", r.item.parentId ? "text-[13px] text-[var(--ink-soft)]" : "text-[13.5px]", r.item.state === "done" && "text-[var(--ink-soft)] line-through", r.item.state === "late" && "font-semibold text-red-600")}>{r.item.name}</span>
               </button>
             )
           )}
@@ -414,13 +420,23 @@ export function ProjectTimeline({
                   </div>
                 );
               }
+              const bs = barStyle(it.state);
+              const sub = !!it.parentId;
+              const barH = sub ? 16 : 24;
+              // ชื่อพอดีในแถบไหม (~7px ต่อตัว ไม่นับสระบน/ล่าง·วรรณยุกต์ไทยที่ไม่กินที่) — ไม่พอ = เขียนไว้ข้างขวาแถบ
+              const fits = g.w > it.name.replace(/[\u0E31\u0E34-\u0E3A\u0E47-\u0E4E]/g, "").length * 7 + 22;
               return (
                 <div key={it.id} data-bar={it.id} title={`${it.name} · ${fmtDay(pv?.start ?? it.start)} – ${fmtDay(pv?.end ?? it.end)}`}
-                  className={cn("group absolute z-[2] flex select-none items-center gap-1 rounded-md px-1.5 text-[11.5px] font-semibold text-white shadow-sm",
+                  className={cn("group absolute z-[2] flex select-none items-center gap-1 rounded-md px-2 font-semibold shadow-sm", sub ? "text-[10.5px]" : "text-[12px]",
                     draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer", sel === it.id && "outline outline-2 outline-offset-1 outline-[var(--ink)]")}
-                  style={{ left: g.left, width: g.w, top: y + 8, height: 22, background: STATE_COLOR[it.state], touchAction: draggable ? "none" : "auto" }}>
-                  {it.pct !== undefined && it.state !== "done" && <span className="pointer-events-none absolute inset-y-0 left-0 rounded-l-md bg-white/25" style={{ width: `${it.pct}%` }} />}
-                  <span className="relative truncate">{g.w > 70 ? it.name : ""}</span>
+                  style={{ left: g.left, width: g.w, top: y + (ROW - barH) / 2, height: barH, background: bs.background, color: bs.color, border: bs.border, opacity: it.state === "done" ? 0.75 : 1, touchAction: draggable ? "none" : "auto" }}>
+                  {it.pct !== undefined && it.state !== "done" && it.pct > 0 && <span className="pointer-events-none absolute inset-y-0 left-0 rounded-l-md" style={{ width: `${it.pct}%`, background: it.state === "todo" ? "color-mix(in srgb, var(--chart-blue) 30%, transparent)" : "rgba(255,255,255,.25)" }} />}
+                  <span className="relative truncate">{it.state === "done" ? "✓ " : ""}{fits && !sub ? it.name : ""}</span>
+                  {(!fits || sub) && (
+                    <span className="pointer-events-none absolute left-full ml-1.5 whitespace-nowrap text-[11.5px] font-medium" style={{ color: it.state === "late" ? "var(--chart-red)" : "var(--ink)" }}>
+                      {it.name}{it.pct !== undefined && it.state !== "done" ? ` · ${it.pct}%` : ""}
+                    </span>
+                  )}
                   {draggable && <span data-rz="1" className="absolute inset-y-0 right-0 w-2 cursor-ew-resize" />}
                   {canEdit && !coarse && (
                     <span data-cn="1" title="ลากไปวางบนงานที่ต้องรองานนี้"
@@ -548,7 +564,7 @@ function ItemDetail({
         ) : (
           <h3 className="m-0 min-w-0 flex-1 text-base font-semibold">{item.kind === "milestone" ? "◆ " : ""}{item.name}</h3>
         )}
-        <span className="rounded-full px-2 py-0.5 text-xs font-semibold text-white" style={{ background: STATE_COLOR[item.state] }}>{STATE_LABEL[item.state]}</span>
+        <StatePill state={item.state} />
         <button type="button" onClick={onClose} className="rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 py-1 text-xs">ปิด</button>
       </div>
       <dl className="grid grid-cols-[110px_minmax(0,1fr)] gap-x-3 gap-y-2 text-[13.5px]">
