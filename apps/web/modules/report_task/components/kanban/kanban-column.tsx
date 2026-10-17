@@ -219,11 +219,11 @@ export function KanbanColumn({
           {/* คอมเมนต์ที่ยังไม่ได้อ่านในคอลัมน์นี้ — ไม่มี = ไม่แสดง */}
           {unreadComments > 0 && (
             <span
-              className="ml-auto inline-flex h-6 shrink-0 items-center gap-1 rounded-full bg-[var(--chart-red)] px-2 text-[11.5px] font-bold tabular-nums text-white"
+              className="ml-auto inline-flex h-6 shrink-0 items-center gap-1 rounded-full bg-[var(--chart-red)] px-2 text-[12px] font-bold tabular-nums text-white"
               title={`มีคอมเมนต์ที่ยังไม่ได้อ่าน ${unreadComments} รายการ ในคอลัมน์นี้`}
             >
               <MessageCircle className="h-3.5 w-3.5" />
-              {unreadComments} ยังไม่อ่าน
+              {unreadComments}
             </span>
           )}
         </div>
