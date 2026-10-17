@@ -54,7 +54,7 @@ function writeSaved(userId: string, value: SavedTaskView) {
 const GROUP_BYS: GroupBy[] = ["status", "priority", "assignee", "department"];
 
 /** คีย์ใน URL ที่หน้านี้เป็นเจ้าของ (ตัวกรอง + มุมมอง) — คีย์อื่น (task, taskTitle, บอร์ดรายคน/แผนก ฯลฯ) ห้ามแตะ */
-const FILTER_URL_KEYS = ["dept", "assignee", "priority", "penalty", "preset", "from", "to", "view"] as const;
+const FILTER_URL_KEYS = ["dept", "assignee", "priority", "penalty", "preset", "from", "to", "view", "project"] as const;
 
 export default function TasksPage() {
   return (
@@ -97,6 +97,7 @@ function TasksPageContent() {
     const preset = searchParams.get("preset");
     const from = searchParams.get("from");
     const to = searchParams.get("to");
+    const project = searchParams.get("project");
     const patch: Partial<typeof filters> = {};
     if (dept) patch.departmentId = dept;
     if (assignee) patch.assigneeId = assignee;
@@ -105,6 +106,7 @@ function TasksPageContent() {
     if (preset) patch.preset = preset as DatePreset;
     if (from) patch.customFrom = from;
     if (to) patch.customTo = to;
+    if (project) patch.projectId = project;
     if (Object.keys(patch).length > 0) setFilters(patch);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setUrlHadFilters(Object.keys(patch).length > 0 || !!searchParams.get("view"));
@@ -160,6 +162,8 @@ function TasksPageContent() {
         if (filters.customTo) params.set("to", filters.customTo);
       }
     }
+    // ค่าเริ่มต้น "none" (งานทั่วไป) ไม่ต้องใส่ใน URL
+    if (filters.projectId !== "none") params.set("project", filters.projectId);
     if (view !== "board") params.set("view", view);
     const query = params.toString();
     // ไม่มีอะไรเปลี่ยน = ไม่ต้องเขียนทับ (ไม่ไปกวนการนำทางที่กำลังเกิดขึ้น)

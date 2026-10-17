@@ -221,11 +221,17 @@ export function TaskFilters({
   // even see) after switching. Reset on every identity change. This mutates
   // an external (Zustand) store, so it has to run as an effect, not during
   // render — setting store state mid-render is unsafe.
+  //
+  // ยกเว้นครั้งแรกหลังเปิด/รีเฟรชหน้า: ตัวตนเริ่มจากค่า default/ค่าที่จำในเครื่อง แล้วถูกตั้งเป็นคนที่ล็อกอินจริง
+  // (report-task-scaffold.tsx setViewingAs) — นั่นไม่ใช่การสลับคน ถ้าล้างตรงนั้น ตัวกรองใน URL/ที่จำไว้หายทุกครั้ง
+  // (เจอจากเทสต์ production บน localhost 17/10/2569: ?priority=high, ?project=all หายหมดในเบราว์เซอร์ที่เพิ่งล็อกอิน)
   const lastIdentity = useRef(viewingAsUserId);
+  const settledIdentity = useRef(false);
   useEffect(() => {
     if (lastIdentity.current !== viewingAsUserId) {
       lastIdentity.current = viewingAsUserId;
-      resetFilters();
+      if (settledIdentity.current) resetFilters();
+      settledIdentity.current = true;
     }
   }, [viewingAsUserId, resetFilters]);
 

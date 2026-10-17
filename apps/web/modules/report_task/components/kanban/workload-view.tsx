@@ -65,7 +65,12 @@ export function WorkloadView() {
     [viewingAsUserId, employeesForScope, departmentsForScope]
   );
 
-  const filtered = useMemo(() => tasks.filter((t) => matchesTaskFilters(t, filters)), [tasks, filters]);
+  // ภาระงานนับรวมงานโปรเจกต์เสมอ (งานโปรเจกต์ก็คืองานของคนนั้น) — ค่าเริ่มต้นของบอร์ดซ่อนงานโปรเจกต์
+  // ถ้าใช้ตามตัวกรอง หัวหน้าจะเห็นภาระน้อยกว่าจริง · เลือกโปรเจกต์ใดโปรเจกต์หนึ่ง = ดูเฉพาะโปรเจกต์นั้นได้ตามเดิม
+  const filtered = useMemo(
+    () => tasks.filter((t) => matchesTaskFilters(t, filters.projectId === "none" ? { ...filters, projectId: "all" } : filters)),
+    [tasks, filters]
+  );
   const { shownTasks, shownMx } = useBoardMaintenance(filtered, filters);
 
   const rows = useMemo(() => {
