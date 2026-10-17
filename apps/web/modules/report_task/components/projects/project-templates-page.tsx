@@ -179,6 +179,7 @@ export function TemplateEditor({ t, canEdit, onChange, onDuplicate, onDelete, fo
       </>)}
       <p className={cn("m-0 text-xs text-[var(--ink-soft)]", forProject && "hidden")}>{back ? "สร้างโปรเจกต์แล้วใส่แค่ \"วันเสร็จเป้าหมาย\" ระบบย้อนบอกว่าแต่ละงานต้องเริ่มวันไหน" : "สร้างโปรเจกต์แล้วใส่ \"วันเริ่ม\" ระบบคำนวณวันของทุกงานต่อให้"}</p>
 
+      <p className="m-0 text-[11.5px] text-[var(--ink-soft)] md:hidden">ตำแหน่งที่ทำ และงานที่ต้องรอ แก้ได้ในปุ่ม &quot;รายละเอียด&quot; ของแต่ละงาน</p>
       <div className="hidden grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_64px_64px_minmax(0,1.2fr)_28px] gap-1.5 text-[11px] font-semibold text-[var(--ink-soft)] md:grid">
         <span>งาน</span><span>ตำแหน่งที่ทำ</span><span>เริ่มวันที่</span><span>กี่วัน</span><span>ต้องรอ</span><span />
       </div>
@@ -210,8 +211,9 @@ export function TemplateEditor({ t, canEdit, onChange, onDuplicate, onDelete, fo
               const bad = templateConflict(t, it);
               return (
                 <div key={it.key} className="grid gap-1">
-                  <div className="grid grid-cols-[minmax(0,1fr)_56px_56px_28px] items-center gap-1.5 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_64px_64px_minmax(0,1.2fr)_28px]">
-                    <span className="flex min-w-0 items-center gap-1">
+                  {/* มือถือ: ชื่องานเต็มบรรทัด แล้ว "เริ่มวันที่ · กี่วัน · ลบ" บรรทัดถัดไป (เดิมชื่อถูกบีบจนอ่านไม่ออก) */}
+                  <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_28px] items-center gap-1.5 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_64px_64px_minmax(0,1.2fr)_28px]">
+                    <span className="col-span-3 flex min-w-0 items-center gap-1 md:col-span-1">
                       <span className="text-[var(--ink-soft)]">{it.milestone ? "◆" : ""}</span>
                       <input className={field} disabled={!canEdit} defaultValue={it.name} onBlur={(e) => e.target.value.trim() && setItem(it.key, { name: e.target.value.trim() })} />
                       <button type="button" onClick={() => setOpen(open === it.key ? null : it.key)} aria-expanded={open === it.key}
@@ -223,10 +225,17 @@ export function TemplateEditor({ t, canEdit, onChange, onDuplicate, onDelete, fo
                     </span>
                     <input className={cn(field, "hidden md:block")} list="tpl-roles" disabled={!canEdit || it.milestone} defaultValue={it.milestone ? "—" : it.role}
                       onBlur={(e) => !it.milestone && setItem(it.key, { role: e.target.value.trim() || "ทีมงาน" })} />
-                    <input type="number" min={1} className={cn(field, bad && "border-red-500 text-red-600")} title={bad ? "เริ่มก่อนงานที่ต้องรอเสร็จ" : "เริ่มวันที่เท่าไหร่ของโปรเจกต์"}
-                      disabled={!canEdit} value={it.off + 1} onChange={(e) => setItem(it.key, { off: Math.max(0, (+e.target.value || 1) - 1) })} />
-                    {it.milestone ? <span className="text-center text-xs text-[var(--ink-soft)]">◆</span> : (
-                      <input type="number" min={1} className={field} disabled={!canEdit} value={it.dur} title="กี่วัน" onChange={(e) => setItem(it.key, { dur: Math.max(1, +e.target.value || 1) })} />
+                    {/* label ห่อช่อง: มือถือมีคำกำกับหน้าช่อง (คอมใช้หัวตารางด้านบน) — ยังเป็น 1 ช่องของ grid เท่าเดิม */}
+                    <label className="flex min-w-0 items-center gap-1">
+                      <span className="shrink-0 text-[11px] text-[var(--ink-soft)] md:hidden">เริ่มวันที่</span>
+                      <input type="number" min={1} className={cn(field, bad && "border-red-500 text-red-600")} title={bad ? "เริ่มก่อนงานที่ต้องรอเสร็จ" : "เริ่มวันที่เท่าไหร่ของโปรเจกต์"}
+                        disabled={!canEdit} value={it.off + 1} onChange={(e) => setItem(it.key, { off: Math.max(0, (+e.target.value || 1) - 1) })} />
+                    </label>
+                    {it.milestone ? <span className="text-center text-xs text-[var(--ink-soft)]">◆ จุดสำคัญ</span> : (
+                      <label className="flex min-w-0 items-center gap-1">
+                        <span className="shrink-0 text-[11px] text-[var(--ink-soft)] md:hidden">กี่วัน</span>
+                        <input type="number" min={1} className={field} disabled={!canEdit} value={it.dur} title="กี่วัน" onChange={(e) => setItem(it.key, { dur: Math.max(1, +e.target.value || 1) })} />
+                      </label>
                     )}
                     {/* รอหลายงาน หรือตั้งวิธีรอไว้ → แก้ในรายละเอียด (ช่องเดียวแก้แล้วจะทับของเดิมหาย) */}
                     {it.dependsOn.length > 1 || Object.keys(it.depRules ?? {}).length ? (
@@ -250,6 +259,12 @@ export function TemplateEditor({ t, canEdit, onChange, onDuplicate, onDelete, fo
                   </div>
                   {open === it.key && (
                     <div className="ml-2 grid gap-2 rounded-lg bg-[var(--bg-soft)] p-2.5">
+                      {/* มือถือไม่มีคอลัมน์ "ตำแหน่งที่ทำ" — แก้ตรงนี้แทน */}
+                      {!it.milestone && (
+                        <label className="grid gap-1 text-xs text-[var(--ink-soft)] md:hidden">ตำแหน่งที่ทำ
+                          <input className={field} list="tpl-roles" disabled={!canEdit} defaultValue={it.role} onBlur={(e) => setItem(it.key, { role: e.target.value.trim() || "ทีมงาน" })} />
+                        </label>
+                      )}
                       <div className="grid gap-1.5">
                         <span className="text-xs text-[var(--ink-soft)]">ต้องรอ (เลือกได้หลายงาน · ตั้งได้ว่าเริ่มพร้อมกัน หรือรอเพิ่มกี่วัน{t.workdays ? "ทำงาน" : ""})</span>
                         {it.dependsOn.map((k) => {
