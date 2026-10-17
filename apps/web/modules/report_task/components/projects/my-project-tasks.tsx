@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useProjectStore } from "@/modules/report_task/store/project-store";
@@ -29,6 +29,7 @@ export function MyProjectTasks({ onOpen }: { onOpen: (taskId: string) => void })
   const mine = useMyOpenProjectTasks();
   const projects = useProjectStore((s) => s.projects);
   const today = todayBkk();
+  const [showAll, setShowAll] = useState(false);
   if (!mine.length) return null;
   const late = mine.filter((t) => t.dueDate.slice(0, 10) < today).length;
   // แยกกลุ่มตามโปรเจกต์ (เรียงตามงานที่ต้องส่งเร็วสุดของแต่ละโปรเจกต์) — อ่านง่ายกว่ารายการยาวรวมกัน
@@ -42,7 +43,8 @@ export function MyProjectTasks({ onOpen }: { onOpen: (taskId: string) => void })
         {late > 0 && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[12px] font-semibold text-red-700 dark:bg-red-950/60 dark:text-red-300">เลยกำหนด {late}</span>}
       </div>
       <div className="grid gap-3 md:grid-cols-2">
-        {[...groups].map(([pid, list]) => {
+        {/* ย่อไว้ก่อน 4 โปรเจกต์ × 3 งาน — อยู่หลายโปรเจกต์แล้วส่วนนี้ยาวจนดันการ์ดโปรเจกต์ลงไปล่างจอ */}
+        {[...groups].slice(0, showAll ? undefined : 4).map(([pid, list]) => {
           const p = projects.find((x) => x.id === pid);
           const lateN = list.filter((t) => t.dueDate.slice(0, 10) < today).length;
           return (
@@ -57,7 +59,7 @@ export function MyProjectTasks({ onOpen }: { onOpen: (taskId: string) => void })
                 <span className="shrink-0 text-[12px] text-[var(--ink-soft)]">{list.length} งาน{lateN ? <b className="text-red-600"> · เลย {lateN}</b> : ""}</span>
               </div>
               <ul className="m-0 grid list-none gap-0.5 p-0">
-                {list.slice(0, 5).map((t) => (
+                {list.slice(0, 3).map((t) => (
                   <li key={t.id}>
                     <button type="button" onClick={() => onOpen(t.id)}
                       className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-[var(--bg-soft)]">
@@ -71,15 +73,20 @@ export function MyProjectTasks({ onOpen }: { onOpen: (taskId: string) => void })
                   </li>
                 ))}
               </ul>
-              {list.length > 5 && p && (
+              {list.length > 3 && p && (
                 <Link href={`/report-task/projects/${p.id}?mine=1`} className="px-2 text-[12.5px] font-semibold text-[var(--brand-green-dark)] hover:underline">
-                  ดูอีก {list.length - 5} งานในโปรเจกต์ ›
+                  ดูอีก {list.length - 3} งานในโปรเจกต์ ›
                 </Link>
               )}
             </div>
           );
         })}
       </div>
+      {groups.size > 4 && (
+        <button type="button" onClick={() => setShowAll((v) => !v)} className="justify-self-start rounded-lg px-2 py-1 text-[13px] font-semibold text-[var(--brand-green-dark)] hover:bg-[var(--bg-soft)]">
+          {showAll ? "ย่อ" : `แสดงอีก ${groups.size - 4} โปรเจกต์`}
+        </button>
+      )}
     </section>
   );
 }

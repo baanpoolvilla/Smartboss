@@ -15,9 +15,12 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useProjectStore } from "@/modules/report_task/store/project-store";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { CreateProjectDialog } from "./create-project-dialog";
-import { PersonDot, ProgressBar, ProjectStatusChip, TH_MONTH_SHORT, fmtDay, todayBkk } from "./project-ui";
+import { PersonDot, ProjectStatusChip, fmtDay, todayBkk } from "./project-ui";
+import type { Project, ProjectStatus } from "@/modules/report_task/types";
+import type { TimelineItem } from "@/modules/report_task/lib/project-schedule";
 
-const BAR: Record<string, string> = { ok: "var(--chart-green)", risk: "var(--chart-amber)", late: "var(--chart-red)", hold: "var(--chart-blue)", done: "var(--chart-gray)", dropped: "var(--chart-gray)" };
+/** เรียงการ์ด: โปรเจกต์ที่มีปัญหาขึ้นก่อน */
+const RANK: Record<string, number> = { late: 0, risk: 1, ok: 2, hold: 3, done: 4, dropped: 5 };
 
 /** หน้ารวมโปรเจกต์ (Portfolio) — ทุกโปรเจกต์ที่เห็นได้ สถานะ ความคืบหน้า และแถบเวลาบนปฏิทินเดียวกัน */
 export function ProjectsPortfolio() {
@@ -36,38 +39,35 @@ export function ProjectsPortfolio() {
       .filter((p) => canSeeProject(p, me, tasks))
       .map((p) => {
         const items = timelineItems(p, tasks, today);
-        return { p, status: projectStatusOf(p, items), pct: progressOf(items), next: nextMilestoneOf(items), count: items.filter((i) => i.kind === "task").length };
+        const tasksOnly = items.filter((i) => i.kind === "task");
+        const total = Math.max(1, dayNum(p.endDate) - dayNum(p.startDate) + 1);
+        const timePct = Math.min(100, Math.max(0, Math.round(((dayNum(today) - dayNum(p.startDate) + 1) / total) * 100)));
+        return {
+          p, status: projectStatusOf(p, items), pct: progressOf(items), next: nextMilestoneOf(items), count: tasksOnly.length,
+          late: tasksOnly.filter((i) => i.state === "late").length,
+          mine: tasksOnly.filter((i) => i.state !== "done" && i.assigneeIds.includes(me)).length,
+          timePct, daysLeft: dayNum(p.endDate) - dayNum(today),
+        };
       })
       .filter((r) => (filter === "all" ? true : filter === "mine" ? !!memberRole(r.p, me) || tasks.some((t) => t.project?.projectId === r.p.id && t.assigneeIds.includes(me)) : !["done", "dropped"].includes(r.status)))
-      .sort((a, b) => a.p.endDate.localeCompare(b.p.endDate));
+      .sort((a, b) => (RANK[a.status] ?? 9) - (RANK[b.status] ?? 9) || a.p.endDate.localeCompare(b.p.endDate));
   }, [projects, tasks, me, filter, today]);
-
-  const lo = rows.length ? Math.min(...rows.map((r) => dayNum(r.p.startDate)), dayNum(today)) : dayNum(today) - 30;
-  const hi = rows.length ? Math.max(...rows.map((r) => dayNum(r.p.endDate)), dayNum(today) + 14) : dayNum(today) + 60;
-  const span = Math.max(1, hi - lo);
-  const x = (s: string) => `${(((dayNum(s) - lo) / span) * 100).toFixed(2)}%`;
-  const months: { label: string; left: string }[] = [];
-  for (let d = lo; d <= hi; d++) {
-    const dt = new Date(d * 864e5);
-    if (dt.getUTCDate() === 1) months.push({ label: TH_MONTH_SHORT[dt.getUTCMonth()]!, left: `${(((d - lo) / span) * 100).toFixed(2)}%` });
-  }
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="m-0 text-xl font-bold">โปรเจกต์</h1>
-        <span className="text-xs text-[var(--ink-soft)]">{rows.length} โปรเจกต์</span>
+        <h1 className="m-0 text-2xl font-bold">โปรเจกต์</h1>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <div className="inline-flex rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-0.5">
             {([["active", "กำลังทำ"], ["all", "ทั้งหมด"], ["mine", "ของฉัน"]] as const).map(([k, l]) => (
               <button key={k} type="button" aria-pressed={filter === k} onClick={() => setFilter(k)}
-                className={cn("rounded-md px-3 py-1 text-xs", filter === k ? "bg-[var(--bg)] font-semibold shadow-sm" : "text-[var(--ink-soft)]")}>{l}</button>
+                className={cn("rounded-md px-3.5 py-1.5 text-[13px]", filter === k ? "bg-[var(--bg)] font-semibold shadow-sm" : "text-[var(--ink-soft)]")}>{l}</button>
             ))}
           </div>
           {canCreateProject(me) && (
             <>
-              <Link href="/report-task/projects/templates" className="rounded-lg border border-[var(--line)] px-3 py-1.5 text-xs hover:bg-[var(--bg-soft)]">แม่แบบ</Link>
-              <button type="button" className="rounded-lg bg-[var(--brand-green)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50" disabled={!ready} onClick={() => setCreating(true)}>+ สร้างโปรเจกต์</button>
+              <Link href="/report-task/projects/templates" className="inline-flex h-9 items-center rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3.5 text-[13px] hover:bg-[var(--bg-soft)]">แม่แบบ</Link>
+              <button type="button" className="h-9 rounded-lg bg-[var(--brand-green)] px-3.5 text-[13px] font-semibold text-white disabled:opacity-50" disabled={!ready} onClick={() => setCreating(true)}>+ สร้างโปรเจกต์</button>
             </>
           )}
         </div>
@@ -84,55 +84,74 @@ export function ProjectsPortfolio() {
         </div>
       ) : (
         <>
-          {/* คอม: ตาราง */}
-          <div className="hidden overflow-x-auto rounded-xl border border-[var(--line)] md:block">
-            <table className="w-full min-w-[900px] border-collapse text-[13.5px]">
-              <thead>
-                <tr className="bg-[var(--bg-soft)] text-left text-xs text-[var(--ink-soft)]">
-                  <th className="px-3 py-2 font-semibold">โปรเจกต์</th>
-                  <th className="px-3 py-2 font-semibold">สถานะ</th>
-                  <th className="px-3 py-2 font-semibold">เจ้าของ</th>
-                  <th className="px-3 py-2 font-semibold">ความคืบหน้า</th>
-                  <th className="px-3 py-2 font-semibold">จุดสำคัญถัดไป</th>
-                  <th className="w-[34%] px-3 py-2 font-semibold">
-                    <div className="relative h-4">{months.map((m) => <span key={m.left} className="absolute" style={{ left: m.left }}>{m.label}</span>)}</div>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.p.id} tabIndex={0} className="cursor-pointer border-t border-[var(--line)] hover:bg-[var(--bg-soft)]"
-                    onClick={() => router.push(`/report-task/projects/${r.p.id}`)} onKeyDown={(e) => e.key === "Enter" && router.push(`/report-task/projects/${r.p.id}`)}>
-                    <td className="px-3 py-2.5"><b>{r.p.name}</b><div className="text-xs text-[var(--ink-soft)]">{fmtDay(r.p.startDate)} – {fmtDay(r.p.endDate, true)} · {r.count} งาน</div></td>
-                    <td className="px-3 py-2.5"><ProjectStatusChip status={r.status} /></td>
-                    <td className="px-3 py-2.5"><span className="inline-flex items-center gap-1.5"><PersonDot userId={r.p.ownerId} /><span className="text-xs">{getUser(r.p.ownerId)?.name}</span></span></td>
-                    <td className="px-3 py-2.5"><ProgressBar pct={r.pct} /></td>
-                    <td className="px-3 py-2.5 text-xs">{r.next ? `${r.next.name} · ${fmtDay(r.next.start)}` : "—"}</td>
-                    <td className="px-3 py-2.5">
-                      <div className="relative h-5 rounded bg-[var(--bg-soft)]">
-                        <div className="absolute top-1.5 h-2 rounded-full" style={{ left: x(r.p.startDate), width: `calc(${x(r.p.endDate)} - ${x(r.p.startDate)})`, background: BAR[r.status] }} />
-                        <div className="absolute inset-y-0 w-0.5" style={{ left: x(today), background: "var(--chart-red)" }} title="วันนี้" />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {/* มือถือ: การ์ด */}
-          <div className="grid gap-2 md:hidden">
-            {rows.map((r) => (
-              <Link key={r.p.id} href={`/report-task/projects/${r.p.id}`} className="grid gap-1.5 rounded-xl border border-[var(--line)] p-3">
-                <div className="flex items-start justify-between gap-2"><b className="text-sm">{r.p.name}</b><ProjectStatusChip status={r.status} /></div>
-                <ProgressBar pct={r.pct} />
-                <span className="flex items-center gap-1.5 text-xs text-[var(--ink-soft)]"><PersonDot userId={r.p.ownerId} size={18} />{fmtDay(r.p.startDate)} – {fmtDay(r.p.endDate)}{r.next ? ` · ถัดไป: ${r.next.name}` : ""}</span>
-              </Link>
-            ))}
+          <h2 className="m-0 pt-1 text-[16px] font-bold">{filter === "mine" ? "โปรเจกต์ของฉัน" : filter === "all" ? "โปรเจกต์ทั้งหมด" : "โปรเจกต์ที่กำลังทำ"} <span className="ml-1 text-[13px] font-normal text-[var(--ink-soft)]">{rows.length}</span></h2>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {rows.map((r) => <ProjectCard key={r.p.id} r={r} today={today} />)}
           </div>
         </>
       )}
       <TaskDetailSheet taskId={openTaskId} onOpenChange={(o) => !o && closeTask()} />
       {creating && <CreateProjectDialog onClose={() => setCreating(false)} onCreated={(id) => router.push(`/report-task/projects/${id}`)} />}
     </div>
+  );
+}
+
+type Row = { p: Project; status: ProjectStatus; pct: number; next?: TimelineItem; count: number; late: number; mine: number; timePct: number; daysLeft: number };
+
+/** การ์ดโปรเจกต์ — อ่านจบในการ์ดเดียว: สถานะ · คืบหน้าเทียบเวลาที่ผ่านไป · งานเลยกำหนด · จุดสำคัญถัดไป */
+function ProjectCard({ r, today }: { r: Row; today: string }) {
+  const { p } = r;
+  const closed = ["done", "dropped"].includes(r.status);
+  // งานคืบหน้าน้อยกว่าเวลาที่ผ่านไปมาก = ส่อว่าจะไม่ทัน (เตือนเบา ๆ ก่อนจะกลายเป็น "ล่าช้า")
+  const behind = !closed && r.count > 0 && r.timePct - r.pct >= 20;
+  const nd = r.next ? dayNum(r.next.start) - dayNum(today) : 0;
+  return (
+    <Link href={`/report-task/projects/${p.id}`}
+      className={cn("grid content-start gap-3 rounded-2xl border bg-[var(--bg)] p-4 transition-shadow hover:shadow-md",
+        r.status === "late" ? "border-red-300 dark:border-red-900" : r.status === "risk" ? "border-amber-300 dark:border-amber-900" : "border-[var(--line)]", closed && "opacity-75")}>
+      <div className="flex items-start gap-2">
+        <b className="min-w-0 flex-1 break-words text-[16px] leading-snug">{p.name}</b>
+        <ProjectStatusChip status={r.status} />
+      </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-[var(--ink-soft)]">
+        <span className="inline-flex items-center gap-1.5"><PersonDot userId={p.ownerId} size={20} /><span className="text-[var(--ink)]">{getUser(p.ownerId)?.name ?? "—"}</span></span>
+        <span className="tabular-nums">{fmtDay(p.startDate)} – {fmtDay(p.endDate, true)}</span>
+      </div>
+
+      {/* คืบหน้า (เขียว) เทียบเวลาที่ผ่านไป (เส้นดำ) */}
+      <div className="grid gap-1.5">
+        <div className="flex items-baseline gap-2 text-[12.5px]">
+          <b className="text-[18px] tabular-nums">{r.pct}%</b>
+          <span className="text-[var(--ink-soft)]">เสร็จ</span>
+          <span className={cn("ml-auto tabular-nums", !closed && r.daysLeft < 0 ? "font-semibold text-red-600" : "text-[var(--ink-soft)]")}>
+            {closed ? "ปิดแล้ว" : r.daysLeft >= 0 ? `เหลือ ${r.daysLeft} วัน` : `เลยวันเสร็จ ${-r.daysLeft} วัน`}
+          </span>
+        </div>
+        <div className="relative h-2.5 overflow-hidden rounded-full bg-[var(--line)]" title={`งานเสร็จ ${r.pct}% · เวลาผ่านไป ${r.timePct}%`}>
+          <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${r.pct}%`, background: r.status === "late" ? "var(--chart-red)" : r.status === "risk" ? "var(--chart-amber)" : "var(--brand-green)" }} />
+          {/* เส้นดำ = วันนี้ (เวลาที่ผ่านไป) · ช่วงแรกของโปรเจกต์ไม่ต้องแสดง (ดูเหมือนขีดหลงมา) */}
+          {!closed && r.timePct > 3 && <span className="absolute inset-y-0 w-0.5 bg-[var(--ink)]" style={{ left: `calc(${r.timePct}% - 1px)` }} />}
+        </div>
+        {behind && <span className="text-[12px] text-amber-700 dark:text-amber-300">เวลาผ่านไป {r.timePct}% แต่งานเสร็จ {r.pct}% — อาจไม่ทัน</span>}
+      </div>
+
+      <div className="flex flex-wrap gap-1.5 text-[12px]">
+        <span className="rounded-full bg-[var(--bg-soft)] px-2.5 py-0.5 text-[var(--ink-soft)]">{r.count} งาน</span>
+        {r.late > 0 && <span className="rounded-full bg-red-100 px-2.5 py-0.5 font-semibold text-red-700 dark:bg-red-950/60 dark:text-red-300">เลยกำหนด {r.late}</span>}
+        {r.mine > 0 && <span className="rounded-full bg-[var(--accent)] px-2.5 py-0.5 font-semibold text-[var(--brand-green-dark)]">👤 งานของฉัน {r.mine}</span>}
+      </div>
+
+      <div className="flex items-center gap-2 border-t border-[var(--line)] pt-2.5 text-[13px]">
+        {r.next ? (
+          <>
+            <span className="h-2.5 w-2.5 shrink-0 rotate-45 rounded-[2px]" style={{ background: nd < 0 ? "var(--chart-red)" : "var(--chart-violet)" }} />
+            <span className="min-w-0 flex-1 truncate">{r.next.name}</span>
+            <span className={cn("shrink-0 text-[12px] tabular-nums", nd < 0 ? "font-semibold text-red-600" : "text-[var(--ink-soft)]")}>
+              {fmtDay(r.next.start)} · {nd < 0 ? `เลย ${-nd} วัน` : nd === 0 ? "วันนี้" : `อีก ${nd} วัน`}
+            </span>
+          </>
+        ) : <span className="text-[12.5px] text-[var(--ink-soft)]">ไม่มีจุดสำคัญที่รออยู่</span>}
+      </div>
+    </Link>
   );
 }

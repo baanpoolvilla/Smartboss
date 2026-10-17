@@ -100,7 +100,7 @@ export function PersonDot({ userId, size = 22 }: { userId: string; size?: number
 export function ProgressBar({ pct, className }: { pct: number; className?: string }) {
   return (
     <span className={cn("flex items-center gap-2", className)}>
-      <span className="h-1.5 min-w-14 flex-1 overflow-hidden rounded-full bg-[var(--bg-soft)]">
+      <span className="h-1.5 min-w-14 flex-1 overflow-hidden rounded-full bg-[var(--line)]">
         <span className="block h-full rounded-full bg-[var(--brand-green)]" style={{ width: `${pct}%` }} />
       </span>
       <b className="text-xs tabular-nums">{pct}%</b>
