@@ -116,6 +116,10 @@ export const DEFAULT_PROJECT_TEMPLATES: ProjectTemplate[] = [
 interface ProjectStore {
   projects: Project[];
   templates: ProjectTemplate[];
+  /** โหลดจากเซิร์ฟเวอร์ครบแล้ว (ตั้งใน store-hydrator) — ก่อนนั้นห้ามสร้าง/แก้: ตอนโหลดเสร็จข้อมูลเซิร์ฟเวอร์ทับของในเครื่อง
+   *  ของที่สร้างก่อนโหลดเสร็จจะหายเงียบ ๆ (เจอจากเทสต์บน localhost 17/10/2569) */
+  projectsLoaded: boolean;
+  templatesLoaded: boolean;
   setProjects: (p: Project[]) => void;
   setTemplates: (t: ProjectTemplate[]) => void;
 
@@ -144,6 +148,8 @@ function patchProject(list: Project[], id: string, fn: (p: Project) => Project):
 export const useProjectStore = create<ProjectStore>()((set) => ({
   projects: [],
   templates: DEFAULT_PROJECT_TEMPLATES,
+  projectsLoaded: false,
+  templatesLoaded: false,
   setProjects: (projects) => set({ projects }),
   setTemplates: (templates) => set({ templates }),
 

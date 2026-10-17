@@ -32,6 +32,7 @@ import { fmtDay, todayBkk, useCompanyHolidays } from "./project-ui";
 export function ProjectTemplatesPage() {
   const me = useIdentityStore((s) => s.viewingAsUserId);
   const templates = useProjectStore((s) => s.templates);
+  const ready = useProjectStore((s) => s.templatesLoaded);
   const upsert = useProjectStore((s) => s.upsertTemplate);
   const remove = useProjectStore((s) => s.removeTemplate);
   const params = useSearchParams();
@@ -50,6 +51,9 @@ export function ProjectTemplatesPage() {
     upsert(nt);
     setCur(nt.id);
   }
+
+  // แก้แม่แบบก่อนโหลดจากเซิร์ฟเวอร์เสร็จ = ของที่แก้ถูกทับหาย — รอก่อน
+  if (!ready) return <p className="py-20 text-center text-sm text-[var(--ink-soft)]">กำลังโหลดแม่แบบ…</p>;
 
   return (
     <div className="space-y-3">

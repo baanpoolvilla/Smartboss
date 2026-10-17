@@ -97,7 +97,7 @@ export function ListTab({ project, items, canEdit = false, canPlan = false, onOp
               g.name ? <tr key={`g-${g.key}`}><td colSpan={6} className="bg-[var(--bg-soft)] px-3 py-1.5 text-xs font-bold text-[var(--ink-soft)]">{g.name} · {g.rows.length}</td></tr> : null,
               ...g.rows.map((i) => (
                 <tr key={i.id} className={cn("border-b border-[var(--line)]/60", i.kind === "task" && "cursor-pointer hover:bg-[var(--bg-soft)]")} onClick={() => i.kind === "task" && onOpen(i.id)}>
-                  <td className="px-2 py-1.5">
+                  <td className="min-w-52 px-2 py-1.5">
                     {canEdit && i.kind === "task" ? (
                       <div className="flex items-center gap-1">
                         <InlineName item={i} onSave={(t) => saveTaskDetails(i.id, t, i.task?.description ?? "", me)} />

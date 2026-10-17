@@ -53,6 +53,8 @@ export function ProjectView({ projectId }: { projectId: string }) {
   const me = useIdentityStore((s) => s.viewingAsUserId);
   const project = useProjectStore((s) => s.projects.find((p) => p.id === projectId));
   const upsertTemplate = useProjectStore((s) => s.upsertTemplate);
+  const ready = useProjectStore((s) => s.projectsLoaded);
+  const templatesReady = useProjectStore((s) => s.templatesLoaded);
   const tasks = useTaskStore((s) => s.tasks);
   const setTaskProject = useTaskStore((s) => s.setTaskProject);
   const { openTaskId, open: openTask, close: closeTask } = useTaskSheetParam();
@@ -69,6 +71,8 @@ export function ProjectView({ projectId }: { projectId: string }) {
 
   const items = useMemo(() => (project ? timelineItems(project, tasks, today) : []), [project, tasks, today]);
 
+  // ยังโหลดไม่เสร็จ — อย่าเพิ่งขึ้น "ไม่พบโปรเจกต์" (เปิดจากลิงก์แจ้งเตือนจะเห็นแวบหนึ่ง) และกันแก้ก่อนโหลดเสร็จ
+  if (!ready) return <p className="py-20 text-center text-sm text-[var(--ink-soft)]">กำลังโหลดโปรเจกต์…</p>;
   if (!project) {
     return (
       <div className="grid place-items-center gap-3 py-20 text-center text-[var(--ink-soft)]">
@@ -98,7 +102,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
           </span>
           <div className="ml-auto flex flex-wrap gap-2">
             {canEdit && (
-              <button type="button" className="rounded-lg border border-[var(--line)] px-3 py-1.5 text-xs hover:bg-[var(--bg-soft)]"
+              <button type="button" className="rounded-lg border border-[var(--line)] px-3 py-1.5 text-xs hover:bg-[var(--bg-soft)] disabled:opacity-50" disabled={!templatesReady}
                 onClick={() => {
                   const t = templateFromProject(project, items, (uid) => ROLE_OF_DEFAULT(uid), () => `tpl-${uuid()}`, me);
                   upsertTemplate(t);

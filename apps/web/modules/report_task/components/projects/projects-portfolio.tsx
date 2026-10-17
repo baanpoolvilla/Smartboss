@@ -21,6 +21,7 @@ export function ProjectsPortfolio() {
   const router = useRouter();
   const me = useIdentityStore((s) => s.viewingAsUserId);
   const projects = useProjectStore((s) => s.projects);
+  const ready = useProjectStore((s) => s.projectsLoaded && s.templatesLoaded);
   const tasks = useTaskStore((s) => s.tasks);
   const [filter, setFilter] = useState<"active" | "all" | "mine">("active");
   const [creating, setCreating] = useState(false);
@@ -62,13 +63,15 @@ export function ProjectsPortfolio() {
           {canCreateProject(me) && (
             <>
               <Link href="/report-task/projects/templates" className="rounded-lg border border-[var(--line)] px-3 py-1.5 text-xs hover:bg-[var(--bg-soft)]">แม่แบบ</Link>
-              <button type="button" className="rounded-lg bg-[var(--brand-green)] px-3 py-1.5 text-xs font-semibold text-white" onClick={() => setCreating(true)}>+ สร้างโปรเจกต์</button>
+              <button type="button" className="rounded-lg bg-[var(--brand-green)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50" disabled={!ready} onClick={() => setCreating(true)}>+ สร้างโปรเจกต์</button>
             </>
           )}
         </div>
       </div>
 
-      {rows.length === 0 ? (
+      {!ready ? (
+        <p className="py-20 text-center text-sm text-[var(--ink-soft)]">กำลังโหลดโปรเจกต์…</p>
+      ) : rows.length === 0 ? (
         <div className="grid place-items-center gap-2 rounded-xl border border-dashed border-[var(--line)] py-16 text-center text-sm text-[var(--ink-soft)]">
           <p className="m-0">{projects.length ? "ไม่มีโปรเจกต์ในตัวกรองนี้" : "ยังไม่มีโปรเจกต์"}</p>
           {canCreateProject(me) ? <p className="m-0">กด &quot;+ สร้างโปรเจกต์&quot; เพื่อเริ่ม — เลือกแม่แบบได้ เช่น รีโนเวทบ้าน</p> : <p className="m-0">หัวหน้าแผนกหรือ CEO เป็นคนสร้างโปรเจกต์ แล้วเพิ่มคุณเป็นสมาชิก</p>}

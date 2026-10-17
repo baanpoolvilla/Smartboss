@@ -54,7 +54,8 @@ async function putTasks(request: NextRequest) {
 
   const result = await writeTasks(
     session.orgId,
-    parsed.data.tasks,
+    // กติกาทำซ้ำ/แม่แบบรอบในสคีมาเป็น looseObject (ตรวจแค่โครง) — ชนิดเต็มอยู่ที่ Task
+    parsed.data.tasks as Task[],
     parsed.data.expectedVersion,
     session.userId
   );

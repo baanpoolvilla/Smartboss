@@ -120,6 +120,29 @@ export const taskSchema = z.object({
   checklist: z.array(checklistItemSchema),
   showChecklistOnCard: z.boolean(),
   projectTopicId: z.string().optional(),
+  // ฟิลด์ที่หน้าจอใช้อยู่แต่เคยไม่มีในนี้ → zod ตัดทิ้งทุกครั้งที่บันทึก (เหมือน reviewedBy ด้านบน)
+  // เห็นบนจอได้จนรีเฟรช แล้วหาย: เวลาส่ง · อีโมจิ · คนติดตาม · งานทำซ้ำ · โปรเจกต์
+  dueTime: z.string().optional(),
+  emojiReactions: z.record(z.string(), z.array(z.string())).optional(),
+  watcherIds: z.array(z.string()).optional(),
+  // ก้อนซ้อน (กติกาทำซ้ำ/แม่แบบรอบ, วิธีรอ) ใช้ looseObject — มีฟิลด์ย่อยเพิ่มทีหลังจะได้ไม่ถูกตัดซ้ำรอยเดิม
+  recurrence: z
+    .looseObject({
+      seriesId: z.string(),
+      occurrence: z.number(),
+      rule: z.looseObject({}),
+      template: z.looseObject({}),
+      stopped: z.boolean().optional(),
+    })
+    .optional(),
+  project: z
+    .looseObject({
+      projectId: z.string(),
+      sectionId: z.string(),
+      dependsOn: z.array(z.string()).optional(),
+      depRules: z.record(z.string(), z.looseObject({ type: z.literal("ss").optional(), lag: z.number().optional() })).optional(),
+    })
+    .optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

@@ -9,11 +9,14 @@ import type { Task } from "@/modules/report_task/types";
  *   - ไม่นับในสรุปภาพรวมของบริษัท (ai-insight)
  * เพิ่มผู้รับงานคนอื่นเมื่อไหร่ = งานปกติทันที (เห็นตามสิทธิ์ นับคะแนนตามปกติ)
  */
-export function isPersonalTask(task: Pick<Task, "assignedById" | "assigneeIds">): boolean {
+export function isPersonalTask(task: Pick<Task, "assignedById" | "assigneeIds"> & { project?: Task["project"] }): boolean {
+  // งานในโปรเจกต์ไม่ใช่งานส่วนตัว แม้คนสร้างจะมอบให้ตัวเอง (เช่น ตำแหน่งในแม่แบบที่ตกเป็นของเจ้าของ)
+  // — สมาชิกโปรเจกต์ต้องเห็นกันบนแผนเวลา/รายการ และนับคะแนนตามปกติ
+  if (task.project) return false;
   return !!task.assignedById && task.assigneeIds.length === 1 && task.assigneeIds[0] === task.assignedById;
 }
 
 /** งานส่วนตัวของคนอื่น = มองไม่เห็น · งานอื่น ๆ ไม่ตัดสินที่นี่ (ใช้กติกาสิทธิ์ปกติ) */
-export function isOthersPersonalTask(task: Pick<Task, "assignedById" | "assigneeIds">, userId: string): boolean {
+export function isOthersPersonalTask(task: Pick<Task, "assignedById" | "assigneeIds"> & { project?: Task["project"] }, userId: string): boolean {
   return isPersonalTask(task) && task.assignedById !== userId;
 }

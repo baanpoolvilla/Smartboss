@@ -244,14 +244,14 @@ export function StoreHydrator() {
         apiKey="projects"
         store={useProjectStore}
         select={(s) => s.projects}
-        apply={(s, projects) => ({ ...s, projects })}
+        apply={(s, projects) => ({ ...s, projects, projectsLoaded: true })}
       />
       <ServerStoreSync
         apiKey="project-templates"
         pollMs={SLOW_POLL_MS}
         store={useProjectStore}
         select={(s) => s.templates}
-        apply={(s, templates) => ({ ...s, templates })}
+        apply={(s, templates) => ({ ...s, templates, templatesLoaded: true })}
       />
       <ServerStoreSync
         apiKey="project-topics"
