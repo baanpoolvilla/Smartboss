@@ -19,7 +19,7 @@ import {
   RefreshCw,
   ShoppingCart,
 } from "lucide-react";
-import { requireOrg, hasPermission } from "@smartboss/auth";
+import { requireOrg, hasPermission, canViewAll } from "@smartboss/auth";
 import { Card } from "@smartboss/ui/components/card";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import {
@@ -68,6 +68,9 @@ import {
   updateWorkOrderPropertiesAction,
 } from "../actions";
 import { EditWorkOrderProperties } from "@/modules/maintenance/components/edit-work-order-properties";
+import { WorkOrderDueRequest, type DueRequestView } from "@/modules/maintenance/components/work-order-due-request";
+import { listDueRequests } from "@/modules/maintenance/data/work-order-due-requests";
+import { canDecideDueRequest } from "@/modules/maintenance/lib/due-request-access";
 
 const STATUS_COLOR: Record<string, string> = {
   open: "#2563EB",
@@ -88,6 +91,9 @@ const PRIORITY_COLOR: Record<string, string> = {
   medium: "#2563EB",
   low: "#6B7280",
 };
+
+/** Date → YYYY-MM-DD ตามเวลาไทย (กำหนดส่งเก็บเป็นสิ้นวันเวลาไทย) */
+const ymdBkk = (d: Date) => new Date(d.getTime() + 7 * 3600e3).toISOString().slice(0, 10);
 
 export default async function WorkOrderDetailPage({
   params,
@@ -127,7 +133,7 @@ export default async function WorkOrderDetailPage({
   const isSuperAdmin = hasPermission(session, MAINT_PERMS.admin);
   const isTechnicianOnly = !canManage;
 
-  const [properties, asset, comments, expenses, externalPhotos, linkedPos] =
+  const [properties, asset, comments, expenses, externalPhotos, linkedPos, dueRequests] =
     await Promise.all([
       listProperties(orgId),
       wo.assetId ? getAsset(orgId, wo.assetId) : Promise.resolve(null),
@@ -137,6 +143,7 @@ export default async function WorkOrderDetailPage({
       canSeePo
         ? listPurchaseOrdersForWorkOrder(orgId, id)
         : Promise.resolve([]),
+      listDueRequests(orgId, id),
     ]);
 
   const propNames: Record<string, string> = Object.fromEntries(
@@ -147,6 +154,7 @@ export default async function WorkOrderDetailPage({
     wo.createdBy,
     ...wo.ccUserIds,
     ...comments.map((c) => c.userId),
+    ...dueRequests.flatMap((r) => [r.requestedBy, r.decidedBy]),
   ]);
 
   const uploadLink = canManage ? await getActiveUploadLink(orgId, id) : null;
@@ -174,6 +182,20 @@ export default async function WorkOrderDetailPage({
   const overdue =
     wo.dueDate != null && wo.dueDate < new Date() && wo.status !== "completed";
   const isOpenOrRunning = wo.status !== "completed" && wo.status !== "cancelled";
+  const viewAll = canViewAll(session);
+  const dueRequestViews: DueRequestView[] = dueRequests.map((r) => ({
+    id: r.id,
+    requestedBy: r.requestedBy,
+    requestedByName: names[r.requestedBy] ?? "-",
+    previousDate: r.previousDate ? ymdBkk(r.previousDate) : null,
+    newDate: ymdBkk(r.newDate),
+    reason: r.reason,
+    status: r.status as DueRequestView["status"],
+    decidedByName: r.decidedBy ? (names[r.decidedBy] ?? "-") : null,
+    decisionNote: r.decisionNote,
+    createdAt: r.createdAt.toISOString(),
+    canDecide: r.status === "pending" && isOpenOrRunning && canDecideDueRequest({ userId: session.userId, viewAll }, wo, r.requestedBy),
+  }));
   // ช่างนอกส่งข้อความเปล่าได้ (ไม่มีรูป) แถวแบบนั้น storagePath เป็นค่าว่าง
   const externalUrls = externalPhotos
     .map((p) => p.storagePath)
@@ -295,8 +317,19 @@ export default async function WorkOrderDetailPage({
           <InfoRow
             icon={<CalendarClock className="h-5 w-5" />}
             label="กำหนดส่ง"
-            value={fmtThaiDate(wo.dueDate)}
-            valueColor={overdue ? "#DC2626" : undefined}
+            value={
+              <div className="grid gap-2">
+                <span style={overdue ? { color: "#DC2626" } : undefined}>{fmtThaiDate(wo.dueDate)}</span>
+                {/* ขอเลื่อนกำหนดส่ง (ผู้รับผิดชอบ) · อนุมัติ/ไม่อนุมัติ (CEO / คนเปิดใบงาน) */}
+                <WorkOrderDueRequest
+                  workOrderId={wo.id}
+                  dueDate={ymdBkk(wo.dueDate)}
+                  canRequest={isOpenOrRunning && wo.assignedTo === session.userId}
+                  myId={session.userId}
+                  requests={dueRequestViews}
+                />
+              </div>
+            }
           />
         )}
         {wo.completedAt && (

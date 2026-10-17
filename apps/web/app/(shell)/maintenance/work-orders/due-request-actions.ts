@@ -1,0 +1,126 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { canViewAll, requireOrg } from "@smartboss/auth";
+import { getWorkOrder, updateWorkOrder, addWorkOrderComment } from "@/modules/maintenance/data/work-orders";
+import { workOrderAccess, canSeeWorkOrder } from "@/modules/maintenance/data/work-order-access";
+import { notifyActorName, notifyUser, notifyUsers, usersWithPermission } from "@/modules/maintenance/data/notify";
+import { createDueRequest, decideDueRequest, getDueRequest } from "@/modules/maintenance/data/work-order-due-requests";
+import { logActivity } from "@/modules/maintenance/data/activity";
+import { fmtThaiDate } from "@/modules/maintenance/lib/format";
+import { canDecideDueRequest } from "@/modules/maintenance/lib/due-request-access";
+
+/**
+ * ขอเลื่อนกำหนดส่งใบงาน — แบบเดียวกับงานบนบอร์ดงาน (ผู้ใช้ขอ 17/10/2569)
+ *   ขอได้:     ผู้รับผิดชอบใบงาน · ใบงานยังไม่เสร็จ/ไม่ยกเลิก · มีกำหนดส่ง · ขอได้แค่ "เลื่อนออกไป"
+ *   อนุมัติได้: CEO (สิทธิ์ดูข้อมูลทั้งบริษัท) หรือคนเปิดใบงาน — ที่ไม่ใช่คนขอเอง
+ *   อนุมัติ = แก้กำหนดส่งของใบงานทันที + บันทึกในความคิดเห็น (log) + แจ้งคนขอ
+ */
+
+/** YYYY-MM-DD → สิ้นวันเวลาไทย — เหมือน parseDueDate ใน actions.ts (cron เทียบ < ตรง ๆ) */
+function endOfDayBkk(v: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+  const d = new Date(`${v}T23:59:59.999+07:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+const ymdBkk = (d: Date) => new Date(d.getTime() + 7 * 3600e3).toISOString().slice(0, 10);
+
+type Session = Awaited<ReturnType<typeof requireOrg>>;
+type Wo = NonNullable<Awaited<ReturnType<typeof getWorkOrder>>>;
+
+function log(s: Session, wo: Wo, summary: string, detail?: Record<string, unknown>) {
+  return logActivity(s.orgId, {
+    userId: s.userId,
+    entity: "work_order",
+    entityId: wo.id,
+    entityCode: wo.code,
+    action: "update",
+    summary: `${summary} ${wo.code ?? ""} "${wo.title}"`.replace(/\s+/g, " ").trim(),
+    detail,
+  });
+}
+
+function refresh(id: string) {
+  revalidatePath(`/maintenance/work-orders/${id}`);
+  revalidatePath("/maintenance/work-orders");
+}
+
+export async function requestDueDateAction(workOrderId: string, newDate: string, reason: string): Promise<{ error?: string }> {
+  const s = await requireOrg();
+  const wo = await getWorkOrder(s.orgId, workOrderId);
+  if (!wo || !canSeeWorkOrder(await workOrderAccess(s), wo)) return { error: "ไม่พบใบงาน" };
+  if (wo.assignedTo !== s.userId) return { error: "ขอเลื่อนได้เฉพาะผู้รับผิดชอบใบงาน" };
+  if (wo.status === "completed" || wo.status === "cancelled") return { error: "ใบงานนี้ปิดแล้ว" };
+  if (!wo.dueDate) return { error: "ใบงานนี้ไม่มีกำหนดส่ง" };
+  const d = endOfDayBkk(newDate);
+  if (!d) return { error: "วันที่ไม่ถูกต้อง" };
+  if (ymdBkk(d) <= ymdBkk(wo.dueDate)) return { error: "วันใหม่ต้องหลังกำหนดส่งเดิม" };
+  const why = reason.trim();
+  if (!why) return { error: "ใส่เหตุผลที่ต้องเลื่อน" };
+
+  await createDueRequest(s.orgId, { workOrderId, requestedBy: s.userId, previousDate: wo.dueDate, newDate: d, reason: why });
+  await addWorkOrderComment(s.orgId, workOrderId, s.userId, `ขอเลื่อนกำหนดส่ง ${fmtThaiDate(wo.dueDate)} → ${fmtThaiDate(d)} · ${why}`, null, { kind: "log" });
+  await log(s, wo, `ขอเลื่อนกำหนดส่ง ${fmtThaiDate(wo.dueDate)} → ${fmtThaiDate(d)} ของ`, { reason: why });
+
+  // แจ้งคนที่อนุมัติได้: CEO + คนเปิดใบงาน (ไม่รวมคนขอ)
+  const approvers = new Set<string>([
+    ...(await usersWithPermission(s.orgId, "core.data.view_all")),
+    ...(wo.createdBy ? [wo.createdBy] : []),
+  ]);
+  approvers.delete(s.userId);
+  const who = (await notifyActorName(s.userId)) ?? "ผู้รับผิดชอบ";
+  await notifyUsers(s.orgId, [...approvers], {
+    title: `${who} · ⏰ ขอเลื่อนกำหนดส่งใบงาน รออนุมัติ`,
+    body: `${wo.title} · ${fmtThaiDate(wo.dueDate)} → ${fmtThaiDate(d)} · ${why}`,
+    type: "work_order",
+    referenceId: wo.id,
+    line: `⏰ ขอเลื่อนกำหนดส่งใบงาน (รออนุมัติ)\n📝 ${wo.title}\n📅 ${fmtThaiDate(wo.dueDate)} → ${fmtThaiDate(d)}\n💬 ${why}\n👤 ${who}`,
+  });
+  refresh(workOrderId);
+  return {};
+}
+
+export async function cancelDueRequestAction(requestId: string): Promise<{ error?: string }> {
+  const s = await requireOrg();
+  const r = await getDueRequest(s.orgId, requestId);
+  if (!r || r.status !== "pending") return { error: "ไม่พบคำขอที่รออนุมัติ" };
+  if (r.requestedBy !== s.userId) return { error: "ยกเลิกได้เฉพาะคนขอ" };
+  const wo = await getWorkOrder(s.orgId, r.workOrderId);
+  if (!wo) return { error: "ไม่พบใบงาน" };
+  await decideDueRequest(s.orgId, requestId, { status: "cancelled", decidedBy: s.userId });
+  await addWorkOrderComment(s.orgId, wo.id, s.userId, "ยกเลิกคำขอเลื่อนกำหนดส่ง", null, { kind: "log" });
+  await log(s, wo, "ยกเลิกคำขอเลื่อนกำหนดส่งของ");
+  refresh(wo.id);
+  return {};
+}
+
+export async function decideDueRequestAction(requestId: string, approve: boolean, note: string): Promise<{ error?: string }> {
+  const s = await requireOrg();
+  const r = await getDueRequest(s.orgId, requestId);
+  if (!r || r.status !== "pending") return { error: "คำขอนี้ถูกตัดสินไปแล้ว" };
+  const wo = await getWorkOrder(s.orgId, r.workOrderId);
+  if (!wo || !canSeeWorkOrder(await workOrderAccess(s), wo)) return { error: "ไม่พบใบงาน" };
+  if (!canDecideDueRequest({ userId: s.userId, viewAll: canViewAll(s) }, wo, r.requestedBy)) return { error: "ไม่มีสิทธิ์อนุมัติคำขอนี้" };
+  const memo = note.trim() || null;
+
+  const ok = await decideDueRequest(s.orgId, requestId, { status: approve ? "approved" : "rejected", decidedBy: s.userId, decisionNote: memo });
+  if (!ok) return { error: "คำขอนี้ถูกตัดสินไปแล้ว" };
+  if (approve) await updateWorkOrder(s.orgId, wo.id, { dueDate: r.newDate });
+
+  const text = approve
+    ? `อนุมัติเลื่อนกำหนดส่ง ${fmtThaiDate(wo.dueDate)} → ${fmtThaiDate(r.newDate)}${memo ? ` · ${memo}` : ""}`
+    : `ไม่อนุมัติเลื่อนกำหนดส่ง (ขอ ${fmtThaiDate(r.newDate)})${memo ? ` · ${memo}` : ""}`;
+  await addWorkOrderComment(s.orgId, wo.id, s.userId, text, null, { kind: "log" });
+  await log(s, wo, `${text} ของ`);
+
+  const who = (await notifyActorName(s.userId)) ?? "ผู้อนุมัติ";
+  await notifyUser(s.orgId, r.requestedBy, {
+    title: approve ? `${who} · ✅ อนุมัติเลื่อนกำหนดส่งใบงาน` : `${who} · ❌ ไม่อนุมัติเลื่อนกำหนดส่งใบงาน`,
+    body: `${wo.title} · ${approve ? `กำหนดส่งใหม่ ${fmtThaiDate(r.newDate)}` : `ยังเป็น ${fmtThaiDate(wo.dueDate)}`}${memo ? ` · ${memo}` : ""}`,
+    type: "work_order",
+    referenceId: wo.id,
+    line: `${approve ? "✅ อนุมัติ" : "❌ ไม่อนุมัติ"}เลื่อนกำหนดส่งใบงาน\n📝 ${wo.title}\n📅 ${approve ? `กำหนดส่งใหม่ ${fmtThaiDate(r.newDate)}` : `ยังเป็น ${fmtThaiDate(wo.dueDate)}`}${memo ? `\n💬 ${memo}` : ""}`,
+  });
+  refresh(wo.id);
+  return {};
+}

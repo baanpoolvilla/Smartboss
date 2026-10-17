@@ -110,6 +110,7 @@ model WorkOrder {
   externalPhotos WorkOrderExternalPhoto[]
   uploadLinks    WorkOrderUploadLink[]
   purchaseOrders PurchaseOrder[]
+  dueRequests    WorkOrderDueRequest[]
 
   @@unique([orgId, code])
   @@index([orgId])
@@ -425,5 +426,29 @@ model MaintenanceActivity {
   @@index([orgId, createdAt])
   @@index([orgId, entity, entityId])
   @@map("activity_logs")
+  @@schema("maintenance")
+}
+
+/// คำขอเลื่อนกำหนดส่งของใบงาน — ผู้รับผิดชอบขอ, CEO/คนเปิดใบงานอนุมัติ (อนุมัติแล้วแก้ work_orders.due_date)
+model WorkOrderDueRequest {
+  id           String    @id @default(uuid())
+  orgId        String    @map("org_id")
+  workOrderId  String    @map("work_order_id")
+  requestedBy  String    @map("requested_by") // core.users.id
+  /// กำหนดส่งตอนขอ (เทียบตอนอนุมัติ — ถ้าวันเปลี่ยนไปแล้วก็ยังใช้วันใหม่ที่ขอ)
+  previousDate DateTime? @map("previous_date")
+  newDate      DateTime  @map("new_date")
+  reason       String
+  status       String    @default("pending") // pending|approved|rejected|cancelled
+  decidedBy    String?   @map("decided_by")
+  decidedAt    DateTime? @map("decided_at")
+  decisionNote String?   @map("decision_note")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, workOrderId])
+  @@index([orgId, status])
+  @@map("work_order_due_requests")
   @@schema("maintenance")
 }
