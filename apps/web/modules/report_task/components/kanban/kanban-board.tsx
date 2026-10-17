@@ -14,7 +14,7 @@ import { chartColors } from "@/modules/report_task/lib/chart-colors";
 import { taskDepartmentIdsForBoard, OTHER_DEPARTMENT_ID } from "@/modules/report_task/lib/task-department";
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
 import { cn } from "@/modules/report_task/lib/utils";
-import { KanbanColumn, type BoardColumn } from "./kanban-column";
+import { KanbanColumn, sumUnread, type BoardColumn, useUnreadCommentMap } from "./kanban-column";
 import { buildStatusColumns } from "./status-columns";
 import { TaskDetailSheet } from "./task-detail-sheet";
 import { PersonTopicsBoard } from "./person-topics-board";
@@ -44,6 +44,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   const resetFilters = useTaskStore((s) => s.resetFilters);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const projectTopics = useProjectTopicStore((s) => s.topics);
+  const unreadMap = useUnreadCommentMap();
   // A department head sees the whole board; everyone else only sees tasks
   // they're assigned to or created — a coworker's task no longer appears.
   const allTasks = useMemo(
@@ -539,6 +540,12 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
                 }
               >
                 <span className="max-w-[140px] truncate">{column.label}</span>
+                {/* คอมเมนต์ที่ยังไม่อ่านในคอลัมน์ (มือถือไม่มีหัวคอลัมน์ บอกตรงแท็บแทน) */}
+                {sumUnread(column.tasks, unreadMap) > 0 && (
+                  <span className="flex h-5 items-center gap-0.5 rounded-full bg-[var(--chart-red)] px-1.5 text-[10.5px] font-bold text-white" title="คอมเมนต์ที่ยังไม่ได้อ่าน">
+                    💬{sumUnread(column.tasks, unreadMap)}
+                  </span>
+                )}
                 <span
                   className="flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold tabular-nums"
                   style={

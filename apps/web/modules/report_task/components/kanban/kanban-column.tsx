@@ -11,6 +11,19 @@ import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import { chartColors } from "@/modules/report_task/lib/chart-colors";
 import { cn } from "@/modules/report_task/lib/utils";
 import type { Task, TaskStatus } from "@/modules/report_task/types";
+import { useMemo } from "react";
+import { MessageCircle } from "lucide-react";
+import { useNotificationStore } from "@/modules/report_task/store/notification-store";
+import { useIdentityStore } from "@/modules/report_task/store/identity-store";
+import { unreadTaskCommentCounts } from "@/modules/report_task/lib/task-comment-activity";
+
+/** คอมเมนต์ที่ยังไม่ได้อ่าน แยกตามงาน (ของคนที่ดูอยู่) — ใช้ร่วมกับแท็บคอลัมน์บนมือถือใน kanban-board.tsx */
+export function useUnreadCommentMap(): Map<string, number> {
+  const notifications = useNotificationStore((s) => s.notifications);
+  const me = useIdentityStore((s) => s.viewingAsUserId);
+  return useMemo(() => unreadTaskCommentCounts(notifications, me), [notifications, me]);
+}
+export const sumUnread = (tasks: Task[], map: Map<string, number>) => tasks.reduce((n, t) => n + (map.get(t.id) ?? 0), 0);
 import type { LucideIcon } from "lucide-react";
 
 export interface BoardColumn {
@@ -104,8 +117,10 @@ export function KanbanColumn({
   /** มือถือ (<640px): ซ่อนการ์ดหัวคอลัมน์ — แถบแท็บของบอร์ดบอกชื่อ+จำนวนแทนแล้ว (ดู kanban-board.tsx) */
   hideHeaderOnMobile?: boolean;
 }) {
-  const Icon = column.icon;
   const accent = column.accent;
+  // คอมเมนต์ที่ยังไม่อ่านในคอลัมน์นี้ — ขึ้นแทนป้ายจำนวนงานทางขวา (จำนวนงานย้ายไปไว้หน้าชื่อแทนไอคอน)
+  const unreadMap = useUnreadCommentMap();
+  const unreadComments = sumUnread(column.tasks, unreadMap);
   const percent = boardTotal > 0 ? Math.round((column.tasks.length / boardTotal) * 100) : 0;
   // The header's icon chip/count/% text used to just be `accent` itself —
   // fine for a saturated color like the amber/red/gray accents, but the
@@ -189,24 +204,28 @@ export function KanbanColumn({
             )}
           >
         <div className="flex items-center gap-2.5">
-          {Icon && (
-            <span
-              className="h-7 w-7 rounded-lg flex items-center justify-center shrink-0"
-              style={{ backgroundColor: `color-mix(in srgb, ${accent} 14%, white)`, color: textAccent }}
-            >
-              <Icon className="h-4 w-4" />
-            </span>
-          )}
+          {/* จำนวนงานในคอลัมน์ — อยู่หน้าชื่อ (เดิมเป็นไอคอน) */}
+          <span
+            className="h-7 min-w-7 px-1.5 rounded-lg flex items-center justify-center shrink-0 text-[13px] font-bold tabular-nums"
+            style={{ backgroundColor: `color-mix(in srgb, ${accent} 14%, white)`, color: textAccent }}
+            title={`${entries.length} งาน`}
+          >
+            {entries.length}
+          </span>
           {/* จุดสี — a second, plainer color cue beyond the icon chip, right against the label. */}
           <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: accent }} />
           <h3 className="text-sm font-semibold truncate tracking-tight">{column.label}</h3>
 
-          <span
-            className="ml-auto text-[11px] font-semibold rounded-full h-5 min-w-5 px-1.5 flex items-center justify-center tabular-nums shrink-0"
-            style={{ backgroundColor: `color-mix(in srgb, ${accent} 12%, white)`, color: textAccent }}
-          >
-            {entries.length}
-          </span>
+          {/* คอมเมนต์ที่ยังไม่ได้อ่านในคอลัมน์นี้ — ไม่มี = ไม่แสดง */}
+          {unreadComments > 0 && (
+            <span
+              className="ml-auto inline-flex h-6 shrink-0 items-center gap-1 rounded-full bg-[var(--chart-red)] px-2 text-[11.5px] font-bold tabular-nums text-white"
+              title={`มีคอมเมนต์ที่ยังไม่ได้อ่าน ${unreadComments} รายการ ในคอลัมน์นี้`}
+            >
+              <MessageCircle className="h-3.5 w-3.5" />
+              {unreadComments} ยังไม่อ่าน
+            </span>
+          )}
         </div>
 
         {/* "รอดำเนินการ"/"กำลังทำ" segment on-time-vs-late (their own accent +
