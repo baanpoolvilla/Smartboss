@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { NewTaskDialog } from "@/modules/report_task/components/kanban/new-task-dialog";
 import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-detail-sheet";
 import { useTaskSheetParam } from "@/modules/report_task/hooks/use-task-sheet-param";
@@ -444,8 +445,8 @@ function ProjectSettingsButton({ project }: { project: Project }) {
             <label className="grid gap-1 text-xs text-[var(--ink-soft)]">ชื่อโปรเจกต์<input className={field} defaultValue={project.name} onBlur={(e) => e.target.value.trim() && updateProject(project.id, { name: e.target.value.trim() })} /></label>
             <label className="grid gap-1 text-xs text-[var(--ink-soft)]">เป้าหมาย / ขอบเขต<textarea className={field} rows={3} defaultValue={project.description} onBlur={(e) => updateProject(project.id, { description: e.target.value })} /></label>
             <div className="grid grid-cols-2 gap-2">
-              <label className="grid gap-1 text-xs text-[var(--ink-soft)]">วันเริ่ม<input type="date" className={field} defaultValue={project.startDate} onChange={(e) => e.target.value && updateProject(project.id, { startDate: e.target.value })} /></label>
-              <label className="grid gap-1 text-xs text-[var(--ink-soft)]">วันเสร็จเป้าหมาย<input type="date" className={field} defaultValue={project.endDate} onChange={(e) => e.target.value && updateProject(project.id, { endDate: e.target.value })} /></label>
+              <label className="grid gap-1 text-xs text-[var(--ink-soft)]">วันเริ่ม<DatePickerField value={project.startDate} onChange={(v) => v && updateProject(project.id, { startDate: v })} /></label>
+              <label className="grid gap-1 text-xs text-[var(--ink-soft)]">วันเสร็จเป้าหมาย<DatePickerField value={project.endDate} minDate={project.startDate} onChange={(v) => v && updateProject(project.id, { endDate: v })} /></label>
             </div>
             <label className="grid gap-1 text-xs text-[var(--ink-soft)]">เจ้าของโปรเจกต์ (คุมแผน เลื่อนกำหนดส่งได้)
               <select className={field} value={project.ownerId}

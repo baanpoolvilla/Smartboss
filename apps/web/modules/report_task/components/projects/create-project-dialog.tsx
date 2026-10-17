@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { departmentIdsOf, users } from "@/modules/report_task/lib/directory";
 import { dayToIso, shiftDays, templateDate, templateEnd, templateStartFromEnd } from "@/modules/report_task/lib/project-schedule";
 import { uuid } from "@/modules/report_task/lib/uuid";
@@ -30,7 +31,9 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [start, setStart] = useState(today);
-  const [end, setEnd] = useState(shiftDays(today, 30));
+  const [endPicked, setEndPicked] = useState(shiftDays(today, 30));
+  // วันเสร็จเป้าหมาย "ตามแม่แบบ" จนกว่าจะเลือกเอง — เดิมตั้ง +30 วันตายตัว แม่แบบที่ยาวกว่าเลยขึ้นเตือน "เกินวันเสร็จ" ทั้งที่ยังไม่ได้แตะอะไร
+  const [endTouched, setEndTouched] = useState(false);
   const [ownerId, setOwnerId] = useState(me);
   const [memberIds, setMemberIds] = useState<string[]>([]);
   const [tplId, setTplId] = useState<string>(templates[0]?.id ?? "");
@@ -42,6 +45,9 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
   const personFor = (role: string) => roleMap[role] ?? (guessed(role) || ownerId);
   const creating = useRef(false);
 
+  const tplEnd = tpl && tpl.anchor === "start" && tpl.items.length ? templateDate(tpl, start, Math.max(...tpl.items.map(templateEnd)), holidays) : null;
+  const end = !endTouched && tplEnd ? tplEnd : endPicked;
+  const setEnd = (v: string) => { setEndTouched(true); setEndPicked(v); };
   // แม่แบบนับถอยหลัง: วันเริ่มคำนวณจากวันเสร็จ
   const effStart = tpl?.anchor === "end" ? templateStartFromEnd(tpl, end, holidays) : start;
   const effEnd = tpl ? templateDate(tpl, effStart, tpl.items.length ? Math.max(...tpl.items.map(templateEnd)) : 0, holidays) : end;
@@ -128,9 +134,13 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
             <label className="grid gap-1 text-xs text-[var(--ink-soft)]">เป้าหมาย / ขอบเขต<textarea className={field} rows={3} value={desc} onChange={(e) => setDesc(e.target.value)} /></label>
             <div className="grid grid-cols-2 gap-2">
               <label className="grid gap-1 text-xs text-[var(--ink-soft)]">วันเริ่ม
-                <input type="date" className={cn(field, tpl?.anchor === "end" && "opacity-60")} value={effStart} min={tpl?.items.length ? today : undefined} disabled={tpl?.anchor === "end"} onChange={(e) => e.target.value && setStart(e.target.value)} />
+                {tpl?.anchor === "end" ? (
+                  <span className={cn(field, "opacity-60")}>{fmtDay(effStart, true)} (คำนวณจากวันเสร็จ)</span>
+                ) : (
+                  <DatePickerField value={effStart} minDate={tpl?.items.length ? today : undefined} onChange={(v) => v && setStart(v)} />
+                )}
               </label>
-              <label className="grid gap-1 text-xs text-[var(--ink-soft)]">วันเสร็จเป้าหมาย<input type="date" className={field} value={end} onChange={(e) => e.target.value && setEnd(e.target.value)} /></label>
+              <label className="grid gap-1 text-xs text-[var(--ink-soft)]">วันเสร็จเป้าหมาย<DatePickerField value={end} minDate={effStart} onChange={(v) => v && setEnd(v)} /></label>
             </div>
             {tpl?.anchor === "end" && (
               <p className={cn("m-0 text-xs", tooLate ? "font-bold text-red-600" : "text-[var(--brand-green-dark)]")}>
@@ -139,7 +149,7 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
             )}
             {overEnd && (
               <p className="m-0 text-xs font-semibold text-amber-700 dark:text-amber-300">
-                ⚠ งานตามแม่แบบจบ {fmtDay(effEnd, true)} เกินวันเสร็จเป้าหมาย {Math.round((Date.parse(effEnd) - Date.parse(end)) / 864e5)} วัน · ถ้าสร้างเลย วันเสร็จเป้าหมายจะเป็น {fmtDay(effEnd, true)} (หรือเลื่อนวันเริ่มให้เร็วขึ้น)
+                ⚠ งานในแม่แบบต้องใช้เวลาถึง {fmtDay(effEnd, true)} แต่ตั้งวันเสร็จไว้ {fmtDay(end, true)} (ช้ากว่า {Math.round((Date.parse(effEnd) - Date.parse(end)) / 864e5)} วัน) · กดสร้างเลยได้ ระบบจะเลื่อนวันเสร็จเป็น {fmtDay(effEnd, true)} ให้ หรือเลือกวันเริ่มให้เร็วขึ้น
               </p>
             )}
             <label className="grid gap-1 text-xs text-[var(--ink-soft)]">เจ้าของโปรเจกต์ (คุมแผน เลื่อนกำหนดส่งได้)

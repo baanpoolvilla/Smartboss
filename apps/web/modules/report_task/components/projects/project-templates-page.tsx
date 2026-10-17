@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useRef, useState, type PointerEvent as RPointerEvent } from "react";
 import { toast } from "sonner";
 
+import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { canCreateProject } from "@/modules/report_task/lib/project-access";
 import {
   arrangeTemplate,
@@ -322,7 +323,7 @@ function TemplateEditor({ t, canEdit, onChange, onDuplicate, onDelete }: {
           {back ? (
             <>
               <b>ตัวอย่างถ้าต้องเสร็จวันที่</b>
-              <input type="date" className={cn(field, "w-auto")} value={endSample} onChange={(e) => e.target.value && setEndSample(e.target.value)} />
+              <DatePickerField className="h-8 w-[150px]" value={endSample} onChange={(v) => v && setEndSample(v)} />
               <span className={cn("text-xs", tooLate ? "font-bold text-red-600" : "text-[var(--ink-soft)]")}>
                 {tooLate ? `⚠ เวลาไม่พอ — ต้องเริ่ม ${fmtDay(s0)} ซึ่งผ่านมาแล้ว` : `ต้องเริ่ม ${fmtDay(s0, true)} · ใช้เวลา ${last + 1} วัน${t.workdays ? "ทำงาน" : ""}`}
               </span>
@@ -330,7 +331,7 @@ function TemplateEditor({ t, canEdit, onChange, onDuplicate, onDelete }: {
           ) : (
             <>
               <b>ตัวอย่างถ้าเริ่ม</b>
-              <input type="date" className={cn(field, "w-auto")} value={startSample} onChange={(e) => e.target.value && setStartSample(e.target.value)} />
+              <DatePickerField className="h-8 w-[150px]" value={startSample} onChange={(v) => v && setStartSample(v)} />
               <span className="text-xs text-[var(--ink-soft)]">ใช้เวลา {last + 1} วัน{t.workdays ? "ทำงาน" : ""} · จบ {fmtDay(e0, true)}</span>
             </>
           )}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { TaskCard } from "@/modules/report_task/components/kanban/task-card";
 import { getUser } from "@/modules/report_task/lib/directory";
 import { dayNum, dayToIso, depRuleLabel, ymdOfDay, type TimelineItem } from "@/modules/report_task/lib/project-schedule";
@@ -41,6 +42,7 @@ function InlineName({ item, onSave }: { item: TimelineItem; onSave: (name: strin
   );
 }
 
+const dateCell = "h-8 w-[132px] border-transparent bg-transparent px-1.5 text-[13px] hover:border-[var(--line)]";
 const cellInput = "rounded border border-transparent bg-transparent px-1 py-0.5 text-base tabular-nums hover:border-[var(--line)] focus:border-[var(--brand-green)] focus:outline-none sm:text-[13px]";
 
 export function ListTab({ project, items, canEdit = false, canPlan = false, onOpen }: { project: Project; items: TimelineItem[]; canEdit?: boolean; canPlan?: boolean; onOpen: (id: string) => void }) {
@@ -124,17 +126,14 @@ export function ListTab({ project, items, canEdit = false, canPlan = false, onOp
                   </td>
                   <td className="px-2 py-1.5 tabular-nums" onClick={(e) => canEdit && e.stopPropagation()}>
                     {canPlan && i.kind === "task" && i.state !== "done" ? (
-                      <input type="date" className={cellInput} value={i.start} max={i.end} aria-label="วันเริ่ม"
-                        onChange={(e) => e.target.value && rescheduleTask(i.id, dayToIso(e.target.value), i.task!.dueDate, why, me)} />
+                      <DatePickerField className={dateCell} value={i.start} onChange={(v) => v && rescheduleTask(i.id, dayToIso(v), i.task!.dueDate, why, me)} />
                     ) : canEdit && i.kind === "milestone" && i.state !== "done" ? (
-                      <input type="date" className={cellInput} value={i.start} aria-label="วันจุดสำคัญ"
-                        onChange={(e) => e.target.value && updateMilestone(project.id, i.id, { date: e.target.value })} />
+                      <DatePickerField className={dateCell} value={i.start} onChange={(v) => v && updateMilestone(project.id, i.id, { date: v })} />
                     ) : <span className="px-1">{fmtDay(i.start)}</span>}
                   </td>
                   <td className="px-2 py-1.5 tabular-nums" onClick={(e) => canEdit && e.stopPropagation()}>
                     {i.kind === "milestone" ? "—" : canPlan && i.state !== "done" ? (
-                      <input type="date" className={cellInput} value={i.end} min={i.start} aria-label="กำหนดส่ง"
-                        onChange={(e) => e.target.value && rescheduleTask(i.id, i.task!.startDate, dayToIso(e.target.value), why, me)} />
+                      <DatePickerField className={dateCell} value={i.end} minDate={i.start} onChange={(v) => v && rescheduleTask(i.id, i.task!.startDate, dayToIso(v), why, me)} />
                     ) : <span className="px-1">{fmtDay(i.end)}</span>}
                   </td>
                   <td className="px-3 py-2"><span className="rounded-full px-2 py-0.5 text-xs font-semibold text-white" style={{ background: STATE_COLOR[i.state] }}>{STATE_LABEL[i.state]}</span></td>
