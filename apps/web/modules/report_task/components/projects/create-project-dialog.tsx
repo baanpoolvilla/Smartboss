@@ -14,7 +14,7 @@ import { useTaskStore } from "@/modules/report_task/store/task-store";
 import type { Project, ProjectMilestone, ProjectTemplate, Task } from "@/modules/report_task/types";
 import { TemplateEditor } from "./project-templates-page";
 import { guessPersonForRole } from "./project-roles";
-import { fmtDay, notifyAddedToProject, todayBkk, useCompanyHolidays } from "./project-ui";
+import { defaultMemberRole, fmtDay, notifyAddedToProject, todayBkk, useCompanyHolidays } from "./project-ui";
 
 /**
  * สร้างโปรเจกต์ — เริ่มเปล่า หรือจากแม่แบบ (ช่วงงาน + งาน + จุดสำคัญ + งานที่ต้องรอ + คำอธิบาย/เช็คลิสต์)
@@ -114,7 +114,7 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
         updatedAt: now,
       });
     }
-    const members = [...new Set([...memberIds, ...newTasks.flatMap((t) => t.assigneeIds)])].filter((id) => id !== ownerId).map((userId) => ({ userId, role: "editor" as const }));
+    const members = [...new Set([...memberIds, ...newTasks.flatMap((t) => t.assigneeIds)])].filter((id) => id !== ownerId).map((userId) => ({ userId, role: defaultMemberRole(userId) }));
     const project: Project = {
       id: pid, name: name.trim(), description: desc.trim(), ownerId, members,
       startDate: effStart, endDate: tpl ? (effEnd > end && tpl.anchor === "start" ? effEnd : end) : end,

@@ -15,7 +15,7 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useProjectStore } from "@/modules/report_task/store/project-store";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { CreateProjectDialog } from "./create-project-dialog";
-import { PersonDot, ProjectStatusChip, fmtDay, todayBkk } from "./project-ui";
+import { PersonDot, ProjectStatusChip, askProjectUpdate, fmtDay, todayBkk } from "./project-ui";
 import type { Project, ProjectStatus } from "@/modules/report_task/types";
 import type { TimelineItem } from "@/modules/report_task/lib/project-schedule";
 
@@ -30,6 +30,8 @@ export function ProjectsPortfolio() {
   const ready = useProjectStore((s) => s.projectsLoaded && s.templatesLoaded);
   const tasks = useTaskStore((s) => s.tasks);
   const [filter, setFilter] = useState<"active" | "all" | "mine">("active");
+  /** กดตัวเลขในแถบผู้บริหาร = ดูเฉพาะกลุ่มนั้น */
+  const [focus, setFocus] = useState<Focus>("all");
   const [creating, setCreating] = useState(false);
   const { openTaskId, open: openTask, close: closeTask } = useTaskSheetParam();
   const today = todayBkk();
@@ -47,6 +49,8 @@ export function ProjectsPortfolio() {
           late: tasksOnly.filter((i) => i.state === "late").length,
           mine: tasksOnly.filter((i) => i.state !== "done" && i.assigneeIds.includes(me)).length,
           timePct, daysLeft: dayNum(p.endDate) - dayNum(today),
+          // วันนับจากอัปเดตสถานะล่าสุด (ไม่เคยอัปเดต = นับจากวันเริ่มโปรเจกต์)
+          staleDays: dayNum(today) - dayNum(([...p.updates].sort((a, b) => b.at.localeCompare(a.at))[0]?.at.slice(0, 10)) ?? p.startDate),
         };
       })
       .filter((r) => (filter === "all" ? true : filter === "mine" ? !!memberRole(r.p, me) || tasks.some((t) => t.project?.projectId === r.p.id && t.assigneeIds.includes(me)) : !["done", "dropped"].includes(r.status)))
@@ -73,6 +77,8 @@ export function ProjectsPortfolio() {
         </div>
       </div>
 
+      {/* ผู้บริหาร (CEO/หัวหน้าแผนก) เห็นภาพรวมก่อน · พนักงานเห็น "งานของฉัน" ก่อน */}
+      {ready && canCreateProject(me) && <ExecSummary rows={rows} focus={focus} onFocus={setFocus} me={me} />}
       {ready && <MyProjectTasks onOpen={(id) => openTask(id)} />}
 
       {!ready ? (
@@ -84,9 +90,10 @@ export function ProjectsPortfolio() {
         </div>
       ) : (
         <>
-          <h2 className="m-0 pt-1 text-[16px] font-bold">{filter === "mine" ? "โปรเจกต์ของฉัน" : filter === "all" ? "โปรเจกต์ทั้งหมด" : "โปรเจกต์ที่กำลังทำ"} <span className="ml-1 text-[13px] font-normal text-[var(--ink-soft)]">{rows.length}</span></h2>
+          <h2 className="m-0 pt-1 text-[16px] font-bold">{filter === "mine" ? "โปรเจกต์ของฉัน" : filter === "all" ? "โปรเจกต์ทั้งหมด" : "โปรเจกต์ที่กำลังทำ"}{focus !== "all" ? ` · ${FOCUS_LABEL[focus]}` : ""} <span className="ml-1 text-[13px] font-normal text-[var(--ink-soft)]">{rows.filter((r) => inFocus(r, focus)).length}</span>
+            {focus !== "all" && <button type="button" onClick={() => setFocus("all")} className="ml-2 rounded-md px-2 py-0.5 text-[12.5px] font-normal text-[var(--brand-green-dark)] hover:bg-[var(--bg-soft)]">ดูทั้งหมด ✕</button>}</h2>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {rows.map((r) => <ProjectCard key={r.p.id} r={r} today={today} />)}
+            {rows.filter((r) => inFocus(r, focus)).map((r) => <ProjectCard key={r.p.id} r={r} today={today} />)}
           </div>
         </>
       )}
@@ -96,7 +103,95 @@ export function ProjectsPortfolio() {
   );
 }
 
-type Row = { p: Project; status: ProjectStatus; pct: number; next?: TimelineItem; count: number; late: number; mine: number; timePct: number; daysLeft: number };
+type Row = { p: Project; status: ProjectStatus; pct: number; next?: TimelineItem; count: number; late: number; mine: number; timePct: number; daysLeft: number; staleDays: number };
+
+type Focus = "all" | "late" | "risk" | "stale";
+const FOCUS_LABEL: Record<Focus, string> = { all: "ทั้งหมด", late: "ล่าช้า", risk: "มีความเสี่ยง", stale: "ไม่อัปเดตเกิน 7 วัน" };
+const STALE_DAYS = 7;
+const isOpen = (r: Row) => !["done", "dropped"].includes(r.status);
+const isStale = (r: Row) => isOpen(r) && r.status !== "hold" && r.staleDays > STALE_DAYS;
+function inFocus(r: Row, f: Focus): boolean {
+  if (f === "all") return true;
+  if (f === "stale") return isStale(r);
+  return isOpen(r) && r.status === f;
+}
+
+/** เหตุผลที่ต้องดู (สั้น ๆ) — ว่าง = ไม่มีปัญหา */
+function problemsOf(r: Row, today: string): { text: string; hot: boolean }[] {
+  const out: { text: string; hot: boolean }[] = [];
+  if (r.late) out.push({ text: `เลยกำหนด ${r.late} งาน`, hot: true });
+  if (r.next && r.next.start < today) out.push({ text: `จุดสำคัญ "${r.next.name}" เลยวันแล้ว`, hot: true });
+  if (r.daysLeft < 0) out.push({ text: `เลยวันเสร็จ ${-r.daysLeft} วัน`, hot: true });
+  if (r.count > 0 && r.timePct - r.pct >= 20) out.push({ text: `เวลาผ่านไป ${r.timePct}% งานเสร็จ ${r.pct}%`, hot: false });
+  if (isStale(r)) out.push({ text: `ไม่อัปเดตสถานะ ${r.staleDays} วัน`, hot: false });
+  if (r.status === "risk" && !out.length) out.push({ text: "เจ้าของแจ้งว่ามีความเสี่ยง", hot: false });
+  return out;
+}
+
+/**
+ * แถบผู้บริหาร — CEO/หัวหน้าแผนก (ตกลงกับผู้ใช้ 17/10/2569): ตัวเลขสรุป (กดแล้วการ์ดด้านล่างเหลือเฉพาะกลุ่มนั้น)
+ * + "ต้องดูก่อน" โปรเจกต์ที่มีปัญหาเรียงหนักสุดก่อน กดเปิด/ขอให้อัปเดตได้เลย · พนักงานไม่เห็นส่วนนี้
+ */
+function ExecSummary({ rows, focus, onFocus, me }: { rows: Row[]; focus: Focus; onFocus: (f: Focus) => void; me: string }) {
+  const today = todayBkk();
+  const open = rows.filter(isOpen);
+  const counts: Record<Focus, number> = {
+    all: open.length,
+    late: open.filter((r) => r.status === "late").length,
+    risk: open.filter((r) => r.status === "risk").length,
+    stale: open.filter(isStale).length,
+  };
+  const attention = open
+    .map((r) => ({ r, probs: problemsOf(r, today) }))
+    .filter((x) => x.probs.length || x.r.status === "late" || x.r.status === "risk")
+    .sort((a, b) => (RANK[a.r.status] ?? 9) - (RANK[b.r.status] ?? 9) || b.probs.filter((p) => p.hot).length - a.probs.filter((p) => p.hot).length || b.r.late - a.r.late)
+    .slice(0, 5);
+  const tiles: { f: Focus; label: string; tone: string }[] = [
+    { f: "all", label: "กำลังทำ", tone: "" },
+    { f: "late", label: "🔴 ล่าช้า", tone: "text-red-600" },
+    { f: "risk", label: "🟠 มีความเสี่ยง", tone: "text-amber-600" },
+    { f: "stale", label: `⏰ ไม่อัปเดตเกิน ${STALE_DAYS} วัน`, tone: "text-[var(--ink-soft)]" },
+  ];
+  if (!open.length) return null;
+  return (
+    <section className="grid gap-3">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4" role="group" aria-label="สรุปโปรเจกต์">
+        {tiles.map((t) => (
+          <button key={t.f} type="button" onClick={() => onFocus(focus === t.f ? "all" : t.f)} aria-pressed={focus === t.f && t.f !== "all"}
+            className={cn("grid gap-0.5 rounded-2xl border bg-[var(--bg)] px-4 py-3 text-left transition-colors hover:border-[var(--brand-green)]",
+              focus === t.f && t.f !== "all" ? "border-[var(--ink)] ring-1 ring-[var(--ink)]" : "border-[var(--line)]",
+              t.f === "late" && counts.late > 0 && "bg-red-50 dark:bg-red-950/30")}>
+            <b className={cn("text-[28px] leading-tight tabular-nums", counts[t.f] > 0 ? t.tone : "text-[var(--ink-soft)]")}>{counts[t.f]}</b>
+            <span className="text-[12.5px] text-[var(--ink-soft)]">{t.label}</span>
+          </button>
+        ))}
+      </div>
+      {attention.length > 0 && (
+        <div className="grid gap-1.5 rounded-2xl border border-[var(--line)] bg-[var(--bg)] p-3.5">
+          <b className="px-1 text-[15px]">ต้องดูก่อน <span className="text-[12.5px] font-normal text-[var(--ink-soft)]">เรียงจากปัญหาหนักสุด</span></b>
+          {attention.map(({ r, probs }) => (
+            <div key={r.p.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl bg-[var(--bg-soft)] px-3 py-2.5">
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: r.status === "late" ? "var(--chart-red)" : r.status === "risk" ? "var(--chart-amber)" : "var(--ink-soft)" }} />
+              <span className="min-w-0 flex-[1_1_240px]">
+                <b className="text-[14px]">{r.p.name}</b>
+                <span className="text-[12.5px] text-[var(--ink-soft)]"> · {getUser(r.p.ownerId)?.name ?? "—"} · </span>
+                {probs.map((x, i) => (
+                  <span key={i} className={cn("text-[12.5px]", x.hot ? "font-semibold text-red-600" : "text-[var(--ink-soft)]")}>{i ? " · " : ""}{x.text}</span>
+                ))}
+              </span>
+              <span className="flex shrink-0 gap-1.5">
+                {r.p.ownerId !== me && (isStale(r) || r.status === "risk") && (
+                  <button type="button" onClick={() => askProjectUpdate(r.p, me)} className="h-8 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 text-[12.5px] hover:bg-[var(--bg-soft)]">🔔 ขอให้อัปเดต</button>
+                )}
+                <Link href={`/report-task/projects/${r.p.id}`} className="inline-flex h-8 items-center rounded-lg bg-[var(--ink)] px-3 text-[12.5px] font-semibold text-[var(--bg)]">เปิด</Link>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
 
 /** การ์ดโปรเจกต์ — อ่านจบในการ์ดเดียว: สถานะ · คืบหน้าเทียบเวลาที่ผ่านไป · งานเลยกำหนด · จุดสำคัญถัดไป */
 function ProjectCard({ r, today }: { r: Row; today: string }) {

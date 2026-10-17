@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 
-import { getUser } from "@/modules/report_task/lib/directory";
+import { getUser, isDepartmentHead } from "@/modules/report_task/lib/directory";
 import { PROJECT_STATUS_META, dayNum } from "@/modules/report_task/lib/project-schedule";
 import { cn } from "@/modules/report_task/lib/utils";
 import { useHolidayStore } from "@/modules/report_task/store/holiday-store";
@@ -28,14 +28,31 @@ export function syncChatMember(project: { chatChannelId?: string }, userId: stri
   });
 }
 
-/** มอบงานในโปรเจกต์ให้คนที่ยังไม่ใช่สมาชิก → เพิ่มเป็นสมาชิก "แก้ได้" ให้เลย (เหมือนตอนสร้างจากแม่แบบ) + แจ้ง + เข้าห้องแชท */
+/**
+ * สิทธิ์เริ่มต้นของคนที่ถูกเพิ่มเข้าโปรเจกต์ (ตกลงกับผู้ใช้ 17/10/2569):
+ * หัวหน้าแผนก = "แก้ได้" (เพิ่ม/แบ่งงานให้ลูกน้อง) · พนักงานทั่วไป = "ดูอย่างเดียว" (เห็นงาน ติ๊กเสร็จงานตัวเอง
+ * คอมเมนต์ แตกงานย่อยจากงานที่ได้รับ แต่เพิ่มงานใหม่ในโปรเจกต์ไม่ได้ งานไม่รก) · เจ้าของเปลี่ยนรายคนได้ในตั้งค่า
+ * ใช้กับคนที่เพิ่มใหม่เท่านั้น — สมาชิกเดิมไม่เปลี่ยน
+ */
+export function defaultMemberRole(userId: string): "editor" | "viewer" {
+  return isDepartmentHead(userId) ? "editor" : "viewer";
+}
+
+/** ขอให้เจ้าของโปรเจกต์อัปเดตสถานะ (แจ้งเตือนไปที่เจ้าของ) */
+export function askProjectUpdate(project: { id: string; name: string; ownerId: string }, actorId: string) {
+  const name = getUser(actorId)?.name ?? "มีคน";
+  useNotificationStore.getState().notifyMany([project.ownerId], actorId, `${name} ขอให้อัปเดตสถานะโปรเจกต์ "${project.name}"`, undefined, `/report-task/projects/${project.id}`);
+  toast.success(`ส่งคำขอให้ ${getUser(project.ownerId)?.name ?? "เจ้าของ"} แล้ว`);
+}
+
+/** มอบงานในโปรเจกต์ให้คนที่ยังไม่ใช่สมาชิก → เพิ่มเป็นสมาชิกให้เลย (สิทธิ์ตาม defaultMemberRole) (เหมือนตอนสร้างจากแม่แบบ) + แจ้ง + เข้าห้องแชท */
 export function ensureProjectMembers(projectId: string, userIds: string[], actorId: string) {
   const p = useProjectStore.getState().projects.find((x) => x.id === projectId);
   if (!p) return;
   const have = new Set([p.ownerId, ...p.members.map((m) => m.userId)]);
   const fresh = [...new Set(userIds)].filter((id) => id && !have.has(id));
   if (!fresh.length) return;
-  useProjectStore.getState().updateProject(p.id, { members: [...p.members, ...fresh.map((userId) => ({ userId, role: "editor" as const }))] });
+  useProjectStore.getState().updateProject(p.id, { members: [...p.members, ...fresh.map((userId) => ({ userId, role: defaultMemberRole(userId) }))] });
   // แจ้ง "เพิ่มเข้าโปรเจกต์" ไม่ซ้ำกับแจ้ง "มอบหมายงาน" ที่ตัวงานส่งเอง
   notifyAddedToProject(p, fresh, actorId);
   fresh.forEach((id) => syncChatMember(p, id, "add"));

@@ -30,7 +30,7 @@ import { useTaskStore } from "@/modules/report_task/store/task-store";
 import type { Project, ProjectStatus } from "@/modules/report_task/types";
 import { ProjectTimeline } from "./project-timeline";
 import { BoardTab, CalendarTab, DashboardTab, FilesTab, ListTab, MessagesTab } from "./project-tabs";
-import { PCT_HELP, PersonDot, ProjectStatusChip, STATE_COLOR, STATE_LABEL, StatePill, fmtDay, ensureProjectMembers, notifyAddedToProject, syncChatMember, todayBkk, useCompanyHolidays } from "./project-ui";
+import { PCT_HELP, PersonDot, ProjectStatusChip, STATE_COLOR, STATE_LABEL, StatePill, fmtDay, askProjectUpdate, defaultMemberRole, ensureProjectMembers, notifyAddedToProject, syncChatMember, todayBkk, useCompanyHolidays } from "./project-ui";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { ROLE_OF_DEFAULT } from "./project-roles";
 
@@ -464,11 +464,7 @@ function AskUpdateButton({ project }: { project: Project }) {
   if (me === project.ownerId || project.closedStatus) return null;
   return (
     <button type="button" className="rounded-lg border border-[var(--line)] px-2.5 py-1 text-xs hover:bg-[var(--bg-soft)]"
-      onClick={() => {
-        const name = getUser(me)?.name ?? "มีคน";
-        useNotificationStore.getState().notifyMany([project.ownerId], me, `${name} ขอให้อัปเดตสถานะโปรเจกต์ "${project.name}"`, undefined, `/report-task/projects/${project.id}`);
-        toast.success(`ส่งคำขอให้ ${getUser(project.ownerId)?.name ?? "เจ้าของ"} แล้ว`);
-      }}>
+      onClick={() => askProjectUpdate(project, me)}>
       🔔 ขอให้อัปเดต
     </button>
   );
@@ -584,7 +580,7 @@ function ProjectSettingsButton({ project }: { project: Project }) {
               ))}
               <select className={field} value="" onChange={(e) => {
                   if (!e.target.value) return;
-                  updateProject(project.id, { members: [...project.members, { userId: e.target.value, role: "editor" }] });
+                  updateProject(project.id, { members: [...project.members, { userId: e.target.value, role: defaultMemberRole(e.target.value) }] });
                   notifyAddedToProject(project, [e.target.value], me);
                   syncChatMember(project, e.target.value, "add");
                 }}>
