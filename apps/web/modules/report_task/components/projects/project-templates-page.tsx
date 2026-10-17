@@ -68,7 +68,7 @@ export function ProjectTemplatesPage() {
         <div className="grid content-start gap-1 border-b border-[var(--line)] bg-[var(--bg-soft)] p-2 md:border-b-0 md:border-r">
           {templates.map((x) => (
             <button key={x.id} type="button" onClick={() => setCur(x.id)}
-              className={cn("grid gap-0.5 rounded-lg border px-2.5 py-2 text-left", x.id === t?.id ? "border-[var(--brand-green)] bg-[var(--bg)]" : "border-transparent")}>
+              className={cn("grid gap-0.5 rounded-lg px-2.5 py-2 text-left", x.id === t?.id ? "bg-[var(--bg)] ring-1 ring-[var(--brand-green)]" : "hover:bg-[var(--bg)]")}>
               <b className="text-[13.5px]">{x.name}</b>
               <span className="text-xs text-[var(--ink-soft)]">{x.sections.length} ช่วง · {x.items.filter((i) => !i.milestone).length} งาน · {x.items.filter((i) => i.milestone).length} จุดสำคัญ · ใช้แล้ว {x.usedCount} ครั้ง</span>
             </button>

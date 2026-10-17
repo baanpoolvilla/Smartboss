@@ -252,7 +252,7 @@ export function BoardTab({ project, items, canEdit, onOpen }: { project: Project
             <div className="flex justify-between text-xs font-semibold text-[var(--ink-soft)]"><span className="truncate">{c.label}</span><span>{c.list.length}</span></div>
             {c.list.map((t) => (
               <div key={t.id} draggable={canEdit} onDragStart={(e) => e.dataTransfer.setData("text/task", t.id)}>
-                <TaskCard task={t} onOpen={onOpen} />
+                <TaskCard task={t} onOpen={onOpen} hideProjectChip />
               </div>
             ))}
             {!c.list.length && <p className="m-0 py-4 text-center text-xs text-[var(--ink-soft)]">ว่าง</p>}

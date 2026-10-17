@@ -30,7 +30,7 @@ import { useTaskStore } from "@/modules/report_task/store/task-store";
 import type { Project, ProjectStatus } from "@/modules/report_task/types";
 import { ProjectTimeline } from "./project-timeline";
 import { BoardTab, CalendarTab, DashboardTab, FilesTab, ListTab, MessagesTab } from "./project-tabs";
-import { PCT_HELP, PersonDot, ProjectStatusChip, STATE_COLOR, STATE_LABEL, fmtDay, ensureProjectMembers, notifyAddedToProject, syncChatMember, todayBkk, useCompanyHolidays } from "./project-ui";
+import { PCT_HELP, PersonDot, ProjectStatusChip, STATE_COLOR, STATE_LABEL, StatePill, fmtDay, ensureProjectMembers, notifyAddedToProject, syncChatMember, todayBkk, useCompanyHolidays } from "./project-ui";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { ROLE_OF_DEFAULT } from "./project-roles";
 
@@ -154,7 +154,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
         <div role="tablist" className="flex min-w-0 gap-1 overflow-x-auto">
           {TABS.filter((t) => PRIMARY_TABS.includes(t.id)).map((t) => (
             <button key={t.id} role="tab" type="button" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
-              className={cn("inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3.5 py-2.5 text-[14px] transition-colors", tab === t.id ? "border-[var(--brand-green)] font-bold text-[var(--brand-green-dark)]" : "border-transparent text-[var(--ink-soft)] hover:text-[var(--ink)]")}>
+              className={cn("inline-flex items-center gap-1.5 whitespace-nowrap px-3.5 py-2.5 text-[14px] transition-colors", tab === t.id ? "font-bold text-[var(--brand-green-dark)] shadow-[inset_0_-2px_0_var(--brand-green)]" : "text-[var(--ink-soft)] hover:text-[var(--ink)]")}>
               <t.icon className="h-4 w-4" />
               {t.label}
             </button>
@@ -185,7 +185,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
         <ProjectTimeline project={project} items={items} today={today} holidays={holidays} canEdit={canEdit} canPlan={canPlan}
           onOpenTask={(id) => openTask(id)} onAddTask={(sec) => setNewTaskSection(sec || project.sections[0]?.id || "")} />
       )}
-      {tab === "overview" && <Overview project={project} items={allItems} pct={pct} today={today} canEdit={canEdit} />}
+      {tab === "overview" && <Overview project={project} items={allItems} pct={pct} today={today} canEdit={canEdit} onOpen={(id) => openTask(id)} />}
       {tab === "list" && <ListTab project={project} items={items} canEdit={canEdit} canPlan={canPlan} onOpen={(id) => openTask(id)} />}
       {tab === "board" && <BoardTab project={project} items={items} canEdit={canEdit} onOpen={(id) => openTask(id)} />}
       {tab === "calendar" && <CalendarTab items={items} today={today} onOpen={(id) => openTask(id)} />}
@@ -225,7 +225,7 @@ function MoreTabs({ tab, onPick }: { tab: Tab; onPick: (t: Tab) => void }) {
   return (
     <div className="relative shrink-0">
       <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)}
-        className={cn("inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3.5 py-2.5 text-[14px]", active ? "border-[var(--brand-green)] font-bold text-[var(--brand-green-dark)]" : "border-transparent text-[var(--ink-soft)] hover:text-[var(--ink)]")}>
+        className={cn("inline-flex items-center gap-1.5 whitespace-nowrap px-3.5 py-2.5 text-[14px]", active ? "font-bold text-[var(--brand-green-dark)] shadow-[inset_0_-2px_0_var(--brand-green)]" : "text-[var(--ink-soft)] hover:text-[var(--ink)]")}>
         {active && <active.icon className="h-4 w-4" />}
         {active ? active.label : "เพิ่มเติม"} ▾
       </button>
@@ -265,83 +265,140 @@ function EmptyProject({ canEdit, onAddTask, onTemplates }: { canEdit: boolean; o
   );
 }
 
-function Overview({ project, items, pct, today, canEdit }: { project: Project; items: ReturnType<typeof timelineItems>; pct: number; today: string; canEdit: boolean }) {
+function Overview({ project, items, pct, today, canEdit, onOpen }: { project: Project; items: ReturnType<typeof timelineItems>; pct: number; today: string; canEdit: boolean; onOpen: (id: string) => void }) {
   const tasksOnly = items.filter((i) => i.kind === "task");
   const n = (s: string) => tasksOnly.filter((i) => i.state === s).length;
   const latest = [...project.updates].sort((a, b) => b.at.localeCompare(a.at))[0];
-  const miles = items.filter((i) => i.kind === "milestone");
-  const C = 2 * Math.PI * 34;
+  const miles = items.filter((i) => i.kind === "milestone").sort((a, b) => a.start.localeCompare(b.start));
+  const R = 26, C = 2 * Math.PI * R;
   const { late, affected } = lateImpact(items);
+  const daysLeft = dayNum(project.endDate) - dayNum(today);
+  // งานที่ต้องทำต่อ: เลยกำหนดก่อน แล้วตามวันส่ง (ไม่รวมที่เสร็จแล้ว)
+  const next = tasksOnly
+    .filter((i) => i.state !== "done")
+    .sort((a, b) => (a.state === "late" ? 0 : 1) - (b.state === "late" ? 0 : 1) || a.end.localeCompare(b.end))
+    .slice(0, 6);
+  const card = "rounded-xl border border-[var(--line)] bg-[var(--bg)] p-4";
+  const h = "m-0 text-[15px] font-bold";
+  const tiles: { k: "done" | "doing" | "late" | "todo"; icon: string }[] = [
+    { k: "done", icon: "✓" }, { k: "doing", icon: "▶" }, { k: "late", icon: "!" }, { k: "todo", icon: "○" },
+  ];
   return (
-    <div className="grid gap-3 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-      <div className="grid content-start gap-3">
-        <section className="rounded-xl border border-[var(--line)] p-4">
-          <h3 className="m-0 mb-1 text-sm font-semibold">เป้าหมาย</h3>
-          <p className="m-0 whitespace-pre-wrap text-sm">{project.description || "—"}</p>
-        </section>
-        <KeyResources project={project} canEdit={canEdit} />
-        <section className="grid gap-3 rounded-xl border border-[var(--line)] p-4">
-          <div className="flex items-center gap-4">
-            <svg width="84" height="84" viewBox="0 0 84 84" aria-label={`ความคืบหน้า ${pct}%`}>
-              <circle cx="42" cy="42" r="34" fill="none" stroke="var(--bg-soft)" strokeWidth="9" />
-              {pct > 0 && <circle cx="42" cy="42" r="34" fill="none" stroke="var(--brand-green)" strokeWidth="9" strokeLinecap="round" strokeDasharray={`${(C * pct) / 100} ${C}`} transform="rotate(-90 42 42)" />}
-              <text x="42" y="47" textAnchor="middle" fontSize="17" fontWeight="700" fill="var(--ink)">{pct}%</text>
-            </svg>
-            <div>
-              <b>ความคืบหน้า</b>
-              <p className="m-0 text-xs text-[var(--ink-soft)]">{PCT_HELP}</p>
-              <p className="m-0 text-xs text-[var(--ink-soft)]">เหลือ {Math.max(0, dayNum(project.endDate) - dayNum(today))} วันถึงวันเสร็จเป้าหมาย</p>
+    <div className="grid gap-3">
+      {/* แถวสรุป — อ่านจบในบรรทัดเดียว */}
+      {/* มือถือ: ความคืบหน้าเต็มแถว แล้วตัวเลข 4 ช่องเรียงแถวเดียว (เดิม 2x2 กล่องใหญ่กินจอ) */}
+      <div className="grid grid-cols-4 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
+        <div className={cn(card, "col-span-4 flex items-center gap-3 sm:col-span-1")} title={PCT_HELP}>
+          <svg width="64" height="64" viewBox="0 0 64 64" aria-label={`ความคืบหน้า ${pct}%`} className="shrink-0">
+            {/* เส้นพื้นหลังต้องมองเห็น (เดิมใช้สีเดียวกับพื้นการ์ด เหลือแต่เส้นโค้งลอย ๆ) */}
+            <circle cx="32" cy="32" r={R} fill="none" stroke="var(--line)" strokeWidth="7" />
+            {pct > 0 && <circle cx="32" cy="32" r={R} fill="none" stroke="var(--brand-green)" strokeWidth="7" strokeLinecap="round" strokeDasharray={`${(C * pct) / 100} ${C}`} transform="rotate(-90 32 32)" />}
+            <text x="32" y="37" textAnchor="middle" fontSize="15" fontWeight="700" fill="var(--ink)">{pct}%</text>
+          </svg>
+          <div className="min-w-0">
+            <b className="block text-[14px]">ความคืบหน้า</b>
+            <span className={cn("text-[12.5px]", daysLeft < 0 && !project.closedStatus ? "font-semibold text-red-600" : "text-[var(--ink-soft)]")}>
+              {project.closedStatus ? "ปิดโปรเจกต์แล้ว" : daysLeft >= 0 ? `เหลือ ${daysLeft} วัน` : `เลยวันเสร็จ ${-daysLeft} วัน`}
+            </span>
+          </div>
+        </div>
+        {tiles.map(({ k, icon }) => {
+          const v = n(k);
+          const hot = k === "late" && v > 0;
+          return (
+            <div key={k} className={cn(card, "grid content-center gap-0.5 max-sm:p-2.5 max-sm:text-center", hot && "border-red-300 bg-red-50 dark:border-red-900 dark:bg-red-950/30")}>
+              <span className="flex items-center gap-1.5 text-[12.5px] text-[var(--ink-soft)] max-sm:flex-col max-sm:gap-1 max-sm:text-[11px]">
+                <span className="grid h-5 w-5 place-items-center rounded-full text-[10px] font-bold text-white" style={{ background: k === "todo" ? "var(--chart-gray)" : STATE_COLOR[k] }}>{icon}</span>
+                {STATE_LABEL[k]}
+              </span>
+              <b className={cn("text-[22px] leading-tight tabular-nums sm:text-[28px]", hot && "text-red-600")}>{v}</b>
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {(["done", "doing", "late", "todo"] as const).map((k) => (
-              <div key={k} className="rounded-lg bg-[var(--bg-soft)] p-2.5">
-                <b className="block text-2xl tabular-nums" style={k === "late" ? { color: STATE_COLOR.late } : undefined}>{n(k)}</b>
-                <span className="text-xs text-[var(--ink-soft)]">{STATE_LABEL[k]}</span>
-              </div>
-            ))}
-          </div>
-          {late.length > 0 && (
-            <p className="m-0 text-xs text-red-600">
-              เลยกำหนด: {late.map((l) => l.name).join(", ")}{affected.length ? ` · มีงานรออยู่ ${affected.length} รายการ` : ""}
-            </p>
-          )}
-        </section>
+          );
+        })}
       </div>
-      <div className="grid content-start gap-3">
-        <section className="rounded-xl border border-[var(--line)] p-4">
-          <div className="mb-2 flex items-center gap-2">
-            <h3 className="m-0 text-sm font-semibold">สถานะล่าสุด</h3>
-            <span className="ml-auto"><AskUpdateButton project={project} /></span>
-          </div>
-          {latest ? <UpdatePost u={latest} /> : <p className="m-0 text-sm text-[var(--ink-soft)]">ยังไม่มีอัปเดต</p>}
-        </section>
-        <section className="rounded-xl border border-[var(--line)] p-4">
-          <h3 className="m-0 mb-2 text-sm font-semibold">จุดสำคัญ</h3>
-          {miles.length ? (
-            <ul className="m-0 grid list-none gap-2 p-0">
-              {miles.map((m) => (
-                <li key={m.id} className="flex items-center gap-2.5 text-sm">
-                  <span className="h-2.5 w-2.5 rotate-45 rounded-[2px]" style={{ background: m.state === "done" ? STATE_COLOR.done : m.state === "late" ? STATE_COLOR.late : "var(--chart-violet)" }} />
-                  {m.name}
-                  <span className="ml-auto whitespace-nowrap tabular-nums text-[var(--ink-soft)]">{fmtDay(m.start)}</span>
+
+      {late.length > 0 && (
+        <p className="m-0 rounded-xl bg-red-50 px-4 py-2.5 text-[13.5px] text-red-700 dark:bg-red-950/40 dark:text-red-300">
+          <b>เลยกำหนด:</b> {late.map((l) => l.name).join(", ")}{affected.length ? ` · มีงาน/จุดสำคัญรออยู่ ${affected.length} รายการ` : ""}
+        </p>
+      )}
+
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <div className="grid content-start gap-3">
+          <section className={card}>
+            <h3 className={cn(h, "mb-2")}>งานที่ต้องทำต่อ</h3>
+            {next.length ? (
+              <ul className="m-0 grid list-none gap-0.5 p-0">
+                {next.map((i) => (
+                  <li key={i.id}>
+                    <button type="button" onClick={() => onOpen(i.id)} className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left hover:bg-[var(--bg-soft)]">
+                      {i.assigneeIds[0] ? <PersonDot userId={i.assigneeIds[0]} size={24} /> : <span className="w-6" />}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[14px] font-medium">{i.parentId ? "↳ " : ""}{i.name}</span>
+                        <span className="block truncate text-[12px] text-[var(--ink-soft)]">{getUser(i.assigneeIds[0] ?? "")?.name ?? "ยังไม่มีคนทำ"} · ส่ง {fmtDay(i.end)}</span>
+                      </span>
+                      <StatePill state={i.state} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : <p className="m-0 text-[13.5px] text-[var(--ink-soft)]">{tasksOnly.length ? "งานทั้งหมดเสร็จแล้ว 🎉" : "ยังไม่มีงานในโปรเจกต์"}</p>}
+          </section>
+          <section className={card}>
+            <h3 className={cn(h, "mb-1.5")}>เป้าหมาย</h3>
+            {project.description ? (
+              <p className="m-0 whitespace-pre-wrap text-[14px] leading-relaxed">{project.description}</p>
+            ) : (
+              <p className="m-0 text-[13.5px] text-[var(--ink-soft)]">ยังไม่ได้เขียนเป้าหมาย{canEdit ? " · เขียนได้ใน ⚙ ตั้งค่าโปรเจกต์ (เช่น ทำอะไร ให้เสร็จเมื่อไหร่ งบเท่าไหร่)" : ""}</p>
+            )}
+          </section>
+          <KeyResources project={project} canEdit={canEdit} />
+        </div>
+
+        <div className="grid content-start gap-3">
+          <section className={card}>
+            <div className="mb-2 flex items-center gap-2">
+              <h3 className={h}>สถานะล่าสุด</h3>
+              <span className="ml-auto"><AskUpdateButton project={project} /></span>
+            </div>
+            {latest ? <UpdatePost u={latest} /> : <p className="m-0 text-[13.5px] text-[var(--ink-soft)]">ยังไม่มีอัปเดต · โพสต์ได้ในแท็บ &quot;อัปเดตสถานะ&quot; (เพิ่มเติม ▾)</p>}
+          </section>
+          <section className={card}>
+            <h3 className={cn(h, "mb-2")}>จุดสำคัญ</h3>
+            {miles.length ? (
+              <ul className="m-0 grid list-none gap-1.5 p-0">
+                {miles.map((m) => {
+                  const d = dayNum(m.start) - dayNum(today);
+                  return (
+                    <li key={m.id} className="flex items-center gap-2.5 text-[14px]">
+                      <span className="h-3 w-3 shrink-0 rotate-45 rounded-[2px]" style={{ background: m.state === "done" ? STATE_COLOR.done : m.state === "late" ? STATE_COLOR.late : "var(--chart-violet)" }} />
+                      <span className={cn("min-w-0 flex-1 truncate", m.state === "done" && "text-[var(--ink-soft)] line-through")}>{m.name}</span>
+                      <span className="whitespace-nowrap text-[12.5px] tabular-nums text-[var(--ink-soft)]">{fmtDay(m.start)}</span>
+                      <span className={cn("whitespace-nowrap rounded-full px-2 py-0.5 text-[11.5px] font-semibold",
+                        m.state === "done" ? "bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-300" : d < 0 ? "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300" : "bg-[var(--bg-soft)] text-[var(--ink-soft)]")}>
+                        {m.state === "done" ? "ถึงแล้ว" : d < 0 ? `เลย ${-d} วัน` : d === 0 ? "วันนี้" : `อีก ${d} วัน`}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : <p className="m-0 text-[13.5px] text-[var(--ink-soft)]">ยังไม่มีจุดสำคัญ · เพิ่มได้ในแท็บแผนเวลา</p>}
+          </section>
+          <section className={card}>
+            <h3 className={cn(h, "mb-2")}>สมาชิก <span className="ml-1 text-[12px] font-normal text-[var(--ink-soft)]">{project.members.filter((m) => m.userId !== project.ownerId).length + 1} คน</span></h3>
+            <ul className="m-0 grid list-none gap-1.5 p-0">
+              {[{ userId: project.ownerId, role: "owner" as const }, ...project.members.filter((m) => m.userId !== project.ownerId)].map((m) => (
+                <li key={m.userId} className="flex items-center gap-2.5 text-[14px]">
+                  <PersonDot userId={m.userId} size={26} />
+                  <span className="min-w-0 flex-1 truncate">{getUser(m.userId)?.name ?? "—"}</span>
+                  <span className={cn("rounded-full px-2 py-0.5 text-[11.5px] font-semibold", m.role === "owner" ? "bg-[var(--accent)] text-[var(--brand-green-dark)]" : "bg-[var(--bg-soft)] text-[var(--ink-soft)]")}>
+                    {{ owner: "เจ้าของ", editor: "แก้ได้", viewer: "ดูอย่างเดียว" }[m.role]}
+                  </span>
                 </li>
               ))}
             </ul>
-          ) : <p className="m-0 text-sm text-[var(--ink-soft)]">ยังไม่มีจุดสำคัญ</p>}
-        </section>
-        <section className="rounded-xl border border-[var(--line)] p-4">
-          <h3 className="m-0 mb-2 text-sm font-semibold">สมาชิก</h3>
-          <div className="flex flex-wrap gap-2.5">
-            {[{ userId: project.ownerId, role: "owner" as const }, ...project.members.filter((m) => m.userId !== project.ownerId)].map((m) => (
-              <span key={m.userId} className="inline-flex items-center gap-1.5 text-[13px]">
-                <PersonDot userId={m.userId} size={22} />
-                {getUser(m.userId)?.name}
-                <span className="text-[11px] text-[var(--ink-soft)]">{{ owner: "เจ้าของ", editor: "แก้ได้", viewer: "ดูอย่างเดียว" }[m.role]}</span>
-              </span>
-            ))}
-          </div>
-        </section>
+          </section>
+        </div>
       </div>
     </div>
   );

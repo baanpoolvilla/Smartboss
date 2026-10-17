@@ -52,6 +52,7 @@ import { StickerConfirmDialog } from "@/modules/report_task/components/shared/st
 import type { Sticker } from "@/modules/report_task/types";
 
 interface CardBodyProps {
+  hideProjectChip?: boolean;
   task: Task;
   onOpen?: (id: string) => void;
   /** True inside the derived "เลยกำหนด" column — tags the card with its real
@@ -70,7 +71,7 @@ interface CardBodyProps {
   dimWhenDone?: boolean;
 }
 
-function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dimWhenDone = true }: CardBodyProps) {
+function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dimWhenDone = true, hideProjectChip }: CardBodyProps) {
   const addReaction = useTaskStore((s) => s.addReaction);
   const moveTask = useTaskStore((s) => s.moveTask);
   const toggleAssigneeChecklist = useTaskStore((s) => s.toggleAssigneeChecklist);
@@ -451,7 +452,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
             </span>
           )}
           <DueDateBadge task={task} />
-          {task.project && <ProjectChip projectId={task.project.projectId} sectionId={task.project.sectionId} />}
+          {task.project && !hideProjectChip && <ProjectChip projectId={task.project.projectId} sectionId={task.project.sectionId} />}
           {task.parentId ? <ParentTaskLink parentId={task.parentId} /> : <SubtaskCountChip taskId={task.id} />}
           {task.recurrence && (
             <span
@@ -624,12 +625,15 @@ export const TaskCard = memo(function TaskCard({
   showOriginalStatus,
   groupedByPriority,
   dimWhenDone,
+  hideProjectChip,
 }: {
   task: Task;
   onOpen: (id: string) => void;
   showOriginalStatus?: boolean;
   groupedByPriority?: boolean;
   dimWhenDone?: boolean;
+  /** อยู่ในหน้าโปรเจกต์อยู่แล้ว — ไม่ต้องโชว์ป้ายชื่อโปรเจกต์ซ้ำ */
+  hideProjectChip?: boolean;
 }) {
   return (
     <TaskCardBody
@@ -638,6 +642,7 @@ export const TaskCard = memo(function TaskCard({
       showOriginalStatus={showOriginalStatus}
       groupedByPriority={groupedByPriority}
       dimWhenDone={dimWhenDone}
+      hideProjectChip={hideProjectChip}
     />
   );
 });
