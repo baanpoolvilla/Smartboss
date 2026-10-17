@@ -11,7 +11,8 @@ import { cn } from "@/modules/report_task/lib/utils";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useProjectStore } from "@/modules/report_task/store/project-store";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
-import type { Project, ProjectMilestone, Task } from "@/modules/report_task/types";
+import type { Project, ProjectMilestone, ProjectTemplate, Task } from "@/modules/report_task/types";
+import { TemplateEditor } from "./project-templates-page";
 import { guessPersonForRole } from "./project-roles";
 import { fmtDay, notifyAddedToProject, todayBkk, useCompanyHolidays } from "./project-ui";
 
@@ -37,7 +38,12 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
   const [ownerId, setOwnerId] = useState(me);
   const [memberIds, setMemberIds] = useState<string[]>([]);
   const [tplId, setTplId] = useState<string>(templates[0]?.id ?? "");
-  const tpl = templates.find((t) => t.id === tplId);
+  const tpl0 = templates.find((t) => t.id === tplId);
+  // สำเนาแม่แบบที่ปรับเฉพาะโปรเจกต์นี้ (ตัด/เพิ่มงาน เลื่อนวัน ยืดหด เปลี่ยนงานที่ต้องรอ) — ต้นฉบับไม่เปลี่ยน
+  const [draft, setDraft] = useState<ProjectTemplate | null>(null);
+  const [editing, setEditing] = useState(false);
+  const tpl = draft && draft.id === tplId ? draft : tpl0;
+  const tweaked = !!draft && draft.id === tplId;
   const roles = useMemo(() => [...new Set((tpl?.items ?? []).filter((i) => !i.milestone).map((i) => i.role || "ทีมงาน"))], [tpl]);
   const [roleMap, setRoleMap] = useState<Record<string, string>>({});
   // เดาคนจากตำแหน่ง/แผนก — เดาไม่ได้ใส่เจ้าของโปรเจกต์ (ปกติ = คนสร้างเอง) ไว้ก่อน เปลี่ยนได้
@@ -117,7 +123,8 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
     addProject(project);
     newTasks.forEach((t) => addTask(t));
     notifyAddedToProject(project, [ownerId, ...members.map((m) => m.userId)], me);
-    if (tpl) upsertTemplate({ ...tpl, usedCount: tpl.usedCount + 1 });
+    // นับการใช้ที่แม่แบบต้นฉบับ (ไม่เอาสำเนาที่ปรับไปทับต้นฉบับ)
+    if (tpl0) upsertTemplate({ ...tpl0, usedCount: tpl0.usedCount + 1 });
     toast.success(`สร้างโปรเจกต์แล้ว${newTasks.length ? ` · สร้างงาน ${newTasks.length} งานบนบอร์ดงานให้` : ""}`);
     onClose();
     onCreated(pid);
@@ -174,11 +181,23 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
               <span className="text-xs text-[var(--ink-soft)]">เริ่มจากแม่แบบ</span>
               {[{ id: "", name: "เปล่า", sub: "เริ่มจากศูนย์" }, ...templates.map((t) => ({ id: t.id, name: t.name, sub: `${t.sections.map((s) => s.name).join(" → ")} · ${t.items.filter((i) => i.milestone).length} จุดสำคัญ${t.anchor === "end" ? " · นับถอยหลังจากวันเสร็จ" : ""}` }))].map((o) => (
                 <label key={o.id || "blank"} className={cn("flex cursor-pointer gap-2.5 rounded-xl border p-2.5", tplId === o.id ? "border-[var(--brand-green)] bg-[var(--accent)]" : "border-[var(--line)]")}>
-                  <input type="radio" name="proj-tpl" checked={tplId === o.id} onChange={() => setTplId(o.id)} className="mt-1 accent-[var(--brand-green)]" />
+                  <input type="radio" name="proj-tpl" checked={tplId === o.id} onChange={() => { setTplId(o.id); setDraft(null); }} className="mt-1 accent-[var(--brand-green)]" />
                   <span><b className="block text-[13.5px]">{o.name}</b><span className="text-xs text-[var(--ink-soft)]">{o.sub}</span></span>
                 </label>
               ))}
             </div>
+            {tpl && (
+              <div className={cn("flex flex-wrap items-center gap-2 rounded-xl border p-2.5", tweaked ? "border-[var(--brand-green)] bg-[var(--accent)]" : "border-dashed border-[var(--line)]")}>
+                <span className="min-w-0 flex-1 text-xs text-[var(--ink-soft)]">
+                  {tweaked ? <><b className="text-[var(--brand-green-dark)]">ปรับแล้วสำหรับโปรเจกต์นี้</b> · {tpl.items.filter((i) => !i.milestone).length} งาน · แม่แบบต้นฉบับไม่เปลี่ยน</> : "อยากเลื่อนวัน ตัด/เพิ่มงาน หรือเปลี่ยนลำดับงาน เฉพาะโปรเจกต์นี้?"}
+                </span>
+                <button type="button" className="rounded-lg bg-[var(--brand-green)] px-3 py-1.5 text-xs font-semibold text-white"
+                  onClick={() => { if (!tweaked && tpl0) setDraft(structuredClone(tpl0)); setEditing(true); }}>
+                  ✏️ {tweaked ? "แก้ต่อ" : "ปรับงานก่อนสร้าง"}
+                </button>
+                {tweaked && <button type="button" className="rounded-lg px-2 py-1.5 text-xs text-[var(--ink-soft)] hover:underline" onClick={() => setDraft(null)}>กลับเป็นแม่แบบเดิม</button>}
+              </div>
+            )}
             {tpl && roles.length > 0 && (
               <div className="grid gap-1.5">
                 <span className="text-xs text-[var(--ink-soft)]">ใครทำตำแหน่งไหน</span>
@@ -204,6 +223,33 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
           <button type="button" className="rounded-lg bg-[var(--brand-green)] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50" disabled={!!blocked} onClick={create}>สร้างโปรเจกต์</button>
         </div>
       </div>
+      {editing && draft && (
+        // หน้าต่างแก้งานของแม่แบบสำหรับโปรเจกต์นี้ — ซ้อนบนหน้าสร้างโปรเจกต์
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={(e) => { e.stopPropagation(); setEditing(false); }}>
+          <div className="grid max-h-[94dvh] w-full grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-t-2xl bg-[var(--bg)] shadow-2xl sm:max-w-5xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="ปรับงานสำหรับโปรเจกต์นี้">
+            <div className="flex flex-wrap items-center gap-2 border-b border-[var(--line)] px-4 py-3">
+              <b className="text-base">ปรับงานสำหรับโปรเจกต์นี้</b>
+              <span className="text-xs text-[var(--ink-soft)]">จาก &quot;{tpl0?.name}&quot; · แก้ตรงนี้ไม่เปลี่ยนแม่แบบต้นฉบับ</span>
+              <button type="button" className="ml-auto px-2" onClick={() => setEditing(false)} aria-label="ปิด">✕</button>
+            </div>
+            <div className="overflow-y-auto">
+              <TemplateEditor t={draft} canEdit onChange={setDraft} forProject={{ start, end }} />
+            </div>
+            <div className="flex flex-wrap items-center gap-2 border-t border-[var(--line)] px-4 py-3">
+              <button type="button" className="rounded-lg border border-[var(--line)] px-3 py-1.5 text-sm"
+                onClick={() => {
+                  const copy: ProjectTemplate = { ...structuredClone(draft), id: `tpl-${uuid()}`, name: `${name.trim() || tpl0?.name || "แม่แบบ"} (แม่แบบ)`, usedCount: 0, createdBy: me, updatedAt: new Date().toISOString() };
+                  upsertTemplate(copy);
+                  toast.success(`บันทึกเป็นแม่แบบใหม่ "${copy.name}" แล้ว · แม่แบบเดิมยังอยู่`);
+                }}>
+                บันทึกเป็นแม่แบบใหม่ด้วย
+              </button>
+              <button type="button" className="rounded-lg px-3 py-1.5 text-sm text-[var(--ink-soft)] hover:underline" onClick={() => { setDraft(null); setEditing(false); }}>ยกเลิกการปรับ</button>
+              <button type="button" className="ml-auto rounded-lg bg-[var(--brand-green)] px-4 py-1.5 text-sm font-semibold text-white" onClick={() => setEditing(false)}>ใช้แบบที่ปรับ</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

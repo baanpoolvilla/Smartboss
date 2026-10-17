@@ -86,8 +86,13 @@ export function ProjectTemplatesPage() {
   );
 }
 
-function TemplateEditor({ t, canEdit, onChange, onDuplicate, onDelete }: {
-  t: ProjectTemplate; canEdit: boolean; onChange: (t: ProjectTemplate) => void; onDuplicate: () => void; onDelete: () => void;
+/**
+ * ตัวแก้แม่แบบ — ใช้ 2 ที่: หน้าแม่แบบ (แก้ต้นฉบับ บันทึกอัตโนมัติ) และหน้าสร้างโปรเจกต์ (forProject:
+ * แก้สำเนาเฉพาะโปรเจกต์นี้ ต้นฉบับไม่เปลี่ยน · ตัวอย่างวันใช้วันเริ่ม/วันเสร็จของโปรเจกต์ ไม่มีช่องชื่อ/ลบ/สำเนา)
+ */
+export function TemplateEditor({ t, canEdit, onChange, onDuplicate, onDelete, forProject }: {
+  t: ProjectTemplate; canEdit: boolean; onChange: (t: ProjectTemplate) => void; onDuplicate?: () => void; onDelete?: () => void;
+  forProject?: { start: string; end: string };
 }) {
   const holidays = useCompanyHolidays();
   const today = todayBkk();
@@ -118,7 +123,7 @@ function TemplateEditor({ t, canEdit, onChange, onDuplicate, onDelete }: {
   const field = "w-full min-w-0 rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-base sm:text-[13px] disabled:opacity-70 text-[var(--ink)]";
   const last = templateSpan(t);
   const back = t.anchor === "end";
-  const s0 = back ? templateStartFromEnd(t, endSample, holidays) : startSample;
+  const s0 = back ? templateStartFromEnd(t, forProject?.end ?? endSample, holidays) : (forProject?.start ?? startSample);
   const e0 = templateDate(t, s0, last, holidays);
   const tooLate = back && s0 < today;
   const anyBad = t.items.some((i) => templateConflict(t, i));
@@ -152,6 +157,7 @@ function TemplateEditor({ t, canEdit, onChange, onDuplicate, onDelete }: {
 
   return (
     <div className="grid min-w-0 content-start gap-3 p-4">
+      {!forProject && (<>
       <div className="grid gap-2 sm:grid-cols-2">
         <label className="grid gap-1 text-xs text-[var(--ink-soft)]">ชื่อแม่แบบ<input className={field} disabled={!canEdit} defaultValue={t.name} onBlur={(e) => e.target.value.trim() && set({ name: e.target.value.trim() })} /></label>
         <label className="grid gap-1 text-xs text-[var(--ink-soft)]">ใช้กับ<input className={field} disabled={!canEdit} defaultValue={t.description} onBlur={(e) => set({ description: e.target.value })} /></label>
@@ -170,7 +176,8 @@ function TemplateEditor({ t, canEdit, onChange, onDuplicate, onDelete }: {
           นับเฉพาะวันทำงาน (ข้ามเสาร์–อาทิตย์ + วันหยุดบริษัท)
         </label>
       </div>
-      <p className="m-0 text-xs text-[var(--ink-soft)]">{back ? "สร้างโปรเจกต์แล้วใส่แค่ \"วันเสร็จเป้าหมาย\" ระบบย้อนบอกว่าแต่ละงานต้องเริ่มวันไหน" : "สร้างโปรเจกต์แล้วใส่ \"วันเริ่ม\" ระบบคำนวณวันของทุกงานต่อให้"}</p>
+      </>)}
+      <p className={cn("m-0 text-xs text-[var(--ink-soft)]", forProject && "hidden")}>{back ? "สร้างโปรเจกต์แล้วใส่แค่ \"วันเสร็จเป้าหมาย\" ระบบย้อนบอกว่าแต่ละงานต้องเริ่มวันไหน" : "สร้างโปรเจกต์แล้วใส่ \"วันเริ่ม\" ระบบคำนวณวันของทุกงานต่อให้"}</p>
 
       <div className="hidden grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_64px_64px_minmax(0,1.2fr)_28px] gap-1.5 text-[11px] font-semibold text-[var(--ink-soft)] md:grid">
         <span>งาน</span><span>ตำแหน่งที่ทำ</span><span>เริ่มวันที่</span><span>กี่วัน</span><span>ต้องรอ</span><span />
@@ -320,7 +327,14 @@ function TemplateEditor({ t, canEdit, onChange, onDuplicate, onDelete }: {
 
       <div className="grid gap-2 rounded-xl border border-[var(--line)] p-3">
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          {back ? (
+          {forProject ? (
+            <>
+              <b>วันจริงของโปรเจกต์นี้</b>
+              <span className={cn("text-xs", tooLate ? "font-bold text-red-600" : "text-[var(--ink-soft)]")}>
+                {fmtDay(s0, true)} – {fmtDay(e0, true)} · {last + 1} วัน{t.workdays ? "ทำงาน" : ""}{tooLate ? " · ⚠ ต้องเริ่มก่อนวันนี้ เวลาไม่พอ" : ""}
+              </span>
+            </>
+          ) : back ? (
             <>
               <b>ตัวอย่างถ้าต้องเสร็จวันที่</b>
               <DatePickerField className="h-8 w-[150px]" value={endSample} onChange={(v) => v && setEndSample(v)} />
@@ -361,7 +375,7 @@ function TemplateEditor({ t, canEdit, onChange, onDuplicate, onDelete }: {
         </div>
       </div>
 
-      {canEdit && (
+      {canEdit && !forProject && onDelete && onDuplicate && (
         <div className="flex flex-wrap justify-end gap-2">
           <button type="button" className="rounded-lg border border-[var(--line)] px-3 py-1.5 text-sm text-red-600" onClick={onDelete}>ลบแม่แบบ</button>
           <button type="button" className="rounded-lg border border-[var(--line)] px-3 py-1.5 text-sm" onClick={onDuplicate}>ทำสำเนา</button>
