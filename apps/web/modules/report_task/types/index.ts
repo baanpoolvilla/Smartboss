@@ -420,6 +420,8 @@ export interface ProjectTemplateItem {
   dur: number;
   milestone: boolean;
   dependsOn: string[];
+  /** วิธีรอของแต่ละ key ใน dependsOn — lag นับหน่วยเดียวกับ off (วันทำงาน ถ้าแม่แบบนับวันทำงาน) */
+  depRules?: Record<string, ProjectDepRule>;
   description: string;
   checklist: string[];
 }

@@ -950,7 +950,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
           }
           // ถอดออกจากโปรเจกต์ → งานอื่นที่รองานนี้อยู่เลิกรอ
           if (!link && x.project?.dependsOn?.includes(taskId)) {
-            return { ...x, project: { ...x.project, dependsOn: x.project.dependsOn.filter((d) => d !== taskId) } };
+            const { [taskId]: _gone, ...rules } = x.project.depRules ?? {};
+            return { ...x, project: { ...x.project, dependsOn: x.project.dependsOn.filter((d) => d !== taskId), ...(x.project.depRules ? { depRules: rules } : {}) } };
           }
           return x;
         }),

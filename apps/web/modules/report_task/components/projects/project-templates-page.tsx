@@ -9,6 +9,7 @@ import { canCreateProject } from "@/modules/report_task/lib/project-access";
 import {
   arrangeTemplate,
   dayNum,
+  depRuleLabel,
   templateConflict,
   templateDate,
   templateEnd,
@@ -19,7 +20,7 @@ import { uuid } from "@/modules/report_task/lib/uuid";
 import { cn } from "@/modules/report_task/lib/utils";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useProjectStore } from "@/modules/report_task/store/project-store";
-import type { ProjectTemplate, ProjectTemplateItem } from "@/modules/report_task/types";
+import type { ProjectDepRule, ProjectTemplate, ProjectTemplateItem } from "@/modules/report_task/types";
 import { SUGGESTED_ROLES } from "./project-roles";
 import { fmtDay, todayBkk, useCompanyHolidays } from "./project-ui";
 
@@ -91,6 +92,24 @@ function TemplateEditor({ t, canEdit, onChange, onDuplicate, onDelete }: {
   const [newChk, setNewChk] = useState("");
   const set = (patch: Partial<ProjectTemplate>) => onChange({ ...t, ...patch });
   const setItem = (key: string, patch: Partial<ProjectTemplateItem>) => set({ items: t.items.map((i) => (i.key === key ? { ...i, ...patch } : i)) });
+  /** ตั้งงานที่ต้องรอ + วิธีรอ — เก็บเฉพาะวิธีรอของงานที่ยังรออยู่และไม่ใช่แบบปกติ */
+  const setDeps = (it: ProjectTemplateItem, deps: string[], rules: Record<string, ProjectDepRule> = it.depRules ?? {}) => {
+    const depRules = Object.fromEntries(Object.entries(rules).filter(([k, v]) => deps.includes(k) && (v.type || v.lag)));
+    setItem(it.key, { dependsOn: deps, depRules: Object.keys(depRules).length ? depRules : undefined });
+  };
+  /** k รอ (ต่อกันเป็นทอด) งาน key อยู่ไหม — ตั้งให้ key รอ k จะวน */
+  const waitsOn = (k: string, key: string): boolean => {
+    const seen = new Set<string>();
+    const stack = [k];
+    while (stack.length) {
+      const x = stack.pop()!;
+      if (x === key) return true;
+      if (seen.has(x)) continue;
+      seen.add(x);
+      t.items.find((i) => i.key === x)?.dependsOn.forEach((d) => stack.push(d));
+    }
+    return false;
+  };
   const field = "w-full min-w-0 rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-base sm:text-[13px] disabled:opacity-70";
   const last = templateSpan(t);
   const back = t.anchor === "end";
@@ -186,6 +205,8 @@ function TemplateEditor({ t, canEdit, onChange, onDuplicate, onDelete }: {
                       <button type="button" onClick={() => setOpen(open === it.key ? null : it.key)} aria-expanded={open === it.key}
                         className="shrink-0 whitespace-nowrap rounded-md border border-[var(--line)] px-1.5 py-0.5 text-[11px]">
                         {it.description || it.checklist.length ? `📝${it.checklist.length ? ` ☑${it.checklist.length}` : ""}` : "＋ รายละเอียด"}
+                        {/* มือถือไม่มีคอลัมน์ "ต้องรอ" — บอกจำนวนไว้ตรงนี้ กดเข้าไปแก้ได้ */}
+                        {it.dependsOn.length > 0 && <span className="md:hidden"> ⏳{it.dependsOn.length}</span>}
                       </button>
                     </span>
                     <input className={cn(field, "hidden md:block")} list="tpl-roles" disabled={!canEdit || it.milestone} defaultValue={it.milestone ? "—" : it.role}
@@ -195,17 +216,68 @@ function TemplateEditor({ t, canEdit, onChange, onDuplicate, onDelete }: {
                     {it.milestone ? <span className="text-center text-xs text-[var(--ink-soft)]">◆</span> : (
                       <input type="number" min={1} className={field} disabled={!canEdit} value={it.dur} title="กี่วัน" onChange={(e) => setItem(it.key, { dur: Math.max(1, +e.target.value || 1) })} />
                     )}
-                    <select className={cn(field, "hidden md:block")} disabled={!canEdit} value={it.dependsOn[0] ?? ""} onChange={(e) => setItem(it.key, { dependsOn: e.target.value ? [e.target.value] : [] })}>
-                      <option value="">— ไม่ต้องรอ</option>
-                      {t.items.filter((x) => x.key !== it.key).map((x) => <option key={x.key} value={x.key}>{x.milestone ? "◆ " : ""}{x.name}</option>)}
-                    </select>
+                    {/* รอหลายงาน หรือตั้งวิธีรอไว้ → แก้ในรายละเอียด (ช่องเดียวแก้แล้วจะทับของเดิมหาย) */}
+                    {it.dependsOn.length > 1 || Object.keys(it.depRules ?? {}).length ? (
+                      <button type="button" onClick={() => setOpen(it.key)} title="แก้ในรายละเอียด"
+                        className="hidden truncate rounded-md border border-[var(--line)] px-2 py-1 text-left text-[12px] md:block">
+                        {it.dependsOn.map((k) => { const n = t.items.find((x) => x.key === k)?.name ?? "—"; const l = depRuleLabel(it.depRules?.[k]); return l ? `${n} (${l})` : n; }).join(", ")}
+                      </button>
+                    ) : (
+                      <select className={cn(field, "hidden md:block")} disabled={!canEdit} value={it.dependsOn[0] ?? ""} onChange={(e) => setItem(it.key, { dependsOn: e.target.value ? [e.target.value] : [] })}>
+                        <option value="">— ไม่ต้องรอ</option>
+                        {t.items.filter((x) => x.key !== it.key && !waitsOn(x.key, it.key)).map((x) => <option key={x.key} value={x.key}>{x.milestone ? "◆ " : ""}{x.name}</option>)}
+                      </select>
+                    )}
                     {canEdit ? (
                       <button type="button" className="text-[var(--ink-soft)]" aria-label="ลบ"
-                        onClick={() => set({ items: t.items.filter((x) => x.key !== it.key).map((x) => ({ ...x, dependsOn: x.dependsOn.filter((k) => k !== it.key) })) })}>✕</button>
+                        onClick={() => set({ items: t.items.filter((x) => x.key !== it.key).map((x) => {
+                          const rest = Object.fromEntries(Object.entries(x.depRules ?? {}).filter(([k]) => k !== it.key));
+                          return { ...x, dependsOn: x.dependsOn.filter((k) => k !== it.key), depRules: Object.keys(rest).length ? rest : undefined };
+                        }) })}>✕</button>
                     ) : <span />}
                   </div>
                   {open === it.key && (
                     <div className="ml-2 grid gap-2 rounded-lg bg-[var(--bg-soft)] p-2.5">
+                      <div className="grid gap-1.5">
+                        <span className="text-xs text-[var(--ink-soft)]">ต้องรอ (เลือกได้หลายงาน · ตั้งได้ว่าเริ่มพร้อมกัน หรือรอเพิ่มกี่วัน{t.workdays ? "ทำงาน" : ""})</span>
+                        {it.dependsOn.map((k) => {
+                          const pre = t.items.find((x) => x.key === k);
+                          const rule = it.depRules?.[k] ?? {};
+                          const setRule = (nr: ProjectDepRule) => setDeps(it, it.dependsOn, { ...it.depRules, [k]: nr });
+                          return (
+                            <div key={k} className="flex flex-wrap items-center gap-1.5 text-xs">
+                              <b className="min-w-0 truncate">{pre?.milestone ? "◆ " : ""}{pre?.name ?? "—"}</b>
+                              {canEdit ? (
+                                <>
+                                  {pre && !pre.milestone && (
+                                    <select aria-label="วิธีรอ" className="rounded-md border border-[var(--line)] bg-[var(--bg)] px-1 py-0.5 text-base sm:text-xs" value={rule.type ?? "fs"}
+                                      onChange={(e) => setRule({ ...rule, type: e.target.value === "ss" ? "ss" : undefined })}>
+                                      <option value="fs">เริ่มหลังเสร็จ</option>
+                                      <option value="ss">เริ่มพร้อมกันได้</option>
+                                    </select>
+                                  )}
+                                  <label className="inline-flex items-center gap-1 text-[var(--ink-soft)]">+ รอ
+                                    <input type="number" min={0} max={365} inputMode="numeric" aria-label="รอเพิ่มกี่วัน" value={rule.lag ?? 0}
+                                      onChange={(e) => setRule({ ...rule, lag: Math.min(365, Math.max(0, Math.round(Number(e.target.value) || 0))) || undefined })}
+                                      className="w-12 rounded-md border border-[var(--line)] bg-[var(--bg)] px-1 py-0.5 text-center text-base tabular-nums sm:text-xs" />
+                                    วัน
+                                  </label>
+                                  <button type="button" className="text-[var(--ink-soft)]" aria-label="เลิกรอ" onClick={() => setDeps(it, it.dependsOn.filter((x) => x !== k))}>✕</button>
+                                </>
+                              ) : depRuleLabel(rule) ? <span className="text-[var(--ink-soft)]">({depRuleLabel(rule)})</span> : null}
+                            </div>
+                          );
+                        })}
+                        {canEdit && (
+                          <select className={cn(field, "w-auto")} value="" onChange={(e) => e.target.value && setDeps(it, [...it.dependsOn, e.target.value])}>
+                            <option value="">+ เพิ่มงานที่ต้องรอ</option>
+                            {t.items.filter((x) => x.key !== it.key && !it.dependsOn.includes(x.key) && !waitsOn(x.key, it.key)).map((x) => (
+                              <option key={x.key} value={x.key}>{x.milestone ? "◆ " : ""}{x.name}</option>
+                            ))}
+                          </select>
+                        )}
+                        {!it.dependsOn.length && !canEdit && <span className="text-xs">—</span>}
+                      </div>
                       <label className="grid gap-1 text-xs text-[var(--ink-soft)]">คำอธิบาย (ติดไปกับงานทุกครั้งที่สร้างจากแม่แบบ)
                         <textarea className={field} rows={2} disabled={!canEdit} defaultValue={it.description} onBlur={(e) => setItem(it.key, { description: e.target.value })} />
                       </label>

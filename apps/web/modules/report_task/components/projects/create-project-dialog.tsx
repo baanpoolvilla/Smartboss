@@ -58,8 +58,13 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
       const s = templateDate(tpl!, effStart, it.off, holidays);
       const e = templateDate(tpl!, effStart, templateEnd(it), holidays);
       const deps = it.dependsOn.map((k) => itemId.get(k)).filter((x): x is string => !!x);
+      // วิธีรอจากแม่แบบ (key → id จริง) · ไม่มี = เริ่มหลังเสร็จ เหมือนเดิม
+      const depRules = Object.fromEntries(
+        Object.entries(it.depRules ?? {}).flatMap(([k, r]) => { const id = itemId.get(k); return id && it.dependsOn.includes(k) && (r.type || r.lag) ? [[id, { ...r }]] : []; })
+      );
+      const rules = Object.keys(depRules).length ? { depRules } : {};
       const sectionId = secId.get(it.sectionKey) ?? sections[0]!.id;
-      if (it.milestone) { milestones.push({ id: itemId.get(it.key)!, name: it.name, date: s, sectionId, dependsOn: deps }); continue; }
+      if (it.milestone) { milestones.push({ id: itemId.get(it.key)!, name: it.name, date: s, sectionId, dependsOn: deps, ...rules }); continue; }
       const who = personFor(it.role || "ทีมงาน");
       newTasks.push({
         id: itemId.get(it.key)!,
@@ -81,7 +86,7 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
         checklist: it.checklist.map((text) => ({ id: `task-chk-${uuid()}`, text, done: false, ownerId: who })),
         completedAssigneeIds: [],
         showChecklistOnCard: false,
-        project: { projectId: pid, sectionId, dependsOn: deps },
+        project: { projectId: pid, sectionId, dependsOn: deps, ...rules },
         createdAt: now,
         updatedAt: now,
       });

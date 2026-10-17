@@ -264,10 +264,17 @@ export function templateStartFromEnd(t: ProjectTemplate, end: string, holidays: 
   return d;
 }
 
+/** วันแรก (off) ที่งานในแม่แบบเริ่มได้ ถ้าต้องรอ p — กติกาเดียวกับ earliestAfter */
+export function templateEarliest(p: Pick<ProjectTemplateItem, "off" | "dur" | "milestone">, rule?: ProjectDepRule): number {
+  const lag = Math.max(0, Math.round(rule?.lag ?? 0));
+  if (rule?.type === "ss") return p.off + lag;
+  return templateEnd(p) + (p.milestone ? 0 : 1) + lag;
+}
+
 export function templateConflict(t: ProjectTemplate, it: ProjectTemplateItem): boolean {
   return it.dependsOn.some((k) => {
     const p = t.items.find((x) => x.key === k);
-    return !!p && it.off < templateEnd(p) + (p.milestone ? 0 : 1);
+    return !!p && it.off < templateEarliest(p, it.depRules?.[k]);
   });
 }
 
@@ -279,7 +286,7 @@ export function arrangeTemplate(t: ProjectTemplate): ProjectTemplateItem[] {
     for (const it of items) for (const k of it.dependsOn) {
       const p = items.find((x) => x.key === k);
       if (!p) continue;
-      const need = templateEnd(p) + (p.milestone ? 0 : 1);
+      const need = templateEarliest(p, it.depRules?.[k]);
       if (it.off < need) { it.off = need; ch = true; }
     }
     if (!ch) break;
@@ -299,6 +306,12 @@ export function templateFromProject(
   const keyOf = new Map<string, string>();
   const secKey = new Map(project.sections.map((s) => [s.id, ids()]));
   for (const i of items) keyOf.set(i.id, ids());
+  // วิธีรอ (เริ่มพร้อมกัน/รอ X วัน) — เปลี่ยน id จริงเป็น key ของแม่แบบ
+  const rulesOf = (i: TimelineItem) => {
+    const out: Record<string, ProjectDepRule> = {};
+    for (const d of i.deps) { const k = keyOf.get(d), r = i.depRules[d]; if (k && r && (r.type || r.lag)) out[k] = { ...r }; }
+    return Object.keys(out).length ? { depRules: out } : {};
+  };
   return {
     id: ids(),
     name: `${project.name} (แม่แบบ)`,
@@ -315,6 +328,7 @@ export function templateFromProject(
       dur: i.kind === "milestone" ? 0 : dayNum(i.end) - dayNum(i.start) + 1,
       milestone: i.kind === "milestone",
       dependsOn: i.deps.map((d) => keyOf.get(d)).filter((x): x is string => !!x),
+      ...rulesOf(i),
       description: i.task?.description ?? "",
       checklist: i.task?.checklist.map((c) => c.text) ?? [],
     })),
