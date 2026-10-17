@@ -96,7 +96,7 @@ export function ListTab({ project, items, canEdit = false, canPlan = false, onOp
             {groups.map((g) => [
               g.name ? <tr key={`g-${g.key}`}><td colSpan={6} className="bg-[var(--bg-soft)] px-3 py-1.5 text-xs font-bold text-[var(--ink-soft)]">{g.name} · {g.rows.length}</td></tr> : null,
               ...g.rows.map((i) => (
-                <tr key={i.id} className={cn("border-b border-[var(--line)]/60", i.kind === "task" && "cursor-pointer hover:bg-[var(--bg-soft)]")} onClick={() => i.kind === "task" && !canEdit && onOpen(i.id)}>
+                <tr key={i.id} className={cn("border-b border-[var(--line)]/60", i.kind === "task" && "cursor-pointer hover:bg-[var(--bg-soft)]")} onClick={() => i.kind === "task" && onOpen(i.id)}>
                   <td className="px-2 py-1.5">
                     {canEdit && i.kind === "task" ? (
                       <div className="flex items-center gap-1">
@@ -127,7 +127,7 @@ export function ListTab({ project, items, canEdit = false, canPlan = false, onOp
                       <input type="date" className={cellInput} value={i.start} max={i.end} aria-label="วันเริ่ม"
                         onChange={(e) => e.target.value && rescheduleTask(i.id, dayToIso(e.target.value), i.task!.dueDate, why, me)} />
                     ) : canEdit && i.kind === "milestone" && i.state !== "done" ? (
-                      <input type="date" className={cellInput} value={i.start} aria-label="วัน Milestone"
+                      <input type="date" className={cellInput} value={i.start} aria-label="วันจุดสำคัญ"
                         onChange={(e) => e.target.value && updateMilestone(project.id, i.id, { date: e.target.value })} />
                     ) : <span className="px-1">{fmtDay(i.start)}</span>}
                   </td>
@@ -200,7 +200,7 @@ export function BoardTab({ project, items, canEdit, onOpen }: { project: Project
   );
 }
 
-/* ───────────── ปฏิทิน: เดือน แสดงงานตามช่วงวัน + Milestone (แบบ Asana Calendar) ───────────── */
+/* ───────────── ปฏิทิน: เดือน แสดงงานตามช่วงวัน + จุดสำคัญ (แบบ Asana Calendar) ───────────── */
 
 export function CalendarTab({ items, today, onOpen }: { items: TimelineItem[]; today: string; onOpen: (id: string) => void }) {
   const [month, setMonth] = useState(() => today.slice(0, 7));

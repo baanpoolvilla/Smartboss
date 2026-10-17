@@ -15,7 +15,7 @@ import { guessPersonForRole } from "./project-roles";
 import { fmtDay, notifyAddedToProject, todayBkk, useCompanyHolidays } from "./project-ui";
 
 /**
- * สร้างโปรเจกต์ — เริ่มเปล่า หรือจากแม่แบบ (ช่วงงาน + งาน + Milestone + งานที่ต้องรอ + คำอธิบาย/เช็คลิสต์)
+ * สร้างโปรเจกต์ — เริ่มเปล่า หรือจากแม่แบบ (ช่วงงาน + งาน + จุดสำคัญ + งานที่ต้องรอ + คำอธิบาย/เช็คลิสต์)
  * แม่แบบแบบ "นับถอยหลังจากวันเสร็จ" ใส่แค่วันเสร็จ ระบบคำนวณวันเริ่มให้ · วันเริ่มผ่านไปแล้ว = เตือน "เวลาไม่พอ"
  */
 export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
@@ -162,7 +162,7 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
           <div className="grid content-start gap-3">
             <div className="grid gap-1.5">
               <span className="text-xs text-[var(--ink-soft)]">เริ่มจากแม่แบบ</span>
-              {[{ id: "", name: "เปล่า", sub: "เริ่มจากศูนย์" }, ...templates.map((t) => ({ id: t.id, name: t.name, sub: `${t.sections.map((s) => s.name).join(" → ")} · ${t.items.filter((i) => i.milestone).length} Milestone${t.anchor === "end" ? " · นับถอยหลังจากวันเสร็จ" : ""}` }))].map((o) => (
+              {[{ id: "", name: "เปล่า", sub: "เริ่มจากศูนย์" }, ...templates.map((t) => ({ id: t.id, name: t.name, sub: `${t.sections.map((s) => s.name).join(" → ")} · ${t.items.filter((i) => i.milestone).length} จุดสำคัญ${t.anchor === "end" ? " · นับถอยหลังจากวันเสร็จ" : ""}` }))].map((o) => (
                 <label key={o.id || "blank"} className={cn("flex cursor-pointer gap-2.5 rounded-xl border p-2.5", tplId === o.id ? "border-[var(--brand-green)] bg-[var(--accent)]" : "border-[var(--line)]")}>
                   <input type="radio" name="proj-tpl" checked={tplId === o.id} onChange={() => setTplId(o.id)} className="mt-1 accent-[var(--brand-green)]" />
                   <span><b className="block text-[13.5px]">{o.name}</b><span className="text-xs text-[var(--ink-soft)]">{o.sub}</span></span>
@@ -183,7 +183,7 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
                     </span>
                   </div>
                 ))}
-                <span className="text-xs text-[var(--ink-soft)]">จะสร้างงาน {tpl.items.filter((i) => !i.milestone).length} งานบนบอร์ดงาน + {tpl.items.filter((i) => i.milestone).length} Milestone · จบประมาณ {fmtDay(effEnd, true)}</span>
+                <span className="text-xs text-[var(--ink-soft)]">จะสร้างงาน {tpl.items.filter((i) => !i.milestone).length} งานบนบอร์ดงาน + {tpl.items.filter((i) => i.milestone).length} จุดสำคัญ · จบประมาณ {fmtDay(effEnd, true)}</span>
               </div>
             )}
           </div>

@@ -84,7 +84,7 @@ export function ProjectsPortfolio() {
                   <th className="px-3 py-2 font-semibold">สถานะ</th>
                   <th className="px-3 py-2 font-semibold">เจ้าของ</th>
                   <th className="px-3 py-2 font-semibold">ความคืบหน้า</th>
-                  <th className="px-3 py-2 font-semibold">Milestone ถัดไป</th>
+                  <th className="px-3 py-2 font-semibold">จุดสำคัญถัดไป</th>
                   <th className="w-[34%] px-3 py-2 font-semibold">
                     <div className="relative h-4">{months.map((m) => <span key={m.left} className="absolute" style={{ left: m.left }}>{m.label}</span>)}</div>
                   </th>

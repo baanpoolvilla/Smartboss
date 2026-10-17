@@ -65,7 +65,7 @@ export function ProjectTemplatesPage() {
             <button key={x.id} type="button" onClick={() => setCur(x.id)}
               className={cn("grid gap-0.5 rounded-lg border px-2.5 py-2 text-left", x.id === t?.id ? "border-[var(--brand-green)] bg-[var(--bg)]" : "border-transparent")}>
               <b className="text-[13.5px]">{x.name}</b>
-              <span className="text-xs text-[var(--ink-soft)]">{x.sections.length} ช่วง · {x.items.filter((i) => !i.milestone).length} งาน · {x.items.filter((i) => i.milestone).length} Milestone · ใช้แล้ว {x.usedCount} ครั้ง</span>
+              <span className="text-xs text-[var(--ink-soft)]">{x.sections.length} ช่วง · {x.items.filter((i) => !i.milestone).length} งาน · {x.items.filter((i) => i.milestone).length} จุดสำคัญ · ใช้แล้ว {x.usedCount} ครั้ง</span>
             </button>
           ))}
         </div>
@@ -184,9 +184,9 @@ function TemplateEditor({ t, canEdit, onChange, onDuplicate, onDelete }: {
                     <button key={String(mile)} type="button" className="rounded-md border border-[var(--line)] px-2 py-1 text-xs"
                       onClick={() => {
                         const prev = its[its.length - 1] ?? t.items[t.items.length - 1];
-                        set({ items: [...t.items, { key: `k-${uuid()}`, sectionKey: s.key, name: mile ? "Milestone ใหม่" : "งานใหม่", role: mile ? "" : "ช่าง", off: prev ? templateEnd(prev) + 1 : 0, dur: mile ? 0 : 2, milestone: mile, dependsOn: prev ? [prev.key] : [], description: "", checklist: [] }] });
+                        set({ items: [...t.items, { key: `k-${uuid()}`, sectionKey: s.key, name: mile ? "จุดสำคัญใหม่" : "งานใหม่", role: mile ? "" : "ช่าง", off: prev ? templateEnd(prev) + 1 : 0, dur: mile ? 0 : 2, milestone: mile, dependsOn: prev ? [prev.key] : [], description: "", checklist: [] }] });
                       }}>
-                      {mile ? "+ Milestone" : "+ งาน"}
+                      {mile ? "+ จุดสำคัญ" : "+ งาน"}
                     </button>
                   ))}
                   <button type="button" className="px-1 text-[var(--ink-soft)]" aria-label="ลบช่วงนี้" disabled={t.sections.length <= 1}

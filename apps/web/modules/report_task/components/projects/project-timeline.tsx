@@ -37,7 +37,7 @@ type Row = { kind: "group"; key: string; name: string; items: TimelineItem[] } |
  * Timeline ของโปรเจกต์ (แบบ Asana Timeline/Gantt รวมเป็นหน้าเดียว)
  * - ลากแถบ = เลื่อนวัน · ลากขอบขวา = ยืด/หด · ลากจุดกลมท้ายแถบไปวางบนอีกงาน = งานนั้นต้องรองานนี้
  * - ลากงานได้เฉพาะเจ้าของโปรเจกต์/CEO (canPlan) — บันทึกเป็นการเลื่อนกำหนดส่ง (rescheduleTask)
- * - Milestone เป็นของโปรเจกต์ — คนที่แก้โปรเจกต์ได้ (canEdit) ลากได้
+ * - จุดสำคัญเป็นของโปรเจกต์ — คนที่แก้โปรเจกต์ได้ (canEdit) ลากได้
  * - จอสัมผัสไม่ลาก (นิ้วลากแล้วหน้าจอเลื่อนแทน) — กดแถบแล้วใช้ปุ่ม −/+ วัน ในแผงรายละเอียด
  */
 export function ProjectTimeline({
@@ -100,7 +100,7 @@ export function ProjectTimeline({
         by.set(k, [...(by.get(k) ?? []), i]);
       }
       for (const [k, its] of by) {
-        out.push({ kind: "group", key: k, name: k === "◆" ? "Milestone" : (getUser(k)?.name ?? "ยังไม่มีผู้รับผิดชอบ"), items: its });
+        out.push({ kind: "group", key: k, name: k === "◆" ? "จุดสำคัญ" : (getUser(k)?.name ?? "ยังไม่มีผู้รับผิดชอบ"), items: its });
         its.forEach((item) => out.push({ kind: "item", item }));
       }
       return out;
@@ -143,7 +143,7 @@ export function ProjectTimeline({
   const meId = currentUserId;
   function commitMove(item: TimelineItem, start: string, end: string) {
     const delta = dayNum(start) - dayNum(item.start);
-    applyMove({ id: item.id, kind: item.kind, start, end }, `เลื่อนจาก Timeline โปรเจกต์ "${project.name}"`);
+    applyMove({ id: item.id, kind: item.kind, start, end }, `เลื่อนจากแผนเวลาโปรเจกต์ "${project.name}"`);
     const next = items.map((i) => (i.id === item.id ? { ...i, start, end } : i));
     let extra = "";
     if (project.shiftMode === "keep" && delta !== 0) {
@@ -244,7 +244,7 @@ export function ProjectTimeline({
         <div className="flex items-start gap-3 rounded-xl bg-sky-50 px-3 py-2.5 text-sm dark:bg-sky-950/40">
           <span>💡</span>
           <div className="min-w-0 flex-1">
-            <b>3 อย่างที่ทำได้ใน Timeline</b>
+            <b>3 อย่างที่ทำได้ในแผนเวลา</b>
             <ol className="ml-4 list-decimal text-[13px]">
               <li>ลากแถบ = เลื่อนวัน · ลากขอบขวา = ยืด/หดวัน {canPlan ? "" : "(เฉพาะเจ้าของโปรเจกต์/CEO)"}</li>
               <li>ลากจุดกลมท้ายแถบ ไปวางบนอีกงาน = งานนั้นต้องรองานนี้</li>
@@ -279,13 +279,17 @@ export function ProjectTimeline({
             <button type="button" className="rounded-lg border border-[var(--line)] px-3 py-1 text-xs hover:bg-[var(--bg-soft)]" onClick={() => onAddTask(project.sections[0]?.id ?? "")}>+ งาน</button>
             <button type="button" className="rounded-lg border border-[var(--line)] px-3 py-1 text-xs hover:bg-[var(--bg-soft)]"
               onClick={() => {
-                const id = addMilestone(project.id, { name: "Milestone ใหม่", date: shiftDays(today, 7), sectionId: project.sections[project.sections.length - 1]?.id ?? "" });
+                const id = addMilestone(project.id, { name: "จุดสำคัญใหม่", date: shiftDays(today, 7), sectionId: project.sections[project.sections.length - 1]?.id ?? "" });
                 setSel(id);
-                toast.success("เพิ่ม Milestone แล้ว · แก้ชื่อ/วันได้ในแผงด้านล่าง");
+                toast.success("เพิ่มจุดสำคัญ แล้ว · แก้ชื่อ/วันได้ในแผงด้านล่าง");
               }}>
-              + Milestone
+              + จุดสำคัญ
             </button>
           </>
+        )}
+        {tipHidden && (
+          <button type="button" className="h-7 w-7 rounded-full border border-[var(--line)] text-xs text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]" title="วิธีใช้แผนเวลา" aria-label="วิธีใช้แผนเวลา"
+            onClick={() => { setTipHidden(false); try { localStorage.removeItem("project-timeline-tip"); } catch {} }}>?</button>
         )}
         <details className="relative">
           <summary className="cursor-pointer list-none rounded-lg border border-[var(--line)] px-3 py-1 text-xs hover:bg-[var(--bg-soft)]">ตัวเลือก ⚙</summary>
@@ -307,13 +311,22 @@ export function ProjectTimeline({
               <option value="auto">เลื่อนงานที่รออยู่ตามทันที</option>
               <option value="keep">เลื่อนตาม + รักษาระยะห่างเดิม</option>
             </select>
+            {/* ตัวอย่างสั้น ๆ — ชื่อตัวเลือกอย่างเดียวคนอ่านไม่เข้าใจ */}
+            <p className="m-0 max-w-64 text-[11.5px] leading-relaxed text-[var(--ink-soft)]">
+              ตัวอย่าง: เลื่อน &quot;เดินไฟ&quot; ช้าไป 3 วัน แล้ว &quot;ติดโคม&quot; รอเดินไฟอยู่ →{" "}
+              {{
+                ask: "ขึ้นแถบเตือนสีแดง ให้กดปุ่มเลื่อนติดโคมตามเอง",
+                auto: "ติดโคมเลื่อนไปเริ่มหลังเดินไฟเสร็จทันที (เลื่อนเท่าที่จำเป็น)",
+                keep: "ติดโคมเลื่อนไป 3 วันเท่ากันเสมอ แม้ยังไม่ชน (ช่องว่างระหว่างงานเท่าเดิม)",
+              }[project.shiftMode]}
+            </p>
           </div>
         </details>
         <div className="ml-auto hidden flex-wrap gap-3 text-[11px] text-[var(--ink-soft)] sm:flex">
           {(["done", "doing", "todo", "late"] as const).map((k) => (
             <span key={k} className="inline-flex items-center gap-1"><i className="inline-block h-2 w-3.5 rounded-sm" style={{ background: STATE_COLOR[k] }} />{STATE_LABEL[k]}</span>
           ))}
-          <span className="inline-flex items-center gap-1"><i className="inline-block h-2 w-2 rotate-45 rounded-[1px]" style={{ background: "var(--chart-violet)" }} />Milestone</span>
+          <span className="inline-flex items-center gap-1"><i className="inline-block h-2 w-2 rotate-45 rounded-[1px]" style={{ background: "var(--chart-violet)" }} />จุดสำคัญ</span>
         </div>
       </div>
 
@@ -454,7 +467,7 @@ export function ProjectTimeline({
           <span>⚠ <b>{conflicts.length} งานเริ่มก่อนงานที่ต้องรอเสร็จ:</b> {conflicts.map(([a, b]) => `${b.name} (รอ ${a.name})`).join(", ")}</span>
           {canPlan && (
             <button type="button" className="ml-auto rounded-lg border border-red-200 bg-[var(--bg)] px-3 py-1 text-xs text-[var(--ink)] dark:border-red-900"
-              onClick={() => { const plan = cascadePlan(items); plan.forEach((m) => applyMove(m, "เลื่อนตามงานที่ต้องรอ (Timeline)")); toast.success(`เลื่อนงานที่ต่อกันแล้ว ${plan.length} รายการ · แจ้งผู้รับผิดชอบแล้ว`); }}>
+              onClick={() => { const plan = cascadePlan(items); plan.forEach((m) => applyMove(m, "เลื่อนตามงานที่ต้องรอ (แผนเวลา)")); toast.success(`เลื่อนงานที่ต่อกันแล้ว ${plan.length} รายการ · แจ้งผู้รับผิดชอบแล้ว`); }}>
               เลื่อนงานที่ต่อกันตาม
             </button>
           )}
@@ -462,7 +475,7 @@ export function ProjectTimeline({
       ) : impact.late.length > 0 ? (
         <div className="rounded-xl bg-red-50 px-3 py-2.5 text-[13px] text-red-700 dark:bg-red-950/40 dark:text-red-300">
           ⚠ <b>{impact.late.map((l) => l.name).join(", ")}</b> เลยกำหนดแล้ว
-          {impact.affected.length > 0 && <> · มีงานรออยู่ {impact.affected.length} รายการ{impact.affected.some((a) => a.kind === "milestone") && <> รวม Milestone <b>{impact.affected.filter((a) => a.kind === "milestone").map((a) => a.name).join(", ")}</b></>}</>}
+          {impact.affected.length > 0 && <> · มีงานรออยู่ {impact.affected.length} รายการ{impact.affected.some((a) => a.kind === "milestone") && <> รวมจุดสำคัญ <b>{impact.affected.filter((a) => a.kind === "milestone").map((a) => a.name).join(", ")}</b></>}</>}
         </div>
       ) : null}
 
@@ -480,7 +493,7 @@ export function ProjectTimeline({
           onMove={(start, end) => commitMove(selItem, start, end)}
           onSetDeps={(deps) => setDeps(selItem, deps)}
           onSetRule={(d, rule) => setDeps(selItem, selItem.deps, { ...selItem.depRules, [d]: rule })}
-          onRemoveMilestone={() => { removeMilestone(project.id, selItem.id); setSel(null); toast.success("ลบ Milestone แล้ว"); }}
+          onRemoveMilestone={() => { removeMilestone(project.id, selItem.id); setSel(null); toast.success("ลบจุดสำคัญ แล้ว"); }}
           onUpdateMilestone={(patch) => updateMilestone(project.id, selItem.id, patch)}
         />
       )}
@@ -580,7 +593,7 @@ function ItemDetail({
                 <b className="font-semibold">{pre?.name ?? "—"}</b>
                 {canEdit ? (
                   <>
-                    {/* วิธีรอ: หลังเสร็จ (ปกติ) / เริ่มพร้อมกันได้ — Milestone ไม่มีช่วงเวลา เลยมีแค่แบบปกติ */}
+                    {/* วิธีรอ: หลังเสร็จ (ปกติ) / เริ่มพร้อมกันได้ — จุดสำคัญไม่มีช่วงเวลา เลยมีแค่แบบปกติ */}
                     {pre?.kind === "task" && (
                       <select aria-label="วิธีรอ" value={rule.type ?? "fs"} onChange={(e) => onSetRule(d, { ...rule, type: e.target.value === "ss" ? "ss" : undefined })}
                         className="rounded-md border border-[var(--line)] bg-[var(--bg)] px-1 py-0.5 text-base sm:text-xs">
@@ -623,9 +636,9 @@ function ItemDetail({
             <>
               <button type="button" onClick={() => onUpdateMilestone({ doneAt: item.milestone?.doneAt ? undefined : new Date().toISOString() })}
                 className="rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 py-1.5 text-sm">
-                {item.milestone?.doneAt ? "ยกเลิกว่าถึงแล้ว" : "✓ ถึง Milestone นี้แล้ว"}
+                {item.milestone?.doneAt ? "ยกเลิกว่าถึงแล้ว" : "✓ ถึงจุดสำคัญ นี้แล้ว"}
               </button>
-              <button type="button" onClick={onRemoveMilestone} className="rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 py-1.5 text-sm text-red-600">ลบ Milestone</button>
+              <button type="button" onClick={onRemoveMilestone} className="rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 py-1.5 text-sm text-red-600">ลบจุดสำคัญ</button>
             </>
           )
         )}

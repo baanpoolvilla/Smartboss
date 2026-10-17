@@ -34,11 +34,13 @@ import { ROLE_OF_DEFAULT } from "./project-roles";
 
 // มุมมองเดียวกับ Asana: Overview · List · Board · Timeline(+Gantt) · Calendar · Dashboard · Messages · Files (+ อัปเดตสถานะ)
 type Tab = "timeline" | "overview" | "list" | "board" | "calendar" | "dashboard" | "messages" | "files" | "updates";
+// แท็บหลักโชว์ตลอด ที่เหลืออยู่ใต้ "เพิ่มเติม ▾" — 9 แท็บเรียงกันบนมือถือต้องเลื่อนหา คนทั่วไปงง
+const PRIMARY_TABS: Tab[] = ["overview", "list", "board", "timeline", "messages"];
 const TABS: { id: Tab; label: string }[] = [
   { id: "overview", label: "ภาพรวม" },
   { id: "list", label: "รายการ" },
   { id: "board", label: "บอร์ด" },
-  { id: "timeline", label: "Timeline" },
+  { id: "timeline", label: "แผนเวลา" },
   { id: "calendar", label: "ปฏิทิน" },
   { id: "dashboard", label: "แดชบอร์ด" },
   { id: "messages", label: "ข้อความ" },
@@ -57,7 +59,12 @@ export function ProjectView({ projectId }: { projectId: string }) {
   const holidays = useCompanyHolidays();
   const today = todayBkk();
   // เปิดหน้ามือถือ (จอแคบ) เจอ "รายการ" ก่อน — อ่านง่ายกว่า Timeline บนจอเล็ก
-  const [tab, setTab] = useState<Tab>(() => (typeof window !== "undefined" && window.innerWidth < 640 ? "list" : "timeline"));
+  // แท็บแรก: เจ้าของ/CEO บนคอม = แผนเวลา (คุมแผน) · คนอื่น/มือถือ = รายการ (อ่านง่ายสุด)
+  const [tab, setTab] = useState<Tab>(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 640) return "list";
+    const p = useProjectStore.getState().projects.find((x) => x.id === projectId);
+    return p && canPlanProject(p, useIdentityStore.getState().viewingAsUserId) ? "timeline" : "list";
+  });
   const [newTaskSection, setNewTaskSection] = useState<string | null>(null);
 
   const items = useMemo(() => (project ? timelineItems(project, tasks, today) : []), [project, tasks, today]);
@@ -106,20 +113,26 @@ export function ProjectView({ projectId }: { projectId: string }) {
         </div>
         {suggestLate(project, items) && (
           <p className="m-0 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-            ระบบเห็นว่ามีงานเลยกำหนดที่กระทบ Milestone แต่สถานะล่าสุดยังเป็น &quot;ตามแผน&quot; — ลองอัปเดตสถานะ
+            ระบบเห็นว่ามีงานเลยกำหนดที่กระทบจุดสำคัญ แต่สถานะล่าสุดยังเป็น &quot;ตามแผน&quot; — ลองอัปเดตสถานะ
           </p>
         )}
       </div>
 
-      <div role="tablist" className="flex gap-1 overflow-x-auto border-b border-[var(--line)]">
-        {TABS.map((t) => (
-          <button key={t.id} role="tab" type="button" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
-            className={cn("whitespace-nowrap border-b-2 px-3 py-2 text-sm", tab === t.id ? "border-[var(--brand-green)] font-bold text-[var(--brand-green-dark)]" : "border-transparent text-[var(--ink-soft)]")}>
-            {t.label}
-          </button>
-        ))}
+      <div className="flex items-end gap-1 border-b border-[var(--line)]">
+        <div role="tablist" className="flex min-w-0 gap-1 overflow-x-auto">
+          {TABS.filter((t) => PRIMARY_TABS.includes(t.id)).map((t) => (
+            <button key={t.id} role="tab" type="button" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
+              className={cn("whitespace-nowrap border-b-2 px-3 py-2 text-sm", tab === t.id ? "border-[var(--brand-green)] font-bold text-[var(--brand-green-dark)]" : "border-transparent text-[var(--ink-soft)]")}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <MoreTabs tab={tab} onPick={setTab} />
       </div>
 
+      {items.length === 0 && EMPTY_TABS.includes(tab) ? (
+        <EmptyProject canEdit={canEdit} onAddTask={() => setNewTaskSection(project.sections[0]?.id ?? "")} onTemplates={() => router.push("/report-task/projects/templates")} />
+      ) : <>
       {tab === "timeline" && (
         <ProjectTimeline project={project} items={items} today={today} holidays={holidays} canEdit={canEdit} canPlan={canPlan}
           onOpenTask={(id) => openTask(id)} onAddTask={(sec) => setNewTaskSection(sec || project.sections[0]?.id || "")} />
@@ -132,6 +145,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
       {tab === "messages" && <MessagesTab project={project} canEdit={canEdit} />}
       {tab === "files" && <FilesTab items={items} onOpen={(id) => openTask(id)} />}
       {tab === "updates" && <UpdatesTab project={project} canEdit={canEdit} />}
+      </>}
 
       <TaskDetailSheet taskId={openTaskId} onOpenChange={(o) => !o && closeTask()} />
       {newTaskSection !== null && (
@@ -147,6 +161,54 @@ export function ProjectView({ projectId }: { projectId: string }) {
           }}
         />
       )}
+    </div>
+  );
+}
+
+const EMPTY_TABS: Tab[] = ["timeline", "list", "board", "calendar", "dashboard", "files"];
+
+/** แท็บรอง (บอร์ด… ไฟล์ อัปเดตสถานะ) — ปุ่มบอกชื่อแท็บที่เปิดอยู่ถ้าเป็นแท็บรอง */
+function MoreTabs({ tab, onPick }: { tab: Tab; onPick: (t: Tab) => void }) {
+  const [open, setOpen] = useState(false);
+  const rest = TABS.filter((t) => !PRIMARY_TABS.includes(t.id));
+  const active = rest.find((t) => t.id === tab);
+  return (
+    <div className="relative shrink-0">
+      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)}
+        className={cn("whitespace-nowrap border-b-2 px-3 py-2 text-sm", active ? "border-[var(--brand-green)] font-bold text-[var(--brand-green-dark)]" : "border-transparent text-[var(--ink-soft)]")}>
+        {active ? active.label : "เพิ่มเติม"} ▾
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full z-30 mt-1 grid w-max min-w-40 rounded-xl border border-[var(--line)] bg-[var(--bg)] p-1 shadow-xl">
+            {rest.map((t) => (
+              <button key={t.id} type="button" onClick={() => { onPick(t.id); setOpen(false); }}
+                className={cn("rounded-lg px-3 py-2 text-left text-sm hover:bg-[var(--bg-soft)]", tab === t.id && "font-bold text-[var(--brand-green-dark)]")}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** โปรเจกต์ที่ยังไม่มีงาน — บอกว่าต้องทำอะไรต่อ แทนตาราง/แผนเวลาว่าง ๆ */
+function EmptyProject({ canEdit, onAddTask, onTemplates }: { canEdit: boolean; onAddTask: () => void; onTemplates: () => void }) {
+  return (
+    <div className="grid place-items-center gap-3 rounded-xl border border-dashed border-[var(--line)] px-4 py-14 text-center">
+      <b>ยังไม่มีงานในโปรเจกต์นี้</b>
+      {canEdit ? (
+        <>
+          <p className="m-0 max-w-md text-sm text-[var(--ink-soft)]">เพิ่มงานแรก แล้วงานจะขึ้นทั้งที่นี่และบนบอร์ดงานของคนที่ได้รับ · ครั้งหน้าสร้างโปรเจกต์จากแม่แบบได้ งานจะมาครบพร้อมวัน</p>
+          <div className="flex flex-wrap justify-center gap-2">
+            <button type="button" className="rounded-lg bg-[var(--brand-green)] px-4 py-1.5 text-sm font-semibold text-white" onClick={onAddTask}>+ เพิ่มงานแรก</button>
+            <button type="button" className="rounded-lg border border-[var(--line)] px-4 py-1.5 text-sm" onClick={onTemplates}>ดูแม่แบบ</button>
+          </div>
+        </>
+      ) : <p className="m-0 text-sm text-[var(--ink-soft)]">รอเจ้าของโปรเจกต์เพิ่มงาน</p>}
     </div>
   );
 }
@@ -203,7 +265,7 @@ function Overview({ project, items, pct, today, canEdit }: { project: Project; i
           {latest ? <UpdatePost u={latest} /> : <p className="m-0 text-sm text-[var(--ink-soft)]">ยังไม่มีอัปเดต</p>}
         </section>
         <section className="rounded-xl border border-[var(--line)] p-4">
-          <h3 className="m-0 mb-2 text-sm font-semibold">Milestone</h3>
+          <h3 className="m-0 mb-2 text-sm font-semibold">จุดสำคัญ</h3>
           {miles.length ? (
             <ul className="m-0 grid list-none gap-2 p-0">
               {miles.map((m) => (
@@ -214,7 +276,7 @@ function Overview({ project, items, pct, today, canEdit }: { project: Project; i
                 </li>
               ))}
             </ul>
-          ) : <p className="m-0 text-sm text-[var(--ink-soft)]">ยังไม่มี Milestone</p>}
+          ) : <p className="m-0 text-sm text-[var(--ink-soft)]">ยังไม่มีจุดสำคัญ</p>}
         </section>
         <section className="rounded-xl border border-[var(--line)] p-4">
           <h3 className="m-0 mb-2 text-sm font-semibold">สมาชิก</h3>
