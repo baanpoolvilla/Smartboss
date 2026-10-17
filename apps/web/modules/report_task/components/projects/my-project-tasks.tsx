@@ -31,33 +31,55 @@ export function MyProjectTasks({ onOpen }: { onOpen: (taskId: string) => void })
   const today = todayBkk();
   if (!mine.length) return null;
   const late = mine.filter((t) => t.dueDate.slice(0, 10) < today).length;
+  // แยกกลุ่มตามโปรเจกต์ (เรียงตามงานที่ต้องส่งเร็วสุดของแต่ละโปรเจกต์) — อ่านง่ายกว่ารายการยาวรวมกัน
+  const groups = new Map<string, Task[]>();
+  for (const t of mine) groups.set(t.project!.projectId, [...(groups.get(t.project!.projectId) ?? []), t]);
   return (
-    <section id="my" className="grid gap-2.5 rounded-xl border border-[var(--line)] bg-[var(--bg)] p-4">
+    <section id="my" className="grid gap-3 rounded-xl border border-[var(--line)] bg-[var(--bg)] p-4">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="m-0 text-[16px] font-bold">งานของฉันในโปรเจกต์</h2>
         <span className="rounded-full bg-[var(--bg-soft)] px-2 py-0.5 text-[12px] font-semibold text-[var(--ink-soft)]">{mine.length} งาน</span>
         {late > 0 && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[12px] font-semibold text-red-700 dark:bg-red-950/60 dark:text-red-300">เลยกำหนด {late}</span>}
       </div>
-      <ul className="m-0 grid list-none gap-1.5 p-0">
-        {mine.slice(0, 8).map((t) => {
-          const p = projects.find((x) => x.id === t.project!.projectId);
+      <div className="grid gap-3 md:grid-cols-2">
+        {[...groups].map(([pid, list]) => {
+          const p = projects.find((x) => x.id === pid);
+          const lateN = list.filter((t) => t.dueDate.slice(0, 10) < today).length;
           return (
-            <li key={t.id}>
-              <button type="button" onClick={() => onOpen(t.id)}
-                className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-2.5 py-2 text-left hover:bg-[var(--bg-soft)]">
-                <span className="min-w-0 flex-[1_1_220px] text-[14px] font-semibold">
-                  {t.parentId ? <span className="mr-1 text-[var(--ink-soft)]">↳</span> : null}
-                  {t.title}
-                  <span className="ml-2 text-[12px] font-normal text-[var(--ink-soft)]">📁 {p ? p.name : "(โปรเจกต์ถูกลบแล้ว)"}</span>
-                </span>
-                <span className="tabular-nums text-[13px] text-[var(--ink-soft)]">ส่ง {fmtDay(t.dueDate)}</span>
-                <StatePill state={stateOf(t, today)} />
-              </button>
-            </li>
+            <div key={pid} className="grid content-start gap-1 rounded-xl border border-[var(--line)] p-2.5">
+              <div className="flex items-center gap-2 px-1">
+                <span aria-hidden>📁</span>
+                {p ? (
+                  <Link href={`/report-task/projects/${p.id}?mine=1`} className="min-w-0 flex-1 truncate text-[14.5px] font-bold hover:underline">{p.name}</Link>
+                ) : (
+                  <span className="min-w-0 flex-1 truncate text-[14.5px] font-bold text-[var(--ink-soft)]">(โปรเจกต์ถูกลบแล้ว)</span>
+                )}
+                <span className="shrink-0 text-[12px] text-[var(--ink-soft)]">{list.length} งาน{lateN ? <b className="text-red-600"> · เลย {lateN}</b> : ""}</span>
+              </div>
+              <ul className="m-0 grid list-none gap-0.5 p-0">
+                {list.slice(0, 5).map((t) => (
+                  <li key={t.id}>
+                    <button type="button" onClick={() => onOpen(t.id)}
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-[var(--bg-soft)]">
+                      <span className="min-w-0 flex-1 truncate text-[14px]">
+                        {t.parentId ? <span className="mr-1 text-[var(--ink-soft)]">↳</span> : null}
+                        {t.title}
+                      </span>
+                      <span className="shrink-0 tabular-nums text-[12.5px] text-[var(--ink-soft)]">{fmtDay(t.dueDate)}</span>
+                      <StatePill state={stateOf(t, today)} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {list.length > 5 && p && (
+                <Link href={`/report-task/projects/${p.id}?mine=1`} className="px-2 text-[12.5px] font-semibold text-[var(--brand-green-dark)] hover:underline">
+                  ดูอีก {list.length - 5} งานในโปรเจกต์ ›
+                </Link>
+              )}
+            </div>
           );
         })}
-      </ul>
-      {mine.length > 8 && <p className="m-0 text-xs text-[var(--ink-soft)]">และอีก {mine.length - 8} งาน — เปิดในแต่ละโปรเจกต์ด้านล่าง</p>}
+      </div>
     </section>
   );
 }

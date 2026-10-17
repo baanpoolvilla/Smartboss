@@ -51,6 +51,24 @@ export function ListTab({ project, items, canEdit = false, canPlan = false, onOp
   const setAssignees = useTaskStore((s) => s.setAssignees);
   const rescheduleTask = useTaskStore((s) => s.rescheduleTask);
   const updateMilestone = useProjectStore((s) => s.updateMilestone);
+  const moveTask = useTaskStore((s) => s.moveTask);
+  /** ติ๊กเสร็จจากรายการ — เฉพาะคนที่รับงาน (เหมือนบนบอร์ดงาน) · เช็คลิสต์ยังไม่ครบ ระบบไม่ให้ปิด → บอกเหตุผล */
+  const toggleDone = (i: TimelineItem) => {
+    const done = i.state !== "done";
+    moveTask(i.id, done ? "done" : "in_progress");
+    const after = useTaskStore.getState().tasks.find((t) => t.id === i.id)?.status;
+    if (done && after !== "done") toast.error("ติ๊กเช็คลิสต์ในงานให้ครบก่อน แล้วค่อยกดเสร็จ");
+    else if (done) toast.success(`"${i.name}" เสร็จแล้ว`);
+  };
+  const DoneBox = ({ i }: { i: TimelineItem }) =>
+    i.kind === "task" && i.assigneeIds.includes(me) ? (
+      <button type="button" role="checkbox" aria-checked={i.state === "done"} aria-label={`ทำเสร็จ: ${i.name}`} title={i.state === "done" ? "กดอีกครั้งเพื่อเปิดงานใหม่" : "ทำเสร็จแล้ว กดติ๊ก"}
+        onClick={(e) => { e.stopPropagation(); toggleDone(i); }}
+        className={cn("grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 text-[11px] font-bold transition-colors",
+          i.state === "done" ? "border-[var(--brand-green)] bg-[var(--brand-green)] text-white" : "border-[var(--ink-soft)]/50 text-transparent hover:border-[var(--brand-green)] hover:text-[var(--brand-green)]")}>
+        ✓
+      </button>
+    ) : null;
   const teamIds = [...new Set([project.ownerId, ...project.members.map((m) => m.userId)])];
   const why = "แก้จากหน้ารายการโปรเจกต์";
   const [group, setGroup] = useState<"section" | "none">("section");
@@ -98,10 +116,12 @@ export function ListTab({ project, items, canEdit = false, canPlan = false, onOp
             {g.rows.map((i) => {
               const sub = !!i.parentId && shownIds.has(i.parentId);
               return (
-                <button key={i.id} type="button" onClick={() => i.kind === "task" && onOpen(i.id)}
-                  className={cn("grid gap-1.5 rounded-xl border border-[var(--line)] bg-[var(--bg)] p-3 text-left", sub && "ml-5", i.state === "late" && "border-red-300 bg-red-50/60 dark:border-red-900 dark:bg-red-950/20")}>
+                <div key={i.id} role="button" tabIndex={0} onClick={() => i.kind === "task" && onOpen(i.id)}
+                  onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && i.kind === "task") { e.preventDefault(); onOpen(i.id); } }}
+                  className={cn("grid cursor-pointer gap-1.5 rounded-xl border border-[var(--line)] bg-[var(--bg)] p-3 text-left", sub && "ml-5", i.state === "late" && "border-red-300 bg-red-50/60 dark:border-red-900 dark:bg-red-950/20")}>
                   <span className="flex items-start gap-2">
                     {sub && <span className="text-[var(--ink-soft)]">↳</span>}
+                    <span className="pt-0.5"><DoneBox i={i} /></span>
                     {i.kind === "milestone" && <span style={{ color: "var(--chart-violet)" }}>◆</span>}
                     <span className={cn("min-w-0 flex-1 text-[15px] font-semibold leading-snug", i.state === "done" && "font-normal text-[var(--ink-soft)] line-through")}>{i.name}</span>
                     <StatePill state={i.state} />
@@ -113,7 +133,7 @@ export function ListTab({ project, items, canEdit = false, canPlan = false, onOp
                   {i.deps.some((d) => byId.has(d)) && (
                     <span className="text-[12px] text-[var(--ink-soft)]">รอ: {i.deps.filter((d) => byId.has(d)).map((d) => byId.get(d)!.name).join(", ")}</span>
                   )}
-                </button>
+                </div>
               );
             })}
           </div>
@@ -141,13 +161,17 @@ export function ListTab({ project, items, canEdit = false, canPlan = false, onOp
                     {canEdit && i.kind === "task" ? (
                       <div className={cn("flex items-center gap-1", i.parentId && shownIds.has(i.parentId) && "pl-5")}>
                         {i.parentId && shownIds.has(i.parentId) && <span className="text-[var(--ink-soft)]" aria-label="งานย่อย">↳</span>}
+                        <DoneBox i={i} />
                         <InlineName item={i} onSave={(t) => saveTaskDetails(i.id, t, i.task?.description ?? "", me)} />
                         <button type="button" className="shrink-0 rounded px-1.5 text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)]" aria-label={`เปิดงาน ${i.name}`} title="เปิดรายละเอียดงาน" onClick={(e) => { e.stopPropagation(); onOpen(i.id); }}>↗</button>
                       </div>
                     ) : canEdit && i.kind === "milestone" ? (
                       <div className="flex items-center gap-1"><span style={{ color: "var(--chart-violet)" }}>◆</span><InlineName item={i} onSave={(t) => updateMilestone(project.id, i.id, { name: t })} /></div>
                     ) : (
-                      <span className={cn("px-1", i.state === "done" && "text-[var(--ink-soft)] line-through")}>{i.kind === "milestone" ? "◆ " : ""}{i.name}</span>
+                      <span className="inline-flex items-center gap-2">
+                        <DoneBox i={i} />
+                        <span className={cn("px-1", i.state === "done" && "text-[var(--ink-soft)] line-through")}>{i.kind === "milestone" ? "◆ " : ""}{i.name}</span>
+                      </span>
                     )}
                   </td>
                   <td className="px-2 py-1.5" onClick={(e) => canEdit && e.stopPropagation()}>

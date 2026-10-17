@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { CalendarDays, ChartColumn, Flag, GanttChart, LayoutGrid, List, MessageSquare, Paperclip, SquareKanban, type LucideIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -70,8 +70,22 @@ export function ProjectView({ projectId }: { projectId: string }) {
     return p && canPlanProject(p, useIdentityStore.getState().viewingAsUserId) ? "timeline" : "list";
   });
   const [newTaskSection, setNewTaskSection] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  // "งานของฉัน": พนักงานที่มีงานในโปรเจกต์เปิดมาเห็นเฉพาะงานตัวเองก่อน (ไม่ต้องไล่หาชื่อตัวเองในรายการ)
+  // เจ้าของ/CEO เห็นทั้งหมดก่อน · ลิงก์ ?mine=1 (จาก "งานของฉันในโปรเจกต์") บังคับเปิดแบบของฉัน
+  const [mineOnly, setMineOnly] = useState<boolean>(() => {
+    if (searchParams.get("mine") === "1") return true;
+    const p = useProjectStore.getState().projects.find((x) => x.id === projectId);
+    const uid = useIdentityStore.getState().viewingAsUserId;
+    if (!p || canPlanProject(p, uid)) return false;
+    return useTaskStore.getState().tasks.some((t) => t.project?.projectId === projectId && t.assigneeIds.includes(uid));
+  });
 
-  const items = useMemo(() => (project ? timelineItems(project, tasks, today) : []), [project, tasks, today]);
+  const allItems = useMemo(() => (project ? timelineItems(project, tasks, today) : []), [project, tasks, today]);
+  const myCount = useMemo(() => allItems.filter((i) => i.kind === "task" && i.assigneeIds.includes(me)).length, [allItems, me]);
+  const mineView = mineOnly && myCount > 0;
+  // มุมมองงาน (รายการ/บอร์ด/แผนเวลา/ปฏิทิน) กรองตามปุ่ม · ภาพรวม/แดชบอร์ด/ไฟล์ ยังเป็นของทั้งโปรเจกต์
+  const items = useMemo(() => (mineView ? allItems.filter((i) => i.kind === "task" && i.assigneeIds.includes(me)) : allItems), [allItems, mineView, me]);
 
   // ยังโหลดไม่เสร็จ — อย่าเพิ่งขึ้น "ไม่พบโปรเจกต์" (เปิดจากลิงก์แจ้งเตือนจะเห็นแวบหนึ่ง) และกันแก้ก่อนโหลดเสร็จ
   if (!ready) return <p className="py-20 text-center text-sm text-[var(--ink-soft)]">กำลังโหลดโปรเจกต์…</p>;
@@ -88,8 +102,8 @@ export function ProjectView({ projectId }: { projectId: string }) {
   }
   const canEdit = canEditProject(project, me);
   const canPlan = canPlanProject(project, me);
-  const status = projectStatusOf(project, items);
-  const pct = progressOf(items);
+  const status = projectStatusOf(project, allItems);
+  const pct = progressOf(allItems);
 
   return (
     <div className="space-y-3">
@@ -149,20 +163,35 @@ export function ProjectView({ projectId }: { projectId: string }) {
         <MoreTabs tab={tab} onPick={setTab} />
       </div>
 
-      {items.length === 0 && EMPTY_TABS.includes(tab) ? (
+      {myCount > 0 && MINE_TABS.includes(tab) && (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-xl border border-[var(--line)] bg-[var(--bg-soft)] p-1" role="group" aria-label="แสดงงาน">
+            {([[true, `👤 งานของฉัน`, myCount], [false, "ทั้งหมด", allItems.filter((i) => i.kind === "task").length]] as const).map(([v, label, n]) => (
+              <button key={String(v)} type="button" aria-pressed={mineOnly === v} onClick={() => setMineOnly(v)}
+                className={cn("inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-[13.5px]", mineOnly === v ? "bg-[var(--bg)] font-bold text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)]")}>
+                {label}
+                <span className={cn("rounded-full px-1.5 text-[11.5px] font-semibold tabular-nums", mineOnly === v ? "bg-[var(--accent)] text-[var(--brand-green-dark)]" : "bg-[var(--bg)]")}>{n}</span>
+              </button>
+            ))}
+          </div>
+          {mineView && <span className="text-[12.5px] text-[var(--ink-soft)]">กำลังดูเฉพาะงานที่คุณรับผิดชอบ</span>}
+        </div>
+      )}
+
+      {allItems.length === 0 && EMPTY_TABS.includes(tab) ? (
         <EmptyProject canEdit={canEdit} onAddTask={() => setNewTaskSection(project.sections[0]?.id ?? "")} onTemplates={() => router.push("/report-task/projects/templates")} />
       ) : <>
       {tab === "timeline" && (
         <ProjectTimeline project={project} items={items} today={today} holidays={holidays} canEdit={canEdit} canPlan={canPlan}
           onOpenTask={(id) => openTask(id)} onAddTask={(sec) => setNewTaskSection(sec || project.sections[0]?.id || "")} />
       )}
-      {tab === "overview" && <Overview project={project} items={items} pct={pct} today={today} canEdit={canEdit} />}
+      {tab === "overview" && <Overview project={project} items={allItems} pct={pct} today={today} canEdit={canEdit} />}
       {tab === "list" && <ListTab project={project} items={items} canEdit={canEdit} canPlan={canPlan} onOpen={(id) => openTask(id)} />}
       {tab === "board" && <BoardTab project={project} items={items} canEdit={canEdit} onOpen={(id) => openTask(id)} />}
       {tab === "calendar" && <CalendarTab items={items} today={today} onOpen={(id) => openTask(id)} />}
-      {tab === "dashboard" && <DashboardTab project={project} items={items} today={today} onOpen={(id) => openTask(id)} />}
+      {tab === "dashboard" && <DashboardTab project={project} items={allItems} today={today} onOpen={(id) => openTask(id)} />}
       {tab === "messages" && <MessagesTab project={project} canEdit={canEdit} />}
-      {tab === "files" && <FilesTab items={items} onOpen={(id) => openTask(id)} />}
+      {tab === "files" && <FilesTab items={allItems} onOpen={(id) => openTask(id)} />}
       {tab === "updates" && <UpdatesTab project={project} canEdit={canEdit} />}
       </>}
 
@@ -185,6 +214,8 @@ export function ProjectView({ projectId }: { projectId: string }) {
 }
 
 const EMPTY_TABS: Tab[] = ["timeline", "list", "board", "calendar", "dashboard", "files"];
+/** แท็บที่ปุ่ม "งานของฉัน | ทั้งหมด" มีผล */
+const MINE_TABS: Tab[] = ["list", "board", "timeline", "calendar"];
 
 /** แท็บรอง (บอร์ด… ไฟล์ อัปเดตสถานะ) — ปุ่มบอกชื่อแท็บที่เปิดอยู่ถ้าเป็นแท็บรอง */
 function MoreTabs({ tab, onPick }: { tab: Tab; onPick: (t: Tab) => void }) {
