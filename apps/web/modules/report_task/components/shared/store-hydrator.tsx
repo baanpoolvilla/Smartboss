@@ -11,6 +11,7 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { syncStickerUsageFromServer, useStickerUsageStore } from "@/modules/report_task/store/sticker-usage-store";
 
 import { ServerStoreSync } from "./server-store-sync";
+import { StaleActionNotifSweeper } from "./stale-action-notif-sweeper";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { usePenaltySettingsStore } from "@/modules/report_task/store/penalty-settings-store";
 import { useReportPenaltySettingsStore } from "@/modules/report_task/store/report-penalty-settings-store";
@@ -328,6 +329,8 @@ export function StoreHydrator() {
         select={(s) => s.notifications}
         apply={(s, notifications) => ({ ...s, notifications, loaded: true })}
       />
+      {/* แจ้งเตือน "รอคุณทำ" ที่คนอื่นจัดการแล้ว (คำขอเลื่อนถูกตัดสิน / งานย้ายไปคนอื่น) ⇒ อ่านแล้ว */}
+      <StaleActionNotifSweeper />
       <ServerStoreSync
         apiKey="activity-log"
         pollMs={MEDIUM_POLL_MS}

@@ -225,6 +225,27 @@ export async function markReadByReference(userId: string, referenceId: string) {
  * referenceId เก็บเป็น "orgId:ticketId" ไม่ใช่ referenceId เปล่า ๆ — ผู้เรียก
  * ต้องรู้ตัวเองว่ารูปแบบไหนใช้กับ type ไหน ดู maintenanceHrefFor ใน derive.ts)
  */
+/**
+ * แจ้งเตือนแบบ "รอคุณทำ" (รออนุมัติ / ได้รับมอบหมาย / ขอเลื่อน) ของเรื่องนี้ — มีคนจัดการไปแล้ว
+ * ⇒ ถือว่าอ่านแล้วสำหรับทุกคน ไม่ต้องค้างเป็นเลขแดง/แถบ "รอคุณ" ของคนอื่น (ผู้ใช้ขอ 18/10/2569
+ * "ถ้าอะไรถูกเคลียแล้วก็ต้องไม่เห็น") · เฉพาะหัวข้อที่ระบุ (titleIncludes) — แจ้งเตือนข่าวสาร
+ * (คอมเมนต์ใหม่ เปลี่ยนสถานะ) ไม่แตะ: แค่มีคนอื่นอ่านไม่ได้แปลว่าเราไม่ต้องรู้
+ * มาร์คอ่าน ไม่ลบ ⇒ ยังดูย้อนหลังในกระดิ่งได้ · ไม่ throw (ไม่ให้ขั้นตอนหลักล้มเพราะตรงนี้)
+ */
+export async function resolveActionNotifications(referenceId: string, type: string, titleIncludes: string[]) {
+  if (!referenceId || titleIncludes.length === 0) return;
+  try {
+    await crossOrg("notification:recipient-scoped-not-org-scoped", () =>
+      prisma.notification.updateMany({
+        where: { referenceId, type, readAt: null, OR: titleIncludes.map((t) => ({ title: { contains: t } })) },
+        data: { readAt: new Date() },
+      })
+    );
+  } catch (err) {
+    console.error("[notify] resolveActionNotifications failed", err);
+  }
+}
+
 export async function deleteNotificationsByReference(referenceId: string, type?: string | string[]) {
   await crossOrg("notification:recipient-scoped-not-org-scoped", () =>
     prisma.notification.deleteMany({

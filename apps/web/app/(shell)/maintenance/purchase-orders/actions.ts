@@ -55,6 +55,7 @@ import {
   notifyActorName,
   usersWithPermission,
   deleteNotificationsByReference,
+  resolveActionNotifications,
 } from "@/modules/maintenance/data/notify";
 import { putFile, putFiles, deleteFiles } from "@/modules/maintenance/lib/storage";
 import {
@@ -322,6 +323,8 @@ export async function approveNormalAction(formData: FormData) {
       body: assigneeName ? `มอบให้ ${assigneeName} ไปสั่งซื้อ` : undefined,
     });
   }
+  // จัดการแล้ว ⇒ แจ้งเตือน "รอคุณทำ" ของเรื่องนี้ไม่ต้องค้างที่ใคร (notify.ts resolveActionNotifications)
+  if (changed) await resolveActionNotifications(id, "purchase_order", ["รออนุมัติ"]);
   revalidatePath(`/maintenance/purchase-orders/${id}`);
   redirect("/maintenance/purchase-orders");
 }
@@ -346,6 +349,8 @@ export async function approveEmergencyAction(formData: FormData) {
       text: "PR ฉุกเฉินอนุมัติแล้ว",
     });
   }
+  // จัดการแล้ว ⇒ แจ้งเตือน "รอคุณทำ" ของเรื่องนี้ไม่ต้องค้างที่ใคร (notify.ts resolveActionNotifications)
+  if (changed) await resolveActionNotifications(id, "purchase_order", ["รออนุมัติ"]);
   revalidatePath(`/maintenance/purchase-orders/${id}`);
   redirect("/maintenance/purchase-orders");
 }
@@ -369,6 +374,8 @@ export async function rejectAction(formData: FormData) {
       body: po.poAssignedTo ? "ไม่ต้องดำเนินการสั่งซื้อรายการนี้แล้ว" : undefined,
     });
   }
+  // จัดการแล้ว ⇒ แจ้งเตือน "รอคุณทำ" ของเรื่องนี้ไม่ต้องค้างที่ใคร (notify.ts resolveActionNotifications)
+  if (changed) await resolveActionNotifications(id, "purchase_order", ["รออนุมัติ", "ได้รับมอบ PO"]);
   revalidatePath(`/maintenance/purchase-orders/${id}`);
   redirect("/maintenance/purchase-orders");
 }
@@ -470,6 +477,8 @@ export async function confirmOrderAction(formData: FormData) {
     { emoji: "🚚", text: "สั่งซื้อแล้ว รอรับของ", body: `ยอด ฿${total.toLocaleString()}` }
   );
 
+  // จัดการแล้ว ⇒ แจ้งเตือน "รอคุณทำ" ของเรื่องนี้ไม่ต้องค้างที่ใคร (notify.ts resolveActionNotifications)
+  if (changed) await resolveActionNotifications(id, "purchase_order", ["ได้รับมอบ PO"]);
   revalidatePath(`/maintenance/purchase-orders/${id}`);
   redirect("/maintenance/purchase-orders");
 }
@@ -503,6 +512,8 @@ export async function receiveAction(formData: FormData) {
       text: "รับของแล้ว",
     });
   }
+  // จัดการแล้ว ⇒ แจ้งเตือน "รอคุณทำ" ของเรื่องนี้ไม่ต้องค้างที่ใคร (notify.ts resolveActionNotifications)
+  if (changed) await resolveActionNotifications(id, "purchase_order", ["คุณเป็นผู้รับของ", "ได้รับมอบ PO"]);
   revalidatePath(`/maintenance/purchase-orders/${id}`);
   redirect("/maintenance/purchase-orders");
 }
@@ -547,6 +558,8 @@ export async function selfReceiveAction(formData: FormData) {
       body: `ยอด ฿${total.toLocaleString()}`,
     });
   } else if (urls.length > 0) await deleteFiles(urls).catch(() => 0);
+  // จัดการแล้ว ⇒ แจ้งเตือน "รอคุณทำ" ของเรื่องนี้ไม่ต้องค้างที่ใคร (notify.ts resolveActionNotifications)
+  if (changed) await resolveActionNotifications(id, "purchase_order", ["คุณเป็นผู้รับของ", "ได้รับมอบ PO"]);
   revalidatePath(`/maintenance/purchase-orders/${id}`);
   redirect("/maintenance/purchase-orders");
 }

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { canViewAll, requireOrg } from "@smartboss/auth";
 import { getWorkOrder, updateWorkOrder, addWorkOrderComment } from "@/modules/maintenance/data/work-orders";
 import { workOrderAccess, canSeeWorkOrder } from "@/modules/maintenance/data/work-order-access";
-import { notifyActorName, notifyUser, notifyUsers, usersWithPermission } from "@/modules/maintenance/data/notify";
+import { notifyActorName, notifyUser, notifyUsers, resolveActionNotifications, usersWithPermission } from "@/modules/maintenance/data/notify";
 import { createDueRequest, decideDueRequest, getDueRequest } from "@/modules/maintenance/data/work-order-due-requests";
 import { logActivity } from "@/modules/maintenance/data/activity";
 import { fmtThaiDate } from "@/modules/maintenance/lib/format";
@@ -24,6 +24,9 @@ function endOfDayBkk(v: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 const ymdBkk = (d: Date) => new Date(d.getTime() + 7 * 3600e3).toISOString().slice(0, 10);
+
+/** หัวข้อแจ้งเตือนคำขอ (ใช้หาแถวที่ต้องเคลียร์เมื่อคำขอจบ) — ต้องตรงกับ title ใน requestDueDateAction */
+const PENDING_TITLE = "ขอเลื่อนกำหนดส่งใบงาน รออนุมัติ";
 
 type Session = Awaited<ReturnType<typeof requireOrg>>;
 type Wo = NonNullable<Awaited<ReturnType<typeof getWorkOrder>>>;
@@ -88,6 +91,8 @@ export async function cancelDueRequestAction(requestId: string): Promise<{ error
   const wo = await getWorkOrder(s.orgId, r.workOrderId);
   if (!wo) return { error: "ไม่พบใบงาน" };
   await decideDueRequest(s.orgId, requestId, { status: "cancelled", decidedBy: s.userId });
+  // คำขอจบแล้ว ⇒ แจ้งเตือน "รออนุมัติ" ของผู้อนุมัติทุกคนเคลียร์ (ไม่ใช่แค่ของคนที่กด)
+  await resolveActionNotifications(wo.id, "work_order", [PENDING_TITLE]);
   await addWorkOrderComment(s.orgId, wo.id, s.userId, "ยกเลิกคำขอเลื่อนกำหนดส่ง", null, { kind: "log" });
   await log(s, wo, "ยกเลิกคำขอเลื่อนกำหนดส่งของ");
   refresh(wo.id);
@@ -105,6 +110,8 @@ export async function decideDueRequestAction(requestId: string, approve: boolean
 
   const ok = await decideDueRequest(s.orgId, requestId, { status: approve ? "approved" : "rejected", decidedBy: s.userId, decisionNote: memo });
   if (!ok) return { error: "คำขอนี้ถูกตัดสินไปแล้ว" };
+  // คนหนึ่งอนุมัติ/ไม่อนุมัติแล้ว ⇒ "รออนุมัติ" ที่ผู้อนุมัติคนอื่นจะไม่ขึ้นแล้ว (ผู้ใช้ขอ 18/10/2569)
+  await resolveActionNotifications(wo.id, "work_order", [PENDING_TITLE]);
   if (approve) await updateWorkOrder(s.orgId, wo.id, { dueDate: r.newDate });
 
   const text = approve

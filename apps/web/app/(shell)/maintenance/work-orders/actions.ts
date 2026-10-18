@@ -21,6 +21,7 @@ import {
   notifyUsers,
   propertyCaretaker,
   deleteNotificationsByReference,
+  resolveActionNotifications,
 } from "@/modules/maintenance/data/notify";
 import { getProperty } from "@/modules/maintenance/data/properties";
 import { getAsset } from "@/modules/maintenance/data/assets";
@@ -256,6 +257,10 @@ async function notifyStatusChanged(
   status: string,
   actorId: string
 ) {
+  // ปิดงาน/ยกเลิกแล้ว ⇒ "ได้รับมอบหมาย" / "ขอเลื่อน…รออนุมัติ" ของใบนี้ไม่มีอะไรให้ทำแล้ว ไม่ต้องค้างที่ใคร
+  if (status === "completed" || status === "cancelled") {
+    await resolveActionNotifications(wo.id, "work_order", ["ได้รับมอบหมายงานใหม่", "ขอเลื่อนกำหนดส่งใบงาน รออนุมัติ"]);
+  }
   const st = STATUS_TEXT[status] ?? { emoji: "📋", label: status };
   const property = await getProperty(orgId, wo.propertyId);
   const propertyName = property?.name ?? "-";
