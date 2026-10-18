@@ -94,7 +94,6 @@ function TasksPageContent() {
     const preset = searchParams.get("preset");
     const from = searchParams.get("from");
     const to = searchParams.get("to");
-    const project = searchParams.get("project");
     const patch: Partial<typeof filters> = {};
     if (dept) patch.departmentId = dept;
     if (assignee) patch.assigneeId = assignee;
@@ -103,7 +102,6 @@ function TasksPageContent() {
     if (preset) patch.preset = preset as DatePreset;
     if (from) patch.customFrom = from;
     if (to) patch.customTo = to;
-    if (project) patch.projectId = project;
     if (Object.keys(patch).length > 0) setFilters(patch);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setUrlHadFilters(Object.keys(patch).length > 0 || !!searchParams.get("view"));
@@ -159,8 +157,7 @@ function TasksPageContent() {
         if (filters.customTo) params.set("to", filters.customTo);
       }
     }
-    // ค่าเริ่มต้น "none" (งานทั่วไป) ไม่ต้องใส่ใน URL
-    if (filters.projectId !== "none") params.set("project", filters.projectId);
+    // บอร์ดไม่มีงานโปรเจกต์เสมอ (projectId ล็อก "none" ด้านล่าง) — ไม่ต้องใส่ใน URL
     if (view !== "board") params.set("view", view);
     const query = params.toString();
     // ไม่มีอะไรเปลี่ยน = ไม่ต้องเขียนทับ (ไม่ไปกวนการนำทางที่กำลังเกิดขึ้น)
@@ -182,6 +179,13 @@ function TasksPageContent() {
   useEffect(() => {
     if (filters.quickView !== "all") setFilters({ quickView: "all" });
   }, [filters.quickView, setFilters]);
+
+  // งานโปรเจกต์อยู่หน้าโปรเจกต์อย่างเดียว ไม่ขึ้นบนบอร์ด ("เอาโปรเจกออกจาก task ไปอยู่ของโปรเจกเอง กันงง")
+  // ช่อง "โปรเจกต์" ในตัวกรองเอาออกแล้ว — ลิงก์เก่า ?project= หรือค่าที่จำไว้ในเครื่องก็ไม่ดึงงานโปรเจกต์กลับมา
+  // (FILTER_URL_KEYS ยังมี "project" ไว้ลบคีย์เก่าออกจาก URL) · มุมมองภาระงานยังนับงานโปรเจกต์ตามเดิม (workload-view.tsx)
+  useEffect(() => {
+    if (filters.projectId !== "none") setFilters({ projectId: "none" });
+  }, [filters.projectId, setFilters]);
 
   // Feeds the mobile filter sheet's "แสดง N งาน" button — same filters the
   // board itself narrows by (unlike kpiTasks above, which drops the quick-view

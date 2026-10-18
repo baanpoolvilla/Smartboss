@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, AlertTriangle, Building2, Users, Flag, CircleDot, User as UserIcon, Group, SlidersHorizontal, CalendarDays, Eye, Check, ChevronDown, GanttChart } from "lucide-react";
+import { Plus, AlertTriangle, Building2, Users, Flag, CircleDot, User as UserIcon, Group, SlidersHorizontal, CalendarDays, Eye, Check, ChevronDown } from "lucide-react";
 import { Button } from "@/modules/report_task/components/ui/button";
 import {
   Select,
@@ -19,8 +19,6 @@ import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { useDepartmentStore } from "@/modules/report_task/store/department-store";
-import { useProjectStore } from "@/modules/report_task/store/project-store";
-import { canSeeProject } from "@/modules/report_task/lib/project-access";
 import { getDepartment, getUser, isOwner, scopedDepartments, scopedUsers, users } from "@/modules/report_task/lib/directory";
 import { taskPriorityOrder, priorityMeta } from "@/modules/report_task/lib/task-meta";
 import { datePresetGroups, datePresetLabels } from "@/modules/report_task/lib/date-filter";
@@ -118,15 +116,6 @@ export function TaskFilters({
   const setFilters = useTaskStore((s) => s.setFilters);
   const resetFilters = useTaskStore((s) => s.resetFilters);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
-  // โปรเจกต์ที่เห็นได้ — ไม่มีสักโปรเจกต์ = ไม่ต้องโชว์ช่องนี้เลย (บอร์ดเหมือนเดิม)
-  const allProjects = useProjectStore((s) => s.projects);
-  const allTasks = useTaskStore((s) => s.tasks);
-  const projectChoices = useMemo(
-    () => allProjects.filter((p) => !p.closedStatus && canSeeProject(p, viewingAsUserId, allTasks)),
-    [allProjects, viewingAsUserId, allTasks]
-  );
-  const projectLabel =
-    filters.projectId === "all" ? "ทุกงาน รวมโปรเจกต์" : filters.projectId === "none" ? "งานทั่วไป" : (allProjects.find((p) => p.id === filters.projectId)?.name ?? "โปรเจกต์");
   const [ownNewTaskOpen, setOwnNewTaskOpen] = useState(false);
   // Mobile-only (<640px) — the 5 fields below collapse into this one button,
   // opened as a bottom sheet, instead of the full row (see the render below).
@@ -403,24 +392,6 @@ export function TaskFilters({
         </Select>
       </FilterField>
 
-      {(projectChoices.length > 0 || filters.projectId !== "none") && (
-        <FilterField label="โปรเจกต์">
-          <Select value={filters.projectId} onValueChange={(v) => v && setFilters({ projectId: v })}>
-            <SelectTrigger className={filterFieldTriggerClass(filters.projectId !== "none", "min-w-[150px] max-w-[220px]")}>
-              <GanttChart className="h-4 w-4 shrink-0" />
-              <SelectValue placeholder="โปรเจกต์"><span className="truncate">{projectLabel}</span></SelectValue>
-            </SelectTrigger>
-            <SelectContent alignItemWithTrigger={false} className="w-auto max-w-[min(90vw,360px)]">
-              <SelectItem value="none">งานทั่วไป (ไม่รวมโปรเจกต์)</SelectItem>
-              <SelectItem value="all">ทุกงาน รวมงานโปรเจกต์</SelectItem>
-              {projectChoices.map((p) => (
-                <SelectItem key={p.id} value={p.id}>📁 {p.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FilterField>
-      )}
-
       {groupBy && onGroupByChange ? (
         // "งานของฉัน"/"งานที่กำลังติดตาม" ยุบมารวมอยู่ในดรอปดาวน์เดียวกับ
         // "จัดกลุ่มตาม" เลย ("อยู่ในนี้ไม่ได้หรอ" — เดิมแยกเป็นดรอปดาวน์ของ
@@ -676,23 +647,6 @@ export function TaskFilters({
           ))}
         </SelectContent>
       </Select>
-
-      {(projectChoices.length > 0 || filters.projectId !== "none") && (
-        <Select value={filters.projectId} onValueChange={(v) => v && setFilters({ projectId: v })}>
-          <SelectTrigger className={mobileFieldRowTriggerClass(filters.projectId !== "none")}>
-            <MobileFieldIcon icon={GanttChart} active={filters.projectId !== "none"} />
-            <span className="text-[13.5px] font-medium text-[var(--ink)]">โปรเจกต์</span>
-            <MobileFieldValue active={filters.projectId !== "none"}>{projectLabel}</MobileFieldValue>
-          </SelectTrigger>
-          <SelectContent alignItemWithTrigger={false} className="w-auto max-w-[min(90vw,360px)]">
-              <SelectItem value="none">งานทั่วไป (ไม่รวมโปรเจกต์)</SelectItem>
-              <SelectItem value="all">ทุกงาน รวมงานโปรเจกต์</SelectItem>
-              {projectChoices.map((p) => (
-                <SelectItem key={p.id} value={p.id}>📁 {p.name}</SelectItem>
-              ))}
-          </SelectContent>
-        </Select>
-      )}
 
       {groupBy && onGroupByChange && (
         <Select value={groupBy} onValueChange={(v) => v && onGroupByChange(v as GroupBy)}>
