@@ -125,7 +125,8 @@ export function MaintenanceCard({ item }: { item: MaintenanceBoardItem }) {
               </span>
             )}
           </div>
-          <p className={cn("text-sm font-semibold leading-snug text-[var(--ink)]", done && "text-[var(--ink-soft)]")}>
+          {/* ขนาด/ตัดบรรทัดเดียวกับชื่องานบนการ์ดงาน (task-card.tsx) — สองแบบการ์ดปนกันในคอลัมน์ ต้องดูเป็นชุดเดียวกัน */}
+          <p className={cn("line-clamp-2 text-[13px] font-semibold leading-snug text-[var(--ink)]", done && "text-[var(--ink-soft)]")}>
             {item.title}
           </p>
           {/* วันที่สร้าง + ครบกำหนด */}
