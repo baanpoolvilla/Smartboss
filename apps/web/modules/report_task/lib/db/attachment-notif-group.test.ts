@@ -38,11 +38,18 @@ describe("groupAttachmentNotifications", () => {
     expect(absorbedIdSet(r.incoming)).toEqual(new Set(["n1", "n2"]));
   });
 
-  it("starts a new row once the old one was read, is too old, or is another task/person", () => {
+  it("keeps merging into an unread row however old it is (Facebook-style)", () => {
+    const stored = [row("n1", one("IMG_1.jpeg"), { createdAt: at(3 * 24 * 3600_000) })];
+    const r = groupAttachmentNotifications([row("n2", one("IMG_2.jpeg"))], stored, NOW);
+    expect(r.incoming).toHaveLength(1);
+    expect(r.incoming[0]).toMatchObject({ message: 'A-Sujita แนบไฟล์ 2 ไฟล์ ในงาน "บ้านอ้อหลักคารั่ว"', grouped: true });
+    expect(GROUP_WINDOW_MS).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  it("starts a new row once the old one was read, or is another task/person", () => {
     const fresh = [row("n9", one("IMG_9.jpeg"))];
     for (const prev of [
       row("p", one("a"), { read: true }),
-      row("p", one("a"), { createdAt: at(GROUP_WINDOW_MS + 1) }),
       row("p", one("a"), { taskId: "t2" }),
       row("p", one("a"), { byUserId: "u-other" }),
     ]) {
