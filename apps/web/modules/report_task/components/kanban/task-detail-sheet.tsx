@@ -2350,15 +2350,20 @@ export function TaskDetailSheet({
               แถบเครื่องมือ (แนบไฟล์ · อิโมจิ · ส่ง) อยู่ล่างในกรอบเดียวกัน — เดิมปุ่มสามตัวเรียงหน้าช่องพิมพ์ในแถวเดียว
               ช่องเหลือกว้างนิดเดียว ข้อความตกบรรทัดทุกสองสามคำ ("ไม่สวย ให้พื้นที่พิมพ์แชทเยอะกว่านี้")
             */}
-            {/* แบบเดียวกับช่องพิมพ์ในแชท (modules/chat/components/composer.tsx) — ผู้ใช้ขอ 18/10/2569 "ทำเหมือนของแชทเลย":
-                [+ แนบ] [🖼 รูป] ( ช่องพิมพ์ทรงแคปซูล ) [😊] [➤] — ส่งอยู่ขวาสุดตัวเดียว ไม่ชนปุ่มอื่น */}
-            <div className={cn("flex items-end gap-0.5", chatExpanded && "md:mx-auto md:w-full md:max-w-[760px]")}>
+            {/* แถบพิมพ์แบบเดียวกับหน้ารายงาน (report-feed/openchat-feed.tsx) — ผู้ใช้ขอ 18/10/2569 "ดู space ที่พิมจากของรายงาน
+                ไม่กินพื้นที่": กรอบเดียวบาง ๆ ปุ่มเล็กอยู่ในกรอบ [+][🖼] ช่องพิมพ์ [😊][➤] */}
+            <div
+              className={cn(
+                "flex items-end gap-1 rounded-xl border border-[var(--line)] bg-[var(--bg-soft)] px-2 py-1.5 transition-colors focus-within:border-[var(--brand-green)]/50",
+                chatExpanded && "md:mx-auto md:w-full md:max-w-[760px]"
+              )}
+            >
               <AttachMenu
                 onFiles={(files) => void handleCommentFilesSelected(files)}
                 disabled={commentUploading}
-                trigger={commentUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-6 w-6" />}
+                trigger={commentUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                 aria-label="แนบไฟล์/รูปภาพ"
-                className="flex h-10 w-9 shrink-0 items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] disabled:pointer-events-none disabled:opacity-50"
+                className="mb-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--brand-green)] text-[var(--ink)] disabled:pointer-events-none disabled:opacity-50"
               />
               <input
                 ref={commentImageInputRef}
@@ -2376,11 +2381,11 @@ export function TaskDetailSheet({
                 type="button"
                 onClick={() => commentImageInputRef.current?.click()}
                 disabled={commentUploading}
-                className="flex h-10 w-8 shrink-0 items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] disabled:opacity-50"
+                className="mb-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-white disabled:opacity-50"
                 aria-label="ส่งรูป"
                 title="ส่งรูป"
               >
-                <ImagePlus className="h-5 w-5" />
+                <ImagePlus className="h-4 w-4" />
               </button>
               <div className="relative min-w-0 flex-1">
                 {mentionQuery && mentionCandidates.length > 0 && (
@@ -2456,8 +2461,8 @@ export function TaskDetailSheet({
                       submitComment();
                     }
                   }}
-                  // แคปซูลแบบช่องพิมพ์แชท เริ่มบรรทัดเดียว ขยายตามข้อความ · มือถือ 16px กัน iPhone ซูมหน้า
-                  className="block max-h-40 min-h-10 w-full resize-none rounded-[20px] border border-[var(--line)] bg-[var(--bg-soft)] px-4 py-2 text-base leading-6 shadow-none [field-sizing:content] placeholder:text-[var(--ink-soft)] focus-visible:border-[var(--brand-green)] focus-visible:ring-0 sm:text-[15px]"
+                  // ไม่มีกรอบของตัวเอง (กรอบอยู่ที่แถบ) เริ่มบรรทัดเดียว ขยายตามข้อความ · มือถือ 16px กัน iPhone ซูมหน้า
+                  className="block max-h-32 min-h-7 w-full resize-none rounded-none border-0 bg-transparent px-1 py-1 text-base leading-5 shadow-none [field-sizing:content] placeholder:text-[var(--ink-faint)] focus-visible:ring-0 sm:text-sm"
                 />
               </div>
               <Popover open={commentEmojiOpen} onOpenChange={setCommentEmojiOpen}>
@@ -2467,9 +2472,9 @@ export function TaskDetailSheet({
                       type="button"
                       aria-label="อิโมจิและสติกเกอร์ (Ctrl+E)"
                       title="อิโมจิและสติกเกอร์ (Ctrl+E)"
-                      className="flex h-10 w-8 shrink-0 items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+                      className="mb-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-white"
                     >
-                      <Smile className="h-5 w-5" />
+                      <Smile className="h-4 w-4" />
                     </button>
                   }
                 />
@@ -2481,10 +2486,10 @@ export function TaskDetailSheet({
                 type="button"
                 onClick={submitComment}
                 disabled={commentUploading}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--brand-green-dark)] text-white transition-opacity hover:brightness-110 disabled:opacity-40"
+                className="mb-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--brand-green)] text-[var(--ink)] transition-colors disabled:opacity-40"
                 aria-label="ส่งความคิดเห็น"
               >
-                <SendHorizontal className="h-5 w-5" />
+                <SendHorizontal className="h-3.5 w-3.5" />
               </button>
             </div>
           </div>
