@@ -95,19 +95,6 @@ import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 
 type ItemType = "task" | "meeting" | "leave" | "dayoff";
 
-/**
- * Shift a YYYY-MM-DD date forward by `days` — used by the "กำหนดส่งไว +N วัน"
- * quick-pick buttons. Built and mutated entirely via UTC (construction +
- * setUTC*), matching how date-only fields are anchored elsewhere — mixing
- * local setDate() with a UTC read back (toISOString) rolls the result a day
- * off for non-zero UTC offsets.
- */
-function shiftDate(dateStr: string, days: number) {
-  const d = new Date(`${dateStr.slice(0, 10)}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
 function hhmm(iso: string) {
   return new Date(iso).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
@@ -299,11 +286,6 @@ export function NewTaskDialog({
   const [repeatOn, setRepeatOn] = useState(false);
   const [repeatRule, setRepeatRule] = useState<TaskRecurrenceRule | null>(null);
   const effectiveRule: TaskRecurrenceRule = { ...(repeatRule ?? defaultRecurrenceRule(startDate)), anchor: startDate };
-  // Hidden behind "+ ใส่เวลา" by default — most tasks don't set one, so it
-  // stays out of the way until asked for. `dueTime` already being set (rare
-  // here since this dialog always starts blank, but kept for consistency)
-  // keeps it open instead of hiding a value the user just typed.
-  const [showDueTime, setShowDueTime] = useState(false);
   const derivedDepartmentIds = departmentIdsOf(assigneeIds);
   // ตัวเลือก "แผนก" เองในตัวเลือกขั้นสูง (ดูด้านล่าง) — คนละเรื่องกับ
   // derivedDepartmentIds ข้างบน: อันนั้นคือแผนกจริงของงาน (มาจากคนที่มอบหมาย
@@ -688,7 +670,7 @@ export function NewTaskDialog({
   function createLeave() {
     const user = getUser(leaveUserId);
     // FullCalendar's all-day end is exclusive, so add a day to the end date.
-    // UTC throughout — see shiftDate above for why.
+    // UTC throughout — mixing local setDate() with a UTC read back (toISOString) rolls the date a day off.
     const endExclusive = new Date(`${leaveEnd}T00:00:00Z`);
     endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
     // A half-day (specific time range) only applies to a single-day leave —
@@ -1118,12 +1100,39 @@ export function NewTaskDialog({
           {/* Title (task/meeting) */}
           {itemType !== "leave" && itemType !== "dayoff" && (
             <Row icon={Type}>
-              <Input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder={itemType === "task" ? "เพิ่มชื่องาน" : "เพิ่มหัวข้อประชุม"}
-                className="text-base font-medium border-0 border-b border-[var(--line)] rounded-none px-0 shadow-none focus-visible:ring-0 focus-visible:border-[var(--brand-green)]"
-              />
+              <div className="flex items-center gap-1.5 border-b border-[var(--line)] focus-within:border-[var(--brand-green)]">
+                <Input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder={itemType === "task" ? "เพิ่มชื่องาน" : "เพิ่มหัวข้อประชุม"}
+                  className="min-w-0 flex-1 text-base font-medium border-0 rounded-none px-0 shadow-none focus-visible:ring-0"
+                />
+                {/* ความสำคัญ — ป้ายเล็กท้ายชื่องาน มีให้เห็นแต่ไม่เด่น (mockup หน้าสร้างงาน 18/10/2569) */}
+                {itemType === "task" && (
+                  <Select value={priority} onValueChange={(v) => v && setPriority(v as TaskPriority)}>
+                    <SelectTrigger
+                      size="sm"
+                      title="ความสำคัญ"
+                      aria-label="ความสำคัญ"
+                      className="h-7 w-auto shrink-0 gap-1 rounded-full border-transparent bg-transparent px-2 text-xs text-[var(--ink-soft)] shadow-none hover:border-[var(--line)] hover:bg-[var(--bg-soft)]"
+                    >
+                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: priorityMeta[priority]?.accentColor }} />
+                      <Flag className="h-3 w-3" />
+                      <SelectValue>{priorityMeta[priority]?.label ?? ""}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent align="end" alignItemWithTrigger={false}>
+                      {taskPriorityOrder.map((p) => (
+                        <SelectItem key={p} value={p}>
+                          <span className="flex items-center gap-2">
+                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: priorityMeta[p].accentColor }} />
+                            {priorityMeta[p].label}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
             </Row>
           )}
 
@@ -1146,13 +1155,11 @@ export function NewTaskDialog({
 
           {itemType === "task" && (
             <>
-              {/* เช็คลิสต์ (ไม่บังคับ) — อยู่ใต้รายละเอียดเสมอ (แบบธรรมดา) ไม่ย้ายไปมาตามโหมด */}
-              {renderChecklistRow()}
               {!personalMode && (
               <Row icon={User}>
-                <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+                <div className="flex items-start gap-2">
                 <div className="shrink-0 space-y-1">
-                  <Label className="text-xs text-[var(--ink-soft)]">ประเภทงาน</Label>
+                  <Label className="text-xs text-[var(--ink-soft)]">ประเภท</Label>
                   <div className="inline-flex h-9 w-fit items-center gap-0.5 rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-0.5">
                     {(["individual", "group"] as const).map((m) => (
                       <button
@@ -1160,18 +1167,18 @@ export function NewTaskDialog({
                         type="button"
                         onClick={() => changeTaskMode(m)}
                         className={cn(
-                          "h-full rounded-md px-3 text-sm font-medium transition-colors",
+                          "h-full rounded-md px-2.5 text-xs font-medium transition-colors",
                           taskMode === m ? "bg-white shadow-sm text-[var(--ink)]" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
                         )}
                       >
-                        {m === "individual" ? "งานเดี่ยว" : "งานกลุ่ม"}
+                        {m === "individual" ? "เดี่ยว" : "กลุ่ม"}
                       </button>
                     ))}
                   </div>
                 </div>
-                <div className="min-w-[220px] flex-1 space-y-1">
-                  <Label className="text-xs text-[var(--ink-soft)]">
-                    ผู้รับผิดชอบ {taskMode === "group" ? "(เลือกได้หลายคน)" : "(เลือก 1 คน)"} · {assigneeIds.length} คน
+                <div className="min-w-0 flex-1 space-y-1">
+                  <Label className="truncate text-xs text-[var(--ink-soft)]">
+                    ผู้รับผิดชอบ {taskMode === "group" ? "(หลายคน)" : "(1 คน)"}{assigneeIds.length > 0 ? ` · ${assigneeIds.length} คน` : ""}
                   </Label>
                   <Popover>
                     <PopoverTrigger
@@ -1282,22 +1289,11 @@ export function NewTaskDialog({
                 );
               })()}
 
+              {/* วันเริ่มต้น – กำหนดส่ง แถวเดียวกันทุกขนาดจอ · "กำหนดส่งไว +N วัน" กับ "+ ใส่เวลา" เอาออกแล้ว (ผู้ใช้ขอ 18/10/2569)
+                  ความสำคัญย้ายไปเป็นป้ายเล็กท้ายชื่องาน */}
               <Row icon={CalendarDays}>
-                <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3">
-                  <div className="space-y-1">
-                    <Label className="flex items-center gap-1 text-xs text-[var(--ink-soft)]">
-                      <Flag className="h-3 w-3" /> ความสำคัญ
-                    </Label>
-                    <Select value={priority} onValueChange={(v) => v && setPriority(v as TaskPriority)}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue>{priorityMeta[priority]?.label ?? ""}</SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {taskPriorityOrder.map((p) => <SelectItem key={p} value={p}>{priorityMeta[p].label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                  <div className="min-w-0 space-y-1">
                     <Label className="text-xs text-[var(--ink-soft)]">วันเริ่มต้น</Label>
                     <DatePickerField
                       value={startDate}
@@ -1309,68 +1305,47 @@ export function NewTaskDialog({
                       }}
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-[var(--ink-soft)]">กำหนดส่ง</Label>
+                  <div className="min-w-0 space-y-1">
+                    <Label className="text-xs text-[var(--ink-soft)]">กำหนดส่ง{repeatOn ? " (ใช้ตามรอบทำซ้ำ)" : ""}</Label>
                     <DatePickerField value={dueDate} minDate={startDate || todayIso()} onChange={setDueDate} />
                   </div>
                 </div>
-                {/* กำหนดส่งไว + เวลากำหนดส่ง อยู่แถวเดียวกัน ตัวเล็ก ๆ ประหยัดที่ */}
-                <div className="flex items-center justify-between gap-x-3 gap-y-1 mt-1.5 flex-wrap">
-                  <div className="flex items-center gap-1 flex-wrap">
-                    <span className="text-[10px] text-[var(--ink-soft)]">กำหนดส่งไว:</span>
-                    {[
-                      { label: "3 วัน", days: 3 },
-                      { label: "7 วัน", days: 7 },
-                      { label: "14 วัน", days: 14 },
-                      { label: "30 วัน", days: 30 },
-                    ].map((p) => (
-                      <button
-                        key={p.days}
-                        type="button"
-                        onClick={() => setDueDate(shiftDate(startDate || todayIso(), p.days))}
-                        className="rounded border border-[var(--line)] px-1.5 text-[10px] leading-4 text-[var(--ink-soft)] hover:border-[var(--brand-green)] hover:text-[var(--brand-green-dark)] transition-colors shrink-0"
-                      >
-                        +{p.label}
-                      </button>
-                    ))}
-                  </div>
-                  {/* Optional — unset means "แจ้งเตือนก่อนกำหนด" (Settings ▸
-                      แจ้งเตือน) can only count whole days, since there's no
-                      actual moment to count hours/minutes back from
-                      without this. Hidden behind a toggle instead of always
-                      showing — see `showDueTime`'s own comment. */}
-                  {showDueTime || dueTime ? (
-                    <div className="flex items-center gap-1.5 pt-0.5">
-                      <TimePickerField
-                        value={dueTime}
-                        onChange={setDueTime}
-                        className="w-full sm:w-[130px]"
-                        aria-label="เวลากำหนดส่ง (ไม่บังคับ)"
-                        title="เวลากำหนดส่ง (ไม่บังคับ) — ใส่ไว้ถ้าอยากตั้งแจ้งเตือนล่วงหน้าเป็นชั่วโมง/นาทีได้"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDueTime("");
-                          setShowDueTime(false);
-                        }}
-                        className="shrink-0 text-[11px] text-[var(--ink-soft)] hover:text-[var(--chart-red)] transition-colors"
-                      >
-                        ล้างเวลา
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setShowDueTime(true)}
-                      className="flex items-center gap-1 text-[11px] text-[var(--ink-soft)] hover:text-[var(--brand-green-dark)] transition-colors pt-0.5"
-                    >
-                      <Clock className="h-3 w-3" />+ ใส่เวลา
-                    </button>
-                  )}
-                </div>
               </Row>
 
+              {/* แบบธรรมดา = ชื่อ · รายละเอียด · ผู้รับผิดชอบ · วันที่ · กดปุ่มนี้ถึงจะเห็นช่องขั้นสูง (เช็คลิสต์ · เดี่ยว/กลุ่ม · หัวข้อโปรเจค · ไฟล์แนบ) — ไม่กดก็สร้างแบบเรียบง่ายด้วยค่าเริ่มต้นได้เลย */}
+              {(() => {
+                // พับไว้แต่มีอะไรเปิดใช้อยู่ = บอกบนปุ่ม จะได้ไม่ลืมว่าตั้งไว้
+                const usedSummary = [
+                  ...(repeatOn ? ["ทำซ้ำ"] : []),
+                  ...(checklistOn ? [`เช็คลิสต์ ${checklistItems.length}`] : []),
+                  ...(taskMode === "group" && (mainAssigneeId || useAssigneeDueDates) ? ["ตั้งค่างานกลุ่มเพิ่มเติม"] : []),
+                  ...(taskFiles.length > 0 ? [`ไฟล์แนบ ${taskFiles.length}`] : []),
+                ].join(" · ");
+                return (
+                  <div className="ml-[30px] flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowAdvanced((v) => !v)}
+                      aria-expanded={showAdvanced}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--line)] bg-white px-3 py-1.5 text-[13px] font-semibold text-[var(--ink)] transition-colors hover:border-[var(--brand-green)] hover:text-[var(--brand-green-dark)]"
+                    >
+                      <SlidersHorizontal className="h-3.5 w-3.5" />
+                      {showAdvanced ? "ซ่อนตัวเลือกขั้นสูง" : "ตัวเลือกขั้นสูง"}
+                      <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showAdvanced && "rotate-180")} />
+                    </button>
+                    {!showAdvanced && usedSummary && (
+                      <span className="text-[11px] font-medium leading-snug text-[var(--brand-green-dark)]">เปิดใช้: {usedSummary}</span>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {showAdvanced && (
+                <div className="space-y-3 border-t border-dashed border-[var(--line)] pt-3">
+                  <p className="ml-[30px] text-[11px] font-semibold tracking-wide text-[var(--ink-soft)]">ตัวเลือกขั้นสูง</p>
+                  {/* "แผนก" กับ "หัวข้อโปรเจค" เอาออกไปก่อน — จะทำโปรเจคเป็นอีกแบบแยกจากงาน ("ตอนสร้างก็ไม่ต้องมีให้เลือก
+                      เดี๋ยวงง") งานใหม่จึงไม่มีหัวข้อโปรเจค งานเดิมที่มีอยู่แล้วยังเก็บไว้เหมือนเดิม */}
+                  {/* ทำซ้ำ + เช็คลิสต์ ย้ายมาอยู่ในตัวเลือกขั้นสูง (ผู้ใช้ขอ 18/10/2569) */}
               <Row icon={Repeat}>
                 <div className="space-y-2">
                   <label
@@ -1397,37 +1372,7 @@ export function NewTaskDialog({
                   )}
                 </div>
               </Row>
-
-              {/* แบบธรรมดา = ชื่อ · รายละเอียด · ผู้รับผิดชอบ · วันที่ · กดปุ่มนี้ถึงจะเห็นช่องขั้นสูง (เช็คลิสต์ · เดี่ยว/กลุ่ม · หัวข้อโปรเจค · ไฟล์แนบ) — ไม่กดก็สร้างแบบเรียบง่ายด้วยค่าเริ่มต้นได้เลย */}
-              {(() => {
-                const usedSummary = [
-                  ...(taskMode === "group" && (mainAssigneeId || useAssigneeDueDates) ? ["ตั้งค่างานกลุ่มเพิ่มเติม"] : []),
-                  ...(taskFiles.length > 0 ? [`ไฟล์แนบ ${taskFiles.length}`] : []),
-                ].join(" · ");
-                return (
-                  <div className="ml-[30px] flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setShowAdvanced((v) => !v)}
-                      aria-expanded={showAdvanced}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--line)] bg-white px-3 py-1.5 text-[13px] font-semibold text-[var(--ink)] transition-colors hover:border-[var(--brand-green)] hover:text-[var(--brand-green-dark)]"
-                    >
-                      <SlidersHorizontal className="h-3.5 w-3.5" />
-                      {showAdvanced ? "ซ่อนตัวเลือกขั้นสูง" : "ตัวเลือกขั้นสูง"}
-                      <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showAdvanced && "rotate-180")} />
-                    </button>
-                    {!showAdvanced && (
-                      <span className="text-[11px] leading-snug text-[var(--ink-soft)]">ค่าที่ใช้: {usedSummary}</span>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {showAdvanced && (
-                <div className="space-y-3 border-t border-dashed border-[var(--line)] pt-3">
-                  <p className="ml-[30px] text-[11px] font-semibold tracking-wide text-[var(--ink-soft)]">ตัวเลือกขั้นสูง</p>
-                  {/* "แผนก" กับ "หัวข้อโปรเจค" เอาออกไปก่อน — จะทำโปรเจคเป็นอีกแบบแยกจากงาน ("ตอนสร้างก็ไม่ต้องมีให้เลือก
-                      เดี๋ยวงง") งานใหม่จึงไม่มีหัวข้อโปรเจค งานเดิมที่มีอยู่แล้วยังเก็บไว้เหมือนเดิม */}
+                  {renderChecklistRow()}
                   {taskMode === "group" && renderGroupExtras()}
                   <Row icon={Paperclip}>
                     <div className="space-y-2">
@@ -1804,21 +1749,22 @@ export function NewTaskDialog({
             </>
           )}
 
-          {itemType === "task" && (
-            <div className="flex items-center gap-2 text-xs text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-lg px-3 py-2">
-              <Building2 className="h-3.5 w-3.5" />
-              <span>มอบหมายโดย</span>
-              <Avatar className="h-5 w-5">
-                <AvatarImage src={assignedByUser.avatarUrl ?? undefined} alt={assignedByUser.name} />
-                <AvatarFallback className="text-[8px] bg-white">{assignedByUser.avatar}</AvatarFallback>
-              </Avatar>
-              <span className="font-medium text-[var(--ink)]">{assignedByUser.name}</span>
-              <span className="ml-auto text-[10px]">(สลับที่มุมขวาบน)</span>
-            </div>
-          )}
         </div>
 
-        <DialogFooter className="px-5 py-4 border-t border-[var(--line)]">
+        {/* ปุ่มติดล่างเสมอ — เปิดทำซ้ำ/เช็คลิสต์/ไฟล์แนบแล้วฟอร์มยาว (โดยเฉพาะมือถือ) ปุ่มสร้างงานไม่หลุดลงไปใต้จอ */}
+        <DialogFooter className="sticky bottom-0 z-10 mx-0 mb-0 flex-row items-center justify-end gap-2 border-t border-[var(--line)] bg-white px-5 py-3 sm:py-4">
+          {itemType === "task" && (
+            <span className="mr-auto flex min-w-0 items-center gap-1.5 text-[11.5px] text-[var(--ink-soft)]" title={`มอบหมายโดย ${assignedByUser.name}`}>
+              <Avatar className="h-5 w-5 shrink-0">
+                <AvatarImage src={assignedByUser.avatarUrl ?? undefined} alt={assignedByUser.name} />
+                <AvatarFallback className="text-[8px] bg-[var(--bg-soft)]">{assignedByUser.avatar}</AvatarFallback>
+              </Avatar>
+              <span className="truncate">
+                <span className="hidden sm:inline">มอบหมายโดย </span>
+                <span className="font-medium text-[var(--ink)]">{assignedByUser.name}</span>
+              </span>
+            </span>
+          )}
           <Button variant="outline" onClick={() => requestClose(false)} disabled={submitting}>ยกเลิก</Button>
           <Button
             className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"

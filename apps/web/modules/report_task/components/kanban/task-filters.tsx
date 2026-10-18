@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, AlertTriangle, Building2, Users, Flag, CircleDot, User as UserIcon, Group, SlidersHorizontal, CalendarDays, Eye, Check, ChevronDown } from "lucide-react";
+import { Plus, AlertTriangle, Building2, Users, Flag, CircleDot, User as UserIcon, Group, SlidersHorizontal, CalendarDays, Eye, Check, ChevronDown, X } from "lucide-react";
 import { Button } from "@/modules/report_task/components/ui/button";
 import {
   Select,
@@ -21,7 +21,7 @@ import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { useDepartmentStore } from "@/modules/report_task/store/department-store";
 import { getDepartment, getUser, isOwner, scopedDepartments, scopedUsers, users } from "@/modules/report_task/lib/directory";
 import { taskPriorityOrder, priorityMeta } from "@/modules/report_task/lib/task-meta";
-import { datePresetGroups, datePresetLabels } from "@/modules/report_task/lib/date-filter";
+import { datePresetGroups, datePresetLabels, type DatePreset } from "@/modules/report_task/lib/date-filter";
 import type { TaskPriority } from "@/modules/report_task/types";
 import {
   FilterField,
@@ -49,6 +49,9 @@ const BOARD_KINDS: { id: BoardKind; icon: string; label: string }[] = [
   { id: "task", icon: "📋", label: "งาน" },
   { id: "wo", icon: "🔧", label: "ใบงานซ่อม" },
 ];
+
+/** ชื่อสั้นบนปุ่มจัดกลุ่มในป๊อปอัปตัวกรอง — ชื่อเต็ม ("ผู้รับผิดชอบ") ทำปุ่มกว้างจนตกบรรทัดในป๊อปอัปกว้าง 380px */
+const groupByShort: Record<GroupBy, string> = { status: "สถานะ", priority: "ความสำคัญ", assignee: "คน", department: "แผนก" };
 
 const groupByIcon: Record<GroupBy, typeof CircleDot> = {
   status: CircleDot,
@@ -765,8 +768,257 @@ export function TaskFilters({
   );
 
   if (bar) {
+    // ---- แบบใหม่ (mockup "ตัวกรองบอร์ดงานแบบใหม่" 18/10/2569) — ชิปกดทีเดียว ไม่ซ่อน ไม่ซ้ำ ----
+    // งานของใคร: ทุกคน / งานของฉัน / ที่ฉันมอบหมาย + ⚠ เลยกำหนด · กำหนดส่ง · ความสำคัญ เป็นชิปทั้งหมด
+    // แผนก/ผู้รับผิดชอบยังเป็นช่องเลือก (รายชื่อยาว) เฉพาะคนที่มีให้เลือก · "การแสดงผล" (จัดกลุ่ม/ประเภทบนบอร์ด) แยกไว้ล่างสุด
+    const whoAll = filters.assigneeId === "all" && filters.assignedById === "all";
+    const presetChips: DatePreset[] = ["all", "today", "week", "month", "custom"];
+    // ค่าที่มาจากลิงก์/ที่จำไว้แต่ไม่มีชิป (เช่น "เมื่อวาน") — โชว์เป็นชิปที่เลือกอยู่ด้วย จะได้เห็นและกดเอาออกได้
+    const extraPreset = presetChips.includes(filters.preset) ? null : filters.preset;
+    const chip = (active: boolean, warn?: boolean) =>
+      cn(
+        "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[13px] transition-colors",
+        active
+          ? warn
+            ? "border-[var(--chart-red)] bg-[var(--chart-red)] font-semibold text-white"
+            : "border-[var(--ink)] bg-[var(--ink)] font-semibold text-white"
+          : "border-[var(--line)] bg-white text-[var(--ink)] hover:border-[var(--ink-soft)]"
+      );
+    const sectionLabel = "mb-1.5 flex items-center justify-between text-[11px] font-semibold tracking-wide text-[var(--ink-faint)]";
+    const panel = (inSheet: boolean) => (
+      <div className="flex flex-col">
+        <div className={cn("flex items-center justify-between gap-2 px-4", inSheet ? "pt-1 pr-11" : "pt-3.5")}>
+          <p className={cn("font-semibold", inSheet ? "text-base" : "text-sm")}>ตัวกรอง</p>
+          {isFiltered && (
+            <button type="button" onClick={resetFilters} className="text-[13px] font-medium text-[var(--brand-green-dark)] underline-offset-2 hover:underline">
+              ล้างทั้งหมด
+            </button>
+          )}
+        </div>
+
+        <div className="px-4 pt-3">
+          <p className={sectionLabel}>งานของใคร</p>
+          <div className="flex flex-wrap gap-1.5">
+            <button type="button" aria-pressed={whoAll} className={chip(whoAll)} onClick={() => setFilters({ assigneeId: "all", assignedById: "all" })}>
+              ทุกคน
+            </button>
+            <button
+              type="button"
+              aria-pressed={quickMineActive}
+              className={chip(quickMineActive)}
+              onClick={() => setFilters({ assigneeId: quickMineActive ? "all" : viewingAsUserId, assignedById: "all" })}
+            >
+              <UserIcon className="h-3.5 w-3.5" />
+              งานของฉัน
+            </button>
+            <button
+              type="button"
+              aria-pressed={quickTrackingActive}
+              className={chip(quickTrackingActive)}
+              onClick={() => setFilters({ assignedById: quickTrackingActive ? "all" : viewingAsUserId, assigneeId: "all" })}
+            >
+              <Eye className="h-3.5 w-3.5" />
+              ที่ฉันมอบหมาย
+            </button>
+            <button
+              type="button"
+              aria-pressed={quickOverdueActive}
+              className={chip(quickOverdueActive, true)}
+              onClick={() => setFilters({ penalty: quickOverdueActive ? "all" : "overdue", quickView: "all" })}
+            >
+              <AlertTriangle className="h-3.5 w-3.5" />
+              เลยกำหนด
+            </button>
+          </div>
+        </div>
+
+        <div className="px-4 pt-3">
+          <p className={sectionLabel}>กำหนดส่ง</p>
+          <div className="flex flex-wrap gap-1.5">
+            {presetChips.map((preset) => {
+              const active = filters.preset === preset;
+              return (
+                <button
+                  key={preset}
+                  type="button"
+                  aria-pressed={active}
+                  className={chip(active)}
+                  onClick={() => setFilters({ preset: active && preset !== "all" ? "all" : preset })}
+                >
+                  {preset === "custom" ? "กำหนดเอง…" : datePresetLabels[preset]}
+                </button>
+              );
+            })}
+            {extraPreset && (
+              <button type="button" aria-pressed className={chip(true)} onClick={() => setFilters({ preset: "all" })} title="กดเพื่อเอาออก">
+                {datePresetLabels[extraPreset]} ✕
+              </button>
+            )}
+          </div>
+          {filters.preset === "custom" && (
+            <div className="mt-2 flex items-center gap-2">
+              <DatePickerField value={filters.customFrom} onChange={(v) => setFilters({ customFrom: v })} className="h-9 min-w-0 flex-1" />
+              <span className="text-sm text-[var(--ink-soft)]">ถึง</span>
+              <DatePickerField value={filters.customTo} onChange={(v) => setFilters({ customTo: v })} minDate={filters.customFrom} className="h-9 min-w-0 flex-1" />
+            </div>
+          )}
+        </div>
+
+        <div className="px-4 pt-3">
+          <p className={sectionLabel}>ความสำคัญ</p>
+          <div className="flex flex-wrap gap-1.5">
+            <button type="button" aria-pressed={filters.priority === "all"} className={chip(filters.priority === "all")} onClick={() => setFilters({ priority: "all" })}>
+              ทั้งหมด
+            </button>
+            {taskPriorityOrder.map((pr) => {
+              const active = filters.priority === pr;
+              return (
+                <button key={pr} type="button" aria-pressed={active} className={chip(active)} onClick={() => setFilters({ priority: active ? "all" : pr })}>
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: priorityMeta[pr].accentColor }} />
+                  {priorityMeta[pr].label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* แผนก / ผู้รับผิดชอบ — มีให้เลือกเฉพาะหัวหน้า/เจ้าของ (พนักงานทั่วไปเห็นแค่ของตัวเองอยู่แล้ว ไม่ต้องโชว์) */}
+        {(availableDepartments.length > 1 || peopleInScope.length > 1) && (
+          <div className="px-4 pt-3">
+            <p className={sectionLabel}>แผนก / คน</p>
+            <div className="flex flex-col gap-1.5">
+              {availableDepartments.length > 1 && (
+                <Select value={filters.departmentId} onValueChange={(v) => v && setFilters({ departmentId: v })}>
+                  <SelectTrigger className={cn("h-9 w-full rounded-[10px] text-[13px]", filters.departmentId !== "all" && "border-[var(--brand-green-dark)]/40 bg-[var(--accent)]")}>
+                    <span className="w-[84px] shrink-0 text-left text-[var(--ink-soft)]">แผนก</span>
+                    <span className="flex-1 truncate text-left font-medium">
+                      {filters.departmentId === "all" ? "ทุกแผนก" : (getDepartment(filters.departmentId)?.name ?? "แผนก")}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent alignItemWithTrigger={false}>
+                    <SelectItem value="all">ทุกแผนก</SelectItem>
+                    {availableDepartments.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {peopleInScope.length > 1 && (
+                <Select value={filters.assigneeId} onValueChange={(v) => v && setFilters({ assigneeId: v, ...(v !== "all" ? { assignedById: "all" } : {}) })}>
+                  <SelectTrigger className={cn("h-9 w-full rounded-[10px] text-[13px]", filters.assigneeId !== "all" && "border-[var(--brand-green-dark)]/40 bg-[var(--accent)]")}>
+                    <span className="w-[84px] shrink-0 text-left text-[var(--ink-soft)]">ผู้รับผิดชอบ</span>
+                    <span className="flex-1 truncate text-left font-medium">
+                      {filters.assigneeId === "all" ? "ทุกคน" : filters.assigneeId === viewingAsUserId ? "ของฉัน" : (getUser(filters.assigneeId)?.name ?? "ผู้รับผิดชอบ")}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent alignItemWithTrigger={false}>
+                    <SelectItem value="all">ทุกคน</SelectItem>
+                    {viewerInScope && <SelectItem value={viewingAsUserId}>ของฉัน</SelectItem>}
+                    {restOfScope.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </div>
+        )}
+
+        {!inSheet && resultCount !== undefined && (
+          <p className="px-4 pt-3 text-[12.5px] text-[var(--ink-soft)]">
+            ตรงเงื่อนไข <b className="tabular-nums text-[var(--ink)]">{resultCount}</b> งาน · บอร์ดเปลี่ยนทันทีที่กด
+          </p>
+        )}
+
+        {/* การแสดงผล — ไม่ใช่ตัวกรอง แยกไว้ล่างสุด และไม่นับเป็น "ใช้ตัวกรองอยู่" */}
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[var(--line)] px-4 py-3">
+          {groupBy && onGroupByChange && (
+            <>
+              <span className="text-[12.5px] text-[var(--ink-soft)]">จัดกลุ่มตาม</span>
+              <span className="inline-flex gap-0.5 rounded-[9px] bg-[var(--bg-soft)] p-[3px]">
+                {GROUP_BY_CHOICES.map((g) => (
+                  <button
+                    key={g}
+                    type="button"
+                    aria-pressed={groupBy === g}
+                    onClick={() => onGroupByChange(g)}
+                    className={cn(
+                      "rounded-[7px] px-2.5 py-1 text-xs transition-colors",
+                      groupBy === g ? "bg-white font-semibold text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
+                    )}
+                  >
+                    {groupByShort[g]}
+                  </button>
+                ))}
+              </span>
+            </>
+          )}
+          <span className="ml-auto flex gap-1">
+            {BOARD_KINDS.map((k) => {
+              const on = boardKinds[k.id];
+              return (
+                <button
+                  key={k.id}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => toggleBoardKind(k.id)}
+                  title={on ? `ซ่อน${k.label}บนบอร์ด` : `แสดง${k.label}บนบอร์ด`}
+                  className={cn(
+                    "inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs transition-colors",
+                    on ? "border-[var(--line)] bg-white text-[var(--ink)]" : "border-dashed border-[var(--line)] bg-transparent text-[var(--ink-faint)] line-through"
+                  )}
+                >
+                  <span>{k.icon}</span>
+                  {k.label}
+                  <span className="tabular-nums text-[var(--ink-soft)]">{boardKindCounts[k.id]}</span>
+                </button>
+              );
+            })}
+          </span>
+        </div>
+      </div>
+    );
+
+    // ป้ายตัวกรองที่ใช้อยู่ บนแถบบน (จอคอม) — กด ✕ เอาออกทีละอันได้โดยไม่ต้องเปิดป๊อปอัป
+    const activeTags: { key: string; label: string; warn?: boolean; clear: Partial<typeof filters> }[] = [
+      ...(quickMineActive ? [{ key: "mine", label: "งานของฉัน", clear: { assigneeId: "all" } }] : []),
+      ...(!quickMineActive && filters.assigneeId !== "all"
+        ? [{ key: "who", label: getUser(filters.assigneeId)?.name ?? "ผู้รับผิดชอบ", clear: { assigneeId: "all" } }]
+        : []),
+      ...(quickTrackingActive ? [{ key: "track", label: "ที่ฉันมอบหมาย", clear: { assignedById: "all" } }] : []),
+      ...(quickOverdueActive ? [{ key: "late", label: "เลยกำหนด", warn: true, clear: { penalty: "all" } }] : []),
+      ...(filters.preset !== "all" ? [{ key: "when", label: datePresetLabels[filters.preset], clear: { preset: "all" } }] : []),
+      ...(filters.priority !== "all" ? [{ key: "pr", label: priorityMeta[filters.priority as TaskPriority]?.label ?? "ความสำคัญ", clear: { priority: "all" } }] : []),
+      ...(filters.departmentId !== "all" ? [{ key: "dept", label: getDepartment(filters.departmentId)?.name ?? "แผนก", clear: { departmentId: "all" } }] : []),
+    ] as { key: string; label: string; warn?: boolean; clear: Partial<typeof filters> }[];
+
     return (
       <>
+        {/* ≥1024px: ป้ายตัวกรองที่ใช้อยู่ ข้างปุ่ม (จอแคบกว่านี้ดูจำนวนบนปุ่มแทน) */}
+        {activeTags.length > 0 && (
+          <div className="hidden min-w-0 items-center gap-1.5 overflow-hidden lg:flex">
+            {activeTags.map((t) => (
+              <span
+                key={t.key}
+                className={cn(
+                  "inline-flex h-7 shrink-0 items-center gap-0.5 rounded-full border pl-2.5 pr-1 text-xs",
+                  t.warn ? "border-red-200 bg-red-50 text-[var(--chart-red)]" : "border-[var(--line)] bg-[var(--bg-soft)] text-[var(--ink)]"
+                )}
+              >
+                <span className="max-w-[120px] truncate">{t.label}</span>
+                <button
+                  type="button"
+                  onClick={() => setFilters({ ...t.clear, quickView: "all" })}
+                  aria-label={`เอา ${t.label} ออก`}
+                  className="flex h-5 w-5 items-center justify-center rounded-full opacity-70 hover:bg-black/5 hover:opacity-100"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
         {/* <640px: ไอคอนอย่างเดียว เปิดแผ่นตัวกรองด้านล่าง */}
         <button
           type="button"
@@ -802,36 +1054,27 @@ export function TaskFilters({
               </button>
             }
           />
-          <PopoverContent align="end" className="w-[380px] max-h-[75vh] gap-0 overflow-y-auto p-0">
-            <div className="flex items-center justify-between gap-2 px-4 pt-3.5">
-              <p className="text-sm font-semibold">ตัวกรอง</p>
-              {isFiltered && (
-                <button
-                  type="button"
-                  onClick={resetFilters}
-                  className="text-sm font-medium text-[var(--brand-green-dark)] underline-offset-2 hover:underline"
-                >
-                  ล้างตัวกรอง
-                </button>
-              )}
-            </div>
-            <div className="px-4 pt-3">
-              <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">ตัวกรองด่วน</p>
-              {quickChips}
-            </div>
-            <div className="flex flex-col gap-2 px-4 pt-3">{mobileFieldsNode}</div>
-            <div className="sticky bottom-0 bg-popover px-4 py-3">
-              <Button
-                className="h-10 w-full bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
-                onClick={() => setDesktopPanelOpen(false)}
-              >
-                {resultCount === undefined ? "ใช้ตัวกรอง" : `แสดง ${resultCount} งาน`}
-              </Button>
-            </div>
+          <PopoverContent align="end" className="w-[380px] max-h-[80vh] gap-0 overflow-y-auto p-0">
+            {panel(false)}
           </PopoverContent>
         </Popover>
 
-        {sheet}
+        <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
+          <SheetContent side="bottom" className="max-h-[88vh] gap-0 overflow-y-auto rounded-t-2xl">
+            <SheetHeader className="sr-only">
+              <SheetTitle>ตัวกรอง</SheetTitle>
+            </SheetHeader>
+            <div className="pt-3">{panel(true)}</div>
+            <SheetFooter className="sticky bottom-0 border-t border-[var(--line)] bg-white">
+              <Button
+                className="h-[46px] w-full bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+                onClick={() => setMobileSheetOpen(false)}
+              >
+                {resultCount === undefined ? "ใช้ตัวกรอง" : `แสดง ${resultCount} งาน`}
+              </Button>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
         <NewTaskDialog open={newTaskOpen} onOpenChange={setNewTaskOpen} allowedTypes={["task"]} />
       </>
     );
