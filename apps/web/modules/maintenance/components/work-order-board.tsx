@@ -623,7 +623,7 @@ export function WorkOrderBoard({
       )}
 
       {/* "รอคุณ" — บอกว่าเลขแดงที่เมนูใบงานคือเรื่องอะไร */}
-      <PendingForYouStrip categories={WO_CATEGORIES} />
+      <PendingForYouStrip categories={WO_CATEGORIES} className="shrink-0 px-3 pb-2 pt-1" />
 
       {/* ─── มือถือ: แท็บ 4 สถานะ ─── */}
       <div className="flex min-h-0 flex-1 flex-col lg:hidden">

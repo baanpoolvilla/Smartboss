@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { NewTaskDialog } from "@/modules/report_task/components/kanban/new-task-dialog";
+import { ProjectPendingStrip, useProjectPending } from "./project-pending";
 import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-detail-sheet";
 import { useTaskSheetParam } from "@/modules/report_task/hooks/use-task-sheet-param";
 import { getUser, users } from "@/modules/report_task/lib/directory";
@@ -61,6 +62,10 @@ export function ProjectView({ projectId }: { projectId: string }) {
   const setTaskProject = useTaskStore((s) => s.setTaskProject);
   const { openTaskId, open: openTask, close: closeTask } = useTaskSheetParam();
   const holidays = useCompanyHolidays();
+  // "รอคุณ" เฉพาะโปรเจกต์นี้ (ผู้ใช้ขอ 18/10/2569 "ให้มีแจ้งเตือนในนี้ด้วย") — ชุดเดียวกับเลขแดงที่เมนูโปรเจกต์
+  const pendingAll = useProjectPending();
+  const pending = useMemo(() => pendingAll.filter((i) => i.projectId === projectId), [pendingAll, projectId]);
+  const pendingIds = useMemo(() => new Set(pending.map((i) => i.taskId)), [pending]);
   const today = todayBkk();
   // เปิดหน้ามือถือ (จอแคบ) เจอ "รายการ" ก่อน — อ่านง่ายกว่า Timeline บนจอเล็ก
   // แท็บแรก: เจ้าของ/CEO บนคอม = แผนเวลา (คุมแผน) · คนอื่น/มือถือ = รายการ (อ่านง่ายสุด)
@@ -150,6 +155,8 @@ export function ProjectView({ projectId }: { projectId: string }) {
         )}
       </div>
 
+      <ProjectPendingStrip items={pending} onOpen={(id) => openTask(id)} showProject={false} />
+
       <div className="flex items-end gap-1 border-b border-[var(--line)]">
         <div role="tablist" className="flex min-w-0 gap-1 overflow-x-auto">
           {TABS.filter((t) => PRIMARY_TABS.includes(t.id)).map((t) => (
@@ -157,6 +164,10 @@ export function ProjectView({ projectId }: { projectId: string }) {
               className={cn("inline-flex items-center gap-1.5 whitespace-nowrap px-3.5 py-2.5 text-[14px] transition-colors", tab === t.id ? "font-bold text-[var(--brand-green-dark)] shadow-[inset_0_-2px_0_var(--brand-green)]" : "text-[var(--ink-soft)] hover:text-[var(--ink)]")}>
               <t.icon className="h-4 w-4" />
               {t.label}
+              {/* เลขแดง = งานในโปรเจกต์นี้ที่มีเรื่องรอเรา (แท็บที่โชว์งาน) */}
+              {(t.id === "list" || t.id === "board") && pending.length > 0 && (
+                <span className="rounded-full bg-[#dc2626] px-1.5 text-[11px] font-bold leading-[18px] text-white">{pending.length}</span>
+              )}
             </button>
           ))}
         </div>
@@ -187,7 +198,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
       )}
       {tab === "overview" && <Overview project={project} items={allItems} pct={pct} today={today} canEdit={canEdit} onOpen={(id) => openTask(id)} />}
       {tab === "list" && <ListTab project={project} items={items} canEdit={canEdit} canPlan={canPlan} onOpen={(id) => openTask(id)} />}
-      {tab === "board" && <BoardTab project={project} items={items} canEdit={canEdit} onOpen={(id) => openTask(id)} />}
+      {tab === "board" && <BoardTab project={project} items={items} canEdit={canEdit} onOpen={(id) => openTask(id)} pendingIds={pendingIds} />}
       {tab === "calendar" && <CalendarTab items={items} today={today} onOpen={(id) => openTask(id)} />}
       {tab === "dashboard" && <DashboardTab project={project} items={allItems} today={today} onOpen={(id) => openTask(id)} />}
       {tab === "messages" && <MessagesTab project={project} canEdit={canEdit} />}

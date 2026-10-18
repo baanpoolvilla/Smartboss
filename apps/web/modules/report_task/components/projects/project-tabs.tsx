@@ -213,7 +213,7 @@ export function ListTab({ project, items, canEdit = false, canPlan = false, onOp
 
 /* ───────────── บอร์ด: คอลัมน์ตามสถานะ หรือตามช่วงงาน (ลากการ์ดย้ายช่วงได้ แบบ Asana Board) ───────────── */
 
-export function BoardTab({ project, items, canEdit, onOpen }: { project: Project; items: TimelineItem[]; canEdit: boolean; onOpen: (id: string) => void }) {
+export function BoardTab({ project, items, canEdit, onOpen, pendingIds }: { project: Project; items: TimelineItem[]; canEdit: boolean; onOpen: (id: string) => void; /** งานที่มีเรื่องรอเรา (project-pending.tsx) — กรอบแดง */ pendingIds?: Set<string> }) {
   const me = useIdentityStore((s) => s.viewingAsUserId);
   const setTaskProject = useTaskStore((s) => s.setTaskProject);
   const moveTask = useTaskStore((s) => s.moveTask);
@@ -251,7 +251,8 @@ export function BoardTab({ project, items, canEdit, onOpen }: { project: Project
             className={cn("grid w-72 shrink-0 content-start gap-2 rounded-xl bg-[var(--bg-soft)] p-2.5", over === c.key && "ring-2 ring-[var(--brand-green)]")}>
             <div className="flex justify-between text-xs font-semibold text-[var(--ink-soft)]"><span className="truncate">{c.label}</span><span>{c.list.length}</span></div>
             {c.list.map((t) => (
-              <div key={t.id} draggable={canEdit} onDragStart={(e) => e.dataTransfer.setData("text/task", t.id)}>
+              <div key={t.id} draggable={canEdit} onDragStart={(e) => e.dataTransfer.setData("text/task", t.id)}
+                className={pendingIds?.has(t.id) ? "rounded-xl ring-2 ring-[#dc2626]" : undefined}>
                 <TaskCard task={t} onOpen={onOpen} hideProjectChip />
               </div>
             ))}

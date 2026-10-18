@@ -276,7 +276,7 @@ export function PoBoard({
   return (
     <div>
       {/* "รอคุณ" — บอกว่าเลขแดงที่เมนูสั่งซื้ออุปกรณ์คือเรื่องอะไร */}
-      <PendingForYouStrip categories={PO_CATEGORIES} className="mb-3 rounded-xl border" />
+      <PendingForYouStrip categories={PO_CATEGORIES} className="mb-3" />
       {((canPickPeople && people.length > 0) || !!currentUserId) && (
         <div className="mb-3 flex gap-2 overflow-x-auto">
           <PersonFilter

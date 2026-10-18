@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { Bell, ChevronDown, ChevronUp } from "lucide-react";
+import { useEffect, useMemo } from "react";
+import { PendingCards, type PendingCardItem } from "./pending-cards";
 import { maintenanceCategoryFor, maintenanceHrefFor } from "./derive";
 import type { NotifCategory } from "./types";
 import { useMaintenanceNotifStore, type MaintenanceNotif } from "./use-maintenance-notifications";
@@ -21,15 +20,6 @@ export function splitNotifTitle(title: string): { who: string | null; kind: stri
   const rest = who ? title.slice(dot + 3) : title;
   const colon = rest.indexOf(": ");
   return colon > 0 ? { who, kind: rest.slice(0, colon), subject: rest.slice(colon + 2) } : { who, kind: rest, subject: null };
-}
-
-function ago(iso: string): string {
-  const m = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
-  if (m < 1) return "เมื่อกี้";
-  if (m < 60) return `${m} นาทีที่แล้ว`;
-  const h = Math.round(m / 60);
-  if (h < 24) return `${h} ชม. ที่แล้ว`;
-  return `${Math.round(h / 24)} วันที่แล้ว`;
 }
 
 function useUnread(categories: NotifCategory[]): MaintenanceNotif[] {
@@ -71,59 +61,24 @@ export function PendingPin({ notifs }: { notifs: MaintenanceNotif[] }) {
   );
 }
 
-const SHOW = 3;
-
 export function PendingForYouStrip({ categories, className }: { categories: NotifCategory[]; className?: string }) {
   const unread = useUnread(categories);
-  const [open, setOpen] = useState(false);
-  const rows = useMemo(() => [...unread].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [unread]);
-  if (rows.length === 0) return null;
-  const shown = open ? rows : rows.slice(0, SHOW);
-  return (
-    <div className={`shrink-0 border-y border-red-200 bg-white px-3 py-2 ${className ?? ""}`}>
-      <div className="mb-1.5 flex items-center gap-2 text-[13px] font-bold text-red-700">
-        <Bell className="h-4 w-4" />
-        รอคุณ
-        <span className="rounded-full bg-[#dc2626] px-2 text-[11.5px] leading-5 text-white">{rows.length}</span>
-        <span className="text-[11.5px] font-normal text-(--ink-soft)">เปิดดูแล้วจะหายจากรายการนี้</span>
-      </div>
-      <div className="grid gap-1.5">
-        {shown.map((n) => {
+  const items = useMemo<PendingCardItem[]>(
+    () =>
+      [...unread]
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .map((n) => {
           const { who, kind, subject } = splitNotifTitle(n.title);
-          const href = maintenanceHrefFor(n.type, n.referenceId);
-          const body = (
-            <>
-              <span className="shrink-0 font-bold text-red-700">{kind}</span>
-              <span className="min-w-0 flex-1 truncate font-semibold text-(--ink)">{subject ?? n.body ?? ""}</span>
-              <span className="hidden shrink-0 text-(--ink-soft) sm:inline">
-                {who ? `${who} · ` : ""}
-                {ago(n.createdAt)}
-              </span>
-              {href && <span className="shrink-0 font-bold text-[#1e7830]">เปิดดู →</span>}
-            </>
-          );
-          const cls = "flex items-center gap-2 rounded-[10px] border border-red-200 bg-red-50 px-2.5 py-1.5 text-[12.5px]";
-          return href ? (
-            <Link key={n.id} href={href} className={`${cls} hover:bg-red-100`}>
-              {body}
-            </Link>
-          ) : (
-            <div key={n.id} className={cls}>
-              {body}
-            </div>
-          );
-        })}
-      </div>
-      {rows.length > SHOW && (
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="mt-1.5 inline-flex items-center gap-1 text-[12px] font-semibold text-(--ink-soft) hover:text-(--ink)"
-        >
-          {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-          {open ? "ย่อ" : `ดูอีก ${rows.length - SHOW} เรื่อง`}
-        </button>
-      )}
-    </div>
+          return {
+            key: n.id,
+            kind,
+            title: subject ?? n.body ?? kind,
+            meta: [who, subject ? n.body : null].filter(Boolean).join(" · ") || null,
+            at: n.createdAt,
+            href: maintenanceHrefFor(n.type, n.referenceId),
+          };
+        }),
+    [unread]
   );
+  return <PendingCards items={items} className={className} />;
 }
