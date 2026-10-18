@@ -6,6 +6,7 @@ import { REPORT_TASK_BASE, REPORT_TASK_CODE } from "./constants";
 import { navItems } from "./lib/nav-config";
 import { ALL_REPORT_TASK_PERMS, REPORT_TASK_PERMS } from "./permissions";
 import { TaskReviewNavBadge } from "./components/shared/task-review-nav-badge";
+import { ProjectNavBadge } from "./components/shared/project-nav-badge";
 
 /**
  * โมดูลรายงานและงาน — เดิมพอร์ตมาจากแอป easyboss-workspace ที่เคยรันเดี่ยว ๆ
@@ -36,7 +37,12 @@ const menus: ModuleMenuItem[] = navItems.map((item) => ({
   // Discord-style "someone's waiting on you" pill — Tasks/Kanban counts work
   // sitting in "รอตรวจ" (TaskReviewNavBadge). แชท/รายงานมีตัวเลขของตัวเองในโมดูล
   // "Chat & Report" (chat-report-manifest.ts)
-  badge: item.href === `${REPORT_TASK_BASE}/tasks` ? createElement(TaskReviewNavBadge) : undefined,
+  badge:
+    item.href === `${REPORT_TASK_BASE}/tasks`
+      ? createElement(TaskReviewNavBadge)
+      : item.href === `${REPORT_TASK_BASE}/projects`
+        ? createElement(ProjectNavBadge)
+        : undefined,
 }));
 
 export const reportTaskManifest: ModuleManifest = {

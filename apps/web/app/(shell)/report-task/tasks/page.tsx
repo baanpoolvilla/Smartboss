@@ -19,7 +19,6 @@ import type { DatePreset } from "@/modules/report_task/lib/date-filter";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Skeleton } from "@/modules/report_task/components/ui/skeleton";
 import { StickyFilterBar } from "@/modules/report_task/components/shared/sticky-filter-bar";
-import { ProjectTasksBanner } from "@/modules/report_task/components/projects/my-project-tasks";
 import type { TaskPriority } from "@/modules/report_task/types";
 
 type TaskView = "board" | "grid" | "workload";
@@ -320,12 +319,6 @@ function TasksPageContent() {
           restate the same overdue count (or 0 for "สำเร็จทั้งหมด") once the
           board itself is already narrowed to nothing but overdue tasks, see
           kanban-board.tsx's matching column collapse for the same filter. */}
-      {/* งานโปรเจกต์ไม่ขึ้นบนบอร์ด (ค่าเริ่มต้น) — บอกว่ามีรออยู่ ไม่ให้ลืม */}
-      {!personBoardId && loaded && filters.projectId === "none" && (
-        <div className="px-3 pt-2 sm:px-0 sm:pt-0">
-          <ProjectTasksBanner />
-        </div>
-      )}
       {!personBoardId && loaded && view === "board" && filters.penalty !== "overdue" && (
         // <640px ไม่แสดง — แถบแท็บคอลัมน์ของบอร์ดบอกจำนวนต่อสถานะแทนแล้ว ("เลยกำหนด" อยู่ในตัวกรองด่วน)
         <div className="mt-1 hidden sm:block">

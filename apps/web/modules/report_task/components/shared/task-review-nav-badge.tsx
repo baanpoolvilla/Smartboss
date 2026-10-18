@@ -3,10 +3,40 @@
 import { useMemo } from "react";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { useNotificationStore } from "@/modules/report_task/store/notification-store";
+import { useNotificationStore, type AppNotification } from "@/modules/report_task/store/notification-store";
+import type { Task } from "@/modules/report_task/types";
 import { canReviewTask } from "@/modules/report_task/lib/permissions";
 import { useTaskReviewSettingsStore } from "@/modules/report_task/store/task-review-settings-store";
 import { unreadTaskAssignmentCounts, unreadTaskAttachmentCounts, unreadTaskCommentCounts } from "@/modules/report_task/lib/task-comment-activity";
+
+type ReviewSettings = ReturnType<typeof useTaskReviewSettingsStore.getState>["settings"];
+
+/** taskId ของงานที่อยู่ในโปรเจกต์ */
+export function projectTaskIds(tasks: Task[]): Set<string> {
+  return new Set(tasks.filter((t) => t.project).map((t) => t.id));
+}
+
+/** รอตรวจ (ที่เรามีสิทธิ์ตรวจ) + คอมเมนต์/ไฟล์แนบ/การมอบหมายที่ยังไม่อ่าน — เฉพาะงานที่ include(taskId) ผ่าน */
+export function taskNavBadgeCount(
+  tasks: Task[],
+  notifications: AppNotification[],
+  userId: string,
+  reviewSettings: ReviewSettings,
+  include: (taskId: string) => boolean
+): number {
+  const reviewCount = tasks.filter(
+    (t) => include(t.id) && t.status === "done" && !t.reviewedBy && canReviewTask(t.departmentIds, userId, reviewSettings)
+  ).length;
+  let unreadActivityCount = 0;
+  for (const counts of [
+    unreadTaskCommentCounts(notifications, userId),
+    unreadTaskAttachmentCounts(notifications, userId),
+    unreadTaskAssignmentCounts(notifications, userId),
+  ]) {
+    for (const [taskId, n] of counts) if (include(taskId)) unreadActivityCount += n;
+  }
+  return reviewCount + unreadActivityCount;
+}
 
 /**
  * Discord-style unread pill for the "งาน / Kanban" rail item (see
@@ -33,18 +63,10 @@ export function TaskReviewNavBadge() {
   const reviewSettings = useTaskReviewSettingsStore((s) => s.settings);
   const notifications = useNotificationStore((s) => s.notifications);
 
+  // งานโปรเจกต์ไม่ขึ้นบนบอร์ดแล้ว — นับไว้ที่เมนู "โปรเจกต์" แทน (ProjectNavBadge)
   const count = useMemo(() => {
-    const reviewCount = tasks.filter(
-      (t) => t.status === "done" && !t.reviewedBy && canReviewTask(t.departmentIds, viewingAsUserId, reviewSettings)
-    ).length;
-    const unreadComments = unreadTaskCommentCounts(notifications, viewingAsUserId);
-    const unreadAttachments = unreadTaskAttachmentCounts(notifications, viewingAsUserId);
-    const unreadAssignments = unreadTaskAssignmentCounts(notifications, viewingAsUserId);
-    let unreadActivityCount = 0;
-    for (const n of unreadComments.values()) unreadActivityCount += n;
-    for (const n of unreadAttachments.values()) unreadActivityCount += n;
-    for (const n of unreadAssignments.values()) unreadActivityCount += n;
-    return reviewCount + unreadActivityCount;
+    const ids = projectTaskIds(tasks);
+    return taskNavBadgeCount(tasks, notifications, viewingAsUserId, reviewSettings, (id) => !ids.has(id));
   }, [tasks, viewingAsUserId, reviewSettings, notifications]);
 
   if (count === 0) return null;
