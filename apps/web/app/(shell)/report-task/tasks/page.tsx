@@ -13,10 +13,8 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canManage } from "@/modules/report_task/lib/directory";
 import { canSeeTask } from "@/modules/report_task/lib/permissions";
 import { matchesTaskFilters } from "@/modules/report_task/lib/task-filter";
-import { taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Skeleton } from "@/modules/report_task/components/ui/skeleton";
-import type { TaskPriority } from "@/modules/report_task/types";
 
 type TaskView = "board" | "grid" | "workload";
 
@@ -88,12 +86,10 @@ function TasksPageContent() {
   useEffect(() => {
     const dept = searchParams.get("dept");
     const assignee = searchParams.get("assignee");
-    const priority = searchParams.get("priority");
     const penalty = searchParams.get("penalty");
     const patch: Partial<typeof filters> = {};
     if (dept) patch.departmentId = dept;
     if (assignee) patch.assigneeId = assignee;
-    if (priority && taskPriorityOrder.includes(priority as TaskPriority)) patch.priority = priority as TaskPriority;
     if (penalty && ["overdue", "pending", "docked"].includes(penalty)) patch.penalty = penalty as PenaltyFilter;
     if (Object.keys(patch).length > 0) setFilters(patch);
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -141,7 +137,6 @@ function TasksPageContent() {
     for (const key of FILTER_URL_KEYS) params.delete(key);
     if (filters.departmentId !== "all") params.set("dept", filters.departmentId);
     if (filters.assigneeId !== "all") params.set("assignee", filters.assigneeId);
-    if (filters.priority !== "all") params.set("priority", filters.priority);
     if (filters.penalty !== "all") params.set("penalty", filters.penalty);
     // บอร์ดไม่มีงานโปรเจกต์เสมอ (projectId ล็อก "none" ด้านล่าง) — ไม่ต้องใส่ใน URL
     if (view !== "board") params.set("view", view);
@@ -178,6 +173,11 @@ function TasksPageContent() {
   useEffect(() => {
     if (filters.preset !== "all") setFilters({ preset: "all", customFrom: "", customTo: "" });
   }, [filters.preset, setFilters]);
+  // ตัวกรองความสำคัญก็ตัดทิ้งแล้ว (ผู้ใช้ขอ 18/10/2569) — ลิงก์เก่า ?priority= / ค่าที่จำไว้ ห้ามกรองแบบมองไม่เห็น
+  // (การจัดกลุ่มตามความสำคัญบนบอร์ดเป็นอีกเรื่อง ยังใช้ได้)
+  useEffect(() => {
+    if (filters.priority !== "all") setFilters({ priority: "all" });
+  }, [filters.priority, setFilters]);
 
   // Feeds the mobile filter sheet's "แสดง N งาน" button — same filters the
   // board itself narrows by (unlike kpiTasks above, which drops the quick-view

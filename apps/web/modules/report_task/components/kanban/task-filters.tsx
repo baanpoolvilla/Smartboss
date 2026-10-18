@@ -19,8 +19,6 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { useDepartmentStore } from "@/modules/report_task/store/department-store";
 import { getDepartment, getUser, isOwner, scopedDepartments, scopedUsers, users } from "@/modules/report_task/lib/directory";
-import { taskPriorityOrder, priorityMeta } from "@/modules/report_task/lib/task-meta";
-import type { TaskPriority } from "@/modules/report_task/types";
 import {
   FilterField,
   FILTER_FIELD_LABEL_CLASS,
@@ -210,7 +208,6 @@ export function TaskFilters({
     </SelectGroup>
   );
   const quickOverdueActive = filters.penalty === "overdue";
-  const quickCriticalActive = filters.priority === "critical";
 
   // filters is global store state that outlives the identity switcher — a
   // department/assignee picked while viewing as one person would otherwise
@@ -365,23 +362,6 @@ export function TaskFilters({
           </span>
         </FilterField>
       )}
-
-      <FilterField label="ความสำคัญ">
-        <Select value={filters.priority} onValueChange={(v) => v && setFilters({ priority: v as typeof filters.priority })}>
-          <SelectTrigger className={filterFieldTriggerClass(filters.priority !== "all", "min-w-[130px]")}>
-            <Flag className="h-4 w-4 shrink-0" />
-            <SelectValue placeholder="ความสำคัญ">
-              {filters.priority === "all" ? "ทุกความสำคัญ" : (priorityMeta[filters.priority as TaskPriority]?.label ?? "ความสำคัญ")}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent alignItemWithTrigger={false}>
-            <SelectItem value="all">ทุกความสำคัญ</SelectItem>
-            {taskPriorityOrder.map((p) => (
-              <SelectItem key={p} value={p}>{priorityMeta[p].label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </FilterField>
 
       {groupBy && onGroupByChange ? (
         // "งานของฉัน"/"งานที่กำลังติดตาม" ยุบมารวมอยู่ในดรอปดาวน์เดียวกับ
@@ -597,22 +577,6 @@ export function TaskFilters({
         </div>
       )}
 
-      <Select value={filters.priority} onValueChange={(v) => v && setFilters({ priority: v as typeof filters.priority })}>
-        <SelectTrigger className={mobileFieldRowTriggerClass(filters.priority !== "all")}>
-          <MobileFieldIcon icon={Flag} active={filters.priority !== "all"} />
-          <span className="text-[13.5px] font-medium text-[var(--ink)]">ความสำคัญ</span>
-          <MobileFieldValue active={filters.priority !== "all"}>
-            {filters.priority === "all" ? "ทุกความสำคัญ" : (priorityMeta[filters.priority as TaskPriority]?.label ?? "ความสำคัญ")}
-          </MobileFieldValue>
-        </SelectTrigger>
-        <SelectContent alignItemWithTrigger={false}>
-          <SelectItem value="all">ทุกความสำคัญ</SelectItem>
-          {taskPriorityOrder.map((p) => (
-            <SelectItem key={p} value={p}>{priorityMeta[p].label}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
       {groupBy && onGroupByChange && (
         <Select value={groupBy} onValueChange={(v) => v && onGroupByChange(v as GroupBy)}>
           <SelectTrigger className={mobileFieldRowTriggerClass(groupBy !== "status" || kindsFiltered)}>
@@ -688,7 +652,6 @@ export function TaskFilters({
       <QuickFilterChip icon={UserIcon} label="งานของฉัน" active={quickMineActive} onClick={() => setFilters({ assigneeId: quickMineActive ? "all" : viewingAsUserId })} />
       <QuickFilterChip icon={Eye} label="กำลังติดตาม" active={quickTrackingActive} onClick={() => setFilters({ assignedById: quickTrackingActive ? "all" : viewingAsUserId })} />
       <QuickFilterChip icon={AlertTriangle} label="เลยกำหนด" warn active={quickOverdueActive} onClick={() => setFilters({ penalty: quickOverdueActive ? "all" : "overdue" })} />
-      <QuickFilterChip icon={Flag} label="ด่วนมาก" active={quickCriticalActive} onClick={() => setFilters({ priority: quickCriticalActive ? "all" : "critical" })} />
     </div>
   );
 
@@ -838,23 +801,7 @@ export function TaskFilters({
           </div>
         </div>
 
-        <div className="px-4 pt-3">
-          <p className={sectionLabel}>ความสำคัญ</p>
-          <div className="flex flex-wrap gap-1.5">
-            <button type="button" aria-pressed={filters.priority === "all"} className={chip(filters.priority === "all")} onClick={() => setFilters({ priority: "all" })}>
-              ทั้งหมด
-            </button>
-            {taskPriorityOrder.map((pr) => {
-              const active = filters.priority === pr;
-              return (
-                <button key={pr} type="button" aria-pressed={active} className={chip(active)} onClick={() => setFilters({ priority: active ? "all" : pr })}>
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: priorityMeta[pr].accentColor }} />
-                  {priorityMeta[pr].label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        {/* ตัวกรองความสำคัญตัดทิ้งแล้ว (ผู้ใช้ขอ 18/10/2569 "เอาออกตรง filter อย่างเดียว") — จัดกลุ่มตามความสำคัญด้านล่างยังอยู่ */}
 
         {!inSheet && resultCount !== undefined && (
           <p className="px-4 pt-3 text-[12.5px] text-[var(--ink-soft)]">
@@ -919,7 +866,6 @@ export function TaskFilters({
         : []),
       ...(quickTrackingActive ? [{ key: "track", label: "ที่ฉันมอบหมาย", clear: { assignedById: "all" } }] : []),
       ...(quickOverdueActive ? [{ key: "late", label: "เลยกำหนด", warn: true, clear: { penalty: "all" } }] : []),
-      ...(filters.priority !== "all" ? [{ key: "pr", label: priorityMeta[filters.priority as TaskPriority]?.label ?? "ความสำคัญ", clear: { priority: "all" } }] : []),
       ...(filters.departmentId !== "all" ? [{ key: "dept", label: getDepartment(filters.departmentId)?.name ?? "แผนก", clear: { departmentId: "all" } }] : []),
     ] as { key: string; label: string; warn?: boolean; clear: Partial<typeof filters> }[];
 
