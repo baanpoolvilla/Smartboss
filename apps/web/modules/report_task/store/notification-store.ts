@@ -41,6 +41,8 @@ export interface AppNotification {
 
 interface NotificationStore {
   notifications: AppNotification[];
+  /** โหลดจากเซิร์ฟเวอร์รอบแรกเสร็จแล้ว — ก่อนหน้านั้น notifications ว่างเพราะยังไม่มา ไม่ใช่เพราะไม่มี */
+  loaded?: boolean;
   notify: (n: Omit<AppNotification, "id" | "createdAt" | "read">) => void;
   /** Tag N people at once, skipping the actor themselves. */
   notifyMany: (

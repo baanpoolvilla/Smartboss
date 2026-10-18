@@ -2,7 +2,8 @@
 
 import { useDismissKeyboardOnDrag } from "@/lib/dismiss-keyboard-on-drag";
 import { ReactionPicker } from "@/components/emoji-picker";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { NewDivider } from "@/components/new-divider";
 import {
   Dialog,
   DialogContent,
@@ -255,9 +256,35 @@ export function TaskDetailSheet({
 
   // เปิดดูรายละเอียดงานแล้ว = ถือว่าอ่านคอมเมนต์/ไฟล์แนบใหม่ของงานนี้หมดแล้ว
   // ไม่ต้องรอให้ไปคลิกที่แจ้งเตือนแยกอีกที (ดู notification-store.ts's markTaskActivityRead)
+  // notifLoaded: เปิดงานก่อนแจ้งเตือนโหลดเสร็จ — ล้างอีกรอบตอนโหลดมาแล้ว ไม่งั้นค้างเป็นยังไม่อ่าน
+  const notifLoaded = useNotificationStore((s) => !!s.loaded);
   useEffect(() => {
     if (taskId) markTaskActivityRead(viewingAsUserId, taskId);
-  }, [taskId, viewingAsUserId, markTaskActivityRead]);
+  }, [taskId, viewingAsUserId, markTaskActivityRead, notifLoaded]);
+
+  // เส้น "New" แบบ LINE — จำจำนวนคอมเมนต์ที่ยังไม่อ่านไว้ตอนเปิดงาน (ก่อน effect ด้านบนล้างเป็นอ่านแล้ว)
+  // วางเส้นไว้ก่อนคอมเมนต์ของคนอื่นที่ยังไม่อ่านอันแรก แล้วเลื่อนไปตรงนั้น ("เข้าไปดูต้องเลื่อนลงไปดูล่าสุดเอง")
+  const unreadCommentCount = useNotificationStore((s) => {
+    if (!taskId) return 0;
+    let n = 0;
+    for (const x of s.notifications) {
+      if (x.userId === viewingAsUserId && !x.read && x.kind === "task_comment" && x.taskId === taskId) n++;
+    }
+    return n;
+  });
+  const [unreadMark, setUnreadMark] = useState<{ taskId: string | null; id: string | null }>({ taskId: null, id: null });
+  if (task && notifLoaded && unreadMark.taskId !== task.id) {
+    let left = unreadCommentCount;
+    let id: string | null = null;
+    for (let i = task.comments.length - 1; i >= 0 && left > 0; i--) {
+      const c = task.comments[i]!;
+      if (c.authorId === viewingAsUserId) continue;
+      id = c.id;
+      left--;
+    }
+    setUnreadMark({ taskId: task.id, id });
+  }
+  const unreadMarkerId = unreadMark.taskId === taskId ? unreadMark.id : null;
 
   const [comment, setComment] = useState("");
   const allTasks = useTaskStore((s) => s.tasks);
@@ -393,6 +420,40 @@ export function TaskDetailSheet({
     );
     return () => timers.forEach(clearTimeout);
   }, [taskId, taskLoaded]);
+  // เปิดงาน/กางแผงความคิดเห็น — เลื่อนไปที่เส้น "New" ถ้ามี ไม่งั้นไปล่าสุด (ล่างสุด) แบบแชท
+  // เปิดจากแจ้งเตือนที่ชี้คอมเมนต์ (?comment=) ใช้ effect ด้านบนแทน · ซ้ำอีกรอบหลังรูปโหลด (ความสูงเปลี่ยน)
+  const commentListRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!taskId || !taskLoaded) return;
+    if (new URLSearchParams(window.location.search).get("comment")) return;
+    const jump = () => {
+      const el = commentListRef.current;
+      if (!el || el.clientHeight === 0) return;
+      const marker = el.querySelector<HTMLElement>("[data-unread-marker]");
+      if (marker) el.scrollTop += marker.getBoundingClientRect().top - el.getBoundingClientRect().top - 12;
+      else el.scrollTop = el.scrollHeight;
+    };
+    const raf = requestAnimationFrame(jump);
+    const t = setTimeout(jump, 400);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(t);
+    };
+  }, [taskId, taskLoaded, mobileCommentsOpen, unreadMarkerId]);
+  // ส่งความคิดเห็นเอง — เลื่อนลงไปให้เห็นข้อความที่เพิ่งส่ง
+  const lastComment = task?.comments[task.comments.length - 1];
+  const lastCommentId = lastComment?.id;
+  const lastCommentMine = lastComment?.authorId === viewingAsUserId;
+  const seenLastComment = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const prev = seenLastComment.current;
+    seenLastComment.current = lastCommentId;
+    if (!prev || !lastCommentId || prev === lastCommentId || !lastCommentMine) return;
+    requestAnimationFrame(() => {
+      const el = commentListRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    });
+  }, [lastCommentId, lastCommentMine]);
   const [commentUploading, setCommentUploading] = useState(false);
   const [taskAttachUploading, setTaskAttachUploading] = useState(false);
   const [newChecklistItem, setNewChecklistItem] = useState("");
@@ -2165,6 +2226,7 @@ export function TaskDetailSheet({
           </button>
           </div>
           <div
+            ref={commentListRef}
             className={cn(
               "flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0",
               mobileCommentsOpen ? "block" : "hidden md:block",
@@ -2177,8 +2239,13 @@ export function TaskDetailSheet({
               const author = getUser(c.authorId);
               const mine = c.authorId === viewingAsUserId;
               return (
+                <Fragment key={c.id}>
+                {c.id === unreadMarkerId && (
+                  <div data-unread-marker>
+                    <NewDivider />
+                  </div>
+                )}
                 <div
-                  key={c.id}
                   id={`task-comment-${c.id}`}
                   className={cn(
                     "flex gap-2.5 group rounded-xl transition-colors duration-700",
@@ -2234,6 +2301,7 @@ export function TaskDetailSheet({
                     )}
                   </div>
                 </div>
+                </Fragment>
               );
             })}
             {task.comments.length === 0 && (

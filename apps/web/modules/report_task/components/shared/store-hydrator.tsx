@@ -326,7 +326,7 @@ export function StoreHydrator() {
         apiKey="notifications"
         store={useNotificationStore}
         select={(s) => s.notifications}
-        apply={(s, notifications) => ({ ...s, notifications })}
+        apply={(s, notifications) => ({ ...s, notifications, loaded: true })}
       />
       <ServerStoreSync
         apiKey="activity-log"
