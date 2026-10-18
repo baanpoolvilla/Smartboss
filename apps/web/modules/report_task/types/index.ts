@@ -74,6 +74,9 @@ export interface RevisionEntry {
   reason: string;
   revisedBy: string;
   revisedAt: string;
+  /** มาจากการอนุมัติ "ขอเลื่อนกำหนดส่ง" — เวลาที่พนักงานกดขอ · การหักคะแนนตัดสินว่า "เลื่อนทันกำหนดไหม"
+   * จากเวลานี้แทน revisedAt (ขอทัน = ทัน แม้หัวหน้าอนุมัติทีหลังวันเดิม — ไม่ใช่ความผิดคนขอ) */
+  requestedAt?: string;
 }
 
 export interface Attachment {
@@ -195,7 +198,15 @@ export interface Task {
    * per-person adjustment rather than a formal re-plan. */
   assigneeDueDateRevisions?: Record<
     string,
-    { originalDate: string; latestDate: string; revisedBy: string; revisedAt: string }
+    {
+      originalDate: string;
+      latestDate: string;
+      revisedBy: string;
+      revisedAt: string;
+      /** มาจากการอนุมัติคำขอเลื่อน — เวลาที่ขอ + กำหนดส่งตอนขอ (ดู RevisionEntry.requestedAt) */
+      requestedAt?: string;
+      requestPreviousDate?: string;
+    }
   >;
   /** Set the moment status transitions to "done"; cleared if reopened. Lets the missed-deadline sweep judge a *finished* task by when it actually closed, not by "today" (which would eventually brand every old task late). */
   completedAt?: string;

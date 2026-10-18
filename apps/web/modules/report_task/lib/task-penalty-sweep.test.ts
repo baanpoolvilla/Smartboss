@@ -159,6 +159,67 @@ describe("sweepAutoPenalties", () => {
       expect(result.revokedRefIds).toEqual(["t1"]);
     });
 
+    it("an extension request asked in time but approved after the deadline counts as in time", () => {
+      // ขอเลื่อนวันครบกำหนด (−3) แต่ CEO อนุมัติเมื่อวาน (−1) — ขอทัน ไม่ควรโดนหัก
+      const result = sweepAutoPenalties([
+        makeTask({
+          originalDueDate: daysFromNow(-3),
+          dueDate: daysFromNow(4),
+          revisions: [{ ...ext(-1, -3, 4), requestedAt: daysFromNow(-3) }],
+          missedDeadlineOnce: true,
+          penalty: { points: 3, byUserId: SYSTEM_USER_ID, appliedAt: daysFromNow(-2) },
+        }),
+      ]);
+      expect(result.tasks[0]!.penalty).toBeNull();
+      expect(result.revokedRefIds).toEqual(["t1"]);
+    });
+
+    it("an extension request asked after the deadline still docks", () => {
+      const result = sweepAutoPenalties([
+        makeTask({
+          originalDueDate: daysFromNow(-3),
+          dueDate: daysFromNow(4),
+          revisions: [{ ...ext(-1, -3, 4), requestedAt: daysFromNow(-2) }],
+        }),
+      ]);
+      expect(result.tasks[0]!.penalty?.byUserId).toBe(SYSTEM_USER_ID);
+    });
+
+    it("group task: per-person date from an in-time request gives the dock back", () => {
+      const result = sweepAutoPenalties([
+        makeTask({
+          taskMode: "group",
+          assigneeIds: ["usr-02", "usr-03"],
+          originalDueDate: daysFromNow(-3),
+          dueDate: daysFromNow(-3),
+          assigneeDueDates: { "usr-02": daysFromNow(4) },
+          assigneeDueDateRevisions: {
+            "usr-02": { originalDate: daysFromNow(-3), latestDate: daysFromNow(4), revisedBy: "usr-01", revisedAt: daysFromNow(-1), requestedAt: daysFromNow(-3), requestPreviousDate: daysFromNow(-3) },
+          },
+          penalties: { "usr-02": { points: 3, byUserId: SYSTEM_USER_ID, appliedAt: daysFromNow(-2) } },
+        }),
+      ]);
+      expect(result.tasks[0]!.penalties?.["usr-02"]).toBeUndefined();
+      expect(result.revokedRefIds).toContain("t1:usr-02");
+    });
+
+    it("group task: a per-person date set by hand after the miss keeps the dock", () => {
+      const result = sweepAutoPenalties([
+        makeTask({
+          taskMode: "group",
+          assigneeIds: ["usr-02", "usr-03"],
+          originalDueDate: daysFromNow(-3),
+          dueDate: daysFromNow(-3),
+          assigneeDueDates: { "usr-02": daysFromNow(4) },
+          assigneeDueDateRevisions: {
+            "usr-02": { originalDate: daysFromNow(-3), latestDate: daysFromNow(4), revisedBy: "usr-01", revisedAt: daysFromNow(-1) },
+          },
+          penalties: { "usr-02": { points: 3, byUserId: SYSTEM_USER_ID, appliedAt: daysFromNow(-2) } },
+        }),
+      ]);
+      expect(result.tasks[0]!.penalties?.["usr-02"]).toBeDefined();
+    });
+
     it("leaves a manual dock alone", () => {
       const result = sweepAutoPenalties([
         makeTask({

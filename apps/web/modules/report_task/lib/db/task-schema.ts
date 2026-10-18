@@ -11,6 +11,7 @@ const revisionEntrySchema = z.object({
   reason: z.string(),
   revisedBy: z.string(),
   revisedAt: z.string(),
+  requestedAt: z.string().optional(),
 });
 
 // ต้องมีในนี้ ไม่งั้น zod ตัด field ที่ไม่รู้จักทิ้งตอนบันทึก — คำขอหายหลังรีเฟรช (แบบที่ reviewedBy เคยโดน)
@@ -95,7 +96,7 @@ export const taskSchema = z.object({
   assigneeDueDateRevisions: z
     .record(
       z.string(),
-      z.object({ originalDate: z.string(), latestDate: z.string(), revisedBy: z.string(), revisedAt: z.string() })
+      z.object({ originalDate: z.string(), latestDate: z.string(), revisedBy: z.string(), revisedAt: z.string(), requestedAt: z.string().optional(), requestPreviousDate: z.string().optional() })
     )
     .optional(),
   completedAt: z.string().optional(),

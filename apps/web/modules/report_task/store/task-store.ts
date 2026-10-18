@@ -330,14 +330,21 @@ interface TaskStore {
    * (กลับไป "กำลังทำ" กติกาส่งช้าเดียวกับ rejectReview), false = แค่เปลี่ยนวัน คงสถานะไว้
    * ไม่ส่ง = true (พฤติกรรมเดิม)
    */
-  reviseDueDate: (taskId: string, newDate: string, reason: string, revisedBy: string, sendBack?: boolean) => void;
+  reviseDueDate: (taskId: string, newDate: string, reason: string, revisedBy: string, sendBack?: boolean, requestedAt?: string) => void;
   /**
    * Adjusts one assignee's own due-date override on a group task (see
    * `assigneeDueDates`) — logged into `assigneeDueDateRevisions` (first date
    * + latest, not every round) and notifies that assignee, distinct from
    * `reviseDueDate` which revises the shared task-level due date.
    */
-  reviseAssigneeDueDate: (taskId: string, assigneeId: string, newDate: string, revisedBy: string, sendBack?: boolean) => void;
+  reviseAssigneeDueDate: (
+    taskId: string,
+    assigneeId: string,
+    newDate: string,
+    revisedBy: string,
+    sendBack?: boolean,
+    fromRequest?: { requestedAt: string; previousDate: string }
+  ) => void;
   /** Same revision as reviseAssigneeDueDate, applied to every current
    * assignee at once with a single log entry instead of one per person —
    * for the "set everyone to the same date" case rather than adjusting one
@@ -584,7 +591,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
         };
       }),
     })),
-  reviseDueDate: (taskId, newDate, reason, revisedBy, sendBack = true) =>
+  reviseDueDate: (taskId, newDate, reason, revisedBy, sendBack = true, requestedAt) =>
     set((s) => ({
       tasks: s.tasks.map((t) => {
         if (t.id !== taskId) return t;
@@ -623,6 +630,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
               reason,
               revisedBy,
               revisedAt: new Date().toISOString(),
+              ...(requestedAt ? { requestedAt } : {}),
             },
           ],
           updatedAt: new Date().toISOString(),
@@ -709,11 +717,14 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       // เปลี่ยนวันจริงด้วยทางเดิมของการแก้กำหนดส่ง — ประวัติ/บันทึกกิจกรรม/แจ้งผู้รับผิดชอบเหมือนแก้ตรง
       // sendBack = false: แค่เลื่อนวัน ไม่ดึงงานที่ส่งแล้วกลับไปแก้
       if (task.taskMode === "group") {
-        useTaskStore.getState().reviseAssigneeDueDate(taskId, request.requestedBy, request.newDate, deciderId, false);
+        useTaskStore.getState().reviseAssigneeDueDate(taskId, request.requestedBy, request.newDate, deciderId, false, {
+          requestedAt: request.requestedAt,
+          previousDate: request.previousDate,
+        });
       } else {
         useTaskStore
           .getState()
-          .reviseDueDate(taskId, new Date(request.newDate).toISOString(), `อนุมัติคำขอของ ${requesterName}: ${request.reason}`, deciderId, false);
+          .reviseDueDate(taskId, new Date(request.newDate).toISOString(), `อนุมัติคำขอของ ${requesterName}: ${request.reason}`, deciderId, false, request.requestedAt);
       }
     }
     logActivity(
@@ -739,7 +750,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       );
   },
 
-  reviseAssigneeDueDate: (taskId, assigneeId, newDate, revisedBy, sendBack = false) =>
+  reviseAssigneeDueDate: (taskId, assigneeId, newDate, revisedBy, sendBack = false, fromRequest) =>
     set((s) => ({
       tasks: s.tasks.map((t) => {
         if (t.id !== taskId) return t;
@@ -786,6 +797,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
               latestDate: newDate,
               revisedBy,
               revisedAt: now,
+              // อนุมัติจากคำขอ ⇒ จำเวลาที่ขอ (sweep ใช้ตัดสินว่าขอทันกำหนดเดิมไหม) · แก้ตรงเอง = ไม่มี
+              ...(fromRequest ? { requestedAt: fromRequest.requestedAt, requestPreviousDate: fromRequest.previousDate } : {}),
             },
           },
           updatedAt: now,

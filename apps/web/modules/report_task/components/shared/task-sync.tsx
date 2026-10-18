@@ -68,9 +68,30 @@ export function TaskSync() {
   // echoed straight back — which would otherwise bounce identical no-op
   // PUTs between tabs on every poll.
   const applyingRemoteRef = useRef(false);
+  // บันทึกไม่ผ่านเพราะเซิร์ฟเวอร์ไม่ตอบ (กำลัง deploy/รีสตาร์ท/เน็ตหลุด) — ลองใหม่เองจนกว่าจะผ่าน
+  // เดิมโหลดข้อมูลเซิร์ฟเวอร์มาทับทันที ⇒ สิ่งที่เพิ่งกด (เช่น อนุมัติคำขอเลื่อนกำหนดส่ง) หายเงียบ ๆ
+  // ("กดอนุมัติตอนจังหวะดีพอย กลับมาดูไม่เลื่อนให้ คำอนุมัติหาย" 18/10/2569)
+  const retryDelayRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
+
+    /** เก็บของที่ยังไม่ได้บันทึกไว้ (สถานะล่าสุดในเครื่อง ซึ่งมีของที่เพิ่งกดอยู่) แล้วลองส่งใหม่แบบเว้นช่วง
+     * ระหว่างนี้ pendingRef/timerRef ถูกตั้งไว้ ⇒ รอบ poll ไม่ดึงข้อมูลเซิร์ฟเวอร์มาทับ (ดู canPullNow) */
+    function scheduleRetry() {
+      if (cancelled) return;
+      pendingRef.current = useTaskStore.getState().tasks;
+      retryDelayRef.current = Math.min(retryDelayRef.current ? retryDelayRef.current * 2 : 2000, 30_000);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null;
+        flushPending();
+      }, retryDelayRef.current);
+      toast.warning("ยังบันทึกไม่สำเร็จ (เชื่อมต่อเซิร์ฟเวอร์ไม่ได้) — ระบบกำลังลองบันทึกใหม่ให้เอง อย่าเพิ่งปิดหน้านี้", {
+        id: "tasksync-retry",
+        duration: Infinity,
+      });
+    }
 
     function applyRemoteTasks(tasks: Task[]) {
       applyingRemoteRef.current = true;
@@ -109,14 +130,16 @@ export function TaskSync() {
       // normal in-page save.
       if (isUnload) {
         try {
-          await fetch("/api/report-task/tasks", {
+          const res = await fetch("/api/report-task/tasks", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ tasks: snapshot, expectedVersion: versionRef.current }),
             keepalive: true,
           });
+          // แค่สลับแท็บ/พับจอ (หน้ายังอยู่): ส่งไม่ผ่าน ⇒ อย่าทิ้ง กลับมาแล้วบันทึกต่อ (409 = ไปทาง merge ปกติ)
+          if (!res.ok) scheduleRetry();
         } catch {
-          /* best effort on the way out */
+          scheduleRetry(); // หน้าปิดจริง = ไม่มีผล · หน้ายังอยู่ = ลองใหม่เมื่อกลับมา
         }
         return;
       }
@@ -145,8 +168,8 @@ export function TaskSync() {
             body: JSON.stringify({ tasks: mine, expectedVersion: versionRef.current }),
           });
         } catch {
-          toast.error("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ การเปลี่ยนแปลงอาจหายไปเมื่อรีเฟรช", { id: "tasksync-network-error" });
-          await reloadFromServer();
+          // เน็ตหลุด/เซิร์ฟเวอร์รีสตาร์ท — เก็บไว้แล้วลองใหม่ (เดิมโหลดของเซิร์ฟเวอร์มาทับ ของที่เพิ่งกดหาย)
+          scheduleRetry();
           return;
         }
 
@@ -176,6 +199,12 @@ export function TaskSync() {
           baseRef.current = latest; // what the server had when we merged
           mine = merged;
           continue; // retry PUT with merged data + the latest version
+        }
+
+        // 5xx = เซิร์ฟเวอร์ยังไม่พร้อม (เช่น ช่วง deploy nginx ตอบ 502/503) ไม่ใช่ข้อมูลผิด ⇒ ลองใหม่ ไม่ทิ้ง
+        if (res.status >= 500) {
+          scheduleRetry();
+          return;
         }
 
         if (!res.ok) {
@@ -215,6 +244,10 @@ export function TaskSync() {
           }
         }
         baseRef.current = mine; // this snapshot is now the server truth
+        if (retryDelayRef.current) {
+          retryDelayRef.current = 0;
+          toast.success("บันทึกสำเร็จแล้ว", { id: "tasksync-retry", duration: 3000 });
+        }
         return;
       }
 
@@ -236,7 +269,12 @@ export function TaskSync() {
       try {
         const res = await fetch("/api/report-task/tasks/sweep", { method: "POST" });
         const data = (await res.json().catch(() => null)) as { changed?: boolean } | null;
-        if (data?.changed) await reloadFromServer();
+        // มีของรอบันทึก/กำลังลองบันทึกใหม่อยู่ ⇒ อย่าดึงของเซิร์ฟเวอร์มาทับ (ของที่รอจะหาย) — จดไว้ ค่อยดึงตอนว่าง
+        // บันทึกรอบถัดไปจะได้ 409 แล้ว merge กับผลของ sweep ตามปกติ
+        if (data?.changed) {
+          if (canPullNow()) await reloadFromServer();
+          else signalRef.current = true;
+        }
       } catch {
         // Offline or server down — next tick tries again.
       }
