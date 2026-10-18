@@ -80,8 +80,6 @@ import {
   Upload,
   ChevronDown,
   Eye,
-  Maximize2,
-  Minimize2,
   ImagePlus,
   SendHorizontal,
 } from "lucide-react";
@@ -1343,7 +1341,9 @@ export function TaskDetailSheet({
                   such stakes, so it's editable inline instead. */}
               <div className="flex items-center gap-1.5 h-9 px-1 text-sm">
                 {formatDate(task.dueDate)}
-                {canEditMain && (
+                {/* ช่อง "เวลา" เอาออกแล้ว (ผู้ใช้ขอ 18/10/2569 — ตอนสร้างงานก็ไม่มีแล้ว) · งานเก่าที่เคยตั้งเวลาไว้
+                    ยังโชว์ให้ลบออกได้ ไม่งั้นเวลาค้างอยู่แบบมองไม่เห็น (มีผลกับการนับส่งทันเวลา) */}
+                {canEditMain && !!task.dueTime && (
                   <TimePickerField
                     value={task.dueTime ?? ""}
                     onChange={(v) => setDueTime(task.id, v, viewingAsUserId)}
@@ -2214,16 +2214,7 @@ export function TaskDetailSheet({
               <ChevronDown className="h-4 w-4 text-[var(--ink-soft)] shrink-0 md:hidden" />
             )}
           </button>
-          {/* คอม: ขยายเต็มหน้าต่าง / กลับไปแบบมีรายละเอียดงาน */}
-          <button
-            type="button"
-            onClick={() => setChatExpanded((v) => !v)}
-            className="mr-2 hidden h-8 shrink-0 items-center gap-1 rounded-lg px-2 text-xs font-medium text-[var(--ink-soft)] transition-colors hover:bg-[var(--bg-soft)] hover:text-[var(--ink)] md:inline-flex"
-            title={chatExpanded ? "ย่อกลับ แสดงรายละเอียดงาน" : "ขยายความคิดเห็นเต็มหน้าต่าง"}
-          >
-            {chatExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-            {chatExpanded ? "ย่อ" : "ขยาย"}
-          </button>
+          {/* ปุ่ม "ขยาย" ความคิดเห็นเต็มหน้าต่างเอาออกแล้ว (ผู้ใช้ขอ 18/10/2569) */}
           </div>
           <div
             ref={commentListRef}
