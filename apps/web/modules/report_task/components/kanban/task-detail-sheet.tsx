@@ -81,6 +81,8 @@ import {
   Eye,
   Maximize2,
   Minimize2,
+  ImagePlus,
+  SendHorizontal,
 } from "lucide-react";
 import type { Attachment, Sticker, TaskPriority, TaskStatus } from "@/modules/report_task/types";
 import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
@@ -263,6 +265,7 @@ export function TaskDetailSheet({
   const [mentionQuery, setMentionQuery] = useState<{ start: number; query: string } | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
   const commentRef = useRef<HTMLTextAreaElement>(null);
+  const commentImageInputRef = useRef<HTMLInputElement>(null);
   const [commentEmojiOpen, setCommentEmojiOpen] = useState(false);
   // รูปจากปุ่มดินสอ (หน้าดูรูป) เพิ่งเข้ามาในคอมเมนต์ — กางแผง (มือถือ) เลื่อนไปให้เห็น + กะพริบ
   const [commentAttachFlash, setCommentAttachFlash] = useState(false);
@@ -2279,36 +2282,38 @@ export function TaskDetailSheet({
               แถบเครื่องมือ (แนบไฟล์ · อิโมจิ · ส่ง) อยู่ล่างในกรอบเดียวกัน — เดิมปุ่มสามตัวเรียงหน้าช่องพิมพ์ในแถวเดียว
               ช่องเหลือกว้างนิดเดียว ข้อความตกบรรทัดทุกสองสามคำ ("ไม่สวย ให้พื้นที่พิมพ์แชทเยอะกว่านี้")
             */}
-            {/* แถวเดียว: [📎 😊] ช่องพิมพ์ (ขยายตามข้อความ) [➤] — เดิมช่องพิมพ์อยู่บน แถบปุ่มอยู่ล่าง
-                สูงรวม ~90–125px กินที่อ่านแชท ("พื้นที่พิมพ์ไม่ให้กินเยอะเกินไป") */}
-            <div className={cn("flex items-end rounded-xl border border-input bg-white transition-colors focus-within:border-[var(--brand-green)] focus-within:ring-2 focus-within:ring-[var(--brand-green)]/20", chatExpanded && "md:mx-auto md:w-full md:max-w-[760px]")}>
-              {/* แนบไฟล์ · อิโมจิ/สติกเกอร์ อยู่ซ้าย ส่งอยู่ขวาตัวเดียว แบบ LINE — กดส่งไม่พลาดไปโดนปุ่มอื่น (ผู้ใช้ขอ 18/10/2569) */}
-              <div className="flex shrink-0 items-center gap-0.5 pb-0.5 pl-1">
+            {/* แบบเดียวกับช่องพิมพ์ในแชท (modules/chat/components/composer.tsx) — ผู้ใช้ขอ 18/10/2569 "ทำเหมือนของแชทเลย":
+                [+ แนบ] [🖼 รูป] ( ช่องพิมพ์ทรงแคปซูล ) [😊] [➤] — ส่งอยู่ขวาสุดตัวเดียว ไม่ชนปุ่มอื่น */}
+            <div className={cn("flex items-end gap-0.5", chatExpanded && "md:mx-auto md:w-full md:max-w-[760px]")}>
               <AttachMenu
                 onFiles={(files) => void handleCommentFilesSelected(files)}
                 disabled={commentUploading}
-                trigger={commentUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Paperclip className="h-5 w-5" />}
+                trigger={commentUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-6 w-6" />}
                 aria-label="แนบไฟล์/รูปภาพ"
-                className="shrink-0 inline-flex h-9 w-8 items-center justify-center rounded-full text-[var(--ink-soft)] disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground"
+                className="flex h-10 w-9 shrink-0 items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] disabled:pointer-events-none disabled:opacity-50"
               />
-              <Popover open={commentEmojiOpen} onOpenChange={setCommentEmojiOpen}>
-                <PopoverTrigger
-                  render={
-                    <button
-                      type="button"
-                      aria-label="อิโมจิและสติกเกอร์ (Ctrl+E)"
-                      title="อิโมจิและสติกเกอร์ (Ctrl+E)"
-                      className="shrink-0 inline-flex h-9 w-8 items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-accent hover:text-accent-foreground"
-                    >
-                      <Smile className="h-5 w-5" />
-                    </button>
-                  }
-                />
-                <PopoverContent side="top" align="start" className="w-auto max-w-[calc(100vw-1.5rem)] p-2" finalFocus={commentRef}>
-                  <EmojiStickerPicker onPickEmoji={insertCommentEmoji} onPickSticker={sendCommentSticker} />
-                </PopoverContent>
-              </Popover>
-              </div>
+              <input
+                ref={commentImageInputRef}
+                type="file"
+                accept="image/*,video/mp4,video/webm"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  if (files.length > 0) void handleCommentFilesSelected(files);
+                  e.target.value = "";
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => commentImageInputRef.current?.click()}
+                disabled={commentUploading}
+                className="flex h-10 w-8 shrink-0 items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] disabled:opacity-50"
+                aria-label="ส่งรูป"
+                title="ส่งรูป"
+              >
+                <ImagePlus className="h-5 w-5" />
+              </button>
               <div className="relative min-w-0 flex-1">
                 {mentionQuery && mentionCandidates.length > 0 && (
                   <div className="absolute bottom-full left-0 right-0 z-30 mb-1 max-h-56 overflow-y-auto rounded-lg border border-[var(--line)] bg-white p-1 shadow-lg">
@@ -2336,7 +2341,7 @@ export function TaskDetailSheet({
                 )}
                 <Textarea
                   ref={commentRef}
-                  placeholder="เขียนความคิดเห็น… (@ แท็กคน)"
+                  placeholder="พิมพ์ความคิดเห็น"
                   rows={1}
                   value={comment}
                   onChange={(e) => {
@@ -2383,23 +2388,36 @@ export function TaskDetailSheet({
                       submitComment();
                     }
                   }}
-                  // ช่องพิมพ์เต็มความกว้าง ขยายตามข้อความได้ถึงราว 8 บรรทัด — ไม่มีกรอบของตัวเอง ใช้กรอบของกล่องรวม
-                  // คอมเริ่ม 3 บรรทัด · มือถือเริ่มบรรทัดเดียว ("พื้นที่พิมพ์ไม่กินเยอะเกินไป") และ 16px กัน iPhone ซูมหน้า
-                  className="max-h-40 min-h-[2.5rem] w-full resize-none border-0 bg-transparent px-1.5 py-2.5 text-base md:text-sm shadow-none [field-sizing:content] focus-visible:ring-0"
+                  // แคปซูลแบบช่องพิมพ์แชท เริ่มบรรทัดเดียว ขยายตามข้อความ · มือถือ 16px กัน iPhone ซูมหน้า
+                  className="block max-h-40 min-h-10 w-full resize-none rounded-[20px] border border-[var(--line)] bg-[var(--bg-soft)] px-4 py-2 text-base leading-6 shadow-none [field-sizing:content] placeholder:text-[var(--ink-soft)] focus-visible:border-[var(--brand-green)] focus-visible:ring-0 sm:text-[15px]"
                 />
               </div>
-              {/* ขนาดเดียวกับช่องพิมพ์แชท (composer.tsx): ไอคอน 20px ในปุ่มกว้าง 32px ห่างกัน 2px — ชิดแบบ LINE
-                  ("ทำไมห่างกันจัง ... อยากให้ชิดแบบไลน์ คล้าย ๆ แชทของเรา") */}
-              <div className="flex shrink-0 items-center px-1 pb-0.5">
-              <Button
-                size="icon"
-                className="size-9 shrink-0 rounded-full bg-[var(--brand-green)] text-[var(--ink)] hover:bg-[var(--brand-green-dark)] hover:text-white"
+              <Popover open={commentEmojiOpen} onOpenChange={setCommentEmojiOpen}>
+                <PopoverTrigger
+                  render={
+                    <button
+                      type="button"
+                      aria-label="อิโมจิและสติกเกอร์ (Ctrl+E)"
+                      title="อิโมจิและสติกเกอร์ (Ctrl+E)"
+                      className="flex h-10 w-8 shrink-0 items-center justify-center rounded-full text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+                    >
+                      <Smile className="h-5 w-5" />
+                    </button>
+                  }
+                />
+                <PopoverContent side="top" align="end" className="w-auto max-w-[calc(100vw-1.5rem)] p-2" finalFocus={commentRef}>
+                  <EmojiStickerPicker onPickEmoji={insertCommentEmoji} onPickSticker={sendCommentSticker} />
+                </PopoverContent>
+              </Popover>
+              <button
+                type="button"
                 onClick={submitComment}
+                disabled={commentUploading}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--brand-green-dark)] text-white transition-opacity hover:brightness-110 disabled:opacity-40"
                 aria-label="ส่งความคิดเห็น"
               >
-                <Send className="h-4 w-4" />
-              </Button>
-              </div>
+                <SendHorizontal className="h-5 w-5" />
+              </button>
             </div>
           </div>
         </FileDropZone>
