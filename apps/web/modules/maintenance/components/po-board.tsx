@@ -19,6 +19,8 @@ import {
   PackageCheck,
 } from "lucide-react";
 import { Card } from "@smartboss/ui/components/card";
+import { PendingForYouStrip, PendingPin, usePendingFor } from "@/modules/notifications/pending-for-you";
+import type { NotifCategory } from "@/modules/notifications/types";
 
 export interface BoardPo {
   id: string;
@@ -59,6 +61,9 @@ export interface BoardReturn {
   createdAtLabel: string;
 }
 
+/** แจ้งเตือนหมวดเดียวกับเลขแดงที่เมนู "สั่งซื้ออุปกรณ์" (manifest.ts) */
+const PO_CATEGORIES: NotifCategory[] = ["purchase_order"];
+
 const PHASE_ICON: Record<string, typeof FileEdit> = {
   "เปิด PR": FileEdit,
   "สร้าง PO": ClipboardCheck,
@@ -68,9 +73,11 @@ const PHASE_ICON: Record<string, typeof FileEdit> = {
 
 function PoCard({ po }: { po: BoardPo }) {
   const PhaseIcon = PHASE_ICON[po.phase.label] ?? FileEdit;
+  // มีแจ้งเตือนที่ยังไม่อ่านของใบนี้ = กรอบแดง + ป้ายบอกเรื่อง (ดู PendingForYouStrip ด้านบนบอร์ด)
+  const pending = usePendingFor(po.id, PO_CATEGORIES);
   return (
     <Link href={`/maintenance/purchase-orders/${po.id}`} className="block">
-      <Card className="p-3 transition-colors hover:bg-(--bg-soft)">
+      <Card className={`p-3 transition-colors hover:bg-(--bg-soft)${pending.length > 0 ? " ring-2 ring-[#dc2626]" : ""}`}>
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
             <p className="font-mono text-[11px] tracking-tight text-(--ink-soft)">
@@ -98,6 +105,11 @@ function PoCard({ po }: { po: BoardPo }) {
           </span>
         </div>
 
+        {pending.length > 0 && (
+          <div className="mt-1">
+            <PendingPin notifs={pending} />
+          </div>
+        )}
         {po.propertyName && (
           <p className="mt-1 inline-flex items-center gap-1 text-xs text-(--ink-soft)">
             <HomeIcon className="h-3 w-3" /> {po.propertyName}
@@ -263,6 +275,8 @@ export function PoBoard({
 
   return (
     <div>
+      {/* "รอคุณ" — บอกว่าเลขแดงที่เมนูสั่งซื้ออุปกรณ์คือเรื่องอะไร */}
+      <PendingForYouStrip categories={PO_CATEGORIES} className="mb-3 rounded-xl border" />
       {((canPickPeople && people.length > 0) || !!currentUserId) && (
         <div className="mb-3 flex gap-2 overflow-x-auto">
           <PersonFilter

@@ -12,12 +12,17 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { Card } from "@smartboss/ui/components/card";
+import { PendingForYouStrip, PendingPin, usePendingFor } from "@/modules/notifications/pending-for-you";
+import type { NotifCategory } from "@/modules/notifications/types";
 import {
   AUTO_GROUP_KEY,
   groupByPriority,
   priorityLabel,
   type PriorityGroup,
 } from "@/modules/maintenance/lib/priority";
+
+/** แจ้งเตือนหมวดเดียวกับเลขแดงที่เมนู "ใบงาน" (manifest.ts) */
+const WO_CATEGORIES: NotifCategory[] = ["work_order"];
 
 export interface BoardOrder {
   id: string;
@@ -131,10 +136,12 @@ function OrderCard({
   creatorName?: string;
 }) {
   const isNew = wo.status === "open";
+  // มีแจ้งเตือนที่ยังไม่อ่านของใบนี้ = กรอบแดง + ป้ายบอกเรื่อง (ดู PendingForYouStrip ด้านบนบอร์ด)
+  const pending = usePendingFor(wo.id, WO_CATEGORIES);
   return (
     <Link href={`/maintenance/work-orders/${wo.id}`} className="block">
       <Card
-        className="p-3 pl-[11px] transition-colors hover:bg-(--app-pale)"
+        className={`p-3 pl-[11px] transition-colors hover:bg-(--app-pale)${pending.length > 0 ? " ring-2 ring-[#dc2626]" : ""}`}
         style={{
           borderLeft: `3px solid ${isNew ? M.redShade400 : "transparent"}`,
         }}
@@ -163,6 +170,12 @@ function OrderCard({
             <PriorityBadge priority={wo.priority} />
           )}
         </div>
+
+        {pending.length > 0 && (
+          <div className="mt-1">
+            <PendingPin notifs={pending} />
+          </div>
+        )}
 
         <div className="mt-1 flex items-center gap-3 text-xs text-(--ink-soft)">
           <span className="inline-flex min-w-0 items-center gap-1">
@@ -608,6 +621,9 @@ export function WorkOrderBoard({
           )}
         </div>
       )}
+
+      {/* "รอคุณ" — บอกว่าเลขแดงที่เมนูใบงานคือเรื่องอะไร */}
+      <PendingForYouStrip categories={WO_CATEGORIES} />
 
       {/* ─── มือถือ: แท็บ 4 สถานะ ─── */}
       <div className="flex min-h-0 flex-1 flex-col lg:hidden">

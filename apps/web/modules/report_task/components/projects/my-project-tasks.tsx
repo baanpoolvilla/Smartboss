@@ -8,6 +8,7 @@ import { useProjectStore } from "@/modules/report_task/store/project-store";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import type { Task } from "@/modules/report_task/types";
 import { StatePill, fmtDay, todayBkk } from "./project-ui";
+import { PendingTag, type ProjectPendingItem } from "./project-pending";
 
 /** งานโปรเจกต์ที่ยังไม่เสร็จของฉัน (เรียงตามวันส่ง) */
 export function useMyOpenProjectTasks(): Task[] {
@@ -25,7 +26,7 @@ const stateOf = (t: Task, today: string) => (t.dueDate.slice(0, 10) < today ? "l
  * "งานของฉันในโปรเจกต์" — งานโปรเจกต์ไม่ขึ้นบนบอร์ดงาน (แยกกันตามที่ตกลง 17/10/2569)
  * ที่นี่จึงเป็นที่ที่คนทำงานเห็นงานโปรเจกต์ของตัวเองครบทุกโปรเจกต์ในที่เดียว
  */
-export function MyProjectTasks({ onOpen }: { onOpen: (taskId: string) => void }) {
+export function MyProjectTasks({ onOpen, pending = [] }: { onOpen: (taskId: string) => void; pending?: ProjectPendingItem[] }) {
   const mine = useMyOpenProjectTasks();
   const projects = useProjectStore((s) => s.projects);
   const today = todayBkk();
@@ -62,11 +63,12 @@ export function MyProjectTasks({ onOpen }: { onOpen: (taskId: string) => void })
                 {list.slice(0, 3).map((t) => (
                   <li key={t.id}>
                     <button type="button" onClick={() => onOpen(t.id)}
-                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-[var(--bg-soft)]">
+                      className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-[var(--bg-soft)]${pending.some((i) => i.taskId === t.id) ? " ring-2 ring-[#dc2626]" : ""}`}>
                       <span className="min-w-0 flex-1 truncate text-[14px]">
                         {t.parentId ? <span className="mr-1 text-[var(--ink-soft)]">↳</span> : null}
                         {t.title}
                       </span>
+                      <PendingTag items={pending.filter((i) => i.taskId === t.id)} />
                       <span className="shrink-0 tabular-nums text-[12.5px] text-[var(--ink-soft)]">{fmtDay(t.dueDate)}</span>
                       <StatePill state={stateOf(t, today)} />
                     </button>

@@ -3,6 +3,7 @@
 import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-detail-sheet";
 import { useTaskSheetParam } from "@/modules/report_task/hooks/use-task-sheet-param";
 import { MyProjectTasks } from "./my-project-tasks";
+import { PendingTag, ProjectPendingStrip, useProjectPending, type ProjectPendingItem } from "./project-pending";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -35,6 +36,8 @@ export function ProjectsPortfolio() {
   const [creating, setCreating] = useState(false);
   const { openTaskId, open: openTask, close: closeTask } = useTaskSheetParam();
   const today = todayBkk();
+  // "รอคุณ" — เลขแดงที่เมนูโปรเจกต์คือเรื่องอะไร (project-pending.tsx)
+  const pending = useProjectPending();
 
   const rows = useMemo(() => {
     return projects
@@ -77,9 +80,10 @@ export function ProjectsPortfolio() {
         </div>
       </div>
 
+      {ready && <ProjectPendingStrip items={pending} onOpen={(id) => openTask(id)} />}
       {/* ผู้บริหาร (CEO/หัวหน้าแผนก) เห็นภาพรวมก่อน · พนักงานเห็น "งานของฉัน" ก่อน */}
       {ready && canCreateProject(me) && <ExecSummary rows={rows} focus={focus} onFocus={setFocus} me={me} />}
-      {ready && <MyProjectTasks onOpen={(id) => openTask(id)} />}
+      {ready && <MyProjectTasks onOpen={(id) => openTask(id)} pending={pending} />}
 
       {!ready ? (
         <p className="py-20 text-center text-sm text-[var(--ink-soft)]">กำลังโหลดโปรเจกต์…</p>
@@ -93,7 +97,7 @@ export function ProjectsPortfolio() {
           <h2 className="m-0 pt-1 text-[16px] font-bold">{filter === "mine" ? "โปรเจกต์ของฉัน" : filter === "all" ? "โปรเจกต์ทั้งหมด" : "โปรเจกต์ที่กำลังทำ"}{focus !== "all" ? ` · ${FOCUS_LABEL[focus]}` : ""} <span className="ml-1 text-[13px] font-normal text-[var(--ink-soft)]">{rows.filter((r) => inFocus(r, focus)).length}</span>
             {focus !== "all" && <button type="button" onClick={() => setFocus("all")} className="ml-2 rounded-md px-2 py-0.5 text-[12.5px] font-normal text-[var(--brand-green-dark)] hover:bg-[var(--bg-soft)]">ดูทั้งหมด ✕</button>}</h2>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {rows.filter((r) => inFocus(r, focus)).map((r) => <ProjectCard key={r.p.id} r={r} today={today} />)}
+            {rows.filter((r) => inFocus(r, focus)).map((r) => <ProjectCard key={r.p.id} r={r} today={today} pending={pending.filter((i) => i.projectId === r.p.id)} />)}
           </div>
         </>
       )}
@@ -194,7 +198,7 @@ function ExecSummary({ rows, focus, onFocus, me }: { rows: Row[]; focus: Focus; 
 }
 
 /** การ์ดโปรเจกต์ — อ่านจบในการ์ดเดียว: สถานะ · คืบหน้าเทียบเวลาที่ผ่านไป · งานเลยกำหนด · จุดสำคัญถัดไป */
-function ProjectCard({ r, today }: { r: Row; today: string }) {
+function ProjectCard({ r, today, pending }: { r: Row; today: string; pending: ProjectPendingItem[] }) {
   const { p } = r;
   const closed = ["done", "dropped"].includes(r.status);
   // งานคืบหน้าน้อยกว่าเวลาที่ผ่านไปมาก = ส่อว่าจะไม่ทัน (เตือนเบา ๆ ก่อนจะกลายเป็น "ล่าช้า")
@@ -203,11 +207,13 @@ function ProjectCard({ r, today }: { r: Row; today: string }) {
   return (
     <Link href={`/report-task/projects/${p.id}`}
       className={cn("grid content-start gap-3 rounded-2xl border bg-[var(--bg)] p-4 transition-shadow hover:shadow-md",
-        r.status === "late" ? "border-red-300 dark:border-red-900" : r.status === "risk" ? "border-amber-300 dark:border-amber-900" : "border-[var(--line)]", closed && "opacity-75")}>
+        r.status === "late" ? "border-red-300 dark:border-red-900" : r.status === "risk" ? "border-amber-300 dark:border-amber-900" : "border-[var(--line)]", closed && "opacity-75",
+        pending.length > 0 && "ring-2 ring-[#dc2626]")}>
       <div className="flex items-start gap-2">
         <b className="min-w-0 flex-1 break-words text-[16px] leading-snug">{p.name}</b>
         <ProjectStatusChip status={r.status} />
       </div>
+      {pending.length > 0 && <div className="-mt-1.5"><PendingTag items={pending} /></div>}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-[var(--ink-soft)]">
         <span className="inline-flex items-center gap-1.5"><PersonDot userId={p.ownerId} size={20} /><span className="text-[var(--ink)]">{getUser(p.ownerId)?.name ?? "—"}</span></span>
         <span className="tabular-nums">{fmtDay(p.startDate)} – {fmtDay(p.endDate, true)}</span>
