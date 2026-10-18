@@ -15,8 +15,6 @@ import { canSeeTask } from "@/modules/report_task/lib/permissions";
 import { matchesTaskFilters } from "@/modules/report_task/lib/task-filter";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Skeleton } from "@/modules/report_task/components/ui/skeleton";
-import { ProjectPendingStrip, useTaskPending } from "@/modules/report_task/components/projects/project-pending";
-import { useTaskSheetParam } from "@/modules/report_task/hooks/use-task-sheet-param";
 
 type TaskView = "board" | "grid" | "workload";
 
@@ -274,8 +272,6 @@ function TasksPageContent() {
 
       {/* แถวตัวเลข (ทั้งหมด / รอดำเนินการ / กำลังทำ / …) เอาออกแล้ว ("ตรงนี้ไม่เอา") — หัวคอลัมน์บอกจำนวนอยู่แล้ว
           "เลยกำหนด" อยู่ในตัวกรองด่วน */}
-      {/* "รอคุณ" — บอกว่าเลขแดงที่เมนู "งาน / Kanban" คือเรื่องอะไร (รอตรวจ / คอมเมนต์ / มอบหมายใหม่) */}
-      {loaded && !personBoardId && <BoardPendingStrip />}
       {!loaded ? (
         <BoardSkeleton />
       ) : view === "board" ? (
@@ -331,11 +327,4 @@ function BoardSkeleton() {
       ))}
     </div>
   );
-}
-
-/** แถบ "รอคุณ" บนบอร์ดงาน — งานที่ไม่อยู่ในโปรเจกต์ นับแบบเดียวกับเลขแดงที่เมนู (TaskReviewNavBadge) */
-function BoardPendingStrip() {
-  const items = useTaskPending("board");
-  const { open } = useTaskSheetParam();
-  return <ProjectPendingStrip items={items} onOpen={(id) => open(id)} showProject={false} className="shrink-0 px-3 pt-2 sm:px-0 sm:pt-0" />;
 }

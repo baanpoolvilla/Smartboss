@@ -19,7 +19,7 @@ import {
   PackageCheck,
 } from "lucide-react";
 import { Card } from "@smartboss/ui/components/card";
-import { PendingForYouStrip, PendingPin, usePendingFor } from "@/modules/notifications/pending-for-you";
+import { PendingPin, usePendingFor } from "@/modules/notifications/pending-for-you";
 import type { NotifCategory } from "@/modules/notifications/types";
 
 export interface BoardPo {
@@ -73,11 +73,11 @@ const PHASE_ICON: Record<string, typeof FileEdit> = {
 
 function PoCard({ po }: { po: BoardPo }) {
   const PhaseIcon = PHASE_ICON[po.phase.label] ?? FileEdit;
-  // มีแจ้งเตือนที่ยังไม่อ่านของใบนี้ = กรอบแดง + ป้ายบอกเรื่อง (ดู PendingForYouStrip ด้านบนบอร์ด)
+  // มีแจ้งเตือนที่ยังไม่อ่านของใบนี้ = พื้นแดงอ่อน + ป้ายบอกเรื่อง (ผู้ใช้ขอ 18/10/2569 "พื้นการ์ดเป็นสีแดง")
   const pending = usePendingFor(po.id, PO_CATEGORIES);
   return (
     <Link href={`/maintenance/purchase-orders/${po.id}`} className="block">
-      <Card className={`p-3 transition-colors hover:bg-(--bg-soft)${pending.length > 0 ? " ring-2 ring-[#dc2626]" : ""}`}>
+      <Card className={`p-3 transition-colors hover:bg-(--bg-soft)${pending.length > 0 ? " border-[#f3a4a4] bg-[#fdecec]" : ""}`}>
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
             <p className="font-mono text-[11px] tracking-tight text-(--ink-soft)">
@@ -275,8 +275,6 @@ export function PoBoard({
 
   return (
     <div>
-      {/* "รอคุณ" — บอกว่าเลขแดงที่เมนูสั่งซื้ออุปกรณ์คือเรื่องอะไร */}
-      <PendingForYouStrip categories={PO_CATEGORIES} className="mb-3" />
       {((canPickPeople && people.length > 0) || !!currentUserId) && (
         <div className="mb-3 flex gap-2 overflow-x-auto">
           <PersonFilter

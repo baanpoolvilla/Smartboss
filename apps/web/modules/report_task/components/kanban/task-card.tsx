@@ -20,7 +20,9 @@ import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
-import { unreadTaskAttachmentCounts, unreadTaskCommentCounts } from "@/modules/report_task/lib/task-comment-activity";
+import { unreadTaskAssignmentCounts, unreadTaskAttachmentCounts, unreadTaskCommentCounts } from "@/modules/report_task/lib/task-comment-activity";
+import { canReviewTask } from "@/modules/report_task/lib/permissions";
+import { useTaskReviewSettingsStore } from "@/modules/report_task/store/task-review-settings-store";
 import { MessageSquare, Paperclip, SmilePlus, SearchCheck, Check, Circle, Star, Clock, Eye, Lock, Repeat } from "lucide-react";
 import { describeRule, freqLabel, totalOccurrences } from "@/modules/report_task/lib/task-recurrence";
 import { ParentTaskLink, SubtaskCountChip } from "@/modules/report_task/components/kanban/subtasks-section";
@@ -101,6 +103,22 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
   // this card's own checklist-progress bar (below) to the same greenPale so
   // it doesn't clash with the pill sitting right above it.
   const isPendingReview = isDone && !task.reviewedBy;
+  // การ์ดที่มีเรื่องรอเรา (นับแบบเดียวกับเลขแดงที่เมนู — task-review-nav-badge.tsx) = พื้นแดงอ่อน + ป้ายบอกเรื่อง
+  // แทนกล่อง "แจ้งเตือนที่รอคุณ" ด้านบนบอร์ด (ผู้ใช้ขอ 18/10/2569 "พื้นการ์ดพวกนี้ให้เป็นสีแดง")
+  const reviewSettings = useTaskReviewSettingsStore((s) => s.settings);
+  const unreadAssigned = useMemo(
+    () => unreadTaskAssignmentCounts(notifications, viewingAsUserId).get(task.id) ?? 0,
+    [notifications, viewingAsUserId, task.id]
+  );
+  const reviewWaiting = isPendingReview && canReviewTask(task.departmentIds, viewingAsUserId, reviewSettings);
+  const pendingLabel = reviewWaiting
+    ? "✅ รอคุณตรวจ"
+    : unreadAssigned > 0
+      ? "👤 มอบหมายให้คุณ"
+      : unreadAttachments > 0 && unreadComments === 0
+        ? "📎 ไฟล์แนบใหม่"
+        : null;
+  const pendingForMe = reviewWaiting || unreadAssigned > 0 || unreadAttachments > 0 || unreadComments > 0;
   // A group task tracks each assignee's own completion, derived from their
   // own checklist items — the card's status only follows once everyone's
   // marked done (see task-completion.ts). The quick-toggle circle below
@@ -172,13 +190,15 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
         }
       }}
       className={cn(
-        "group relative rounded-xl border border-[var(--line)] bg-white p-3 sm:rounded-2xl sm:p-4 shadow-[0_1px_3px_rgba(16,24,40,0.07),0_1px_2px_rgba(16,24,40,0.04)] transition-all duration-200",
+        "group relative rounded-xl border p-3 sm:rounded-2xl sm:p-4 shadow-[0_1px_3px_rgba(16,24,40,0.07),0_1px_2px_rgba(16,24,40,0.04)] transition-all duration-200",
         onOpen && "cursor-pointer hover:shadow-[0_12px_28px_-10px_rgba(16,24,40,0.22)] hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--brand-green)_35%,var(--line))]",
         // A done card should read as "settled" at a glance even sitting next
         // to open ones in a column that isn't grouped by status (priority,
         // assignee) — the checkbox + strikethrough alone turned out too
         // subtle to notice (see below), so the whole card recedes too.
-        isDone && dimWhenDone && "opacity-70",
+        pendingForMe ? "border-[#f3a4a4] bg-[#fdecec]" : "border-[var(--line)] bg-white",
+        // งานเสร็จที่ยังรอเราตรวจ ไม่จางลง — ต้องเห็นชัดว่ามีอะไรให้ทำ
+        isDone && dimWhenDone && !pendingForMe && "opacity-70",
         // คอมเมนต์ยังไม่อ่าน — แถบแดงขอบซ้าย ให้เห็นจากระยะตอนกวาดตาทั้งคอลัมน์
         unreadComments > 0 && "shadow-[inset_3px_0_0_var(--danger),0_1px_3px_rgba(16,24,40,0.07)]"
       )}
@@ -338,6 +358,9 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
           </Tooltip>
         )}
         <div className="min-w-0 flex-1">
+          {pendingLabel && (
+            <span className="mb-1 inline-flex rounded-full bg-[#dc2626] px-2 py-0.5 text-[10.5px] font-bold text-white">{pendingLabel}</span>
+          )}
           <p className={cn("text-[14px] font-semibold leading-snug line-clamp-2 text-[var(--ink)]", isDone && "font-medium", isReviewedDone && "line-through")}>
             {task.title}
           </p>

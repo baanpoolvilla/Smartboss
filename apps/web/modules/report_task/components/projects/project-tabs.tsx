@@ -45,7 +45,7 @@ function InlineName({ item, onSave }: { item: TimelineItem; onSave: (name: strin
 const dateCell = "h-8 w-[128px] border-0 bg-transparent px-1.5 text-[13px] text-[var(--ink)] hover:ring-1 hover:ring-[var(--line)]";
 const cellInput = "max-w-[150px] rounded-md border-0 bg-transparent px-1 py-1 text-base text-[var(--ink)] tabular-nums outline-none hover:ring-1 hover:ring-[var(--line)] focus:ring-2 focus:ring-[var(--brand-green)] sm:text-[13px]";
 
-export function ListTab({ project, items, canEdit = false, canPlan = false, onOpen }: { project: Project; items: TimelineItem[]; canEdit?: boolean; canPlan?: boolean; onOpen: (id: string) => void }) {
+export function ListTab({ project, items, canEdit = false, canPlan = false, onOpen, pendingIds }: { project: Project; items: TimelineItem[]; canEdit?: boolean; canPlan?: boolean; onOpen: (id: string) => void; /** งานที่มีเรื่องรอเรา (project-pending.tsx) — พื้นแดงอ่อน */ pendingIds?: Set<string> }) {
   const me = useIdentityStore((s) => s.viewingAsUserId);
   const saveTaskDetails = useTaskStore((s) => s.saveTaskDetails);
   const setAssignees = useTaskStore((s) => s.setAssignees);
@@ -118,7 +118,7 @@ export function ListTab({ project, items, canEdit = false, canPlan = false, onOp
               return (
                 <div key={i.id} role="button" tabIndex={0} onClick={() => i.kind === "task" && onOpen(i.id)}
                   onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && i.kind === "task") { e.preventDefault(); onOpen(i.id); } }}
-                  className={cn("grid cursor-pointer gap-1.5 rounded-xl border border-[var(--line)] bg-[var(--bg)] p-3 text-left", sub && "ml-5", i.state === "late" && "border-red-300 bg-red-50/60 dark:border-red-900 dark:bg-red-950/20")}>
+                  className={cn("grid cursor-pointer gap-1.5 rounded-xl border border-[var(--line)] bg-[var(--bg)] p-3 text-left", sub && "ml-5", i.state === "late" && "border-red-300 bg-red-50/60 dark:border-red-900 dark:bg-red-950/20", pendingIds?.has(i.id) && "border-[#f3a4a4] bg-[#fdecec] dark:border-red-900 dark:bg-red-950/40")}>
                   <span className="flex items-start gap-2">
                     {sub && <span className="text-[var(--ink-soft)]">↳</span>}
                     <span className="pt-0.5"><DoneBox i={i} /></span>
@@ -156,7 +156,7 @@ export function ListTab({ project, items, canEdit = false, canPlan = false, onOp
                 </tr>
               ) : null,
               ...g.rows.map((i) => (
-                <tr key={i.id} className={cn("border-b border-[var(--line)]/50 transition-colors", i.kind === "task" && "cursor-pointer hover:bg-[var(--bg-soft)]", i.state === "late" && "bg-red-50/60 dark:bg-red-950/20")} onClick={() => i.kind === "task" && onOpen(i.id)}>
+                <tr key={i.id} className={cn("border-b border-[var(--line)]/50 transition-colors", i.kind === "task" && "cursor-pointer hover:bg-[var(--bg-soft)]", i.state === "late" && "bg-red-50/60 dark:bg-red-950/20", pendingIds?.has(i.id) && "bg-[#fdecec] dark:bg-red-950/40")} onClick={() => i.kind === "task" && onOpen(i.id)}>
                   <td className="min-w-52 px-2 py-1.5">
                     {canEdit && i.kind === "task" ? (
                       <div className={cn("flex items-center gap-1", i.parentId && shownIds.has(i.parentId) && "pl-5")}>
@@ -213,7 +213,7 @@ export function ListTab({ project, items, canEdit = false, canPlan = false, onOp
 
 /* ───────────── บอร์ด: คอลัมน์ตามสถานะ หรือตามช่วงงาน (ลากการ์ดย้ายช่วงได้ แบบ Asana Board) ───────────── */
 
-export function BoardTab({ project, items, canEdit, onOpen, pendingIds }: { project: Project; items: TimelineItem[]; canEdit: boolean; onOpen: (id: string) => void; /** งานที่มีเรื่องรอเรา (project-pending.tsx) — กรอบแดง */ pendingIds?: Set<string> }) {
+export function BoardTab({ project, items, canEdit, onOpen }: { project: Project; items: TimelineItem[]; canEdit: boolean; onOpen: (id: string) => void }) {
   const me = useIdentityStore((s) => s.viewingAsUserId);
   const setTaskProject = useTaskStore((s) => s.setTaskProject);
   const moveTask = useTaskStore((s) => s.moveTask);
@@ -251,8 +251,7 @@ export function BoardTab({ project, items, canEdit, onOpen, pendingIds }: { proj
             className={cn("grid w-72 shrink-0 content-start gap-2 rounded-xl bg-[var(--bg-soft)] p-2.5", over === c.key && "ring-2 ring-[var(--brand-green)]")}>
             <div className="flex justify-between text-xs font-semibold text-[var(--ink-soft)]"><span className="truncate">{c.label}</span><span>{c.list.length}</span></div>
             {c.list.map((t) => (
-              <div key={t.id} draggable={canEdit} onDragStart={(e) => e.dataTransfer.setData("text/task", t.id)}
-                className={pendingIds?.has(t.id) ? "rounded-xl ring-2 ring-[#dc2626]" : undefined}>
+              <div key={t.id} draggable={canEdit} onDragStart={(e) => e.dataTransfer.setData("text/task", t.id)}>
                 <TaskCard task={t} onOpen={onOpen} hideProjectChip />
               </div>
             ))}

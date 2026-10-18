@@ -8,7 +8,7 @@ import { toast } from "sonner";
 
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { NewTaskDialog } from "@/modules/report_task/components/kanban/new-task-dialog";
-import { ProjectPendingStrip, useProjectPending } from "./project-pending";
+import { useProjectPending } from "./project-pending";
 import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-detail-sheet";
 import { useTaskSheetParam } from "@/modules/report_task/hooks/use-task-sheet-param";
 import { getUser, users } from "@/modules/report_task/lib/directory";
@@ -155,8 +155,6 @@ export function ProjectView({ projectId }: { projectId: string }) {
         )}
       </div>
 
-      <ProjectPendingStrip items={pending} onOpen={(id) => openTask(id)} showProject={false} />
-
       <div className="flex items-end gap-1 border-b border-[var(--line)]">
         <div role="tablist" className="flex min-w-0 gap-1 overflow-x-auto">
           {TABS.filter((t) => PRIMARY_TABS.includes(t.id)).map((t) => (
@@ -197,8 +195,8 @@ export function ProjectView({ projectId }: { projectId: string }) {
           onOpenTask={(id) => openTask(id)} onAddTask={(sec) => setNewTaskSection(sec || project.sections[0]?.id || "")} />
       )}
       {tab === "overview" && <Overview project={project} items={allItems} pct={pct} today={today} canEdit={canEdit} onOpen={(id) => openTask(id)} />}
-      {tab === "list" && <ListTab project={project} items={items} canEdit={canEdit} canPlan={canPlan} onOpen={(id) => openTask(id)} />}
-      {tab === "board" && <BoardTab project={project} items={items} canEdit={canEdit} onOpen={(id) => openTask(id)} pendingIds={pendingIds} />}
+      {tab === "list" && <ListTab project={project} items={items} canEdit={canEdit} canPlan={canPlan} onOpen={(id) => openTask(id)} pendingIds={pendingIds} />}
+      {tab === "board" && <BoardTab project={project} items={items} canEdit={canEdit} onOpen={(id) => openTask(id)} />}
       {tab === "calendar" && <CalendarTab items={items} today={today} onOpen={(id) => openTask(id)} />}
       {tab === "dashboard" && <DashboardTab project={project} items={allItems} today={today} onOpen={(id) => openTask(id)} />}
       {tab === "messages" && <MessagesTab project={project} canEdit={canEdit} />}

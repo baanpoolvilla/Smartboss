@@ -12,7 +12,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { Card } from "@smartboss/ui/components/card";
-import { PendingForYouStrip, PendingPin, usePendingFor } from "@/modules/notifications/pending-for-you";
+import { PendingPin, usePendingFor } from "@/modules/notifications/pending-for-you";
 import type { NotifCategory } from "@/modules/notifications/types";
 import {
   AUTO_GROUP_KEY,
@@ -136,12 +136,12 @@ function OrderCard({
   creatorName?: string;
 }) {
   const isNew = wo.status === "open";
-  // มีแจ้งเตือนที่ยังไม่อ่านของใบนี้ = กรอบแดง + ป้ายบอกเรื่อง (ดู PendingForYouStrip ด้านบนบอร์ด)
+  // มีแจ้งเตือนที่ยังไม่อ่านของใบนี้ = พื้นแดงอ่อน + ป้ายบอกเรื่อง (ผู้ใช้ขอ 18/10/2569 "พื้นการ์ดเป็นสีแดง")
   const pending = usePendingFor(wo.id, WO_CATEGORIES);
   return (
     <Link href={`/maintenance/work-orders/${wo.id}`} className="block">
       <Card
-        className={`p-3 pl-[11px] transition-colors hover:bg-(--app-pale)${pending.length > 0 ? " ring-2 ring-[#dc2626]" : ""}`}
+        className={`p-3 pl-[11px] transition-colors hover:bg-(--app-pale)${pending.length > 0 ? " border-[#f3a4a4] bg-[#fdecec]" : ""}`}
         style={{
           borderLeft: `3px solid ${isNew ? M.redShade400 : "transparent"}`,
         }}
@@ -621,9 +621,6 @@ export function WorkOrderBoard({
           )}
         </div>
       )}
-
-      {/* "รอคุณ" — บอกว่าเลขแดงที่เมนูใบงานคือเรื่องอะไร */}
-      <PendingForYouStrip categories={WO_CATEGORIES} className="shrink-0 px-3 pb-2 pt-1" />
 
       {/* ─── มือถือ: แท็บ 4 สถานะ ─── */}
       <div className="flex min-h-0 flex-1 flex-col lg:hidden">

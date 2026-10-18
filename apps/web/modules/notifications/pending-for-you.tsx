@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
-import { PendingCards, type PendingCardItem } from "./pending-cards";
-import { maintenanceCategoryFor, maintenanceHrefFor } from "./derive";
+import { maintenanceCategoryFor } from "./derive";
 import type { NotifCategory } from "./types";
 import { useMaintenanceNotifStore, type MaintenanceNotif } from "./use-maintenance-notifications";
 
@@ -59,26 +58,4 @@ export function PendingPin({ notifs }: { notifs: MaintenanceNotif[] }) {
       {notifs.length > 1 && <span className="shrink-0">+{notifs.length - 1}</span>}
     </span>
   );
-}
-
-export function PendingForYouStrip({ categories, className }: { categories: NotifCategory[]; className?: string }) {
-  const unread = useUnread(categories);
-  const items = useMemo<PendingCardItem[]>(
-    () =>
-      [...unread]
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-        .map((n) => {
-          const { who, kind, subject } = splitNotifTitle(n.title);
-          return {
-            key: n.id,
-            kind,
-            title: subject ?? n.body ?? kind,
-            meta: [who, subject ? n.body : null].filter(Boolean).join(" · ") || null,
-            at: n.createdAt,
-            href: maintenanceHrefFor(n.type, n.referenceId),
-          };
-        }),
-    [unread]
-  );
-  return <PendingCards items={items} className={className} />;
 }

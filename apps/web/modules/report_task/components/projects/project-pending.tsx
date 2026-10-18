@@ -2,7 +2,6 @@
 
 import { useMemo } from "react";
 
-import { PendingCards } from "@/modules/notifications/pending-cards";
 
 import { getUser } from "@/modules/report_task/lib/directory";
 import { canReviewTask } from "@/modules/report_task/lib/permissions";
@@ -79,21 +78,5 @@ export function PendingTag({ items }: { items: ProjectPendingItem[] }) {
       {items[0]!.kind}
       {items.length > 1 && <span>+{items.length - 1}</span>}
     </span>
-  );
-}
-
-export function ProjectPendingStrip({ items, onOpen, showProject = true, className }: { items: ProjectPendingItem[]; onOpen: (taskId: string) => void; showProject?: boolean; className?: string }) {
-  return (
-    <PendingCards
-      className={className}
-      items={items.map((i) => ({
-        key: i.key,
-        kind: i.kind,
-        title: i.title,
-        meta: [showProject ? `📁 ${i.projectName}` : null, i.who].filter(Boolean).join(" · ") || null,
-        at: i.at,
-        onClick: () => onOpen(i.taskId),
-      }))}
-    />
   );
 }

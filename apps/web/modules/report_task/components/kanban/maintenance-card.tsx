@@ -18,6 +18,11 @@ import { useMaintenanceBoardStore } from "@/modules/report_task/store/maintenanc
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import type { MaintenanceBoardItem } from "@/modules/report_task/lib/maintenance-board";
 import type { Sticker } from "@/modules/report_task/types";
+import { PendingPin, usePendingFor } from "@/modules/notifications/pending-for-you";
+import type { NotifCategory } from "@/modules/notifications/types";
+
+/** แจ้งเตือนของใบงาน/ใบสั่งซื้อที่ยังไม่อ่าน = การ์ดพื้นแดงอ่อน (เหมือนการ์ดงานที่มีเรื่องรอเรา) */
+const MAINT_CATEGORIES: NotifCategory[] = ["work_order", "purchase_order"];
 
 /** สีประจำประเภท — ใบงานซ่อม = เขียวอมฟ้า (สีโมดูลแจ้งซ่อม) */
 export const MAINTENANCE_KIND = {
@@ -85,6 +90,7 @@ export function MaintenanceCard({ item }: { item: MaintenanceBoardItem }) {
     else toast.success("ยกเลิกสติกเกอร์แล้ว คืนคะแนนให้แล้ว");
   }
 
+  const unreadNotifs = usePendingFor(item.id, MAINT_CATEGORIES);
   return (
     <>
       <div className="relative">
@@ -92,8 +98,8 @@ export function MaintenanceCard({ item }: { item: MaintenanceBoardItem }) {
         href={`${item.href}?from=tasks`}
         prefetch={false}
         // แบบ A ("แถบหัวสีเขียว") ที่เลือกจาก mockup — แถบหัวสีแจ้งซ่อมเต็มความกว้าง มองไกลก็รู้ว่าไม่ใช่การ์ดงาน
-        className="group block overflow-hidden rounded-xl border bg-white shadow-sm transition-shadow hover:shadow-md"
-        style={{ borderColor: "#b7e3dd" }}
+        className={cn("group block overflow-hidden rounded-xl border shadow-sm transition-shadow hover:shadow-md", unreadNotifs.length > 0 ? "bg-[#fdecec]" : "bg-white")}
+        style={{ borderColor: unreadNotifs.length > 0 ? "#f3a4a4" : "#b7e3dd" }}
         aria-label={`${k.label} ${item.code} ${item.title} — เปิดในแจ้งซ่อม`}
       >
         <div
@@ -125,6 +131,11 @@ export function MaintenanceCard({ item }: { item: MaintenanceBoardItem }) {
               </span>
             )}
           </div>
+          {unreadNotifs.length > 0 && (
+            <div>
+              <PendingPin notifs={unreadNotifs} />
+            </div>
+          )}
           {/* ขนาด/ตัดบรรทัดเดียวกับชื่องานบนการ์ดงาน (task-card.tsx) — สองแบบการ์ดปนกันในคอลัมน์ ต้องดูเป็นชุดเดียวกัน */}
           <p className={cn("line-clamp-2 text-[14px] font-semibold leading-snug text-[var(--ink)]", done && "text-[var(--ink-soft)]")}>
             {item.title}

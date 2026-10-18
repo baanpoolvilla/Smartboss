@@ -34,8 +34,11 @@ export function MyProjectTasks({ onOpen, pending = [] }: { onOpen: (taskId: stri
   if (!mine.length) return null;
   const late = mine.filter((t) => t.dueDate.slice(0, 10) < today).length;
   // แยกกลุ่มตามโปรเจกต์ (เรียงตามงานที่ต้องส่งเร็วสุดของแต่ละโปรเจกต์) — อ่านง่ายกว่ารายการยาวรวมกัน
+  // มีเรื่องรอเรา (พื้นแดง) ขึ้นก่อน ทั้งโปรเจกต์และงานในโปรเจกต์ — ไม่งั้นตกไปอยู่ใต้ "ดูอีก…" มองไม่เห็น
+  const hot = new Set(pending.map((i) => i.taskId));
+  const ordered = [...mine].sort((a, b) => Number(hot.has(b.id)) - Number(hot.has(a.id)));
   const groups = new Map<string, Task[]>();
-  for (const t of mine) groups.set(t.project!.projectId, [...(groups.get(t.project!.projectId) ?? []), t]);
+  for (const t of ordered) groups.set(t.project!.projectId, [...(groups.get(t.project!.projectId) ?? []), t]);
   return (
     <section id="my" className="grid gap-3 rounded-xl border border-[var(--line)] bg-[var(--bg)] p-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -63,7 +66,7 @@ export function MyProjectTasks({ onOpen, pending = [] }: { onOpen: (taskId: stri
                 {list.slice(0, 3).map((t) => (
                   <li key={t.id}>
                     <button type="button" onClick={() => onOpen(t.id)}
-                      className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-[var(--bg-soft)]${pending.some((i) => i.taskId === t.id) ? " ring-2 ring-[#dc2626]" : ""}`}>
+                      className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-[var(--bg-soft)]${pending.some((i) => i.taskId === t.id) ? " bg-[#fdecec] dark:bg-red-950/40" : ""}`}>
                       <span className="min-w-0 flex-1 truncate text-[14px]">
                         {t.parentId ? <span className="mr-1 text-[var(--ink-soft)]">↳</span> : null}
                         {t.title}
