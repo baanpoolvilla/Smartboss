@@ -828,7 +828,7 @@ export function NewTaskDialog({
     setSelectedTopicId(id);
     setNewTopicName("");
     setCreatingTopic(false);
-    toast.success(`สร้างหัวข้อโปรเจค "${name}" แล้ว`);
+    toast.success(`สร้างหมวดงาน "${name}" แล้ว`);
   }
 
   async function handleSubmit() {

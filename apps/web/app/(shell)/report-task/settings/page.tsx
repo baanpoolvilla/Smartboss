@@ -141,7 +141,7 @@ function SettingsPageInner() {
   const taskGrantableSections: { key: GrantableSection; label: string; icon: LucideIcon }[] = [
     { key: "stickers", label: "สติกเกอร์ & คะแนน", icon: Smile },
     { key: "attachments", label: "ไฟล์แนบ", icon: Paperclip },
-    { key: "projectTopics", label: "หัวข้อโปรเจค", icon: Tag },
+    { key: "projectTopics", label: "หมวดงาน", icon: Tag },
     { key: "taskReview", label: "การตรวจงาน", icon: ShieldCheck },
   ];
   const calendarGrantableSections: { key: GrantableSection; label: string; icon: LucideIcon }[] = [

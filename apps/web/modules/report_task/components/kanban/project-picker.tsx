@@ -54,7 +54,7 @@ export function ProjectPicker({
   const label = (
     <>
       <FolderKanban className="h-3.5 w-3.5 shrink-0" />
-      <span className="max-w-[180px] truncate">{selected?.name ?? "ทุกโปรเจค"}</span>
+      <span className="max-w-[180px] truncate">{selected?.name ?? "ทุกหมวดงาน"}</span>
       {!active && <ChevronDown className="h-3.5 w-3.5 shrink-0" />}
     </>
   );
@@ -65,13 +65,13 @@ export function ProjectPicker({
     <div className={filterFieldTriggerClass(active, cn("min-w-0 shrink", active && "pr-1.5"))}>
       {isMobile ? (
         <>
-          <button type="button" onClick={() => setOpen(true)} className={triggerClass} aria-label="เลือกโปรเจค">
+          <button type="button" onClick={() => setOpen(true)} className={triggerClass} aria-label="เลือกหมวดงาน">
             {label}
           </button>
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetContent side="bottom" className="gap-2 rounded-t-2xl pb-4">
               <SheetHeader className="pb-0 pr-11">
-                <SheetTitle>เลือกโปรเจค</SheetTitle>
+                <SheetTitle>เลือกหมวดงาน</SheetTitle>
               </SheetHeader>
               <div className="px-3">{list}</div>
             </SheetContent>
@@ -79,7 +79,7 @@ export function ProjectPicker({
         </>
       ) : (
         <Popover open={open} onOpenChange={setOpen}>
-          <PopoverTrigger className={triggerClass} aria-label="เลือกโปรเจค">
+          <PopoverTrigger className={triggerClass} aria-label="เลือกหมวดงาน">
             {label}
           </PopoverTrigger>
           <PopoverContent align="start" className="w-72 gap-0 p-1.5">
@@ -92,8 +92,8 @@ export function ProjectPicker({
           type="button"
           onClick={() => onChange("all")}
           className="ml-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--accent-foreground)]/10 hover:bg-[var(--accent-foreground)]/20"
-          aria-label="ดูทุกโปรเจค"
-          title="ดูทุกโปรเจค"
+          aria-label="ดูทุกหมวดงาน"
+          title="ดูทุกหมวดงาน"
         >
           <X className="h-3 w-3" />
         </button>
@@ -152,14 +152,14 @@ function ProjectList({
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="ค้นหาโปรเจค…"
+            placeholder="ค้นหาหมวดงาน…"
             className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-[var(--ink-faint)]"
           />
         </label>
       )}
       {/* สูงคงที่ เลื่อนข้างใน — กล่องไม่ยืดตามจำนวนโปรเจค */}
       <div className="max-h-72 overflow-y-auto overscroll-contain">
-        {!query.trim() && row("all", "ทุกโปรเจค", total)}
+        {!query.trim() && row("all", "ทุกหมวดงาน", total)}
         {named.map((o) => row(o.id, o.name, o.count))}
         {unsorted && (
           <>
@@ -168,7 +168,7 @@ function ProjectList({
           </>
         )}
         {named.length === 0 && !unsorted && (
-          <p className="px-2.5 py-3 text-center text-sm text-[var(--ink-soft)]">ไม่พบโปรเจคที่ชื่อมี “{query.trim()}”</p>
+          <p className="px-2.5 py-3 text-center text-sm text-[var(--ink-soft)]">ไม่พบหมวดงานที่ชื่อมี “{query.trim()}”</p>
         )}
       </div>
     </div>

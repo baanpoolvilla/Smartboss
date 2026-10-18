@@ -50,7 +50,8 @@ export function DepartmentTopicsBoard({
   const deptName = isOther ? "อื่นๆ" : (department?.name ?? "—");
   const deptColor = isOther ? "var(--ink-soft)" : (department?.color ?? "var(--ink-soft)");
 
-  const visibleTasks = useMemo(() => allTasks.filter((t) => canSeeTask(t, viewingAsUserId)), [allTasks, viewingAsUserId]);
+  // ไม่รวมงานโปรเจกต์ — อยู่หน้าโปรเจกต์อย่างเดียว (เหมือนบอร์ดหลัก)
+  const visibleTasks = useMemo(() => allTasks.filter((t) => !t.project && canSeeTask(t, viewingAsUserId)), [allTasks, viewingAsUserId]);
 
   // "อื่นๆ" ไม่ใช่แผนกจริง — เป็นที่กองงานที่ไม่มีโปรเจคเลย (ไม่เคยถูกเลือก
   // แผนกให้อย่างจริงจัง ดู taskDepartmentIdsForBoard's doc) จึงกรองด้วยเงื่อนไข
@@ -74,7 +75,7 @@ export function DepartmentTopicsBoard({
       .filter((topic) => counts.has(topic.id))
       .map((topic) => ({ id: topic.id, name: topic.name, count: counts.get(topic.id)! }));
     // ลำดับในรายการ (มากไปน้อย, "ไม่มีโปรเจค" ท้ายสุด) ProjectPicker จัดเอง
-    return counts.has(UNSORTED_KEY) ? [...named, { id: UNSORTED_KEY, name: "ไม่มีโปรเจค", count: counts.get(UNSORTED_KEY)! }] : named;
+    return counts.has(UNSORTED_KEY) ? [...named, { id: UNSORTED_KEY, name: "ไม่มีหมวดงาน", count: counts.get(UNSORTED_KEY)! }] : named;
   }, [inDept, topics]);
 
   // เปลี่ยนแผนก (กลับไปบอร์ดแล้วเลือกใหม่) = เริ่มที่ "ทุกโปรเจค" ใหม่
@@ -160,7 +161,7 @@ export function DepartmentTopicsBoard({
           <ArrowLeft className="h-4.5 w-4.5" />
         </button>
         <span className="h-7 w-7 rounded-lg shrink-0" style={{ backgroundColor: deptColor }} aria-hidden="true" />
-        <h2 className="text-base font-semibold truncate min-w-0">{isOther ? "งานที่ยังไม่มีโปรเจค" : `แผนก${deptName}`}</h2>
+        <h2 className="text-base font-semibold truncate min-w-0">{isOther ? "งานที่ยังไม่มีหมวดงาน" : `แผนก${deptName}`}</h2>
         {/* แผนกเดียวมีโปรเจคเดียว (หรือไม่มีเลย) = ไม่มีอะไรให้เลือก ไม่ต้องโชว์ปุ่ม */}
         {projectOptions.length > 1 && (
           <ProjectPicker
@@ -178,8 +179,8 @@ export function DepartmentTopicsBoard({
       {inDept.length === 0 ? (
         <EmptyState
           icon={SearchX}
-          title={isOther ? "ไม่มีงานที่ยังไม่มีโปรเจค" : "ไม่มีงานในแผนกนี้"}
-          description={isOther ? "งานทุกอันมีโปรเจคกำหนดแผนกไว้แล้วตอนนี้" : `แผนก${deptName}ยังไม่มีงานอยู่ตอนนี้`}
+          title={isOther ? "ไม่มีงานที่ยังไม่มีหมวดงาน" : "ไม่มีงานในแผนกนี้"}
+          description={isOther ? "งานทุกอันมีหมวดงานกำหนดแผนกไว้แล้วตอนนี้" : `แผนก${deptName}ยังไม่มีงานอยู่ตอนนี้`}
         />
       ) : (
         <div className="relative min-h-0 flex-1">

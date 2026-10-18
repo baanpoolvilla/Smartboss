@@ -219,7 +219,7 @@ export function KanbanColumn({
           <HeaderTag
             type={onHeaderClick ? "button" : undefined}
             onClick={onHeaderClick}
-            title={onHeaderClick ? (headerClickTitle ?? "ดูงานของคนนี้แยกตามหัวข้อโปรเจค") : undefined}
+            title={onHeaderClick ? (headerClickTitle ?? "ดูงานของคนนี้แยกตามหมวดงาน") : undefined}
             className={cn(
               "shrink-0 w-full rounded-xl bg-white border border-[var(--line)] shadow-[0_1px_2px_rgba(16,24,40,0.04)] px-3.5 py-3 mb-3 text-left",
               hideHeaderOnMobile && "hidden sm:block",
@@ -372,7 +372,7 @@ export function KanbanColumn({
             className="flex-1 flex flex-col items-center justify-center gap-2.5 text-center rounded-lg border border-dashed border-[var(--line)] py-6 px-3 hover:border-[var(--brand-green)] hover:bg-white transition-colors disabled:hover:border-[var(--line)] disabled:hover:bg-transparent disabled:cursor-default"
           >
             <span className="text-sm font-semibold text-[var(--ink)]">
-              {column.projectCount ?? 0} โปรเจค · {column.tasks.length} งาน
+              {column.projectCount ?? 0} หมวด · {column.tasks.length} งาน
             </span>
             {!!column.projectNames?.length && (
               <div className="flex flex-wrap items-center justify-center gap-1.5 px-1">

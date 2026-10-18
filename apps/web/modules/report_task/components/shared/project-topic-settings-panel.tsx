@@ -110,22 +110,22 @@ export function ProjectTopicSettingsPanel() {
       }));
     }
     setTopics(draft);
-    toast.success("บันทึกหัวข้อโปรเจคแล้ว");
+    toast.success("บันทึกหมวดงานแล้ว");
   }
 
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-base font-semibold">จัดการหัวข้อโปรเจค</h2>
+        <h2 className="text-base font-semibold">จัดการหมวดงาน</h2>
         <p className="text-sm text-[var(--ink-soft)] mt-0.5">
-          เปลี่ยนชื่อ ตั้งสี หรือลบหัวข้อโปรเจคได้ที่นี่ (สร้างหัวข้อใหม่แบบเร็วๆ ระหว่างสร้างงานก็ยังทำได้เหมือนเดิม)
-          — ลบหัวข้อไหน งานที่เคยติดหัวข้อนั้นจะกลายเป็น &ldquo;ไม่ระบุหัวข้อโปรเจค&rdquo; แทน ไม่ได้ถูกลบไปด้วย —
+          เปลี่ยนชื่อ ตั้งสี หรือลบหมวดงานได้ที่นี่ (สร้างหัวข้อใหม่แบบเร็วๆ ระหว่างสร้างงานก็ยังทำได้เหมือนเดิม)
+          — ลบหัวข้อไหน งานที่เคยติดหัวข้อนั้นจะกลายเป็น &ldquo;ไม่ระบุหมวดงาน&rdquo; แทน ไม่ได้ถูกลบไปด้วย —
           กด บันทึก เพื่อยืนยันการเปลี่ยนแปลง
         </p>
       </div>
 
       {draft.length === 0 && (
-        <p className="text-sm text-[var(--ink-soft)]">ยังไม่มีหัวข้อโปรเจคเลย</p>
+        <p className="text-sm text-[var(--ink-soft)]">ยังไม่มีหมวดงานเลย</p>
       )}
 
       <div className="space-y-2">
@@ -152,7 +152,7 @@ export function ProjectTopicSettingsPanel() {
               size="icon"
               onClick={() => setRemoveTarget(t)}
               title="ลบ"
-              aria-label={`ลบหัวข้อโปรเจค ${t.name}`}
+              aria-label={`ลบหมวดงาน ${t.name}`}
             >
               <Trash2 className="h-4 w-4 text-[var(--ink-soft)]" />
             </Button>
@@ -165,10 +165,10 @@ export function ProjectTopicSettingsPanel() {
           value={newLabel}
           onChange={(e) => setNewLabel(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && add()}
-          placeholder="ชื่อหัวข้อโปรเจคใหม่"
+          placeholder="ชื่อหมวดงานใหม่"
           className="flex-1"
         />
-        <Button variant="outline" size="icon" onClick={add} aria-label="เพิ่มหัวข้อโปรเจค">
+        <Button variant="outline" size="icon" onClick={add} aria-label="เพิ่มหมวดงาน">
           <Plus className="h-4 w-4" />
         </Button>
       </div>
@@ -180,9 +180,9 @@ export function ProjectTopicSettingsPanel() {
       <AlertDialog open={!!removeTarget} onOpenChange={(v) => !v && setRemoveTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>ลบหัวข้อโปรเจค &quot;{removeTarget?.name}&quot;?</AlertDialogTitle>
+            <AlertDialogTitle>ลบหมวดงาน &quot;{removeTarget?.name}&quot;?</AlertDialogTitle>
             <AlertDialogDescription>
-              งานที่เคยติดหัวข้อนี้จะกลายเป็น &quot;ไม่ระบุหัวข้อโปรเจค&quot; แทน (ไม่ได้ถูกลบไปด้วย) —
+              งานที่เคยติดหัวข้อนี้จะกลายเป็น &quot;ไม่ระบุหมวดงาน&quot; แทน (ไม่ได้ถูกลบไปด้วย) —
               ยังไม่มีผลจนกว่าจะกด &quot;บันทึก&quot;
             </AlertDialogDescription>
           </AlertDialogHeader>

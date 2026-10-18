@@ -21,7 +21,7 @@ const grantableSections: { key: GrantableSection; label: string; icon: typeof Sm
   // label spells both out so granting this section doesn't read as
   // "just create/delete" to whoever's checking the box.
   { key: "reportTopics", label: "สร้าง/ลบ/จัดลำดับหัวข้อ Report", icon: FolderTree },
-  { key: "projectTopics", label: "หัวข้อโปรเจค", icon: Tag },
+  { key: "projectTopics", label: "หมวดงาน", icon: Tag },
 ];
 
 /**

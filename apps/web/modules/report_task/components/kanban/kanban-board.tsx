@@ -664,7 +664,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
                   }
                   headerClickTitle={
                     groupBy === "assignee"
-                      ? "ดูทุกงานของคนนี้แยกตามหัวข้อโปรเจค"
+                      ? "ดูทุกงานของคนนี้แยกตามหมวดงาน"
                       : groupBy === "department"
                         ? "ดูงานของแผนกนี้ตามสถานะ"
                         : undefined

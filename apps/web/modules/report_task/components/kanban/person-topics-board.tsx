@@ -90,7 +90,8 @@ export function PersonTopicsBoard({
   const mine = useMemo(
     () =>
       allTasks
-        .filter((t) => t.assigneeIds.includes(personId))
+        // งานโปรเจกต์อยู่หน้าโปรเจกต์อย่างเดียว ไม่ขึ้นบนบอร์ด (เหมือนบอร์ดหลัก tasks/page.tsx)
+        .filter((t) => t.assigneeIds.includes(personId) && !t.project)
         .filter((t) => {
           if (departmentId == null) return true;
           return isOtherDept
@@ -242,17 +243,17 @@ export function PersonTopicsBoard({
           <AvatarFallback className="text-[10px]">{person?.avatar}</AvatarFallback>
         </Avatar>
         <h2 className="text-sm font-semibold truncate min-w-0 shrink">
-          งานของ {person?.name ?? "—"} {deptName ? `แผนก${deptName} ` : ""}แยกตามหัวข้อโปรเจค
+          งานของ {person?.name ?? "—"} {deptName ? `แผนก${deptName} ` : ""}แยกตามหมวดงาน
         </h2>
 
         {columns.length > 1 && (
           <Select value={topicFilter} onValueChange={(v) => v && setTopicFilter(v)}>
             <SelectTrigger className={filterFieldTriggerClass(topicFilter !== "all", "min-w-[150px] ml-2 shrink-0")}>
               <FolderKanban className="h-3.5 w-3.5 shrink-0" />
-              <SelectValue>{topicFilter === "all" ? "ทุกหัวข้อโปรเจค" : columns.find((c) => c.id === topicFilter)?.name ?? "ทุกหัวข้อโปรเจค"}</SelectValue>
+              <SelectValue>{topicFilter === "all" ? "ทุกหมวดงาน" : columns.find((c) => c.id === topicFilter)?.name ?? "ทุกหมวดงาน"}</SelectValue>
             </SelectTrigger>
             <SelectContent alignItemWithTrigger={false}>
-              <SelectItem value="all">ทุกหัวข้อโปรเจค</SelectItem>
+              <SelectItem value="all">ทุกหมวดงาน</SelectItem>
               {columns.map((c) => (
                 <SelectItem key={c.id} value={c.id}>{c.name} ({c.tasks.length})</SelectItem>
               ))}
@@ -281,7 +282,7 @@ export function PersonTopicsBoard({
         <EmptyState
           icon={SearchX}
           title="ไม่พบงานในหัวข้อนี้"
-          description="ลองเลือกหัวข้อโปรเจคอื่น หรือกดล้างตัวกรองเพื่อดูทุกหัวข้อ"
+          description="ลองเลือกหมวดงานอื่น หรือกดล้างตัวกรองเพื่อดูทุกหัวข้อ"
         />
       ) : (
         <div className="relative min-h-0 flex-1">
