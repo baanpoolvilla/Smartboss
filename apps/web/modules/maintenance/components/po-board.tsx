@@ -19,7 +19,7 @@ import {
   PackageCheck,
 } from "lucide-react";
 import { Card } from "@smartboss/ui/components/card";
-import { PendingPin, usePendingFor } from "@/modules/notifications/pending-for-you";
+import { PendingBand, usePendingFor } from "@/modules/notifications/pending-for-you";
 import type { NotifCategory } from "@/modules/notifications/types";
 
 export interface BoardPo {
@@ -78,6 +78,7 @@ function PoCard({ po }: { po: BoardPo }) {
   return (
     <Link href={`/maintenance/purchase-orders/${po.id}`} className="block">
       <Card className={`p-3 transition-colors hover:bg-(--bg-soft)${pending.length > 0 ? " border-[#f3a4a4] bg-[#fdecec]" : ""}`}>
+        <PendingBand notifs={pending} className="-mx-3 -mt-3 mb-2 rounded-t-[inherit]" />
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
             <p className="font-mono text-[11px] tracking-tight text-(--ink-soft)">
@@ -105,11 +106,6 @@ function PoCard({ po }: { po: BoardPo }) {
           </span>
         </div>
 
-        {pending.length > 0 && (
-          <div className="mt-1">
-            <PendingPin notifs={pending} />
-          </div>
-        )}
         {po.propertyName && (
           <p className="mt-1 inline-flex items-center gap-1 text-xs text-(--ink-soft)">
             <HomeIcon className="h-3 w-3" /> {po.propertyName}

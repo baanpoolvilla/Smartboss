@@ -45,17 +45,23 @@ export function usePendingFor(referenceId: string, categories: NotifCategory[]):
   );
 }
 
-/** ป้ายแดงบนการ์ด เช่น "💬 ความคิดเห็นใหม่" (+N ถ้ามีหลายเรื่อง) */
-export function PendingPin({ notifs }: { notifs: MaintenanceNotif[] }) {
+/**
+ * แถบแดงขอบบนการ์ด "ยังไม่ได้อ่าน · 💬 ความคิดเห็นใหม่" (+N ถ้ามีหลายเรื่อง) — ผู้ใช้ขอ 18/10/2569
+ * "ขอบบนว่ายังไม่ได้อ่าน ทำให้รู้" · เปิดดูแล้วแจ้งเตือนถูกอ่าน แถบ/พื้นแดงหายเอง
+ * วางเป็นลูกตัวแรกของการ์ด (ผู้เรียกจัดให้ชิดขอบบนเอง)
+ */
+export function PendingBand({ notifs, className }: { notifs: MaintenanceNotif[]; className?: string }) {
   if (notifs.length === 0) return null;
   const { kind } = splitNotifTitle(notifs[0]!.title);
   return (
-    <span
-      className="inline-flex max-w-full items-center gap-1 rounded-full bg-[#dc2626] px-2 py-0.5 text-[10.5px] font-bold text-white"
-      title={notifs.map((n) => n.title).join("\n")}
+    <div
+      className={`flex items-center gap-1 bg-[#dc2626] px-3 py-1 text-[11px] font-bold leading-4 text-white ${className ?? ""}`}
+      title={`ยังไม่ได้อ่าน — เปิดดูแล้วการ์ดจะกลับเป็นสีปกติ\n${notifs.map((n) => n.title).join("\n")}`}
     >
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-white" aria-hidden />
+      <span className="shrink-0">ยังไม่ได้อ่าน ·</span>
       <span className="truncate">{kind}</span>
       {notifs.length > 1 && <span className="shrink-0">+{notifs.length - 1}</span>}
-    </span>
+    </div>
   );
 }

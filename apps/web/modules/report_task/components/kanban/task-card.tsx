@@ -111,13 +111,15 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
     [notifications, viewingAsUserId, task.id]
   );
   const reviewWaiting = isPendingReview && canReviewTask(task.departmentIds, viewingAsUserId, reviewSettings);
-  const pendingLabel = reviewWaiting
-    ? "✅ รอคุณตรวจ"
-    : unreadAssigned > 0
-      ? "👤 มอบหมายให้คุณ"
-      : unreadAttachments > 0 && unreadComments === 0
-        ? "📎 ไฟล์แนบใหม่"
-        : null;
+  // แถบแดงขอบบนการ์ด บอกตรง ๆ ว่าแดงเพราะ "ยังไม่ได้อ่าน" (ผู้ใช้ขอ 18/10/2569) ไม่ใช่งานมีปัญหา
+  // เปิดดูงานแล้ว (markTaskActivityRead) แถบ + พื้นแดงหายเอง · รอตรวจหายเมื่อกด ผ่าน/ไม่ผ่าน
+  const unreadParts = [
+    unreadComments > 0 ? `💬 คอมเมนต์ ${unreadComments}` : null,
+    unreadAttachments > 0 ? `📎 ไฟล์ ${unreadAttachments}` : null,
+    unreadAssigned > 0 ? "👤 งานที่มอบให้คุณ" : null,
+  ].filter(Boolean);
+  const pendingBand = unreadParts.length > 0 ? `ยังไม่ได้อ่าน · ${unreadParts.join(" · ")}` : reviewWaiting ? "✅ รอคุณตรวจ · กด ผ่าน / ไม่ผ่าน" : null;
+  const pendingHint = unreadParts.length > 0 ? "มีเรื่องใหม่ที่คุณยังไม่ได้อ่าน · เปิดดูแล้วการ์ดจะกลับเป็นสีปกติ" : "งานเสร็จแล้ว รอคุณกด ผ่าน / ไม่ผ่าน";
   const pendingForMe = reviewWaiting || unreadAssigned > 0 || unreadAttachments > 0 || unreadComments > 0;
   // A group task tracks each assignee's own completion, derived from their
   // own checklist items — the card's status only follows once everyone's
@@ -203,6 +205,15 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
         unreadComments > 0 && "shadow-[inset_3px_0_0_var(--danger),0_1px_3px_rgba(16,24,40,0.07)]"
       )}
     >
+      {pendingBand && (
+        <div
+          className="-mx-3 -mt-3 mb-2 flex items-center gap-1.5 rounded-t-xl bg-[#dc2626] px-3 py-1 text-[11px] font-bold leading-4 text-white sm:-mx-4 sm:-mt-4 sm:mb-2.5 sm:rounded-t-2xl sm:px-4"
+          title={pendingHint}
+        >
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-white" aria-hidden />
+          <span className="truncate">{pendingBand}</span>
+        </div>
+      )}
       <div className="flex items-center gap-2 mb-1.5 sm:mb-2.5">
         {/* Dot + label badge, colored to match whichever attribute it's
             showing — priority's own accent (red/amber/green/gray) normally,
@@ -358,9 +369,6 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
           </Tooltip>
         )}
         <div className="min-w-0 flex-1">
-          {pendingLabel && (
-            <span className="mb-1 inline-flex rounded-full bg-[#dc2626] px-2 py-0.5 text-[10.5px] font-bold text-white">{pendingLabel}</span>
-          )}
           <p className={cn("text-[14px] font-semibold leading-snug line-clamp-2 text-[var(--ink)]", isDone && "font-medium", isReviewedDone && "line-through")}>
             {task.title}
           </p>

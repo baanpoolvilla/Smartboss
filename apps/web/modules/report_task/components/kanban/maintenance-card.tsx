@@ -18,7 +18,7 @@ import { useMaintenanceBoardStore } from "@/modules/report_task/store/maintenanc
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import type { MaintenanceBoardItem } from "@/modules/report_task/lib/maintenance-board";
 import type { Sticker } from "@/modules/report_task/types";
-import { PendingPin, usePendingFor } from "@/modules/notifications/pending-for-you";
+import { PendingBand, usePendingFor } from "@/modules/notifications/pending-for-you";
 import type { NotifCategory } from "@/modules/notifications/types";
 
 /** แจ้งเตือนของใบงาน/ใบสั่งซื้อที่ยังไม่อ่าน = การ์ดพื้นแดงอ่อน (เหมือนการ์ดงานที่มีเรื่องรอเรา) */
@@ -102,6 +102,7 @@ export function MaintenanceCard({ item }: { item: MaintenanceBoardItem }) {
         style={{ borderColor: unreadNotifs.length > 0 ? "#f3a4a4" : "#b7e3dd" }}
         aria-label={`${k.label} ${item.code} ${item.title} — เปิดในแจ้งซ่อม`}
       >
+        <PendingBand notifs={unreadNotifs} />
         <div
           // แถบบาง ๆ พอให้รู้ว่าเป็นใบงานซ่อม — เดิม py-1.5 หนาเกินไป แย่งที่เนื้อการ์ด ("หนาเกินไป")
           className="flex items-center justify-between gap-2 px-2.5 py-0.5 text-[10.5px] font-semibold leading-4 text-white"
@@ -131,11 +132,6 @@ export function MaintenanceCard({ item }: { item: MaintenanceBoardItem }) {
               </span>
             )}
           </div>
-          {unreadNotifs.length > 0 && (
-            <div>
-              <PendingPin notifs={unreadNotifs} />
-            </div>
-          )}
           {/* ขนาด/ตัดบรรทัดเดียวกับชื่องานบนการ์ดงาน (task-card.tsx) — สองแบบการ์ดปนกันในคอลัมน์ ต้องดูเป็นชุดเดียวกัน */}
           <p className={cn("line-clamp-2 text-[14px] font-semibold leading-snug text-[var(--ink)]", done && "text-[var(--ink-soft)]")}>
             {item.title}

@@ -12,7 +12,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { Card } from "@smartboss/ui/components/card";
-import { PendingPin, usePendingFor } from "@/modules/notifications/pending-for-you";
+import { PendingBand, usePendingFor } from "@/modules/notifications/pending-for-you";
 import type { NotifCategory } from "@/modules/notifications/types";
 import {
   AUTO_GROUP_KEY,
@@ -146,6 +146,7 @@ function OrderCard({
           borderLeft: `3px solid ${isNew ? M.redShade400 : "transparent"}`,
         }}
       >
+        <PendingBand notifs={pending} className="-mx-3 -mt-3 mb-2 -ml-[11px] rounded-t-[inherit]" />
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
             <p className="font-mono text-[11px] tracking-tight text-(--ink-soft)">
@@ -170,12 +171,6 @@ function OrderCard({
             <PriorityBadge priority={wo.priority} />
           )}
         </div>
-
-        {pending.length > 0 && (
-          <div className="mt-1">
-            <PendingPin notifs={pending} />
-          </div>
-        )}
 
         <div className="mt-1 flex items-center gap-3 text-xs text-(--ink-soft)">
           <span className="inline-flex min-w-0 items-center gap-1">
