@@ -832,6 +832,49 @@ export function TaskFilters({
           </div>
         </div>
 
+        {/* ลำดับเดียวกับก่อนปรับ (ผู้ใช้ขอ 18/10/2569): งานของใคร → แผนก → ผู้รับผิดชอบ → กำหนดส่ง → ความสำคัญ
+            แผนก / ผู้รับผิดชอบ — มีให้เลือกเฉพาะหัวหน้า/เจ้าของ (พนักงานทั่วไปเห็นแค่ของตัวเองอยู่แล้ว ไม่ต้องโชว์) */}
+        {(availableDepartments.length > 1 || peopleInScope.length > 1) && (
+          <div className="px-4 pt-3">
+            <p className={sectionLabel}>แผนก / คน</p>
+            <div className="flex flex-col gap-1.5">
+              {availableDepartments.length > 1 && (
+                <Select value={filters.departmentId} onValueChange={(v) => v && setFilters({ departmentId: v })}>
+                  <SelectTrigger className={cn("h-9 w-full rounded-[10px] text-[13px]", filters.departmentId !== "all" && "border-[var(--brand-green-dark)]/40 bg-[var(--accent)]")}>
+                    <span className="w-[84px] shrink-0 text-left text-[var(--ink-soft)]">แผนก</span>
+                    <span className="flex-1 truncate text-left font-medium">
+                      {filters.departmentId === "all" ? "ทุกแผนก" : (getDepartment(filters.departmentId)?.name ?? "แผนก")}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent alignItemWithTrigger={false}>
+                    <SelectItem value="all">ทุกแผนก</SelectItem>
+                    {availableDepartments.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {peopleInScope.length > 1 && (
+                <Select value={filters.assigneeId} onValueChange={(v) => v && setFilters({ assigneeId: v, ...(v !== "all" ? { assignedById: "all" } : {}) })}>
+                  <SelectTrigger className={cn("h-9 w-full rounded-[10px] text-[13px]", filters.assigneeId !== "all" && "border-[var(--brand-green-dark)]/40 bg-[var(--accent)]")}>
+                    <span className="w-[84px] shrink-0 text-left text-[var(--ink-soft)]">ผู้รับผิดชอบ</span>
+                    <span className="flex-1 truncate text-left font-medium">
+                      {filters.assigneeId === "all" ? "ทุกคน" : filters.assigneeId === viewingAsUserId ? "ของฉัน" : (getUser(filters.assigneeId)?.name ?? "ผู้รับผิดชอบ")}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent alignItemWithTrigger={false}>
+                    <SelectItem value="all">ทุกคน</SelectItem>
+                    {viewerInScope && <SelectItem value={viewingAsUserId}>ของฉัน</SelectItem>}
+                    {restOfScope.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="px-4 pt-3">
           <p className={sectionLabel}>กำหนดส่ง</p>
           <div className="flex flex-wrap gap-1.5">
@@ -881,48 +924,6 @@ export function TaskFilters({
             })}
           </div>
         </div>
-
-        {/* แผนก / ผู้รับผิดชอบ — มีให้เลือกเฉพาะหัวหน้า/เจ้าของ (พนักงานทั่วไปเห็นแค่ของตัวเองอยู่แล้ว ไม่ต้องโชว์) */}
-        {(availableDepartments.length > 1 || peopleInScope.length > 1) && (
-          <div className="px-4 pt-3">
-            <p className={sectionLabel}>แผนก / คน</p>
-            <div className="flex flex-col gap-1.5">
-              {availableDepartments.length > 1 && (
-                <Select value={filters.departmentId} onValueChange={(v) => v && setFilters({ departmentId: v })}>
-                  <SelectTrigger className={cn("h-9 w-full rounded-[10px] text-[13px]", filters.departmentId !== "all" && "border-[var(--brand-green-dark)]/40 bg-[var(--accent)]")}>
-                    <span className="w-[84px] shrink-0 text-left text-[var(--ink-soft)]">แผนก</span>
-                    <span className="flex-1 truncate text-left font-medium">
-                      {filters.departmentId === "all" ? "ทุกแผนก" : (getDepartment(filters.departmentId)?.name ?? "แผนก")}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent alignItemWithTrigger={false}>
-                    <SelectItem value="all">ทุกแผนก</SelectItem>
-                    {availableDepartments.map((d) => (
-                      <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              {peopleInScope.length > 1 && (
-                <Select value={filters.assigneeId} onValueChange={(v) => v && setFilters({ assigneeId: v, ...(v !== "all" ? { assignedById: "all" } : {}) })}>
-                  <SelectTrigger className={cn("h-9 w-full rounded-[10px] text-[13px]", filters.assigneeId !== "all" && "border-[var(--brand-green-dark)]/40 bg-[var(--accent)]")}>
-                    <span className="w-[84px] shrink-0 text-left text-[var(--ink-soft)]">ผู้รับผิดชอบ</span>
-                    <span className="flex-1 truncate text-left font-medium">
-                      {filters.assigneeId === "all" ? "ทุกคน" : filters.assigneeId === viewingAsUserId ? "ของฉัน" : (getUser(filters.assigneeId)?.name ?? "ผู้รับผิดชอบ")}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent alignItemWithTrigger={false}>
-                    <SelectItem value="all">ทุกคน</SelectItem>
-                    {viewerInScope && <SelectItem value={viewingAsUserId}>ของฉัน</SelectItem>}
-                    {restOfScope.map((u) => (
-                      <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-          </div>
-        )}
 
         {!inSheet && resultCount !== undefined && (
           <p className="px-4 pt-3 text-[12.5px] text-[var(--ink-soft)]">
