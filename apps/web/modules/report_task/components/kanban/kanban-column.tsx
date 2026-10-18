@@ -180,6 +180,33 @@ export function KanbanColumn({
     : 0;
   const onTimeCount = column.tasks.length - overdueCount;
 
+  // หัวคอลัมน์: ช่วงสีบนพื้นหลัง (แทนหลอดเดิม) — คอลัมน์สถานะปกติ = ตรงเวลา (สีคอลัมน์) + เลยกำหนด (แดง),
+  // คอลัมน์อื่น (ตามคน/ความสำคัญ) = แยกตามสถานะ เหมือนหลอดเดิมทุกอย่าง แค่ย้ายไปเป็นพื้น
+  const total = column.tasks.length;
+  const headerSegments: { pct: number; color: string }[] =
+    total === 0
+      ? []
+      : isPlainStatusColumn
+        ? [
+            ...(onTimeCount > 0 ? [{ pct: (onTimeCount / total) * 100, color: accent }] : []),
+            ...(overdueCount > 0 ? [{ pct: (overdueCount / total) * 100, color: chartColors.red }] : []),
+          ]
+        : statusCounts.filter((x) => x.count > 0).map((x) => ({ pct: (x.count / total) * 100, color: statusMeta[x.status].accentColor }));
+  // ป้ายจำนวนสีทึบ — สีอ่อน (รอตรวจสอบ = เขียวอ่อน) เข้มขึ้นนิดให้ตัวเลขสีขาวอ่านออก
+  const chipColor = `color-mix(in srgb, ${accent} 82%, black)`;
+  // รายละเอียดที่เอาออกจากหน้าหัว (ป้าย "เลย", ตัวหนังสือใต้หลอด) อยู่ใน tooltip แทน
+  const headerTitle = [
+    onHeaderClick ? (headerClickTitle ?? "ดูงานของคนนี้แยกตามหมวดงาน") : null,
+    `${column.label} ${total} งาน · ${percent}% ของบอร์ด`,
+    isPlainStatusColumn
+      ? overdueCount > 0
+        ? `ตรงเวลา ${onTimeCount} · เลยกำหนด ${overdueCount}`
+        : null
+      : statusCounts.filter((x) => x.count > 0).map((x) => `${statusMeta[x.status].label} ${x.count}`).join(" · "),
+  ]
+    .filter(Boolean)
+    .join("\n");
+
   // §6 — every column caps at PAGE_SIZE cards up front (same constant for
   // every column, so all columns stay in sync scrolling-wise before anyone
   // expands); "ดูเพิ่มเติม" reveals the rest, "แสดงน้อยลง" collapses back —
@@ -219,110 +246,59 @@ export function KanbanColumn({
           <HeaderTag
             type={onHeaderClick ? "button" : undefined}
             onClick={onHeaderClick}
-            title={onHeaderClick ? (headerClickTitle ?? "ดูงานของคนนี้แยกตามหมวดงาน") : undefined}
+            title={headerTitle}
             className={cn(
-              "shrink-0 w-full rounded-xl bg-white border border-[var(--line)] shadow-[0_1px_2px_rgba(16,24,40,0.04)] px-3.5 py-3 mb-3 text-left",
+              // แบบ A ที่เลือกจาก mockup (18/10/2569): ทั้งหัวคือหลอด — พื้นสีจาง = สัดส่วนในคอลัมน์ (ตรงเวลา/เลยกำหนด
+              // หรือแยกตามสถานะ) + เส้นสีเข้มที่ขอบล่าง · แถวเดียว 42px แทนกล่อง 3 ชั้นเดิม (~84px) คืนที่ให้การ์ด
+              "relative shrink-0 w-full h-[42px] overflow-hidden rounded-xl bg-white border border-[var(--line)] shadow-[0_1px_2px_rgba(16,24,40,0.04)] mb-3 text-left",
               hideHeaderOnMobile && "hidden sm:block",
-              onHeaderClick && "cursor-pointer transition-colors hover:border-[var(--brand-green)] hover:bg-[color-mix(in_srgb,var(--brand-green)_4%,white)]"
+              onHeaderClick && "cursor-pointer transition-colors hover:border-[var(--brand-green)]"
             )}
           >
-        <div className="flex items-center gap-2.5">
-          {/* จำนวนงานในคอลัมน์ — อยู่หน้าชื่อ (เดิมเป็นไอคอน) */}
-          <span
-            className="h-7 min-w-7 px-1.5 rounded-lg flex items-center justify-center shrink-0 text-[13px] font-bold tabular-nums"
-            style={{ backgroundColor: `color-mix(in srgb, ${accent} 14%, white)`, color: textAccent }}
-            title={`${entries.length} งาน`}
-          >
-            {entries.length}
-          </span>
-          {/* จุดสี — a second, plainer color cue beyond the icon chip, right against the label. */}
-          <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: accent }} />
-          <h3 className="text-sm font-semibold truncate tracking-tight">{column.label}</h3>
-
-          {/* คอมเมนต์ที่ยังไม่ได้อ่านในคอลัมน์นี้ — ไม่มี = ไม่แสดง */}
-          {unreadComments > 0 && (
-            <span
-              className="ml-auto inline-flex h-6 shrink-0 items-center gap-1 rounded-full bg-[var(--chart-red)] px-2 text-[12px] font-bold tabular-nums text-white"
-              title={`มีคอมเมนต์ที่ยังไม่ได้อ่าน ${unreadComments} รายการ ในคอลัมน์นี้`}
-            >
-              <MessageCircle className="h-3.5 w-3.5" />
-              {unreadComments}
+            {headerSegments.length > 0 && (
+              <>
+                <span className="absolute inset-0 flex" aria-hidden>
+                  {headerSegments.map((seg, i) => (
+                    <span
+                      key={i}
+                      className="h-full transition-[width] duration-300"
+                      style={{
+                        width: `${seg.pct}%`,
+                        backgroundColor: `color-mix(in srgb, ${seg.color} 24%, white)`,
+                        boxShadow: i > 0 ? "inset 1.5px 0 0 white" : undefined,
+                      }}
+                    />
+                  ))}
+                </span>
+                <span className="absolute inset-x-0 bottom-0 flex h-[3px]" aria-hidden>
+                  {headerSegments.map((seg, i) => (
+                    <span key={i} className="h-full transition-[width] duration-300" style={{ width: `${seg.pct}%`, backgroundColor: seg.color }} />
+                  ))}
+                </span>
+              </>
+            )}
+            <span className="relative flex h-full items-center gap-2 px-2">
+              {/* จำนวนงาน — ป้ายสีทึบของคอลัมน์ */}
+              <span
+                className="flex h-6 min-w-[26px] shrink-0 items-center justify-center rounded-[7px] px-1.5 text-[13px] font-bold tabular-nums text-white"
+                style={{ backgroundColor: chipColor }}
+              >
+                {entries.length}
+              </span>
+              <h3 className="min-w-0 truncate text-sm font-bold tracking-tight text-[var(--ink)]">{column.label}</h3>
+              {/* % ของบอร์ด ต่อท้ายชื่อ (ไม่ไปทับรอยต่อสีทางขวา) */}
+              <span className="-ml-0.5 shrink-0 text-xs font-semibold tabular-nums text-[var(--ink-soft)]">{percent}%</span>
+              {/* คอมเมนต์ที่ยังไม่อ่าน — ขวาสุด ไม่มี = ไม่แสดง */}
+              {unreadComments > 0 && (
+                <span
+                  className="ml-auto inline-flex h-6 shrink-0 items-center gap-1 rounded-full bg-[var(--chart-red)] px-2 text-xs font-bold tabular-nums text-white shadow-[0_1px_3px_rgba(229,72,77,0.35)]"
+                  title={`มีคอมเมนต์ที่ยังไม่ได้อ่าน ${unreadComments} รายการ ในคอลัมน์นี้`}
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                  {unreadComments}
+                </span>
+              )}
             </span>
-          )}
-        </div>
-
-        {/* "รอดำเนินการ"/"กำลังทำ" segment on-time-vs-late (their own accent +
-            red) since a plain status split would just be 100% one color;
-            every other column keeps the by-status split (see statusCounts'
-            own doc). Either way, the legend line underneath always spells out
-            the actual counts — a color-only bar can't be read precisely. */}
-        <div className="mt-2.5">
-          {column.tasks.length === 0 ? (
-            <div className="h-1.5 rounded-full bg-[var(--bg-soft)]" />
-          ) : isPlainStatusColumn ? (
-            <div
-              className="flex h-1.5 rounded-full bg-[var(--bg-soft)] overflow-hidden"
-              title={overdueCount > 0 ? `${column.label} ${onTimeCount} · เลยกำหนด ${overdueCount}` : `${column.label} ${onTimeCount}`}
-            >
-              {onTimeCount > 0 && (
-                <div
-                  className="h-full first:rounded-l-full last:rounded-r-full transition-[width] duration-300"
-                  style={{ width: `${(onTimeCount / column.tasks.length) * 100}%`, backgroundColor: accent }}
-                />
-              )}
-              {overdueCount > 0 && (
-                <div
-                  className="h-full first:rounded-l-full last:rounded-r-full transition-[width] duration-300"
-                  style={{ width: `${(overdueCount / column.tasks.length) * 100}%`, backgroundColor: chartColors.red }}
-                />
-              )}
-            </div>
-          ) : (
-            <div className="flex h-1.5 rounded-full bg-[var(--bg-soft)] overflow-hidden" title={statusCounts.map((s) => `${statusMeta[s.status].label} ${s.count}`).join(" · ")}>
-              {statusCounts
-                .filter((s) => s.count > 0)
-                .map((s) => (
-                  <div
-                    key={s.status}
-                    className="h-full first:rounded-l-full last:rounded-r-full transition-[width] duration-300"
-                    style={{ width: `${(s.count / column.tasks.length) * 100}%`, backgroundColor: statusMeta[s.status].accentColor }}
-                  />
-                ))}
-            </div>
-          )}
-          <div className="flex items-center gap-2.5 mt-1 flex-wrap">
-            <p className="text-[10px] font-medium" style={{ color: textAccent }}>
-              {percent}% ของบอร์ด
-            </p>
-            {isPlainStatusColumn ? (
-              // Only worth spelling out once the bar is actually split —
-              // with no overdue tasks this column is 100% one color/status
-              // already, and repeating "{label} {count}" here would just
-              // restate the header's own name/count badge back at itself.
-              overdueCount > 0 && (
-                <>
-                  <span className="flex items-center gap-1 text-[10px] text-[var(--ink-soft)]">
-                    <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: accent }} />
-                    {column.label} {onTimeCount}
-                  </span>
-                  <span className="flex items-center gap-1 text-[10px] font-medium" style={{ color: chartColors.red }}>
-                    <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: chartColors.red }} />
-                    เลยกำหนด {overdueCount}
-                  </span>
-                </>
-              )
-            ) : (
-              statusCounts
-                .filter((s) => s.count > 0)
-                .map((s) => (
-                  <span key={s.status} className="flex items-center gap-1 text-[10px] text-[var(--ink-soft)]">
-                    <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: statusMeta[s.status].accentColor }} />
-                    {statusMeta[s.status].label} {s.count}
-                  </span>
-                ))
-            )}
-          </div>
-        </div>
           </HeaderTag>
         );
       })()}

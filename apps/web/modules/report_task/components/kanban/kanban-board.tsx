@@ -535,27 +535,28 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
                 )}
                 style={
                   active
-                    ? { borderColor: column.accent, backgroundColor: `color-mix(in srgb, ${column.accent} 14%, white)` }
+                    ? { borderColor: column.accent, backgroundColor: `color-mix(in srgb, ${column.accent} 24%, white)` }
                     : undefined
                 }
               >
-                <span className="max-w-[140px] truncate">{column.label}</span>
-                {/* คอมเมนต์ที่ยังไม่อ่านในคอลัมน์ (มือถือไม่มีหัวคอลัมน์ บอกตรงแท็บแทน) */}
-                {sumUnread(column.tasks, unreadMap) > 0 && (
-                  <span className="flex h-5 items-center gap-0.5 rounded-full bg-[var(--chart-red)] px-1.5 text-[10.5px] font-bold text-white" title="คอมเมนต์ที่ยังไม่ได้อ่าน">
-                    💬{sumUnread(column.tasks, unreadMap)}
-                  </span>
-                )}
+                {/* ลำดับเดียวกับหัวคอลัมน์บนจอคอม (kanban-column.tsx): [จำนวน] ชื่อ … 💬 ขวาสุด */}
                 <span
-                  className="flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold tabular-nums"
+                  className="flex h-5 min-w-5 items-center justify-center rounded-md px-1.5 text-[11.5px] font-bold tabular-nums"
                   style={
                     active
-                      ? { backgroundColor: column.accent, color: "white" }
+                      ? { backgroundColor: `color-mix(in srgb, ${column.accent} 82%, black)`, color: "white" }
                       : { backgroundColor: "var(--bg-soft)", color: "var(--ink)" }
                   }
                 >
                   {column.entries?.length ?? column.tasks.length}
                 </span>
+                <span className="max-w-[140px] truncate">{column.label}</span>
+                {/* คอมเมนต์ที่ยังไม่อ่านในคอลัมน์ (มือถือไม่มีหัวคอลัมน์ บอกตรงแท็บแทน) */}
+                {sumUnread(column.tasks, unreadMap) > 0 && (
+                  <span className="flex h-5 items-center gap-0.5 rounded-full bg-[var(--chart-red)] px-1.5 text-[11px] font-bold text-white" title="คอมเมนต์ที่ยังไม่ได้อ่าน">
+                    💬{sumUnread(column.tasks, unreadMap)}
+                  </span>
+                )}
               </button>
             );
           })}

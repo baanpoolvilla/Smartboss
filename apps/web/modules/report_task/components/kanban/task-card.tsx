@@ -178,7 +178,9 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
         // to open ones in a column that isn't grouped by status (priority,
         // assignee) — the checkbox + strikethrough alone turned out too
         // subtle to notice (see below), so the whole card recedes too.
-        isDone && dimWhenDone && "opacity-70"
+        isDone && dimWhenDone && "opacity-70",
+        // คอมเมนต์ยังไม่อ่าน — แถบแดงขอบซ้าย ให้เห็นจากระยะตอนกวาดตาทั้งคอลัมน์
+        unreadComments > 0 && "shadow-[inset_3px_0_0_var(--danger),0_1px_3px_rgba(16,24,40,0.07)]"
       )}
     >
       <div className="flex items-center gap-2 mb-1.5 sm:mb-2.5">
@@ -243,12 +245,12 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
             </Tooltip>
           )
         ) : groupedByPriority ? (
-          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-[var(--ink)]">
+          <span className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-[var(--ink)]">
             <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: statusMeta[task.status].accentColor }} />
             {statusMeta[task.status].label}
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-[var(--ink)]">
+          <span className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-[var(--ink)]">
             <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: priorityMeta[task.priority].accentColor }} />
             {priorityMeta[task.priority].label}
           </span>
@@ -269,17 +271,15 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
           )}
           {/* คอมเมนต์อยู่มุมขวาบน แทนตัวนับ "แก้กำหนดส่งกี่ครั้ง" (เอาออกตามที่ผู้ใช้ขอ 17/10/2569 — ประวัติเลื่อนวันยังดูได้ในหน้างาน) */}
           {task.comments.length > 0 && (
+            // ยังไม่อ่าน = ป้ายแดงทึบ "N ใหม่" (เดิมตัวแดง + จุด 6px มองแทบไม่เห็น) · อ่านแล้ว = จำนวนทั้งหมดสีปกติ
             <span
               className={cn(
-                "relative flex items-center gap-0.5 text-[11px] font-medium",
-                unreadComments > 0 && "font-semibold text-(--danger)"
+                "flex items-center gap-1 text-xs font-medium",
+                unreadComments > 0 && "h-5 rounded-full bg-(--danger) pl-1.5 pr-2 font-bold text-white shadow-[0_1px_3px_rgba(229,72,77,0.35)]"
               )}
-              title={unreadComments > 0 ? `มีความคิดเห็นใหม่ที่ยังไม่ได้อ่าน ${unreadComments} รายการ` : "ความคิดเห็น"}
+              title={unreadComments > 0 ? `มีความคิดเห็นใหม่ที่ยังไม่ได้อ่าน ${unreadComments} รายการ (ทั้งหมด ${task.comments.length})` : "ความคิดเห็น"}
             >
-              <MessageSquare className="h-3.5 w-3.5" /> {task.comments.length}
-              {unreadComments > 0 && (
-                <span className="absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-(--danger)" />
-              )}
+              <MessageSquare className="h-3.5 w-3.5" /> {unreadComments > 0 ? `${unreadComments} ใหม่` : task.comments.length}
             </span>
           )}
         </div>
@@ -338,11 +338,11 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
           </Tooltip>
         )}
         <div className="min-w-0 flex-1">
-          <p className={cn("text-[13px] font-semibold leading-snug line-clamp-2 text-[var(--ink)]", isDone && "font-medium", isReviewedDone && "line-through")}>
+          <p className={cn("text-[14px] font-semibold leading-snug line-clamp-2 text-[var(--ink)]", isDone && "font-medium", isReviewedDone && "line-through")}>
             {task.title}
           </p>
           {isShared && (
-            <p className="text-[10px] text-[var(--ink)] mt-0.5">
+            <p className="text-[11px] text-[var(--ink)] mt-0.5">
               {completedCount}/{task.assigneeIds.length} คนเสร็จแล้ว
               <span className="text-[var(--ink-soft)]"> · {task.completionRule === "any" ? "คนใดคนหนึ่งก็ปิดงาน" : "ต้องครบทุกคน"}</span>
             </p>
@@ -367,7 +367,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
             className="flex-1"
             style={isPendingReview ? ({ "--primary": chartColors.greenPale } as CSSProperties) : undefined}
           />
-          <span className="text-[10px] font-medium tabular-nums text-[var(--ink)] shrink-0">
+          <span className="text-[11px] font-medium tabular-nums text-[var(--ink)] shrink-0">
             {doneChecklist}/{visibleChecklist.length}
           </span>
         </div>
@@ -461,7 +461,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
               {task.status === "in_progress" ? statusMeta.in_progress.label : statusMeta.todo.label}
             </span>
           )}
-          <DueDateBadge task={task} />
+          <DueDateBadge task={task} className="text-xs" />
           {task.project && !hideProjectChip && <ProjectChip projectId={task.project.projectId} sectionId={task.project.sectionId} />}
           {task.parentId ? <ParentTaskLink parentId={task.parentId} /> : <SubtaskCountChip taskId={task.id} />}
           {task.recurrence && (
@@ -504,7 +504,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
           {task.attachments.length > 0 && (
             <span
               className={cn(
-                "relative flex items-center gap-0.5 text-[11px] font-medium",
+                "relative flex items-center gap-0.5 text-xs font-medium",
                 unreadAttachments > 0 && "font-semibold text-(--danger)"
               )}
               title={unreadAttachments > 0 ? `มีไฟล์แนบใหม่ที่ยังไม่ได้ดู ${unreadAttachments} รายการ` : "ไฟล์แนบ"}
