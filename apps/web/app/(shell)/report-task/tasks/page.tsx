@@ -5,7 +5,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { LayoutGrid, Plus, Table2, Users } from "lucide-react";
 import { TaskFilters } from "@/modules/report_task/components/kanban/task-filters";
 import { useSetAppBarLeading } from "@/modules/report_task/components/shared/app-bar-leading";
-import { TaskBoardKpis } from "@/modules/report_task/components/kanban/task-board-kpis";
 import { KanbanBoard, type GroupBy } from "@/modules/report_task/components/kanban/kanban-board";
 import { TaskGridView } from "@/modules/report_task/components/kanban/task-grid-view";
 import { WorkloadView } from "@/modules/report_task/components/kanban/workload-view";
@@ -178,15 +177,11 @@ function TasksPageContent() {
   // Non-heads only ever see their own tasks (see canSeeTask).
   const visibleTasks = useMemo(() => tasks.filter((t) => canSeeTask(t, viewingAsUserId)), [tasks, viewingAsUserId]);
 
-  // The 4 KPI cards react to every filter EXCEPT their own quick-view drill
-  // (see TaskBoardKpis) — otherwise clicking "เลยกำหนด" would collapse all 4
-  // numbers down to the same overdue count instead of staying a stable set
-  // of options to click between, while the board itself (which reads
-  // `filters` straight from the store) still narrows correctly.
-  const kpiTasks = useMemo(
-    () => visibleTasks.filter((t) => matchesTaskFilters(t, { ...filters, quickView: "all" })),
-    [visibleTasks, filters]
-  );
+  // แถวตัวเลข (TaskBoardKpis) เป็นที่เดียวที่ตั้ง/ล้าง quickView ได้ — เอาแถวออกแล้ว ค่าที่ค้างอยู่
+  // (ใน store หรือที่จำไว้ในเครื่อง) จะซ่อนงานโดยไม่มีปุ่มให้ล้าง เลยล้างทิ้งเสมอ
+  useEffect(() => {
+    if (filters.quickView !== "all") setFilters({ quickView: "all" });
+  }, [filters.quickView, setFilters]);
 
   // Feeds the mobile filter sheet's "แสดง N งาน" button — same filters the
   // board itself narrows by (unlike kpiTasks above, which drops the quick-view
@@ -279,16 +274,8 @@ function TasksPageContent() {
   return (
     <div className="flex h-full min-h-0 flex-col sm:gap-4 sm:pb-6 lg:pb-4">
 
-      {/* Hidden under "เลยกำหนดเท่านั้น" — every number here would just
-          restate the same overdue count (or 0 for "สำเร็จทั้งหมด") once the
-          board itself is already narrowed to nothing but overdue tasks, see
-          kanban-board.tsx's matching column collapse for the same filter. */}
-      {!personBoardId && loaded && view === "board" && filters.penalty !== "overdue" && (
-        // <640px ไม่แสดง — แถบแท็บคอลัมน์ของบอร์ดบอกจำนวนต่อสถานะแทนแล้ว ("เลยกำหนด" อยู่ในตัวกรองด่วน)
-        <div className="mt-1 hidden sm:block">
-          <TaskBoardKpis tasks={kpiTasks} />
-        </div>
-      )}
+      {/* แถวตัวเลข (ทั้งหมด / รอดำเนินการ / กำลังทำ / …) เอาออกแล้ว ("ตรงนี้ไม่เอา") — หัวคอลัมน์บอกจำนวนอยู่แล้ว
+          "เลยกำหนด" อยู่ในตัวกรองด่วน */}
       {!loaded ? (
         <BoardSkeleton />
       ) : view === "board" ? (
