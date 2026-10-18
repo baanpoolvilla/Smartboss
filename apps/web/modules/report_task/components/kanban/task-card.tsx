@@ -172,7 +172,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
         }
       }}
       className={cn(
-        "group relative rounded-2xl border border-[var(--line)] bg-white p-4 shadow-[0_1px_3px_rgba(16,24,40,0.07),0_1px_2px_rgba(16,24,40,0.04)] transition-all duration-200",
+        "group relative rounded-xl border border-[var(--line)] bg-white p-3 sm:rounded-2xl sm:p-4 shadow-[0_1px_3px_rgba(16,24,40,0.07),0_1px_2px_rgba(16,24,40,0.04)] transition-all duration-200",
         onOpen && "cursor-pointer hover:shadow-[0_12px_28px_-10px_rgba(16,24,40,0.22)] hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--brand-green)_35%,var(--line))]",
         // A done card should read as "settled" at a glance even sitting next
         // to open ones in a column that isn't grouped by status (priority,
@@ -181,7 +181,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
         isDone && dimWhenDone && "opacity-70"
       )}
     >
-      <div className="flex items-center gap-2 mb-2.5">
+      <div className="flex items-center gap-2 mb-1.5 sm:mb-2.5">
         {/* Dot + label badge, colored to match whichever attribute it's
             showing — priority's own accent (red/amber/green/gray) normally,
             or status's accent when the board is grouped by priority (see
@@ -354,7 +354,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
           below) is easy to skim past; a bar reads instantly even at a glance
           across a busy column. */}
       {visibleChecklist.length > 0 && (
-        <div className="mt-2 flex items-center gap-2">
+        <div className="mt-1.5 flex items-center gap-2 sm:mt-2">
           {/* --primary is scoped via inline style, not a global theme edit —
               only this bar (only on a "รอตรวจสอบ" card) picks up greenPale,
               every other Progress bar in the app keeps the normal brand
@@ -437,14 +437,15 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
         </div>
       )}
 
-      {/* Divider keeps the meta row visually separate from the body. <640px:
-          the two clusters below (date/status/penalty/counts, then the
-          sticker button + avatar stack) stack into their own rows instead of
-          fighting for one line — squeezed onto one row on a narrow phone
-          card, the avatar stack used to get pushed right past the card's own
-          rounded corner. ≥640px is unchanged (single row, space-between). */}
-      <div className="mt-3.5 pt-3 border-t border-[var(--line)]/60 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-2.5 text-[var(--ink)] min-w-0">
+      {/* Divider keeps the meta row visually separate from the body. Single
+          row at every width: date/status/counts on the left (min-w-0 +
+          flex-wrap, so on a narrow phone card the chips wrap onto a second
+          line instead of shoving the avatars past the card's corner), sticker
+          button + avatars pinned right (shrink-0). <640px used to stack these
+          into two rows, an avatar-only row on every card ("การ์ดในมือถือ
+          กินพื้นที่เยอะไป"). Mobile also gets tighter padding/gaps above. */}
+      <div className="mt-2.5 pt-2 border-t border-[var(--line)]/60 flex flex-row items-center justify-between gap-2 sm:mt-3.5 sm:pt-3">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[var(--ink)] min-w-0 max-sm:flex-1 sm:gap-2.5">
           {/* Only meaningful for a task still todo/in_progress — showOriginalStatus
               is also true for the derived "รอตรวจสอบ" column, where every task's
               real status is "done" and this tag would just mislabel it. Solid
