@@ -88,11 +88,13 @@ export function AppScaffold({
             ))}
         </div>
 
-        <h1 className={`truncate px-1 text-center font-bold text-(--ink) ${flush ? "hidden" : flushMobile ? "hidden text-xl sm:block" : "text-lg sm:text-xl"}`}>
+        {/* flushMobile (บอร์ดงาน): ไม่มีชื่อหน้าทุกขนาดจอ — แท็บมุมมอง + ปุ่มตัวกรองใน `leading` ใช้แถบนี้แทน
+            แบบหน้ารายงาน ("เคลีย space ของ task ... อยากได้แบบของ report") */}
+        <h1 className={`truncate px-1 text-center font-bold text-(--ink) ${flush || flushMobile ? "hidden" : "text-lg sm:text-xl"}`}>
           {title}
         </h1>
 
-        <div className={`flex min-w-[44px] items-center justify-end gap-0.5 sm:min-w-[110px] ${flush ? "shrink-0" : flushMobile ? "shrink-0 sm:flex-1" : "flex-1"}`}>
+        <div className={`flex min-w-[44px] items-center justify-end gap-0.5 sm:min-w-[110px] ${flush || flushMobile ? "shrink-0" : "flex-1"}`}>
           {actions}
           {!hideDefaultActions && <AppBarActions />}
         </div>

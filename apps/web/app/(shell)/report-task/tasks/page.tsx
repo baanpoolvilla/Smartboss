@@ -2,8 +2,8 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { LayoutGrid, Plus, SlidersHorizontal, Table2, Users } from "lucide-react";
-import { TaskFilters, countActiveTaskFilters } from "@/modules/report_task/components/kanban/task-filters";
+import { LayoutGrid, Plus, Table2, Users } from "lucide-react";
+import { TaskFilters } from "@/modules/report_task/components/kanban/task-filters";
 import { useSetAppBarLeading } from "@/modules/report_task/components/shared/app-bar-leading";
 import { TaskBoardKpis } from "@/modules/report_task/components/kanban/task-board-kpis";
 import { KanbanBoard, type GroupBy } from "@/modules/report_task/components/kanban/kanban-board";
@@ -18,7 +18,6 @@ import { taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
 import type { DatePreset } from "@/modules/report_task/lib/date-filter";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Skeleton } from "@/modules/report_task/components/ui/skeleton";
-import { StickyFilterBar } from "@/modules/report_task/components/shared/sticky-filter-bar";
 import type { TaskPriority } from "@/modules/report_task/types";
 
 type TaskView = "board" | "grid" | "workload";
@@ -218,14 +217,18 @@ function TasksPageContent() {
    */
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
-  const activeFilterCount = countActiveTaskFilters(filters);
-  const mobileLeading = useMemo(
+  /*
+   * ทุกขนาดจอ (เดิมเฉพาะมือถือ) — แบบหน้ารายงาน: แท็บมุมมอง + ปุ่ม "ตัวกรอง" อยู่บนแถบหัวแทนชื่อหน้า
+   * แถวตัวกรองเต็มแถวเดิมเหนือบอร์ดหายไป กดปุ่มตัวกรองแล้วเลือกจากป๊อปอัปตรงนั้น ("เคลีย space ของ task
+   * ... อยากได้แบบของ report") · สร้างงานใหม่เป็นปุ่มลอย + มุมขวาล่าง
+   */
+  const appBarLeading = useMemo(
     () => (
-      <div className="flex w-full min-w-0 items-center gap-2 pl-1 sm:hidden">
-        <span className="text-[17px] font-bold text-(--ink)">Tasks</span>
+      <div className="flex w-full min-w-0 items-center gap-2 pl-1 sm:pl-2">
+        <span className="text-[17px] font-bold text-(--ink) sm:hidden">Tasks</span>
         {!personBoardId && (
           <>
-            <div className="flex items-center gap-0.5 rounded-[10px] bg-[var(--bg-soft)] p-[3px]">
+            <div className="flex items-center gap-0.5 rounded-[10px] bg-[var(--bg-soft)] p-[3px] sm:gap-1 sm:rounded-xl sm:p-1">
               {tabs.map((t) => {
                 const TabIcon = t.icon;
                 const activeTab = view === t.id;
@@ -233,87 +236,48 @@ function TasksPageContent() {
                   <button
                     key={t.id}
                     type="button"
+                    data-tour={t.id === "board" ? "task-view-board" : t.id === "grid" ? "task-view-grid" : undefined}
                     onClick={() => setView(t.id)}
                     aria-label={`มุมมอง${t.label}`}
                     aria-pressed={activeTab}
                     title={t.label}
                     className={cn(
-                      "flex h-[38px] w-10 items-center justify-center rounded-lg transition-colors",
-                      activeTab ? "bg-white text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)]"
+                      "flex h-[38px] w-10 items-center justify-center gap-1.5 rounded-lg transition-colors sm:h-auto sm:w-auto sm:px-3 sm:py-1.5 sm:text-xs sm:font-semibold",
+                      activeTab ? "bg-white text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
                     )}
                   >
-                    <TabIcon className="h-[18px] w-[18px]" />
+                    <TabIcon className="h-[18px] w-[18px] sm:h-3.5 sm:w-3.5" />
+                    <span className="hidden sm:inline">{t.label}</span>
                   </button>
                 );
               })}
             </div>
-            <button
-              type="button"
-              onClick={() => setMobileFilterOpen(true)}
-              aria-label={activeFilterCount > 0 ? `ตัวกรอง ใช้อยู่ ${activeFilterCount} รายการ` : "ตัวกรอง"}
-              className="relative ml-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-(--app-strong) transition-colors hover:bg-(--bg-soft)"
-            >
-              <SlidersHorizontal className="h-5 w-5" />
-              {activeFilterCount > 0 && (
-                <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--brand-green-dark)] px-1 text-[10.5px] font-bold text-white tabular-nums">
-                  {activeFilterCount}
-                </span>
-              )}
-            </button>
+            <div className="ml-auto flex items-center">
+              <TaskFilters
+                bar
+                groupBy={view === "board" ? groupBy : undefined}
+                onGroupByChange={setGroupBy}
+                resultCount={filteredTaskCount}
+                mobile={{
+                  sheetOpen: mobileFilterOpen,
+                  onSheetOpenChange: setMobileFilterOpen,
+                  newTaskOpen,
+                  onNewTaskOpenChange: setNewTaskOpen,
+                }}
+              />
+            </div>
           </>
         )}
       </div>
     ),
     // tabs สร้างใหม่ทุกครั้งที่ render แต่ขึ้นกับ isHead อย่างเดียว
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [view, isHead, personBoardId, activeFilterCount]
+    [view, isHead, personBoardId, groupBy, filteredTaskCount, mobileFilterOpen, newTaskOpen]
   );
-  useSetAppBarLeading(mobileLeading);
+  useSetAppBarLeading(appBarLeading);
 
   return (
     <div className="flex h-full min-h-0 flex-col sm:gap-4 sm:pb-6 lg:pb-4">
-      {!personBoardId && (
-        // <640px ซ่อนทั้งแถบ (ตัวควบคุมอยู่บนแถบหัวแล้ว) — แผ่นตัวกรอง/หน้าต่างสร้างงานข้างในเป็น portal ยังเปิดได้ปกติ
-        <div className="hidden sm:block">
-        <StickyFilterBar
-          actions={
-            // View switcher — same task data: Board (Kanban) ↔ Grid ↔ Workload
-            <div className="inline-flex items-center gap-1 rounded-xl bg-[var(--bg-soft)] p-1 max-w-full overflow-x-auto shrink-0">
-              {tabs.map((t) => {
-                const TabIcon = t.icon;
-                const activeTab = view === t.id;
-                return (
-                  <button
-                    key={t.id}
-                    data-tour={t.id === "board" ? "task-view-board" : t.id === "grid" ? "task-view-grid" : undefined}
-                    onClick={() => setView(t.id)}
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all",
-                      activeTab ? "bg-white text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
-                    )}
-                  >
-                    <TabIcon className="h-3.5 w-3.5" />
-                    {t.label}
-                  </button>
-                );
-              })}
-            </div>
-          }
-        >
-          <TaskFilters
-            groupBy={view === "board" ? groupBy : undefined}
-            onGroupByChange={setGroupBy}
-            resultCount={filteredTaskCount}
-            mobile={{
-              sheetOpen: mobileFilterOpen,
-              onSheetOpenChange: setMobileFilterOpen,
-              newTaskOpen,
-              onNewTaskOpenChange: setNewTaskOpen,
-            }}
-          />
-        </StickyFilterBar>
-        </div>
-      )}
 
       {/* Hidden under "เลยกำหนดเท่านั้น" — every number here would just
           restate the same overdue count (or 0 for "สำเร็จทั้งหมด") once the
@@ -343,13 +307,14 @@ function TasksPageContent() {
         </div>
       )}
 
-      {/* <640px: "สร้างงานใหม่" เป็นปุ่มลอยเหนือแถบเมนูล่าง แทนแถวปุ่มเต็มความกว้างเดิม */}
+      {/* "สร้างงานใหม่" เป็นปุ่มลอย + ทุกขนาดจอ (มือถือ/แท็บเล็ตลอยเหนือแถบเมนูล่าง · จอใหญ่มุมขวาล่าง) */}
       {!personBoardId && (
         <button
           type="button"
           onClick={() => setNewTaskOpen(true)}
           aria-label="สร้างงานใหม่"
-          className="fixed bottom-[82px] right-3.5 z-30 flex h-14 w-14 items-center justify-center rounded-[18px] bg-[var(--brand-green-dark)] text-white shadow-[0_6px_16px_rgba(23,51,47,0.28)] transition-transform active:scale-95 sm:hidden"
+          title="สร้างงานใหม่"
+          className="fixed bottom-[82px] right-3.5 z-30 flex h-14 w-14 items-center justify-center rounded-[18px] bg-[var(--brand-green-dark)] text-white shadow-[0_6px_16px_rgba(23,51,47,0.28)] transition-transform hover:brightness-110 active:scale-95 lg:bottom-6 lg:right-6"
         >
           <Plus className="h-6 w-6" />
         </button>

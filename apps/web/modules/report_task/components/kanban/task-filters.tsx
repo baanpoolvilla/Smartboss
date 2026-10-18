@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/modules/report_task/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/modules/report_task/components/ui/sheet";
+import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
@@ -88,7 +89,14 @@ export function TaskFilters({
   onGroupByChange,
   resultCount,
   mobile,
+  bar = false,
 }: {
+  /**
+   * true = อยู่บนแถบหัวของหน้า (บอร์ดงาน) — เหลือปุ่ม "ตัวกรอง" ปุ่มเดียว กดแล้วเลือกจากตรงนั้น:
+   * ≥640px เป็นป๊อปอัปใต้ปุ่ม (แบบปุ่ม "กรอง" ของหน้ารายงาน) · <640px เปิดแผ่นตัวกรองด้านล่างเหมือนเดิม
+   * ไม่มีแถวตัวกรองเต็มแถว/ปุ่มสร้างงาน (สร้างงานเป็นปุ่มลอย +) — ใช้คู่กับ `mobile`
+   */
+  bar?: boolean;
   /** ตัวเลือก "จัดกลุ่มตาม" ของบอร์ด Kanban — ไม่ส่งมา (มุมมองตาราง/ภาระงาน) แล้วช่องนี้จะไม่โชว์เลย */
   groupBy?: GroupBy;
   onGroupByChange?: (g: GroupBy) => void;
@@ -127,6 +135,7 @@ export function TaskFilters({
   const setNewTaskOpen = mobile ? mobile.onNewTaskOpenChange : setOwnNewTaskOpen;
   const mobileSheetOpen = mobile ? mobile.sheetOpen : ownSheetOpen;
   const setMobileSheetOpen = mobile ? mobile.onSheetOpenChange : setOwnSheetOpen;
+  const [desktopPanelOpen, setDesktopPanelOpen] = useState(false);
 
   const isFiltered =
     filters.departmentId !== defaultFilters.departmentId ||
@@ -755,6 +764,125 @@ export function TaskFilters({
     </>
   );
 
+  const quickChips = (
+    <div className="flex gap-2.5 overflow-x-auto pb-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <QuickFilterChip icon={UserIcon} label="งานของฉัน" active={quickMineActive} onClick={() => setFilters({ assigneeId: quickMineActive ? "all" : viewingAsUserId })} />
+      <QuickFilterChip icon={Eye} label="กำลังติดตาม" active={quickTrackingActive} onClick={() => setFilters({ assignedById: quickTrackingActive ? "all" : viewingAsUserId })} />
+      <QuickFilterChip icon={CalendarDays} label="วันนี้" active={quickTodayActive} onClick={() => setFilters({ preset: quickTodayActive ? "all" : "today" })} />
+      <QuickFilterChip icon={AlertTriangle} label="เลยกำหนด" warn active={quickOverdueActive} onClick={() => setFilters({ penalty: quickOverdueActive ? "all" : "overdue" })} />
+      <QuickFilterChip icon={Flag} label="ด่วนมาก" active={quickCriticalActive} onClick={() => setFilters({ priority: quickCriticalActive ? "all" : "critical" })} />
+    </div>
+  );
+
+  const sheet = (
+    <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
+      <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
+        {/* pr-11 — clears the Sheet's own absolute close button (top-3
+            right-3, size-7), which otherwise sits right on top of
+            "ล้างตัวกรอง" since both are right-aligned in this row. */}
+        <SheetHeader className="flex-row items-center justify-between gap-2 pb-2 pr-11">
+          <SheetTitle>ตัวกรอง</SheetTitle>
+          {isFiltered && (
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="text-sm font-medium text-[var(--brand-green-dark)] underline-offset-2 hover:underline"
+            >
+              ล้างตัวกรอง
+            </button>
+          )}
+        </SheetHeader>
+        <div className="px-4">
+          <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">ตัวกรองด่วน</p>
+          {quickChips}
+        </div>
+
+        <div className="flex flex-col gap-2 px-4 pt-4">{mobileFieldsNode}</div>
+        <SheetFooter>
+          <Button
+            className="h-[46px] w-full bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+            onClick={() => setMobileSheetOpen(false)}
+          >
+            {resultCount === undefined ? "ใช้ตัวกรอง" : `แสดง ${resultCount} งาน`}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
+  );
+
+  if (bar) {
+    return (
+      <>
+        {/* <640px: ไอคอนอย่างเดียว เปิดแผ่นตัวกรองด้านล่าง */}
+        <button
+          type="button"
+          onClick={() => setMobileSheetOpen(true)}
+          aria-label={activeFilterCount > 0 ? `ตัวกรอง ใช้อยู่ ${activeFilterCount} รายการ` : "ตัวกรอง"}
+          className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-(--app-strong) transition-colors hover:bg-(--bg-soft) sm:hidden"
+        >
+          <SlidersHorizontal className="h-5 w-5" />
+          {activeFilterCount > 0 && (
+            <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--brand-green-dark)] px-1 text-[10.5px] font-bold text-white tabular-nums">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
+
+        {/* ≥640px: ปุ่ม "ตัวกรอง" → ป๊อปอัปใต้ปุ่ม เลือกจากตรงนั้นเลย */}
+        <Popover open={desktopPanelOpen} onOpenChange={setDesktopPanelOpen}>
+          <PopoverTrigger
+            render={
+              <button
+                type="button"
+                className={cn(
+                  "hidden h-[34px] shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors sm:flex",
+                  activeFilterCount > 0
+                    ? "border-[var(--brand-green)]/40 bg-[var(--accent)] text-[var(--brand-green-dark)]"
+                    : "border-[var(--line)] bg-white text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+                )}
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                ตัวกรอง
+                {activeFilterCount > 0 && <span className="tabular-nums">{activeFilterCount}</span>}
+                <ChevronDown className="h-3 w-3" />
+              </button>
+            }
+          />
+          <PopoverContent align="end" className="w-[380px] max-h-[75vh] gap-0 overflow-y-auto p-0">
+            <div className="flex items-center justify-between gap-2 px-4 pt-3.5">
+              <p className="text-sm font-semibold">ตัวกรอง</p>
+              {isFiltered && (
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="text-sm font-medium text-[var(--brand-green-dark)] underline-offset-2 hover:underline"
+                >
+                  ล้างตัวกรอง
+                </button>
+              )}
+            </div>
+            <div className="px-4 pt-3">
+              <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">ตัวกรองด่วน</p>
+              {quickChips}
+            </div>
+            <div className="flex flex-col gap-2 px-4 pt-3">{mobileFieldsNode}</div>
+            <div className="sticky bottom-0 bg-popover px-4 py-3">
+              <Button
+                className="h-10 w-full bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+                onClick={() => setDesktopPanelOpen(false)}
+              >
+                {resultCount === undefined ? "ใช้ตัวกรอง" : `แสดง ${resultCount} งาน`}
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        {sheet}
+        <NewTaskDialog open={newTaskOpen} onOpenChange={setNewTaskOpen} allowedTypes={["task"]} />
+      </>
+    );
+  }
+
   return (
     <>
       {/* ≥640px: full row, unchanged from before. */}
@@ -811,45 +939,7 @@ export function TaskFilters({
         </Button>
       </div>
 
-      <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
-        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
-          {/* pr-11 — clears the Sheet's own absolute close button (top-3
-              right-3, size-7), which otherwise sits right on top of
-              "ล้างตัวกรอง" since both are right-aligned in this row. */}
-          <SheetHeader className="flex-row items-center justify-between gap-2 pb-2 pr-11">
-            <SheetTitle>ตัวกรอง</SheetTitle>
-            {isFiltered && (
-              <button
-                type="button"
-                onClick={resetFilters}
-                className="text-sm font-medium text-[var(--brand-green-dark)] underline-offset-2 hover:underline"
-              >
-                ล้างตัวกรอง
-              </button>
-            )}
-          </SheetHeader>
-          <div className="px-4">
-            <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)]">ตัวกรองด่วน</p>
-            <div className="flex gap-2.5 overflow-x-auto pb-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <QuickFilterChip icon={UserIcon} label="งานของฉัน" active={quickMineActive} onClick={() => setFilters({ assigneeId: quickMineActive ? "all" : viewingAsUserId })} />
-              <QuickFilterChip icon={Eye} label="กำลังติดตาม" active={quickTrackingActive} onClick={() => setFilters({ assignedById: quickTrackingActive ? "all" : viewingAsUserId })} />
-              <QuickFilterChip icon={CalendarDays} label="วันนี้" active={quickTodayActive} onClick={() => setFilters({ preset: quickTodayActive ? "all" : "today" })} />
-              <QuickFilterChip icon={AlertTriangle} label="เลยกำหนด" warn active={quickOverdueActive} onClick={() => setFilters({ penalty: quickOverdueActive ? "all" : "overdue" })} />
-              <QuickFilterChip icon={Flag} label="ด่วนมาก" active={quickCriticalActive} onClick={() => setFilters({ priority: quickCriticalActive ? "all" : "critical" })} />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2 px-4 pt-4">{mobileFieldsNode}</div>
-          <SheetFooter>
-            <Button
-              className="h-[46px] w-full bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
-              onClick={() => setMobileSheetOpen(false)}
-            >
-              {resultCount === undefined ? "ใช้ตัวกรอง" : `แสดง ${resultCount} งาน`}
-            </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+      {sheet}
 
       <NewTaskDialog open={newTaskOpen} onOpenChange={setNewTaskOpen} allowedTypes={["task"]} />
     </>
