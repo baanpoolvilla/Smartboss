@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, AlertTriangle, Building2, Users, Flag, CircleDot, User as UserIcon, Group, SlidersHorizontal, CalendarDays, Eye, Check, ChevronDown, X } from "lucide-react";
+import { Plus, AlertTriangle, Building2, Users, Flag, CircleDot, User as UserIcon, Group, SlidersHorizontal, Eye, Check, ChevronDown, X } from "lucide-react";
 import { Button } from "@/modules/report_task/components/ui/button";
 import {
   Select,
@@ -14,14 +14,12 @@ import {
 } from "@/modules/report_task/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/modules/report_task/components/ui/sheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
-import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { useDepartmentStore } from "@/modules/report_task/store/department-store";
 import { getDepartment, getUser, isOwner, scopedDepartments, scopedUsers, users } from "@/modules/report_task/lib/directory";
 import { taskPriorityOrder, priorityMeta } from "@/modules/report_task/lib/task-meta";
-import { datePresetGroups, datePresetLabels, type DatePreset } from "@/modules/report_task/lib/date-filter";
 import type { TaskPriority } from "@/modules/report_task/types";
 import {
   FilterField,
@@ -32,7 +30,6 @@ import {
   MobileFieldValue,
   QuickFilterChip,
 } from "@/modules/report_task/components/shared/filter-field";
-import { DateRangeSelectField } from "@/modules/report_task/components/shared/date-range-select-field";
 import { cn } from "@/modules/report_task/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NewTaskDialog } from "./new-task-dialog";
@@ -212,7 +209,6 @@ export function TaskFilters({
       })}
     </SelectGroup>
   );
-  const quickTodayActive = filters.preset === "today";
   const quickOverdueActive = filters.penalty === "overdue";
   const quickCriticalActive = filters.priority === "critical";
 
@@ -369,14 +365,6 @@ export function TaskFilters({
           </span>
         </FilterField>
       )}
-
-      <DateRangeSelectField
-        preset={filters.preset}
-        customFrom={filters.customFrom}
-        customTo={filters.customTo}
-        onPresetChange={(preset) => setFilters({ preset })}
-        onCustomRangeChange={(customFrom, customTo) => setFilters({ customFrom, customTo })}
-      />
 
       <FilterField label="ความสำคัญ">
         <Select value={filters.priority} onValueChange={(v) => v && setFilters({ priority: v as typeof filters.priority })}>
@@ -609,32 +597,6 @@ export function TaskFilters({
         </div>
       )}
 
-      <Select value={filters.preset} onValueChange={(v) => v && setFilters({ preset: v as typeof filters.preset })}>
-        <SelectTrigger className={mobileFieldRowTriggerClass(filters.preset !== "all")}>
-          <MobileFieldIcon icon={CalendarDays} active={filters.preset !== "all"} />
-          <span className="text-[13.5px] font-medium text-[var(--ink)]">ช่วงเวลา</span>
-          <MobileFieldValue active={filters.preset !== "all"}>{datePresetLabels[filters.preset]}</MobileFieldValue>
-        </SelectTrigger>
-        <SelectContent alignItemWithTrigger={false}>
-          {datePresetGroups.map((group, i) => (
-            <SelectGroup key={i}>
-              {group.label && <SelectLabel>{group.label}</SelectLabel>}
-              {group.presets.map((p) => (
-                <SelectItem key={p} value={p}>{datePresetLabels[p]}</SelectItem>
-              ))}
-              {i < datePresetGroups.length - 1 && <SelectSeparator />}
-            </SelectGroup>
-          ))}
-        </SelectContent>
-      </Select>
-      {filters.preset === "custom" && (
-        <div className="flex items-center gap-2 px-0.5">
-          <DatePickerField value={filters.customFrom} onChange={(v) => setFilters({ customFrom: v })} className="h-11 flex-1" />
-          <span className="text-[var(--ink-soft)] text-sm">ถึง</span>
-          <DatePickerField value={filters.customTo} onChange={(v) => setFilters({ customTo: v })} minDate={filters.customFrom} className="h-11 flex-1" />
-        </div>
-      )}
-
       <Select value={filters.priority} onValueChange={(v) => v && setFilters({ priority: v as typeof filters.priority })}>
         <SelectTrigger className={mobileFieldRowTriggerClass(filters.priority !== "all")}>
           <MobileFieldIcon icon={Flag} active={filters.priority !== "all"} />
@@ -725,7 +687,6 @@ export function TaskFilters({
     <div className="flex gap-2.5 overflow-x-auto pb-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <QuickFilterChip icon={UserIcon} label="งานของฉัน" active={quickMineActive} onClick={() => setFilters({ assigneeId: quickMineActive ? "all" : viewingAsUserId })} />
       <QuickFilterChip icon={Eye} label="กำลังติดตาม" active={quickTrackingActive} onClick={() => setFilters({ assignedById: quickTrackingActive ? "all" : viewingAsUserId })} />
-      <QuickFilterChip icon={CalendarDays} label="วันนี้" active={quickTodayActive} onClick={() => setFilters({ preset: quickTodayActive ? "all" : "today" })} />
       <QuickFilterChip icon={AlertTriangle} label="เลยกำหนด" warn active={quickOverdueActive} onClick={() => setFilters({ penalty: quickOverdueActive ? "all" : "overdue" })} />
       <QuickFilterChip icon={Flag} label="ด่วนมาก" active={quickCriticalActive} onClick={() => setFilters({ priority: quickCriticalActive ? "all" : "critical" })} />
     </div>
@@ -772,9 +733,6 @@ export function TaskFilters({
     // งานของใคร: ทุกคน / งานของฉัน / ที่ฉันมอบหมาย + ⚠ เลยกำหนด · กำหนดส่ง · ความสำคัญ เป็นชิปทั้งหมด
     // แผนก/ผู้รับผิดชอบยังเป็นช่องเลือก (รายชื่อยาว) เฉพาะคนที่มีให้เลือก · "การแสดงผล" (จัดกลุ่ม/ประเภทบนบอร์ด) แยกไว้ล่างสุด
     const whoAll = filters.assigneeId === "all" && filters.assignedById === "all";
-    const presetChips: DatePreset[] = ["all", "today", "week", "month", "custom"];
-    // ค่าที่มาจากลิงก์/ที่จำไว้แต่ไม่มีชิป (เช่น "เมื่อวาน") — โชว์เป็นชิปที่เลือกอยู่ด้วย จะได้เห็นและกดเอาออกได้
-    const extraPreset = presetChips.includes(filters.preset) ? null : filters.preset;
     const chip = (active: boolean, warn?: boolean) =>
       cn(
         "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[13px] transition-colors",
@@ -865,27 +823,9 @@ export function TaskFilters({
         </div>
 
         <div className="px-4 pt-3">
+          {/* ชิปช่วงเวลา (ทั้งหมด/วันนี้/สัปดาห์นี้/เดือนนี้/กำหนดเอง) ตัดทิ้งแล้ว (ผู้ใช้ขอ 18/10/2569) — เหลือแค่ "เลยกำหนด" */}
           <p className={sectionLabel}>กำหนดส่ง</p>
           <div className="flex flex-wrap gap-1.5">
-            {presetChips.map((preset) => {
-              const active = filters.preset === preset;
-              return (
-                <button
-                  key={preset}
-                  type="button"
-                  aria-pressed={active}
-                  className={chip(active)}
-                  onClick={() => setFilters({ preset: active && preset !== "all" ? "all" : preset })}
-                >
-                  {preset === "custom" ? "กำหนดเอง…" : datePresetLabels[preset]}
-                </button>
-              );
-            })}
-            {extraPreset && (
-              <button type="button" aria-pressed className={chip(true)} onClick={() => setFilters({ preset: "all" })} title="กดเพื่อเอาออก">
-                {datePresetLabels[extraPreset]} ✕
-              </button>
-            )}
             <button
               type="button"
               aria-pressed={quickOverdueActive}
@@ -896,13 +836,6 @@ export function TaskFilters({
               เลยกำหนด
             </button>
           </div>
-          {filters.preset === "custom" && (
-            <div className="mt-2 flex items-center gap-2">
-              <DatePickerField value={filters.customFrom} onChange={(v) => setFilters({ customFrom: v })} className="h-9 min-w-0 flex-1" />
-              <span className="text-sm text-[var(--ink-soft)]">ถึง</span>
-              <DatePickerField value={filters.customTo} onChange={(v) => setFilters({ customTo: v })} minDate={filters.customFrom} className="h-9 min-w-0 flex-1" />
-            </div>
-          )}
         </div>
 
         <div className="px-4 pt-3">
@@ -986,7 +919,6 @@ export function TaskFilters({
         : []),
       ...(quickTrackingActive ? [{ key: "track", label: "ที่ฉันมอบหมาย", clear: { assignedById: "all" } }] : []),
       ...(quickOverdueActive ? [{ key: "late", label: "เลยกำหนด", warn: true, clear: { penalty: "all" } }] : []),
-      ...(filters.preset !== "all" ? [{ key: "when", label: datePresetLabels[filters.preset], clear: { preset: "all" } }] : []),
       ...(filters.priority !== "all" ? [{ key: "pr", label: priorityMeta[filters.priority as TaskPriority]?.label ?? "ความสำคัญ", clear: { priority: "all" } }] : []),
       ...(filters.departmentId !== "all" ? [{ key: "dept", label: getDepartment(filters.departmentId)?.name ?? "แผนก", clear: { departmentId: "all" } }] : []),
     ] as { key: string; label: string; warn?: boolean; clear: Partial<typeof filters> }[];

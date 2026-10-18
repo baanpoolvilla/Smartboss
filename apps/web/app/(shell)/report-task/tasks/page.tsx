@@ -14,7 +14,6 @@ import { canManage } from "@/modules/report_task/lib/directory";
 import { canSeeTask } from "@/modules/report_task/lib/permissions";
 import { matchesTaskFilters } from "@/modules/report_task/lib/task-filter";
 import { taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
-import type { DatePreset } from "@/modules/report_task/lib/date-filter";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Skeleton } from "@/modules/report_task/components/ui/skeleton";
 import type { TaskPriority } from "@/modules/report_task/types";
@@ -91,17 +90,11 @@ function TasksPageContent() {
     const assignee = searchParams.get("assignee");
     const priority = searchParams.get("priority");
     const penalty = searchParams.get("penalty");
-    const preset = searchParams.get("preset");
-    const from = searchParams.get("from");
-    const to = searchParams.get("to");
     const patch: Partial<typeof filters> = {};
     if (dept) patch.departmentId = dept;
     if (assignee) patch.assigneeId = assignee;
     if (priority && taskPriorityOrder.includes(priority as TaskPriority)) patch.priority = priority as TaskPriority;
     if (penalty && ["overdue", "pending", "docked"].includes(penalty)) patch.penalty = penalty as PenaltyFilter;
-    if (preset) patch.preset = preset as DatePreset;
-    if (from) patch.customFrom = from;
-    if (to) patch.customTo = to;
     if (Object.keys(patch).length > 0) setFilters(patch);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setUrlHadFilters(Object.keys(patch).length > 0 || !!searchParams.get("view"));
@@ -150,13 +143,6 @@ function TasksPageContent() {
     if (filters.assigneeId !== "all") params.set("assignee", filters.assigneeId);
     if (filters.priority !== "all") params.set("priority", filters.priority);
     if (filters.penalty !== "all") params.set("penalty", filters.penalty);
-    if (filters.preset !== "all") {
-      params.set("preset", filters.preset);
-      if (filters.preset === "custom") {
-        if (filters.customFrom) params.set("from", filters.customFrom);
-        if (filters.customTo) params.set("to", filters.customTo);
-      }
-    }
     // บอร์ดไม่มีงานโปรเจกต์เสมอ (projectId ล็อก "none" ด้านล่าง) — ไม่ต้องใส่ใน URL
     if (view !== "board") params.set("view", view);
     const query = params.toString();
@@ -186,6 +172,12 @@ function TasksPageContent() {
   useEffect(() => {
     if (filters.projectId !== "none") setFilters({ projectId: "none" });
   }, [filters.projectId, setFilters]);
+
+  // ตัวกรองช่วงเวลา (กำหนดส่ง วันนี้/สัปดาห์/เดือน/กำหนดเอง) ตัดทิ้งแล้ว (ผู้ใช้ขอ 18/10/2569) — ลิงก์เก่า ?preset=
+  // หรือค่าที่จำไว้ในเครื่องต้องไม่กรองงานแบบมองไม่เห็น (FILTER_URL_KEYS ยังมี preset/from/to ไว้ลบคีย์เก่าออกจาก URL)
+  useEffect(() => {
+    if (filters.preset !== "all") setFilters({ preset: "all", customFrom: "", customTo: "" });
+  }, [filters.preset, setFilters]);
 
   // Feeds the mobile filter sheet's "แสดง N งาน" button — same filters the
   // board itself narrows by (unlike kpiTasks above, which drops the quick-view
