@@ -254,6 +254,46 @@
   color: var(--brand-green-dark);
   font-weight: 700;
 }
+/* วันนี้ต้อง "ดูแล้วรู้" (ผู้ใช้ขอ 18/10/2569) — ทั้งคอมและมือถือ:
+   พื้นเขียวชัดขึ้น + กรอบเขียวหนารอบช่อง (เฉพาะมุมมองเดือน) + เลขในวงกลมเขียวตัวขาว
+   วงกลมวาดด้วย background (radial-gradient) ไม่เปลี่ยนขนาดกล่อง ⇒ แถวยังสูงเท่ากันทุกแถว (ดูหมายเหตุด้านบน)
+   ป้าย "วันนี้" อยู่ใน full-calendar-view.tsx (คอมเท่านั้น) */
+.ebw-calendar {
+  --fc-today-bg-color: color-mix(in srgb, var(--brand-green-dark) 15%, var(--bg));
+}
+.ebw-calendar .fc-dayGridMonth-view td.fc-day-today {
+  box-shadow: inset 0 0 0 2px var(--brand-green-dark);
+}
+/* เลขวันที่จริงคือ <a> ด้านใน (renderDayCellContent) — ตัวนอกของ FullCalendar ครอบทั้งแถว ห้ามวาดวงกลมที่ตัวนอก */
+.ebw-calendar .fc-dayGridMonth-view .fc-day-today .fc-daygrid-day-number {
+  color: #fff;
+}
+.ebw-calendar .fc-dayGridMonth-view .fc-day-today .fc-daygrid-day-number .fc-daygrid-day-number {
+  /* ซ้ายขวาเท่ากัน + กว้างขั้นต่ำ ⇒ วงกลมอยู่กลางตัวเลขพอดี (แนวนอนเท่านั้น ความสูงแถวไม่เปลี่ยน) */
+  padding-left: 5px;
+  padding-right: 5px;
+  min-width: 1.6rem;
+  text-align: center;
+  background: radial-gradient(circle at 50% 50%, var(--brand-green-dark) 0 0.7rem, transparent calc(0.7rem + 0.5px));
+}
+.ebw-calendar .ebw-today-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 16px;
+  padding: 0 7px;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--brand-green-dark);
+}
+/* มุมมองสัปดาห์/วัน: หัวคอลัมน์ของวันนี้เป็นแถบเขียวตัวขาว (ชนะสีแดงของวันอาทิตย์ด้านล่าง) */
+.ebw-calendar .fc-timegrid .fc-col-header-cell.fc-day-today {
+  background: var(--brand-green-dark);
+}
+.ebw-calendar .fc-timegrid .fc-col-header-cell.fc-day-today .fc-col-header-cell-cushion,
+.ebw-calendar .fc-timegrid .fc-col-header-cell.fc-day-today .fc-col-header-cell-cushion * {
+  color: #fff !important;
+  font-weight: 800;
+}
 /* Weekend shading — very subtle, just enough to mark "end of week" without
    competing with the event chips' own colors. */
 .ebw-calendar .fc-day-sat:not(.fc-day-today),

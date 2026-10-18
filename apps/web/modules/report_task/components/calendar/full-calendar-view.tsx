@@ -528,6 +528,10 @@ export const FullCalendarView = forwardRef<FullCalendarViewHandle, FullCalendarV
               {shortTitle}
             </span>
           ))}
+        {/* ป้าย "วันนี้" — คอมเท่านั้น (มือถือช่องแคบ ใช้กรอบ + วงกลมใน theme.css พอ) · วันหยุดมีชื่อวันหยุดอยู่แล้วไม่ใส่ซ้อน */}
+        {arg.isToday && view === "dayGridMonth" && !holiday && !isNarrowViewport && (
+          <span className="ebw-today-label shrink-0 self-center">วันนี้</span>
+        )}
         <a className="fc-daygrid-day-number shrink-0">{arg.dayNumberText}</a>
       </div>
     );
