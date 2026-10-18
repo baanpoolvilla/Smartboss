@@ -5,6 +5,10 @@ import { toast } from "sonner";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import type { Task } from "@/modules/report_task/types";
 import { mergeThreeWay } from "./store-merge";
+import { resolveDueRequestRaces } from "@/modules/report_task/lib/due-request-race";
+import { getUser } from "@/modules/report_task/lib/directory";
+import { useIdentityStore } from "@/modules/report_task/store/identity-store";
+import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { realtimeStatus, subscribeRealtime } from "@/lib/realtime-client";
 
 // Task collides often (everyone works the same board at once), so it polls
@@ -193,7 +197,32 @@ export function TaskSync() {
             await reloadFromServer();
             return;
           }
-          const merged = mergeThreeWay(baseRef.current, mine, latest) as Task[];
+          // คำขอเลื่อนกำหนดส่งที่ถูกตัดสินชนกัน ⇒ ใครถึงเซิร์ฟเวอร์ก่อนได้ก่อน (due-request-race.ts)
+          const { tasks: merged, lost } = resolveDueRequestRaces(
+            baseRef.current,
+            mine,
+            latest,
+            mergeThreeWay(baseRef.current, mine, latest) as Task[]
+          );
+          for (const l of lost) {
+            const who = (l.winner.decidedBy && getUser(l.winner.decidedBy)?.name) || "มีคน";
+            const verdict = l.winner.status === "approved" ? "อนุมัติ" : l.winner.status === "rejected" ? "ไม่อนุมัติ" : "ยกเลิก";
+            toast.info(`คำขอเลื่อนกำหนดส่ง "${l.taskTitle}" — ${who} ${verdict}ไปก่อนแล้ว คำตัดสินของคุณไม่ถูกบันทึก`, { duration: 8000 });
+            // คนขออาจได้ข้อความผลของเราไปแล้ว (ส่งตอนกด) — ส่งข้อความแก้ให้ชัดว่าผลจริงคืออะไร
+            const me = useIdentityStore.getState().viewingAsUserId;
+            useNotificationStore
+              .getState()
+              .notifyMany(
+                [l.requestedBy],
+                me,
+                `แก้ไขผลคำขอเลื่อนกำหนดส่งงาน "${l.taskTitle}": ผลจริงคือ ${who} ${verdict} (ข้อความผลก่อนหน้านี้จาก ${getUser(me)?.name ?? "อีกคน"} ไม่มีผล)`,
+                undefined,
+                `/report-task/tasks?task=${l.taskId}`,
+                undefined,
+                "task_due_request",
+                l.taskId
+              );
+          }
           if (!cancelled) applyRemoteTasks(merged);
           versionRef.current = latestVersion;
           baseRef.current = latest; // what the server had when we merged
