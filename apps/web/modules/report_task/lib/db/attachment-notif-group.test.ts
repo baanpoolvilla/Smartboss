@@ -57,4 +57,46 @@ describe("groupAttachmentNotifications", () => {
     const incoming = [row("c2", "A ความเห็น", { kind: "task_comment" })];
     expect(groupAttachmentNotifications(incoming, stored, NOW)).toEqual({ incoming, stored });
   });
+
+  describe("photo-only comments (sent one by one, LINE-style)", () => {
+    const pic = (n?: number) => `A-Sujita แสดงความคิดเห็นในงาน "บ้านอ้อหลักคารั่ว": ${n ? `ส่งรูป ${n} รูป` : "ส่งรูป"}`;
+    const crow = (id: string, message: string, extra: Record<string, unknown> = {}) => row(id, message, { kind: "task_comment", ...extra });
+
+    it("3 photos sent as 3 comments become one notification", () => {
+      let stored = [crow("c1", pic(), { createdAt: at(90_000) })];
+      let r = groupAttachmentNotifications([crow("c2", pic(), { createdAt: at(60_000) })], stored, NOW);
+      stored = [...r.incoming, ...r.stored];
+      r = groupAttachmentNotifications([crow("c3", pic())], stored, NOW);
+      expect(r.stored).toEqual([]);
+      expect(r.incoming).toHaveLength(1);
+      expect(r.incoming[0]).toMatchObject({ id: "c3", message: pic(3), grouped: true, absorbedIds: ["c1", "c2"] });
+    });
+
+    it("photos then a file reads as files", () => {
+      const stored = [crow("c1", pic(2), { createdAt: at(60_000) })];
+      const r = groupAttachmentNotifications([crow("c2", 'A-Sujita แสดงความคิดเห็นในงาน "บ้านอ้อหลักคารั่ว": แนบไฟล์')], stored, NOW);
+      expect(r.incoming[0]!.message).toBe('A-Sujita แสดงความคิดเห็นในงาน "บ้านอ้อหลักคารั่ว": แนบไฟล์ 3 ไฟล์');
+    });
+
+    it("a comment with text is never merged", () => {
+      const stored = [crow("c1", pic(), { createdAt: at(60_000) })];
+      const r = groupAttachmentNotifications([crow("c2", 'A-Sujita แสดงความคิดเห็นในงาน "บ้านอ้อหลักคารั่ว": ส่งรูปแล้วนะคะ')], stored, NOW);
+      expect(r.incoming).toHaveLength(1);
+      expect(r.stored).toHaveLength(1);
+    });
+
+    it("an already-read photo notification is not reopened", () => {
+      const stored = [crow("c1", pic(), { createdAt: at(60_000), read: true })];
+      const r = groupAttachmentNotifications([crow("c2", pic())], stored, NOW);
+      expect(r.incoming[0]!.message).toBe(pic());
+      expect(r.stored).toHaveLength(1);
+    });
+
+    it("photo comments and task attachments stay separate rows", () => {
+      const stored = [row("a1", one("IMG_1.jpeg"), { createdAt: at(60_000) })];
+      const r = groupAttachmentNotifications([crow("c1", pic())], stored, NOW);
+      expect(r.incoming[0]!.message).toBe(pic());
+      expect(r.stored).toHaveLength(1);
+    });
+  });
 });
