@@ -37,7 +37,8 @@ import type { BoardKind } from "@/modules/report_task/lib/maintenance-board";
 
 /** ตัวเลือกจัดกลุ่มบนบอร์ด — "แผนก" ซ่อนไว้ก่อน จะทำเป็นมุมมองโปรเจค/แผนกแยกจากงาน
  * ("เอาแผนกออกก่อน เดี๋ยวงง") โค้ดบอร์ดแผนกใน kanban-board.tsx ยังอยู่ เปิดกลับได้ที่นี่ที่เดียว */
-const GROUP_BY_CHOICES: GroupBy[] = ["status", "priority", "assignee"];
+// จัดกลุ่มได้แค่ สถานะ / ความสำคัญ (ผู้ใช้ขอ 18/10/2569 — "คน" เอาออก)
+const GROUP_BY_CHOICES: GroupBy[] = ["status", "priority"];
 
 /** "แสดงบนบอร์ด" ในเมนูจัดกลุ่ม — ใบงานซ่อมปนกับงานบนบอร์ด (lib/maintenance-board.ts) */
 const BOARD_KINDS: { id: BoardKind; icon: string; label: string }[] = [
@@ -785,21 +786,7 @@ export function TaskFilters({
           </div>
         </div>
 
-        <div className="px-4 pt-3">
-          {/* ชิปช่วงเวลา (ทั้งหมด/วันนี้/สัปดาห์นี้/เดือนนี้/กำหนดเอง) ตัดทิ้งแล้ว (ผู้ใช้ขอ 18/10/2569) — เหลือแค่ "เลยกำหนด" */}
-          <p className={sectionLabel}>กำหนดส่ง</p>
-          <div className="flex flex-wrap gap-1.5">
-            <button
-              type="button"
-              aria-pressed={quickOverdueActive}
-              className={chip(quickOverdueActive, true)}
-              onClick={() => setFilters({ penalty: quickOverdueActive ? "all" : "overdue", quickView: "all" })}
-            >
-              <AlertTriangle className="h-3.5 w-3.5" />
-              เลยกำหนด
-            </button>
-          </div>
-        </div>
+        {/* หัวข้อ "กำหนดส่ง" เอาออก — ช่วงเวลาตัดทิ้งแล้ว และ "เลยกำหนด" ย้ายไปอยู่แถวจัดกลุ่มตามด้านล่าง (ผู้ใช้ขอ 18/10/2569) */}
 
         {/* ตัวกรองความสำคัญตัดทิ้งแล้ว (ผู้ใช้ขอ 18/10/2569 "เอาออกตรง filter อย่างเดียว") — จัดกลุ่มตามความสำคัญด้านล่างยังอยู่ */}
 
@@ -832,6 +819,16 @@ export function TaskFilters({
               </span>
             </>
           )}
+          {/* "เลยกำหนด" ย้ายมาอยู่แถวนี้ (ผู้ใช้ขอ 18/10/2569) — ยังเป็นตัวกรอง: กดแล้วบอร์ดเหลือเฉพาะงานเลยกำหนด */}
+          <button
+            type="button"
+            aria-pressed={quickOverdueActive}
+            className={cn(chip(quickOverdueActive, true), "h-7 px-2.5 text-xs")}
+            onClick={() => setFilters({ penalty: quickOverdueActive ? "all" : "overdue", quickView: "all" })}
+          >
+            <AlertTriangle className="h-3.5 w-3.5" />
+            เลยกำหนด
+          </button>
           <span className="ml-auto flex gap-1">
             {BOARD_KINDS.map((k) => {
               const on = boardKinds[k.id];

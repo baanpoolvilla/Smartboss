@@ -45,7 +45,6 @@ function writeSaved(userId: string, value: SavedTaskView) {
     /* private mode ฯลฯ — แค่ไม่จำ */
   }
 }
-const GROUP_BYS: GroupBy[] = ["status", "priority", "assignee", "department"];
 
 /** คีย์ใน URL ที่หน้านี้เป็นเจ้าของ (ตัวกรอง + มุมมอง) — คีย์อื่น (task, taskTitle, บอร์ดรายคน/แผนก ฯลฯ) ห้ามแตะ */
 const FILTER_URL_KEYS = ["dept", "assignee", "priority", "penalty", "preset", "from", "to", "view", "project"] as const;
@@ -111,8 +110,9 @@ function TasksPageContent() {
         // เริ่มจากค่าเริ่มต้นก่อน แล้วค่อยทับด้วยที่จำไว้ — ช่องที่เพิ่มทีหลัง/ค่าที่เสียไม่ค้าง
         resetFilters();
         if (saved.filters && typeof saved.filters === "object") setFilters(saved.filters);
+        // จัดกลุ่มเหลือแค่ สถานะ/ความสำคัญ — ที่จำไว้เป็น "คน" กลับไปสถานะ
         // eslint-disable-next-line react-hooks/set-state-in-effect
-        if (GROUP_BYS.includes(saved.groupBy)) setGroupBy(saved.groupBy);
+        if (saved.groupBy === "status" || saved.groupBy === "priority") setGroupBy(saved.groupBy);
         if (saved.view === "grid" || saved.view === "workload") setView(saved.view);
       }
     }
