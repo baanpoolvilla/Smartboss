@@ -87,9 +87,7 @@ export function penaltyDueDate(task: Pick<Task, "originalDueDate" | "revisions">
     // (เจอจริง: ขอเลื่อน 30/09 → 04/09 ตั้งใจ 04/10 แก้กลับเป็น 04/10 วันเดียวกัน
     // แต่ chain หยุดที่ 04/09 ⇒ โดนหัก −3 ทั้งที่ไม่เคยเลยกำหนดจริง)
     if (dueDay(r.newDate) < localDay(r.revisedAt)) continue;
-    // คำขอเลื่อนที่อนุมัติแล้ว: ดูเวลาที่ "ขอ" ไม่ใช่เวลาที่หัวหน้ากดอนุมัติ — ขอทันกำหนดเดิมแต่หัวหน้าว่างทีหลัง
-    // เดิมนับเป็นเลื่อนหลังเลยกำหนด ⇒ ยังโดนหัก ทั้งที่อนุมัติแล้ว ("อนุมัติแล้วไม่อนุมัติให้" 18/10/2569)
-    if (localDay(r.requestedAt ?? r.revisedAt) > dueDay(due)) break;
+    if (localDay(r.revisedAt) > dueDay(due)) break;
     due = r.newDate;
   }
   // rejectReview moves originalDueDate forward itself when the assignee had
@@ -209,18 +207,10 @@ export function sweepAutoPenalties(
         const override = updated.assigneeDueDates?.[assigneeId];
         const effectiveDueDate = override ?? heldTo;
         const existing = updated.penalties?.[assigneeId];
-        // วันรายคนที่มาจากการอนุมัติคำขอซึ่ง "ขอทันกำหนดเดิม" — นับเหมือนเลื่อนก่อนครบกำหนด คืนคะแนนได้
-        const rev = updated.assigneeDueDateRevisions?.[assigneeId];
-        const inTimeRequest =
-          !!override &&
-          !!rev?.requestedAt &&
-          !!rev.requestPreviousDate &&
-          rev.latestDate === override &&
-          localDay(rev.requestedAt) <= dueDay(rev.requestPreviousDate);
         // An automatic dock on the shared date that an in-time extension has
         // since made wrong — take it back (an override is left alone: it can
         // be set after the fact, so it isn't proof the miss didn't happen).
-        if (existing && (!override || inTimeRequest) && existing.byUserId === SYSTEM_USER_ID && daysUntil(effectiveDueDate) >= 0) {
+        if (existing && !override && existing.byUserId === SYSTEM_USER_ID && daysUntil(effectiveDueDate) >= 0) {
           const { [assigneeId]: _dropped, ...rest } = updated.penalties ?? {};
           updated = { ...updated, penalties: rest };
           revokedRefIds.push(`${t.id}:${assigneeId}`);
