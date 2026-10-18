@@ -79,6 +79,8 @@ import {
   Upload,
   ChevronDown,
   Eye,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import type { Attachment, Sticker, TaskPriority, TaskStatus } from "@/modules/report_task/types";
 import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
@@ -333,6 +335,14 @@ export function TaskDetailSheet({
   // visible cue a conversation exists without forcing it open.
   const [mobileCommentsOpen, setMobileCommentsOpen] = useState(false);
   const dismissKeyboard = useDismissKeyboardOnDrag();
+  // คอม: ขยายความคิดเห็นเต็มหน้าต่าง (ซ่อนรายละเอียดงานชั่วคราว) — แผงข้างกว้าง ~380px อ่านแชทยาว ๆ ไม่สะดวก
+  // ("space ในการดูแชทมันน้อย ให้แสดงเต็มจอ") · เปิดงานอื่น = กลับเป็นแบบปกติ
+  const [chatExpanded, setChatExpanded] = useState(false);
+  const [chatExpandedFor, setChatExpandedFor] = useState(taskId);
+  if (chatExpandedFor !== taskId) {
+    setChatExpandedFor(taskId);
+    setChatExpanded(false);
+  }
   // iPhone ไม่ย่อหน้าเว็บตามคีย์บอร์ด (interactive-widget ใช้ได้แค่ Android) — หน้าความคิดเห็นเต็มจอ
   // เลยสูงเท่าเดิม คีย์บอร์ดบังช่องพิมพ์ เลื่อนขึ้นไปหาข้อความ ช่องพิมพ์ก็เลื่อนหายตาม ("เลื่อนแล้วต้องเลื่อน
   // ลงมาพิมพ์อีก") ⇒ ระหว่างคีย์บอร์ดเปิด ให้กรอบพอดีพื้นที่ที่เห็นจริง (visualViewport): รายการเลื่อนในกรอบ
@@ -747,7 +757,13 @@ export function TaskDetailSheet({
   return (
     <>
     <Dialog open={!!taskId} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full sm:max-w-5xl h-[88vh] max-h-[88vh] p-0 gap-0 flex flex-col overflow-hidden">
+      <DialogContent
+        className={cn(
+          "w-full sm:max-w-5xl h-[88vh] max-h-[88vh] p-0 gap-0 flex flex-col overflow-hidden",
+          // มือถือ: เปิดความคิดเห็นแล้วทั้งหน้าต่างเต็มจอ (เดิมแชทอยู่ในกล่อง 88vh เว้นขอบบนล่าง) — แผงแชทข้างใน fixed inset-0 จะเต็มจอจริง
+          mobileCommentsOpen && "max-md:h-dvh max-md:max-h-dvh max-md:max-w-none max-md:rounded-none"
+        )}
+      >
         <DialogHeader className="border-b border-[var(--line)] px-6 py-4 space-y-2 shrink-0">
           {/* pr-10 keeps this row clear of the dialog's own absolute close (X)
               button, which otherwise overlaps the delete button here. */}
@@ -811,7 +827,7 @@ export function TaskDetailSheet({
             persistent comments/chat rail on the right — stacked on small
             screens since there's no room for two columns there. */}
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5 min-w-0 min-h-0">
+        <div className={cn("flex-1 overflow-y-auto px-6 py-5 space-y-5 min-w-0 min-h-0", chatExpanded && "md:hidden")}>
           {/* Editable description (creator only) — staged in draftDescription */}
           <div className="space-y-1">
             <Label className="text-xs text-[var(--ink-soft)]">รายละเอียด</Label>
@@ -2104,17 +2120,19 @@ export function TaskDetailSheet({
           onFiles={(files) => void handleCommentFilesSelected(files)}
           label="ปล่อยเพื่อแนบในความคิดเห็น"
           className={cn(
-            "w-full md:w-[320px] shrink-0 max-h-[55vh] md:max-h-none border-t md:border-t-0 md:border-l border-[var(--line)] flex flex-col overflow-hidden min-h-0 bg-[var(--bg-soft)]/30",
+            "w-full md:w-[380px] shrink-0 max-h-[55vh] md:max-h-none border-t md:border-t-0 md:border-l border-[var(--line)] flex flex-col overflow-hidden min-h-0 bg-[var(--bg-soft)]/30",
+            chatExpanded && "md:w-full md:border-l-0",
             // มือถือ: เปิดความคิดเห็นแล้วเต็มจอทับรายละเอียดงาน แบบหน้าแชท — เดิมเป็นแผงล่างสูงไม่เกิน 55%
             // แถมช่องพิมพ์กินอีก 3 บรรทัด เหลือที่อ่านแชทนิดเดียว ("space ในการดูแชทน้อย ให้แสดงเต็มจอ")
             mobileCommentsOpen && "max-md:fixed max-md:inset-0 max-md:z-40 max-md:max-h-none max-md:border-t-0 max-md:bg-white"
           )}
           style={mobileCommentsOpen && keyboardFit ? { height: keyboardFit.height, bottom: "auto" } : undefined}
         >
+          <div className="flex shrink-0 items-center border-b border-[var(--line)]">
           <button
             type="button"
             onClick={() => setMobileCommentsOpen((v) => !v)}
-            className="flex items-center justify-between gap-2 px-4 py-3 border-b border-[var(--line)] shrink-0 text-left md:pointer-events-none md:cursor-default"
+            className="flex min-w-0 flex-1 items-center justify-between gap-2 px-4 py-3 text-left md:pointer-events-none md:cursor-default"
           >
             <span className="flex items-center gap-1.5">
               <h4 className="text-sm font-semibold">ความคิดเห็น ({task.comments.length})</h4>
@@ -2132,8 +2150,23 @@ export function TaskDetailSheet({
               <ChevronDown className="h-4 w-4 text-[var(--ink-soft)] shrink-0 md:hidden" />
             )}
           </button>
+          {/* คอม: ขยายเต็มหน้าต่าง / กลับไปแบบมีรายละเอียดงาน */}
+          <button
+            type="button"
+            onClick={() => setChatExpanded((v) => !v)}
+            className="mr-2 hidden h-8 shrink-0 items-center gap-1 rounded-lg px-2 text-xs font-medium text-[var(--ink-soft)] transition-colors hover:bg-[var(--bg-soft)] hover:text-[var(--ink)] md:inline-flex"
+            title={chatExpanded ? "ย่อกลับ แสดงรายละเอียดงาน" : "ขยายความคิดเห็นเต็มหน้าต่าง"}
+          >
+            {chatExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+            {chatExpanded ? "ย่อ" : "ขยาย"}
+          </button>
+          </div>
           <div
-            className={cn("flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0", mobileCommentsOpen ? "block" : "hidden md:block")}
+            className={cn(
+              "flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0",
+              mobileCommentsOpen ? "block" : "hidden md:block",
+              chatExpanded && "md:px-[max(1rem,calc((100%-760px)/2))]"
+            )}
             // เลื่อนอ่านความคิดเห็นแล้วคีย์บอร์ดหุบลง (แบบ Discord) — ได้ที่อ่านเต็มจอ จะพิมพ์ค่อยแตะช่องพิมพ์
             {...dismissKeyboard}
           >
@@ -2246,7 +2279,9 @@ export function TaskDetailSheet({
               แถบเครื่องมือ (แนบไฟล์ · อิโมจิ · ส่ง) อยู่ล่างในกรอบเดียวกัน — เดิมปุ่มสามตัวเรียงหน้าช่องพิมพ์ในแถวเดียว
               ช่องเหลือกว้างนิดเดียว ข้อความตกบรรทัดทุกสองสามคำ ("ไม่สวย ให้พื้นที่พิมพ์แชทเยอะกว่านี้")
             */}
-            <div className="flex flex-col rounded-xl border border-input bg-white transition-colors focus-within:border-[var(--brand-green)] focus-within:ring-2 focus-within:ring-[var(--brand-green)]/20">
+            {/* แถวเดียว: ช่องพิมพ์ (ขยายตามข้อความ) + แนบไฟล์ · อิโมจิ · ส่ง ชิดขวา — เดิมช่องพิมพ์อยู่บน แถบปุ่มอยู่ล่าง
+                สูงรวม ~90–125px กินที่อ่านแชท ("พื้นที่พิมพ์ไม่ให้กินเยอะเกินไป") */}
+            <div className={cn("flex items-end rounded-xl border border-input bg-white transition-colors focus-within:border-[var(--brand-green)] focus-within:ring-2 focus-within:ring-[var(--brand-green)]/20", chatExpanded && "md:mx-auto md:w-full md:max-w-[760px]")}>
               <div className="relative min-w-0 flex-1">
                 {mentionQuery && mentionCandidates.length > 0 && (
                   <div className="absolute bottom-full left-0 right-0 z-30 mb-1 max-h-56 overflow-y-auto rounded-lg border border-[var(--line)] bg-white p-1 shadow-lg">
@@ -2274,7 +2309,7 @@ export function TaskDetailSheet({
                 )}
                 <Textarea
                   ref={commentRef}
-                  placeholder="เขียนความคิดเห็น… พิมพ์ @ เพื่อแท็กคน"
+                  placeholder="เขียนความคิดเห็น… (@ แท็กคน)"
                   rows={1}
                   value={comment}
                   onChange={(e) => {
@@ -2323,12 +2358,12 @@ export function TaskDetailSheet({
                   }}
                   // ช่องพิมพ์เต็มความกว้าง ขยายตามข้อความได้ถึงราว 8 บรรทัด — ไม่มีกรอบของตัวเอง ใช้กรอบของกล่องรวม
                   // คอมเริ่ม 3 บรรทัด · มือถือเริ่มบรรทัดเดียว ("พื้นที่พิมพ์ไม่กินเยอะเกินไป") และ 16px กัน iPhone ซูมหน้า
-                  className="max-h-48 min-h-[2.5rem] md:min-h-[4.5rem] w-full resize-none border-0 bg-transparent px-3 pt-2.5 pb-1 text-base md:text-sm shadow-none [field-sizing:content] focus-visible:ring-0"
+                  className="max-h-40 min-h-[2.5rem] w-full resize-none border-0 bg-transparent px-3 py-2.5 text-base md:text-sm shadow-none [field-sizing:content] focus-visible:ring-0"
                 />
               </div>
               {/* ขนาดเดียวกับช่องพิมพ์แชท (composer.tsx): ไอคอน 20px ในปุ่มกว้าง 32px ห่างกัน 2px — ชิดแบบ LINE
                   ("ทำไมห่างกันจัง ... อยากให้ชิดแบบไลน์ คล้าย ๆ แชทของเรา") */}
-              <div className="flex items-center gap-0.5 px-1 pb-1">
+              <div className="flex shrink-0 items-center gap-0.5 px-1 pb-0.5">
               <AttachMenu
                 onFiles={(files) => void handleCommentFilesSelected(files)}
                 disabled={commentUploading}
@@ -2355,7 +2390,7 @@ export function TaskDetailSheet({
               </Popover>
               <Button
                 size="icon"
-                className="ml-auto size-9 shrink-0 rounded-full bg-[var(--brand-green)] text-[var(--ink)] hover:bg-[var(--brand-green-dark)] hover:text-white"
+                className="ml-0.5 size-9 shrink-0 rounded-full bg-[var(--brand-green)] text-[var(--ink)] hover:bg-[var(--brand-green-dark)] hover:text-white"
                 onClick={submitComment}
                 aria-label="ส่งความคิดเห็น"
               >
