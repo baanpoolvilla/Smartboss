@@ -111,7 +111,6 @@ function Annotator({ file }: { file: File }) {
     // รอบที่ถูกยกเลิกแล้ว (เปลี่ยนรูป / dev รัน effect ซ้ำ) revoke URL ไปก่อนโหลดเสร็จ ⇒ onerror ของรอบเก่ายิงทีหลัง
     // เดิมเลยขึ้น "เปิดรูปนี้ไม่ได้" ค้าง ทั้งที่รอบใหม่โหลดได้ — ไม่สนเหตุการณ์ของรอบที่จบไปแล้ว
     let alive = true;
-    setFailed(false);
     const url = URL.createObjectURL(file);
     const image = new Image();
     image.onload = () => alive && setImg(image);
