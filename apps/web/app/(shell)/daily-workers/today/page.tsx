@@ -42,9 +42,10 @@ function shiftDate(date: string, delta: number) {
  */
 export default async function DailyWorkersTodayPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
   const session = await requireOrg();
-  if (![DW_PERMS.view, DW_PERMS.manage, DW_PERMS.override].some((p) => hasPermission(session, p))) redirect("/");
+  if (![DW_PERMS.view, DW_PERMS.manage, DW_PERMS.override, DW_PERMS.pay].some((p) => hasPermission(session, p))) redirect("/");
   const canFix = hasPermission(session, DW_PERMS.override);
-  const canSeePay = hasPermission(session, DW_PERMS.manage) || canFix;
+  // ยอดเงินเห็นทุกคนที่เข้าหน้านี้ได้ (ดู/จัดการ/แก้เวลา/ตั้งค่าแรง) — CEO ได้ view เพื่อดูยอด
+  const canSeePay = true;
 
   const { date: raw } = await searchParams;
   const today = bangkokToday();

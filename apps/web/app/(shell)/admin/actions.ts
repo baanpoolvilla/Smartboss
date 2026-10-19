@@ -456,7 +456,7 @@ export async function setRolePermissionsAction(formData: FormData) {
   });
   // คนงานรายวัน: จัดการ/แก้สถานะได้ = ต้องเห็นตารางด้วย (เมนูผูกกับสิทธิ์ดู) — ติ๊กให้เอง
   const valid = [...picked];
-  if (picked.some((p) => p.code === DW_PERMS.manage || p.code === DW_PERMS.override) && !picked.some((p) => p.code === DW_PERMS.view)) {
+  if (picked.some((p) => p.code === DW_PERMS.manage || p.code === DW_PERMS.override || p.code === DW_PERMS.pay) && !picked.some((p) => p.code === DW_PERMS.view)) {
     const view = await prisma.permission.findUnique({ where: { code: DW_PERMS.view }, select: { id: true, code: true } });
     if (view) valid.push(view);
   }

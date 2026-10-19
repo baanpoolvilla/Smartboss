@@ -281,7 +281,7 @@ export async function removeTimeEditAction(input: { employmentId: string; date: 
 /** % OT กลางของบริษัท (คนงานที่ไม่ได้ตั้ง % เอง) */
 export async function saveDwSettingsAction(input: { otPercent: number }): Promise<Result> {
   try {
-    const session = await guard(DW_PERMS.manage);
+    const session = await guard(DW_PERMS.pay);
     const p = Number(input.otPercent);
     if (!Number.isFinite(p) || p <= 0 || p > 1000) return { error: "% OT ต้องอยู่ระหว่าง 1–1000" };
     for (let attempt = 0; attempt < 4; attempt++) {
@@ -304,7 +304,7 @@ export async function saveDwSettingsAction(input: { otPercent: number }): Promis
  */
 export async function savePayRateAction(input: { employmentIds: string[]; dailyWage: number; otPercent: number | null; from: string }): Promise<Result> {
   try {
-    const session = await guard(DW_PERMS.manage);
+    const session = await guard(DW_PERMS.pay);
     const wage = Number(input.dailyWage);
     if (!Number.isFinite(wage) || wage <= 0 || wage > 100000) return { error: "ค่าแรงต่อวันไม่ถูกต้อง" };
     const ot = input.otPercent === null ? null : Number(input.otPercent);

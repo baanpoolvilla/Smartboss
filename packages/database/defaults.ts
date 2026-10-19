@@ -128,6 +128,8 @@ export const ADS_PERMS = ["ads.access", "ads.setting.manage", "ads.admin"];
  * ไม่ให้ ADMIN/CEO ตั้งแต่แรก ("จะได้ไม่รก" ติ๊กเพิ่มเองได้) · ไม่อยู่ใน BASELINE_PERMS
  */
 export const DAILY_WORKER_PERMS = ["daily_worker.view", "daily_worker.manage", "daily_worker.override"];
+/** ตั้งค่าแรง/% OT คนงาน — แยกจากงานหน้างาน ค่าตั้งต้น HR_OFFICER + CEO (ผู้ดูแลบ้านไม่ได้) */
+export const DAILY_WORKER_PAY_PERM = "daily_worker.pay";
 
 /**
  * สิทธิ์พื้นฐานที่ **ทุกบทบาทได้รับ** — คือคำตอบของกติกา "ทุกคนเห็นและเข้าถึงได้
@@ -209,6 +211,8 @@ const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
     "ads.access",
     // สติกเกอร์บริษัท: แอดมิน (IT) ได้ผ่าน CHAT_PERMS แล้ว + CEO + การตลาด
     "chat.sticker.manage",
+    // คนงานรายวัน: ดูยอดเงิน + ตั้งค่าแรง (ไม่ทำงานหน้างาน) — ผู้ใช้ตกลง 19/10/2569
+    "daily_worker.view", DAILY_WORKER_PAY_PERM,
   ],
   // หัวหน้างานเข้าหลังบ้านได้ แต่ได้แค่ "ดูแลคน" ไม่ใช่ "ตั้งค่าระบบ" —
   // จัดการผู้ใช้และดูบทบาทได้ แต่แก้บทบาท/สิทธิ์ เปิดปิดโมดูล ตั้งค่าบริษัท
@@ -238,6 +242,7 @@ const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
     // วันหยุด/ประเภทการลาบนปฏิทินทีมเป็นงานของฝ่ายบุคคลโดยตรง
     "report_task.calendar.manage",
     ...DAILY_WORKER_PERMS,
+    DAILY_WORKER_PAY_PERM,
   ],
   // งานการเงิน — ตัวเลขจัดซื้อและค่าใช้จ่ายของงานซ่อมบำรุงที่ไม่อยู่ในชุดพื้นฐาน
   ACCOUNTANT: [

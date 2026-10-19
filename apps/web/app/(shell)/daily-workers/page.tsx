@@ -20,7 +20,8 @@ export default async function DailyWorkersPage({ searchParams }: { searchParams:
   const canView = hasPermission(session, DW_PERMS.view);
   const canManage = hasPermission(session, DW_PERMS.manage);
   const canOverride = hasPermission(session, DW_PERMS.override);
-  if (!canView && !canManage && !canOverride) redirect("/");
+  const canPay = hasPermission(session, DW_PERMS.pay);
+  if (!canView && !canManage && !canOverride && !canPay) redirect("/");
 
   const { month: raw } = await searchParams;
   const month = raw && /^\d{4}-(0[1-9]|1[0-2])$/.test(raw) ? raw : bangkokToday().slice(0, 7);
@@ -104,7 +105,7 @@ export default async function DailyWorkersPage({ searchParams }: { searchParams:
             </p>
           </section>
 
-          {canManage && (
+          {canPay && (
             <PaySettings
               rows={data.workers
                 .filter((w) => w.employmentId)

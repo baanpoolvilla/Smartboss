@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dayPay, daysInMonth, hoursLabel, judgeDay, judgeTimes, minutesToHm, otMinutes, shiftMonth } from "./types";
+import { type DayInput, dayPay, daysInMonth, hoursLabel, judgeDay, judgeTimes, minutesToHm, otMinutes, shiftMonth } from "./types";
 
 describe("daily worker helpers", () => {
   it("OT hours come from the start–end the supervisor typed, crossing midnight too", () => {
@@ -48,7 +48,7 @@ describe("worker pay rules (19/10/2569)", () => {
 });
 
 describe("judgeDay — one day of one worker (ค่าแรง 400 · กะ 08:00–17:00 · OT 150%)", () => {
-  const base = { date: "2026-10-16", today: "2026-10-19", shiftStart: 480, shiftEnd: 1020, otMinutes: null, legacyOverride: false, wage: 400, otPercent: 150 };
+  const base: Omit<DayInput, "inAt" | "outAt"> = { date: "2026-10-16", today: "2026-10-19", shiftStart: 480, shiftEnd: 1020, otMinutes: null, legacyOverride: false, wage: 400, otPercent: 150 };
   const day = (x: Partial<typeof base> & { inAt: string; outAt: string | null }) => judgeDay({ ...base, ...x });
 
   it("ตรงเวลา เต็มวัน = 400", () => {

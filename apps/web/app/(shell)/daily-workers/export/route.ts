@@ -15,7 +15,7 @@ function csv(rows: (string | number)[][]): string {
 /** ดาวน์โหลดเป็นไฟล์ที่ Excel เปิดได้ (CSV + BOM) — สรุปรายคน แล้วตามด้วยรายวัน */
 export async function GET(request: Request) {
   const session = await requireOrg();
-  if (![DW_PERMS.view, DW_PERMS.manage, DW_PERMS.override].some((p) => hasPermission(session, p))) {
+  if (![DW_PERMS.view, DW_PERMS.manage, DW_PERMS.override, DW_PERMS.pay].some((p) => hasPermission(session, p))) {
     return new Response("ไม่มีสิทธิ์", { status: 403 });
   }
   const raw = new URL(request.url).searchParams.get("month") ?? "";
