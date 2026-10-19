@@ -8,6 +8,8 @@ import {
   terminateEmploymentSchema,
   updateEmploymentSchema,
   updatePersonSchema,
+  updateMyNameSchema,
+  type UpdateMyNameInput,
   type Assignment,
   type CreateAssignmentInput,
   type CreateEmploymentInput,
@@ -60,6 +62,16 @@ export class PeopleController {
     @Body(zodPipe(updatePersonSchema)) body: Partial<CreatePersonInput>,
   ): Promise<Person> {
     return this.service.updatePerson(requireUuid(personId, 'personId'), body);
+  }
+
+  /**
+   * พนักงานแก้ชื่อของตัวเอง — ไม่ต้องมีสิทธิ์จัดการบุคคล แต่แก้ได้เฉพาะ person ของ employment ตัวเอง
+   * และเฉพาะชื่อ/นามสกุล/ชื่อเล่น (ดู PeopleService.updateMyName)
+   */
+  @Patch('me/name')
+  @RequirePermissions('workforce.attendance.read.self')
+  async updateMyName(@Body(zodPipe(updateMyNameSchema)) body: UpdateMyNameInput): Promise<Person> {
+    return this.service.updateMyName(body);
   }
 
   @Get('employments')

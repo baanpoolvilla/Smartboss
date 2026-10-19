@@ -10,6 +10,8 @@ import { loadSecuritySettings } from "@/lib/security-settings";
 import { AccountTabs } from "./account-tabs";
 import { changeOwnPasswordAction, removeOwnAvatarAction, updateOwnProfileAction } from "./actions";
 import { AvatarForm } from "./avatar-form";
+import { OwnNameForm } from "./own-name-form";
+import { loadOwnNameParts } from "@/modules/hr/lib/own-name";
 import { PasswordInput } from "@/components/password-input";
 
 /**
@@ -37,6 +39,8 @@ export default async function AccountPage() {
   });
 
   const roleNames = user.roles.map((r) => r.role.name).join(" · ") || "—";
+  // มีทะเบียนพนักงาน = แก้เป็นสามช่อง (ชื่อประกอบตามรูปแบบบริษัท) · ไม่มี (เช่นแอดมินระบบ) = ช่องเดียวแบบเดิม
+  const nameParts = session.orgId ? await loadOwnNameParts(session.orgId, session.userId, user.email) : null;
 
   // ต้องตรงกับที่ changeOwnPasswordAction ใช้ตรวจจริง (ตั้งได้ที่ /admin/security)
   const { passwordMinLength } = await loadSecuritySettings(session.orgId ?? null);
@@ -100,6 +104,19 @@ export default async function AccountPage() {
         </div>
       </SectionCard>
 
+      {nameParts ? (
+        <div className="mt-4">
+          <SectionCard title="ชื่อที่แสดง" description="กรอกแยกช่อง ระบบประกอบชื่อตามรูปแบบที่บริษัทเลือก — ทั้งระบบบุคคล แชท บอร์ดงาน และรายงาน">
+            <OwnNameForm
+              firstName={nameParts.firstName}
+              lastName={nameParts.lastName}
+              preferredName={nameParts.preferredName}
+              format={nameParts.format}
+              current={user.name}
+            />
+          </SectionCard>
+        </div>
+      ) : (
       <form action={updateOwnProfileAction} className="mt-4">
         <SectionCard title="ชื่อที่แสดง" description="ชื่อที่คนอื่นเห็นในระบบ">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -121,6 +138,7 @@ export default async function AccountPage() {
           </div>
         </SectionCard>
       </form>
+      )}
 
       <form action={changeOwnPasswordAction} className="mt-4">
         <SectionCard

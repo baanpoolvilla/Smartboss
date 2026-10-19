@@ -223,3 +223,51 @@ export async function removeOwnAvatarAction() {
   });
   revalidatePath("/account");
 }
+
+/**
+ * แก้ชื่อของตัวเองเป็นสามช่อง (ชื่อ / นามสกุล / ชื่อเล่น) — ผู้ใช้ขอ 19/10/2569 เลิกพิมพ์ชื่อเองช่องเดียว
+ * แก้ที่ทะเบียนพนักงาน (workforce PATCH /me/name — แก้ได้เฉพาะของตัวเอง) แล้วชื่อบัญชีที่แชท/บอร์ด/รายงานใช้
+ * เขียนตามชื่อที่ระบบบุคคลประกอบตามรูปแบบของบริษัท · คนที่ไม่มีทะเบียนยังใช้ updateOwnProfileAction (ช่องเดียว)
+ */
+export async function updateOwnNameAction(input: { firstName: string; lastName: string; preferredName: string }): Promise<{ error?: string; name?: string }> {
+  const session = await requireAuth();
+  const firstName = input.firstName.trim();
+  const lastName = input.lastName.trim();
+  const preferredName = input.preferredName.trim();
+  if (!firstName || !lastName) return { error: "กรุณากรอกชื่อและนามสกุล" };
+  if (firstName.length > 100 || lastName.length > 100 || preferredName.length > 100) return { error: "ชื่อยาวเกินไป" };
+  if (!session.orgId) return { error: "บัญชีนี้ไม่มีบริษัท" };
+
+  const { wfFetch, WorkforceError } = await import("@/modules/hr/lib/api");
+  const { syncUserToWorkforce } = await import("@/modules/admin/data/user-guards");
+  const { syncUserName } = await import("@/modules/hr/lib/name-sync");
+  const call = () =>
+    wfFetch<{ email: string | null; display_name: string }>("/me/name", {
+      method: "PATCH",
+      body: { first_name: firstName, last_name: lastName, preferred_name: preferredName },
+    });
+  let person: { email: string | null; display_name: string };
+  try {
+    person = await call();
+  } catch (error) {
+    // บัญชียังไม่ผูกกับทะเบียน (เจอทะเบียนจากอีเมลแต่ principal ยังไม่ชี้) — ผูกให้แล้วลองใหม่ครั้งเดียว
+    if (error instanceof WorkforceError && (error.status === 404 || error.status === 403)) {
+      try {
+        await syncUserToWorkforce(session.userId, session.orgId, session.userId);
+        person = await call();
+      } catch {
+        return { error: "ยังไม่ได้ผูกบัญชีกับทะเบียนพนักงาน — แจ้ง HR ให้แก้ชื่อให้ หรือเช็กว่าอีเมลตรงกัน" };
+      }
+    } else {
+      return { error: error instanceof WorkforceError ? error.displayMessage : "บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง" };
+    }
+  }
+
+  // ชื่อบัญชีตามชื่อที่ระบบบุคคลประกอบ (ตามอีเมลในทะเบียน) — ถ้าไม่มีอีเมลในทะเบียน เขียนให้บัญชีนี้ตรง ๆ
+  if (person.email) await syncUserName(session.orgId, person.email, person.display_name);
+  else await prisma.user.update({ where: { id: session.userId }, data: { name: person.display_name } });
+
+  await audit({ userId: session.userId, action: "USER_UPDATED", targetId: session.userId });
+  revalidatePath("/account");
+  return { name: person.display_name };
+}

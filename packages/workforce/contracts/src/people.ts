@@ -27,6 +27,17 @@ export const createPersonSchema = z.object({
 
 export const updatePersonSchema = createPersonSchema.partial();
 
+/**
+ * พนักงานแก้ชื่อของตัวเอง (PATCH /me/name) — สามช่องนี้เท่านั้น อีเมล/เบอร์/เลขบัตรยังต้องให้ HR แก้
+ * ชื่อที่แสดงประกอบตามรูปแบบของบริษัทเหมือนเดิม (ผู้ใช้ขอ 19/10/2569 — เลิกพิมพ์ชื่อเองช่องเดียว)
+ */
+export const updateMyNameSchema = z.object({
+  first_name: z.string().trim().min(1).max(100),
+  last_name: z.string().trim().min(1).max(100),
+  preferred_name: z.string().trim().max(100).default(''),
+});
+export type UpdateMyNameInput = z.infer<typeof updateMyNameSchema>;
+
 export const personSchema = z
   .object({
     id: uuidSchema,

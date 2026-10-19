@@ -168,6 +168,25 @@ export class PeopleService {
     });
   }
 
+  /**
+   * แก้ชื่อของตัวเอง — หา person จาก employment ของคนที่ล็อกอินอยู่ (ไม่รับ id จาก client)
+   * แล้วแก้ผ่าน updatePerson ตัวเดิม (ได้ audit people.person.update เหมือน HR แก้)
+   */
+  async updateMyName(input: { first_name: string; last_name: string; preferred_name: string }): Promise<Person> {
+    const principal = this.requestContext.requirePrincipal();
+    if (principal.employmentId === null) throw AppError.notFound('employment');
+    const personId = await this.uow.run(async (uow) => {
+      const employment = await this.repository.findEmploymentById(uow.tx, principal.employmentId!);
+      if (employment === undefined) throw AppError.notFound('employment');
+      return employment.person.id;
+    });
+    return this.updatePerson(personId, {
+      first_name: input.first_name,
+      last_name: input.last_name,
+      preferred_name: input.preferred_name,
+    });
+  }
+
   // --- employments ---
 
   async createEmployment(input: CreateEmploymentInput): Promise<Employment> {

@@ -55,6 +55,7 @@ import {
   personSchema,
   terminateEmploymentSchema,
   updatePersonSchema,
+  updateMyNameSchema,
 } from './people';
 
 export interface RouteDefinition {
@@ -285,6 +286,17 @@ export const ROUTES: readonly RouteDefinition[] = [
     tag: 'people',
     permissions: ['workforce.people.manage'],
     body: updatePersonSchema,
+    response: personSchema,
+  },
+  {
+    operationId: 'updateMyName',
+    method: 'patch',
+    path: '/me/name',
+    summary: 'แก้ชื่อของตัวเอง (ชื่อ/นามสกุล/ชื่อเล่น)',
+    tag: 'people',
+    // พนักงานทุกคนมีสิทธิ์นี้ — endpoint แก้ได้แค่ person ของ employment ตัวเอง
+    permissions: ['workforce.attendance.read.self'],
+    body: updateMyNameSchema,
     response: personSchema,
   },
   {
