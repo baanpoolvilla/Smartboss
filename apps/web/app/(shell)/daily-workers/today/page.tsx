@@ -123,7 +123,8 @@ export default async function DailyWorkersTodayPage({ searchParams }: { searchPa
                           {r.cell?.ot && ` · OT ${r.cell.ot.start}–${r.cell.ot.end} (${hoursLabel(r.cell.ot.minutes)})`}
                         </span>
                       </span>
-                      <span className="shrink-0 text-right text-sm tabular-nums">
+                      {/* มือถือ: เวลา/ค่าแรงลงไปบรรทัดล่าง ชื่อจะได้ไม่ถูกบีบเหลือคำละบรรทัด */}
+                      <span className="order-last w-full pl-12 text-left text-sm tabular-nums sm:order-none sm:w-auto sm:pl-0 sm:text-right">
                         มา <b>{r.inAt ?? "--:--"}</b> · กลับ <b>{r.outAt ?? "--:--"}</b>
                         {r.lateMin > 0 && <span className="block text-xs text-(--tone-warn)">สาย {r.lateMin} นาที</span>}
                         {r.early && <span className="block text-xs text-(--tone-warn)">กลับก่อน{r.cell?.earlyMin ? ` ${r.cell.earlyMin} นาที` : "เวลา"}</span>}

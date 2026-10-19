@@ -53,7 +53,7 @@ export function PaySettings({ rows, otPercent, today }: { rows: Row[]; otPercent
   return (
     <section className="flex flex-col gap-3 rounded-2xl border border-(--line) bg-(--bg) p-4">
       <div className="flex flex-wrap items-end gap-3">
-        <div className="min-w-0 flex-1">
+        <div className="w-full min-w-0 sm:w-auto sm:flex-1">
           <h2 className="text-base font-semibold">ค่าแรงคนงาน</h2>
           <p className="text-xs text-(--ink-soft)">
             ค่าแรงต่อวัน · หักสาย/กลับก่อน นาทีละ ค่าแรง÷480 · OT ชั่วโมงละ ค่าแรง÷8 × %
@@ -83,7 +83,7 @@ export function PaySettings({ rows, otPercent, today }: { rows: Row[]; otPercent
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[520px] text-sm">
+        <table className="w-full text-sm">
           <thead className="text-xs text-(--ink-soft)">
             <tr>
               <th className="w-8 py-1.5 text-left">
@@ -96,7 +96,7 @@ export function PaySettings({ rows, otPercent, today }: { rows: Row[]; otPercent
               </th>
               <th className="py-1.5 text-left font-semibold">ชื่อ</th>
               <th className="py-1.5 text-right font-semibold">ค่าแรง/วัน</th>
-              <th className="py-1.5 text-right font-semibold">OT/ชม.</th>
+              <th className="hidden py-1.5 text-right font-semibold sm:table-cell">OT/ชม.</th>
               <th className="py-1.5 text-right font-semibold">% OT</th>
             </tr>
           </thead>
@@ -117,7 +117,7 @@ export function PaySettings({ rows, otPercent, today }: { rows: Row[]; otPercent
                   <td className="py-1.5 text-right tabular-nums">
                     {r.dailyWage === null ? <span className="text-(--tone-warn)">ยังไม่ตั้ง</span> : `${baht(r.dailyWage)} บาท`}
                   </td>
-                  <td className="py-1.5 text-right tabular-nums text-(--ink-soft)">
+                  <td className="hidden py-1.5 text-right tabular-nums text-(--ink-soft) sm:table-cell">
                     {r.dailyWage === null ? "—" : `${baht(Math.round(((r.dailyWage / 8) * pct) / 100 * 100) / 100)} บาท`}
                   </td>
                   <td className="py-1.5 text-right tabular-nums">
