@@ -64,6 +64,18 @@ export type StoreWrite =
  * ใช้ updateMany ที่มี version ในเงื่อนไข ทำให้การตรวจกับการเขียนเป็นก้าวเดียว
  * ถ้าแยกเป็น read-then-write สองคำขอที่มาพร้อมกันจะผ่านการตรวจทั้งคู่แล้วทับกัน
  */
+/** แถวที่ "เพิ่งเพิ่ม" (id ไม่อยู่ในก้อนเดิม) และซ้ำกับของที่มีอยู่ หรือซ้ำกันเอง — ตัดทิ้ง · แถวเดิมไม่แตะ */
+function dropFreshDuplicates(beforeData: unknown, afterData: unknown): unknown {
+  if (!Array.isArray(afterData)) return afterData;
+  const before = Array.isArray(beforeData) ? (beforeData as { id?: unknown }[]) : [];
+  const known = new Set(before.map((n) => n?.id));
+  const after = afterData as { id?: unknown }[];
+  const fresh = after.filter((n) => !known.has(n?.id));
+  if (fresh.length === 0) return afterData;
+  const kept = new Set(dropDuplicateNotifications(fresh as Parameters<typeof dropDuplicateNotifications>[0], before as Parameters<typeof dropDuplicateNotifications>[1]));
+  return after.filter((n) => known.has(n?.id) || kept.has(n as never));
+}
+
 export async function writeStore(
   orgId: string,
   key: string,
@@ -75,7 +87,9 @@ export async function writeStore(
   // เพราะมีหลายทางที่บันทึกคีย์นี้ (หน้าเว็บ PUT, ตัวเตือนใกล้ถึงกำหนด, สรุปงาน, คำขอแก้คะแนน ฯลฯ)
   if (key === NOTIFICATIONS_KEY) {
     const before = await readStore<unknown>(orgId, key);
-    const pruned = pruneNotifications(data);
+    // กันเบิ้ลทุกทางที่เขียนคีย์นี้ (หน้าเว็บ ตัวเตือน ตัวหักคะแนน คำขอ ฯลฯ) — แถวใหม่ที่ซ้ำกับของเดิม/กันเอง ตัดทิ้ง
+    // (ผู้ใช้ 19/10/2569 "ทั้งระบบนะ กันไว้ก่อนเลย" · กติกาใน notification-dedupe.ts)
+    const pruned = dropFreshDuplicates(before.data, pruneNotifications(data));
     const result = await writeStoreRaw(orgId, key, pruned, expectedVersion, updatedBy);
     if (result.ok) {
       announceNewNotifications(orgId, before.data, pruned);

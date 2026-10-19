@@ -49,16 +49,32 @@ export async function notifyUser(
   // แจ้งเตือนพลาดต้องไม่ทำให้การบันทึกพลาดตาม — ผู้เรียกส่วนใหญ่แจ้ง "หลัง" บันทึกข้อมูล
   // เสร็จแล้ว ถ้าโยนต่อ action จะตอบ 500 แล้วหน้าจอขึ้น "บันทึกไม่สำเร็จ" ทั้งที่ข้อมูลเข้าแล้ว
   try {
-    await prisma.notification.create({
-      data: {
-        orgId,
-        userId,
-        title: input.title,
-        body: input.body ?? null,
-        type: input.type ?? "general",
-        referenceId: input.referenceId ?? null,
-      },
+    // กันเบิ้ลทั้งระบบ (ผู้ใช้ 19/10/2569) — แจ้งเตือนเดิมถึงคนเดิม (ชนิด/เรื่อง/หัวข้อ/รายละเอียดเดียวกัน) ภายในช่วงนี้
+    // ไม่สร้างใหม่ ไม่เด้ง ไม่ส่ง LINE ซ้ำ · ล็อกต่อ (ผู้รับ+เรื่อง) กันสองคำขอที่มาพร้อมกันเป๊ะผ่านการเช็กทั้งคู่
+    // แชท 10 วินาที (ข้อความเหมือนกันส่งสองครั้งคือสองข้อความจริง) · อื่น ๆ 10 นาที
+    const type = input.type ?? "general";
+    const windowMs = type.startsWith("chat_") ? 10_000 : 10 * 60_000;
+    const created = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`notify:${orgId}:${userId}:${type}:${input.referenceId ?? ""}:${input.title}`}))`;
+      const dup = await tx.notification.findFirst({
+        where: {
+          orgId,
+          userId,
+          type,
+          referenceId: input.referenceId ?? null,
+          title: input.title,
+          body: input.body ?? null,
+          createdAt: { gte: new Date(Date.now() - windowMs) },
+        },
+        select: { id: true },
+      });
+      if (dup) return false;
+      await tx.notification.create({
+        data: { orgId, userId, title: input.title, body: input.body ?? null, type, referenceId: input.referenceId ?? null },
+      });
+      return true;
     });
+    if (!created) return;
   } catch (error) {
     console.error("[notify] notification.create failed:", error);
     return;
