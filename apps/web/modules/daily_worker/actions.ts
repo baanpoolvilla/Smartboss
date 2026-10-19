@@ -8,9 +8,9 @@ import { prisma } from "@smartboss/database";
 import { wfFetch as wfFetchRaw, WorkforceError } from "@/modules/hr/lib/api";
 import { syncUserToWorkforce } from "@/modules/admin/data/user-guards";
 import { DW_PERMS } from "./permissions";
-import { bangkokToday, loadMonth, OT_KEY, OVERRIDE_KEY, PAY_KEY, SETTINGS_KEY, TIME_EDIT_KEY, updateStoreList } from "./lib/data";
+import { bangkokToday, loadMoney, loadMonth, OT_KEY, OVERRIDE_KEY, PAY_KEY, PAYMENTS_KEY, SETTINGS_KEY, TIME_EDIT_KEY, updateStoreList } from "./lib/data";
 import { writeStore, readStore } from "@/modules/report_task/lib/db/org-store";
-import { otMinutes, type DwSettings, type OtEntry, type OverrideEntry, type PayRateEntry, type TimeEditEntry } from "./lib/types";
+import { otMinutes, owedOn, type DwSettings, type OtEntry, type OverrideEntry, type PayRateEntry, type PaymentEntry, type TimeEditEntry } from "./lib/types";
 
 /**
  * Server action ของโมดูลคนงานรายวัน — ตรวจสิทธิ์ Smartboss ทุกตัว (การซ่อนปุ่มไม่ใช่ security control)
@@ -328,6 +328,84 @@ export async function savePayRateAction(input: { employmentIds: string[]; dailyW
     ]);
     revalidatePath("/daily-workers");
     return { ok: true, done: ids.size };
+  } catch (error) {
+    return { error: message(error) };
+  }
+}
+
+/**
+ * บันทึกการจ่ายเงินให้คนงาน — ผู้ดูแลบ้าน (manage) จ่ายได้ไม่เกินยอดค้าง · จ่ายเกินยอดค้าง = เบิกล่วงหน้า
+ * ได้เฉพาะคนที่มีสิทธิ์ตั้งค่าแรง (HR/CEO — ผู้ใช้ตกลง 19/10/2569 "HR เป็นคนทำเรื่องเงิน") และต้องใส่หมายเหตุ
+ * เก็บ snapshot ค่าแรงรายวันของเดือนนั้น ณ ตอนจ่าย ไว้บอกทีหลังว่ายอดวันไหนเปลี่ยนหลังจ่าย
+ */
+export async function recordPaymentAction(input: { employmentId: string; date: string; amount: number; note: string }): Promise<Result> {
+  try {
+    const session = await requireOrg();
+    const canPay = hasPermission(session, DW_PERMS.manage) || hasPermission(session, DW_PERMS.pay);
+    if (!canPay) return { error: "ไม่มีสิทธิ์จ่ายเงิน" };
+    const amount = Math.round(Number(input.amount) * 100) / 100;
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000) return { error: "จำนวนเงินไม่ถูกต้อง" };
+    if (!DATE_RE.test(input.date) || input.date > bangkokToday()) return { error: "วันที่ไม่ถูกต้อง" };
+    const { money } = await loadMoney(session.orgId!, input.date.slice(0, 7));
+    const m = money.get(input.employmentId);
+    if (!m) return { error: "ไม่พบคนงาน" };
+    const owed = owedOn(m.days, input.date);
+    const note = input.note.trim().slice(0, 200);
+    const advance = amount > owed + 0.005;
+    if (advance) {
+      if (!hasPermission(session, DW_PERMS.pay)) {
+        return { error: `จ่ายได้ไม่เกินยอดค้าง ${owed.toLocaleString("th-TH")} บาท — จะให้เบิกล่วงหน้าต้องให้ HR เป็นคนบันทึก` };
+      }
+      if (!note) return { error: "เบิกล่วงหน้าต้องใส่หมายเหตุ" };
+    }
+    const snapshot: Record<string, number> = {};
+    for (const d of m.days) if (d.date <= input.date && d.earned) snapshot[d.date] = d.earned;
+    const byName = await nameOf(session.userId);
+    await updateStoreList<PaymentEntry>(session.orgId!, PAYMENTS_KEY, session.userId, (list) => [
+      ...list,
+      {
+        id: randomUUID(),
+        employmentId: input.employmentId,
+        date: input.date,
+        amount,
+        kind: advance ? "advance" : "wage",
+        note,
+        byUserId: session.userId,
+        byName,
+        at: new Date().toISOString(),
+        snapshot,
+      },
+    ]);
+    revalidatePath("/daily-workers");
+    return { ok: true };
+  } catch (error) {
+    return { error: message(error) };
+  }
+}
+
+/** ยกเลิกรายการจ่าย (กดผิด) — คนบันทึกเองภายในวันนั้น หรือคนที่มีสิทธิ์ตั้งค่าแรง (HR) · ต้องใส่เหตุผล ไม่ลบทิ้ง */
+export async function voidPaymentAction(input: { id: string; reason: string }): Promise<Result> {
+  try {
+    const session = await requireOrg();
+    const reason = input.reason.trim();
+    if (!reason) return { error: "ต้องใส่เหตุผล" };
+    const isHr = hasPermission(session, DW_PERMS.pay);
+    const byName = await nameOf(session.userId);
+    let denied = false;
+    await updateStoreList<PaymentEntry>(session.orgId!, PAYMENTS_KEY, session.userId, (list) =>
+      list.map((p) => {
+        if (p.id !== input.id || p.voided) return p;
+        const own = p.byUserId === session.userId && p.date === bangkokToday();
+        if (!isHr && !own) {
+          denied = true;
+          return p;
+        }
+        return { ...p, voided: { byName, at: new Date().toISOString(), reason: reason.slice(0, 200) } };
+      }),
+    );
+    if (denied) return { error: "ยกเลิกได้เฉพาะรายการที่ตัวเองบันทึกวันนี้ — อื่น ๆ ให้ HR ยกเลิก" };
+    revalidatePath("/daily-workers");
+    return { ok: true };
   } catch (error) {
     return { error: message(error) };
   }

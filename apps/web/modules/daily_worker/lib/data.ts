@@ -18,6 +18,9 @@ import {
   type OtEntry,
   type OverrideEntry,
   type PayRateEntry,
+  type PaymentEntry,
+  type DayMoney,
+  walkLedger,
   type TimeEditEntry,
   type WorkerMonth,
 } from "./types";
@@ -42,6 +45,12 @@ export const OVERRIDE_KEY = "daily-worker-overrides";
 export const TIME_EDIT_KEY = "daily-worker-time-edits";
 export const SETTINGS_KEY = "daily-worker-settings";
 export const PAY_KEY = "daily-worker-pay";
+export const PAYMENTS_KEY = "daily-worker-payments";
+
+export async function readPayments(orgId: string) {
+  const { data } = await readStore<PaymentEntry[]>(orgId, PAYMENTS_KEY);
+  return data ?? [];
+}
 
 export async function readPayRates(orgId: string) {
   const { data } = await readStore<PayRateEntry[]>(orgId, PAY_KEY);
@@ -277,6 +286,14 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
     return w ? Number(w.amount) : null;
   };
   const otPercentOn = (employmentId: string, date: string): number => rateOn(employmentId, date)?.otPercent ?? settings.otPercent;
+  const rateSourceOn = (employmentId: string, date: string): DayCell["rate"] => {
+    const own = rateOn(employmentId, date);
+    if (own) {
+      return { wage: own.dailyWage, otPercent: own.otPercent ?? settings.otPercent, origin: "module", byName: own.byName, from: own.from, otFromCompany: own.otPercent === null };
+    }
+    const w = wf.wages.find((r) => r.employment_id === employmentId && r.effective_from <= date && (!r.effective_to || r.effective_to >= date));
+    return w ? { wage: Number(w.amount), otPercent: settings.otPercent, origin: "hr", byName: null, from: w.effective_from, otFromCompany: true } : undefined;
+  };
   const empBySubject = new Map(wf.employments.map((e) => [e.subject, e]));
   const firstInByEmp = new Map(wf.firstIn.map((f) => [f.employment_id, f.day]));
 
@@ -328,7 +345,11 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
             cell.earlyMin = j.earlyMin;
           }
           if (j.s !== "x") cell.workedMin = j.workedMin;
-          if (j.pay) cell.pay = j.pay;
+          if (j.pay) {
+            cell.pay = j.pay;
+            cell.rate = rateSourceOn(emp.employment_id, date);
+          }
+          if (dayStart !== null && dayEnd !== null) cell.shift = { start: dayStart, end: dayEnd };
           if (ov && r?.late) cell.override = { reason: ov.reason, byName: ov.byName, at: ov.at };
         } else if (leave) {
           cell.s = leave.is_day_off ? "o" : "l";
@@ -339,7 +360,10 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
           cell.s = "m";
           cell.override = { reason: ov.reason, byName: ov.byName, at: ov.at };
           const wage = wageOn(emp.employment_id, date);
-          if (wage !== null) cell.pay = dayPay(wage, 0, otEntry?.minutes ?? 0, otPercentOn(emp.employment_id, date));
+          if (wage !== null) {
+            cell.pay = dayPay(wage, 0, otEntry?.minutes ?? 0, otPercentOn(emp.employment_id, date));
+            cell.rate = rateSourceOn(emp.employment_id, date);
+          }
         } else if (date < today) {
           // "ไม่มา" เฉพาะวันที่มีกะจริงในวันนั้น — ก่อนเริ่มกะ/ก่อนเริ่มงานไม่นับ (เจอจริง: 9–14 ต.ค. ขึ้นไม่มา ทั้งที่กะเริ่ม 15)
           cell.s = r?.has_shift && started !== null && date >= started ? "n" : "";
@@ -517,4 +541,83 @@ export async function workerEmploymentIds(orgId: string): Promise<Set<string>> {
     ),
   ).catch(() => []);
   return new Set(rows.map((r) => r.id));
+}
+
+/* ───────────── บัญชีค้างจ่าย ───────────── */
+
+export interface WorkerMoney {
+  worker: WorkerMonth;
+  /** ยกมาจากสิ้นเดือนก่อน */
+  opening: number;
+  days: DayMoney[];
+  earned: number;
+  paid: number;
+  closing: number;
+}
+
+const monthOf = (date: string) => date.slice(0, 7);
+function addMonths(month: string, n: number): string {
+  const [y, m] = month.split("-").map(Number) as [number, number];
+  const d = new Date(Date.UTC(y, m - 1 + n, 1));
+  return d.toISOString().slice(0, 7);
+}
+function monthDates(month: string, today: string): string[] {
+  const total = daysInMonth(month);
+  const out: string[] = [];
+  for (let d = 1; d <= total; d++) {
+    const date = `${month}-${String(d).padStart(2, "0")}`;
+    if (date > today) break;
+    out.push(date);
+  }
+  return out;
+}
+function earnMap(w: WorkerMonth, month: string): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [d, c] of Object.entries(w.cells)) if (c.pay) out[`${month}-${String(d).padStart(2, "0")}`] = c.pay.total;
+  return out;
+}
+
+/**
+ * เงินของคนงานทุกคนในเดือน `month` — ยกมาคิดจากเดือนก่อนหน้าทีละเดือน (ย้อนไม่เกิน 12 เดือน
+ * นับจากเดือนแรกที่มีการลงเวลาหรือการจ่าย) · ตัวเลขทุกหน้าที่เกี่ยวกับเงินมาจากฟังก์ชันนี้ที่เดียว
+ */
+export async function loadMoney(orgId: string, month: string, now: Date = new Date()) {
+  const [data, payments] = await Promise.all([loadMonth(orgId, month, now), readPayments(orgId)]);
+  const today = data.today;
+  const firstMonths = [
+    ...payments.map((p) => monthOf(p.date)),
+    ...data.workers.map((w) => (w.startedOn ? monthOf(w.startedOn) : null)).filter((x): x is string => !!x),
+  ].filter((m) => m < month);
+  let start = firstMonths.length ? firstMonths.sort()[0]! : month;
+  if (start < addMonths(month, -12)) start = addMonths(month, -12);
+
+  // ยกมา: เดินเดือนก่อนหน้าทีละเดือน
+  const opening = new Map<string, number>();
+  for (let m = start; m < month; m = addMonths(m, 1)) {
+    const prev = await loadMonth(orgId, m, now);
+    for (const w of prev.workers) {
+      if (!w.employmentId) continue;
+      const mine = payments.filter((p) => p.employmentId === w.employmentId && monthOf(p.date) === m);
+      const days = walkLedger(opening.get(w.employmentId) ?? 0, monthDates(m, today), earnMap(w, m), mine);
+      opening.set(w.employmentId, days.length ? days[days.length - 1]!.balance : (opening.get(w.employmentId) ?? 0));
+    }
+  }
+
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const money = new Map<string, WorkerMoney>();
+  for (const w of data.workers) {
+    if (!w.employmentId) continue;
+    const open = opening.get(w.employmentId) ?? 0;
+    const mine = payments.filter((p) => p.employmentId === w.employmentId && monthOf(p.date) === month);
+    const days = walkLedger(open, monthDates(month, today), earnMap(w, month), mine);
+    money.set(w.employmentId, {
+      worker: w,
+      opening: open,
+      days,
+      earned: r2(days.reduce((s, d) => s + d.earned, 0)),
+      paid: r2(days.reduce((s, d) => s + d.paid, 0)),
+      closing: days.length ? days[days.length - 1]!.balance : open,
+    });
+  }
+  return { data, money, payments: payments.filter((p) => monthOf(p.date) === month) };
 }

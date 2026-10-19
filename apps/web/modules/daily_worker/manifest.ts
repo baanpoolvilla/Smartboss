@@ -25,6 +25,8 @@ export const dailyWorkerManifest: ModuleManifest = {
     // แยกจาก "ภาพรวม" ของพนักงานประจำ — ใครมา/ไม่มา มากี่โมง กลับกี่โมง แก้ขาดเป็นมาได้ทันที
     { label: "ลงเวลาวันนี้", path: "/daily-workers/today", permission: DW_PERMS.view, icon: "Clock" },
     { label: "ตารางคนงาน", path: "/daily-workers", permission: DW_PERMS.view, icon: "CalendarDays" },
+    // เงินอยู่ที่นี่ที่เดียว (+ หน้ารายคน) — บัญชีค้างจ่าย เบิกก่อน/เก็บไว้ได้ (ผู้ใช้ตกลง 19/10/2569)
+    { label: "จ่ายเงิน", path: "/daily-workers/pay", permission: DW_PERMS.view, icon: "Wallet" },
   ],
   permissions: Object.values(DW_PERMS),
 };

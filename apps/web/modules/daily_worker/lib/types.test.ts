@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type DayInput, dayPay, daysInMonth, hoursLabel, judgeDay, judgeTimes, minutesToHm, otMinutes, shiftMonth } from "./types";
+import { type DayInput, type PaymentEntry, changedAfterPay, owedOn, walkLedger, dayPay, daysInMonth, hoursLabel, judgeDay, judgeTimes, minutesToHm, otMinutes, shiftMonth } from "./types";
 
 describe("daily worker helpers", () => {
   it("OT hours come from the start–end the supervisor typed, crossing midnight too", () => {
@@ -89,5 +89,37 @@ describe("judgeDay — one day of one worker (ค่าแรง 400 · กะ 0
   });
   it("กะ 09:00–18:00 ใช้กะของวันนั้น: เข้า 08:50 = ไม่สาย", () => {
     expect(day({ inAt: "08:50", outAt: "18:00", shiftStart: 540, shiftEnd: 1080 })).toMatchObject({ s: "m", lateMin: 0, pay: { total: 400 } });
+  });
+});
+
+describe("ledger — บัญชีค้างจ่าย", () => {
+  const pay = (date: string, amount: number, extra: Partial<PaymentEntry> = {}): PaymentEntry => ({
+    id: `${date}-${amount}`, employmentId: "e", date, amount, kind: "wage", note: "", byUserId: "u", byName: "ผู้ดูแล", at: `${date}T17:00:00Z`, ...extra,
+  });
+  const dates = ["2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18", "2026-10-19"];
+  const earn = { "2026-10-13": 400, "2026-10-14": 383.33, "2026-10-15": 0, "2026-10-16": 375, "2026-10-17": 400, "2026-10-19": 390 };
+
+  it("จ่ายรายวัน + เก็บไว้ + เบิกเกิน → ตัวเลขเดียวกับ mockup", () => {
+    const days = walkLedger(0, dates, earn, [pay("2026-10-13", 400), pay("2026-10-14", 400), pay("2026-10-19", 1500, { kind: "advance" })]);
+    expect(days.find((d) => d.date === "2026-10-18")!.balance).toBe(758.33);
+    const d19 = days.find((d) => d.date === "2026-10-19")!;
+    expect(d19).toMatchObject({ carried: 758.33, earned: 390, paid: 1500, balance: -351.67 });
+  });
+  it("ยกเลิกการจ่ายแล้ว ไม่นับ", () => {
+    const days = walkLedger(0, dates, earn, [pay("2026-10-13", 400, { voided: { byName: "HR", at: "", reason: "กดผิด" } })]);
+    expect(days[0]!.balance).toBe(400);
+  });
+  it("ยกมาจากเดือนก่อน", () => {
+    expect(walkLedger(-100, ["2026-11-01"], { "2026-11-01": 400 }, [])[0]!.balance).toBe(300);
+  });
+  it("ยอดค้างที่จ่ายได้ไม่ติดลบ", () => {
+    const days = walkLedger(0, dates, earn, [pay("2026-10-19", 1500, { kind: "advance" })]);
+    expect(owedOn(days, "2026-10-18")).toBe(1558.33);
+    expect(owedOn(days, "2026-10-19")).toBe(448.33);
+  });
+  it("แก้เวลาหลังจ่าย → บอกว่ายอดเปลี่ยนจากตอนจ่ายเท่าไร", () => {
+    const p = pay("2026-10-14", 400, { snapshot: { "2026-10-14": 400 } });
+    expect(changedAfterPay("2026-10-14", 383.33, [p])).toMatchObject({ was: 400, now: 383.33 });
+    expect(changedAfterPay("2026-10-14", 400, [p])).toBeNull();
   });
 });

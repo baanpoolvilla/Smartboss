@@ -6,7 +6,7 @@ import { requireOrg, hasPermission } from "@smartboss/auth";
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { DW_PERMS } from "@/modules/daily_worker/permissions";
 import { bangkokToday, loadDay } from "@/modules/daily_worker/lib/data";
-import { baht, hoursLabel } from "@/modules/daily_worker/lib/types";
+import { hoursLabel } from "@/modules/daily_worker/lib/types";
 import { TimeEditFix } from "@/modules/daily_worker/components/time-edit-fix";
 import { syncUserToWorkforce } from "@/modules/admin/data/user-guards";
 
@@ -36,7 +36,8 @@ function shiftDate(date: string, delta: number) {
 
 /**
  * ลงเวลาของคนงานรายวันวันเดียว — แยกจาก "ภาพรวม" ของพนักงานประจำในระบบบุคคล ("จะได้แยกกันชัดเจน")
- * ผู้ดูแลเห็นทันทีว่าใครมา/สาย/ขาด มากี่โมง กลับกี่โมง ค่าแรงวันนี้เท่าไร (คนงานได้เงินรายวัน)
+ * ผู้ดูแลเห็นทันทีว่าใครมา/สาย/ขาด มากี่โมง กลับกี่โมง — ไม่มีตัวเงิน (เงินอยู่ที่ "จ่ายเงิน" + หน้ารายคนเท่านั้น
+ * ผู้ใช้ 19/10/2569: "เงินรวมไม่ต้องคิดในลงเวลา ไม่งั้นจะซ้ำซ้อน")
  * แก้เวลาเข้า/ออกได้จากหน้านี้เลยพร้อมเหตุผล (ไปหน้างานมา สแกนไม่ทัน)
  * สถานะตามกติกาของคนงาน (19/10/2569): เข้าหลังเวลาเข้ากะ = สาย หักตามนาที · ไม่ลงออก = ขาด
  */
@@ -44,8 +45,6 @@ export default async function DailyWorkersTodayPage({ searchParams }: { searchPa
   const session = await requireOrg();
   if (![DW_PERMS.view, DW_PERMS.manage, DW_PERMS.override, DW_PERMS.pay].some((p) => hasPermission(session, p))) redirect("/");
   const canFix = hasPermission(session, DW_PERMS.override);
-  // ยอดเงินเห็นทุกคนที่เข้าหน้านี้ได้ (ดู/จัดการ/แก้เวลา/ตั้งค่าแรง) — CEO ได้ view เพื่อดูยอด
-  const canSeePay = true;
 
   const { date: raw } = await searchParams;
   const today = bangkokToday();
@@ -65,7 +64,6 @@ export default async function DailyWorkersTodayPage({ searchParams }: { searchPa
   const d = new Date(`${date}T12:00:00+07:00`);
   const title = `${WD[d.getUTCDay()]} ${Number(date.slice(8))} ${MONTHS[Number(date.slice(5, 7)) - 1]} ${Number(date.slice(0, 4)) + 543}`;
   const count = (s: string) => data?.rows.filter((r) => r.status === s).length ?? 0;
-  const payTotal = data?.rows.reduce((sum, r) => sum + (r.cell?.pay?.total ?? 0), 0) ?? 0;
 
   return (
     <AppScaffold title="ลงเวลาคนงาน" width="max-w-3xl">
@@ -98,18 +96,13 @@ export default async function DailyWorkersTodayPage({ searchParams }: { searchPa
               <p className="text-xs text-(--ink-soft)">
                 มา {count("m")} · สาย {count("s")} · ขาด {count("x")} · {date === today ? `ยังไม่มา ${count("w")} · ` : ""}ไม่มา {count("n")} · หยุด/ลา{" "}
                 {count("o") + count("l") + count("r")}
-                {canSeePay && payTotal > 0 && (
-                  <>
-                    {" "}· ค่าแรงรวม <b className="text-(--ink)">{baht(payTotal)} บาท</b>
-                  </>
-                )}
+
               </p>
             </div>
             <ul className="flex flex-col gap-2">
               {data.rows.map((r) => {
                 const st = STATUS[r.status]!;
                 const fixable = canFix && !!r.employmentId && !["o", "l", "r", "ns", "none"].includes(r.status);
-                const pay = r.cell?.pay;
                 return (
                   <li key={r.userId} className="flex flex-col gap-2 rounded-xl border border-(--line) px-3 py-2.5">
                     <div className="flex flex-wrap items-center gap-3">
@@ -117,7 +110,13 @@ export default async function DailyWorkersTodayPage({ searchParams }: { searchPa
                         {r.name.slice(0, 2).toUpperCase()}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <b className="block truncate text-sm">{r.name}</b>
+                        {r.employmentId ? (
+                          <Link href={`/daily-workers/w/${r.employmentId}?month=${date.slice(0, 7)}`} className="block truncate text-sm font-bold hover:underline">
+                            {r.name}
+                          </Link>
+                        ) : (
+                          <b className="block truncate text-sm">{r.name}</b>
+                        )}
                         <span className="block text-xs text-(--ink-soft)">
                           {r.employeeCode ?? "หาทะเบียนไม่เจอ"} · {r.shift ? `เข้ากะ ${r.shift.slice(0, 5)} เลิก ${r.shift.slice(-5)}` : "ยังไม่ผูกกะ"}
                           {r.cell?.ot && ` · OT ${r.cell.ot.start}–${r.cell.ot.end} (${hoursLabel(r.cell.ot.minutes)})`}
@@ -128,13 +127,7 @@ export default async function DailyWorkersTodayPage({ searchParams }: { searchPa
                         มา <b>{r.inAt ?? "--:--"}</b> · กลับ <b>{r.outAt ?? "--:--"}</b>
                         {r.lateMin > 0 && <span className="block text-xs text-(--tone-warn)">สาย {r.lateMin} นาที</span>}
                         {r.early && <span className="block text-xs text-(--tone-warn)">กลับก่อน{r.cell?.earlyMin ? ` ${r.cell.earlyMin} นาที` : "เวลา"}</span>}
-                        {canSeePay && pay && (
-                          <span className="block text-xs text-(--ink-soft)">
-                            ค่าแรง <b className="text-(--ink)">{baht(pay.total)}</b>
-                            {pay.deduct > 0 && ` (หัก ${baht(pay.deduct)})`}
-                            {pay.ot > 0 && ` (OT +${baht(pay.ot)})`}
-                          </span>
-                        )}
+
                       </span>
                       <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${st.cls}`}>
                         {r.cell?.override ? "มา (แก้แล้ว)" : st.text}

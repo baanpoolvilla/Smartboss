@@ -1,10 +1,11 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { DW_PERMS } from "@/modules/daily_worker/permissions";
 import { bangkokToday, loadMonth, summarize } from "@/modules/daily_worker/lib/data";
-import { baht, hoursLabel, minutesToHm } from "@/modules/daily_worker/lib/types";
+import { hoursLabel, minutesToHm } from "@/modules/daily_worker/lib/types";
 import { WorkerRoster } from "@/modules/daily_worker/components/worker-roster";
 import { PaySettings } from "@/modules/daily_worker/components/pay-settings";
 import { syncUserToWorkforce } from "@/modules/admin/data/user-guards";
@@ -51,7 +52,7 @@ export default async function DailyWorkersPage({ searchParams }: { searchParams:
           <section className="flex flex-col gap-2">
             <h2 className="text-base font-semibold">สรุปลงเวลา · ทั้งเดือน{data.today.startsWith(month) ? " (ถึงวันนี้)" : ""}</h2>
             <div className="overflow-x-auto rounded-2xl border border-(--line) bg-(--bg)">
-              <table className="w-full min-w-[1040px] text-sm">
+              <table className="w-full min-w-[720px] text-sm">
                 <thead className="bg-(--bg-soft) text-xs text-(--ink-soft)">
                   <tr>
                     <th className="px-3 py-2 text-left font-semibold">ชื่อ</th>
@@ -63,11 +64,7 @@ export default async function DailyWorkersPage({ searchParams }: { searchParams:
                     <th className="px-3 py-2 text-right font-semibold">ไม่มา</th>
                     <th className="px-3 py-2 text-right font-semibold">หยุด/ลา</th>
                     <th className="px-3 py-2 text-right font-semibold">OT</th>
-                    <th className="px-3 py-2 text-right font-semibold">ค่าแรง/วัน</th>
-                    <th className="px-3 py-2 text-right font-semibold">ค่าแรงรวม</th>
-                    <th className="px-3 py-2 text-right font-semibold">หักสาย/กลับก่อน</th>
-                    <th className="px-3 py-2 text-right font-semibold">ค่า OT</th>
-                    <th className="px-3 py-2 text-right font-semibold">รวมจ่าย</th>
+
                   </tr>
                 </thead>
                 <tbody>
@@ -76,7 +73,15 @@ export default async function DailyWorkersPage({ searchParams }: { searchParams:
                     const dash = !w.shiftId;
                     return (
                       <tr key={w.userId} className="border-t border-(--line)">
-                        <td className="px-3 py-2 font-medium">{w.name}</td>
+                        <td className="px-3 py-2 font-medium">
+                          {w.employmentId ? (
+                            <Link href={`/daily-workers/w/${w.employmentId}?month=${month}`} className="hover:underline">
+                              {w.name}
+                            </Link>
+                          ) : (
+                            w.name
+                          )}
+                        </td>
                         <td className="px-3 py-2 text-(--ink-soft)">{w.shiftId ? `${minutesToHm(w.shiftStart)}–${minutesToHm(w.shiftEnd)}` : "ยังไม่ผูกกะ"}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{s.present}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-(--tone-warn)">{dash ? "—" : s.late ? `${s.late} (${s.lateMin} น.)` : 0}</td>
@@ -85,14 +90,7 @@ export default async function DailyWorkersPage({ searchParams }: { searchParams:
                         <td className="px-3 py-2 text-right tabular-nums">{s.noShow}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{s.off + s.leave}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{s.otMinutes ? hoursLabel(s.otMinutes) : "0"}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{w.dailyWage === null ? <span className="text-(--tone-warn)">ยังไม่ตั้ง</span> : baht(w.dailyWage)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{baht(s.pay.wage)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums text-(--tone-danger)">{s.pay.deduct ? `−${baht(s.pay.deduct)}` : "0"}</td>
-                        <td className="px-3 py-2 text-right tabular-nums text-violet-700 dark:text-violet-300">{s.pay.ot ? `+${baht(s.pay.ot)}` : "0"}</td>
-                        <td className="px-3 py-2 text-right font-semibold tabular-nums">
-                          {baht(s.pay.total)}
-                          {s.pay.unpaidDays > 0 && <span className="block text-[11px] font-normal text-(--tone-warn)">ยังไม่คิด {s.pay.unpaidDays} วัน</span>}
-                        </td>
+
                       </tr>
                     );
                   })}
@@ -100,8 +98,11 @@ export default async function DailyWorkersPage({ searchParams }: { searchParams:
               </table>
             </div>
             <p className="text-xs text-(--ink-soft)">
-              คนงานไม่คิดคะแนน · สาย = ลงเข้าหลังเวลาเข้ากะ (ไม่มีผ่อนผัน) · ขาด = ไม่ลงออกทั้งวัน (ไม่ได้ค่าแรง) · หักสาย/กลับก่อนนาทีละ ค่าแรง÷480 ·
-              OT ชั่วโมงละ ค่าแรง÷8 × % · &quot;ยังไม่คิด&quot; = มาแต่ยังไม่ตั้งค่าแรง หรือวันนี้ยังไม่ลงออก
+              คนงานไม่คิดคะแนน · สาย = ลงเข้าหลังเวลาเข้ากะ (ไม่มีผ่อนผัน) · ขาด = ไม่ลงออกทั้งวัน (ไม่ได้ค่าแรง) · กดชื่อดูบัญชีรายคน ·
+              ตัวเงินดูที่{" "}
+              <Link href={`/daily-workers/pay?month=${month}`} className="font-semibold underline">
+                จ่ายเงิน
+              </Link>
             </p>
           </section>
 

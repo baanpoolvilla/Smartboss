@@ -28,6 +28,10 @@ export interface DayCell {
   workedMin?: number;
   /** ค่าแรงวันนี้ — ไม่มี = ยังคิดไม่ได้ (ยังไม่ตั้งค่าแรงรายวัน / วันนี้ยังไม่ลงออก) */
   pay?: DayPay;
+  /** ที่มาของค่าแรงวันนี้ (ใครตั้ง มีผลวันไหน % OT) — โชว์ใน "ที่มาของตัวเลข" */
+  rate?: { wage: number; otPercent: number; origin: "module" | "hr"; byName: string | null; from: string; otFromCompany: boolean };
+  /** กะของวันนั้นจริง (นาที) */
+  shift?: { start: number; end: number };
   /** ผู้ดูแลแก้เวลาเข้า/ออก (ไปหน้างานมา สแกนไม่ทัน ฯลฯ) — เก็บเวลาที่สแกนจริงไว้ด้วย */
   edit?: { inAt: string | null; outAt: string | null; scannedIn: string | null; scannedOut: string | null; reason: string; byName: string; at: string };
   ot?: { id: string; start: string; end: string; minutes: number; note: string; byName: string };
@@ -248,4 +252,72 @@ export function judgeDay(d: DayInput & { inAt: string }): DayJudgement {
   if (!noOut && workedMin === 0 && !hasOt) return { s: "x", lateMin: 0, earlyMin: 0, workedMin: 0, pay: null };
   const pay = d.wage !== null && !noOut ? dayPay(d.wage, lateMin + t.earlyMin, d.otMinutes ?? 0, d.otPercent) : null;
   return { s: lateMin > 0 ? "s" : "m", lateMin, earlyMin: t.earlyMin, workedMin, pay };
+}
+
+/* ───────────── บัญชีค้างจ่าย (ผู้ใช้ตกลง 19/10/2569) ─────────────
+ * ค่าแรงที่ได้แต่ละวัน (DayCell.pay.total) เข้าบัญชีเอง · เงินที่จ่ายออกบันทึกเป็นรายการ (PaymentEntry)
+ * คงเหลือ = ยกมา + ได้ − จ่าย · บวก = บริษัทค้างจ่าย · ลบ = คนงานเบิกเกิน (หักจากค่าแรงวันถัดไปเอง)
+ * จ่ายเกินยอดค้าง = เบิกล่วงหน้า — เฉพาะคนที่มีสิทธิ์ตั้งค่าแรง (HR/CEO) · ผู้ดูแลบ้านจ่ายได้ไม่เกินยอดค้าง
+ */
+export interface PaymentEntry {
+  id: string;
+  employmentId: string;
+  /** วันที่จ่าย (เวลาไทย) */
+  date: string;
+  amount: number;
+  /** wage = จ่ายค่าแรงที่ค้าง · advance = จ่ายเกินยอดค้าง (เบิกล่วงหน้า) */
+  kind: "wage" | "advance";
+  note: string;
+  byUserId: string;
+  byName: string;
+  at: string;
+  /** ค่าแรงของแต่ละวัน ณ ตอนจ่าย (วันในเดือนเดียวกัน ≤ date) — ไว้บอกว่ายอดวันไหนเปลี่ยนหลังจ่าย */
+  snapshot?: Record<string, number>;
+  voided?: { byName: string; at: string; reason: string };
+}
+
+export interface DayMoney {
+  date: string;
+  /** คงเหลือก่อนวันนี้ */
+  carried: number;
+  earned: number;
+  paid: number;
+  /** คงเหลือสิ้นวัน */
+  balance: number;
+  payments: PaymentEntry[];
+}
+
+const r2m = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * เดินบัญชีทีละวัน: ยกมา → +ได้วันนั้น → −จ่ายวันนั้น (ได้ก่อนจ่าย จ่ายค่าแรงวันนี้ในวันเดียวกันได้)
+ * payments ที่ยกเลิกแล้ว (voided) ไม่นับ
+ */
+export function walkLedger(opening: number, dates: string[], earnByDate: Record<string, number>, payments: PaymentEntry[]): DayMoney[] {
+  const live = payments.filter((p) => !p.voided);
+  let bal = opening;
+  return dates.map((date) => {
+    const carried = r2m(bal);
+    const earned = r2m(earnByDate[date] ?? 0);
+    const mine = live.filter((p) => p.date === date);
+    const paid = r2m(mine.reduce((s, p) => s + p.amount, 0));
+    bal = r2m(carried + earned - paid);
+    return { date, carried, earned, paid, balance: bal, payments: mine };
+  });
+}
+
+/** ยอดของวันนั้นเปลี่ยนหลังจ่ายไปแล้วไหม — เทียบกับ snapshot ของการจ่ายครั้งล่าสุดที่ครอบวันนั้น */
+export function changedAfterPay(date: string, current: number, payments: PaymentEntry[]): { was: number; now: number; paidAt: string } | null {
+  const p = payments
+    .filter((x) => !x.voided && x.snapshot && x.snapshot[date] !== undefined)
+    .sort((a, b) => b.at.localeCompare(a.at))[0];
+  if (!p) return null;
+  const was = p.snapshot![date]!;
+  return Math.abs(was - current) >= 0.01 ? { was, now: r2m(current), paidAt: p.at } : null;
+}
+
+/** ยอดที่ยังค้างจ่ายได้โดยไม่นับเป็นเบิก (คงเหลือสิ้นวันนั้น ไม่ติดลบ) */
+export function owedOn(days: DayMoney[], date: string): number {
+  const d = days.find((x) => x.date === date) ?? [...days].reverse().find((x) => x.date <= date);
+  return d ? Math.max(0, d.balance) : 0;
 }
