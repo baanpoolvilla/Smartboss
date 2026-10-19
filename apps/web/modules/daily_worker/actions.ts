@@ -9,8 +9,8 @@ import { wfFetch as wfFetchRaw, WorkforceError } from "@/modules/hr/lib/api";
 import { syncUserToWorkforce } from "@/modules/admin/data/user-guards";
 import { DW_PERMS } from "./permissions";
 import { bangkokToday, loadMoney, loadMonth, OT_KEY, OVERRIDE_KEY, updateStoreList } from "./lib/data";
-import { withDailyWorkerTenant } from "./lib/db";
-import { otMinutes, owedOn, type OtEntry, type OverrideEntry } from "./lib/types";
+import { insertAudit, logDw, withDailyWorkerTenant } from "./lib/db";
+import { baht, hoursLabel, otMinutes, owedOn, type OtEntry, type OverrideEntry } from "./lib/types";
 
 /**
  * Server action ของโมดูลคนงานรายวัน — ตรวจสิทธิ์ Smartboss ทุกตัว (การซ่อนปุ่มไม่ใช่ security control)
@@ -115,6 +115,16 @@ export async function setDaysOffAction(input: { month: string; cells: { employme
         }
         return true;
       });
+      if (done > 0) {
+        await logDw(session.orgId!, {
+          byUserId: session.userId,
+          byName: await nameOf(session.userId),
+          action: "day_off",
+          employmentIds: [...new Set(todo.map((c) => c.employmentId))],
+          summary: `ลงหยุด ${done} ช่อง`,
+          detail: { cells: todo.map((c) => ({ employmentId: c.employmentId, date: `${input.month}-${String(c.day).padStart(2, "0")}` })) },
+        });
+      }
       revalidatePath("/daily-workers");
       return { ok: true, done, skipped: input.cells.length - done };
     }
@@ -127,6 +137,17 @@ export async function setDaysOffAction(input: { month: string; cells: { employme
       await wfFetch(`/leave-requests/${id}/cancel-for`, { method: "POST", body: { reason: "ผู้ดูแลยกเลิกวันหยุด (คนงานรายวัน)" } });
       return true;
     });
+    if (done > 0) {
+      const cleared = input.cells.filter((c) => byEmp.get(c.employmentId)?.cells[c.day]?.leave?.dayOff);
+      await logDw(session.orgId!, {
+        byUserId: session.userId,
+        byName: await nameOf(session.userId),
+        action: "day_off_clear",
+        employmentIds: [...new Set(cleared.map((c) => c.employmentId))],
+        summary: `ยกเลิกวันหยุด ${done} วัน`,
+        detail: { cells: cleared.map((c) => ({ employmentId: c.employmentId, date: `${input.month}-${String(c.day).padStart(2, "0")}` })) },
+      });
+    }
     revalidatePath("/daily-workers");
     return { ok: true, done, skipped: input.cells.length - done };
   } catch (error) {
@@ -160,6 +181,14 @@ export async function saveOtAction(input: { employmentIds: string[]; date: strin
         at,
       })),
     ]);
+    await logDw(session.orgId!, {
+      byUserId: session.userId,
+      byName,
+      action: "ot",
+      employmentIds: [...ids],
+      workDate: input.date,
+      summary: `ลง OT ${input.start}–${input.end} (${hoursLabel(minutes)})${input.note.trim() ? ` · ${input.note.trim().slice(0, 100)}` : ""}`,
+    });
     revalidatePath("/daily-workers");
     return { ok: true, done: ids.size };
   } catch (error) {
@@ -173,6 +202,7 @@ export async function deleteOtAction(input: { employmentId: string; date: string
     await updateStoreList<OtEntry>(session.orgId!, OT_KEY, session.userId, (list) =>
       list.filter((o) => !(o.employmentId === input.employmentId && o.date === input.date)),
     );
+    await logDw(session.orgId!, { byUserId: session.userId, byName: await nameOf(session.userId), action: "ot_delete", employmentIds: [input.employmentId], workDate: input.date, summary: "ลบ OT" });
     revalidatePath("/daily-workers");
     return { ok: true };
   } catch (error) {
@@ -192,6 +222,7 @@ export async function setOverrideAction(input: { employmentId: string; date: str
       ...list.filter((o) => !(o.employmentId === input.employmentId && o.date === input.date)),
       { employmentId: input.employmentId, date: input.date, reason: reason.slice(0, 300), byUserId: session.userId, byName, at: new Date().toISOString() },
     ]);
+    await logDw(session.orgId!, { byUserId: session.userId, byName, action: "override", employmentIds: [input.employmentId], workDate: input.date, summary: `แก้เป็นมา (แบบเดิม) · ${reason.slice(0, 200)}` });
     revalidatePath("/daily-workers");
     return { ok: true };
   } catch (error) {
@@ -205,6 +236,7 @@ export async function removeOverrideAction(input: { employmentId: string; date: 
     await updateStoreList<OverrideEntry>(session.orgId!, OVERRIDE_KEY, session.userId, (list) =>
       list.filter((o) => !(o.employmentId === input.employmentId && o.date === input.date)),
     );
+    await logDw(session.orgId!, { byUserId: session.userId, byName: await nameOf(session.userId), action: "override_remove", employmentIds: [input.employmentId], workDate: input.date, summary: "ยกเลิก \"แก้เป็นมา\" แบบเดิม" });
     revalidatePath("/daily-workers");
     return { ok: true };
   } catch (error) {
@@ -218,7 +250,7 @@ const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "satur
 export async function assignShiftAction(input: { employmentId: string; shiftId: string; from: string }): Promise<Result> {
   try {
     const wfFetch = makeWf();
-    await guard(DW_PERMS.manage);
+    const session = await guard(DW_PERMS.manage);
     if (!input.employmentId || !input.shiftId || !DATE_RE.test(input.from)) return { error: "ข้อมูลไม่ครบ" };
     await wfFetch("/recurring-work-patterns", {
       method: "POST",
@@ -230,6 +262,7 @@ export async function assignShiftAction(input: { employmentId: string; shiftId: 
         supersede_current: true,
       },
     });
+    await logDw(session.orgId!, { byUserId: session.userId, byName: await nameOf(session.userId), action: "shift", employmentIds: [input.employmentId], workDate: input.from, summary: `ผูกกะใหม่ มีผลตั้งแต่ ${input.from}`, detail: { shiftId: input.shiftId } });
     revalidatePath("/daily-workers");
     return { ok: true };
   } catch (error) {
@@ -265,6 +298,14 @@ export async function setTimeEditAction(input: { employmentId: string; date: str
       await tx.dailyWorkerTimeEdit.create({
         data: { orgId, employmentId: input.employmentId, workDate, inAt, outAt, reason: reason.slice(0, 300), byUserId: session.userId, byName },
       });
+      await insertAudit(tx, orgId, {
+        byUserId: session.userId,
+        byName,
+        action: "time_edit",
+        employmentIds: [input.employmentId],
+        workDate: input.date,
+        summary: `แก้เวลา เข้า ${inAt} ออก ${outAt ?? "(ตามสแกน)"} · ${reason.slice(0, 200)}`,
+      });
     });
     revalidatePath("/daily-workers");
     return { ok: true };
@@ -278,12 +319,15 @@ export async function removeTimeEditAction(input: { employmentId: string; date: 
     const session = await guard(DW_PERMS.override);
     const byName = await nameOf(session.userId);
     const orgId = session.orgId!;
-    await withDailyWorkerTenant(orgId, (tx) =>
-      tx.dailyWorkerTimeEdit.updateMany({
+    await withDailyWorkerTenant(orgId, async (tx) => {
+      const r = await tx.dailyWorkerTimeEdit.updateMany({
         where: { orgId, employmentId: input.employmentId, workDate: new Date(`${input.date}T00:00:00Z`), revokedAt: null },
         data: { revokedAt: new Date(), revokedByName: byName },
-      }),
-    );
+      });
+      if (r.count > 0) {
+        await insertAudit(tx, orgId, { byUserId: session.userId, byName, action: "time_edit_revoke", employmentIds: [input.employmentId], workDate: input.date, summary: "ยกเลิกการแก้เวลา กลับไปใช้เวลาที่สแกนจริง" });
+      }
+    });
     revalidatePath("/daily-workers");
     return { ok: true };
   } catch (error) {
@@ -298,13 +342,21 @@ export async function saveDwSettingsAction(input: { otPercent: number }): Promis
     const p = Number(input.otPercent);
     if (!Number.isFinite(p) || p <= 0 || p > 1000) return { error: "% OT ต้องอยู่ระหว่าง 1–1000" };
     const orgId = session.orgId!;
-    await withDailyWorkerTenant(orgId, (tx) =>
-      tx.dailyWorkerSettings.upsert({
+    const byName = await nameOf(session.userId);
+    await withDailyWorkerTenant(orgId, async (tx) => {
+      const before = await tx.dailyWorkerSettings.findUnique({ where: { orgId } });
+      await tx.dailyWorkerSettings.upsert({
         where: { orgId },
         create: { orgId, otPercent: p, updatedBy: session.userId },
         update: { otPercent: p, updatedBy: session.userId },
-      }),
-    );
+      });
+      await insertAudit(tx, orgId, {
+        byUserId: session.userId,
+        byName,
+        action: "settings",
+        summary: `% OT กลาง ${before ? Number(before.otPercent.toString()) : 150}% → ${p}%`,
+      });
+    });
     revalidatePath("/daily-workers");
     return { ok: true };
   } catch (error) {
@@ -329,8 +381,8 @@ export async function savePayRateAction(input: { employmentIds: string[]; dailyW
     const orgId = session.orgId!;
     const ids = [...new Set(input.employmentIds)];
     // เพิ่มเป็นประวัติเสมอ ไม่เขียนทับ — วันเดียวกันตั้งซ้ำ ตัวที่ตั้งทีหลังชนะ (rateOn เรียงตามเวลาที่ตั้ง)
-    await withDailyWorkerTenant(orgId, (tx) =>
-      tx.dailyWorkerPayRate.createMany({
+    await withDailyWorkerTenant(orgId, async (tx) => {
+      await tx.dailyWorkerPayRate.createMany({
         data: ids.map((employmentId) => ({
           orgId,
           employmentId,
@@ -340,8 +392,16 @@ export async function savePayRateAction(input: { employmentIds: string[]; dailyW
           byUserId: session.userId,
           byName,
         })),
-      }),
-    );
+      });
+      await insertAudit(tx, orgId, {
+        byUserId: session.userId,
+        byName,
+        action: "pay_rate",
+        employmentIds: ids,
+        workDate: input.from,
+        summary: `ตั้งค่าแรง ${baht(Math.round(wage * 100) / 100)} บาท/วัน · OT ${ot === null ? "ใช้ % กลาง" : `${ot}%`} · มีผลตั้งแต่ ${input.from}`,
+      });
+    });
     revalidatePath("/daily-workers");
     return { ok: true, done: ids.length };
   } catch (error) {
@@ -399,6 +459,14 @@ export async function recordPaymentAction(input: { employmentId: string; date: s
           snapshot,
         },
       });
+      await insertAudit(tx, orgId, {
+        byUserId: session.userId,
+        byName,
+        action: "payment",
+        employmentIds: [input.employmentId],
+        workDate: input.date,
+        summary: `${advance ? "เบิกล่วงหน้า" : "จ่ายค่าแรง"} ${baht(amount)} บาท (ค้างอยู่ ${baht(owed)})${note ? ` · ${note}` : ""}`,
+      });
       return false;
     });
     if (raced) return { error: "มีคนเพิ่งบันทึกจ่ายให้คนนี้ไป — รีเฟรชดูยอดล่าสุดก่อน" };
@@ -424,6 +492,14 @@ export async function voidPaymentAction(input: { id: string; reason: string }): 
       const own = p.byUserId === session.userId && p.payDate.toISOString().slice(0, 10) === bangkokToday();
       if (!isHr && !own) return "denied" as const;
       await tx.dailyWorkerPayment.update({ where: { id: p.id }, data: { voidedAt: new Date(), voidedByName: byName, voidReason: reason.slice(0, 200) } });
+      await insertAudit(tx, orgId, {
+        byUserId: session.userId,
+        byName,
+        action: "payment_void",
+        employmentIds: [p.employmentId],
+        workDate: p.payDate.toISOString().slice(0, 10),
+        summary: `ยกเลิกรายการ${p.kind === "advance" ? "เบิก" : "จ่าย"} ${baht(Number(p.amount.toString()))} บาท (บันทึกโดย ${p.byName}) · ${reason.slice(0, 200)}`,
+      });
       return "ok" as const;
     });
     if (result === "missing") return { error: "ไม่พบรายการ หรือถูกยกเลิกไปแล้ว" };

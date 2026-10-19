@@ -81,3 +81,25 @@ model DailyWorkerSettings {
   @@map("settings")
   @@schema("daily_worker")
 }
+
+/// ประวัติการแก้ไขทุกอย่างของโมดูลคนงาน (ค่าแรง แก้เวลา จ่าย/เบิก/ยกเลิก วันหยุด OT กะ) — เพิ่มได้อย่างเดียว
+/// application role มีแค่ SELECT/INSERT (แก้/ลบไม่ได้) · ผู้ใช้ขอ 19/10/2569 "เพิ่ม log การแก้ไข"
+model DailyWorkerAuditEvent {
+  id            String   @id @default(uuid())
+  orgId         String   @map("org_id")
+  at            DateTime @default(now()) @db.Timestamptz(6)
+  byUserId      String   @map("by_user_id")
+  byName        String   @map("by_name")
+  /// pay_rate | settings | time_edit | time_edit_revoke | payment | payment_void | day_off | day_off_clear | ot | ot_delete | override | override_remove | shift
+  action        String
+  /// คนงานที่เกี่ยว (workforce.employments.id) — ว่าง = ทั้งบริษัท
+  employmentIds String[] @default([]) @map("employment_ids")
+  /// วันที่ที่เกี่ยว (ถ้ามี)
+  workDate      DateTime? @map("work_date") @db.Date
+  summary       String
+  detail        Json?
+
+  @@index([orgId, at])
+  @@map("audit_events")
+  @@schema("daily_worker")
+}

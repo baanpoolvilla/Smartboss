@@ -9,6 +9,7 @@ import { bangkokToday, loadMoney } from "@/modules/daily_worker/lib/data";
 import { baht, owedOn, shiftMonth } from "@/modules/daily_worker/lib/types";
 import { MoneySource } from "@/modules/daily_worker/components/money-source";
 import { PayForm, VoidPayment } from "@/modules/daily_worker/components/pay-form";
+import { PayTabs } from "@/modules/daily_worker/components/pay-tabs";
 
 export const dynamic = "force-dynamic";
 
@@ -51,18 +52,12 @@ export default async function DailyWorkerPayPage({ searchParams }: { searchParam
   const dayOf = (r: (typeof rows)[number]) => r.days.find((x) => x.date === date);
   const sum = (f: (r: (typeof rows)[number]) => number) => Math.round(rows.reduce((s, r) => s + f(r), 0) * 100) / 100;
 
-  const tab = (on: boolean) => `rounded-full px-3 py-1.5 text-sm font-semibold ${on ? "bg-(--ink) text-(--bg)" : "border border-(--line)"}`;
 
   return (
     <AppScaffold title="จ่ายเงินคนงาน" width="max-w-5xl">
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-2">
-          <Link href={`?date=${date}`} className={tab(!monthView)}>
-            รายวัน
-          </Link>
-          <Link href={`?month=${month}`} className={tab(monthView)}>
-            ทั้งเดือน
-          </Link>
+          <PayTabs active={monthView ? "month" : "day"} month={month} date={monthView ? undefined : date} canSetPay={canAdvance} />
           <span className="flex-1" />
           <Link
             href={monthView ? `/daily-workers/pay-report?month=${month}` : `/daily-workers/pay-report?date=${date}`}
@@ -125,7 +120,7 @@ export default async function DailyWorkerPayPage({ searchParams }: { searchParam
                       <Link href={`/daily-workers/w/${w.employmentId}?month=${month}`} className="min-w-0 flex-1 basis-40">
                         <b className="block truncate text-sm hover:underline">{w.name}</b>
                         <span className="block text-xs text-(--ink-soft)">
-                          {w.employeeCode ?? ""} · {w.dailyWage === null ? <span className="text-(--tone-warn)">ยังไม่ตั้งค่าแรง</span> : `ค่าแรง ${baht(w.dailyWage)}/วัน`}
+                          {w.employeeCode ?? ""} · {w.dailyWage === null ? <span className="text-(--tone-warn)">ยังไม่ตั้งค่าแรง{canAdvance && " (ตั้งที่แท็บ ตั้งค่าแรง)"}</span> : `ค่าแรง ${baht(w.dailyWage)}/วัน`}
                         </span>
                       </Link>
                       <dl className="grid grid-cols-4 gap-x-3 text-right text-xs tabular-nums sm:gap-x-5">

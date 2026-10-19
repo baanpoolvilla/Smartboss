@@ -9,6 +9,8 @@ import { bangkokToday, loadMoney, summarize } from "@/modules/daily_worker/lib/d
 import { baht, changedAfterPay, minutesToHm, owedOn, shiftMonth } from "@/modules/daily_worker/lib/types";
 import { MoneySource } from "@/modules/daily_worker/components/money-source";
 import { PayForm, VoidPayment } from "@/modules/daily_worker/components/pay-form";
+import { AuditList } from "@/modules/daily_worker/components/audit-list";
+import { readAudit } from "@/modules/daily_worker/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +44,12 @@ export default async function WorkerLedgerPage({ params, searchParams }: { param
     return c?.pay && changedAfterPay(d.date, c.pay.total, allPay);
   });
   const lastDay = m.days[m.days.length - 1];
+  const audit = await readAudit(session.orgId, {
+    from: new Date(`${month}-01T00:00:00+07:00`),
+    to: new Date(`${shiftMonth(month, 1)}-01T00:00:00+07:00`),
+    employmentId,
+    limit: 300,
+  }).catch(() => []);
   const [y, mo] = month.split("-").map(Number) as [number, number];
 
   return (
@@ -145,6 +153,11 @@ export default async function WorkerLedgerPage({ params, searchParams }: { param
           <li className="px-3 py-1 text-xs text-(--ink-soft)">ยกมาจากเดือนก่อน {baht(m.opening)}</li>
         </ul>
         <p className="text-xs text-(--ink-soft)">คอลัมน์: ได้ · จ่าย · คงเหลือสิ้นวัน · กดวันไหนเพื่อดูที่มาของตัวเลข</p>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold">ประวัติการแก้ไขของคนนี้ (เดือนนี้)</h2>
+          <AuditList events={audit} names={{ [employmentId]: w.name }} showWho={false} />
+        </section>
 
         {voided.length > 0 && (
           <section className="rounded-2xl border border-(--line) bg-(--bg) p-3 text-xs text-(--ink-soft)">

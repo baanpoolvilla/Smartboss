@@ -82,3 +82,68 @@ export async function readSettingsDb(orgId: string): Promise<DwSettings> {
   const p = num(row?.otPercent);
   return { otPercent: p && p > 0 ? p : DEFAULT_OT_PERCENT };
 }
+
+/* ───────────── ประวัติการแก้ไข (audit_events — เพิ่มได้อย่างเดียว) ───────────── */
+
+export interface AuditInput {
+  byUserId: string;
+  byName: string;
+  action: string;
+  employmentIds?: string[];
+  workDate?: string | null;
+  summary: string;
+  detail?: unknown;
+}
+
+export interface AuditEvent extends AuditInput {
+  id: string;
+  at: string;
+  employmentIds: string[];
+  workDate: string | null;
+}
+
+/** บันทึกใน transaction เดียวกับการแก้ (เรื่องเงิน: แก้สำเร็จ = มี log เสมอ) */
+export async function insertAudit(tx: Tx, orgId: string, e: AuditInput) {
+  await tx.dailyWorkerAuditEvent.create({
+    data: {
+      orgId,
+      byUserId: e.byUserId,
+      byName: e.byName,
+      action: e.action,
+      employmentIds: e.employmentIds ?? [],
+      workDate: e.workDate ? new Date(`${e.workDate}T00:00:00Z`) : null,
+      summary: e.summary.slice(0, 500),
+      detail: (e.detail ?? undefined) as never,
+    },
+  });
+}
+
+/** บันทึกแยก (การแก้ที่เก็บที่อื่น เช่น วันหยุดในระบบบุคคล/OT) — บันทึกไม่ได้ไม่ทำให้งานหลักพัง */
+export async function logDw(orgId: string, e: AuditInput) {
+  try {
+    await withDailyWorkerTenant(orgId, (tx) => insertAudit(tx, orgId, e));
+  } catch (error) {
+    console.error("[daily-worker] audit log failed", error);
+  }
+}
+
+export async function readAudit(orgId: string, opts: { from: Date; to: Date; employmentId?: string; limit?: number }): Promise<AuditEvent[]> {
+  const rows = await withDailyWorkerTenant(orgId, (tx) =>
+    tx.dailyWorkerAuditEvent.findMany({
+      where: { orgId, at: { gte: opts.from, lt: opts.to }, ...(opts.employmentId ? { employmentIds: { has: opts.employmentId } } : {}) },
+      orderBy: { at: "desc" },
+      take: opts.limit ?? 500,
+    }),
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    at: r.at.toISOString(),
+    byUserId: r.byUserId,
+    byName: r.byName,
+    action: r.action,
+    employmentIds: r.employmentIds,
+    workDate: r.workDate ? ymd(r.workDate) : null,
+    summary: r.summary,
+    detail: r.detail,
+  }));
+}

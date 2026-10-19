@@ -7,7 +7,6 @@ import { DW_PERMS } from "@/modules/daily_worker/permissions";
 import { bangkokToday, loadMonth, summarize } from "@/modules/daily_worker/lib/data";
 import { hoursLabel, minutesToHm } from "@/modules/daily_worker/lib/types";
 import { WorkerRoster } from "@/modules/daily_worker/components/worker-roster";
-import { PaySettings } from "@/modules/daily_worker/components/pay-settings";
 import { syncUserToWorkforce } from "@/modules/admin/data/user-guards";
 
 export const dynamic = "force-dynamic";
@@ -105,16 +104,6 @@ export default async function DailyWorkersPage({ searchParams }: { searchParams:
               </Link>
             </p>
           </section>
-
-          {canPay && (
-            <PaySettings
-              rows={data.workers
-                .filter((w) => w.employmentId)
-                .map((w) => ({ employmentId: w.employmentId!, name: w.name, employeeCode: w.employeeCode, dailyWage: w.dailyWage, otPercent: w.otPercent }))}
-              otPercent={data.otPercent}
-              today={data.today}
-            />
-          )}
         </div>
       )}
     </AppScaffold>
