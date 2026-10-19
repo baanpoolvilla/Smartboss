@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { HardDrive } from "lucide-react";
 import { requireOrg, isSuperAdmin } from "@smartboss/auth";
@@ -114,7 +115,10 @@ export default async function StorageAdminPage() {
                       {r.custom ? "· เพดานเฉพาะบริษัท" : "· ใช้ค่ากลาง"}
                     </p>
                     <p className="mt-0.5 text-[11px] text-(--ink-soft)">
-                      คลังไฟล์ {toGB(r.companyFiles)} GB · แชท {toGB(r.chat)} GB
+                      คลังไฟล์ {toGB(r.companyFiles)} GB · แชท {toGB(r.chat)} GB ·{" "}
+                      <Link href={`/admin/storage/${r.id}`} className="font-medium text-(--ink) underline">
+                        ดูแยกตามระบบ (รวมรูปรีพอร์ต/ใบงาน) →
+                      </Link>
                     </p>
                   </div>
 

@@ -53,3 +53,29 @@ export async function readLocal(key: string): Promise<Buffer | null> {
   if (!full) return null;
   return fs.readFile(full);
 }
+
+/** ไฟล์ทั้งหมดใต้ prefix (เดินโฟลเดอร์ย่อยทั้งหมด) — ใช้นับพื้นที่ตามระบบ (หน้า admin/storage) */
+export async function listLocal(prefix: string): Promise<{ key: string; size: number; lastModified: Date }[]> {
+  const root = safePath(prefix);
+  if (!root) return [];
+  const base = path.resolve(uploadDir());
+  const out: { key: string; size: number; lastModified: Date }[] = [];
+  async function walk(dir: string) {
+    let entries: import("node:fs").Dirent[];
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      return; // ไม่มีโฟลเดอร์ = ยังไม่มีไฟล์
+    }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) await walk(full);
+      else if (e.isFile()) {
+        const st = await fs.stat(full);
+        out.push({ key: path.relative(base, full).split(path.sep).join("/"), size: st.size, lastModified: st.mtime });
+      }
+    }
+  }
+  await walk(root);
+  return out;
+}

@@ -5,6 +5,7 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -274,4 +275,34 @@ export async function readStoredFile(
   } catch {
     return null;
   }
+}
+
+export interface StoredObject {
+  /** key ใน storage (ไม่มี /api/files/ นำหน้า) */
+  key: string;
+  size: number;
+  lastModified: Date | null;
+}
+
+/**
+ * ไฟล์ทั้งหมดใต้ prefix (เช่น `<orgId>/`) พร้อมขนาด — นับพื้นที่ตามระบบในหน้า admin/storage
+ * อ่านอย่างเดียว ไล่ทีละ 1,000 รายการจนครบ (S3 ListObjectsV2)
+ */
+export async function listStoredFiles(prefix: string): Promise<StoredObject[]> {
+  if (!prefix || prefix.includes("..")) return [];
+  if (!isRemoteStorage()) {
+    return (await localDisk()).listLocal(prefix);
+  }
+  const out: StoredObject[] = [];
+  let token: string | undefined;
+  do {
+    const res = await getS3().send(
+      new ListObjectsV2Command({ Bucket: S3_BUCKET, Prefix: prefix, ContinuationToken: token })
+    );
+    for (const o of res.Contents ?? []) {
+      if (o.Key) out.push({ key: o.Key, size: o.Size ?? 0, lastModified: o.LastModified ?? null });
+    }
+    token = res.IsTruncated ? res.NextContinuationToken : undefined;
+  } while (token);
+  return out;
 }
