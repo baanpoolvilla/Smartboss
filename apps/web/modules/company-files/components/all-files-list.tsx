@@ -18,23 +18,27 @@ export function AllFilesList({ files }: { files: AllFilesRow[] }) {
   return (
     <div className="flex flex-col gap-1.5">
       {files.map((f) => (
-        <Link key={f.id} href={`/company-files/file/${f.id}`}>
+        <Link key={f.id} href={`/company-files/file/${f.id}`} className="block min-w-0">
           <Card className="p-3 flex items-center gap-3 hover:bg-(--bg-soft) transition-colors">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-(--radius) bg-(--bg-soft)">
               <FileIcon className="h-4.5 w-4.5 text-(--ink-soft)" />
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium truncate">{f.name}</p>
-              <p className="text-[11px] text-(--ink-soft)">
+              <p className="truncate text-[11px] text-(--ink-soft)">
                 {formatFileSize(f.size)} · {fileIconKind(f.mimeType)} · v{f.currentVersion}
                 {f.uploaderName && <> · อัปโหลดโดย {f.uploaderName}</>}
               </p>
-              <p className="text-[11px] text-(--ink-faint,#7f93a6)">
+              <p className="truncate text-[11px] text-(--ink-faint,#7f93a6)">
                 แก้ล่าสุด {new Date(f.updatedAt).toLocaleDateString("th-TH")}
                 {f.modifiedByName && <> · โดย {f.modifiedByName}</>}
               </p>
+              {/* มือถือ: ที่อยู่ของไฟล์ลงมาบรรทัดล่าง ไม่บีบชื่อไฟล์จนข้อความหักหลายบรรทัด */}
+              <span className="mt-1 inline-block max-w-full truncate rounded-full bg-(--bg-soft) px-2 py-0.5 text-[11px] text-(--ink-soft) sm:hidden">
+                {f.sourceLabel}
+              </span>
             </div>
-            <span className="text-[11px] text-(--ink-soft) shrink-0 rounded-full bg-(--bg-soft) px-2.5 py-1">
+            <span className="hidden max-w-[40%] shrink-0 truncate rounded-full bg-(--bg-soft) px-2.5 py-1 text-[11px] text-(--ink-soft) sm:inline-block">
               {f.sourceLabel}
             </span>
           </Card>

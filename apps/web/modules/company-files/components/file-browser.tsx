@@ -105,7 +105,8 @@ export function FileBrowser({
         ))}
       </div>
 
-      <div className="flex items-center gap-2">
+      {/* flex-wrap: มือถือ 4 ปุ่มไม่พอบรรทัดเดียว — เดิมดันทั้งหน้าให้กว้างเกินจอ (ผู้ใช้แจ้ง 19/10/2569) */}
+      <div className="flex flex-wrap items-center gap-2">
         <Button variant="outline" size="sm" disabled={isPending} onClick={handleCreateFolder}>
           <FolderPlus className="h-4 w-4" /> สร้างโฟลเดอร์
         </Button>
@@ -123,7 +124,7 @@ export function FileBrowser({
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as "name" | "modified" | "size")}
-          className="ml-auto h-9 rounded-(--radius) border border-(--line) bg-(--bg) px-2 text-sm"
+          className="h-9 rounded-(--radius) border border-(--line) bg-(--bg) px-2 text-sm sm:ml-auto"
           aria-label="เรียงไฟล์ตาม"
         >
           <option value="name">เรียงตามชื่อ</option>
@@ -146,13 +147,13 @@ export function FileBrowser({
             <MessagesSquare className="h-3.5 w-3.5" /> ห้องรายงาน
           </p>
           {roomFolders.map((f) => (
-            <Link key={f.id} href={`/company-files?folder=${f.id}`}>
+            <Link key={f.id} href={`/company-files?folder=${f.id}`} className="block min-w-0">
               <Card className="p-3 flex items-center gap-3 hover:bg-(--bg-soft) transition-colors">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-(--radius) bg-(--accent-soft,#e0f2fe)">
                   <MessagesSquare className="h-4.5 w-4.5 text-(--accent-dark,#0177ac)" />
                 </span>
                 <span className="text-sm font-medium truncate">{f.name}</span>
-                <span className="text-[11px] text-(--ink-soft) ml-auto shrink-0">เห็นเฉพาะสมาชิกห้องนี้</span>
+                <span className="ml-auto hidden shrink-0 text-[11px] text-(--ink-soft) sm:inline">เห็นเฉพาะสมาชิกห้องนี้</span>
               </Card>
             </Link>
           ))}
@@ -164,7 +165,7 @@ export function FileBrowser({
       ) : (
         <div className="flex flex-col gap-1.5">
           {folders.map((f) => (
-            <Link key={f.id} href={`/company-files?folder=${f.id}`}>
+            <Link key={f.id} href={`/company-files?folder=${f.id}`} className="block min-w-0">
               <Card className="p-3 flex items-center gap-3 hover:bg-(--bg-soft) transition-colors">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-(--radius) bg-(--bg-soft)">
                   <FolderIcon className="h-4.5 w-4.5 text-(--ink-soft)" />
@@ -174,17 +175,17 @@ export function FileBrowser({
             </Link>
           ))}
           {sortedFiles.map((f) => (
-            <Link key={f.id} href={`/company-files/file/${f.id}`}>
+            <Link key={f.id} href={`/company-files/file/${f.id}`} className="block min-w-0">
               <Card className="p-3 flex items-center gap-3 hover:bg-(--bg-soft) transition-colors">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-(--radius) bg-(--bg-soft)">
                   <FileIcon className="h-4.5 w-4.5 text-(--ink-soft)" />
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate">{f.name}</p>
-                  <p className="text-[11px] text-(--ink-soft)">
+                  <p className="truncate text-[11px] text-(--ink-soft)">
                     {formatFileSize(f.size)} · {fileIconKind(f.mimeType)} · v{f.currentVersion}
                   </p>
-                  <p className="text-[11px] text-(--ink-faint,#7f93a6)">
+                  <p className="truncate text-[11px] text-(--ink-faint,#7f93a6)">
                     แก้ล่าสุด {new Date(f.updatedAt).toLocaleDateString("th-TH")}
                     {(uploaderNames[f.updatedBy ?? ""] ?? uploaderNames[f.createdBy]) && (
                       <> · โดย {uploaderNames[f.updatedBy ?? ""] ?? uploaderNames[f.createdBy]}</>
