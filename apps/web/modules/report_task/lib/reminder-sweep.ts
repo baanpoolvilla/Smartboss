@@ -119,7 +119,6 @@ export function computeReminders(input: {
         if (!claimLeads(crossed, (lead) => `task:${t.id}:${lead}`, alreadySent, newSentKeys)) continue;
         const recipients = new Set<string>();
         if (settings.task.notifyAssignee) for (const id of t.assigneeIds) recipients.add(id);
-        if (settings.task.notifyAssigner) recipients.add(t.assignedById);
         // งานส่วนตัว (เปิดให้ตัวเอง): เตือนเจ้าของเสมอ ไม่ว่าตั้งค่าจะปิดการเตือนผู้รับงานไว้ไหม
         // และไม่เตือนหัวหน้า — หัวหน้ามองไม่เห็นงานนี้ ชื่องานห้ามหลุดไปทางแจ้งเตือน (personal-task.ts)
         if (isPersonalTask(t)) {
@@ -130,6 +129,10 @@ export function computeReminders(input: {
             if (t.departmentIds.includes(d.id)) recipients.add(d.headId);
           }
         }
+        // ไม่เตือนคนมอบหมายงาน (19/10/2569 "ให้แจ้งเตือนกับคนที่มอบหมายงานไปให้พอ มันจะรกเกินไป")
+        // แม้จะเป็นหัวหน้าแผนกของงานนั้นก็ตาม — ยกเว้นตัวเองก็เป็นผู้รับผิดชอบด้วย หรือเป็นงานส่วนตัว
+        // ตั้งค่า notifyAssigner เดิมยังเก็บไว้ใน store แต่ไม่ใช้แล้ว
+        if (!isPersonalTask(t) && !t.assigneeIds.includes(t.assignedById)) recipients.delete(t.assignedById);
         if (recipients.size === 0) continue;
         // Whole days read as "3 วัน", not "4320 นาที" — anything shorter than
         // a day falls back to the same ชม./นาที phrasing the meeting

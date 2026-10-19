@@ -245,7 +245,6 @@ export function DeadlineReminderSettingsPanel() {
           <div className="flex flex-wrap items-center gap-2 pl-[46px]">
             <span className="text-[11px] text-[var(--ink-faint)]">แจ้งใคร:</span>
             <RecipientPill active={settings.task.notifyAssignee} label="ผู้รับผิดชอบ" onClick={() => toggleRecipient(setTaskSettings, "notifyAssignee", settings.task.notifyAssignee)} />
-            <RecipientPill active={settings.task.notifyAssigner} label="คนมอบหมายงาน" onClick={() => toggleRecipient(setTaskSettings, "notifyAssigner", settings.task.notifyAssigner)} />
             <RecipientPill active={settings.task.notifyDeptHead} label="หัวหน้าแผนก" onClick={() => toggleRecipient(setTaskSettings, "notifyDeptHead", settings.task.notifyDeptHead)} />
           </div>
         </div>

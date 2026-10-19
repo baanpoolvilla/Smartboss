@@ -65,6 +65,19 @@ describe("แจ้งเตือนใกล้ถึงกำหนดส่�
     expect(taskNotes[0]!.recipients).toEqual(["u1"]);
   });
 
+  it("ไม่เตือนคนมอบหมายงาน แม้ตั้งค่าเดิมเปิดไว้ — เตือนเฉพาะผู้รับผิดชอบ", () => {
+    const result = run({ settings: { task: { ...defaultReminderSettings.task, notifyAssignee: true, notifyAssigner: true } } });
+    const taskNotes = result.notifications.filter((n) => n.message.includes('งาน "test"'));
+    expect(taskNotes).toHaveLength(1);
+    expect(taskNotes[0]!.recipients).toEqual(["u1"]);
+  });
+
+  it("คนมอบหมายที่เป็นผู้รับผิดชอบด้วย ยังได้เตือน", () => {
+    const both = { ...task(), assigneeIds: ["u1", "boss"] } as Task;
+    const result = run({ tasks: [both] });
+    expect(result.notifications[0]!.recipients.sort()).toEqual(["boss", "u1"]);
+  });
+
   it("อยู่ในหลายช่วงพร้อมกัน (3 วัน + 1 วัน) = เตือนครั้งเดียว", () => {
     const result = run();
     const taskNotes = result.notifications.filter((n) => n.message.includes('งาน "test"'));
