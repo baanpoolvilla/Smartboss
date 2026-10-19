@@ -14,6 +14,12 @@ export interface DateExemptions {
    * ขึ้นป้ายรอบตามปกติ (isExemptDate ด้วย ignoreLegacyHolidays)
    */
   legacyHolidayDates?: Set<string>;
+  /**
+   * userId -> วันที่มี OT อนุมัติแล้ว (FINAL_APPROVED) — มาทำงานจริงวันนั้น ⇒ ไม่ยกเว้นการส่งรีพอร์ต
+   * แม้เป็นวันหยุด/Day-Off/ลา (ผู้ใช้ขอ 19/10/2569: "ทำ OT ก็เหมือนทำงานวันนึง") · ส่งแล้วตัดสินตรงเวลา/สาย
+   * ตามปกติ ไม่ส่ง = ไม่ส่ง · OT อนุมัติทีหลัง ⇒ วันนั้นถูกตัดสินใหม่ย้อนหลัง (sweep ย้อนดู 45 วัน)
+   */
+  otDates?: Map<string, Set<string>>;
 }
 
 /** วันที่เริ่มใช้กติกา "Holiday สะสม = วันหยุดราชการไม่ยกเว้นการส่งรายงาน" — วันหยุดก่อนนี้ไม่ย้อนนับว่าไม่ส่ง */
@@ -58,7 +64,8 @@ export function buildDateExemptions(
     ruleExceptions: Record<string, string>;
   },
   monthsBack = 3,
-  holidaysAreLeaveCredit = false
+  holidaysAreLeaveCredit = false,
+  overtime: CalendarEvent[] = []
 ): DateExemptions {
   const personalDates = new Map<string, Set<string>>();
 
@@ -100,7 +107,23 @@ export function buildDateExemptions(
     }
   }
 
-  return { personalDates, companyDates, legacyHolidayDates };
+  const otDates = new Map<string, Set<string>>();
+  for (const ot of overtime) {
+    if (!ot.userId) continue;
+    let set = otDates.get(ot.userId);
+    if (!set) {
+      set = new Set();
+      otDates.set(ot.userId, set);
+    }
+    for (const date of eachDateExclusiveEnd(ot.start, ot.end)) set.add(date);
+  }
+
+  return { personalDates, companyDates, legacyHolidayDates, otDates };
+}
+
+/** วันหยุด/ลาที่มี OT อนุมัติแล้ว — นับเป็นวันทำงาน (ใช้ขึ้นป้าย "ทำ OT วันนี้" บนโพสต์) */
+export function isOtOnDayOff(exemptions: DateExemptions, userId: string, date: string): boolean {
+  return !!exemptions.otDates?.get(userId)?.has(date) && isOffDate(exemptions, userId, date);
 }
 
 /**
@@ -112,6 +135,18 @@ export function isLegacyHolidayOnly(exemptions: DateExemptions, userId: string, 
 }
 
 export function isExemptDate(
+  exemptions: DateExemptions,
+  userId: string,
+  date: string,
+  options?: { ignoreLegacyHolidays?: boolean }
+): boolean {
+  // มี OT อนุมัติวันนั้น = มาทำงาน ⇒ ต้องส่งรีพอร์ตตามปกติ (ดู otDates)
+  if (exemptions.otDates?.get(userId)?.has(date)) return false;
+  return isOffDate(exemptions, userId, date, options);
+}
+
+/** วันหยุด/ลา/วันหยุดบริษัท ล้วน ๆ (ยังไม่ดู OT) */
+function isOffDate(
   exemptions: DateExemptions,
   userId: string,
   date: string,

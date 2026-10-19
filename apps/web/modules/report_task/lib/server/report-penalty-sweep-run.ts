@@ -7,7 +7,7 @@ import { loadPerformanceSettings, type PerformanceEventInput } from "@/lib/perfo
 import { createStoreIfAbsent, readStore } from "@/modules/report_task/lib/db/org-store";
 import { listDirectory } from "@/modules/report_task/lib/db/employee-directory";
 import { buildDateExemptions } from "@/modules/report_task/lib/report-feed-exemptions";
-import { listHolidayEvents, listLeaveEvents, orgHolidaysAreLeaveCredit } from "@/modules/report_task/lib/db/workforce-calendar";
+import { listHolidayEvents, listLeaveEvents, listOvertimeEvents, orgHolidaysAreLeaveCredit } from "@/modules/report_task/lib/db/workforce-calendar";
 import { computeReportPenaltyCandidates } from "@/modules/report_task/lib/report-penalty-sweep";
 import { thaiHolidayEvents } from "@/modules/report_task/data/thai-holidays";
 import { localDateStr } from "@/modules/report_task/lib/now";
@@ -87,7 +87,7 @@ export async function runReportPenaltySweep(orgId: string, actorId: string | nul
   const fromStr = rangeFrom.toISOString().slice(0, 10);
   const toStr = rangeTo.toISOString().slice(0, 10);
 
-  const [settings, { data: featureEnabled }, { data: enabledSince }, { data: graceDaysRaw }, { data: reportFeed }, users, leaves, workforceHolidays, { data: routine }, { data: reminderSettingsRaw }, holidaysAreLeaveCredit] =
+  const [settings, { data: featureEnabled }, { data: enabledSince }, { data: graceDaysRaw }, { data: reportFeed }, users, leaves, workforceHolidays, { data: routine }, { data: reminderSettingsRaw }, holidaysAreLeaveCredit, overtime] =
     await Promise.all([
       loadPerformanceSettings(orgId),
       readStore<boolean>(orgId, "report-penalty-settings"),
@@ -100,6 +100,8 @@ export async function runReportPenaltySweep(orgId: string, actorId: string | nul
       readStore<RoutineDayOffSlice>(orgId, "routine-dayoff"),
       readStore<Partial<ReminderSettings>>(orgId, "reminder-settings"),
       orgHolidaysAreLeaveCredit(orgId),
+      // OT อนุมัติแล้ว = วันทำงาน ต้องส่งรีพอร์ตแม้เป็นวันหยุด (report-feed-exemptions.ts otDates)
+      listOvertimeEvents(orgId, fromStr, toStr),
     ]);
   // เผื่อเวลาส่งย้อนหลังของรอบรายสัปดาห์/รายเดือน (วัน) — ตั้งได้ที่ ตั้งค่า →
   // ห้อง Report → หักคะแนน HR (report-penalty-settings-store.ts) ค่าเริ่มต้น 3
@@ -168,7 +170,7 @@ export async function runReportPenaltySweep(orgId: string, actorId: string | nul
     pickedDates: routine?.pickedDates ?? {},
     rules: routine?.rules ?? [],
     ruleExceptions: routine?.ruleExceptions ?? {},
-  }, undefined, holidaysAreLeaveCredit);
+  }, undefined, holidaysAreLeaveCredit, overtime);
   const candidates = computeReportPenaltyCandidates(
     topics,
     posts,

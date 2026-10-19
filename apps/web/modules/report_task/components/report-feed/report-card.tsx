@@ -47,7 +47,7 @@ import { cutoffsOnDay, lateCutoffFor, minImagesNow, onTimeCutoffFor } from "@/mo
 import { roundInOutage } from "@/modules/report_task/lib/report-outage";
 import { roundIgnoresDateExemptions, roundsForUserOnDay, attributePostToRound, effectiveRoundsOf, roundFrequencyOf } from "@/modules/report_task/lib/submission-rounds";
 import { useReportPenaltySettingsStore } from "@/modules/report_task/store/report-penalty-settings-store";
-import { isExemptDate } from "@/modules/report_task/lib/report-feed-exemptions";
+import { isExemptDate, isOtOnDayOff } from "@/modules/report_task/lib/report-feed-exemptions";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { localDateStr } from "@/modules/report_task/lib/now";
 import {
@@ -317,6 +317,8 @@ export function ReportCard({
   // ignoreLegacyHolidays: วันหยุดเก่าก่อนเปลี่ยนกติกา (เช่น 13/10/2569) โพสต์ที่ส่งมาขึ้นป้ายรอบตามปกติ
   // แม้รอบที่ไม่ได้ส่งวันนั้นจะไม่ถูกนับว่าไม่ส่ง (ดู legacyHolidayDates)
   const postDayExempt = isExemptDate(exemptions, post.authorId, postDay, { ignoreLegacyHolidays: true });
+  // วันหยุด/ลาที่ OT อนุมัติแล้ว — นับเป็นวันทำงาน (postDayExempt = false) + ขึ้นป้าย "ทำ OT วันนี้" ให้รู้ว่าทำไมต้องส่ง
+  const postDayOt = isOtOnDayOff(exemptions, post.authorId, postDay);
   // "ไม่นับเป็นการส่ง daily" (excludeFromSubmission) drops this post out of
   // round candidacy entirely — no ตรงเวลา/สาย badge, same as if it were
   // never posted for compliance purposes (see postsForDay in
@@ -1122,7 +1124,7 @@ export function ReportCard({
   // ป้ายรอบส่ง (ตรงเวลา/ส่งเกินกำหนด/ไม่นับ/หยุด-ลา) — คอมวางต่อท้ายแถวชื่อ·แผนก·เวลา
   // มือถือย้ายไปมุมขวาล่างแถวเดียวกับ "ตอบกลับ": ชื่อ+แผนก+เวลา+ป้ายรวมกัน ~340px
   // แต่จอมือถือเหลือที่ ~300px ล้น ส่วนแถว "ตอบกลับ" มีที่ว่างฝั่งขวาอยู่แล้ว
-  const roundBadge = post.retroFor ? (
+  const baseRoundBadge = post.retroFor ? (
       // ส่งย้อนหลังหลัง CEO อนุมัติ (report-retro.ts) — นับเป็นรีพอตของวันที่ลืม ไม่ใช่วันที่โพสต์
       <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0 text-[10px] leading-4 font-medium bg-violet-50 text-violet-700 border border-violet-200">
         ส่งย้อนหลัง · รีพอตวันที่ {post.retroFor.day} · CEO อนุมัติ
@@ -1181,6 +1183,15 @@ export function ReportCard({
         ตรงเวลา · รอบ{shortRoundLabel(onTimeCutoff.label, topic.name)}
       </span>
     ) : null;
+  // วันหยุดที่ OT อนุมัติแล้ว: ป้าย "ทำ OT วันนี้" นำหน้าป้ายรอบ (ตรงเวลา/สาย ตัดสินตามปกติ)
+  const roundBadge = postDayOt && !post.excludeFromSubmission && !post.retroFor ? (
+    <span className="flex flex-wrap items-center gap-1">
+      <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0 text-[10px] leading-4 font-medium bg-sky-50 text-sky-700 border border-sky-200">
+        ทำ OT วันนี้ · นับเป็นวันทำงาน
+      </span>
+      {baseRoundBadge}
+    </span>
+  ) : baseRoundBadge;
 
   return (
     <div

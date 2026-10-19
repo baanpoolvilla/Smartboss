@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useLeaveStore } from "@/modules/report_task/store/leave-store";
 import { useHolidayStore } from "@/modules/report_task/store/holiday-store";
 import { useRoutineDayOffStore } from "@/modules/report_task/store/routine-dayoff-store";
+import { useOvertimeStore } from "@/modules/report_task/store/overtime-store";
 import { buildDateExemptions, type DateExemptions } from "@/modules/report_task/lib/report-feed-exemptions";
 
 /**
@@ -20,9 +21,11 @@ export function useReportComplianceExemptions(): DateExemptions {
   const pickedDates = useRoutineDayOffStore((s) => s.pickedDates);
   const rules = useRoutineDayOffStore((s) => s.rules);
   const ruleExceptions = useRoutineDayOffStore((s) => s.ruleExceptions);
+  // OT อนุมัติแล้ว = วันทำงาน ต้องส่งรีพอร์ตแม้เป็นวันหยุด (report-feed-exemptions.ts otDates)
+  const overtime = useOvertimeStore((s) => s.overtime);
 
   return useMemo(
-    () => buildDateExemptions(leaves, holidays, { pickedDates, rules, ruleExceptions }, undefined, holidaysAreLeaveCredit),
-    [leaves, holidays, pickedDates, rules, ruleExceptions, holidaysAreLeaveCredit]
+    () => buildDateExemptions(leaves, holidays, { pickedDates, rules, ruleExceptions }, undefined, holidaysAreLeaveCredit, overtime),
+    [leaves, holidays, pickedDates, rules, ruleExceptions, holidaysAreLeaveCredit, overtime]
   );
 }
