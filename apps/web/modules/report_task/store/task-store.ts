@@ -1347,7 +1347,10 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
           // incremental progress. Only the moment it flips to done (not
           // un-ticking), and never when the task's own creator is the one
           // ticking their own item.
-          if (item && !item.done && t.assignedById !== actorId) {
+          // ติ๊กข้อสุดท้ายแล้วงานปิดเอง ⇒ คนมอบหมายได้ "ส่งงาน … รอคุณตรวจ" (notifyReviewReady) อยู่แล้ว
+          // ไม่ต้องได้ "ทำ … ในเช็คลิสต์" อีกอันคู่กัน (เคส HS3 19/10/2569 — ได้มาเป็นคู่)
+          const justCompleted = updated.status === "done" && t.status !== "done";
+          if (item && !item.done && t.assignedById !== actorId && !justCompleted) {
             const actorName = getUser(actorId)?.name ?? "มีคน";
             useNotificationStore.getState().notify({
               userId: t.assignedById,
