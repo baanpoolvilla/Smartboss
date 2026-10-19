@@ -163,9 +163,13 @@ export async function editDueDateAction(workOrderId: string, newDate: string, re
   await addWorkOrderComment(s.orgId, wo.id, s.userId, text, null, { kind: "log" });
   await log(s, wo, `แก้กำหนดส่ง ${range} ของ`, why ? { reason: why } : undefined);
 
-  if (wo.assignedTo && wo.assignedTo !== s.userId) {
+  // แจ้งผู้รับผิดชอบ + CC (ไม่รวมคนเปิดใบงาน และคนที่แก้เอง) — ผู้ใช้ขอ 19/10/2569
+  const recipients = [...new Set([wo.assignedTo, ...wo.ccUserIds])].filter(
+    (u): u is string => !!u && u !== s.userId && u !== wo.createdBy
+  );
+  if (recipients.length > 0) {
     const who = (await notifyActorName(s.userId)) ?? "ผู้เปิดใบงาน";
-    await notifyUser(s.orgId, wo.assignedTo, {
+    await notifyUsers(s.orgId, recipients, {
       title: `${who} · 📅 แก้กำหนดส่งใบงาน`,
       body: `${wo.title} · ${range}${why ? ` · ${why}` : ""}`,
       type: "work_order",

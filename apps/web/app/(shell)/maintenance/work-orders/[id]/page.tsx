@@ -182,6 +182,11 @@ export default async function WorkOrderDetailPage({
   const overdue =
     wo.dueDate != null && wo.dueDate < new Date() && wo.status !== "completed";
   const isOpenOrRunning = wo.status !== "completed" && wo.status !== "cancelled";
+  // การเปลี่ยนกำหนดส่งครั้งล่าสุด (แก้ตรง ๆ / อนุมัติคำขอเลื่อน) — โชว์ใต้วันที่ ไม่ต้องเลื่อนไปหาในความคิดเห็น
+  // ("แก้แล้วไม่เห็นมีบอกเลยใครแก้" 19/10/2569) · อ่านจากแถว log ที่ due-request-actions.ts เขียนไว้
+  const lastDueChange = [...comments]
+    .reverse()
+    .find((c) => c.kind === "log" && /^(แก้กำหนดส่ง|อนุมัติเลื่อนกำหนดส่ง) /.test(c.content ?? ""));
   const viewAll = canViewAll(session);
   const dueRequestViews: DueRequestView[] = dueRequests.map((r) => ({
     id: r.id,
@@ -320,6 +325,13 @@ export default async function WorkOrderDetailPage({
             value={
               <div className="grid gap-2">
                 <span style={overdue ? { color: "#DC2626" } : undefined}>{fmtThaiDate(wo.dueDate)}</span>
+                {lastDueChange && (
+                  <span className="text-[12.5px] font-normal leading-snug text-(--ink-soft)">
+                    {lastDueChange.content}
+                    <br />
+                    โดย <b className="font-semibold text-(--ink)">{lastDueChange.userId ? (names[lastDueChange.userId] ?? "ผู้ใช้") : "ผู้ใช้"}</b> · {fmtThaiDateTime(lastDueChange.createdAt)}
+                  </span>
+                )}
                 {/* ขอเลื่อนกำหนดส่ง (ผู้รับผิดชอบ) · อนุมัติ/ไม่อนุมัติ + แก้ตรง ๆ (CEO / คนเปิดใบงาน) */}
                 <WorkOrderDueRequest
                   workOrderId={wo.id}
