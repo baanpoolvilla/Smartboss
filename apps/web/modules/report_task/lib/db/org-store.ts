@@ -1,4 +1,5 @@
 import "server-only";
+import { dropDuplicateNotifications } from "@/modules/report_task/lib/notification-dedupe";
 import { prisma } from "@smartboss/database";
 import { announceNotification } from "@/lib/notify-push";
 import { loadNotificationPrefs } from "@/lib/notification-prefs";
@@ -200,10 +201,12 @@ export async function writeOwnNotifications(
 
     // แนบไฟล์ทีละไฟล์ในงานเดิม = รวมเป็นแถวเดียว (attachment-notif-group.ts) — แจ้งเตือนแบบอื่นผ่านเหมือนเดิม
     const absorbed = absorbedIdSet(stored);
-    const grouped = groupAttachmentNotifications(
+    // ของคนอื่นที่เครื่องนี้เพิ่งสร้าง — ตัดตัวที่ซ้ำกับที่มีอยู่แล้ว (สองเครื่อง/ติ๊กซ้ำสร้างแจ้งเตือนเดิมสองรอบ ดู notification-dedupe.ts)
+    const freshOthers = dropDuplicateNotifications(
       sent.filter((n) => n.userId !== userId && !storedIds.has(n.id) && !absorbed.has(n.id as string)),
-      stored.filter((n) => n?.userId !== userId)
+      stored as Parameters<typeof dropDuplicateNotifications>[1]
     );
+    const grouped = groupAttachmentNotifications(freshOthers, stored.filter((n) => n?.userId !== userId));
     const merged = [
       ...(absorbed.size > 0 ? myItems.filter((n) => !absorbed.has(n.id as string)) : myItems),
       ...grouped.incoming,

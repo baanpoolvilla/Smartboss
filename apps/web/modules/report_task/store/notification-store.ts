@@ -1,3 +1,4 @@
+import { isDuplicateNotification } from "@/modules/report_task/lib/notification-dedupe";
 import { create } from "zustand";
 import { uuid } from "@/modules/report_task/lib/uuid";
 
@@ -75,20 +76,14 @@ interface NotificationStore {
   removeTaskNotifications: (taskId: string) => void;
 }
 
-/** แจ้งเตือนเดิมซ้ำ (คนเดียวกัน คนทำคนเดียวกัน ข้อความเดียวกัน) ภายในเท่านี้ ไม่สร้างใหม่ */
-const DUPLICATE_WINDOW_MS = 5_000;
-
 /**
- * ตาข่ายกันแจ้งเตือนเบิ้ล — การกระทำเดียวกันโดนสั่งซ้ำติดกัน (แตะเบิ้ล, กดส่งสองที) เคยได้แจ้งเตือนสองอันหน้าตา
+ * ตาข่ายกันแจ้งเตือนเบิ้ล — การกระทำเดียวกันโดนสั่งซ้ำติดกัน (แตะเบิ้ล, กดส่งสองที, ติ๊กซ้ำ) เคยได้แจ้งเตือนสองอันหน้าตา
  * เหมือนกันเป๊ะ ("ทำไมแจ้งเตือนมาเบิ้ล") ไม่เทียบลิงก์ เพราะลิงก์มี id ของความคิดเห็นแต่ละอันติดมา ต่างกันเสมอ
+ * ช่วงเวลาขึ้นกับชนิด (ความคิดเห็น 5 วินาที · เหตุการณ์งาน 10 นาที) — ดู lib/notification-dedupe.ts
+ * เซิร์ฟเวอร์กันซ้ำอีกชั้นตอนรวม (เปิดสองเครื่องแล้วสร้างซ้ำกัน)
  */
-function isRecentDuplicate(list: AppNotification[], userId: string, byUserId: string, message: string, now: number): boolean {
-  for (const n of list) {
-    const age = now - Date.parse(n.createdAt);
-    if (age > DUPLICATE_WINDOW_MS) continue; // ลำดับหลังรวมกับเซิร์ฟเวอร์ไม่การันตีว่าใหม่→เก่า ไล่ให้ครบ
-    if (n.userId === userId && n.byUserId === byUserId && n.message === message) return true;
-  }
-  return false;
+function isRecentDuplicate(list: AppNotification[], userId: string, byUserId: string, message: string, now: number, kind?: string): boolean {
+  return isDuplicateNotification(list, { userId, byUserId, message, kind, createdAt: new Date(now).toISOString() });
 }
 
 // Server-synced via ServerStoreSync (apiKey "notifications") in
@@ -99,7 +94,7 @@ export const useNotificationStore = create<NotificationStore>()(
       notify: (n) =>
         set((s) => {
           const now = Date.now();
-          if (isRecentDuplicate(s.notifications, n.userId, n.byUserId, n.message, now)) return s;
+          if (isRecentDuplicate(s.notifications, n.userId, n.byUserId, n.message, now, n.kind)) return s;
           return {
             notifications: [
               { ...n, id: `notif-${uuid()}`, createdAt: new Date(now).toISOString(), read: false },
@@ -111,7 +106,7 @@ export const useNotificationStore = create<NotificationStore>()(
         set((s) => {
           const now = Date.now();
           const fresh = userIds
-            .filter((id) => id !== byUserId && !isRecentDuplicate(s.notifications, id, byUserId, message, now))
+            .filter((id) => id !== byUserId && !isRecentDuplicate(s.notifications, id, byUserId, message, now, kind))
             .map((userId) => ({
               id: `notif-${uuid()}`,
               userId,
