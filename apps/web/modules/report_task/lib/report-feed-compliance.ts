@@ -306,6 +306,8 @@ export interface ComplianceRow {
   onTime: number;
   late: number;
   missed: number;
+  /** รอบที่ยังไม่ถึงเวลาส่ง (เช่นรอบเย็นของวันนี้) — นับเฉพาะเมื่อเรียกด้วย `countPending` (ห้องสรุปรีพอร์ต) และรวมอยู่ใน trackedDays ด้วย, ไม่งั้นเป็น 0 เสมอ */
+  pending: number;
   /** Days they did post, but none of that day's posts met the room's minimum-photo requirement — a subset flag on top of onTime/late, not a fourth mutually-exclusive bucket. */
   attachmentIssues: number;
   /** % of trackedDays that got a post at all (on-time + late) — "did they show up," same idea as Task's completionRate. Historically mislabeled "ตรงเวลา" in a few places — that's actually this field, not onTimeRate below. */
@@ -326,6 +328,7 @@ function emptyRow(id: string, name: string, subtitle: string): ComplianceRow {
     onTime: 0,
     late: 0,
     missed: 0,
+    pending: 0,
     attachmentIssues: 0,
     complianceRate: 0,
     onTimeRate: 0,
@@ -342,12 +345,18 @@ function finalize(row: ComplianceRow): ComplianceRow {
   };
 }
 
-/** Per-person compliance across every tracked room they're eligible for, within `range` (null = unbounded, still capped at the room's own start day and today). Days that fall on a recorded leave/holiday/routine-day-off (`exemptions`) are excluded entirely — not counted as tracked, not held against the person. */
+/**
+ * Per-person compliance across every tracked room they're eligible for, within `range` (null = unbounded, still capped at the room's own start day and today). Days that fall on a recorded leave/holiday/routine-day-off (`exemptions`) are excluded entirely — not counted as tracked, not held against the person.
+ *
+ * `countPending` (ห้องสรุปรีพอร์ต, ผู้ใช้ขอ 19/10/2569): รอบที่ยังไม่ถึงเวลาส่งก็นับเป็นตัวหารด้วย —
+ * ห้อง 2 รอบ (เช้า/เย็น) ส่งเช้าแล้ว = 50% ไม่ใช่ 100% · ค่าเริ่มต้นปิด (แดชบอร์ด/ที่อื่นคงสูตรเดิม)
+ */
 export function buildUserComplianceReports(
   topics: ReportTopic[],
   posts: ReportPost[],
   range: { from: Date; to: Date } | null,
-  exemptions?: DateExemptions
+  exemptions?: DateExemptions,
+  opts?: { countPending?: boolean }
 ): ComplianceRow[] {
   const tracked = trackedTopicsOf(topics);
   return users.map((u) => {
@@ -360,7 +369,13 @@ export function buildUserComplianceReports(
       for (const day of eachDay(startStr, endStr)) {
         for (const round of rounds) {
           const status = roundComplianceStatus(topic, u.id, round, day, posts, exemptions);
-          if (status === "pending" || status === "exempt") continue;
+          if (status === "exempt") continue;
+          if (status === "pending") {
+            if (!opts?.countPending) continue;
+            row.trackedDays += 1;
+            row.pending += 1;
+            continue;
+          }
           row.trackedDays += 1;
           if (status === "on-time") row.onTime += 1;
           else if (status === "late") row.late += 1;

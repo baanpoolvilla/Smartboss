@@ -308,7 +308,7 @@ export function ReportTopicPanels({
     const totalReactions = topicPosts.reduce((n, p) => n + Object.values(p.reactions).reduce((m, ids) => m + ids.length, 0), 0);
 
     if (hasSchedule) {
-      const complianceRows = buildUserComplianceReports([topic], topicPosts, range, exemptions)
+      const complianceRows = buildUserComplianceReports([topic], topicPosts, range, exemptions, { countPending: true })
         .filter((r) => r.roomsCount > 0)
         .sort((a, b) => b.complianceRate - a.complianceRate || a.name.localeCompare(b.name));
       return { totalPosts: topicPosts.length, totalReplies, totalReactions, complianceRows, contributors: [] as { user: (typeof users)[number]; count: number }[] };
@@ -981,6 +981,8 @@ export function ReportTopicPanels({
                         <StatChip label="ตรงเวลา" value={r.onTime} tone="green" />
                         {r.late > 0 && <StatChip label="สาย" value={r.late} tone="amber" />}
                         {r.missed > 0 && <StatChip label="ไม่ส่ง" value={r.missed} tone="red" />}
+                        {/* รอบที่ยังไม่ถึงเวลาส่ง (นับในตัวหาร % ด้วย — ส่งเช้าแล้วรอเย็น = 50%) */}
+                        {r.pending > 0 && <StatChip label="รอส่ง" value={r.pending} tone="gray" />}
                         {/* Days they did post but didn't attach enough photos for that
                             round — a subset flag on top of onTime/late, not a fourth
                             bucket (see ComplianceRow.attachmentIssues). */}
@@ -1162,6 +1164,7 @@ const statChipTones = {
   green: "bg-[var(--accent)] text-[var(--brand-green-dark)]",
   amber: "bg-amber-50 text-[var(--chart-amber)]",
   red: "bg-red-50 text-[var(--chart-red)]",
+  gray: "bg-[var(--bg-soft)] text-[var(--ink-soft)]",
 } as const;
 
 /** One ตรงเวลา/สาย/ไม่ส่ง/แนบรูปไม่ครบ figure as its own small pill instead of a run-on "X · Y · Z" sentence — each number gets its own visual weight and color, easier to scan at a glance than a dense inline string. */

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { dayComplianceStatus, roundComplianceStatus } from "@/modules/report_task/lib/report-feed-compliance";
+import { buildUserComplianceReports, dayComplianceStatus, roundComplianceStatus } from "@/modules/report_task/lib/report-feed-compliance";
 import { effectiveRoundsOf } from "@/modules/report_task/lib/submission-rounds";
 import { users } from "@/modules/report_task/lib/directory";
 import type { ReportPost, ReportTopic, SubmissionRound } from "@/modules/report_task/store/report-feed-store";
@@ -139,5 +139,28 @@ describe("roundComplianceStatus — legacy single-cutoff room matches dayComplia
     expect(roundComplianceStatus(legacyTopic, legacyUserId, onlyRound!, today, posts)).toBe(
       dayComplianceStatus(legacyTopic, legacyUserId, today, posts)
     );
+  });
+});
+
+describe("buildUserComplianceReports — countPending (ห้องสรุปรีพอร์ต: ส่งเช้าแล้วรอเย็น = 50%)", () => {
+  const dirUser = "usr-directory-01";
+  const am: SubmissionRound = { id: "am", label: "เช้า", time: "09:00", submitters: { mode: "people", userIds: [dirUser] } };
+  const pm: SubmissionRound = { id: "pm", label: "เย็น", time: "18:00", submitters: { mode: "people", userIds: [dirUser] } };
+  const topic = { ...topicWith([am, pm]), createdAt: new Date(2026, 1, 2).toISOString() };
+  const posts = [postAt(new Date(2026, 1, 2, 8, 30), "am", dirUser)];
+  const range = { from: new Date(2026, 1, 2), to: new Date(2026, 1, 2, 23, 59) };
+  const row = (opts?: { countPending?: boolean }) =>
+    buildUserComplianceReports([topic], posts, range, undefined, opts).find((r) => r.id === dirUser)!;
+
+  it("default (dashboard): the not-yet-due evening round is left out → 100%", () => {
+    expect(row().complianceRate).toBe(100);
+    expect(row().pending).toBe(0);
+  });
+
+  it("countPending: the evening round still counts toward the total → 50%", () => {
+    const r = row({ countPending: true });
+    expect(r.trackedDays).toBe(2);
+    expect(r.pending).toBe(1);
+    expect(r.complianceRate).toBe(50);
   });
 });
