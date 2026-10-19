@@ -1124,7 +1124,9 @@ export function ReportCard({
   // ป้ายรอบส่ง (ตรงเวลา/ส่งเกินกำหนด/ไม่นับ/หยุด-ลา) — คอมวางต่อท้ายแถวชื่อ·แผนก·เวลา
   // มือถือย้ายไปมุมขวาล่างแถวเดียวกับ "ตอบกลับ": ชื่อ+แผนก+เวลา+ป้ายรวมกัน ~340px
   // แต่จอมือถือเหลือที่ ~300px ล้น ส่วนแถว "ตอบกลับ" มีที่ว่างฝั่งขวาอยู่แล้ว
-  const baseRoundBadge = post.retroFor ? (
+  // วันหยุดที่ OT อนุมัติแล้ว: ต่อท้ายป้ายตรงเวลา/สายเดิมว่า "· วัน OT" — ป้ายเดียว ไม่เพิ่มป้ายใหม่ (ผู้ใช้ขอ 19/10/2569)
+  const otSuffix = postDayOt ? " · วัน OT" : "";
+  const roundBadge = post.retroFor ? (
       // ส่งย้อนหลังหลัง CEO อนุมัติ (report-retro.ts) — นับเป็นรีพอตของวันที่ลืม ไม่ใช่วันที่โพสต์
       <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0 text-[10px] leading-4 font-medium bg-violet-50 text-violet-700 border border-violet-200">
         ส่งย้อนหลัง · รีพอตวันที่ {post.retroFor.day} · CEO อนุมัติ
@@ -1162,7 +1164,7 @@ export function ReportCard({
         {shortRoundLabel(lateCutoff.label, topic.name).length > 2
           ? ` (${shortRoundLabel(lateCutoff.label, topic.name)})`
           : ""}{" "}
-        · กำหนด {lateCutoff.time}
+        · กำหนด {lateCutoff.time}{otSuffix}
       </span>
     ) : graceLate ? (
       // ส่งตามหลังวันครบกำหนดของรอบรายสัปดาห์/รายเดือน (ภายในเผื่อเวลา) — ดู graceLate
@@ -1172,7 +1174,7 @@ export function ReportCard({
         {shortRoundLabel(graceLate.round.label, topic.name).length > 2
           ? ` (${shortRoundLabel(graceLate.round.label, topic.name)})`
           : ""}{" "}
-        · กำหนด {graceLate.dueLabel} {graceLate.round.time}
+        · กำหนด {graceLate.dueLabel} {graceLate.round.time}{otSuffix}
       </span>
     ) : !lateCutoff && onTimeCutoff && isFirstOnTimeOfRound ? (
       // The positive counterpart to "ส่งช้า" (C10) — without it,
@@ -1180,18 +1182,9 @@ export function ReportCard({
       // never confirmation that a post actually met it.
       <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0 text-[10px] leading-4 font-medium bg-[var(--accent)] text-[var(--brand-green-dark)] border border-[var(--brand-green)]/20">
         <Check className="h-2.5 w-2.5" />
-        ตรงเวลา · รอบ{shortRoundLabel(onTimeCutoff.label, topic.name)}
+        ตรงเวลา · รอบ{shortRoundLabel(onTimeCutoff.label, topic.name)}{otSuffix}
       </span>
     ) : null;
-  // วันหยุดที่ OT อนุมัติแล้ว: ป้าย "ทำ OT วันนี้" นำหน้าป้ายรอบ (ตรงเวลา/สาย ตัดสินตามปกติ)
-  const roundBadge = postDayOt && !post.excludeFromSubmission && !post.retroFor ? (
-    <span className="flex flex-wrap items-center gap-1">
-      <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0 text-[10px] leading-4 font-medium bg-sky-50 text-sky-700 border border-sky-200">
-        ทำ OT วันนี้ · นับเป็นวันทำงาน
-      </span>
-      {baseRoundBadge}
-    </span>
-  ) : baseRoundBadge;
 
   return (
     <div
