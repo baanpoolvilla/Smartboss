@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { CalendarClock } from "lucide-react";
+import { CalendarClock, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
+import { todayBangkok } from "@/modules/maintenance/lib/no-past-date";
 import {
   cancelDueRequestAction,
   decideDueRequestAction,
+  editDueDateAction,
   requestDueDateAction,
 } from "@/app/(shell)/maintenance/work-orders/due-request-actions";
 
@@ -37,11 +39,13 @@ const addDay = (ymd: string, n: number) => new Date(Date.parse(`${ymd}T00:00:00Z
  * ขอเลื่อนกำหนดส่งใบงาน (แบบเดียวกับงานบนบอร์ดงาน) — ใต้แถว "กำหนดส่ง" ในหน้ารายละเอียดใบงาน
  * ผู้รับผิดชอบ: ปุ่ม "ขอเลื่อนกำหนดส่ง" → เลือกวันใหม่ + เหตุผล · ยกเลิกคำขอได้
  * CEO / คนเปิดใบงาน: เห็นคำขอที่รออนุมัติ พร้อมปุ่มอนุมัติ / ไม่อนุมัติ (ใส่หมายเหตุได้)
+ *   + ปุ่ม "แก้" กำหนดส่งตรง ๆ (เลื่อนออก/เข้าได้ ไม่ก่อนวันนี้) — ผู้ใช้ขอ 19/10/2569
  */
 export function WorkOrderDueRequest({
   workOrderId,
   dueDate,
   canRequest,
+  canEdit = false,
   myId,
   requests,
 }: {
@@ -49,10 +53,16 @@ export function WorkOrderDueRequest({
   /** กำหนดส่งปัจจุบัน YYYY-MM-DD (เวลาไทย) */
   dueDate: string;
   canRequest: boolean;
+  /** CEO / คนเปิดใบงาน แก้กำหนดส่งเองได้เลย (คำนวณที่ server) */
+  canEdit?: boolean;
   myId: string;
   requests: DueRequestView[];
 }) {
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const today = todayBangkok();
+  const [editDate, setEditDate] = useState(dueDate < today ? today : dueDate);
+  const [editReason, setEditReason] = useState("");
   const [date, setDate] = useState(addDay(dueDate, 3));
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -69,7 +79,38 @@ export function WorkOrderDueRequest({
 
   return (
     <div className="grid gap-2">
-      {canRequest && !pendingReq && !open && (
+      {canEdit && !editing && (
+        <button type="button" onClick={() => setEditing(true)}
+          className="inline-flex w-max items-center gap-1.5 rounded-lg border border-(--line) bg-white px-3 py-1.5 text-[13px] font-semibold text-(--ink) hover:bg-(--bg-soft)">
+          <Pencil className="h-4 w-4" /> แก้กำหนดส่ง
+        </button>
+      )}
+
+      {editing && (
+        <div className="grid gap-2 rounded-xl border border-(--line) bg-(--bg-soft) p-3">
+          <b className="text-[13.5px]">แก้กำหนดส่ง</b>
+          <label className="grid gap-1 text-[12.5px] text-(--ink-soft)">
+            กำหนดส่งใหม่ (ไม่ก่อนวันนี้)
+            <DatePickerField value={editDate} minDate={today} onChange={(v) => v && setEditDate(v)} className="text-(--ink)" />
+          </label>
+          <label className="grid gap-1 text-[12.5px] text-(--ink-soft)">
+            เหตุผล (ไม่บังคับ)
+            <textarea value={editReason} onChange={(e) => setEditReason(e.target.value)} rows={2}
+              className="w-full rounded-lg border border-(--line) bg-white px-2.5 py-1.5 text-base text-(--ink) sm:text-sm" />
+          </label>
+          {pendingReq && <p className="m-0 text-[12px] text-amber-800">คำขอเลื่อนที่รออนุมัติอยู่จะถูกปิดไปด้วย</p>}
+          <div className="flex flex-wrap justify-end gap-2">
+            <button type="button" className="rounded-lg px-3 py-1.5 text-[13px] text-(--ink-soft)" onClick={() => setEditing(false)}>ยกเลิก</button>
+            <button type="button" disabled={pending || editDate < today || editDate === dueDate}
+              className="rounded-lg bg-[#2E7D32] px-4 py-1.5 text-[13px] font-semibold text-white disabled:opacity-50"
+              onClick={() => run(async () => { const r = await editDueDateAction(workOrderId, editDate, editReason); if (!r.error) { setEditing(false); setEditReason(""); } return r; }, `แก้กำหนดส่งแล้ว · ${th(editDate)}`)}>
+              บันทึก
+            </button>
+          </div>
+        </div>
+      )}
+
+      {canRequest && !canEdit && !pendingReq && !open && (
         <button type="button" onClick={() => setOpen(true)}
           className="inline-flex w-max items-center gap-1.5 rounded-lg border border-(--line) bg-white px-3 py-1.5 text-[13px] font-semibold text-(--ink) hover:bg-(--bg-soft)">
           <CalendarClock className="h-4 w-4" /> ขอเลื่อนกำหนดส่ง

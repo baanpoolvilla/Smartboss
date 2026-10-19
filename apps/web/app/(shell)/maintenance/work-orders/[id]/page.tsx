@@ -70,7 +70,7 @@ import {
 import { EditWorkOrderProperties } from "@/modules/maintenance/components/edit-work-order-properties";
 import { WorkOrderDueRequest, type DueRequestView } from "@/modules/maintenance/components/work-order-due-request";
 import { listDueRequests } from "@/modules/maintenance/data/work-order-due-requests";
-import { canDecideDueRequest } from "@/modules/maintenance/lib/due-request-access";
+import { canDecideDueRequest, canEditDueDate } from "@/modules/maintenance/lib/due-request-access";
 
 const STATUS_COLOR: Record<string, string> = {
   open: "#2563EB",
@@ -320,11 +320,12 @@ export default async function WorkOrderDetailPage({
             value={
               <div className="grid gap-2">
                 <span style={overdue ? { color: "#DC2626" } : undefined}>{fmtThaiDate(wo.dueDate)}</span>
-                {/* ขอเลื่อนกำหนดส่ง (ผู้รับผิดชอบ) · อนุมัติ/ไม่อนุมัติ (CEO / คนเปิดใบงาน) */}
+                {/* ขอเลื่อนกำหนดส่ง (ผู้รับผิดชอบ) · อนุมัติ/ไม่อนุมัติ + แก้ตรง ๆ (CEO / คนเปิดใบงาน) */}
                 <WorkOrderDueRequest
                   workOrderId={wo.id}
                   dueDate={ymdBkk(wo.dueDate)}
                   canRequest={isOpenOrRunning && wo.assignedTo === session.userId}
+                  canEdit={isOpenOrRunning && canEditDueDate({ userId: session.userId, viewAll }, wo)}
                   myId={session.userId}
                   requests={dueRequestViews}
                 />

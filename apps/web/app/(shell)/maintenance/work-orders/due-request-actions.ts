@@ -5,10 +5,11 @@ import { canViewAll, requireOrg } from "@smartboss/auth";
 import { getWorkOrder, updateWorkOrder, addWorkOrderComment } from "@/modules/maintenance/data/work-orders";
 import { workOrderAccess, canSeeWorkOrder } from "@/modules/maintenance/data/work-order-access";
 import { notifyActorName, notifyUser, notifyUsers, resolveActionNotifications, usersWithPermission } from "@/modules/maintenance/data/notify";
-import { createDueRequest, decideDueRequest, getDueRequest } from "@/modules/maintenance/data/work-order-due-requests";
+import { createDueRequest, decideDueRequest, getDueRequest, listDueRequests } from "@/modules/maintenance/data/work-order-due-requests";
 import { logActivity } from "@/modules/maintenance/data/activity";
 import { fmtThaiDate } from "@/modules/maintenance/lib/format";
-import { canDecideDueRequest } from "@/modules/maintenance/lib/due-request-access";
+import { canDecideDueRequest, canEditDueDate } from "@/modules/maintenance/lib/due-request-access";
+import { isPastDay } from "@/modules/maintenance/lib/no-past-date";
 
 /**
  * ขอเลื่อนกำหนดส่งใบงาน — แบบเดียวกับงานบนบอร์ดงาน (ผู้ใช้ขอ 17/10/2569)
@@ -128,6 +129,50 @@ export async function decideDueRequestAction(requestId: string, approve: boolean
     referenceId: wo.id,
     line: `${approve ? "✅ อนุมัติ" : "❌ ไม่อนุมัติ"}เลื่อนกำหนดส่งใบงาน\n📝 ${wo.title}\n📅 ${approve ? `กำหนดส่งใหม่ ${fmtThaiDate(r.newDate)}` : `ยังเป็น ${fmtThaiDate(wo.dueDate)}`}${memo ? `\n💬 ${memo}` : ""}`,
   });
+  refresh(wo.id);
+  return {};
+}
+
+/**
+ * แก้กำหนดส่งตรง ๆ — CEO / คนเปิดใบงาน (ผู้ใช้ขอ 19/10/2569) ไม่ต้องขออนุมัติ
+ *   เลื่อนออกหรือเลื่อนเข้าได้ แต่ไม่ก่อนวันนี้ (เวลาไทย) · ใบงานต้องยังไม่ปิด
+ *   มีคำขอเลื่อนค้างอยู่ ⇒ ปิดคำขอนั้นไปด้วย (กำหนดส่งถูกตั้งใหม่แล้ว)
+ *   บันทึกในความคิดเห็น (log) + แจ้งผู้รับผิดชอบ
+ */
+export async function editDueDateAction(workOrderId: string, newDate: string, reason: string): Promise<{ error?: string }> {
+  const s = await requireOrg();
+  const wo = await getWorkOrder(s.orgId, workOrderId);
+  if (!wo || !canSeeWorkOrder(await workOrderAccess(s), wo)) return { error: "ไม่พบใบงาน" };
+  if (!canEditDueDate({ userId: s.userId, viewAll: canViewAll(s) }, wo)) return { error: "แก้กำหนดส่งได้เฉพาะ CEO หรือคนเปิดใบงาน" };
+  if (wo.status === "completed" || wo.status === "cancelled") return { error: "ใบงานนี้ปิดแล้ว" };
+  const d = endOfDayBkk(newDate);
+  if (!d) return { error: "วันที่ไม่ถูกต้อง" };
+  if (isPastDay(newDate)) return { error: "กำหนดส่งต้องไม่ก่อนวันนี้" };
+  if (wo.dueDate && ymdBkk(d) === ymdBkk(wo.dueDate)) return {};
+  const why = reason.trim();
+
+  await updateWorkOrder(s.orgId, wo.id, { dueDate: d });
+  const pending = (await listDueRequests(s.orgId, wo.id)).filter((r) => r.status === "pending");
+  for (const r of pending) {
+    await decideDueRequest(s.orgId, r.id, { status: "cancelled", decidedBy: s.userId, decisionNote: "แก้กำหนดส่งโดยตรงแล้ว" });
+  }
+  if (pending.length > 0) await resolveActionNotifications(wo.id, "work_order", [PENDING_TITLE]);
+
+  const range = `${wo.dueDate ? fmtThaiDate(wo.dueDate) : "-"} → ${fmtThaiDate(d)}`;
+  const text = `แก้กำหนดส่ง ${range}${why ? ` · ${why}` : ""}`;
+  await addWorkOrderComment(s.orgId, wo.id, s.userId, text, null, { kind: "log" });
+  await log(s, wo, `แก้กำหนดส่ง ${range} ของ`, why ? { reason: why } : undefined);
+
+  if (wo.assignedTo && wo.assignedTo !== s.userId) {
+    const who = (await notifyActorName(s.userId)) ?? "ผู้เปิดใบงาน";
+    await notifyUser(s.orgId, wo.assignedTo, {
+      title: `${who} · 📅 แก้กำหนดส่งใบงาน`,
+      body: `${wo.title} · ${range}${why ? ` · ${why}` : ""}`,
+      type: "work_order",
+      referenceId: wo.id,
+      line: `📅 แก้กำหนดส่งใบงาน\n📝 ${wo.title}\n📅 ${range}${why ? `\n💬 ${why}` : ""}\n👤 ${who}`,
+    });
+  }
   refresh(wo.id);
   return {};
 }
