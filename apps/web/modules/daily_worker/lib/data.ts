@@ -3,9 +3,9 @@ import { prisma } from "@smartboss/database";
 
 import { readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
 import { withWorkforceTenant } from "@/modules/report_task/lib/db/workforce-calendar";
+import { readPaymentsDb, readPayRatesDb, readSettingsDb, readTimeEditsDb } from "./db";
 import { WORKER_ROLE_CODE } from "../permissions";
 import {
-  DEFAULT_OT_PERCENT,
   dayPay,
   daysInMonth,
   hmToMin,
@@ -42,29 +42,23 @@ import {
 
 export const OT_KEY = "daily-worker-ot";
 export const OVERRIDE_KEY = "daily-worker-overrides";
-export const TIME_EDIT_KEY = "daily-worker-time-edits";
-export const SETTINGS_KEY = "daily-worker-settings";
-export const PAY_KEY = "daily-worker-pay";
-export const PAYMENTS_KEY = "daily-worker-payments";
 
-export async function readPayments(orgId: string) {
-  const { data } = await readStore<PaymentEntry[]>(orgId, PAYMENTS_KEY);
-  return data ?? [];
+
+
+export async function readPayments(orgId: string): Promise<PaymentEntry[]> {
+  return readPaymentsDb(orgId);
 }
 
-export async function readPayRates(orgId: string) {
-  const { data } = await readStore<PayRateEntry[]>(orgId, PAY_KEY);
-  return data ?? [];
+export async function readPayRates(orgId: string): Promise<PayRateEntry[]> {
+  return readPayRatesDb(orgId);
 }
 
-export async function readTimeEdits(orgId: string) {
-  const { data } = await readStore<TimeEditEntry[]>(orgId, TIME_EDIT_KEY);
-  return data ?? [];
+// เงิน/เวลาที่แก้/ค่าแรง อยู่ในตารางของ schema daily_worker (RLS ตามบริษัท) — ดู lib/db.ts
+export async function readTimeEdits(orgId: string): Promise<TimeEditEntry[]> {
+  return readTimeEditsDb(orgId);
 }
 export async function readDwSettings(orgId: string): Promise<DwSettings> {
-  const { data } = await readStore<Partial<DwSettings>>(orgId, SETTINGS_KEY);
-  const p = Number(data?.otPercent);
-  return { otPercent: Number.isFinite(p) && p > 0 ? p : DEFAULT_OT_PERCENT };
+  return readSettingsDb(orgId);
 }
 
 export async function readOt(orgId: string) {

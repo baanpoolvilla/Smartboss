@@ -1,0 +1,83 @@
+// ═══════════════════════════════════════════════════════════════════════
+//  schema "daily_worker" — เงินของคนงานรายวัน (ค่าแรง การจ่าย การแก้เวลา)
+//
+//  แยกตามบริษัทด้วย org_id + RLS (FORCE) — อ่าน/เขียนได้เฉพาะใน withDailyWorkerTenant()
+//  (apps/web/modules/daily_worker/lib/db.ts) ที่ตั้ง role + บริษัทใน transaction ไว้แล้ว
+//  ไม่ได้ตั้ง = ไม่เห็นอะไรเลย (fail closed) · application role ไม่มีสิทธิ์ DELETE —
+//  แก้ไขด้วยการยกเลิก (voided/revoked) เก็บประวัติไว้เสมอ (ผู้ใช้ตกลง 19/10/2569)
+// ═══════════════════════════════════════════════════════════════════════
+
+/// การจ่ายเงิน / เบิกล่วงหน้า ให้คนงาน — คงเหลือ = ยกมา + ค่าแรงที่ได้ − จ่าย
+model DailyWorkerPayment {
+  id           String    @id @default(uuid())
+  orgId        String    @map("org_id")
+  /// workforce.employments.id
+  employmentId String    @map("employment_id")
+  payDate      DateTime  @map("pay_date") @db.Date
+  amount       Decimal   @db.Decimal(12, 2)
+  /// wage = จ่ายค่าแรงที่ค้าง · advance = จ่ายเกินยอดค้าง (เบิกล่วงหน้า — เฉพาะ HR)
+  kind         String
+  note         String    @default("")
+  byUserId     String    @map("by_user_id")
+  byName       String    @map("by_name")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// ค่าแรงของแต่ละวัน ณ ตอนจ่าย {"YYYY-MM-DD": number} — ไว้บอกว่ายอดวันไหนเปลี่ยนหลังจ่าย
+  snapshot     Json?
+  voidedAt     DateTime? @map("voided_at") @db.Timestamptz(6)
+  voidedByName String?   @map("voided_by_name")
+  voidReason   String?   @map("void_reason")
+
+  @@index([orgId, employmentId, payDate])
+  @@map("payments")
+  @@schema("daily_worker")
+}
+
+/// ค่าแรงต่อวัน + % OT ของคนงาน มีผลตั้งแต่ effective_from — วันก่อนหน้าคิดเรทเดิม (เก็บเป็นประวัติ ไม่เขียนทับ)
+model DailyWorkerPayRate {
+  id            String   @id @default(uuid())
+  orgId         String   @map("org_id")
+  employmentId  String   @map("employment_id")
+  dailyWage     Decimal  @map("daily_wage") @db.Decimal(12, 2)
+  /// null = ใช้ % กลางของบริษัท
+  otPercent     Decimal? @map("ot_percent") @db.Decimal(6, 2)
+  effectiveFrom DateTime @map("effective_from") @db.Date
+  byUserId      String   @map("by_user_id")
+  byName        String   @map("by_name")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([orgId, employmentId, effectiveFrom])
+  @@map("pay_rates")
+  @@schema("daily_worker")
+}
+
+/// ผู้ดูแลแก้เวลาเข้า/ออก — ตัวที่ใช้ = แถวล่าสุดที่ยังไม่ revoked ของ (คน, วัน) · แก้ซ้ำ = revoke ตัวเก่า + เพิ่มแถวใหม่
+model DailyWorkerTimeEdit {
+  id            String    @id @default(uuid())
+  orgId         String    @map("org_id")
+  employmentId  String    @map("employment_id")
+  workDate      DateTime  @map("work_date") @db.Date
+  /// "HH:MM" · null = ใช้เวลาที่สแกนจริง
+  inAt          String?   @map("in_at")
+  outAt         String?   @map("out_at")
+  reason        String
+  byUserId      String    @map("by_user_id")
+  byName        String    @map("by_name")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  revokedAt     DateTime? @map("revoked_at") @db.Timestamptz(6)
+  revokedByName String?   @map("revoked_by_name")
+
+  @@index([orgId, employmentId, workDate])
+  @@map("time_edits")
+  @@schema("daily_worker")
+}
+
+/// ค่าตั้งของบริษัท (% OT กลาง)
+model DailyWorkerSettings {
+  orgId     String   @id @map("org_id")
+  otPercent Decimal  @map("ot_percent") @db.Decimal(6, 2)
+  updatedBy String   @map("updated_by")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("settings")
+  @@schema("daily_worker")
+}

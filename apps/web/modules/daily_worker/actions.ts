@@ -8,9 +8,9 @@ import { prisma } from "@smartboss/database";
 import { wfFetch as wfFetchRaw, WorkforceError } from "@/modules/hr/lib/api";
 import { syncUserToWorkforce } from "@/modules/admin/data/user-guards";
 import { DW_PERMS } from "./permissions";
-import { bangkokToday, loadMoney, loadMonth, OT_KEY, OVERRIDE_KEY, PAY_KEY, PAYMENTS_KEY, SETTINGS_KEY, TIME_EDIT_KEY, updateStoreList } from "./lib/data";
-import { writeStore, readStore } from "@/modules/report_task/lib/db/org-store";
-import { otMinutes, owedOn, type DwSettings, type OtEntry, type OverrideEntry, type PayRateEntry, type PaymentEntry, type TimeEditEntry } from "./lib/types";
+import { bangkokToday, loadMoney, loadMonth, OT_KEY, OVERRIDE_KEY, updateStoreList } from "./lib/data";
+import { withDailyWorkerTenant } from "./lib/db";
+import { otMinutes, owedOn, type OtEntry, type OverrideEntry } from "./lib/types";
 
 /**
  * Server action ของโมดูลคนงานรายวัน — ตรวจสิทธิ์ Smartboss ทุกตัว (การซ่อนปุ่มไม่ใช่ security control)
@@ -254,10 +254,18 @@ export async function setTimeEditAction(input: { employmentId: string; date: str
     // ต้องมีเวลาเข้าเสมอ — ใส่แค่เวลาออกในวันที่ไม่ได้สแกนเข้า ระบบจะยังนับ "ไม่มา" (หน้าจอส่งเวลาเข้าเดิมมาด้วยทุกครั้ง)
     if (!inAt) return { error: "ใส่เวลาเข้าด้วย" };
     const byName = await nameOf(session.userId);
-    await updateStoreList<TimeEditEntry>(session.orgId!, TIME_EDIT_KEY, session.userId, (list) => [
-      ...list.filter((e) => !(e.employmentId === input.employmentId && e.date === input.date)),
-      { employmentId: input.employmentId, date: input.date, inAt, outAt, reason: reason.slice(0, 300), byUserId: session.userId, byName, at: new Date().toISOString() },
-    ]);
+    const orgId = session.orgId!;
+    const workDate = new Date(`${input.date}T00:00:00Z`);
+    // แก้ซ้ำ = ยกเลิกตัวเก่า (เก็บไว้เป็นประวัติ) + เพิ่มแถวใหม่ ใน transaction เดียว
+    await withDailyWorkerTenant(orgId, async (tx) => {
+      await tx.dailyWorkerTimeEdit.updateMany({
+        where: { orgId, employmentId: input.employmentId, workDate, revokedAt: null },
+        data: { revokedAt: new Date(), revokedByName: byName },
+      });
+      await tx.dailyWorkerTimeEdit.create({
+        data: { orgId, employmentId: input.employmentId, workDate, inAt, outAt, reason: reason.slice(0, 300), byUserId: session.userId, byName },
+      });
+    });
     revalidatePath("/daily-workers");
     return { ok: true };
   } catch (error) {
@@ -268,8 +276,13 @@ export async function setTimeEditAction(input: { employmentId: string; date: str
 export async function removeTimeEditAction(input: { employmentId: string; date: string }): Promise<Result> {
   try {
     const session = await guard(DW_PERMS.override);
-    await updateStoreList<TimeEditEntry>(session.orgId!, TIME_EDIT_KEY, session.userId, (list) =>
-      list.filter((e) => !(e.employmentId === input.employmentId && e.date === input.date)),
+    const byName = await nameOf(session.userId);
+    const orgId = session.orgId!;
+    await withDailyWorkerTenant(orgId, (tx) =>
+      tx.dailyWorkerTimeEdit.updateMany({
+        where: { orgId, employmentId: input.employmentId, workDate: new Date(`${input.date}T00:00:00Z`), revokedAt: null },
+        data: { revokedAt: new Date(), revokedByName: byName },
+      }),
     );
     revalidatePath("/daily-workers");
     return { ok: true };
@@ -284,15 +297,16 @@ export async function saveDwSettingsAction(input: { otPercent: number }): Promis
     const session = await guard(DW_PERMS.pay);
     const p = Number(input.otPercent);
     if (!Number.isFinite(p) || p <= 0 || p > 1000) return { error: "% OT ต้องอยู่ระหว่าง 1–1000" };
-    for (let attempt = 0; attempt < 4; attempt++) {
-      const { data, version } = await readStore<DwSettings>(session.orgId!, SETTINGS_KEY);
-      const r = await writeStore(session.orgId!, SETTINGS_KEY, { ...(data ?? {}), otPercent: p }, data === null ? null : version, session.userId);
-      if (r.ok) {
-        revalidatePath("/daily-workers");
-        return { ok: true };
-      }
-    }
-    return { error: "บันทึกไม่สำเร็จ มีคนแก้พร้อมกัน ลองใหม่อีกครั้ง" };
+    const orgId = session.orgId!;
+    await withDailyWorkerTenant(orgId, (tx) =>
+      tx.dailyWorkerSettings.upsert({
+        where: { orgId },
+        create: { orgId, otPercent: p, updatedBy: session.userId },
+        update: { otPercent: p, updatedBy: session.userId },
+      }),
+    );
+    revalidatePath("/daily-workers");
+    return { ok: true };
   } catch (error) {
     return { error: message(error) };
   }
@@ -312,22 +326,24 @@ export async function savePayRateAction(input: { employmentIds: string[]; dailyW
     if (!DATE_RE.test(input.from)) return { error: "วันที่เริ่มใช้ไม่ถูกต้อง" };
     if (input.employmentIds.length === 0) return { error: "ยังไม่ได้เลือกคนงาน" };
     const byName = await nameOf(session.userId);
-    const at = new Date().toISOString();
-    const ids = new Set(input.employmentIds);
-    await updateStoreList<PayRateEntry>(session.orgId!, PAY_KEY, session.userId, (list) => [
-      ...list.filter((r) => !(ids.has(r.employmentId) && r.from === input.from)),
-      ...[...ids].map((employmentId) => ({
-        employmentId,
-        dailyWage: Math.round(wage * 100) / 100,
-        otPercent: ot,
-        from: input.from,
-        byUserId: session.userId,
-        byName,
-        at,
-      })),
-    ]);
+    const orgId = session.orgId!;
+    const ids = [...new Set(input.employmentIds)];
+    // เพิ่มเป็นประวัติเสมอ ไม่เขียนทับ — วันเดียวกันตั้งซ้ำ ตัวที่ตั้งทีหลังชนะ (rateOn เรียงตามเวลาที่ตั้ง)
+    await withDailyWorkerTenant(orgId, (tx) =>
+      tx.dailyWorkerPayRate.createMany({
+        data: ids.map((employmentId) => ({
+          orgId,
+          employmentId,
+          dailyWage: Math.round(wage * 100) / 100,
+          otPercent: ot,
+          effectiveFrom: new Date(`${input.from}T00:00:00Z`),
+          byUserId: session.userId,
+          byName,
+        })),
+      }),
+    );
     revalidatePath("/daily-workers");
-    return { ok: true, done: ids.size };
+    return { ok: true, done: ids.length };
   } catch (error) {
     return { error: message(error) };
   }
@@ -346,7 +362,9 @@ export async function recordPaymentAction(input: { employmentId: string; date: s
     const amount = Math.round(Number(input.amount) * 100) / 100;
     if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000) return { error: "จำนวนเงินไม่ถูกต้อง" };
     if (!DATE_RE.test(input.date) || input.date > bangkokToday()) return { error: "วันที่ไม่ถูกต้อง" };
-    const { money } = await loadMoney(session.orgId!, input.date.slice(0, 7));
+    const orgId = session.orgId!;
+    const loadedAt = new Date();
+    const { money } = await loadMoney(orgId, input.date.slice(0, 7));
     const m = money.get(input.employmentId);
     if (!m) return { error: "ไม่พบคนงาน" };
     const owed = owedOn(m.days, input.date);
@@ -361,21 +379,29 @@ export async function recordPaymentAction(input: { employmentId: string; date: s
     const snapshot: Record<string, number> = {};
     for (const d of m.days) if (d.date <= input.date && d.earned) snapshot[d.date] = d.earned;
     const byName = await nameOf(session.userId);
-    await updateStoreList<PaymentEntry>(session.orgId!, PAYMENTS_KEY, session.userId, (list) => [
-      ...list,
-      {
-        id: randomUUID(),
-        employmentId: input.employmentId,
-        date: input.date,
-        amount,
-        kind: advance ? "advance" : "wage",
-        note,
-        byUserId: session.userId,
-        byName,
-        at: new Date().toISOString(),
-        snapshot,
-      },
-    ]);
+    // กันสองคนกดจ่ายคนเดียวกันพร้อมกัน (ยอดค้างที่ตรวจไว้จะไม่จริงแล้ว) — ล็อกต่อคนงาน แล้วดูว่ามีใครจ่ายแทรกหลังโหลดยอดไหม
+    const raced = await withDailyWorkerTenant(orgId, async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`dw-pay:${orgId}:${input.employmentId}`}))`;
+      const after = await tx.dailyWorkerPayment.count({
+        where: { orgId, employmentId: input.employmentId, createdAt: { gte: loadedAt }, voidedAt: null },
+      });
+      if (after > 0) return true;
+      await tx.dailyWorkerPayment.create({
+        data: {
+          orgId,
+          employmentId: input.employmentId,
+          payDate: new Date(`${input.date}T00:00:00Z`),
+          amount,
+          kind: advance ? "advance" : "wage",
+          note,
+          byUserId: session.userId,
+          byName,
+          snapshot,
+        },
+      });
+      return false;
+    });
+    if (raced) return { error: "มีคนเพิ่งบันทึกจ่ายให้คนนี้ไป — รีเฟรชดูยอดล่าสุดก่อน" };
     revalidatePath("/daily-workers");
     return { ok: true };
   } catch (error) {
@@ -391,19 +417,17 @@ export async function voidPaymentAction(input: { id: string; reason: string }): 
     if (!reason) return { error: "ต้องใส่เหตุผล" };
     const isHr = hasPermission(session, DW_PERMS.pay);
     const byName = await nameOf(session.userId);
-    let denied = false;
-    await updateStoreList<PaymentEntry>(session.orgId!, PAYMENTS_KEY, session.userId, (list) =>
-      list.map((p) => {
-        if (p.id !== input.id || p.voided) return p;
-        const own = p.byUserId === session.userId && p.date === bangkokToday();
-        if (!isHr && !own) {
-          denied = true;
-          return p;
-        }
-        return { ...p, voided: { byName, at: new Date().toISOString(), reason: reason.slice(0, 200) } };
-      }),
-    );
-    if (denied) return { error: "ยกเลิกได้เฉพาะรายการที่ตัวเองบันทึกวันนี้ — อื่น ๆ ให้ HR ยกเลิก" };
+    const orgId = session.orgId!;
+    const result = await withDailyWorkerTenant(orgId, async (tx) => {
+      const p = await tx.dailyWorkerPayment.findFirst({ where: { orgId, id: input.id, voidedAt: null } });
+      if (!p) return "missing" as const;
+      const own = p.byUserId === session.userId && p.payDate.toISOString().slice(0, 10) === bangkokToday();
+      if (!isHr && !own) return "denied" as const;
+      await tx.dailyWorkerPayment.update({ where: { id: p.id }, data: { voidedAt: new Date(), voidedByName: byName, voidReason: reason.slice(0, 200) } });
+      return "ok" as const;
+    });
+    if (result === "missing") return { error: "ไม่พบรายการ หรือถูกยกเลิกไปแล้ว" };
+    if (result === "denied") return { error: "ยกเลิกได้เฉพาะรายการที่ตัวเองบันทึกวันนี้ — อื่น ๆ ให้ HR ยกเลิก" };
     revalidatePath("/daily-workers");
     return { ok: true };
   } catch (error) {
