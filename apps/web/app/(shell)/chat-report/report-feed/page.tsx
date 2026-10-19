@@ -256,6 +256,8 @@ function ReportFeedPageInner() {
   // A "copy link" on a specific comment (not just the post) adds &reply= —
   // same deep-link idea as Teams' parentMessageId, scoped down to one reply.
   const [highlightReplyId, setHighlightReplyId] = useState<string | null>(() => searchParams.get("reply"));
+  // กดโพสต์จากแท็บสรุป (ประวัติสติกเกอร์) — นับครั้งเพื่อให้เลื่อนหาโพสต์ใหม่หลังฟีดโพสต์ขึ้นมาแล้ว แม้เป็นโพสต์เดิมที่ไฮไลต์อยู่
+  const [postJumpNonce, setPostJumpNonce] = useState(0);
   // Re-derives the three deep-link params from the URL whenever it actually
   // changes — the fix for the stale-initializer gap noted above. A plain
   // room switch via the sidebar (selectView) is a no-op here: the
@@ -725,7 +727,7 @@ function ReportFeedPageInner() {
     }
     // ไม่จางเองแล้ว — เดิมหายไปใน 2.5 วิ กดมาจากแจ้งเตือนยังไม่ทันรู้ว่าเข้ามาดูโพสต์ไหน
     // ("อยากให้ขึ้นสีค้างไว้จนกว่าจะเปลี่ยนหน้า") ค้างจนกว่าจะเปลี่ยนห้อง/ออกจากหน้า/กดแจ้งเตือนอื่น
-  }, [highlightPostId, highlightReplyId, activeId]);
+  }, [highlightPostId, highlightReplyId, activeId, postJumpNonce]);
 
   // เปลี่ยนห้องแล้ว ไฮไลต์ของห้องเดิมไม่มีความหมาย — ล้าง (จำห้องตอนที่ไฮไลต์ถูกตั้ง ไม่ใช่ทุกครั้งที่ห้องโหลด)
   const highlightRoomRef = useRef<{ post: string; room: string | null } | null>(null);
@@ -1569,7 +1571,18 @@ function ReportFeedPageInner() {
                   )}
                 </>
               ) : (
-                <ReportTopicPanels tab={activeTab} topic={activeTopic} topicPosts={topicPosts} initialFileFilter={initialFileFilter} />
+                <ReportTopicPanels
+                  tab={activeTab}
+                  topic={activeTopic}
+                  topicPosts={topicPosts}
+                  initialFileFilter={initialFileFilter}
+                  onOpenPost={(postId) => {
+                    setActiveTab("posts");
+                    setHighlightReplyId(null);
+                    setHighlightPostId(postId);
+                    setPostJumpNonce((n) => n + 1);
+                  }}
+                />
               )}
             </div>
           ) : (

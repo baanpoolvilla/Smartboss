@@ -173,6 +173,7 @@ export function ReportTopicPanels({
   topic,
   topicPosts,
   initialFileFilter,
+  onOpenPost,
 }: {
   tab: "files" | "stats";
   topic: ReportTopic;
@@ -180,6 +181,9 @@ export function ReportTopicPanels({
   /** Which filter the "ไฟล์" tab opens on — set by a legacy `?tab=album` /
    * `?tab=links` deep link (see fileFilterForLegacyTab), "all" otherwise. */
   initialFileFilter?: FileFilter;
+  /** กดชื่อโพสต์ในประวัติสติกเกอร์ — สลับไปแท็บโพสต์แล้วเลื่อนไปหาโพสต์นั้น (ลิงก์ ?post= ห้องเดิมอย่างเดียว
+   * ไม่เปลี่ยนแท็บ หน้าเลยค้างอยู่ที่สรุป "กดตรงเขียวๆไม่เห็นลิ้งไป" 19/10/2569) */
+  onOpenPost?: (postId: string) => void;
 }) {
   // เก็บเป็น FileEntry[] ไม่ใช่ ReportPostImage[] เฉยๆ — อัลบั้ม/แท็บไฟล์รวม
   // รูปจากคนละโพสต์คนละคนไว้ในลิสต์เดียวกัน imageMeta ของ lightbox ด้านล่าง
@@ -1086,6 +1090,11 @@ export function ReportTopicPanels({
                         {" · บนโพสต์ "}
                         <Link
                           href={`/chat-report/report-feed?topic=${topic.id}&post=${e.post.id}`}
+                          onClick={(ev) => {
+                            if (!onOpenPost) return;
+                            ev.preventDefault();
+                            onOpenPost(e.post.id);
+                          }}
                           className="text-[var(--brand-green-dark)] hover:underline"
                         >
                           &ldquo;{e.post.title || "(ไม่มีหัวข้อ)"}&rdquo;
