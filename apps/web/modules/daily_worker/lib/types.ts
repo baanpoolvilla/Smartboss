@@ -204,3 +204,48 @@ export function shiftMonth(month: string, delta: number): string {
   const d = new Date(Date.UTC(y, m - 1 + delta, 1));
   return d.toISOString().slice(0, 7);
 }
+
+export interface DayInput {
+  date: string;
+  today: string;
+  /** เวลาที่ใช้คิด (ผู้ดูแลแก้แล้ว หรือที่สแกนจริง) */
+  inAt: string | null;
+  outAt: string | null;
+  /** กะของ "วันนั้น" (นาทีจากเที่ยงคืน) — null = ไม่มีกะ คิดสาย/เงินไม่ได้ */
+  shiftStart: number | null;
+  shiftEnd: number | null;
+  /** OT ที่ผู้ดูแลลงไว้วันนั้น (นาที) — มี = ไม่ดูเวลาออก */
+  otMinutes: number | null;
+  /** "แก้เป็นมา" แบบเดิม = ไม่นับสาย */
+  legacyOverride: boolean;
+  wage: number | null;
+  otPercent: number;
+}
+
+export interface DayJudgement {
+  s: "m" | "s" | "x";
+  lateMin: number;
+  earlyMin: number;
+  workedMin: number;
+  pay: DayPay | null;
+}
+
+/**
+ * ตัดสินวันที่มีเวลาเข้า (กติกา 19/10/2569) — ฟังก์ชันเดียวที่ทุกหน้าใช้ (ตาราง/วันนี้/Excel)
+ *   - ไม่ลงออก + วันผ่านไปแล้ว + ไม่มี OT = ขาด (ไม่ได้ค่าแรง)
+ *   - ลงเข้า-ออกแต่ไม่ได้ทำงานในกะเลยสักนาที (เช่นสแกนซ้ำตอนเช้า 07:58/07:59) = ขาด
+ *   - เข้าหลังเวลาเข้ากะ = สาย · หักสาย + กลับก่อน นาทีละ ค่าแรง÷480 · OT = ชม. × ค่าแรง÷8 × %
+ *   - วันนี้ที่ยังไม่ลงออก = ตัดสินสาย/ไม่สายได้ แต่ยังไม่คิดเงิน
+ */
+export function judgeDay(d: DayInput & { inAt: string }): DayJudgement {
+  const hasOt = (d.otMinutes ?? 0) > 0;
+  const noOut = !d.outAt && !hasOt;
+  if (noOut && d.date < d.today) return { s: "x", lateMin: 0, earlyMin: 0, workedMin: 0, pay: null };
+  if (d.shiftStart === null || d.shiftEnd === null) return { s: "m", lateMin: 0, earlyMin: 0, workedMin: 0, pay: null };
+  const t = judgeTimes(d.shiftStart, d.shiftEnd, hmToMin(d.inAt), d.outAt ? hmToMin(d.outAt) : null, hasOt);
+  const lateMin = d.legacyOverride ? 0 : t.lateMin;
+  const workedMin = Math.max(0, t.scheduledMin - lateMin - t.earlyMin);
+  if (!noOut && workedMin === 0 && !hasOt) return { s: "x", lateMin: 0, earlyMin: 0, workedMin: 0, pay: null };
+  const pay = d.wage !== null && !noOut ? dayPay(d.wage, lateMin + t.earlyMin, d.otMinutes ?? 0, d.otPercent) : null;
+  return { s: lateMin > 0 ? "s" : "m", lateMin, earlyMin: t.earlyMin, workedMin, pay };
+}

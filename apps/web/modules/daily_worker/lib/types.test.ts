@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dayPay, daysInMonth, hoursLabel, judgeTimes, minutesToHm, otMinutes, shiftMonth } from "./types";
+import { dayPay, daysInMonth, hoursLabel, judgeDay, judgeTimes, minutesToHm, otMinutes, shiftMonth } from "./types";
 
 describe("daily worker helpers", () => {
   it("OT hours come from the start–end the supervisor typed, crossing midnight too", () => {
@@ -44,5 +44,50 @@ describe("worker pay rules (19/10/2569)", () => {
   });
   it("deduction never exceeds the day's wage", () => {
     expect(dayPay(400, 600, 0, 150).deduct).toBe(400);
+  });
+});
+
+describe("judgeDay — one day of one worker (ค่าแรง 400 · กะ 08:00–17:00 · OT 150%)", () => {
+  const base = { date: "2026-10-16", today: "2026-10-19", shiftStart: 480, shiftEnd: 1020, otMinutes: null, legacyOverride: false, wage: 400, otPercent: 150 };
+  const day = (x: Partial<typeof base> & { inAt: string; outAt: string | null }) => judgeDay({ ...base, ...x });
+
+  it("ตรงเวลา เต็มวัน = 400", () => {
+    expect(day({ inAt: "08:00", outAt: "17:00" })).toMatchObject({ s: "m", lateMin: 0, earlyMin: 0, workedMin: 480, pay: { total: 400 } });
+  });
+  it("08:01 = สาย 1 นาที หัก 0.83", () => {
+    expect(day({ inAt: "08:01", outAt: "17:00" })).toMatchObject({ s: "s", lateMin: 1, pay: { deduct: 0.83, total: 399.17 } });
+  });
+  it("สาย 30 + กลับก่อน 30 = หัก 60 นาที = 50 บาท", () => {
+    expect(day({ inAt: "08:30", outAt: "16:30" })).toMatchObject({ s: "s", lateMin: 30, earlyMin: 30, pay: { deduct: 50, total: 350 } });
+  });
+  it("เข้า 13:00 (หลังพักเที่ยง) = สาย 4 ชม. ได้ครึ่งวัน", () => {
+    expect(day({ inAt: "13:00", outAt: "17:00" })).toMatchObject({ s: "s", lateMin: 240, workedMin: 240, pay: { total: 200 } });
+  });
+  it("ไม่ลงออก วันที่ผ่านไปแล้ว = ขาด ไม่ได้เงิน", () => {
+    expect(day({ inAt: "07:55", outAt: null })).toMatchObject({ s: "x", pay: null });
+  });
+  it("วันนี้ยังไม่ลงออก = บอกสายได้ แต่ยังไม่คิดเงิน", () => {
+    expect(day({ date: "2026-10-19", inAt: "08:12", outAt: null })).toMatchObject({ s: "s", lateMin: 12, pay: null });
+  });
+  it("สแกนซ้ำตอนเช้า (07:58 / 07:59) = ไม่ได้ทำงานในกะเลย = ขาด", () => {
+    expect(day({ inAt: "07:58", outAt: "07:59" })).toMatchObject({ s: "x", pay: null });
+  });
+  it("วัน OT 17–19 ไม่ลงออก = ไม่ขาด ได้ 400 + OT 150", () => {
+    expect(day({ inAt: "08:00", outAt: null, otMinutes: 120 })).toMatchObject({ s: "m", pay: { ot: 150, total: 550 } });
+  });
+  it("วัน OT ยังหักสายตามปกติ", () => {
+    expect(day({ inAt: "08:12", outAt: null, otMinutes: 120 })).toMatchObject({ s: "s", pay: { deduct: 10, ot: 150, total: 540 } });
+  });
+  it("\"แก้เป็นมา\" แบบเดิม = ไม่หักสาย", () => {
+    expect(day({ inAt: "08:20", outAt: "17:00", legacyOverride: true })).toMatchObject({ s: "m", pay: { total: 400 } });
+  });
+  it("ยังไม่ตั้งค่าแรง = ตัดสินสายได้ แต่ไม่มียอดเงิน (ไม่ใช่ 0 บาท)", () => {
+    expect(day({ inAt: "08:12", outAt: "17:00", wage: null })).toMatchObject({ s: "s", lateMin: 12, pay: null });
+  });
+  it("ไม่มีกะ = นับมา ไม่คิดเงิน", () => {
+    expect(day({ inAt: "08:12", outAt: "17:00", shiftStart: null, shiftEnd: null })).toMatchObject({ s: "m", pay: null });
+  });
+  it("กะ 09:00–18:00 ใช้กะของวันนั้น: เข้า 08:50 = ไม่สาย", () => {
+    expect(day({ inAt: "08:50", outAt: "18:00", shiftStart: 540, shiftEnd: 1080 })).toMatchObject({ s: "m", lateMin: 0, pay: { total: 400 } });
   });
 });

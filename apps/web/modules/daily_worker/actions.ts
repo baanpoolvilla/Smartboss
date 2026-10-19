@@ -251,7 +251,8 @@ export async function setTimeEditAction(input: { employmentId: string; date: str
     const inAt = input.inAt.trim() || null;
     const outAt = input.outAt.trim() || null;
     if ((inAt && !TIME_RE.test(inAt)) || (outAt && !TIME_RE.test(outAt))) return { error: "เวลาไม่ถูกต้อง" };
-    if (!inAt && !outAt) return { error: "ใส่เวลาเข้าหรือออกอย่างน้อยหนึ่งช่อง" };
+    // ต้องมีเวลาเข้าเสมอ — ใส่แค่เวลาออกในวันที่ไม่ได้สแกนเข้า ระบบจะยังนับ "ไม่มา" (หน้าจอส่งเวลาเข้าเดิมมาด้วยทุกครั้ง)
+    if (!inAt) return { error: "ใส่เวลาเข้าด้วย" };
     const byName = await nameOf(session.userId);
     await updateStoreList<TimeEditEntry>(session.orgId!, TIME_EDIT_KEY, session.userId, (list) => [
       ...list.filter((e) => !(e.employmentId === input.employmentId && e.date === input.date)),

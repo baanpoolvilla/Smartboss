@@ -103,7 +103,7 @@ export function TimeEditFix({
             />
             <button
               type="button"
-              disabled={pending || !reason.trim() || (!vin && !vout)}
+              disabled={pending || !reason.trim() || !vin}
               onClick={() => run(() => setTimeEditAction({ employmentId, date, inAt: vin, outAt: vout, reason }))}
               className="rounded-full bg-(--ink) px-3 py-1.5 text-xs font-semibold text-(--bg) disabled:opacity-40"
             >
@@ -113,7 +113,7 @@ export function TimeEditFix({
               ยกเลิก
             </button>
           </div>
-          <p className="text-[11px] text-(--ink-soft)">เวลาที่แก้ใช้คิดสาย/ขาด/ค่าแรงแทนเวลาที่สแกน · เวลาที่สแกนจริงยังเก็บไว้ให้ดูย้อนหลัง</p>
+          <p className="text-[11px] text-(--ink-soft)">ต้องมีเวลาเข้าเสมอ · เวลาที่แก้ใช้คิดสาย/ขาด/ค่าแรงแทนเวลาที่สแกน · เวลาที่สแกนจริงยังเก็บไว้ให้ดูย้อนหลัง</p>
         </div>
       )}
       {error && <p className="text-xs text-(--tone-danger)">{error}</p>}

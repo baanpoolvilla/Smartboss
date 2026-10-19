@@ -9,6 +9,7 @@ import {
   dayPay,
   daysInMonth,
   hmToMin,
+  judgeDay,
   judgeTimes,
   minutesToHm,
   type DayCell,
@@ -123,6 +124,10 @@ interface ResultRow {
   rest_day: boolean;
   worked_minutes: number;
   has_shift: boolean;
+  /** กะของวันนั้นจริง (นาทีจากเที่ยงคืน เวลาไทย) — เปลี่ยนกะกลางเดือนแล้ววันก่อนหน้ายังใช้กะเดิม */
+  sched_in: number | null;
+  /** ความยาวกะ (นาที) — ข้ามคืนได้ */
+  sched_len: number | null;
 }
 interface WageRow {
   employment_id: string;
@@ -204,7 +209,10 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
                        AND date_trunc('minute', ar.actual_in_at) > ar.scheduled_in_at) AS late,
                     (ar.actual_out_at IS NOT NULL AND ar.scheduled_out_at IS NOT NULL
                        AND date_trunc('minute', ar.actual_out_at) < ar.scheduled_out_at) AS early,
-                    ar.is_rest_day AS rest_day, ar.worked_minutes, (ar.shift_id IS NOT NULL) AS has_shift
+                    ar.is_rest_day AS rest_day, ar.worked_minutes, (ar.shift_id IS NOT NULL) AS has_shift,
+                    (EXTRACT(HOUR FROM ar.scheduled_in_at AT TIME ZONE 'Asia/Bangkok') * 60
+                       + EXTRACT(MINUTE FROM ar.scheduled_in_at AT TIME ZONE 'Asia/Bangkok'))::int AS sched_in,
+                    (EXTRACT(EPOCH FROM (ar.scheduled_out_at - ar.scheduled_in_at)) / 60)::int AS sched_len
                FROM workforce.attendance_results ar
               WHERE ar.is_current AND ar.employment_id = ANY($1::uuid[])
                 AND ar.work_date BETWEEN $2::date AND $3::date`,
@@ -295,31 +303,32 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
         if (ed) {
           cell.edit = { inAt: ed.inAt, outAt: ed.outAt, scannedIn: r?.in_hm ?? null, scannedOut: r?.out_hm ?? null, reason: ed.reason, byName: ed.byName, at: ed.at };
         }
-        const hasShift = emp.shift_start !== null && emp.shift_end !== null;
+        // กะของวันนั้น (จากผลลงเวลาของวันนั้น) ก่อน ไม่มีค่อยใช้กะปัจจุบัน — เปลี่ยนกะกลางเดือนแล้ววันเก่าไม่ถูกตัดสินด้วยกะใหม่
+        const dayStart = r?.sched_in ?? emp.shift_start;
+        const dayEnd = r?.sched_in != null && r.sched_len != null ? r.sched_in + r.sched_len : emp.shift_end;
         if (inAt) {
           cell.inAt = inAt;
           if (outAt) cell.outAt = outAt;
-          // ไม่ลงออกทั้งวัน (วันผ่านไปแล้ว) = ขาด — ยกเว้นวันที่ผู้ดูแลลง OT ไว้ (ไม่ดูเวลาออก)
-          const noOut = !outAt && !otEntry;
-          if (noOut && date < today) {
-            cell.s = "x";
-          } else if (hasShift) {
-            const t = judgeTimes(emp.shift_start!, emp.shift_end!, hmToMin(inAt), outAt ? hmToMin(outAt) : null, !!otEntry);
-            // "แก้เป็นมา" แบบเดิม = ไม่นับสาย
-            const lateMin = ov ? 0 : t.lateMin;
-            cell.s = lateMin > 0 ? "s" : "m";
-            if (lateMin > 0) cell.lateMin = lateMin;
-            if (t.earlyMin > 0) {
-              cell.early = true;
-              cell.earlyMin = t.earlyMin;
-            }
-            cell.workedMin = Math.max(0, t.scheduledMin - lateMin - t.earlyMin);
-            // วันนี้ที่ยังไม่ลงออก = ยังคิดเงินไม่ได้ (รอจบวัน)
-            const wage = wageOn(emp.employment_id, date);
-            if (wage !== null && !noOut) cell.pay = dayPay(wage, lateMin + t.earlyMin, otEntry?.minutes ?? 0, otPercentOn(emp.employment_id, date));
-          } else {
-            cell.s = "m";
+          const j = judgeDay({
+            date,
+            today,
+            inAt,
+            outAt,
+            shiftStart: dayStart,
+            shiftEnd: dayEnd,
+            otMinutes: otEntry?.minutes ?? null,
+            legacyOverride: !!ov,
+            wage: wageOn(emp.employment_id, date),
+            otPercent: otPercentOn(emp.employment_id, date),
+          });
+          cell.s = j.s;
+          if (j.lateMin > 0) cell.lateMin = j.lateMin;
+          if (j.earlyMin > 0) {
+            cell.early = true;
+            cell.earlyMin = j.earlyMin;
           }
+          if (j.s !== "x") cell.workedMin = j.workedMin;
+          if (j.pay) cell.pay = j.pay;
           if (ov && r?.late) cell.override = { reason: ov.reason, byName: ov.byName, at: ov.at };
         } else if (leave) {
           cell.s = leave.is_day_off ? "o" : "l";
