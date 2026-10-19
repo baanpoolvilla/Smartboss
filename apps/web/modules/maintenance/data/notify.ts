@@ -262,6 +262,25 @@ export async function resolveActionNotifications(referenceId: string, type: stri
   }
 }
 
+/**
+ * ลบแจ้งเตือน "รออนุมัติ" ของคำขอที่ถูกถอน (คนขอยกเลิกเอง / ขอใหม่แทน) ออกจากกระดิ่งทุกคน
+ * ผู้ใช้ขอ 19/10/2569 "ลบคำขอเลื่อนต้องลบแจ้งเตือนออกไปด้วย มันจะซ้ำซ้อน"
+ * since = เวลาสร้างคำขอนั้น — แจ้งเตือนของคำขอเก่าที่ตัดสินไปแล้ว (ก่อนหน้านั้น) ไม่แตะ
+ * ต่างจาก resolveActionNotifications (อนุมัติ/ไม่อนุมัติ = ทำเครื่องหมายอ่าน เก็บไว้เป็นประวัติ)
+ */
+export async function deleteActionNotifications(referenceId: string, type: string, titleIncludes: string[], since: Date) {
+  if (!referenceId || titleIncludes.length === 0) return;
+  try {
+    await crossOrg("notification:recipient-scoped-not-org-scoped", () =>
+      prisma.notification.deleteMany({
+        where: { referenceId, type, createdAt: { gte: since }, OR: titleIncludes.map((t) => ({ title: { contains: t } })) },
+      })
+    );
+  } catch (err) {
+    console.error("[notify] deleteActionNotifications failed", err);
+  }
+}
+
 export async function deleteNotificationsByReference(referenceId: string, type?: string | string[]) {
   await crossOrg("notification:recipient-scoped-not-org-scoped", () =>
     prisma.notification.deleteMany({

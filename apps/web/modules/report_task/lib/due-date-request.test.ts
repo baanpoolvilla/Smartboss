@@ -86,6 +86,24 @@ describe("คำขอเลื่อนกำหนดส่ง", () => {
     expect(t.revisions).toHaveLength(1);
     expect(t.dueDateRequests![0]).toMatchObject({ status: "approved", decidedBy: CEO });
     expect(notificationsFor(STAFF).some((n) => n.message.includes("อนุมัติให้เลื่อน"))).toBe(true);
+    // ผู้ขอได้แจ้งเตือนเดียว ("อนุมัติให้เลื่อน") ไม่ได้ "ปรับกำหนดส่ง" ซ้ำอีกอัน
+    expect(notificationsFor(STAFF)).toHaveLength(1);
+  });
+
+  it("อนุมัติ: ผู้รับผิดชอบคนอื่นในงาน (ไม่ใช่คนขอ) ยังได้ \"ปรับกำหนดส่ง\"", () => {
+    useTaskStore.setState({ tasks: [task({ assigneeIds: [STAFF, BOSS], assignedById: CEO })] });
+    useTaskStore.getState().requestDueDateChange("t1", STAFF, "2026-10-07", "รออะไหล่");
+    useNotificationStore.setState({ notifications: [] });
+    useTaskStore.getState().decideDueDateRequest("t1", getTask().dueDateRequests![0]!.id, CEO, true);
+    expect(notificationsFor(STAFF)).toHaveLength(1);
+    expect(notificationsFor(BOSS).some((n) => n.message.includes("ปรับกำหนดส่ง"))).toBe(true);
+  });
+
+  it("งานกลุ่ม: อนุมัติแล้วผู้ขอได้แจ้งเตือนเดียว", () => {
+    useTaskStore.setState({ tasks: [task({ taskMode: "group", assigneeIds: [STAFF, BOSS] })] });
+    useTaskStore.getState().requestDueDateChange("t1", STAFF, "2026-10-07", "รออะไหล่");
+    useTaskStore.getState().decideDueDateRequest("t1", getTask().dueDateRequests![0]!.id, CEO, true);
+    expect(notificationsFor(STAFF)).toHaveLength(1);
   });
 
   it("ไม่อนุมัติ (มีเหตุผล) = วันเดิม และแจ้งผู้ขอพร้อมเหตุผล", () => {

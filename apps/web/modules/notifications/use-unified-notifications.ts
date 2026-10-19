@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
+import { isWithdrawnDueRequestNotification } from "@/modules/report_task/lib/withdrawn-due-request-notif";
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canManage } from "@/modules/report_task/lib/directory";
@@ -50,6 +51,7 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
   // ที่ self-heal เองได้เสมอ ไม่ต้องพึ่ง migration/สคริปต์ล้างข้อมูลแยก
   const tasks = useTaskStore((s) => s.tasks);
   const taskIdSet = useMemo(() => new Set(tasks.map((t) => t.id)), [tasks]);
+  const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
   // นอกหน้างาน (หน้าแรก, HR ฯลฯ) ยังไม่ได้โหลดรายการงาน — ห้ามใช้ taskIdSet ตัดสินว่างานถูกลบ
   // ไม่งั้นแจ้งเตือนงานทุกอันหายจากกระดิ่งนอกหน้างาน
   const tasksLoaded = useTaskStore((s) => s.loaded);
@@ -119,6 +121,11 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
         const tid = n.taskId ?? taskIdFromLink(n.link);
         return !tid || !tasksLoaded || taskIdSet.has(tid);
       })
+      // คำขอเลื่อนกำหนดส่งที่คนขอยกเลิก/ขอใหม่แทนแล้ว — ไม่ต้องเห็นแจ้งเตือนของคำขอนั้น (withdrawn-due-request-notif.ts)
+      .filter((n) => {
+        const t = tasksLoaded && n.taskId ? taskById.get(n.taskId) : undefined;
+        return !t || !isWithdrawnDueRequestNotification(n, t.dueDateRequests);
+      })
       .filter((n) => isNotificationVisible(prefs, topicForReportNotification(n), n.createdAt))
       .map((n) => ({
         id: `rt:${n.id}`,
@@ -182,7 +189,7 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
     return [...fromReport, ...fromMaintenance, ...fromOrgActivity].sort(
       (a, b) => Number(a.read) - Number(b.read) || b.createdAt.localeCompare(a.createdAt)
     );
-  }, [prefs, reportNotifications, maintenanceItems, orgItems, viewingAsUserId, includeRoomPosts, includeOrgActivity, taskIdSet, tasksLoaded, linkFromQuotedTaskTitle, linkFromRoomAdd]);
+  }, [prefs, reportNotifications, maintenanceItems, orgItems, viewingAsUserId, includeRoomPosts, includeOrgActivity, taskIdSet, taskById, tasksLoaded, linkFromQuotedTaskTitle, linkFromRoomAdd]);
 
   const unreadCount = items.filter((n) => !n.read).length;
 

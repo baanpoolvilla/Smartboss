@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
+import { isWithdrawnDueRequestNotification } from "@/modules/report_task/lib/withdrawn-due-request-notif";
 
 /**
  * แจ้งเตือนงาน "รอคุณทำ" ที่คนอื่นจัดการไปแล้ว ⇒ ถือว่าอ่านแล้ว (ของเราเอง) ไม่ค้างเป็นเลขแดง
@@ -34,7 +35,9 @@ export function StaleActionNotifSweeper() {
       else if (
         n.kind === "task_due_request" &&
         n.message.includes("ขอเลื่อนกำหนดส่งงาน") &&
-        !(t.dueDateRequests ?? []).some((r) => r.status === "pending" && r.requestedBy === n.byUserId)
+        (!(t.dueDateRequests ?? []).some((r) => r.status === "pending" && r.requestedBy === n.byUserId) ||
+          // ขอใหม่แทนคำขอเดิม — อันเก่าไม่ค้างเป็นเลขแดงคู่กับอันใหม่
+          isWithdrawnDueRequestNotification(n, t.dueDateRequests))
       )
         stale.push(n.id);
     }

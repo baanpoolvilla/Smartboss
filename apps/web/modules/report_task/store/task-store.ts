@@ -330,7 +330,8 @@ interface TaskStore {
    * (กลับไป "กำลังทำ" กติกาส่งช้าเดียวกับ rejectReview), false = แค่เปลี่ยนวัน คงสถานะไว้
    * ไม่ส่ง = true (พฤติกรรมเดิม)
    */
-  reviseDueDate: (taskId: string, newDate: string, reason: string, revisedBy: string, sendBack?: boolean, requestedAt?: string) => void;
+  /** requester = คนขอเลื่อน (อนุมัติคำขอ) — คนนั้นได้แจ้ง "อนุมัติให้เลื่อน" แล้ว ไม่ต้องได้ "ปรับกำหนดส่ง" ซ้ำ */
+  reviseDueDate: (taskId: string, newDate: string, reason: string, revisedBy: string, sendBack?: boolean, requestedAt?: string, requester?: string) => void;
   /**
    * Adjusts one assignee's own due-date override on a group task (see
    * `assigneeDueDates`) — logged into `assigneeDueDateRevisions` (first date
@@ -591,7 +592,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
         };
       }),
     })),
-  reviseDueDate: (taskId, newDate, reason, revisedBy, sendBack = true, requestedAt) =>
+  reviseDueDate: (taskId, newDate, reason, revisedBy, sendBack = true, requestedAt, requester) =>
     set((s) => ({
       tasks: s.tasks.map((t) => {
         if (t.id !== taskId) return t;
@@ -607,7 +608,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
         const actorName = getUser(revisedBy)?.name ?? "มีคน";
         useNotificationStore
           .getState()
-          .notifyMany(t.assigneeIds, revisedBy, `${actorName} ปรับกำหนดส่งงาน "${t.title}" เป็น ${formatShortDate(newDate)}${reason ? ` — ${reason}` : ""}`, undefined, `/report-task/tasks?task=${t.id}`);
+          .notifyMany(t.assigneeIds.filter((id) => id !== requester), revisedBy, `${actorName} ปรับกำหนดส่งงาน "${t.title}" เป็น ${formatShortDate(newDate)}${reason ? ` — ${reason}` : ""}`, undefined, `/report-task/tasks?task=${t.id}`);
         // งานที่ส่งแล้ว: หัวหน้าเลือกเองว่า "ส่งกลับให้แก้ไข" (กลับไป "กำลังทำ") หรือ
         // "แค่เปลี่ยนวัน" (คงสถานะรอตรวจ — เดิมเด้งกลับเสมอ ลูกน้องต้องติ๊กเช็คลิสต์
         // แล้วกดส่งใหม่ทั้งที่ไม่ได้มีงานเพิ่ม)
@@ -724,7 +725,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       } else {
         useTaskStore
           .getState()
-          .reviseDueDate(taskId, new Date(request.newDate).toISOString(), `อนุมัติคำขอของ ${requesterName}: ${request.reason}`, deciderId, false, request.requestedAt);
+          .reviseDueDate(taskId, new Date(request.newDate).toISOString(), `อนุมัติคำขอของ ${requesterName}: ${request.reason}`, deciderId, false, request.requestedAt, request.requestedBy);
       }
     }
     logActivity(
@@ -770,7 +771,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
           t.id,
           `${name}: ${formatShortDate(previousEffective)} → ${formatShortDate(newDate)}${bounce ? " · ส่งกลับให้แก้ไข" : ""}`
         );
-        if (revisedBy !== assigneeId) {
+        // มาจากอนุมัติคำขอ ⇒ คนขอได้แจ้ง "อนุมัติให้เลื่อน" จาก decideDueDateRequest แล้ว ไม่แจ้งซ้ำ
+        if (revisedBy !== assigneeId && !fromRequest) {
           const actorName = getUser(revisedBy)?.name ?? "มีคน";
           useNotificationStore
             .getState()

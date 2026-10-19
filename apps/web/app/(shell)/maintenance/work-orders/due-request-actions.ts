@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { canViewAll, requireOrg } from "@smartboss/auth";
 import { getWorkOrder, updateWorkOrder, addWorkOrderComment } from "@/modules/maintenance/data/work-orders";
 import { workOrderAccess, canSeeWorkOrder } from "@/modules/maintenance/data/work-order-access";
-import { notifyActorName, notifyUser, notifyUsers, resolveActionNotifications, usersWithPermission } from "@/modules/maintenance/data/notify";
-import { createDueRequest, decideDueRequest, getDueRequest, listDueRequests } from "@/modules/maintenance/data/work-order-due-requests";
+import { deleteActionNotifications, notifyActorName, notifyUser, notifyUsers, resolveActionNotifications, usersWithPermission } from "@/modules/maintenance/data/notify";
+import { createDueRequest, decideDueRequest, getDueRequest, listDueRequests, pendingDueRequest } from "@/modules/maintenance/data/work-order-due-requests";
 import { logActivity } from "@/modules/maintenance/data/activity";
 import { fmtThaiDate } from "@/modules/maintenance/lib/format";
 import { canDecideDueRequest, canEditDueDate } from "@/modules/maintenance/lib/due-request-access";
@@ -62,7 +62,10 @@ export async function requestDueDateAction(workOrderId: string, newDate: string,
   const why = reason.trim();
   if (!why) return { error: "ใส่เหตุผลที่ต้องเลื่อน" };
 
+  // ขอใหม่แทนคำขอที่ค้างอยู่ ⇒ ลบ "รออนุมัติ" ของคำขอเก่าออกก่อน ไม่งั้นผู้อนุมัติเห็นสองอัน
+  const replaced = await pendingDueRequest(s.orgId, workOrderId);
   await createDueRequest(s.orgId, { workOrderId, requestedBy: s.userId, previousDate: wo.dueDate, newDate: d, reason: why });
+  if (replaced) await deleteActionNotifications(wo.id, "work_order", [PENDING_TITLE], replaced.createdAt);
   await addWorkOrderComment(s.orgId, workOrderId, s.userId, `ขอเลื่อนกำหนดส่ง ${fmtThaiDate(wo.dueDate)} → ${fmtThaiDate(d)} · ${why}`, null, { kind: "log" });
   await log(s, wo, `ขอเลื่อนกำหนดส่ง ${fmtThaiDate(wo.dueDate)} → ${fmtThaiDate(d)} ของ`, { reason: why });
 
@@ -92,8 +95,8 @@ export async function cancelDueRequestAction(requestId: string): Promise<{ error
   const wo = await getWorkOrder(s.orgId, r.workOrderId);
   if (!wo) return { error: "ไม่พบใบงาน" };
   await decideDueRequest(s.orgId, requestId, { status: "cancelled", decidedBy: s.userId });
-  // คำขอจบแล้ว ⇒ แจ้งเตือน "รออนุมัติ" ของผู้อนุมัติทุกคนเคลียร์ (ไม่ใช่แค่ของคนที่กด)
-  await resolveActionNotifications(wo.id, "work_order", [PENDING_TITLE]);
+  // คนขอถอนคำขอเอง ⇒ ลบแจ้งเตือน "รออนุมัติ" ของคำขอนี้ออกจากกระดิ่งผู้อนุมัติทุกคน (ไม่ใช่แค่ทำว่าอ่านแล้ว)
+  await deleteActionNotifications(wo.id, "work_order", [PENDING_TITLE], r.createdAt);
   await addWorkOrderComment(s.orgId, wo.id, s.userId, "ยกเลิกคำขอเลื่อนกำหนดส่ง", null, { kind: "log" });
   await log(s, wo, "ยกเลิกคำขอเลื่อนกำหนดส่งของ");
   refresh(wo.id);
