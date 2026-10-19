@@ -8,8 +8,9 @@ import { prisma } from "@smartboss/database";
 import { wfFetch as wfFetchRaw, WorkforceError } from "@/modules/hr/lib/api";
 import { syncUserToWorkforce } from "@/modules/admin/data/user-guards";
 import { DW_PERMS } from "./permissions";
-import { loadMonth, OT_KEY, OVERRIDE_KEY, updateStoreList } from "./lib/data";
-import { otMinutes, type OtEntry, type OverrideEntry } from "./lib/types";
+import { bangkokToday, loadMonth, OT_KEY, OVERRIDE_KEY, PAY_KEY, SETTINGS_KEY, TIME_EDIT_KEY, updateStoreList } from "./lib/data";
+import { writeStore, readStore } from "@/modules/report_task/lib/db/org-store";
+import { otMinutes, type DwSettings, type OtEntry, type OverrideEntry, type PayRateEntry, type TimeEditEntry } from "./lib/types";
 
 /**
  * Server action ของโมดูลคนงานรายวัน — ตรวจสิทธิ์ Smartboss ทุกตัว (การซ่อนปุ่มไม่ใช่ security control)
@@ -231,6 +232,101 @@ export async function assignShiftAction(input: { employmentId: string; shiftId: 
     });
     revalidatePath("/daily-workers");
     return { ok: true };
+  } catch (error) {
+    return { error: message(error) };
+  }
+}
+
+/**
+ * แก้เวลาเข้า/ออกของคนงานวันหนึ่ง (ไปหน้างานมา สแกนไม่ทัน / ลืมสแกนออก) — ต้องใส่เหตุผล เก็บว่าใครแก้ เมื่อไหร่
+ * เวลาที่สแกนจริงยังเก็บไว้ (หน้าจอแสดงคู่กัน) · เว้นช่องไหน = ใช้เวลาที่สแกนจริงของช่องนั้น
+ * สิทธิ์เดียวกับ "แก้สถานะ" (ผู้ดูแลบ้าน/HR ตามค่าตั้งต้น) เพราะมีผลกับค่าแรง
+ */
+export async function setTimeEditAction(input: { employmentId: string; date: string; inAt: string; outAt: string; reason: string }): Promise<Result> {
+  try {
+    const session = await guard(DW_PERMS.override);
+    const reason = input.reason.trim();
+    if (!reason) return { error: "ต้องใส่เหตุผล" };
+    if (!DATE_RE.test(input.date) || input.date > bangkokToday()) return { error: "วันที่ไม่ถูกต้อง" };
+    const inAt = input.inAt.trim() || null;
+    const outAt = input.outAt.trim() || null;
+    if ((inAt && !TIME_RE.test(inAt)) || (outAt && !TIME_RE.test(outAt))) return { error: "เวลาไม่ถูกต้อง" };
+    if (!inAt && !outAt) return { error: "ใส่เวลาเข้าหรือออกอย่างน้อยหนึ่งช่อง" };
+    const byName = await nameOf(session.userId);
+    await updateStoreList<TimeEditEntry>(session.orgId!, TIME_EDIT_KEY, session.userId, (list) => [
+      ...list.filter((e) => !(e.employmentId === input.employmentId && e.date === input.date)),
+      { employmentId: input.employmentId, date: input.date, inAt, outAt, reason: reason.slice(0, 300), byUserId: session.userId, byName, at: new Date().toISOString() },
+    ]);
+    revalidatePath("/daily-workers");
+    return { ok: true };
+  } catch (error) {
+    return { error: message(error) };
+  }
+}
+
+export async function removeTimeEditAction(input: { employmentId: string; date: string }): Promise<Result> {
+  try {
+    const session = await guard(DW_PERMS.override);
+    await updateStoreList<TimeEditEntry>(session.orgId!, TIME_EDIT_KEY, session.userId, (list) =>
+      list.filter((e) => !(e.employmentId === input.employmentId && e.date === input.date)),
+    );
+    revalidatePath("/daily-workers");
+    return { ok: true };
+  } catch (error) {
+    return { error: message(error) };
+  }
+}
+
+/** % OT กลางของบริษัท (คนงานที่ไม่ได้ตั้ง % เอง) */
+export async function saveDwSettingsAction(input: { otPercent: number }): Promise<Result> {
+  try {
+    const session = await guard(DW_PERMS.manage);
+    const p = Number(input.otPercent);
+    if (!Number.isFinite(p) || p <= 0 || p > 1000) return { error: "% OT ต้องอยู่ระหว่าง 1–1000" };
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const { data, version } = await readStore<DwSettings>(session.orgId!, SETTINGS_KEY);
+      const r = await writeStore(session.orgId!, SETTINGS_KEY, { ...(data ?? {}), otPercent: p }, data === null ? null : version, session.userId);
+      if (r.ok) {
+        revalidatePath("/daily-workers");
+        return { ok: true };
+      }
+    }
+    return { error: "บันทึกไม่สำเร็จ มีคนแก้พร้อมกัน ลองใหม่อีกครั้ง" };
+  } catch (error) {
+    return { error: message(error) };
+  }
+}
+
+/**
+ * ตั้งค่าแรงรายวัน (+ % OT ของคนนั้น ถ้าต่างจากค่ากลาง) ให้คนงานหลายคนพร้อมกัน — มีผลตั้งแต่วัน `from`
+ * วันก่อนหน้ายังคิดเรทเดิม (เก็บเป็นประวัติ ไม่เขียนทับ) · ตั้งซ้ำวันเดิม = แทนที่ของวันนั้น
+ */
+export async function savePayRateAction(input: { employmentIds: string[]; dailyWage: number; otPercent: number | null; from: string }): Promise<Result> {
+  try {
+    const session = await guard(DW_PERMS.manage);
+    const wage = Number(input.dailyWage);
+    if (!Number.isFinite(wage) || wage <= 0 || wage > 100000) return { error: "ค่าแรงต่อวันไม่ถูกต้อง" };
+    const ot = input.otPercent === null ? null : Number(input.otPercent);
+    if (ot !== null && (!Number.isFinite(ot) || ot <= 0 || ot > 1000)) return { error: "% OT ต้องอยู่ระหว่าง 1–1000" };
+    if (!DATE_RE.test(input.from)) return { error: "วันที่เริ่มใช้ไม่ถูกต้อง" };
+    if (input.employmentIds.length === 0) return { error: "ยังไม่ได้เลือกคนงาน" };
+    const byName = await nameOf(session.userId);
+    const at = new Date().toISOString();
+    const ids = new Set(input.employmentIds);
+    await updateStoreList<PayRateEntry>(session.orgId!, PAY_KEY, session.userId, (list) => [
+      ...list.filter((r) => !(ids.has(r.employmentId) && r.from === input.from)),
+      ...[...ids].map((employmentId) => ({
+        employmentId,
+        dailyWage: Math.round(wage * 100) / 100,
+        otPercent: ot,
+        from: input.from,
+        byUserId: session.userId,
+        byName,
+        at,
+      })),
+    ]);
+    revalidatePath("/daily-workers");
+    return { ok: true, done: ids.size };
   } catch (error) {
     return { error: message(error) };
   }

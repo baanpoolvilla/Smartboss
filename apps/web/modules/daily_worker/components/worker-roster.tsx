@@ -6,21 +6,16 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 
 import { cn } from "@smartboss/ui/cn";
-import {
-  assignShiftAction,
-  deleteOtAction,
-  removeOverrideAction,
-  saveOtAction,
-  setDaysOffAction,
-  setOverrideAction,
-} from "../actions";
-import { hoursLabel, minutesToHm, otMinutes, shiftMonth, type DayCell, type MonthData, type WorkerMonth } from "../lib/types";
+import { assignShiftAction, deleteOtAction, saveOtAction, setDaysOffAction } from "../actions";
+import { baht, hoursLabel, minutesToHm, otMinutes, shiftMonth, type DayCell, type MonthData, type WorkerMonth } from "../lib/types";
+import { TimeEditFix } from "./time-edit-fix";
 
 const WD = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 const MONTHS = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
 
 const CELL_CLASS: Record<string, string> = {
   m: "bg-(--tone-ok)/12 text-(--tone-ok)",
+  s: "bg-(--tone-warn)/15 text-(--tone-warn) font-bold",
   x: "bg-(--tone-danger)/12 text-(--tone-danger) font-bold",
   n: "bg-(--bg-soft) text-(--ink-soft)",
   o: "bg-slate-200 text-slate-700 font-bold dark:bg-slate-700 dark:text-slate-100",
@@ -28,7 +23,7 @@ const CELL_CLASS: Record<string, string> = {
   r: "bg-(--bg-soft) text-(--ink-soft)",
   "": "text-(--ink-soft)",
 };
-const CELL_LABEL: Record<string, string> = { m: "", x: "ขาด", n: "–", o: "หยุด", l: "ลา", r: "หยุดกะ", "": "" };
+const CELL_LABEL: Record<string, string> = { m: "", s: "สาย", x: "ขาด", n: "–", o: "หยุด", l: "ลา", r: "หยุดกะ", "": "" };
 
 function monthLabel(month: string) {
   const [y, m] = month.split("-").map(Number) as [number, number];
@@ -39,13 +34,16 @@ function describe(c: DayCell | undefined): string {
   if (!c) return "ยังไม่มีข้อมูล";
   const parts: string[] = [];
   if (c.s === "m") parts.push(c.override ? `มา (แก้โดย ${c.override.byName} · ${c.override.reason})` : "มา");
-  if (c.s === "x") parts.push("ขาด");
+  if (c.s === "s") parts.push(`สาย ${c.lateMin ?? 0} นาที`);
+  if (c.s === "x") parts.push("ขาด (ไม่ลงออก)");
   if (c.s === "n") parts.push("ไม่มา");
   if (c.s === "o") parts.push("หยุด");
   if (c.s === "l") parts.push(c.leave?.name ?? "ลา");
   if (c.s === "r") parts.push("วันหยุดตามกะ");
   if (c.inAt) parts.push(`เข้า ${c.inAt}${c.outAt ? ` · ออก ${c.outAt}` : ""}`);
-  if (c.early) parts.push("กลับก่อน");
+  if (c.early) parts.push(`กลับก่อน${c.earlyMin ? ` ${c.earlyMin} นาที` : ""}`);
+  if (c.edit) parts.push(`แก้เวลาโดย ${c.edit.byName} · ${c.edit.reason} (สแกนจริง ${c.edit.scannedIn ?? "--:--"}–${c.edit.scannedOut ?? "--:--"})`);
+  if (c.pay) parts.push(`ค่าแรง ${baht(c.pay.total)} บาท${c.pay.deduct ? ` (หัก ${baht(c.pay.deduct)})` : ""}${c.pay.ot ? ` (OT +${baht(c.pay.ot)})` : ""}`);
   if (c.leave && c.s !== "l") parts.push(`${c.leave.name}`);
   if (c.leave?.byName) parts.push(`ลงโดย ${c.leave.byName}`);
   if (c.ot) parts.push(`OT ${c.ot.start}–${c.ot.end} (${hoursLabel(c.ot.minutes)}) โดย ${c.ot.byName}`);
@@ -62,7 +60,6 @@ export function WorkerRoster({ data, canManage, canOverride }: { data: MonthData
   const [status, setStatus] = useState<string | null>(null);
   const [otForm, setOtForm] = useState<null | { day: number; employmentIds: string[]; start: string; end: string; note: string }>(null);
   const [focus, setFocus] = useState<null | { employmentId: string; day: number }>(null);
-  const [reason, setReason] = useState("");
   const [shiftFor, setShiftFor] = useState<null | { employmentId: string; name: string; shiftId: string; from: string }>(null);
 
   const isCurrentMonth = data.today.startsWith(data.month);
@@ -335,12 +332,12 @@ export function WorkerRoster({ data, canManage, canOverride }: { data: MonthData
                                 setSel(next);
                               }
                               setFocus({ employmentId: w.employmentId!, day: d });
-                              setReason("");
                             }}
                             className={cn(
                               "relative h-8 w-full min-w-6 text-[10.5px] hover:brightness-95 disabled:cursor-default",
                               CELL_CLASS[c?.s ?? ""],
                               c?.early && "shadow-[inset_0_-3px_0_var(--tone-warn)]",
+                              c?.edit && "underline decoration-dotted",
                               on && "bg-sky-100 text-sky-700 shadow-[inset_0_0_0_2px_#2563eb] dark:bg-sky-900/50 dark:text-sky-100",
                             )}
                           >
@@ -371,12 +368,14 @@ export function WorkerRoster({ data, canManage, canOverride }: { data: MonthData
 
         <div className="flex flex-wrap gap-3 border-t border-(--line) px-4 py-2 text-xs text-(--ink-soft)">
           <span>✓ สีเขียว = มา</span>
-          <span className="text-(--tone-danger)">ขาด = ลงเข้าหลังเวลาเข้ากะ</span>
-          <span>ขีดส้มล่าง = กลับก่อน</span>
+          <span className="text-(--tone-warn)">สาย = ลงเข้าหลังเวลาเข้ากะ (หักตามนาที)</span>
+          <span className="text-(--tone-danger)">ขาด = ไม่ลงออกทั้งวัน</span>
+          <span>ขีดส้มล่าง = กลับก่อน (หักตามนาที)</span>
+          <span>ขีดเส้นประ = ผู้ดูแลแก้เวลา</span>
           <span>– = ไม่มา</span>
           <span>หยุด = ผู้ดูแลลง</span>
           <span>จุดม่วง = มี OT</span>
-          <span>แก้ = ขาด → มา (มีเหตุผล)</span>
+          <span>แก้ = แก้เป็นมาแบบเดิม</span>
         </div>
         {status && (
           <div role="status" className="mx-4 mb-3 rounded-lg border border-(--line) bg-(--bg-soft) px-3 py-2 text-sm">
@@ -397,35 +396,19 @@ export function WorkerRoster({ data, canManage, canOverride }: { data: MonthData
               ปิด
             </button>
           </div>
-          {canOverride && (focusCell?.s === "x" || focusCell?.s === "n") && (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <input
-                id="dw-override-reason"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="เหตุผลที่แก้เป็น &quot;มา&quot; (ต้องใส่)"
-                className="min-w-0 flex-1 rounded-lg border border-(--line) bg-(--bg) px-3 py-1.5"
-                aria-label="เหตุผลที่แก้เป็นมา"
+          {canOverride && focusDate <= data.today && !["o", "l", "r"].includes(focusCell?.s ?? "") && (
+            <div className="mt-3">
+              <TimeEditFix
+                key={`${focus.employmentId}:${focusDate}`}
+                employmentId={focus.employmentId}
+                date={focusDate}
+                inAt={focusCell?.inAt ?? null}
+                outAt={focusCell?.outAt ?? null}
+                shiftStart={focusWorker.shiftId ? minutesToHm(focusWorker.shiftStart) : null}
+                shiftEnd={focusWorker.shiftId ? minutesToHm(focusWorker.shiftEnd) : null}
+                cell={focusCell ?? null}
               />
-              <button
-                type="button"
-                disabled={pending || !reason.trim()}
-                onClick={() => run(() => setOverrideAction({ employmentId: focus.employmentId, date: focusDate, reason }), () => "แก้เป็น \"มา\" แล้ว")}
-                className="rounded-full bg-(--ink) px-3 py-1.5 font-semibold text-(--bg) disabled:opacity-40"
-              >
-                แก้เป็น &quot;มา&quot;
-              </button>
             </div>
-          )}
-          {canOverride && focusCell?.override && (
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => run(() => removeOverrideAction({ employmentId: focus.employmentId, date: focusDate }), () => "ยกเลิกการแก้แล้ว กลับเป็น \"ขาด\"")}
-              className="mt-3 rounded-full border border-(--line) px-3 py-1.5"
-            >
-              ยกเลิกการแก้ (กลับเป็นขาด)
-            </button>
           )}
           {canManage && focusCell?.ot && (
             <button

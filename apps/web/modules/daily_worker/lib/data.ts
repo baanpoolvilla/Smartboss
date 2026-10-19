@@ -4,22 +4,58 @@ import { prisma } from "@smartboss/database";
 import { readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
 import { withWorkforceTenant } from "@/modules/report_task/lib/db/workforce-calendar";
 import { WORKER_ROLE_CODE } from "../permissions";
-import { daysInMonth, minutesToHm, type DayCell, type MonthData, type OtEntry, type OverrideEntry, type WorkerMonth } from "./types";
+import {
+  DEFAULT_OT_PERCENT,
+  dayPay,
+  daysInMonth,
+  hmToMin,
+  judgeTimes,
+  minutesToHm,
+  type DayCell,
+  type DwSettings,
+  type MonthData,
+  type OtEntry,
+  type OverrideEntry,
+  type PayRateEntry,
+  type TimeEditEntry,
+  type WorkerMonth,
+} from "./types";
 
 /**
  * ข้อมูลของโมดูลคนงานรายวัน — อ่านตรงจากตารางของ workforce ด้วย tenant context ของบริษัท (withWorkforceTenant)
  * เพื่อให้คนที่มีแค่สิทธิ์ "ดูคนงาน" (ไม่มีสิทธิ์ HR) เปิดตารางได้ · หน้าเว็บตรวจสิทธิ์ Smartboss ก่อนเรียกเสมอ
  *
- * กติกาของคนงาน (เฉพาะบทบาท WORKER — พนักงานประจำใช้กติกาเดิม):
- *   - ลงเวลาเข้าก่อน/ตรงเวลาเข้ากะ (ระดับนาที ไม่มีผ่อนผัน) = มา · 08:01 ขึ้นไป = ขาด (ยังเก็บเวลาจริง)
- *   - ลงเวลาออกก่อนเลิกกะ = มา + "กลับก่อน" · วันที่มี OT ที่ผู้ดูแลลงไว้ไม่ดูเวลาออก
+ * กติกาของคนงาน (เฉพาะบทบาท WORKER — พนักงานประจำใช้กติกาเดิม) — ผู้ใช้กำหนดใหม่ 19/10/2569:
+ *   - ลงเข้าหลังเวลาเข้ากะ (ระดับนาที ไม่มีผ่อนผัน) = สาย หักเงินตามนาที
+ *   - ลงเข้าแต่ไม่ลงออกในวันนั้น = ขาด (ไม่ได้ค่าแรง) · ออกก่อนเลิกกะ = กลับก่อน หักตามนาทีเหมือนสาย
+ *   - วันละ 8 ชม. (พักเที่ยง 12–13 ไม่นับ) · หักนาทีละ ค่าแรงวัน÷480 · OT = ชม. × ค่าแรง÷8 × % (ตั้งค่าได้)
+ *   - ค่าแรงรายวันมาจากระบบบุคคล (เงินเดือนแบบรายวัน compensation_rates DAILY) ตามวันที่มีผล
+ *   - ผู้ดูแลแก้เวลาเข้า/ออกได้พร้อมเหตุผล (ไปหน้างานมา สแกนไม่ทัน) — store daily-worker-time-edits
+ *   - วันที่มี OT ที่ผู้ดูแลลงไว้ไม่ดูเวลาออก (ไม่ลงออก/ออกก่อนก็ไม่ขาด ไม่หัก)
  *   - ไม่ลงเวลาและไม่ได้ลงหยุด = ไม่มา · วันหยุดนักขัตฤกษ์ไม่มีสำหรับคนงาน (ถือเป็นวันทำงาน)
- *   - ผู้มีสิทธิ์แก้ "ขาด → มา" ได้พร้อมเหตุผล (store daily-worker-overrides)
- * OT เก็บที่ store daily-worker-ot (ผู้ดูแลใส่เวลาเริ่ม–จบ) — ค่าแรงยังไม่คิด
+ *   - "แก้เป็นมา" แบบเดิม (store daily-worker-overrides) ยังมีผล = ไม่หักสาย / มาเต็มวัน
  */
 
 export const OT_KEY = "daily-worker-ot";
 export const OVERRIDE_KEY = "daily-worker-overrides";
+export const TIME_EDIT_KEY = "daily-worker-time-edits";
+export const SETTINGS_KEY = "daily-worker-settings";
+export const PAY_KEY = "daily-worker-pay";
+
+export async function readPayRates(orgId: string) {
+  const { data } = await readStore<PayRateEntry[]>(orgId, PAY_KEY);
+  return data ?? [];
+}
+
+export async function readTimeEdits(orgId: string) {
+  const { data } = await readStore<TimeEditEntry[]>(orgId, TIME_EDIT_KEY);
+  return data ?? [];
+}
+export async function readDwSettings(orgId: string): Promise<DwSettings> {
+  const { data } = await readStore<Partial<DwSettings>>(orgId, SETTINGS_KEY);
+  const p = Number(data?.otPercent);
+  return { otPercent: Number.isFinite(p) && p > 0 ? p : DEFAULT_OT_PERCENT };
+}
 
 export async function readOt(orgId: string) {
   const { data, version } = await readStore<OtEntry[]>(orgId, OT_KEY);
@@ -88,6 +124,12 @@ interface ResultRow {
   worked_minutes: number;
   has_shift: boolean;
 }
+interface WageRow {
+  employment_id: string;
+  amount: string;
+  effective_from: string;
+  effective_to: string | null;
+}
 interface LeaveRow {
   id: string;
   employment_id: string;
@@ -112,7 +154,7 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
 
   const wf =
     subjects.length === 0
-      ? { employments: [] as EmploymentRow[], results: [] as ResultRow[], leaves: [] as LeaveRow[], dayOffTypeId: null as string | null, shifts: [] as { id: string; name: string; start_minutes: number; end_minutes: number }[], firstIn: [] as { employment_id: string; day: string }[] }
+      ? { employments: [] as EmploymentRow[], results: [] as ResultRow[], leaves: [] as LeaveRow[], dayOffTypeId: null as string | null, shifts: [] as { id: string; name: string; start_minutes: number; end_minutes: number }[], firstIn: [] as { employment_id: string; day: string }[], wages: [] as WageRow[] }
       : await withWorkforceTenant(orgId, async (tx) => {
           // สัญญาจ้างที่ยังทำงานอยู่ของแต่ละคน + กะที่มีผลวันนี้ (ตารางประจำ — ทุกวันกะเดียวกัน ดู setRecurringPatternAction)
           // ผูกคนกับทะเบียนพนักงาน: principal.person_id (ที่ระบบบุคคลใช้ตอนลงเวลา) ก่อน ไม่มีค่อยเทียบอีเมล
@@ -145,7 +187,7 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
             workers.map((w) => w.email ?? ""),
           );
           const ids = employments.map((e) => e.employment_id);
-          if (ids.length === 0) return { employments, results: [], leaves: [], dayOffTypeId: null, shifts: [], firstIn: [] };
+          if (ids.length === 0) return { employments, results: [], leaves: [], dayOffTypeId: null, shifts: [], firstIn: [], wages: [] as WageRow[] };
           // วันแรกที่ลงเวลาจริงของแต่ละคน (ทั้งประวัติ) — ก่อนวันนั้นไม่นับ "ไม่มา" (ยังไม่เริ่มใช้ระบบ/ยังไม่เริ่มงาน)
           const firstIn = await tx.$queryRawUnsafe<{ employment_id: string; day: string }[]>(
             `SELECT employment_id::text AS employment_id, to_char(min(work_date), 'YYYY-MM-DD') AS day
@@ -192,13 +234,46 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
             `SELECT id::text AS id, name, start_minutes, end_minutes FROM workforce.shift_definitions
               WHERE status = 'ACTIVE' AND rest_day = false ORDER BY start_minutes, name`,
           );
-          return { employments, results, leaves, dayOffTypeId: types[0]?.id ?? null, shifts, firstIn };
+          // ค่าแรงรายวันที่มีผลในเดือนนี้ (HR → พนักงาน → เงินเดือน แบบรายวัน) — ปรับกลางเดือนได้หลายช่วง
+          const wages = await tx
+            .$queryRawUnsafe<WageRow[]>(
+              `SELECT employment_id::text AS employment_id, amount::text AS amount,
+                      to_char(effective_from, 'YYYY-MM-DD') AS effective_from, to_char(effective_to, 'YYYY-MM-DD') AS effective_to
+                 FROM workforce.compensation_rates
+                WHERE pay_basis = 'DAILY' AND employment_id = ANY($1::uuid[])
+                  AND effective_from <= $3::date AND (effective_to IS NULL OR effective_to >= $2::date)
+                ORDER BY effective_from DESC`,
+              ids,
+              from,
+              to,
+            );
+          return { employments, results, leaves, dayOffTypeId: types[0]?.id ?? null, shifts, firstIn, wages };
         });
 
-  const [{ list: ot }, { list: overrides }] = await Promise.all([readOt(orgId), readOverrides(orgId)]);
+  const [{ list: ot }, { list: overrides }, edits, settings, rates] = await Promise.all([
+    readOt(orgId),
+    readOverrides(orgId),
+    readTimeEdits(orgId),
+    readDwSettings(orgId),
+    readPayRates(orgId),
+  ]);
+  // เรทที่ตั้งในโมดูลนี้ (ล่าสุดที่เริ่มก่อน/ตรงวันนั้น) — ไม่มีค่อยใช้เงินเดือนแบบรายวันในระบบบุคคล
+  const rateOn = (employmentId: string, date: string): PayRateEntry | null =>
+    rates
+      .filter((r) => r.employmentId === employmentId && r.from <= date)
+      .sort((a, b) => (a.from === b.from ? b.at.localeCompare(a.at) : b.from.localeCompare(a.from)))[0] ?? null;
+  const wageOn = (employmentId: string, date: string): number | null => {
+    const own = rateOn(employmentId, date);
+    if (own) return own.dailyWage;
+    const w = wf.wages.find((r) => r.employment_id === employmentId && r.effective_from <= date && (!r.effective_to || r.effective_to >= date));
+    return w ? Number(w.amount) : null;
+  };
+  const otPercentOn = (employmentId: string, date: string): number => rateOn(employmentId, date)?.otPercent ?? settings.otPercent;
   const empBySubject = new Map(wf.employments.map((e) => [e.subject, e]));
   const firstInByEmp = new Map(wf.firstIn.map((f) => [f.employment_id, f.day]));
 
+  // วันอ้างอิงของ "ค่าแรงตอนนี้" — เดือนนี้ = วันนี้ · เดือนก่อน = สิ้นเดือนนั้น · เดือนหน้า = วันที่ 1
+  const refDay = today < from ? from : today > to ? to : today;
   const rows: WorkerMonth[] = workers.map((w) => {
     const emp = empBySubject.get(w.userId) ?? null;
     const cells: Record<number, DayCell> = {};
@@ -213,21 +288,49 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
         const leave = wf.leaves.find((l) => l.employment_id === emp.employment_id && l.starts_on <= date && l.ends_on >= date);
         const otEntry = ot.find((o) => o.employmentId === emp.employment_id && o.date === date);
         const ov = overrides.find((o) => o.employmentId === emp.employment_id && o.date === date);
-        if (r?.in_hm) {
-          cell.inAt = r.in_hm;
-          if (r.out_hm) cell.outAt = r.out_hm;
-          cell.s = r.late ? (ov ? "m" : "x") : "m";
-          // วันที่มี OT ที่ผู้ดูแลลงไว้ ไม่ดูเวลาออก (ลงออกหลังทำ OT หรือไม่ลงออกเลยก็ได้)
-          if (r.early && !otEntry) cell.early = true;
-          if (r.late && ov) cell.override = { reason: ov.reason, byName: ov.byName, at: ov.at };
+        const ed = edits.find((e) => e.employmentId === emp.employment_id && e.date === date);
+        // เวลาที่ใช้คิด = ที่ผู้ดูแลแก้ (ถ้ามี) ไม่งั้นเวลาที่สแกนจริง
+        const inAt = ed?.inAt ?? r?.in_hm ?? null;
+        const outAt = ed?.outAt ?? r?.out_hm ?? null;
+        if (ed) {
+          cell.edit = { inAt: ed.inAt, outAt: ed.outAt, scannedIn: r?.in_hm ?? null, scannedOut: r?.out_hm ?? null, reason: ed.reason, byName: ed.byName, at: ed.at };
+        }
+        const hasShift = emp.shift_start !== null && emp.shift_end !== null;
+        if (inAt) {
+          cell.inAt = inAt;
+          if (outAt) cell.outAt = outAt;
+          // ไม่ลงออกทั้งวัน (วันผ่านไปแล้ว) = ขาด — ยกเว้นวันที่ผู้ดูแลลง OT ไว้ (ไม่ดูเวลาออก)
+          const noOut = !outAt && !otEntry;
+          if (noOut && date < today) {
+            cell.s = "x";
+          } else if (hasShift) {
+            const t = judgeTimes(emp.shift_start!, emp.shift_end!, hmToMin(inAt), outAt ? hmToMin(outAt) : null, !!otEntry);
+            // "แก้เป็นมา" แบบเดิม = ไม่นับสาย
+            const lateMin = ov ? 0 : t.lateMin;
+            cell.s = lateMin > 0 ? "s" : "m";
+            if (lateMin > 0) cell.lateMin = lateMin;
+            if (t.earlyMin > 0) {
+              cell.early = true;
+              cell.earlyMin = t.earlyMin;
+            }
+            cell.workedMin = Math.max(0, t.scheduledMin - lateMin - t.earlyMin);
+            // วันนี้ที่ยังไม่ลงออก = ยังคิดเงินไม่ได้ (รอจบวัน)
+            const wage = wageOn(emp.employment_id, date);
+            if (wage !== null && !noOut) cell.pay = dayPay(wage, lateMin + t.earlyMin, otEntry?.minutes ?? 0, otPercentOn(emp.employment_id, date));
+          } else {
+            cell.s = "m";
+          }
+          if (ov && r?.late) cell.override = { reason: ov.reason, byName: ov.byName, at: ov.at };
         } else if (leave) {
           cell.s = leave.is_day_off ? "o" : "l";
         } else if (r?.rest_day) {
           cell.s = "r";
         } else if (ov) {
-          // ไม่ได้ลงเวลา (ลืมลง/ลงไม่ติด) แต่ผู้ดูแลยืนยันว่ามา พร้อมเหตุผล
+          // ไม่ได้ลงเวลา (ลืมลง/ลงไม่ติด) แต่ผู้ดูแลยืนยันว่ามา (แบบเดิม) = มาเต็มวัน
           cell.s = "m";
           cell.override = { reason: ov.reason, byName: ov.byName, at: ov.at };
+          const wage = wageOn(emp.employment_id, date);
+          if (wage !== null) cell.pay = dayPay(wage, 0, otEntry?.minutes ?? 0, otPercentOn(emp.employment_id, date));
         } else if (date < today) {
           // "ไม่มา" เฉพาะวันที่มีกะจริงในวันนั้น — ก่อนเริ่มกะ/ก่อนเริ่มงานไม่นับ (เจอจริง: 9–14 ต.ค. ขึ้นไม่มา ทั้งที่กะเริ่ม 15)
           cell.s = r?.has_shift && started !== null && date >= started ? "n" : "";
@@ -249,27 +352,48 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
       shiftStart: emp?.shift_start ?? null,
       shiftEnd: emp?.shift_end ?? null,
       shiftFrom: emp?.shift_from && emp.shift_from > today ? emp.shift_from : null,
+      // ค่าแรงที่มีผลวันนี้ (ดูเดือนก่อน = ณ สิ้นเดือนนั้น)
+      dailyWage: emp ? wageOn(emp.employment_id, refDay) : null,
+      otPercent: emp ? (rateOn(emp.employment_id, refDay)?.otPercent ?? null) : null,
       cells,
     };
   });
 
   const unlinkedUserIds = wf.employments.filter((e) => !e.linked).map((e) => e.subject);
-  return { month, days: total, today, unlinkedUserIds, workers: rows, dayOffTypeId: wf.dayOffTypeId, shifts: wf.shifts.map((s) => ({ id: s.id, name: s.name, start: s.start_minutes, end: s.end_minutes })) };
+  return { month, days: total, today, unlinkedUserIds, workers: rows, otPercent: settings.otPercent, dayOffTypeId: wf.dayOffTypeId, shifts: wf.shifts.map((s) => ({ id: s.id, name: s.name, start: s.start_minutes, end: s.end_minutes })) };
 }
 
-/** สรุปของคนหนึ่งในเดือนนั้น — ใช้ทั้งตารางสรุปและหน้า "เดือนนี้ของฉัน" */
+/** สรุปของคนหนึ่งในเดือนนั้น — ใช้ทั้งตารางสรุป, Excel และหน้า "เดือนนี้ของฉัน" */
 export function summarize(w: WorkerMonth) {
-  let present = 0, absent = 0, early = 0, noShow = 0, off = 0, leave = 0, otMinutes = 0;
+  let present = 0, late = 0, lateMin = 0, absent = 0, early = 0, earlyMin = 0, noShow = 0, off = 0, leave = 0, otMinutes = 0;
+  let wage = 0, deduct = 0, otPay = 0, total = 0, paidDays = 0, unpaidDays = 0;
   for (const c of Object.values(w.cells)) {
-    if (c.s === "m") present++;
+    if (c.s === "m" || c.s === "s") present++;
+    if (c.s === "s") late++;
+    lateMin += c.lateMin ?? 0;
     if (c.s === "x") absent++;
     if (c.early) early++;
+    earlyMin += c.earlyMin ?? 0;
     if (c.s === "n") noShow++;
     if (c.s === "o") off++;
     if (c.s === "l") leave++;
     if (c.ot) otMinutes += c.ot.minutes;
+    if (c.pay) {
+      paidDays++;
+      wage += c.pay.wage;
+      deduct += c.pay.deduct;
+      otPay += c.pay.ot;
+      total += c.pay.total;
+    } else if (c.s === "m" || c.s === "s") {
+      // มาแต่คิดเงินไม่ได้ (ยังไม่ตั้งค่าแรง / วันนี้ยังไม่ลงออก)
+      unpaidDays++;
+    }
   }
-  return { present, absent, early, noShow, off, leave, otMinutes };
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  return {
+    present, late, lateMin, absent, early, earlyMin, noShow, off, leave, otMinutes,
+    pay: { wage: r2(wage), deduct: r2(deduct), ot: r2(otPay), total: r2(total), paidDays, unpaidDays },
+  };
 }
 
 /** คนงานคนนี้ (ผู้ใช้ที่ล็อกอิน) — null ถ้าไม่ใช่คนงาน */
@@ -292,15 +416,16 @@ export interface DayRow {
   outAt: string | null;
   /** วิธีลงเวลาครั้งแรก — MOBILE / DEVICE (สแกนนิ้ว) / อื่น ๆ */
   source: string | null;
-  /** m=มา x=ขาด n=ไม่มา o=หยุด l=ลา r=หยุดกะ w=ยังไม่มา (วันนี้ ยังไม่ถึงเลิกกะ) ns=ยังไม่ผูกกะ */
-  status: "m" | "x" | "n" | "o" | "l" | "r" | "w" | "ns" | "none";
+  /** m=มาตรงเวลา s=สาย x=ขาด (ไม่ลงออก) n=ไม่มา o=หยุด l=ลา r=หยุดกะ w=ยังไม่มา (วันนี้ ยังไม่ถึงเลิกกะ) ns=ยังไม่ผูกกะ */
+  status: "m" | "s" | "x" | "n" | "o" | "l" | "r" | "w" | "ns" | "none";
   early: boolean;
+  lateMin: number;
   cell: DayCell | null;
 }
 
 /**
  * ลงเวลาของคนงานวันเดียว — เวลาเข้า/ออกอ่านจากการลงเวลาจริง (raw_time_events) ทันที ไม่ต้องรอระบบคำนวณผล
- * สถานะใช้กติกาเดียวกับตาราง (เข้าหลังเวลาเข้ากะระดับนาที = ขาด · ออกก่อนเลิกกะ = กลับก่อน · OT ที่ลงไว้ไม่ดูเวลาออก)
+ * สถานะใช้กติกาเดียวกับตาราง (เข้าหลังเวลาเข้ากะ = สาย · ไม่ลงออก = ขาด · ออกก่อนเลิกกะ = กลับก่อน · OT ที่ลงไว้ไม่ดูเวลาออก)
  */
 export async function loadDay(orgId: string, date: string, now: Date = new Date()) {
   const month = await loadMonth(orgId, date.slice(0, 7), now);
@@ -334,9 +459,9 @@ export async function loadDay(orgId: string, date: string, now: Date = new Date(
     if (cell?.s === "o" || cell?.s === "l" || cell?.s === "r") status = cell.s;
     else if (cell?.override) status = "m";
     else if (inAt) {
-      if (cell?.s === "m" || cell?.s === "x") status = cell.s;
+      if (cell?.s === "m" || cell?.s === "s" || cell?.s === "x") status = cell.s;
       else if (w.shiftStart === null) status = "m";
-      else status = toMin(inAt) > w.shiftStart % 1440 ? "x" : "m";
+      else status = toMin(inAt) > w.shiftStart % 1440 ? "s" : "m";
     } else if (!w.shiftId) status = "ns";
     // วันก่อนหน้า: ไม่มา เฉพาะวันที่มีกะจริง (ก่อนเริ่มกะ = ไม่มีกะวันนั้น)
     else if (date < month.today) status = cell?.s === "n" ? "n" : "none";
@@ -357,6 +482,7 @@ export async function loadDay(orgId: string, date: string, now: Date = new Date(
       source: mine[0]?.source_type ?? null,
       status,
       early,
+      lateMin: cell?.lateMin ?? (status === "s" && inAt && w.shiftStart !== null ? judgeTimes(w.shiftStart, w.shiftEnd ?? w.shiftStart, toMin(inAt), null).lateMin : 0),
       cell,
     };
   });

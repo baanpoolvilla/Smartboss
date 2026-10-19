@@ -96,9 +96,9 @@ const DICT = {
   earlyOut: { th: "กลับก่อนเวลา", en: "Left early", my: "စောပြန်" },
   noShiftYet: { th: "ยังไม่ได้ผูกกะ — แจ้งผู้ดูแล", en: "No shift yet — tell your supervisor", my: "အလုပ်ချိန် မသတ်မှတ်ရသေးပါ · တာဝန်ခံကို ပြောပါ" },
   weekFootnote: {
-    th: "เข้าหลังเวลาเข้ากะ = ขาด · ลืมลงเวลาหรือลงไม่ติด แจ้งผู้ดูแลให้แก้ · วันหยุดผู้ดูแลเป็นคนลง",
-    en: "Late after shift start = absent · Forgot to clock in? Tell your supervisor · Days off are set by your supervisor",
-    my: "အလုပ်ဝင်ချိန်ထက် နောက်ကျရင် ပျက်ကွက်ဟု မှတ်သည် · အချိန်မှတ်ရန် မေ့ရင် တာဝန်ခံကို ပြောပါ · ပိတ်ရက်ကို တာဝန်ခံက သတ်မှတ်ပေးသည်",
+    th: "เข้าหลังเวลาเข้ากะ = สาย หักเงินตามนาที · ไม่ลงเวลาออก = ขาด · ไปหน้างานแล้วลงเวลาไม่ทัน แจ้งผู้ดูแลให้แก้เวลา · วันหยุดผู้ดูแลเป็นคนลง",
+    en: "In after shift start = late, pay cut by the minute · No clock-out = absent · Couldn't clock in from a job site? Ask your supervisor to fix the time · Days off are set by your supervisor",
+    my: "အလုပ်ဝင်ချိန်ထက် နောက်ကျရင် နောက်ကျဟု မှတ်ပြီး မိနစ်အလိုက် လုပ်ခ ဖြတ်သည် · အထွက်အချိန် မမှတ်ရင် ပျက်ကွက်ဟု မှတ်သည် · လုပ်ငန်းခွင်မှ အချိန်မမှတ်နိုင်ရင် တာဝန်ခံကို ပြင်ခိုင်းပါ · ပိတ်ရက်ကို တာဝန်ခံက သတ်မှတ်ပေးသည်",
   },
   // ช่องเขียนรีพอต (report-composer / report-post-fields) — ข้อความไทยต้องตรงกับของเดิมทุกตัว
   writeReport: { th: "เขียนรายงานหรือข้อความ...", en: "Write a report or message...", my: "အစီရင်ခံစာ သို့မဟုတ် စာ ရေးပါ..." },

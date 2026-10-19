@@ -13,6 +13,7 @@ export const dynamic = "force-dynamic";
 
 const STATUS: Record<string, { key: WorkerTextKey; cls: string }> = {
   m: { key: "present", cls: "bg-(--tone-ok)/12 text-(--tone-ok)" },
+  s: { key: "late", cls: "bg-(--tone-warn)/15 text-(--tone-warn)" },
   x: { key: "absent", cls: "bg-(--tone-danger)/12 text-(--tone-danger)" },
   n: { key: "noShow", cls: "bg-(--bg-soft) text-(--ink-soft)" },
   o: { key: "dayOff", cls: "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-100" },
@@ -85,9 +86,10 @@ export default async function MyWeekPage({ searchParams }: { searchParams: Promi
           )}
         </div>
 
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-5 gap-2">
           {[
-            { label: t("present"), value: count("m") },
+            { label: t("present"), value: count("m") + count("s") },
+            { label: t("late"), value: count("s") },
             { label: t("absent"), value: count("x") },
             { label: t("dayOff"), value: count("o") },
             { label: "OT", value: otMinutes ? hours(lang, otMinutes) : "0" },
@@ -121,7 +123,8 @@ export default async function MyWeekPage({ searchParams }: { searchParams: Promi
                   </p>
                   <p className="text-xs text-(--ink-soft)">
                     {date === today && `${t("today")} · `}
-                    {c?.early && <span className="text-(--tone-warn)">{t("earlyOut")} · </span>}
+                    {c?.lateMin ? <span className="text-(--tone-warn)">{t("late")} {c.lateMin} {t("minutes")} · </span> : null}
+                    {c?.early && <span className="text-(--tone-warn)">{t("earlyOut")}{c.earlyMin ? ` ${c.earlyMin} ${t("minutes")}` : ""} · </span>}
                     {c?.ot && <span className="text-violet-700 dark:text-violet-300">OT {c.ot.start}–{c.ot.end} ({hours(lang, c.ot.minutes)})</span>}
                   </p>
                 </div>

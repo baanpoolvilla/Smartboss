@@ -22,23 +22,25 @@ export async function GET() {
   const cells = Object.entries(mine.worker.cells).map(([d, c]) => ({ day: Number(d), ...c }));
   const nextOff = cells.filter((c) => c.day > todayDay && c.s === "o").sort((a, b) => a.day - b.day)[0]?.day ?? null;
   const recent = cells
-    .filter((c) => c.day <= todayDay && (c.s === "x" || c.s === "n" || c.early || c.ot || c.override))
+    .filter((c) => c.day <= todayDay && (c.s === "x" || c.s === "s" || c.s === "n" || c.early || c.ot || c.override))
     .sort((a, b) => b.day - a.day)
     .slice(0, 6)
     .map((c) => ({
       day: c.day,
       text:
-        c.s === "x" ? `ขาด · เข้า ${c.inAt}` :
+        c.s === "x" ? `ขาด · ไม่ลงออก (เข้า ${c.inAt})` :
+        c.s === "s" ? `สาย ${c.lateMin ?? 0} นาที · เข้า ${c.inAt}` :
         c.s === "n" ? "ไม่มา" :
         c.override ? "มา (แก้แล้ว)" :
         c.ot ? `OT ${c.ot.start}–${c.ot.end}` :
         `กลับก่อน · ออก ${c.outAt}`,
-      tone: c.s === "x" ? "bad" : c.s === "n" ? "mute" : c.ot ? "ot" : "warn",
+      tone: c.s === "x" ? "bad" : c.s === "n" ? "mute" : c.ot && c.s !== "s" ? "ot" : "warn",
     }));
   return NextResponse.json({
     worker: true,
     month,
-    summary: { ...mine.summary, ot: mine.summary.otMinutes ? hoursLabel(mine.summary.otMinutes) : "0" },
+    // ยอดเงินยังไม่ส่งให้คนงานเห็น (ผู้ดูแลจ่ายรายวันเอง) — ส่งเฉพาะจำนวนวัน/นาที
+    summary: { ...mine.summary, pay: undefined, ot: mine.summary.otMinutes ? hoursLabel(mine.summary.otMinutes) : "0" },
     nextOff,
     recent,
     hasShift: !!mine.worker.shiftId,
