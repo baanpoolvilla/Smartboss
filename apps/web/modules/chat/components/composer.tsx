@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { Camera, ChevronRight, FileText, Image as ImageIcon, Loader2, Mic, NotebookPen, Paperclip, Plus, RotateCw, SendHorizontal, Smile, Square, Trash2, X } from "lucide-react";
+import { Camera, ChevronRight, FileText, Image as ImageIcon, Loader2, Mic, NotebookPen, Paperclip, Pencil, Plus, RotateCw, SendHorizontal, Smile, Square, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
 
@@ -16,7 +16,7 @@ import { DEPT_MENTION_PREFIX } from "../constants";
 import { ChatAvatar } from "./chat-avatar";
 
 import { fileTooLargeMessage } from "@/lib/file-limits";
-import { hasClipboardText } from "@/lib/annotate/annotate";
+import { hasClipboardText, openAnnotator } from "@/lib/annotate/annotate";
 import { useBackToCloseOnTouch } from "@/lib/back-to-close";
 import { EmojiStickerPicker } from "@/components/sticker-panel";
 import type { Sticker } from "@/lib/stickers-client";
@@ -227,6 +227,37 @@ export const Composer = forwardRef<
       accepted.forEach(startUpload);
     },
     [pending.length, startUpload]
+  );
+
+  /**
+   * วาด/เขียนบนรูปที่แนบไว้ก่อนส่ง (ปุ่มดินสอบนรูป — ผู้ใช้ขอ 19/10/2569) — ใช้ตัววาดรูปตัวเดียวกับหน้าดูรูปเต็มจอ
+   * ได้รูปใหม่ = แทนที่ตำแหน่งเดิม แล้วอัปโหลดใหม่ (ตัวเก่าที่อัปค้างอยู่ถูกทิ้ง เพราะ id ใหม่)
+   */
+  const editPending = useCallback(
+    async (p: PendingFile) => {
+      let edited: File | null = null;
+      try {
+        edited = await openAnnotator(p.file);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "วาดบนรูปนี้ไม่ได้");
+        return;
+      }
+      if (!edited) return;
+      const previewUrl = URL.createObjectURL(edited);
+      previewsRef.current.add(previewUrl);
+      const next: PendingFile = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        file: edited,
+        kind: "image",
+        previewUrl,
+        progress: 0,
+        status: "uploading",
+      };
+      releasePreviews([p]);
+      setPending((list) => list.map((x) => (x.id === p.id ? next : x)));
+      startUpload(next);
+    },
+    [startUpload]
   );
 
   useImperativeHandle(ref, () => ({ addFiles, focus: () => textareaRef.current?.focus() }), [addFiles]);
@@ -502,6 +533,18 @@ export const Composer = forwardRef<
                   className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-black/55 text-[10px] font-medium text-white"
                 >
                   <RotateCw className="h-4 w-4" /> ลองใหม่
+                </button>
+              )}
+              {p.kind === "image" && p.status !== "error" && (
+                <button
+                  type="button"
+                  onClick={() => void editPending(p)}
+                  className="absolute left-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white"
+                  aria-label="วาด/แก้ไขรูปนี้ก่อนส่ง"
+                  title="วาด/แก้ไขรูป"
+                >
+                  {/* เล็กเท่าปุ่ม ✕ — "เอาเล็กๆพอให้รู้ เดี๋ยวจะรกเกินไป" */}
+                  <Pencil className="h-3 w-3" />
                 </button>
               )}
               <button

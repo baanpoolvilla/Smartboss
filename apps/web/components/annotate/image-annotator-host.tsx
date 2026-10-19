@@ -108,12 +108,19 @@ function Annotator({ file }: { file: File }) {
 
   // โหลดรูปจากไฟล์ในเครื่อง
   useEffect(() => {
+    // รอบที่ถูกยกเลิกแล้ว (เปลี่ยนรูป / dev รัน effect ซ้ำ) revoke URL ไปก่อนโหลดเสร็จ ⇒ onerror ของรอบเก่ายิงทีหลัง
+    // เดิมเลยขึ้น "เปิดรูปนี้ไม่ได้" ค้าง ทั้งที่รอบใหม่โหลดได้ — ไม่สนเหตุการณ์ของรอบที่จบไปแล้ว
+    let alive = true;
+    setFailed(false);
     const url = URL.createObjectURL(file);
     const image = new Image();
-    image.onload = () => setImg(image);
-    image.onerror = () => setFailed(true);
+    image.onload = () => alive && setImg(image);
+    image.onerror = () => alive && setFailed(true);
     image.src = url;
-    return () => URL.revokeObjectURL(url);
+    return () => {
+      alive = false;
+      URL.revokeObjectURL(url);
+    };
   }, [file]);
 
   const scale = img ? Math.min(1, MAX_EDGE / Math.max(img.naturalWidth, img.naturalHeight)) : 1;
