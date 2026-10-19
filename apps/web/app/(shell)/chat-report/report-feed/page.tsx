@@ -926,7 +926,7 @@ function ReportFeedPageInner() {
                                 )}
                               >
                                 <Clock className="h-3 w-3" />
-                                เวลาส่ง
+                                <span className="@max-[720px]/roomhead:hidden">เวลาส่ง</span>
                                 <ChevronDown className="h-3 w-3" />
                               </button>
                             }
@@ -1002,7 +1002,7 @@ function ReportFeedPageInner() {
             type="button"
             onClick={() => inRoom && setRoomInfoOpen(true)}
             disabled={!inRoom}
-            className="flex min-w-0 flex-1 flex-col items-start rounded-lg px-1 py-0.5 text-left disabled:cursor-default lg:pointer-events-none lg:max-w-[240px] lg:flex-none"
+            className="flex min-w-0 flex-1 flex-col items-start rounded-lg px-1 py-0.5 text-left disabled:cursor-default lg:pointer-events-none lg:max-w-[240px] lg:flex-initial"
           >
             <span className="flex min-w-0 max-w-full items-center gap-1 text-[var(--ink)]">
               <Hash className="h-4 w-4 shrink-0 text-[var(--ink-soft)]" />
@@ -1029,7 +1029,9 @@ function ReportFeedPageInner() {
         {/* คอม: หัวห้องทั้งแถวอยู่บนแถบบนแถวเดียว (แบบ Discord) — แท็บ · สมาชิก · ส่งแล้ว ·
             เวลาส่ง · มุมมอง · กรอง · ⚙ แทนหัวห้องสองแถวที่เคยซ้อนอยู่ใต้แถบบน */}
         {inRoom && activeTopic && (
-          <div className="hidden min-w-0 flex-1 items-center gap-2 lg:flex">
+          // @container/roomhead: จอแคบ (ย่อหน้าต่าง) ป้ายข้อความในแถวนี้ย่อเหลือไอคอน (@max-[720px]/roomhead) และถ้ายังไม่พอ
+          // ให้แถวเลื่อนข้างได้ แทนที่จะล้นไปทับปุ่ม 🐛/🔔/ออกจากระบบทางขวา ("มันซ้อนกันมั่วซั่วเลยแบบย่อขนาดจอ" 19/10/2569)
+          <div className="@container/roomhead hidden min-w-0 flex-1 items-center gap-2 overflow-x-auto [scrollbar-width:none] lg:flex [&::-webkit-scrollbar]:hidden">
             <span className="h-5 w-px shrink-0 bg-[var(--line)]" aria-hidden />
             <div role="tablist" aria-label="ส่วนของหัวข้อ" className="flex shrink-0 items-center gap-0.5">
               {topicTabs.map((t) => {

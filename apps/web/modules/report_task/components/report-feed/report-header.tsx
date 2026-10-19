@@ -182,7 +182,8 @@ function CompliancePill({
       >
         {dotColor && <span className="h-[6px] w-[6px] rounded-full shrink-0" style={{ backgroundColor: dotColor }} aria-hidden />}
         {Icon && <Icon className="h-3 w-3 shrink-0" />}
-        {label} <b className="font-semibold tabular-nums">{value}</b>
+        {/* แถวหัวห้องจอแคบ: เหลือจุดสี/ไอคอน + ตัวเลข (ชื่อเต็มอยู่ใน title) */}
+        <span className="@max-[720px]/roomhead:hidden">{label}</span> <b className="font-semibold tabular-nums">{value}</b>
       </button>
     );
   }

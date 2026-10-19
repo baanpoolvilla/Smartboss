@@ -52,7 +52,8 @@ export function ReportViewSwitcher({
         aria-label="มุมมองรวมทุกห้อง"
       >
         <Globe className="h-3.5 w-3.5 text-[var(--brand-green-dark)]" />
-        <span className="hidden sm:inline">มุมมอง{current ? ":" : ""}</span>
+        {/* @max-[720px]/roomhead:hidden: ย่อในแถวหัวห้องเมื่อจอแคบ (ที่อื่นไม่มี container ชื่อนี้ ไม่มีผล) */}
+        <span className="hidden sm:inline @max-[720px]/roomhead:hidden">มุมมอง{current ? ":" : ""}</span>
         {current && <span>{current.label}</span>}
         <ChevronDown className="h-3.5 w-3.5 text-[var(--ink-soft)]" />
       </PopoverTrigger>

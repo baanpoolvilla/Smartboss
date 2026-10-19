@@ -365,7 +365,8 @@ export function PostFilterButton({
             )}
           >
             <ListFilter className="h-3.5 w-3.5" />
-            กรอง
+            {/* แถวหัวห้องจอแคบ (container roomhead): เหลือไอคอน — ที่อื่นไม่มีผล */}
+            <span className="@max-[720px]/roomhead:hidden">กรอง</span>
             {activeCount > 0 && <span className="tabular-nums">{activeCount}</span>}
             <ChevronDown className="h-3 w-3" />
           </button>
