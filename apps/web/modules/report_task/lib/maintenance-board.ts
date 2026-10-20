@@ -118,9 +118,9 @@ export function matchesMaintenanceFilters(item: MaintenanceBoardItem, filters: T
 
 export type BoardEntry = { type: "task"; task: Task } | { type: "mx"; item: MaintenanceBoardItem };
 
+/**
  * เรียงงานกับใบซ่อมปนกันด้วยกติกาเดียวกับ sortTasksByDueForBoard (task-flags.ts): ยังไม่เสร็จก่อน → เลยกำหนดก่อน
  * → (ในกลุ่มเสร็จ: รอตรวจก่อนตรวจแล้ว) → วันครบใกล้ก่อน (ใบไม่มีวันครบไปท้าย) → ความสำคัญสูงก่อน → สร้างก่อน
- * → (ในกลุ่มเสร็จ: รอตรวจก่อนตรวจแล้ว) → ความสำคัญสูงก่อน → กำหนดใกล้ก่อน → สร้างก่อน
  */
 export function sortBoardEntries(entries: BoardEntry[]): BoardEntry[] {
   // วันครบกำหนดใกล้สุดขึ้นก่อน งานกับใบงานซ่อมปนกัน (ผู้ใช้ขอ 20/10/2569) — กติกาเดียวกับ sortTasksByDueForBoard
