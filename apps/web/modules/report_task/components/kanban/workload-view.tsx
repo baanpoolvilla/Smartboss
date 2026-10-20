@@ -17,6 +17,7 @@ import { cn } from "@/modules/report_task/lib/utils";
 import { useShowMore } from "@/modules/report_task/hooks/use-show-more";
 import { ShowMoreToggle } from "@/modules/report_task/components/shared/show-more-toggle";
 import { useBoardMaintenance } from "@/modules/report_task/hooks/use-board-maintenance";
+import { useMaintenanceBoardStore } from "@/modules/report_task/store/maintenance-board-store";
 import { MAINTENANCE_KIND } from "./maintenance-card";
 
 /** One legend/breakdown row shared between the bar's click-to-open popover and its color key. */
@@ -72,6 +73,11 @@ export function WorkloadView() {
     [tasks, filters]
   );
   const { shownTasks, shownMx } = useBoardMaintenance(filtered, filters);
+  // เปิดทั้ง "งาน" และ "ใบงานซ่อม" ในตัวกรอง = แถบ/สถานะเป็นยอดรวมสองแบบ ต้องบอกแยกว่างานกี่ ใบงานกี่
+  // เปิดแบบเดียว = รู้อยู่แล้วว่าดูอะไร ไม่ต้องบอก (ผู้ใช้ขอ 20/10/2569)
+  const boardKinds = useMaintenanceBoardStore((s) => s.kinds);
+  const bothKinds = boardKinds.task && boardKinds.wo;
+  const unit = bothKinds ? "รายการ" : boardKinds.wo ? "ใบ" : "งาน";
 
   const rows = useMemo(() => {
     return usersInScope
@@ -91,7 +97,7 @@ export function WorkloadView() {
         const done = mine.filter((t) => t.status === "done").length + mx.filter((i) => i.column === "done").length;
         const total = mine.length + mx.length;
         const open = total - done;
-        return { user: u, total, todo, inProgress, overdue, done, open, wo: mx.length };
+        return { user: u, total, todo, inProgress, overdue, done, open, wo: mx.length, taskCount: mine.length };
       })
       .filter((r) => r.total > 0)
       .sort((a, b) => b.total - a.total || b.open - a.open || b.overdue - a.overdue);
@@ -145,7 +151,7 @@ export function WorkloadView() {
                   className="ml-auto shrink-0 text-xs font-semibold tabular-nums rounded-md ring-1 ring-inset ring-[var(--line)] bg-[var(--bg-soft)] text-[var(--ink)] px-2 py-1 sm:hidden"
                   title="งานทั้งหมดของคนนี้"
                 >
-                  {r.total} งาน
+                  {r.total} {unit}
                 </span>
               </div>
 
@@ -181,10 +187,14 @@ export function WorkloadView() {
                       <BarBreakdownRow color="var(--chart-red)" label="เลยกำหนด" count={r.overdue} total={r.total} />
                       <BarBreakdownRow color="var(--chart-green)" label="เสร็จ" count={r.done} total={r.total} />
                     </div>
-                    {r.wo > 0 && <p className="mt-2 text-[11px] text-[var(--ink-soft)]">รวมใบงานซ่อม {r.wo} ใบแล้ว</p>}
+                    {bothKinds && (
+                      <p className="mt-2 text-[11px] text-[var(--ink-soft)]">
+                        แยกเป็น 📋 งาน {r.taskCount} · {MAINTENANCE_KIND.wo.icon} ใบงานซ่อม {r.wo}
+                      </p>
+                    )}
                     <div className="mt-2 pt-2 border-t border-[var(--line)] flex items-center justify-between text-xs font-medium">
                       <span className="text-[var(--ink-soft)]">รวมทั้งหมด</span>
-                      <span>{r.total} งาน</span>
+                      <span>{r.total} {unit}</span>
                     </div>
                   </PopoverContent>
                 </Popover>
@@ -213,13 +223,35 @@ export function WorkloadView() {
                     <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: "var(--chart-green)" }} />
                     เสร็จ {r.done}
                   </span>
-                  {r.wo > 0 && (
-                    <span title="ใบงานซ่อมที่รับผิดชอบ (รวมอยู่ในแถบแล้ว)" style={{ color: MAINTENANCE_KIND.wo.color }}>
-                      {MAINTENANCE_KIND.wo.icon} ใบงานซ่อม {r.wo}
+                  {bothKinds && (
+                    <span
+                      className="items-center gap-1.5 rounded-full border border-[var(--line)] bg-white px-2 py-0.5 hidden sm:inline-flex"
+                      title="ตัวเลขสถานะคืองาน + ใบงานซ่อมรวมกัน"
+                    >
+                      <span className="font-medium text-[var(--ink)]">📋 งาน {r.taskCount}</span>
+                      <span className="text-[var(--line)]">|</span>
+                      <span className="font-medium" style={{ color: MAINTENANCE_KIND.wo.color }}>
+                        {MAINTENANCE_KIND.wo.icon} ใบงานซ่อม {r.wo}
+                      </span>
                     </span>
                   )}
                   {overloaded && <span className="text-[10px] rounded-full bg-amber-50 text-[var(--chart-amber)] px-1.5 py-0.5">งานเยอะ</span>}
                 </div>
+                {/* มือถือ: แถวสถานะด้านบนเลื่อนซ้ายขวา ตัวแยกงาน/ใบงานซ่อมเลยลงบรรทัดของตัวเอง ไม่ให้ตกขอบจอ */}
+                {bothKinds && (
+                  <div className="mt-1.5 flex text-[11px] sm:hidden">
+                    <span
+                      className="items-center gap-1.5 rounded-full border border-[var(--line)] bg-white px-2 py-0.5 inline-flex"
+                      title="ตัวเลขสถานะคืองาน + ใบงานซ่อมรวมกัน"
+                    >
+                      <span className="font-medium text-[var(--ink)]">📋 งาน {r.taskCount}</span>
+                      <span className="text-[var(--line)]">|</span>
+                      <span className="font-medium" style={{ color: MAINTENANCE_KIND.wo.color }}>
+                        {MAINTENANCE_KIND.wo.icon} ใบงานซ่อม {r.wo}
+                      </span>
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Total task count — replaces the old score badge here, since
@@ -230,7 +262,7 @@ export function WorkloadView() {
                 className="hidden shrink-0 text-xs font-semibold tabular-nums rounded-md ring-1 ring-inset ring-[var(--line)] bg-[var(--bg-soft)] text-[var(--ink)] px-2 py-1 sm:inline-block"
                 title="งานทั้งหมดของคนนี้"
               >
-                {r.total} งาน
+                {r.total} {unit}
               </span>
             </div>
           );
