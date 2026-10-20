@@ -142,7 +142,8 @@ function renderMentions(text: string) {
   const re = new RegExp(`(@(?:${[...names, "\\S+"].join("|")}))`, "g");
   return text.split(re).map((part, i) =>
     part.startsWith("@") ? (
-      <span key={i} className="font-medium text-[var(--brand-green-dark)]">{part}</span>
+      // @ชื่อคน สีน้ำเงินแบบ Discord ชุดเดียวกับหน้ารายงาน (เดิมเขียว — 20/10/2569)
+      <span key={i} className="rounded bg-[#5865f2]/15 px-1 font-medium text-[#4752c4] transition-colors hover:bg-[#5865f2] hover:text-white">{part}</span>
     ) : (
       part
     )
@@ -2241,7 +2242,8 @@ export function TaskDetailSheet({
                   className={cn(
                     "flex gap-2.5 group rounded-xl transition-colors duration-700",
                     mine && "flex-row-reverse",
-                    flashCommentId === c.id && "bg-amber-100/80 ring-2 ring-amber-300/70"
+                    // กดมาจากแจ้งเตือนความคิดเห็น — แดงอ่อน (เดิมเหลือง) ชุดเดียวกับหน้ารายงาน (20/10/2569)
+                    flashCommentId === c.id && "bg-red-50 ring-2 ring-[#dc2626]/40"
                   )}
                 >
                   <Avatar className="h-7 w-7 shrink-0">
