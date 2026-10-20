@@ -98,7 +98,7 @@ export function MaintenanceCard({ item }: { item: MaintenanceBoardItem }) {
         href={`${item.href}?from=tasks`}
         prefetch={false}
         // แบบ A ("แถบหัวสีเขียว") ที่เลือกจาก mockup — แถบหัวสีแจ้งซ่อมเต็มความกว้าง มองไกลก็รู้ว่าไม่ใช่การ์ดงาน
-        className={cn("group block overflow-hidden rounded-xl border shadow-[0_2px_8px_rgba(16,24,40,0.10),0_1px_2px_rgba(16,24,40,0.08)] transition-shadow hover:shadow-md", unreadNotifs.length > 0 ? "bg-[#fdecec]" : "bg-white")}
+        className={cn("group block overflow-hidden rounded-xl border shadow-[0_4px_14px_rgba(16,24,40,0.13),0_1px_3px_rgba(16,24,40,0.10)] transition-shadow hover:shadow-md", unreadNotifs.length > 0 ? "bg-[#fdecec]" : "bg-white")}
         style={{ borderColor: unreadNotifs.length > 0 ? "#f3a4a4" : "#b7e3dd" }}
         aria-label={`${k.label} ${item.code} ${item.title} — เปิดในแจ้งซ่อม`}
       >

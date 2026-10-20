@@ -319,7 +319,7 @@ export function KanbanColumn({
         // Unconditional now, matching every other level of this board's
         // scroll chain (AppScaffold, tasks/page.tsx, KanbanBoard's own row).
         // <640px: ไม่มีกรอบ/ขอบในของคอลัมน์ (การ์ดชิดขอบจอ) + เว้นท้ายรายการให้พ้นปุ่ม + ลอย
-        className="flex-1 flex min-h-0 flex-col gap-2 pb-24 rounded-xl overflow-y-auto transition-colors duration-200 sm:gap-2 sm:p-2.5 sm:bg-[var(--bg-soft)]/50"
+        className="flex-1 flex min-h-0 flex-col gap-2 pb-24 rounded-xl overflow-y-auto transition-colors duration-200 sm:gap-1.5 sm:p-2.5 sm:bg-[var(--bg-soft)]/50"
       >
         {column.summaryOnly && column.breakdown?.length ? (
           column.breakdown.map((row) => (

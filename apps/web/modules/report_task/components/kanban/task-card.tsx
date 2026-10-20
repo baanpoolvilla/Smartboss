@@ -192,7 +192,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
         }
       }}
       className={cn(
-        "group relative rounded-xl border p-3 sm:rounded-2xl sm:p-4 shadow-[0_2px_8px_rgba(16,24,40,0.10),0_1px_2px_rgba(16,24,40,0.08)] transition-all duration-200",
+        "group relative rounded-xl border p-3 sm:rounded-2xl sm:px-4 sm:py-3 shadow-[0_4px_14px_rgba(16,24,40,0.13),0_1px_3px_rgba(16,24,40,0.10)] transition-all duration-200",
         onOpen && "cursor-pointer hover:shadow-[0_12px_28px_-10px_rgba(16,24,40,0.22)] hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--brand-green)_35%,var(--line))]",
         // A done card should read as "settled" at a glance even sitting next
         // to open ones in a column that isn't grouped by status (priority,
@@ -205,7 +205,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
     >
       {pendingBand && (
         <div
-          className="-mx-3 -mt-3 mb-2 flex items-center gap-1.5 rounded-t-xl bg-[#dc2626] px-3 py-1 text-[11px] font-bold leading-4 text-white sm:-mx-4 sm:-mt-4 sm:mb-2.5 sm:rounded-t-2xl sm:px-4"
+          className="-mx-3 -mt-3 mb-2 flex items-center gap-1.5 rounded-t-xl bg-[#dc2626] px-3 py-1 text-[11px] font-bold leading-4 text-white sm:-mx-4 sm:-mt-3 sm:mb-2.5 sm:rounded-t-2xl sm:px-4"
           title={pendingHint}
         >
           <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-white" aria-hidden />
@@ -499,7 +499,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
           button + avatars pinned right (shrink-0). <640px used to stack these
           into two rows, an avatar-only row on every card ("การ์ดในมือถือ
           กินพื้นที่เยอะไป"). Mobile also gets tighter padding/gaps above. */}
-      <div className="mt-2.5 pt-2 border-t border-[var(--line)]/60 flex flex-row items-center justify-between gap-2 sm:mt-3.5 sm:pt-3">
+      <div className="mt-2.5 pt-2 border-t border-[var(--line)]/60 flex flex-row items-center justify-between gap-2 sm:mt-2.5 sm:pt-2.5">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[var(--ink)] min-w-0 max-sm:flex-1 sm:gap-2.5">
           {/* Only meaningful for a task still todo/in_progress — showOriginalStatus
               is also true for the derived "รอตรวจสอบ" column, where every task's
