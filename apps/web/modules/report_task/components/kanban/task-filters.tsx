@@ -922,12 +922,12 @@ export function TaskFilters({
                 className={cn(
                   // สีกรมท่าชุดเดียวกับแท็บมุมมอง (ไม่ใช้เขียว = "เสร็จ"): ปกติขาวขอบเทาเข้ม · hover/เปิดอยู่ = พื้นเทาอ่อนขอบกรมท่า
                   // · มีตัวกรองใช้อยู่ = พื้นกรมท่าเต็ม ตัวขาว + เลขบนวงขาว (เห็นชัดว่ากำลังกรองอยู่)
-                  "group hidden h-[34px] shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold transition-all duration-200 active:scale-[0.97] sm:flex",
+                  "group hidden h-[34px] shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold transition-all duration-200 active:scale-[0.97] sm:flex",
                   activeFilterCount > 0
-                    ? "border-[var(--brand-navy)] bg-[var(--brand-navy)] text-white shadow-[0_2px_10px_rgba(27,37,55,0.3)] hover:brightness-125"
+                    ? "border-[var(--brand-navy)] bg-[var(--brand-navy)] text-white shadow-[0_2px_10px_rgba(27,37,55,0.3)] hover:-translate-y-px hover:bg-[#2b3a52]"
                     : desktopPanelOpen
                       ? "border-[var(--brand-navy)]/60 bg-slate-100 text-[var(--brand-navy)] shadow-sm"
-                      : "border-slate-300 bg-white text-[var(--brand-navy)] hover:border-[var(--brand-navy)]/50 hover:bg-slate-100 hover:shadow-sm"
+                      : "border-slate-300 bg-white text-[var(--brand-navy)] hover:-translate-y-px hover:border-[var(--brand-navy)]/50 hover:bg-slate-100 hover:shadow-[0_2px_8px_rgba(27,37,55,0.12)]"
                 )}
               >
                 <SlidersHorizontal className="h-3.5 w-3.5 transition-transform duration-200 group-hover:scale-110" />
