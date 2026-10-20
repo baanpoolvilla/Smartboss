@@ -16,6 +16,8 @@ import { MessageCircle } from "lucide-react";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { unreadTaskCommentCounts } from "@/modules/report_task/lib/task-comment-activity";
+import { useMaintenanceNotifStore } from "@/modules/notifications/use-maintenance-notifications";
+import { splitNotifTitle } from "@/modules/notifications/pending-for-you";
 
 /** คอมเมนต์ที่ยังไม่ได้อ่าน แยกตามงาน (ของคนที่ดูอยู่) — ใช้ร่วมกับแท็บคอลัมน์บนมือถือใน kanban-board.tsx */
 export function useUnreadCommentMap(): Map<string, number> {
@@ -24,6 +26,20 @@ export function useUnreadCommentMap(): Map<string, number> {
   return useMemo(() => unreadTaskCommentCounts(notifications, me), [notifications, me]);
 }
 export const sumUnread = (tasks: Task[], map: Map<string, number>) => tasks.reduce((n, t) => n + (map.get(t.id) ?? 0), 0);
+
+/** เหมือน useUnreadCommentLatest แต่ของใบงานซ่อม — แจ้งเตือน "💬 ความคิดเห็นใหม่" ที่ยังไม่อ่าน แยกตาม id ใบงาน (ผู้ใช้ขอ 20/10/2569) */
+function useUnreadWoCommentLatest(): Map<string, string> {
+  const items = useMaintenanceNotifStore((s) => s.items);
+  return useMemo(() => {
+    const m = new Map<string, string>();
+    for (const n of items) {
+      if (n.readAt || n.type !== "work_order" || !n.referenceId) continue;
+      if (!splitNotifTitle(n.title).kind.includes("ความคิดเห็นใหม่")) continue;
+      if ((m.get(n.referenceId) ?? "") < n.createdAt) m.set(n.referenceId, n.createdAt);
+    }
+    return m;
+  }, [items]);
+}
 
 /** เวลาคอมเมนต์ล่าสุดที่ยังไม่อ่าน แยกตามงาน — ใช้เรียงการ์ดที่มีคอมเมนต์ใหม่ขึ้นบนสุด (ใหม่สุดก่อน) */
 function useUnreadCommentLatest(): Map<string, string> {
@@ -217,13 +233,15 @@ export function KanbanColumn({
   const baseEntries: BoardEntry[] = column.entries ?? column.tasks.map((task) => ({ type: "task", task }));
   // การ์ดที่มีคอมเมนต์ยังไม่อ่าน "เด้ง" ขึ้นบนสุด (คอมเมนต์ใหม่สุดก่อน) ที่เหลือเรียงตามเดิม —
   // เปิดอ่านแล้ว (แจ้งเตือนถูกทำว่าอ่านแล้ว) การ์ดกลับไปอยู่ตำแหน่งเดิมเอง (ผู้ใช้ขอ 17/10/2569)
+  // ใบงานซ่อมที่มีความคิดเห็นใหม่ยังไม่อ่าน เด้งขึ้นด้วยกติกาเดียวกัน (ผู้ใช้ขอ 20/10/2569)
   const unreadLatest = useUnreadCommentLatest();
+  const unreadWoLatest = useUnreadWoCommentLatest();
   const entries = useMemo(() => {
-    const lastOf = (e: BoardEntry) => (e.type === "task" ? unreadLatest.get(e.task.id) ?? "" : "");
+    const lastOf = (e: BoardEntry) => (e.type === "task" ? unreadLatest.get(e.task.id) ?? "" : unreadWoLatest.get(e.item.id) ?? "");
     if (!baseEntries.some((e) => lastOf(e))) return baseEntries;
     const fresh = baseEntries.filter((e) => lastOf(e)).sort((a, b) => lastOf(b).localeCompare(lastOf(a)));
     return [...fresh, ...baseEntries.filter((e) => !lastOf(e))];
-  }, [baseEntries, unreadLatest]);
+  }, [baseEntries, unreadLatest, unreadWoLatest]);
   const { visible: visibleEntries, remaining, expanded, toggle } = useShowMore(entries, isMobile ? MOBILE_PAGE_SIZE : PAGE_SIZE);
 
   return (

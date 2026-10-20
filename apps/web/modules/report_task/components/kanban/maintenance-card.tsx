@@ -102,7 +102,7 @@ export function MaintenanceCard({ item }: { item: MaintenanceBoardItem }) {
         style={{ borderColor: unreadNotifs.length > 0 ? "#f3a4a4" : "#b7e3dd" }}
         aria-label={`${k.label} ${item.code} ${item.title} — เปิดในแจ้งซ่อม`}
       >
-        <PendingBand notifs={unreadNotifs} />
+        <PendingBand notifs={unreadNotifs} soft />
         <div
           // แถบบาง ๆ พอให้รู้ว่าเป็นใบงานซ่อม — เดิม py-1.5 หนาเกินไป แย่งที่เนื้อการ์ด ("หนาเกินไป")
           className="flex items-center justify-between gap-2 px-2.5 py-0.5 text-[10.5px] font-semibold leading-4 text-white"

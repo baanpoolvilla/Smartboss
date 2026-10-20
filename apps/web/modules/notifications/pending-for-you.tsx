@@ -50,15 +50,16 @@ export function usePendingFor(referenceId: string, categories: NotifCategory[]):
  * "ขอบบนว่ายังไม่ได้อ่าน ทำให้รู้" · เปิดดูแล้วแจ้งเตือนถูกอ่าน แถบ/พื้นแดงหายเอง
  * วางเป็นลูกตัวแรกของการ์ด (ผู้เรียกจัดให้ชิดขอบบนเอง)
  */
-export function PendingBand({ notifs, className }: { notifs: MaintenanceNotif[]; className?: string }) {
+/** soft = พื้นแดงอ่อน ตัวแดง (บอร์ดงาน — ผู้ใช้ 20/10/2569 "สีขอบมันเข้มเกินไป") · ไม่ใส่ = แดงทึบเดิม */
+export function PendingBand({ notifs, className, soft }: { notifs: MaintenanceNotif[]; className?: string; soft?: boolean }) {
   if (notifs.length === 0) return null;
   const { kind } = splitNotifTitle(notifs[0]!.title);
   return (
     <div
-      className={`flex items-center gap-1 bg-[#dc2626] px-3 py-1 text-[11px] font-bold leading-4 text-white ${className ?? ""}`}
+      className={`flex items-center gap-1 px-3 py-1 text-[11px] font-bold leading-4 ${soft ? "bg-[#fde3e3] text-[#b91c1c]" : "bg-[#dc2626] text-white"} ${className ?? ""}`}
       title={`ยังไม่ได้อ่าน — เปิดดูแล้วการ์ดจะกลับเป็นสีปกติ\n${notifs.map((n) => n.title).join("\n")}`}
     >
-      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-white" aria-hidden />
+      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${soft ? "bg-[#dc2626]" : "bg-white"}`} aria-hidden />
       <span className="shrink-0">ยังไม่ได้อ่าน ·</span>
       <span className="truncate">{kind}</span>
       {notifs.length > 1 && <span className="shrink-0">+{notifs.length - 1}</span>}
