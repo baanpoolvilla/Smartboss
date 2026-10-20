@@ -111,7 +111,7 @@ export function WorkloadView() {
 
   return (
     <div className="rounded-xl border border-[var(--line)] bg-white overflow-hidden shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
-      <div className="px-5 py-3.5 border-b border-[var(--line)]">
+      <div className="px-4 py-3.5 border-b sm:px-5 border-[var(--line)]">
         <h3 className="font-semibold text-sm">ภาระงานรายคน</h3>
         <p className="text-xs text-[var(--ink-soft)] mt-0.5">เรียงตามจำนวนงานทั้งหมดมากไปน้อย · แถบแดง = เลยกำหนด</p>
       </div>
@@ -132,7 +132,7 @@ export function WorkloadView() {
             // the mobile-only total badge inside it) disappear from layout
             // there, so its children fall back into the row exactly as
             // before instead of nesting an extra box.
-            <div key={r.user.id} className="flex flex-col gap-2 px-5 py-3 hover:bg-[var(--bg-soft)] transition-colors sm:flex-row sm:items-center sm:gap-3">
+            <div key={r.user.id} className="flex flex-col gap-2.5 px-4 py-3.5 hover:bg-[var(--bg-soft)] transition-colors sm:flex-row sm:items-center sm:gap-3 sm:px-5 sm:py-3">
               <div className="flex items-center gap-3 sm:contents">
                 <Avatar className="h-9 w-9 shrink-0">
                   <AvatarImage src={r.user.avatarUrl ?? undefined} alt={r.user.name} />
@@ -140,7 +140,7 @@ export function WorkloadView() {
                 </Avatar>
 
                 <div className="w-40 shrink-0 min-w-0">
-                  <p className="text-sm font-medium truncate">{r.user.name}</p>
+                  <p className="text-[15px] font-medium truncate sm:text-sm">{r.user.name}</p>
                   <p className="text-[11px] text-[var(--ink-soft)] truncate">{getDepartment(r.user.departmentId)?.name}</p>
                 </div>
 
@@ -168,7 +168,7 @@ export function WorkloadView() {
                         className="block w-full cursor-pointer"
                         aria-label={`ดูสัดส่วนงานของ ${r.user.name}`}
                       >
-                        <div className="h-2 sm:h-2.5 rounded-full bg-[var(--bg-soft)] overflow-hidden flex">
+                        <div className="h-2.5 rounded-full bg-[var(--bg-soft)] overflow-hidden flex">
                           {r.todo > 0 && <div className="h-full" style={{ width: `${seg(r.todo)}%`, backgroundColor: "#94a3b8" }} />}
                           {inProgressNotOverdue > 0 && (
                             <div className="h-full" style={{ width: `${seg(inProgressNotOverdue)}%`, backgroundColor: "var(--chart-amber)" }} />
@@ -202,25 +202,24 @@ export function WorkloadView() {
                     breakdown popover above — this row used to only show 3
                     (no "รอดำเนินการ"), reading as a different, incomplete
                     summary of the exact same bar sitting right above it. */}
-                {/* Single line on mobile (per spec) — scrolls horizontally
-                    rather than wrapping to 2 lines under the bar, which read
-                    cramped at 4 legend items + an occasional "งานเยอะ" badge
-                    on a narrow phone. ≥640px keeps the original wrapping row. */}
-                <div className="flex items-center gap-2.5 mt-1.5 text-[11px] text-[var(--ink-soft)] overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:whitespace-normal">
+                {/* มือถือ: ตัวใหญ่ขึ้น (12.5px) และตัดขึ้นบรรทัดใหม่แทนเลื่อนซ้ายขวา — เดิมแถวเดียวเลื่อนได้
+                    ตัวเลขท้าย ๆ ตกขอบจอ ต้องปัดถึงเห็น (ผู้ใช้ขอ 20/10/2569 "ปรับขนาดในมือถือให้เหมาะสม")
+                    ≥640px เหมือนเดิม */}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-2 text-[12.5px] text-[var(--ink-soft)] sm:gap-x-2.5 sm:mt-1.5 sm:text-[11px]">
                   <span className="flex items-center gap-1">
-                    <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: "#94a3b8" }} />
+                    <span className="h-2 w-2 rounded-full shrink-0 sm:h-1.5 sm:w-1.5" style={{ backgroundColor: "#94a3b8" }} />
                     รอดำเนินการ {r.todo}
                   </span>
                   <span className="flex items-center gap-1">
-                    <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: "var(--chart-amber)" }} />
+                    <span className="h-2 w-2 rounded-full shrink-0 sm:h-1.5 sm:w-1.5" style={{ backgroundColor: "var(--chart-amber)" }} />
                     กำลังทำ {inProgressNotOverdue}
                   </span>
                   <span className={cn("flex items-center gap-1", r.overdue > 0 && "text-[var(--chart-red)] font-medium")}>
-                    <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: "var(--chart-red)" }} />
+                    <span className="h-2 w-2 rounded-full shrink-0 sm:h-1.5 sm:w-1.5" style={{ backgroundColor: "var(--chart-red)" }} />
                     เลยกำหนด {r.overdue}
                   </span>
                   <span className="flex items-center gap-1">
-                    <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: "var(--chart-green)" }} />
+                    <span className="h-2 w-2 rounded-full shrink-0 sm:h-1.5 sm:w-1.5" style={{ backgroundColor: "var(--chart-green)" }} />
                     เสร็จ {r.done}
                   </span>
                   {bothKinds && (
@@ -239,7 +238,7 @@ export function WorkloadView() {
                 </div>
                 {/* มือถือ: แถวสถานะด้านบนเลื่อนซ้ายขวา ตัวแยกงาน/ใบงานซ่อมเลยลงบรรทัดของตัวเอง ไม่ให้ตกขอบจอ */}
                 {bothKinds && (
-                  <div className="mt-1.5 flex text-[11px] sm:hidden">
+                  <div className="mt-2 flex text-[12.5px] sm:hidden">
                     <span
                       className="items-center gap-1.5 rounded-full border border-[var(--line)] bg-white px-2 py-0.5 inline-flex"
                       title="ตัวเลขสถานะคืองาน + ใบงานซ่อมรวมกัน"
@@ -270,7 +269,7 @@ export function WorkloadView() {
       </div>
 
       {(expanded || remaining > 0) && (
-        <div className="border-t border-[var(--line)] px-5 py-3">
+        <div className="border-t border-[var(--line)] px-4 py-3 sm:px-5">
           <ShowMoreToggle expanded={expanded} remaining={remaining} onToggle={toggle} />
         </div>
       )}
