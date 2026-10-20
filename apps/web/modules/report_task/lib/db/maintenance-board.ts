@@ -4,7 +4,7 @@ import { hasPermission, isSuperAdmin, type OrgSession } from "@smartboss/auth";
 
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { workOrderAccess, workOrderVisibilityWhere, type WorkOrderAccess } from "@/modules/maintenance/data/work-order-access";
-import type { MaintenanceBoardItem, MaintenanceColumn, WorkOrderReaction } from "@/modules/report_task/lib/maintenance-board";
+import type { MaintenanceBoardItem, MaintenanceColumn, WoType, WorkOrderReaction } from "@/modules/report_task/lib/maintenance-board";
 import { listWorkOrderReactions } from "./work-order-reactions";
 import type { TaskPriority } from "@/modules/report_task/types";
 
@@ -75,6 +75,10 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
         assignedTo: true,
         createdBy: true,
         ccUserIds: true,
+        pmScheduleId: true,
+        pmScheduleIds: true,
+        autoCreated: true,
+        _count: { select: { purchaseOrders: { where: { status: { not: "cancelled" } } } } },
         property: { select: { name: true } },
       },
       orderBy: { createdAt: "desc" },
@@ -82,6 +86,13 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
     });
     for (const w of rows) {
       const done = w.status === "completed";
+      const isPm = !!w.pmScheduleId || (w.pmScheduleIds ?? []).length > 0;
+      const woTypes: WoType[] = [
+        ...(!isPm && !w.autoCreated ? (["normal"] as const) : []),
+        ...(isPm || w.autoCreated ? (["pm"] as const) : []),
+        ...(w.autoCreated ? (["auto"] as const) : []),
+        ...((w._count?.purchaseOrders ?? 0) > 0 ? (["po"] as const) : []),
+      ];
       const column: MaintenanceColumn = done ? "done" : w.status === "in_progress" ? "in_progress" : "todo";
       items.push({
         kind: "wo",
@@ -100,6 +111,7 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
         place: w.property?.name ?? null,
         href: `/maintenance/work-orders/${w.id}`,
         reactions: reactionsByWo.get(w.id) ?? [],
+        woTypes,
       });
     }
   }

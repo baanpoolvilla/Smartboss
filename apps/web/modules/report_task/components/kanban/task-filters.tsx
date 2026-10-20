@@ -33,7 +33,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { NewTaskDialog } from "./new-task-dialog";
 import { groupByLabels, type GroupBy } from "./kanban-board";
 import { useMaintenanceBoardStore } from "@/modules/report_task/store/maintenance-board-store";
-import type { BoardKind } from "@/modules/report_task/lib/maintenance-board";
+import { WO_TYPES, WO_TYPE_TAG_BG, type BoardKind } from "@/modules/report_task/lib/maintenance-board";
 
 /** ตัวเลือกจัดกลุ่มบนบอร์ด — "แผนก" ซ่อนไว้ก่อน จะทำเป็นมุมมองโปรเจค/แผนกแยกจากงาน
  * ("เอาแผนกออกก่อน เดี๋ยวงง") โค้ดบอร์ดแผนกใน kanban-board.tsx ยังอยู่ เปิดกลับได้ที่นี่ที่เดียว */
@@ -45,6 +45,73 @@ const BOARD_KINDS: { id: BoardKind; icon: string; label: string }[] = [
   { id: "task", icon: "📋", label: "งาน" },
   { id: "wo", icon: "🔧", label: "ใบงานซ่อม" },
 ];
+
+/**
+ * ประเภทย่อยของใบงานซ่อม (ซ่อมทั่วไป/PM/อัตโนมัติ/มี PO) — ขึ้นใต้ "ใบงานซ่อม" เฉพาะตอนติ๊กแสดงใบงานซ่อมอยู่
+ * (ผู้ใช้ขอ 20/10/2569) · ติ๊กได้หลายอัน ออกหมดไม่ได้ · จำในเครื่องเหมือน "แสดงบนบอร์ด"
+ */
+function WoTypeToggles({ className }: { className?: string }) {
+  const showWo = useMaintenanceBoardStore((s) => s.kinds.wo);
+  const woTypes = useMaintenanceBoardStore((s) => s.woTypes);
+  const counts = useMaintenanceBoardStore((s) => s.woTypeCounts);
+  const toggle = useMaintenanceBoardStore((s) => s.toggleWoType);
+  const showAll = useMaintenanceBoardStore((s) => s.showAllWoTypes);
+  if (!showWo) return null;
+  const allOn = WO_TYPES.every((t) => woTypes[t.id]);
+  return (
+    <div className={cn("flex flex-col gap-2 rounded-xl border border-[var(--line)] bg-[var(--bg-soft)] p-2.5", className)}>
+      <div className="flex items-center justify-between">
+        <span className="text-[11.5px] font-semibold text-[var(--ink-soft)]">🔧 ประเภทใบงานซ่อม</span>
+        {!allOn && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              showAll();
+            }}
+            className="cursor-pointer rounded px-1 text-[11.5px] text-[var(--ink-soft)] hover:text-[var(--brand-navy)] hover:underline"
+          >
+            เลือกทั้งหมด
+          </button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {WO_TYPES.map((t) => {
+          const on = woTypes[t.id];
+          return (
+            <button
+              key={t.id}
+              type="button"
+              aria-pressed={on}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggle(t.id);
+              }}
+              title={on ? `ซ่อนใบงาน${t.label}` : `แสดงใบงาน${t.label}`}
+              className={cn(
+                "inline-flex h-7 cursor-pointer items-center gap-1 rounded-full border px-2.5 text-xs transition-all duration-150",
+                on
+                  ? "border-[var(--brand-navy)] bg-white font-semibold text-[var(--brand-navy)] shadow-sm hover:-translate-y-px"
+                  : "border-dashed border-[var(--line)] bg-transparent text-[var(--ink-faint)] hover:border-[var(--brand-navy)]/40 hover:text-[var(--ink-soft)]"
+              )}
+            >
+              {t.tag && (
+                <span className="rounded px-1 text-[9px] font-bold leading-[14px] text-white" style={{ backgroundColor: WO_TYPE_TAG_BG[t.id] }}>
+                  {t.tag}
+                </span>
+              )}
+              {t.label}
+              <span className="tabular-nums text-[var(--ink-soft)]">{counts[t.id]}</span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-[10.5px] leading-snug text-[var(--ink-soft)]">ใบอัตโนมัติ = ระบบเปิดให้เองตามรอบ PM · มี PO = เปิดใบขอซื้อ/สั่งซื้อไว้</p>
+    </div>
+  );
+}
 
 /** ชื่อสั้นบนปุ่มจัดกลุ่มในป๊อปอัปตัวกรอง — ชื่อเต็ม ("ผู้รับผิดชอบ") ทำปุ่มกว้างจนตกบรรทัดในป๊อปอัปกว้าง 380px */
 const groupByShort: Record<GroupBy, string> = { status: "สถานะ", priority: "ความสำคัญ", assignee: "คน", department: "แผนก" };
@@ -206,6 +273,7 @@ export function TaskFilters({
           </button>
         );
       })}
+      <WoTypeToggles className="mx-1 mt-1" />
     </SelectGroup>
   );
   const quickOverdueActive = filters.penalty === "overdue";
@@ -851,6 +919,7 @@ export function TaskFilters({
               );
             })}
           </span>
+          <WoTypeToggles className="w-full" />
         </div>
       </div>
     );

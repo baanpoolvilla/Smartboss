@@ -18,6 +18,25 @@ export type MaintenanceKind = "wo";
 export type BoardKind = "task" | MaintenanceKind;
 export type MaintenanceColumn = "todo" | "in_progress" | "review" | "done";
 
+/**
+ * ประเภทย่อยของใบงานซ่อม — ตัวกรอง "ประเภทใบงานซ่อม" + ป้ายบนการ์ด (ผู้ใช้ขอ 20/10/2569 "จะได้ดูได้ถูกจุด")
+ * ใบหนึ่งมีได้หลายแบบ: ใบอัตโนมัติ (ระบบเปิดตามรอบ PM) เป็น PM ด้วยเสมอ · มี PO ซ้อนกับแบบไหนก็ได้
+ *   normal = ไม่ผูกแผน PM และไม่ใช่ใบอัตโนมัติ · pm = ผูกแผน PM · auto = ระบบเปิดให้เอง · po = มีใบขอซื้อ/สั่งซื้อ (ไม่นับที่ยกเลิก)
+ */
+export type WoType = "normal" | "pm" | "auto" | "po";
+export const WO_TYPES: { id: WoType; label: string; tag: string | null }[] = [
+  { id: "normal", label: "ซ่อมทั่วไป", tag: null },
+  { id: "pm", label: "PM ตามแผน", tag: "PM" },
+  { id: "auto", label: "ใบอัตโนมัติ", tag: "อัตโนมัติ" },
+  { id: "po", label: "มี PO", tag: "PO" },
+];
+/** สีป้ายประเภท (ตัวกรอง + การ์ด ใช้ชุดเดียวกัน) · ซ่อมทั่วไปไม่มีป้าย */
+export const WO_TYPE_TAG_BG: Record<WoType, string> = { normal: "", pm: "#7c3aed", auto: "#475569", po: "#c2410c" };
+/** ข้อมูลเก่าที่ยังไม่มี woTypes = ซ่อมทั่วไป */
+export function woTypesOf(item: MaintenanceBoardItem): WoType[] {
+  return item.woTypes && item.woTypes.length > 0 ? item.woTypes : ["normal"];
+}
+
 export interface MaintenanceBoardItem {
   kind: MaintenanceKind;
   id: string;
@@ -47,6 +66,8 @@ export interface MaintenanceBoardItem {
   href: string;
   /** สติกเกอร์ที่หัวหน้าติดบนการ์ด (มีผลกับคะแนนผู้รับผิดชอบ) — ดู lib/db/work-order-reactions.ts */
   reactions: WorkOrderReaction[];
+  /** ประเภทย่อย (ดู WoType) — อ่านผ่าน woTypesOf() */
+  woTypes?: WoType[];
 }
 
 /** สติกเกอร์ 1 ครั้งบนใบงานซ่อม — ชุดสติกเกอร์เดียวกับงาน คะแนนเข้า targetUserId (ผู้รับผิดชอบตอนที่ติด) */

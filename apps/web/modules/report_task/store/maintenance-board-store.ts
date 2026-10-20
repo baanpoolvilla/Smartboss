@@ -2,7 +2,9 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { BoardKind, MaintenanceBoardItem, WorkOrderReaction } from "@/modules/report_task/lib/maintenance-board";
+import type { BoardKind, MaintenanceBoardItem, WoType, WorkOrderReaction } from "@/modules/report_task/lib/maintenance-board";
+
+const ALL_WO_TYPES: Record<WoType, boolean> = { normal: true, pm: true, auto: true, po: true };
 
 /**
  * ใบงานซ่อมบนหน้างาน (lib/maintenance-board.ts) + ตัวเลือก "แสดงบนบอร์ด" ในเมนูจัดกลุ่ม
@@ -15,6 +17,13 @@ interface MaintenanceBoardState {
   kinds: Record<BoardKind, boolean>;
   /** จำนวนแต่ละประเภทที่ตรงกับตัวกรองอื่นอยู่ตอนนี้ — บอร์ดเป็นคนคำนวณ เมนูเอาไปโชว์ */
   counts: Record<BoardKind, number>;
+  /** ประเภทย่อยของใบงานซ่อมที่ติ๊กไว้ (ซ่อมทั่วไป/PM/อัตโนมัติ/มี PO) — จำในเครื่องเหมือน kinds */
+  woTypes: Record<WoType, boolean>;
+  /** จำนวนใบงานแต่ละประเภท (หลังตัวกรองอื่น ก่อนติ๊กประเภท) — บอร์ดคำนวณ เมนูเอาไปโชว์ */
+  woTypeCounts: Record<WoType, number>;
+  toggleWoType: (t: WoType) => void;
+  showAllWoTypes: () => void;
+  setWoTypeCounts: (counts: Record<WoType, number>) => void;
   load: () => Promise<void>;
   toggleKind: (kind: BoardKind) => void;
   setCounts: (counts: Record<BoardKind, number>) => void;
@@ -38,6 +47,20 @@ export const useMaintenanceBoardStore = create<MaintenanceBoardState>()(
       loaded: false,
       kinds: { task: true, wo: true },
       counts: { task: 0, wo: 0 },
+      woTypes: ALL_WO_TYPES,
+      woTypeCounts: { normal: 0, pm: 0, auto: 0, po: 0 },
+      toggleWoType: (t) =>
+        set((s) => {
+          const next = { ...s.woTypes, [t]: !s.woTypes[t] };
+          // ติ๊กออกหมดไม่ได้ — อยากซ่อนใบงานทั้งหมดให้ติ๊ก "ใบงานซ่อม" ออกแทน
+          if (!Object.values(next).some(Boolean)) return s;
+          return { woTypes: next };
+        }),
+      showAllWoTypes: () => set({ woTypes: ALL_WO_TYPES }),
+      setWoTypeCounts: (counts) =>
+        set((s) =>
+          (Object.keys(counts) as WoType[]).every((k) => s.woTypeCounts[k] === counts[k]) ? s : { woTypeCounts: counts }
+        ),
       load: () => {
         if (inflight) return inflight;
         inflight = (async () => {
@@ -102,12 +125,19 @@ export const useMaintenanceBoardStore = create<MaintenanceBoardState>()(
     }),
     {
       name: "sb-board-kinds",
-      partialize: (s) => ({ kinds: s.kinds }),
+      partialize: (s) => ({ kinds: s.kinds, woTypes: s.woTypes }),
       // ที่จำไว้ในเครื่องจากตอนยังมี "สั่งซื้อ" (po) — เอาแค่ task/wo ที่ยังมีอยู่ ไม่งั้น key เก่าค้างใน state
       merge: (persisted, current) => {
-        const k = (persisted as { kinds?: Partial<Record<BoardKind, boolean>> } | undefined)?.kinds;
+        const p = persisted as { kinds?: Partial<Record<BoardKind, boolean>>; woTypes?: Partial<Record<WoType, boolean>> } | undefined;
+        const k = p?.kinds;
         const kinds = { task: k?.task ?? true, wo: k?.wo ?? true };
-        return { ...current, kinds: kinds.task || kinds.wo ? kinds : current.kinds };
+        const w = p?.woTypes;
+        const woTypes = { normal: w?.normal ?? true, pm: w?.pm ?? true, auto: w?.auto ?? true, po: w?.po ?? true };
+        return {
+          ...current,
+          kinds: kinds.task || kinds.wo ? kinds : current.kinds,
+          woTypes: Object.values(woTypes).some(Boolean) ? woTypes : current.woTypes,
+        };
       },
     }
   )

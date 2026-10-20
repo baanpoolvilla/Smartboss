@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from "react";
 import { useMaintenanceBoardStore } from "@/modules/report_task/store/maintenance-board-store";
-import { matchesMaintenanceFilters } from "@/modules/report_task/lib/maintenance-board";
+import { matchesMaintenanceFilters, WO_TYPES, woTypesOf, type WoType } from "@/modules/report_task/lib/maintenance-board";
 import type { TaskFilterState } from "@/modules/report_task/lib/task-filter";
 import type { Task } from "@/modules/report_task/types";
 
@@ -20,6 +20,8 @@ export function useBoardMaintenance(filteredTasks: Task[], filters: TaskFilterSt
   const kinds = useMaintenanceBoardStore((s) => s.kinds);
   const load = useMaintenanceBoardStore((s) => s.load);
   const setCounts = useMaintenanceBoardStore((s) => s.setCounts);
+  const woTypes = useMaintenanceBoardStore((s) => s.woTypes);
+  const setWoTypeCounts = useMaintenanceBoardStore((s) => s.setWoTypeCounts);
 
   useEffect(() => {
     void load();
@@ -35,15 +37,23 @@ export function useBoardMaintenance(filteredTasks: Task[], filters: TaskFilterSt
   }, [load]);
 
   const mxFiltered = useMemo(() => mxItems.filter((i) => matchesMaintenanceFilters(i, filters)), [mxItems, filters]);
+  // ประเภทย่อยของใบงานซ่อม (ซ่อมทั่วไป/PM/อัตโนมัติ/มี PO) — ใบที่มีหลายแบบ ขึ้นถ้าติ๊กแบบใดแบบหนึ่งไว้
+  const mxTyped = useMemo(
+    () => mxFiltered.filter((i) => i.kind !== "wo" || woTypesOf(i).some((t) => woTypes[t])),
+    [mxFiltered, woTypes]
+  );
 
   useEffect(() => {
     setCounts({
       task: filteredTasks.length,
-      wo: mxFiltered.length,
+      wo: mxTyped.length,
     });
-  }, [filteredTasks, mxFiltered, setCounts]);
+    const typeCounts = Object.fromEntries(WO_TYPES.map((t) => [t.id, 0])) as Record<WoType, number>;
+    for (const i of mxFiltered) for (const t of woTypesOf(i)) typeCounts[t] += 1;
+    setWoTypeCounts(typeCounts);
+  }, [filteredTasks, mxFiltered, mxTyped, setCounts, setWoTypeCounts]);
 
   const shownTasks = useMemo(() => (kinds.task ? filteredTasks : []), [kinds.task, filteredTasks]);
-  const shownMx = useMemo(() => mxFiltered.filter((i) => kinds[i.kind]), [mxFiltered, kinds]);
+  const shownMx = useMemo(() => mxTyped.filter((i) => kinds[i.kind]), [mxTyped, kinds]);
   return { shownTasks, shownMx };
 }

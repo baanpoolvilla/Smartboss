@@ -16,7 +16,7 @@ import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useMaintenanceBoardStore } from "@/modules/report_task/store/maintenance-board-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
-import type { MaintenanceBoardItem } from "@/modules/report_task/lib/maintenance-board";
+import { WO_TYPES, WO_TYPE_TAG_BG, woTypesOf, type MaintenanceBoardItem } from "@/modules/report_task/lib/maintenance-board";
 import type { Sticker } from "@/modules/report_task/types";
 import { PendingBand, usePendingFor } from "@/modules/notifications/pending-for-you";
 import type { NotifCategory } from "@/modules/notifications/types";
@@ -108,8 +108,18 @@ export function MaintenanceCard({ item }: { item: MaintenanceBoardItem }) {
           className="flex items-center justify-between gap-2 px-2.5 py-0.5 text-[10.5px] font-semibold leading-4 text-white"
           style={{ background: k.color }}
         >
-          <span className="inline-flex items-center gap-1">
+          <span className="inline-flex min-w-0 items-center gap-1">
             {k.icon} {k.label}
+            {/* ป้ายประเภท PM / อัตโนมัติ / PO — ชุดเดียวกับตัวกรอง "ประเภทใบงานซ่อม" (20/10/2569) */}
+            {WO_TYPES.filter((t) => t.tag && woTypesOf(item).includes(t.id)).map((t) => (
+              <span
+                key={t.id}
+                className="rounded px-1 text-[9px] font-bold leading-[13px] text-white ring-1 ring-white/40"
+                style={{ backgroundColor: WO_TYPE_TAG_BG[t.id] }}
+              >
+                {t.tag}
+              </span>
+            ))}
           </span>
           <span className="truncate font-medium opacity-90">{item.code}</span>
         </div>
