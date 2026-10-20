@@ -144,4 +144,10 @@ describe("canReviewTaskRecord", () => {
     expect(canReviewTaskRecord({ departmentIds: ["dep-eng"], assignedById: OTHER_ENG }, "usr-06", { headsCanReview: true, extraReviewerIds: ["usr-06"] })).toBe(true);
     expect(canReviewTaskRecord({ departmentIds: ["dep-eng"], assignedById: ENG_HEAD }, OTHER_ENG, S)).toBe(false);
   });
+  // 20/10/2569: คนมอบหมายงาน (ไม่ใช่หัวหน้า) ตรวจงานที่ตัวเองมอบหมายได้ — แต่ไม่ใช่งานที่ตัวเองทำด้วย
+  it("คนมอบหมายงานตรวจได้ ยกเว้นตัวเองเป็นผู้รับผิดชอบด้วย", () => {
+    expect(canReviewTaskRecord({ departmentIds: ["dep-eng"], assignedById: OTHER_ENG, assigneeIds: ["usr-03"] }, OTHER_ENG, S)).toBe(true);
+    expect(canReviewTaskRecord({ departmentIds: ["dep-eng"], assignedById: OTHER_ENG, assigneeIds: ["usr-03", OTHER_ENG] }, OTHER_ENG, S)).toBe(false);
+    expect(canReviewTaskRecord({ departmentIds: ["dep-eng"], assignedById: OTHER_ENG, assigneeIds: ["usr-03"] }, "usr-03", S)).toBe(false);
+  });
 });

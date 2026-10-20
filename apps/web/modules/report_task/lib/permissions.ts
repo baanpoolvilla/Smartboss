@@ -43,13 +43,16 @@ export function canEditRecord(
  * ("ระบบแสดง 9 ... แต่ที่สั่งงานไปแล้วรอ action คือ 3") · CEO ยังเห็นทุกงานบนบอร์ดเหมือนเดิม
  * กันงานค้าง: งานที่ไม่มีใครตรวจได้เลย (ไม่มีหัวหน้าแผนกของงาน และไม่มีผู้ตรวจที่ตั้งไว้) CEO ยังตรวจได้
  * หัวหน้าแผนก / ผู้ตรวจที่ตั้งไว้ (extraReviewerIds) — เหมือนเดิมทุกอย่าง (canReviewTask ด้านล่าง)
+ * 20/10/2569: **คนที่มอบหมายงาน** ตรวจงานนั้นได้ด้วย ("คนที่สร้างงานมอบหมายให้ ... เสร็จงานแล้วแต่ไม่มีปุ่มให้กดตรวจ")
+ *   ยกเว้นตัวเองเป็นผู้รับผิดชอบงานนั้นด้วย — ไม่ให้ตรวจงานตัวเอง · ตรงกับเตือน "รอตรวจเกิน 2 เดือน" ที่ส่งหาคนมอบหมาย
  */
 export function canReviewTaskRecord(
-  task: Pick<Task, "departmentIds" | "assignedById">,
+  task: Pick<Task, "departmentIds" | "assignedById"> & { assigneeIds?: string[] },
   viewingAsUserId: string,
   settings: TaskReviewSettings = { headsCanReview: true, extraReviewerIds: [] }
 ): boolean {
   if (settings.extraReviewerIds.includes(viewingAsUserId)) return true;
+  if (task.assignedById === viewingAsUserId && !(task.assigneeIds ?? []).includes(viewingAsUserId)) return true;
   const deptIds = new Set(task.departmentIds.filter((id): id is string => !!id));
   if (settings.headsCanReview && departments.some((d) => d.headId === viewingAsUserId && deptIds.has(d.id))) return true;
   if (!isOwner(viewingAsUserId)) return false;
