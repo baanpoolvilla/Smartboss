@@ -901,13 +901,13 @@ export function TaskFilters({
           className={cn(
             "relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors active:scale-95 sm:hidden",
             activeFilterCount > 0
-              ? "bg-[var(--sidebar-accent)] text-[var(--brand-green-dark)]"
-              : "text-(--app-strong) hover:bg-[var(--sidebar-accent)] hover:text-[var(--brand-green-dark)]"
+              ? "bg-slate-100 text-[var(--brand-navy)]"
+              : "text-(--app-strong) hover:bg-slate-100 hover:text-[var(--brand-navy)]"
           )}
         >
           <SlidersHorizontal className="h-5 w-5" />
           {activeFilterCount > 0 && (
-            <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--brand-green-dark)] px-1 text-[10.5px] font-bold text-white tabular-nums">
+            <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--brand-navy)] px-1 text-[10.5px] font-bold text-white tabular-nums">
               {activeFilterCount}
             </span>
           )}
@@ -920,17 +920,17 @@ export function TaskFilters({
               <button
                 type="button"
                 className={cn(
-                  // สีเขียวแบรนด์ชุดเดียวกับแท็บมุมมอง: ปกติขาว · hover/เปิดอยู่ = พื้นเขียวอ่อน · มีตัวกรองใช้อยู่ = ขอบเขียว + เลขบนวงเขียว
+                  // สีกรมท่าชุดเดียวกับแท็บมุมมอง (ไม่ใช้เขียว = "เสร็จ"): ปกติขาว · hover/เปิดอยู่ = พื้นเทาอ่อน · มีตัวกรองใช้อยู่ = ขอบกรมท่า + เลขบนวงกรมท่า
                   "group hidden h-[34px] shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold transition-all duration-200 active:scale-[0.97] sm:flex",
                   activeFilterCount > 0 || desktopPanelOpen
-                    ? "border-[var(--brand-green-dark)]/45 bg-[var(--sidebar-accent)] text-[var(--brand-green-dark)] shadow-[0_2px_8px_rgba(30,120,48,0.15)]"
-                    : "border-[var(--line)] bg-white text-[var(--ink)] hover:border-[var(--brand-green-dark)]/40 hover:bg-[var(--sidebar-accent)] hover:text-[var(--brand-green-dark)] hover:shadow-sm"
+                    ? "border-[var(--brand-navy)]/45 bg-slate-100 text-[var(--brand-navy)] shadow-[0_2px_8px_rgba(27,37,55,0.12)]"
+                    : "border-[var(--line)] bg-white text-[var(--ink)] hover:border-[var(--brand-navy)]/40 hover:bg-slate-100 hover:text-[var(--brand-navy)] hover:shadow-sm"
                 )}
               >
-                <SlidersHorizontal className="h-3.5 w-3.5 text-[var(--brand-green-dark)] transition-transform duration-200 group-hover:scale-110" />
+                <SlidersHorizontal className="h-3.5 w-3.5 text-[var(--brand-navy)] transition-transform duration-200 group-hover:scale-110" />
                 ตัวกรอง
                 {activeFilterCount > 0 && (
-                  <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[var(--brand-green-dark)] px-1 text-[11px] font-bold text-white tabular-nums">
+                  <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[var(--brand-navy)] px-1 text-[11px] font-bold text-white tabular-nums">
                     {activeFilterCount}
                   </span>
                 )}
