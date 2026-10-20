@@ -4,7 +4,7 @@ import { useMemo } from "react";
 
 
 import { getUser } from "@/modules/report_task/lib/directory";
-import { canReviewTask } from "@/modules/report_task/lib/permissions";
+import { canReviewTaskRecord } from "@/modules/report_task/lib/permissions";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useProjectStore } from "@/modules/report_task/store/project-store";
@@ -55,7 +55,7 @@ export function useTaskPending(scope: "project" | "board"): ProjectPendingItem[]
     const pname = (pid: string) => projects.find((p) => p.id === pid)?.name ?? "โปรเจกต์";
     const out: ProjectPendingItem[] = [];
     for (const t of byId.values()) {
-      if (t.status === "done" && !t.reviewedBy && canReviewTask(t.departmentIds, me, reviewSettings)) {
+      if (t.status === "done" && !t.reviewedBy && canReviewTaskRecord(t, me, reviewSettings)) {
         const who = t.assigneeIds.map((id) => getUser(id)?.name).filter(Boolean).join(", ");
         out.push({ key: `review:${t.id}`, taskId: t.id, projectId: t.project?.projectId ?? "", kind: "✅ รอคุณตรวจ", title: t.title, projectName: t.project ? pname(t.project.projectId) : "", who: who || null, at: t.completedAt ?? t.updatedAt ?? null });
       }

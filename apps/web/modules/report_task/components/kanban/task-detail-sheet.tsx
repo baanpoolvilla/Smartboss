@@ -43,7 +43,7 @@ import { TaskRecurrenceSection } from "@/modules/report_task/components/kanban/t
 import { TaskProjectInfo } from "@/modules/report_task/components/projects/task-project-info";
 import { SubtasksSection } from "@/modules/report_task/components/kanban/subtasks-section";
 import { canManageSeries } from "@/modules/report_task/lib/task-recurrence";
-import { canEditRecord, canRemoveReaction, canReviewTask, canSeePenaltyStatus, canToggleOwnChecklistItem } from "@/modules/report_task/lib/permissions";
+import { canEditRecord, canRemoveReaction, canReviewTaskRecord, canSeePenaltyStatus, canToggleOwnChecklistItem } from "@/modules/report_task/lib/permissions";
 import { useTaskReviewSettingsStore } from "@/modules/report_task/store/task-review-settings-store";
 import { todayIso } from "@/modules/report_task/lib/now";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
@@ -572,7 +572,7 @@ export function TaskDetailSheet({
   // it's limited to CEO + หัวหน้าแผนก (configurable in ตั้งค่า > งาน >
   // การตรวจงาน) only — an assigner who isn't also a head can still edit the
   // task, just can't review their own assignment.
-  const canReview = canReviewTask(task.departmentIds, viewingAsUserId, taskReviewSettings);
+  const canReview = canReviewTaskRecord(task, viewingAsUserId, taskReviewSettings);
   const lockedTitle = "แก้ไขได้เฉพาะผู้สร้างงาน";
   // canEditMain (and canSeeTask) fall back to the viewer's own
   // department-head match once they're no longer an assignee — a non-owner

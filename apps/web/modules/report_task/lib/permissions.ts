@@ -36,6 +36,30 @@ export function canEditRecord(
  * every existing call site keeps working even before it's updated to pass
  * the real settings.
  */
+/**
+ * ใครกด ผ่าน/ไม่ผ่าน งานชิ้นนี้ได้ — ตัวที่หน้าจอใช้ (การ์ด "รอคุณตรวจ" / เลขบนเมนู / ปุ่มในหน้างาน)
+ *
+ * 20/10/2569: CEO (owner) **ตรวจเฉพาะงานที่ตัวเองมอบหมาย** — เดิมตรวจได้ทุกงาน เลยขึ้น "รอคุณตรวจ" ทั้งบริษัท
+ * ("ระบบแสดง 9 ... แต่ที่สั่งงานไปแล้วรอ action คือ 3") · CEO ยังเห็นทุกงานบนบอร์ดเหมือนเดิม
+ * กันงานค้าง: งานที่ไม่มีใครตรวจได้เลย (ไม่มีหัวหน้าแผนกของงาน และไม่มีผู้ตรวจที่ตั้งไว้) CEO ยังตรวจได้
+ * หัวหน้าแผนก / ผู้ตรวจที่ตั้งไว้ (extraReviewerIds) — เหมือนเดิมทุกอย่าง (canReviewTask ด้านล่าง)
+ */
+export function canReviewTaskRecord(
+  task: Pick<Task, "departmentIds" | "assignedById">,
+  viewingAsUserId: string,
+  settings: TaskReviewSettings = { headsCanReview: true, extraReviewerIds: [] }
+): boolean {
+  if (settings.extraReviewerIds.includes(viewingAsUserId)) return true;
+  const deptIds = new Set(task.departmentIds.filter((id): id is string => !!id));
+  if (settings.headsCanReview && departments.some((d) => d.headId === viewingAsUserId && deptIds.has(d.id))) return true;
+  if (!isOwner(viewingAsUserId)) return false;
+  if (task.assignedById === viewingAsUserId) return true;
+  const someoneElseCanReview =
+    settings.extraReviewerIds.length > 0 ||
+    (settings.headsCanReview && departments.some((d) => deptIds.has(d.id) && !!d.headId));
+  return !someoneElseCanReview;
+}
+
 export function canReviewTask(
   recordDepartmentIds: (string | undefined)[],
   viewingAsUserId: string,

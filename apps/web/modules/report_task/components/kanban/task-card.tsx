@@ -21,7 +21,7 @@ import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { unreadTaskAssignmentCounts, unreadTaskAttachmentCounts, unreadTaskCommentCounts } from "@/modules/report_task/lib/task-comment-activity";
-import { canReviewTask } from "@/modules/report_task/lib/permissions";
+import { canReviewTaskRecord } from "@/modules/report_task/lib/permissions";
 import { useTaskReviewSettingsStore } from "@/modules/report_task/store/task-review-settings-store";
 import { MessageSquare, Paperclip, SmilePlus, SearchCheck, Check, Circle, Star, Clock, Eye, Lock, Repeat } from "lucide-react";
 import { describeRule, freqLabel, totalOccurrences } from "@/modules/report_task/lib/task-recurrence";
@@ -110,7 +110,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
     () => unreadTaskAssignmentCounts(notifications, viewingAsUserId).get(task.id) ?? 0,
     [notifications, viewingAsUserId, task.id]
   );
-  const reviewWaiting = isPendingReview && canReviewTask(task.departmentIds, viewingAsUserId, reviewSettings);
+  const reviewWaiting = isPendingReview && canReviewTaskRecord(task, viewingAsUserId, reviewSettings);
   // แถบแดงขอบบนการ์ด บอกตรง ๆ ว่าแดงเพราะ "ยังไม่ได้อ่าน" (ผู้ใช้ขอ 18/10/2569) ไม่ใช่งานมีปัญหา
   // เปิดดูงานแล้ว (markTaskActivityRead) แถบ + พื้นแดงหายเอง · รอตรวจหายเมื่อกด ผ่าน/ไม่ผ่าน
   // คอมเมนต์ใหม่ไม่ทำให้ทั้งการ์ดแดงแล้ว — ขึ้นแค่ป้ายแดง "N ใหม่" ตรงตัวนับคอมเมนต์ (ผู้ใช้ขอ 20/10/2569 "ขึ้นสีแดงอะไรแบบนั้นพอ")

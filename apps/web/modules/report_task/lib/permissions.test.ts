@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { canEditRecord, canEditReportTopic, canSeeReportTopic, canSeeTask, canToggleOwnChecklistItem } from "@/modules/report_task/lib/permissions";
+import { canEditRecord, canEditReportTopic, canReviewTaskRecord, canSeeReportTopic, canSeeTask, canToggleOwnChecklistItem } from "@/modules/report_task/lib/permissions";
 import { useDepartmentStore } from "@/modules/report_task/store/department-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import type { Department, User } from "@/modules/report_task/types";
@@ -119,5 +119,29 @@ describe("canSeeTask — personal tasks", () => {
   });
   it("becomes a normal task as soon as someone else is added", () => {
     expect(canSeeTask({ ...personal, assigneeIds: [OTHER_ENG, "usr-03"] }, OWNER)).toBe(true);
+  });
+});
+
+// 20/10/2569: CEO ตรวจ (ผ่าน/ไม่ผ่าน) เฉพาะงานที่ตัวเองมอบหมาย — ยังเห็นทุกงานบนบอร์ดเหมือนเดิม
+describe("canReviewTaskRecord", () => {
+  const S = { headsCanReview: true, extraReviewerIds: [] as string[] };
+  it("CEO ตรวจงานที่ตัวเองมอบหมายได้", () => {
+    expect(canReviewTaskRecord({ departmentIds: ["dep-eng"], assignedById: OWNER }, OWNER, S)).toBe(true);
+  });
+  it("CEO ตรวจงานที่คนอื่นมอบหมายไม่ได้ ถ้ามีหัวหน้าแผนกตรวจแทนได้", () => {
+    expect(canReviewTaskRecord({ departmentIds: ["dep-eng"], assignedById: ENG_HEAD }, OWNER, S)).toBe(false);
+  });
+  it("งานที่ไม่มีใครตรวจได้ (แผนกไม่มีหัวหน้า) → CEO ยังตรวจได้ กันงานค้าง", () => {
+    expect(canReviewTaskRecord({ departmentIds: ["dep-marketing"], assignedById: OTHER_ENG }, OWNER, S)).toBe(true);
+    expect(canReviewTaskRecord({ departmentIds: [], assignedById: OTHER_ENG }, OWNER, S)).toBe(true);
+  });
+  it("มีผู้ตรวจที่ตั้งไว้ → CEO ไม่ต้องรับงานที่ไม่มีหัวหน้า", () => {
+    expect(canReviewTaskRecord({ departmentIds: ["dep-marketing"], assignedById: OTHER_ENG }, OWNER, { headsCanReview: true, extraReviewerIds: ["usr-06"] })).toBe(false);
+  });
+  it("หัวหน้าแผนก / ผู้ตรวจที่ตั้งไว้ เหมือนเดิม", () => {
+    expect(canReviewTaskRecord({ departmentIds: ["dep-eng"], assignedById: OTHER_ENG }, ENG_HEAD, S)).toBe(true);
+    expect(canReviewTaskRecord({ departmentIds: ["dep-eng"], assignedById: OTHER_ENG }, DESIGN_HEAD, S)).toBe(false);
+    expect(canReviewTaskRecord({ departmentIds: ["dep-eng"], assignedById: OTHER_ENG }, "usr-06", { headsCanReview: true, extraReviewerIds: ["usr-06"] })).toBe(true);
+    expect(canReviewTaskRecord({ departmentIds: ["dep-eng"], assignedById: ENG_HEAD }, OTHER_ENG, S)).toBe(false);
   });
 });

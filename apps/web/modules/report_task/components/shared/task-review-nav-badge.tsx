@@ -5,7 +5,7 @@ import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useNotificationStore, type AppNotification } from "@/modules/report_task/store/notification-store";
 import type { Task } from "@/modules/report_task/types";
-import { canReviewTask } from "@/modules/report_task/lib/permissions";
+import { canReviewTaskRecord } from "@/modules/report_task/lib/permissions";
 import { useTaskReviewSettingsStore } from "@/modules/report_task/store/task-review-settings-store";
 import { unreadTaskAssignmentCounts, unreadTaskAttachmentCounts, unreadTaskCommentCounts } from "@/modules/report_task/lib/task-comment-activity";
 
@@ -25,7 +25,7 @@ export function taskNavBadgeCount(
   include: (taskId: string) => boolean
 ): number {
   const reviewCount = tasks.filter(
-    (t) => include(t.id) && t.status === "done" && !t.reviewedBy && canReviewTask(t.departmentIds, userId, reviewSettings)
+    (t) => include(t.id) && t.status === "done" && !t.reviewedBy && canReviewTaskRecord(t, userId, reviewSettings)
   ).length;
   let unreadActivityCount = 0;
   for (const counts of [

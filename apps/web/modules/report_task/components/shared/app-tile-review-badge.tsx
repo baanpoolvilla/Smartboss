@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { useDepartmentStore } from "@/modules/report_task/store/department-store";
-import { canReviewTask, canSeeReportTopic } from "@/modules/report_task/lib/permissions";
+import { canReviewTaskRecord, canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { aboutMeCountInPost } from "@/modules/report_task/lib/report-feed-activity";
 import { unreadTaskAssignmentCounts, unreadTaskAttachmentCounts, unreadTaskCommentCounts } from "@/modules/report_task/lib/task-comment-activity";
 import type { AppNotification } from "@/modules/report_task/store/notification-store";
@@ -93,7 +93,7 @@ export function AppTileReviewBadge({
           (t) =>
             t.status === "done" &&
             !t.reviewedBy &&
-            canReviewTask(t.departmentIds, viewingAsUserId, reviewSettings ?? undefined)
+            canReviewTaskRecord(t, viewingAsUserId, reviewSettings ?? undefined)
         ).length;
 
         let unreadActivityCount = 0;
