@@ -563,6 +563,9 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
         </div>
       )}
 
+      {/* ตัวเลข "N งาน · ใบงานซ่อม N" มุมขวาบนเอาออก (ผู้ใช้ขอ 20/10/2569 "ไปดูในตัวกรองได้อยู่แล้ว")
+          แถวนี้เหลือแค่หมายเหตุตอนจัดกลุ่มตามคน/แผนก — ไม่มีหมายเหตุก็ไม่แสดงแถว ไม่ให้เหลือช่องว่าง */}
+      {((groupBy === "assignee" && sharedCount > 0) || (groupBy === "department" && sharedDeptCount > 0)) && (
       <div className="hidden shrink-0 items-center gap-2 pb-2 sm:flex">
         {/* Grouping by person shows a shared task under each assignee, so the
             column counts add up to more than the task total — say so. */}
@@ -578,11 +581,8 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
             งานที่มีหลายแผนก ({sharedDeptCount} งาน) จะแสดงในคอลัมน์ของทุกแผนก
           </span>
         )}
-        <span className="ml-auto text-xs text-[var(--ink-soft)]">
-          {shownTasks.length} งาน
-          {mxOnBoard > 0 ? ` · ใบงานซ่อม ${mxOnBoard}` : ""}
-        </span>
       </div>
+      )}
 
       {boardCount === 0 ? (
         <EmptyState
