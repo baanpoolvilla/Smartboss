@@ -2248,11 +2248,12 @@ export function TaskDetailSheet({
                 >
                   <Avatar className="h-7 w-7 shrink-0">
                     <AvatarImage src={author?.avatarUrl ?? undefined} alt={author?.name} />
-                    <AvatarFallback className={cn("text-[10px]", mine ? "bg-[var(--brand-green)] text-[var(--ink)]" : "bg-[var(--bg-soft)]")}>
+                    <AvatarFallback className={cn("text-[10px]", mine ? "bg-[var(--brand-navy)] text-white" : "bg-[var(--bg-soft)]")}>
                       {author?.avatar}
                     </AvatarFallback>
                   </Avatar>
-                  <div className={cn("min-w-0 max-w-[78%] rounded-lg px-3 py-2", mine ? "bg-[var(--accent)]" : "bg-white")}>
+                  {/* ของตัวเอง = กรมท่าอ่อน · คนอื่น = ขาวขอบเทา (เดิมเขียวอ่อน/ขาว — เลิกใช้เขียวกับข้อความ 20/10/2569) */}
+                  <div className={cn("min-w-0 max-w-[78%] rounded-lg border px-3 py-2", mine ? "border-[#d5dbe6] bg-[#eaeef5]" : "border-[var(--line)] bg-white")}>
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-medium">{mine ? "คุณ" : author?.name}</span>
                       <TimeAgo date={c.createdAt} className="text-[10px] text-[var(--ink-soft)]" />

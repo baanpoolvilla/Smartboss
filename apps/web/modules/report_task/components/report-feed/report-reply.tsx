@@ -124,11 +124,13 @@ export function ReportReply({
             ? // พื้นแดงอ่อนอย่างเดียว (เดิมฟ้า) — แถบแดงซ้ายอยู่ที่ตัวโพสต์แล้ว ใส่ซ้ำตรงนี้จะเป็นกรอบซ้อนกัน
               // พื้นขาว + ขอบแดง (เดิมพื้นแดงอ่อน) — ข้างในขาวเหมือนตัวโพสต์ แต่ยังรู้ว่าแจ้งเตือนพามาที่ความคิดเห็นไหน
               "bg-white border-[#dc2626] ring-1 ring-[#dc2626]/30 dark:bg-transparent"
-            : flashed
-            ? "bg-[var(--accent)] border-[var(--brand-green)]/40"
+            : // 20/10/2569 เลิกใช้เขียว/ฟ้ากับข้อความ ("เขียวกับฟ้าไม่เอาแล้ว") — ของตัวเอง = กรมท่าอ่อน · คนอื่น = ขาวขอบเทา
+              // ไม่ใช้แดง: แดงสงวนไว้ให้แจ้งเตือน ("มีเรื่องถึงคุณ") ใช้กับข้อความตัวเองจะซ้ำกัน
+              flashed
+            ? "bg-[#dde3ee] border-[var(--brand-navy)]/30"
             : isOwn
-              ? "bg-[color-mix(in_srgb,var(--accent)_45%,white)] border-[var(--brand-green)]/15"
-              : "bg-[var(--bg-soft)] border-transparent"
+              ? "bg-[#eaeef5] border-[#d5dbe6]"
+              : "bg-white border-[var(--line)]"
         )}
         style={reply.highlightColor ? { borderLeft: `3px solid ${reply.highlightColor}`, paddingLeft: "9px" } : undefined}
       >
