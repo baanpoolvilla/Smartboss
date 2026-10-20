@@ -64,6 +64,35 @@ export function reactionCounts(task: Task): Record<string, number> {
  * priority, same due date) for stable ordering. Doesn't mutate the input
  * array.
  */
+/**
+ * ลำดับการ์ดบนบอร์ด (Kanban) — **วันครบกำหนดใกล้สุดขึ้นก่อน** (ผู้ใช้ขอ 20/10/2569 "ให้วันที่ที่จะครบมาแสดงก่อน")
+ * เลยกำหนดแล้วอยู่บนสุดเอง (วันเก่ากว่า) · ความสำคัญเป็นตัวตัดสินเมื่อวันเดียวกัน · งานเสร็จยังอยู่ท้าย
+ * (รอตรวจก่อน ตรวจแล้วท้ายสุด) เหมือน sortTasksForDisplay · ใช้วันครบจริงที่การ์ดแสดง (effectiveDueDate)
+ * ตาราง/หน้าอื่นยังใช้ sortTasksForDisplay เหมือนเดิม
+ */
+export function sortTasksByDueForBoard(tasks: Task[]): Task[] {
+  return [...tasks].sort((a, b) => {
+    const aDone = a.status === "done" ? 1 : 0;
+    const bDone = b.status === "done" ? 1 : 0;
+    if (aDone !== bDone) return aDone - bDone;
+    const aOverdue = a.status !== "done" && dueUrgency(a) === "overdue" ? 0 : 1;
+    const bOverdue = b.status !== "done" && dueUrgency(b) === "overdue" ? 0 : 1;
+    if (aOverdue !== bOverdue) return aOverdue - bOverdue;
+    if (aDone === 1) {
+      const aReviewed = a.reviewedBy ? 1 : 0;
+      const bReviewed = b.reviewedBy ? 1 : 0;
+      if (aReviewed !== bReviewed) return aReviewed - bReviewed;
+    }
+    const aDue = new Date(effectiveDueDate(a)).getTime();
+    const bDue = new Date(effectiveDueDate(b)).getTime();
+    if (aDue !== bDue) return aDue - bDue;
+    const aPriority = taskPriorityOrder.indexOf(a.priority);
+    const bPriority = taskPriorityOrder.indexOf(b.priority);
+    if (aPriority !== bPriority) return aPriority - bPriority;
+    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  });
+}
+
 export function sortTasksForDisplay(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => {
     const aDone = a.status === "done" ? 1 : 0;

@@ -1,7 +1,7 @@
 import { AlarmClockOff, Hourglass } from "lucide-react";
 import { statusMeta, statusIcon } from "@/modules/report_task/lib/task-meta";
 import { statusColors, chartColors } from "@/modules/report_task/lib/chart-colors";
-import { sortTasksForDisplay } from "@/modules/report_task/lib/task-flags";
+import { sortTasksByDueForBoard } from "@/modules/report_task/lib/task-flags";
 import type { Task } from "@/modules/report_task/types";
 import type { BoardColumn } from "./kanban-column";
 
@@ -25,7 +25,7 @@ export function buildStatusColumns(tasks: Task[], overdueOnly = false): BoardCol
         label: "เลยกำหนด",
         accent: chartColors.red,
         icon: AlarmClockOff,
-        tasks: sortTasksForDisplay(tasks),
+        tasks: sortTasksByDueForBoard(tasks),
         derived: true,
         emptyMessage: "ไม่มีงานเลยกำหนด 🎉",
       },
@@ -37,21 +37,21 @@ export function buildStatusColumns(tasks: Task[], overdueOnly = false): BoardCol
       label: statusMeta.todo.label,
       accent: chartColors.gray,
       icon: statusIcon.todo,
-      tasks: sortTasksForDisplay(tasks.filter((t) => t.status === "todo")),
+      tasks: sortTasksByDueForBoard(tasks.filter((t) => t.status === "todo")),
     },
     {
       id: "in_progress",
       label: statusMeta.in_progress.label,
       accent: statusColors.in_progress,
       icon: statusIcon.in_progress,
-      tasks: sortTasksForDisplay(tasks.filter((t) => t.status === "in_progress")),
+      tasks: sortTasksByDueForBoard(tasks.filter((t) => t.status === "in_progress")),
     },
     {
       id: "review",
       label: "รอตรวจสอบ",
       accent: chartColors.greenPale,
       icon: Hourglass,
-      tasks: sortTasksForDisplay(tasks.filter((t) => t.status === "done" && !t.reviewedBy)),
+      tasks: sortTasksByDueForBoard(tasks.filter((t) => t.status === "done" && !t.reviewedBy)),
       derived: true,
       emptyMessage: "ไม่มีงานรอตรวจสอบ 🎉",
     },
@@ -60,7 +60,7 @@ export function buildStatusColumns(tasks: Task[], overdueOnly = false): BoardCol
       label: statusMeta.done.label,
       accent: chartColors.greenDeep,
       icon: statusIcon.done,
-      tasks: sortTasksForDisplay(tasks.filter((t) => t.status === "done" && !!t.reviewedBy)),
+      tasks: sortTasksByDueForBoard(tasks.filter((t) => t.status === "done" && !!t.reviewedBy)),
     },
   ];
 }

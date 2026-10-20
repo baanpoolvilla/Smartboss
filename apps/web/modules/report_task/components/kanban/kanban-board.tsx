@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canSeeTask } from "@/modules/report_task/lib/permissions";
-import { sortTasksForDisplay } from "@/modules/report_task/lib/task-flags";
+import { sortTasksByDueForBoard } from "@/modules/report_task/lib/task-flags";
 import { getDepartment, departments, users } from "@/modules/report_task/lib/directory";
 import { priorityMeta, priorityColorHex, taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
 import { matchesTaskFilters } from "@/modules/report_task/lib/task-filter";
@@ -223,7 +223,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
         id: p,
         label: priorityMeta[p].label,
         accent: priorityAccent[p],
-        tasks: sortTasksForDisplay(filtered.filter((t) => t.priority === p)),
+        tasks: sortTasksByDueForBoard(filtered.filter((t) => t.priority === p)),
       }));
     }
     if (groupBy === "department") {
@@ -239,7 +239,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
       // กี่โปรเจคกี่งานพอ ("ให้บอกแค่ว่ามีกี่โปรเจคกี่งานอะไรแบบนั้น")
       const realDeptColumns = departments
         .map((d) => {
-          const deptTasks = sortTasksForDisplay(
+          const deptTasks = sortTasksByDueForBoard(
             filtered.filter((t) => taskDepartmentIdsForBoard(t, projectTopics).includes(d.id))
           );
           const topicIds = Array.from(new Set(deptTasks.map((t) => t.projectTopicId).filter((id): id is string => !!id)));
@@ -262,7 +262,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
       // ผู้รับผิดชอบให้อีกต่อไป (taskDepartmentIdsForBoard คืน [] ให้) กองไว้ที่
       // "อื่นๆ" แทน รอให้ตั้งโปรเจค+แผนกให้ทีหลัง ("ตรงนี้ต้องมีอื่นๆสิ ไว้เก็บ
       // งานเก่าที่ยังไม่มีหัวข้อ")
-      const otherTasks = sortTasksForDisplay(
+      const otherTasks = sortTasksByDueForBoard(
         filtered.filter((t) => taskDepartmentIdsForBoard(t, projectTopics).length === 0)
       );
       const otherColumn =
@@ -291,7 +291,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
     // still lands on project-topic columns same as always.
     return users
       .map((u) => {
-        const tasks = sortTasksForDisplay(filtered.filter((t) => t.assigneeIds.includes(u.id)));
+        const tasks = sortTasksByDueForBoard(filtered.filter((t) => t.assigneeIds.includes(u.id)));
         const counts = new Map<string, number>();
         let noDeptCount = 0;
         for (const t of tasks) {

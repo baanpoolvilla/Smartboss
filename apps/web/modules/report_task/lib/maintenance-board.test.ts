@@ -78,7 +78,7 @@ describe("ตัวกรองบอร์ด กับใบงานซ่อ
 });
 
 describe("เรียงงานกับใบซ่อมปนกัน", () => {
-  it("เลยกำหนดก่อน แล้วความสำคัญสูงก่อน แล้วกำหนดใกล้ก่อน", () => {
+  it("เลยกำหนดก่อน แล้ววันครบใกล้ก่อน แล้วความสำคัญสูงก่อน (วันเดียวกัน)", () => {
     const sorted = sortBoardEntries([
       { type: "task", task: task({ id: "t-low", priority: "low" }) },
       { type: "mx", item: wo({ id: "w-late", overdue: true }) },
@@ -86,5 +86,16 @@ describe("เรียงงานกับใบซ่อมปนกัน", (
       { type: "task", task: task({ id: "t-med" }) },
     ]);
     expect(sorted.map((e) => (e.type === "task" ? e.task.id : e.item.id))).toEqual(["w-late", "w-urgent", "t-med", "t-low"]);
+  });
+
+  // ผู้ใช้ขอ 20/10/2569 "ให้วันที่ที่จะครบมาแสดงก่อน" — วันครบใกล้ชนะความสำคัญ · ใบซ่อมไม่มีวันครบไปท้าย
+  it("วันครบใกล้สุดขึ้นก่อน แม้ความสำคัญต่ำกว่า · ใบงานไม่ได้ตั้งวันครบไปท้าย", () => {
+    const sorted = sortBoardEntries([
+      { type: "mx", item: wo({ id: "w-nodue", priority: "critical", dueDate: null }) },
+      { type: "task", task: task({ id: "t-later-critical", priority: "critical", dueDate: "2099-10-28T00:00:00.000Z" }) },
+      { type: "mx", item: wo({ id: "w-soon-low", priority: "low", dueDate: "2099-10-21T00:00:00.000Z" }) },
+      { type: "task", task: task({ id: "t-mid", dueDate: "2099-10-24T00:00:00.000Z" }) },
+    ]);
+    expect(sorted.map((e) => (e.type === "task" ? e.task.id : e.item.id))).toEqual(["w-soon-low", "t-mid", "t-later-critical", "w-nodue"]);
   });
 });

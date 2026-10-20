@@ -1,6 +1,6 @@
 import { presetRange } from "@/modules/report_task/lib/date-filter";
 import { getUser } from "@/modules/report_task/lib/directory";
-import { dueUrgency } from "@/modules/report_task/lib/task-flags";
+import { dueUrgency, effectiveDueDate } from "@/modules/report_task/lib/task-flags";
 import { taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
 import type { TaskFilterState } from "@/modules/report_task/lib/task-filter";
 import type { Task, TaskPriority } from "@/modules/report_task/types";
@@ -118,11 +118,13 @@ export function matchesMaintenanceFilters(item: MaintenanceBoardItem, filters: T
 
 export type BoardEntry = { type: "task"; task: Task } | { type: "mx"; item: MaintenanceBoardItem };
 
-/**
- * เรียงงานกับใบซ่อมปนกันด้วยกติกาเดียวกับ sortTasksForDisplay (task-flags.ts): ยังไม่เสร็จก่อน → เลยกำหนดก่อน
+ * เรียงงานกับใบซ่อมปนกันด้วยกติกาเดียวกับ sortTasksByDueForBoard (task-flags.ts): ยังไม่เสร็จก่อน → เลยกำหนดก่อน
+ * → (ในกลุ่มเสร็จ: รอตรวจก่อนตรวจแล้ว) → วันครบใกล้ก่อน (ใบไม่มีวันครบไปท้าย) → ความสำคัญสูงก่อน → สร้างก่อน
  * → (ในกลุ่มเสร็จ: รอตรวจก่อนตรวจแล้ว) → ความสำคัญสูงก่อน → กำหนดใกล้ก่อน → สร้างก่อน
  */
 export function sortBoardEntries(entries: BoardEntry[]): BoardEntry[] {
+  // วันครบกำหนดใกล้สุดขึ้นก่อน งานกับใบงานซ่อมปนกัน (ผู้ใช้ขอ 20/10/2569) — กติกาเดียวกับ sortTasksByDueForBoard
+  // ใบงานซ่อมที่ "ไม่ได้ตั้งวันครบกำหนด" ไปต่อท้ายใบ/งานที่มีวันครบ (เดิมใช้วันเปิดใบแทน ทำให้ดูเหมือนใกล้ครบ)
   const key = (e: BoardEntry) => {
     if (e.type === "task") {
       const t = e.task;
@@ -132,7 +134,7 @@ export function sortBoardEntries(entries: BoardEntry[]): BoardEntry[] {
         overdue: !done && dueUrgency(t) === "overdue" ? 0 : 1,
         reviewed: t.reviewedBy ? 1 : 0,
         pri: taskPriorityOrder.indexOf(t.priority),
-        due: new Date(t.dueDate).getTime(),
+        due: new Date(effectiveDueDate(t)).getTime(),
         created: new Date(t.createdAt).getTime(),
       };
     }
@@ -143,7 +145,7 @@ export function sortBoardEntries(entries: BoardEntry[]): BoardEntry[] {
       overdue: i.overdue ? 0 : 1,
       reviewed: done,
       pri: taskPriorityOrder.indexOf(i.priority),
-      due: new Date(maintenanceDate(i)).getTime(),
+      due: i.dueDate ? new Date(i.dueDate).getTime() : Number.POSITIVE_INFINITY,
       created: new Date(i.createdAt).getTime(),
     };
   };
@@ -153,8 +155,8 @@ export function sortBoardEntries(entries: BoardEntry[]): BoardEntry[] {
       if (a.k.done !== b.k.done) return a.k.done - b.k.done;
       if (a.k.overdue !== b.k.overdue) return a.k.overdue - b.k.overdue;
       if (a.k.done === 1 && a.k.reviewed !== b.k.reviewed) return a.k.reviewed - b.k.reviewed;
-      if (a.k.pri !== b.k.pri) return a.k.pri - b.k.pri;
       if (a.k.due !== b.k.due) return a.k.due - b.k.due;
+      if (a.k.pri !== b.k.pri) return a.k.pri - b.k.pri;
       return a.k.created - b.k.created;
     })
     .map((x) => x.e);
