@@ -72,6 +72,8 @@ export function ProjectTimeline({
   const [groupBy, setGroupBy] = useState<"section" | "person">("section");
   const [hideDone, setHideDone] = useState(false);
   const [sel, setSel] = useState<string | null>(null);
+  // แถวที่ชี้เมาส์อยู่ — ไฮไลต์ทั้งแถวสองฝั่ง (ชื่องาน ↔ แถบเวลา) + เส้นนำสายตาไปหาแถบ (20/10/2569 "เส้นบอกว่าแถวนี้งานนี้")
+  const [hoverRow, setHoverRow] = useState<number | null>(null);
   const [coarse, setCoarse] = useState(false);
   const [tipHidden, setTipHidden] = useState(true);
   const rightRef = useRef<HTMLDivElement>(null);
@@ -245,28 +247,31 @@ export function ProjectTimeline({
 
   return (
     <div className="space-y-3">
+      {/* tip เล็กบรรทัดเดียว (เดิมกล่องฟ้า 3 ข้อสูงเกือบ 100px — "เอาเป็น tip เล็กๆ พอให้กดเข้าใจละหาย" 20/10/2569)
+          กด ✕ แล้วหาย จำในเครื่อง · เปิดดูอีกได้ที่ปุ่ม ⓘ วิธีใช้ ในแถบเครื่องมือ */}
       {!tipHidden && (
-        <div className="flex items-start gap-3 rounded-xl bg-sky-50 px-3 py-2.5 text-sm dark:bg-sky-950/40">
-          <span>💡</span>
-          <div className="min-w-0 flex-1">
-            <b>3 อย่างที่ทำได้ในแผนเวลา</b>
-            <ol className="ml-4 list-decimal text-[13px]">
-              <li>ลากแถบ = เลื่อนวัน · ลากขอบขวา = ยืด/หดวัน {canPlan ? "" : "(เฉพาะเจ้าของโปรเจกต์/CEO)"}</li>
-              <li>ลากจุดกลมท้ายแถบ ไปวางบนอีกงาน = งานนั้นต้องรองานนี้</li>
-              <li>กดแถบ = ดูรายละเอียด / เปิดงาน</li>
-            </ol>
-          </div>
+        <div className="hidden items-center gap-2 rounded-lg border border-[#d5dbe6] bg-[#eaeef5] px-2.5 py-1.5 text-[12px] text-[var(--brand-navy)] sm:flex">
+          <span aria-hidden>💡</span>
+          <span className="min-w-0 flex-1 leading-snug">
+            <b>ลากแถบ</b> = เลื่อนวัน{canPlan ? "" : " (เฉพาะเจ้าของโปรเจกต์/CEO)"} · <b>ลากขอบขวา</b> = ยืด/หดวัน · <b>ลากจุดกลมท้ายแถบ</b> ไปวางบนอีกงาน = ต้องรอกัน · <b>กดแถบ</b> = เปิดงาน
+          </span>
           <button
             type="button"
-            className="shrink-0 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 py-1 text-xs"
+            aria-label="ปิดคำแนะนำ"
+            title="เข้าใจแล้ว"
+            className="flex h-6 shrink-0 cursor-pointer items-center gap-1 rounded-md px-2 text-[11.5px] font-semibold hover:bg-white"
             onClick={() => { setTipHidden(true); try { localStorage.setItem("project-timeline-tip", "1"); } catch {} }}
           >
-            เข้าใจแล้ว
+            เข้าใจแล้ว ✕
           </button>
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
+      {/* มือถือ: ไทม์ไลน์แบบการ์ด (MobileTimeline ด้านล่าง) — แถบเครื่องมือกับตารางสองฝั่งเป็นของจอคอม */}
+      <MobileTimeline rows={rows} lo={dayNum(project.startDate)} hi={dayNum(project.endDate)} today={today} canEdit={canEdit}
+        onOpen={(it) => (it.kind === "task" ? onOpenTask(it.id) : setSel(it.id))} onAddTask={onAddTask} />
+
+      <div className="hidden flex-wrap items-center gap-2 sm:flex">
         <div className="inline-flex rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-0.5">
           {(["day", "week", "month", "quarter", "half", "year"] as Zoom[]).map((z) => (
             <button key={z} type="button" onClick={() => setZoom(z)} aria-pressed={zoom === z}
@@ -293,8 +298,8 @@ export function ProjectTimeline({
           </>
         )}
         {tipHidden && (
-          <button type="button" className="h-7 w-7 rounded-full border border-[var(--line)] text-xs text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]" title="วิธีใช้แผนเวลา" aria-label="วิธีใช้แผนเวลา"
-            onClick={() => { setTipHidden(false); try { localStorage.removeItem("project-timeline-tip"); } catch {} }}>?</button>
+          <button type="button" className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-lg border border-[var(--line)] px-2.5 text-[12.5px] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--brand-navy)]" title="วิธีใช้แผนเวลา" aria-label="วิธีใช้แผนเวลา"
+            onClick={() => { setTipHidden(false); try { localStorage.removeItem("project-timeline-tip"); } catch {} }}>ⓘ วิธีใช้</button>
         )}
         <details className="relative">
           <summary className="inline-flex h-8 cursor-pointer list-none items-center rounded-lg border border-[var(--line)] px-3 text-[13px] hover:bg-[var(--bg-soft)]">ตัวเลือก ⚙</summary>
@@ -335,15 +340,16 @@ export function ProjectTimeline({
         </div>
       </div>
 
-      <div className="grid grid-cols-[150px_minmax(0,1fr)] overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--bg)] sm:grid-cols-[270px_minmax(0,1fr)]">
+      <div className="hidden grid-cols-[150px_minmax(0,1fr)] overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--bg)] sm:grid sm:grid-cols-[270px_minmax(0,1fr)]">
         {/* ซ้าย: ชื่อแถว */}
         <div className="z-[2] min-w-0 border-r border-[var(--line)] bg-[var(--bg)]">
           <div className="flex items-end border-b border-[var(--line)] px-2.5 pb-1.5 text-xs font-semibold text-[var(--ink-soft)]" style={{ height: HEAD }}>
             {groupBy === "section" ? "งาน / ช่วงงาน" : "งาน / คน"}
           </div>
-          {rows.map((r) =>
+          {rows.map((r, idx) =>
             r.kind === "group" ? (
-              <div key={`g-${r.key}`} className="flex items-center gap-2 border-b border-[var(--line)] bg-[var(--bg-soft)] px-3 text-[13px] font-bold text-[var(--ink)]" style={{ height: ROW }}>
+              <div key={`g-${r.key}`} onPointerEnter={() => setHoverRow(idx)} onPointerLeave={() => setHoverRow(null)}
+                className="flex items-center gap-2 border-b border-[var(--line)] bg-[var(--bg-soft)] px-3 text-[13px] font-bold text-[var(--ink)]" style={{ height: ROW }}>
                 <span className="min-w-0 flex-1 truncate">{r.name}</span>
                 {canEdit && groupBy === "section" && (
                   <button type="button" className="rounded px-1 text-[var(--ink-soft)] hover:bg-[var(--bg)]" title="เพิ่มงานในช่วงนี้" onClick={() => onAddTask(r.key)}>＋</button>
@@ -351,7 +357,13 @@ export function ProjectTimeline({
               </div>
             ) : (
               <button key={r.item.id} type="button" onClick={() => setSel(r.item.id)}
-                className={cn("flex w-full items-center gap-2 border-b border-[var(--line)]/60 px-2.5 text-left hover:bg-[var(--bg-soft)]", sel === r.item.id && "bg-[var(--accent)]")}
+                onPointerEnter={() => setHoverRow(idx)} onPointerLeave={() => setHoverRow(null)}
+                className={cn(
+                  "flex w-full items-center gap-2 border-b border-[var(--line)]/60 px-2.5 text-left transition-colors",
+                  idx % 2 === 1 && "bg-[#fafbfd]",
+                  hoverRow === idx && "!bg-[#eaeef5] shadow-[inset_3px_0_0_var(--brand-navy)]",
+                  sel === r.item.id && "!bg-[#dde3ee] shadow-[inset_3px_0_0_var(--brand-navy)]"
+                )}
                 style={{ height: ROW }}>
                 {r.item.parentId && groupBy === "section" && <span className="-mr-1 pl-3 text-[var(--ink-soft)]" aria-label="งานย่อย">↳</span>}
                 {r.item.kind === "milestone" ? <span style={{ color: "var(--chart-violet)" }}>◆</span> : r.item.assigneeIds[0] ? <PersonDot userId={r.item.assigneeIds[0]} size={20} /> : <span className="w-5" />}
@@ -394,6 +406,34 @@ export function ProjectTimeline({
             <div className="pointer-events-none absolute bottom-0 z-[3] w-0.5" style={{ left: (dayNum(today) - lo) * W + W / 2, top: 20, background: "var(--chart-red)" }}>
               <span className="absolute -top-0.5 left-1 whitespace-nowrap text-[10px] font-bold" style={{ color: "var(--chart-red)" }}>วันนี้</span>
             </div>
+
+            {/* พื้นแถว: เส้นแบ่งแถวลากเต็มความกว้าง + สลับสีเว้นแถว + ไฮไลต์แถวที่ชี้/เลือก (ตรงกับฝั่งชื่องาน) */}
+            {rows.map((r, idx) => {
+              const on = hoverRow === idx || (r.kind === "item" && sel === r.item.id);
+              return (
+                <div key={`lane-${idx}`} onPointerEnter={() => setHoverRow(idx)} onPointerLeave={() => setHoverRow(null)}
+                  className={cn("absolute inset-x-0 z-0 border-b transition-colors", r.kind === "group" ? "border-[var(--line)]" : "border-[var(--line)]/60")}
+                  style={{
+                    top: HEAD + idx * ROW,
+                    height: ROW,
+                    background: on ? "rgba(27,37,55,0.09)" : r.kind === "group" ? "rgba(241,245,249,0.6)" : idx % 2 === 1 ? "rgba(27,37,55,0.018)" : "transparent",
+                  }} />
+              );
+            })}
+            {/* เส้นนำสายตา: แถวที่ชี้/เลือก — เส้นประจากขอบซ้ายไปถึงหัวแถบ บอกว่าแถบนี้ของงานไหน */}
+            {rows.map((r, idx) => {
+              if (r.kind !== "item" || (hoverRow !== idx && sel !== r.item.id)) return null;
+              const g = geo(r.item, preview?.id === r.item.id ? preview : undefined);
+              if (g.left < 8) return null;
+              return (
+                // สีเส้นใส่ inline — globals.css มี `* { border-color }` นอก @layer ทับคลาสสีขอบทุกตัว
+                <div key={`guide-${idx}`} className="pointer-events-none absolute z-[1]"
+                  style={{ left: 0, width: g.left - 6, top: HEAD + idx * ROW + ROW / 2 - 1, borderTop: "2px dashed rgba(27,37,55,0.55)" }}>
+                  <span className="absolute -right-1 -top-[5px] h-0 w-0"
+                    style={{ borderTop: "4px solid transparent", borderBottom: "4px solid transparent", borderLeft: "6px solid rgba(27,37,55,0.55)" }} />
+                </div>
+              );
+            })}
 
             {rows.map((r, idx) => {
               const y = HEAD + idx * ROW;
@@ -670,4 +710,84 @@ function ItemDetail({
 /** id ผู้ใช้ที่กำลังใช้งาน (อ่านตรงจาก store ตอนกด ไม่ต้อง subscribe) */
 function currentUserId(): string {
   return useIdentityStore.getState().viewingAsUserId;
+}
+
+/**
+ * ไทม์ไลน์บนมือถือ (<640px) — การ์ดเรียงตามช่วงงาน ไม่ต้องเลื่อนซ้าย-ขวา ("ดูง่าย ใช้ง่าย ... เน้นดูรู้เข้าใจสั่งงานได้" 20/10/2569)
+ * แต่ละงาน: ชื่อ · คนทำ · วันที่ · สถานะ + แถบเล็กเทียบช่วงทั้งโปรเจกต์ (เส้นแดง = วันนี้) · แตะ = เปิดงาน
+ */
+function MobileTimeline({
+  rows,
+  lo,
+  hi,
+  today,
+  canEdit,
+  onOpen,
+  onAddTask,
+}: {
+  rows: Row[];
+  lo: number;
+  hi: number;
+  today: string;
+  canEdit: boolean;
+  onOpen: (it: TimelineItem) => void;
+  onAddTask: (sectionId: string) => void;
+}) {
+  const span = Math.max(1, hi - lo + 1);
+  const pos = (d: number) => Math.min(100, Math.max(0, ((d - lo) / span) * 100));
+  const todayPct = pos(dayNum(today));
+  const groups: { key: string; name: string; items: TimelineItem[] }[] = [];
+  for (const r of rows) {
+    if (r.kind === "group") groups.push({ key: r.key, name: r.name, items: [] });
+    else groups[groups.length - 1]?.items.push(r.item);
+  }
+  return (
+    <div className="space-y-4 sm:hidden">
+      <div className="flex items-center justify-between px-0.5 text-[12px] text-[var(--ink-soft)]">
+        <span>{fmtDay(ymdOfDay(lo))}</span>
+        <span className="flex items-center gap-1 font-semibold text-[var(--chart-red)]"><span className="h-3 w-0.5 bg-[var(--chart-red)]" />วันนี้</span>
+        <span>{fmtDay(ymdOfDay(hi))}</span>
+      </div>
+      {groups.map((g) => (
+        <section key={g.key} className="space-y-2">
+          <div className="flex items-center justify-between px-0.5">
+            <h3 className="m-0 text-[14px] font-bold text-[var(--ink)]">{g.name} <span className="text-[12px] font-normal text-[var(--ink-soft)]">{g.items.length}</span></h3>
+            {canEdit && (
+              <button type="button" onClick={() => onAddTask(g.key)} className="rounded-lg px-2 py-1 text-[13px] font-semibold text-[var(--brand-navy)] active:bg-[#eaeef5]">+ งาน</button>
+            )}
+          </div>
+          {g.items.length === 0 && <p className="m-0 rounded-xl border border-dashed border-[var(--line)] px-3 py-3 text-[13px] text-[var(--ink-soft)]">ยังไม่มีงานในช่วงนี้</p>}
+          {g.items.map((it) => {
+            const a = dayNum(it.start), b = dayNum(it.end);
+            const left = pos(a), right = pos(b + 1);
+            const ms = it.kind === "milestone";
+            return (
+              <button key={it.id} type="button" onClick={() => onOpen(it)}
+                className={cn("block w-full rounded-xl border bg-white px-3 py-2.5 text-left shadow-[0_2px_8px_rgba(16,24,40,0.08)] active:scale-[0.99]",
+                  it.state === "late" ? "border-red-200" : "border-[var(--line)]", it.parentId && "ml-4 w-[calc(100%-1rem)]")}>
+                <div className="flex items-start gap-2">
+                  {ms ? <span className="mt-0.5 text-[13px]" style={{ color: "var(--chart-violet)" }}>◆</span> : it.assigneeIds[0] ? <PersonDot userId={it.assigneeIds[0]} size={22} /> : <span className="w-[22px]" />}
+                  <span className={cn("min-w-0 flex-1 text-[14.5px] font-semibold leading-snug", it.state === "done" && "text-[var(--ink-soft)] line-through")}>{it.name}</span>
+                  {!ms && <StatePill state={it.state} />}
+                </div>
+                <div className="mt-1 flex items-center gap-1.5 pl-[30px] text-[12px] text-[var(--ink-soft)]">
+                  <span>{ms ? fmtDay(it.start) : `${fmtDay(it.start)} – ${fmtDay(it.end)}`}</span>
+                  {it.pct !== undefined && it.state !== "done" && it.pct > 0 && <span>· {it.pct}%</span>}
+                </div>
+                {/* แถบเทียบช่วงทั้งโปรเจกต์ — เห็นว่างานอยู่ตรงไหน เลยวันนี้หรือยัง */}
+                <div className="relative mt-2 ml-[30px] h-2.5 rounded-full bg-slate-100">
+                  {ms ? (
+                    <span className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[2px]" style={{ left: `${left}%`, background: "var(--chart-violet)" }} />
+                  ) : (
+                    <span className="absolute inset-y-0 rounded-full" style={{ left: `${left}%`, width: `${Math.max(2, right - left)}%`, background: STATE_COLOR[it.state] ?? "var(--chart-gray)" }} />
+                  )}
+                  <span className="absolute -inset-y-1 w-0.5 bg-[var(--chart-red)]" style={{ left: `${todayPct}%` }} />
+                </div>
+              </button>
+            );
+          })}
+        </section>
+      ))}
+    </div>
+  );
 }
