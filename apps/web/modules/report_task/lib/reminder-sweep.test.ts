@@ -119,3 +119,48 @@ describe("แจ้งเตือนใกล้ถึงกำหนดส่�
     expect(result.newSentKeys).toEqual(expect.arrayContaining(["meeting:m1:15", "meeting:m1:30"]));
   });
 });
+
+// ผู้ใช้ขอ 20/10/2569 — งานเสร็จแล้วค้าง "รอตรวจสอบ" ครบ 2 เดือน → เตือนคนที่เปิดงานให้
+describe("เตือนงานรอตรวจค้างเกิน 2 เดือน", () => {
+  const DAY = 86_400_000;
+  const doneTask = (over: Partial<Task> = {}): Task =>
+    ({ ...task(), id: "d1", title: "งานเสร็จ", status: "done", completedAt: new Date(NOW.getTime() - 61 * DAY).toISOString(), ...over }) as Task;
+  const stale = (r: ReturnType<typeof run>) => r.notifications.filter((n) => n.message.includes("ยังรอคุณตรวจ"));
+
+  it("เสร็จครบ 60 วัน ยังไม่ตรวจ → เตือนคนที่เปิดงานให้ ครั้งเดียว", () => {
+    const r = run({ tasks: [doneTask()] });
+    expect(stale(r)).toHaveLength(1);
+    expect(stale(r)[0]!.recipients).toEqual(["boss"]);
+    expect(stale(r)[0]!.message).toContain('งาน "งานเสร็จ"');
+    expect(stale(r)[0]!.message).toMatch(/ทำเสร็จตั้งแต่ \d{2}\/\d{2}\/25\d{2}/);
+    expect(stale(r)[0]!.link).toBe("/report-task/tasks?task=d1");
+    // รอบถัดไปไม่ซ้ำ
+    expect(stale(run({ tasks: [doneTask()], alreadySent: new Set(r.newSentKeys) }))).toHaveLength(0);
+  });
+
+  it("ยังไม่ถึง 60 วัน / ตรวจแล้ว / งานส่วนตัว / เปิดให้ตัวเอง → ไม่เตือน", () => {
+    const fresh = doneTask({ completedAt: new Date(NOW.getTime() - 59 * DAY).toISOString() });
+    const reviewed = doneTask({ reviewedBy: "boss" });
+    const personal = doneTask({ assigneeIds: ["u1"], assignedById: "u1" });
+    const selfToo = doneTask({ assigneeIds: ["u1", "boss"] });
+    expect(stale(run({ tasks: [fresh, reviewed, personal, selfToo] }))).toHaveLength(0);
+  });
+
+  it("ส่งกลับไปแก้แล้วเสร็จใหม่ = นับใหม่ เตือนใหม่ได้", () => {
+    const first = run({ tasks: [doneTask()] });
+    const again = doneTask({ completedAt: new Date(NOW.getTime() - 70 * DAY + 1000).toISOString() });
+    expect(stale(run({ tasks: [again], alreadySent: new Set(first.newSentKeys) }))).toHaveLength(1);
+  });
+
+  it("คนเดียวมีหลายชิ้น (เกิน 3) → รวมเป็นแจ้งเตือนเดียว", () => {
+    const many = [1, 2, 3, 4, 5].map((i) => doneTask({ id: `d${i}`, title: `งาน ${i}` }));
+    const r = run({ tasks: many });
+    expect(stale(r)).toHaveLength(1);
+    expect(stale(r)[0]!.message).toContain("มีงาน 5 ชิ้น");
+    expect(r.newSentKeys.filter((k) => k.startsWith("review-stale:"))).toHaveLength(5);
+  });
+
+  it("ปิดการเตือนงานในตั้งค่า → ไม่เตือน", () => {
+    expect(stale(run({ tasks: [doneTask()], settings: { task: { ...defaultReminderSettings.task, enabled: false } } }))).toHaveLength(0);
+  });
+});

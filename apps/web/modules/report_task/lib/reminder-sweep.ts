@@ -10,6 +10,17 @@ import { isPersonalTask } from "@/modules/report_task/lib/personal-task";
 
 const DAY_MINUTES = 1440;
 
+/** งานรอตรวจค้างนานเท่านี้ (วัน นับจากวันที่เสร็จ) แล้วเตือนคนที่เปิดงานให้ — "2 เดือน" */
+export const REVIEW_STALE_DAYS = 60;
+/** เกินกี่ชิ้นต่อคนในรอบเดียว แล้วรวมเป็นแจ้งเตือนเดียว */
+const REVIEW_STALE_GROUP_OVER = 3;
+
+/** "20/10/2569" — วันที่แบบที่คนในบริษัทอ่าน (พ.ศ.) */
+function formatThaiDay(iso: string): string {
+  const [y = "", m = "", d = ""] = calendarDateOf(iso).split("-");
+  return `${d}/${m}/${Number(y) + 543}`;
+}
+
 /** "YYYY-MM-DD" + N days — used by the day-ahead report reminder below to
  * find the future date a weekly/monthly round is actually due on. */
 function addDays(dayStr: string, n: number): string {
@@ -143,6 +154,43 @@ export function computeReminders(input: {
           recipients: [...recipients],
           byUserId: SYSTEM_USER_ID,
           message: `งาน "${t.title}" ใกล้ถึงกำหนดส่ง${minutesUntil < 1 ? "" : `ใน${remainingLabel}`}`,
+          link: `/report-task/tasks?task=${t.id}`,
+        });
+      }
+    }
+  }
+
+  // ---- งานเสร็จแล้วแต่ค้าง "รอตรวจสอบ" ครบ 2 เดือน — เตือนคนที่เปิดงานให้ว่า "เสร็จแล้ว ปิดได้เลย" ----
+  // (ผู้ใช้ขอ 20/10/2569 "ทำเสร็จหมดรอตรวจแต่ไม่กดผ่านไม่ผ่าน หรือลืม ... นับจากวันที่เสร็จ 2 เดือนให้ remind")
+  // เตือนครั้งเดียวต่อรอบที่เสร็จ (key มี completedAt — ส่งกลับไปแก้แล้วเสร็จใหม่ = นับใหม่ เตือนใหม่ได้)
+  // งานส่วนตัว / งานที่เปิดให้ตัวเอง ไม่เตือน · คนเดียวมีหลายชิ้นในรอบเดียว (เช่นวันแรกที่เปิดใช้) รวมเป็นแจ้งเตือนเดียว
+  if (settings.task.enabled) {
+    const nowMs = now().getTime();
+    const staleByAssigner = new Map<string, Task[]>();
+    for (const t of tasks) {
+      if (t.status !== "done" || t.reviewedBy || !t.completedAt) continue;
+      if (isPersonalTask(t) || !t.assignedById || t.assigneeIds.includes(t.assignedById)) continue;
+      if (nowMs - new Date(t.completedAt).getTime() < REVIEW_STALE_DAYS * DAY_MINUTES * 60_000) continue;
+      const key = `review-stale:${t.id}:${t.completedAt}`;
+      if (alreadySent.has(key)) continue;
+      newSentKeys.push(key);
+      staleByAssigner.set(t.assignedById, [...(staleByAssigner.get(t.assignedById) ?? []), t]);
+    }
+    for (const [assignerId, list] of staleByAssigner) {
+      if (list.length > REVIEW_STALE_GROUP_OVER) {
+        notifications.push({
+          recipients: [assignerId],
+          byUserId: SYSTEM_USER_ID,
+          message: `มีงาน ${list.length} ชิ้นที่ทำเสร็จเกิน 2 เดือนแล้ว ยังรอคุณตรวจ — กด ผ่าน / ไม่ผ่าน เพื่อปิดงานได้เลย`,
+          link: "/report-task/tasks",
+        });
+        continue;
+      }
+      for (const t of list) {
+        notifications.push({
+          recipients: [assignerId],
+          byUserId: SYSTEM_USER_ID,
+          message: `งาน "${t.title}" ทำเสร็จตั้งแต่ ${formatThaiDay(t.completedAt!)} (เกิน 2 เดือนแล้ว) ยังรอคุณตรวจ — กด ผ่าน / ไม่ผ่าน เพื่อปิดงานได้เลย`,
           link: `/report-task/tasks?task=${t.id}`,
         });
       }
