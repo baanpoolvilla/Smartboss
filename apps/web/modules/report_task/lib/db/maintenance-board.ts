@@ -16,6 +16,8 @@ import type { TaskPriority } from "@/modules/report_task/types";
  * โมดูลแจ้งซ่อมที่นี่ · บริษัทมีคนถือ CEO หลายคน เคยเห็นทุกใบเต็มบอร์ดทั้งที่ไม่เกี่ยว
  * ยกเว้น **ผู้ดูแลระบบสูงสุด** ที่เห็นทุกใบที่ยังไม่ปิด ("ผู้ดูแลสูงสุดคือคนดูระบบ มันต้องเห็นได้หมดอยู่แล้ว")
  * และ **CEO** (บทบาท CEO) เห็นทุกใบด้วย — ผู้ใช้ขอ 19/10/2569 "จะได้รู้งานของแต่ละคน ว่าได้ task เท่าไหร่ แจ้งซ่อมใบงานเท่าไหร่"
+ *   20/10/2569: ไม่ต้องมีสิทธิ์ "เห็นทั้งบริษัท" ในแจ้งซ่อมแล้ว (เดิมต้องมี CEO เลยเห็นแค่ใบของตัวเอง) · กรองต่อได้ด้วย
+ *   "งานของฉัน" (ได้รับมอบหมาย) / "ที่ฉันมอบหมาย" (เปิดใบเอง) — matchesMaintenanceFilters
  * (แท็บภาระงานนับใบงานจากชุดนี้) · เห็นอย่างเดียว ไม่มีแจ้งเตือนเพิ่ม — แจ้งเตือนยังไปเฉพาะคนที่เกี่ยว (มอบหมาย/CC/@กล่าวถึง)
  * ADMIN (IT) ที่มีสิทธิ์เห็นทั้งบริษัทในแจ้งซ่อม ยังเห็นเฉพาะของตัวเองบนบอร์ดเหมือนเดิม
  *   ใบงาน: รับผิดชอบ/เปิดเอง/CC/ผู้ดูแลบ้านหลังนั้น (เกณฑ์เดียวกับแจ้งซ่อมสำหรับคนที่ไม่เห็นทั้งบริษัท)
@@ -44,7 +46,8 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
   if (hasPermission(session, MAINT_PERMS.workorderView)) {
     const full = await workOrderAccess(session);
     // ผู้ดูแลระบบสูงสุดเห็นทุกใบ · คนอื่นใช้เกณฑ์ "เกี่ยวกับตัวเอง" แม้จะมีสิทธิ์เห็นทั้งบริษัทในแจ้งซ่อม
-    const access: WorkOrderAccess = isSuperAdmin(session) || (full.seeAll && session.roles.includes("CEO"))
+    // CEO เห็นทุกใบแม้ไม่มีสิทธิ์เห็นทั้งบริษัทในแจ้งซ่อม (20/10/2569 — เดิมต้องมีด้วย เลยเห็นแค่ใบของตัวเอง)
+    const access: WorkOrderAccess = isSuperAdmin(session) || session.roles.includes("CEO")
       ? { ...full, seeAll: true }
       : full.seeAll
         ? {
@@ -107,6 +110,7 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
         overdue: !done && !!w.dueDate && bangkokDay(w.dueDate) < today,
         responsibleId: w.assignedTo ?? w.createdBy,
         assigneeId: w.assignedTo,
+        createdById: w.createdBy,
         involvedIds: [...new Set([w.assignedTo, w.createdBy, ...w.ccUserIds].filter((x): x is string => !!x))],
         place: w.property?.name ?? null,
         href: `/maintenance/work-orders/${w.id}`,

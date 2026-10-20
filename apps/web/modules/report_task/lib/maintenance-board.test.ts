@@ -57,8 +57,10 @@ const task = (over: Partial<Task>) =>
 beforeEach(() => useEmployeeStore.setState({ employees: people }));
 
 describe("ตัวกรองบอร์ด กับใบงานซ่อม/สั่งซื้อ", () => {
-  it("พนักงาน = คนที่เกี่ยวข้องกับใบ · แผนก = แผนกของผู้รับผิดชอบ", () => {
-    expect(matchesMaintenanceFilters(wo(), { ...ALL, assigneeId: "b" })).toBe(true);
+  // เปลี่ยน 20/10/2569: "งานของฉัน"/ผู้รับผิดชอบ = คนที่ได้รับมอบหมายใบนั้น (เดิม = ทุกคนที่เกี่ยว รวม CC/คนเปิดใบ)
+  it("ผู้รับผิดชอบ = คนที่ได้รับมอบหมายใบ (ไม่ใช่ CC/คนเปิดใบ) · แผนก = แผนกของผู้รับผิดชอบ", () => {
+    expect(matchesMaintenanceFilters(wo(), { ...ALL, assigneeId: "a" })).toBe(true);
+    expect(matchesMaintenanceFilters(wo(), { ...ALL, assigneeId: "b" })).toBe(false);
     expect(matchesMaintenanceFilters(wo(), { ...ALL, assigneeId: "zz" })).toBe(false);
     expect(matchesMaintenanceFilters(wo(), { ...ALL, departmentId: "d-tech" })).toBe(true);
     expect(matchesMaintenanceFilters(wo(), { ...ALL, departmentId: "d-buy" })).toBe(false);
@@ -68,6 +70,12 @@ describe("ตัวกรองบอร์ด กับใบงานซ่อ
     expect(matchesMaintenanceFilters(wo({ overdue: true }), { ...ALL, penalty: "overdue" })).toBe(true);
     expect(matchesMaintenanceFilters(wo(), { ...ALL, penalty: "overdue" })).toBe(false);
     expect(matchesMaintenanceFilters(wo({ overdue: true }), { ...ALL, penalty: "docked" })).toBe(false);
+  });
+
+  // เปลี่ยน 20/10/2569: "ที่ฉันมอบหมาย" = ใบที่ฉันเปิด (เดิมใบงานซ่อมไม่ขึ้นเลย)
+  it("ที่ฉันมอบหมาย = ใบที่คนนั้นเปิด", () => {
+    expect(matchesMaintenanceFilters(wo({ createdById: "b" }), { ...ALL, assignedById: "b" })).toBe(true);
+    expect(matchesMaintenanceFilters(wo({ createdById: "b" }), { ...ALL, assignedById: "a" })).toBe(false);
     expect(matchesMaintenanceFilters(wo(), { ...ALL, assignedById: "a" })).toBe(false);
   });
 

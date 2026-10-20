@@ -81,10 +81,14 @@ describe("บอร์ดงาน — ใบงานซ่อมเฉพา�
     expect(json).not.toContain('"createdBy":"me"');
   });
 
-  it("CEO ที่ไม่มีสิทธิ์เห็นทั้งบริษัทในแจ้งซ่อม ยังเห็นแค่ของตัวเอง", async () => {
+  // เปลี่ยน 20/10/2569: CEO เห็นทุกใบแม้ไม่มีสิทธิ์ "เห็นทั้งบริษัท" ในแจ้งซ่อม — เดิมเห็นแค่ของตัวเอง (ใบเดียว)
+  // ("ceo เห็นใบงานแจ้งซ่อมทั้งหมด ... จะได้รู้งานของแต่ละคน") · ยังต้องมีสิทธิ์ดูใบงาน (maintenance.workorder.view)
+  it("CEO ที่ไม่มีสิทธิ์เห็นทั้งบริษัทในแจ้งซ่อม ก็เห็นทุกใบบนบอร์ดงาน", async () => {
     viewAll = false;
     await listMaintenanceBoardItems(session(["CEO"], ["maintenance.workorder.view"]));
-    expectRelatedOnly();
+    const json = JSON.stringify(queries.find((q) => q.model === "workOrder")!.where);
+    expect(json).not.toContain('"assignedTo":"me"');
+    expect(json).not.toContain('"createdBy":"me"');
   });
 
   it("ผู้ดูแลระบบสูงสุด เห็นทุกใบ (ไม่มีตัวกรองคน)", async () => {
