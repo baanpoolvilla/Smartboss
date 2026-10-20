@@ -3,6 +3,7 @@ import { canEditRecord, canEditReportTopic, canReviewTaskRecord, canSeeReportTop
 import { useDepartmentStore } from "@/modules/report_task/store/department-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import type { Department, User } from "@/modules/report_task/types";
+import { setSessionOwner } from "@/modules/report_task/lib/directory";
 
 // usr-01 heads dep-eng, usr-15 is the owner — fixtures of this test only (the app no longer ships demo people).
 const ENG_HEAD = "usr-01";
@@ -138,6 +139,15 @@ describe("canReviewTaskRecord", () => {
   it("แผนกไม่มีหัวหน้า แต่คนมอบหมายตรวจได้ → ไม่ตกมาที่ CEO", () => {
     expect(canReviewTaskRecord({ departmentIds: ["dep-marketing"], assignedById: OTHER_ENG, assigneeIds: ["usr-03"] }, OWNER, S)).toBe(false);
     expect(canReviewTaskRecord({ departmentIds: [], assignedById: OTHER_ENG }, OWNER, S)).toBe(false);
+  });
+  it("ผู้ดูแลระบบสูงสุด (SUPER_ADMIN ที่ล็อกอิน) ตรวจได้ทุกงาน", () => {
+    setSessionOwner("usr-sa");
+    try {
+      expect(canReviewTaskRecord({ departmentIds: ["dep-eng"], assignedById: ENG_HEAD }, "usr-sa", S)).toBe(true);
+      expect(canReviewTaskRecord({ departmentIds: ["dep-eng"], assignedById: ENG_HEAD }, OWNER, S)).toBe(false);
+    } finally {
+      setSessionOwner(null);
+    }
   });
   it("มีผู้ตรวจที่ตั้งไว้ → CEO ไม่ต้องรับงานที่ไม่มีหัวหน้า", () => {
     expect(canReviewTaskRecord({ departmentIds: ["dep-marketing"], assignedById: OTHER_ENG }, OWNER, { headsCanReview: true, extraReviewerIds: ["usr-06"] })).toBe(false);

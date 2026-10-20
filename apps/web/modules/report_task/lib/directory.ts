@@ -58,6 +58,10 @@ let sessionOwnerId: string | null = null;
 export function setSessionOwner(userId: string | null) {
   sessionOwnerId = userId;
 }
+/** บัญชี "ผู้ดูแลระบบสูงสุด" (role SUPER_ADMIN) ที่ล็อกอินอยู่ — ไม่รวม CEO/ADMIN ที่ติ๊ก "เจ้าของบริษัท" */
+export function isSessionSuperAdmin(userId: string) {
+  return sessionOwnerId !== null && userId === sessionOwnerId;
+}
 export function isOwner(userId: string) {
   return (sessionOwnerId !== null && userId === sessionOwnerId) || getUser(userId)?.isOwner === true;
 }

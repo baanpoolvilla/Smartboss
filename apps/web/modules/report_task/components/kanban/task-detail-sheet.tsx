@@ -572,7 +572,9 @@ export function TaskDetailSheet({
   // it's limited to CEO + หัวหน้าแผนก (configurable in ตั้งค่า > งาน >
   // การตรวจงาน) only — an assigner who isn't also a head can still edit the
   // task, just can't review their own assignment.
-  const canReview = canReviewTaskRecord(task, viewingAsUserId, taskReviewSettings);
+  // ปุ่ม ผ่าน/ไม่ผ่าน: CEO ยังกดได้ทุกงานเหมือนเดิม — ที่จำกัดเฉพาะงานที่ตัวเองมอบหมายคือแถบแดง "รอคุณตรวจ" + เลขแดงที่เมนู
+  // (ผู้ใช้ 20/10/2569: "ceo ยังเห็นและยังตรวจได้ แต่จะไม่ขึ้นเตือนให้ตรวจ")
+  const canReview = canReviewTaskRecord(task, viewingAsUserId, taskReviewSettings) || isOwner(viewingAsUserId);
   const lockedTitle = "แก้ไขได้เฉพาะผู้สร้างงาน";
   // canEditMain (and canSeeTask) fall back to the viewer's own
   // department-head match once they're no longer an assignee — a non-owner

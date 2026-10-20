@@ -1,4 +1,4 @@
-import { canManage, departments, getUser, isOwner } from "@/modules/report_task/lib/directory";
+import { canManage, departments, getUser, isOwner, isSessionSuperAdmin } from "@/modules/report_task/lib/directory";
 import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import type { GrantableSection } from "@/modules/report_task/store/settings-access-store";
 import type { TaskReviewSettings } from "@/modules/report_task/store/task-review-settings-store";
@@ -52,6 +52,8 @@ export function canReviewTaskRecord(
   settings: TaskReviewSettings = { headsCanReview: true, extraReviewerIds: [] }
 ): boolean {
   if (settings.extraReviewerIds.includes(viewingAsUserId)) return true;
+  // ผู้ดูแลระบบสูงสุด (SUPER_ADMIN) ตรวจได้ + ขึ้นเตือนทุกงานเหมือนก่อนแก้ (ผู้ใช้ 20/10/2569: "ผู้ดูแลสูงสุดต้องเห็นหมด")
+  if (isSessionSuperAdmin(viewingAsUserId)) return true;
   if (task.assignedById === viewingAsUserId && !(task.assigneeIds ?? []).includes(viewingAsUserId)) return true;
   const deptIds = new Set(task.departmentIds.filter((id): id is string => !!id));
   if (settings.headsCanReview && departments.some((d) => d.headId === viewingAsUserId && deptIds.has(d.id))) return true;
