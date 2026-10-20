@@ -22,6 +22,7 @@ export function AppScaffold({
   hideDefaultActions = false,
   flush = false,
   flushMobile = false,
+  hideTitle = false,
   children,
 }: {
   title: string;
@@ -70,12 +71,15 @@ export function AppScaffold({
    * "task ในมือถือ พื้นที่ดูน้อยมาก ... เอาให้เต็มพื้นที่เลย") — ใช้คู่กับ fill เท่านั้น
    */
   flushMobile?: boolean;
+  /** true = ไม่มีชื่อหน้ากลางแถบ (ทุกขนาดจอ) ให้ `leading` ใช้แถบเต็ม — หน้าที่ย้ายแท็บขึ้นแถบหัว (โปรเจกต์ 20/10/2569) */
+  hideTitle?: boolean;
   children: React.ReactNode;
 }) {
+  const noTitle = flush || flushMobile || hideTitle;
   const header = (
     <header className="shrink-0 border-b border-(--line) bg-(--bg)">
       <div className={`flex items-center gap-1 px-2 sm:px-3 ${flush ? "h-[52px] lg:h-12" : flushMobile ? "h-[52px] sm:h-[60px]" : "h-[60px]"}`}>
-        <div className={`flex min-w-[44px] flex-1 items-center justify-start sm:min-w-[110px] ${flush || flushMobile ? "min-w-0" : ""}`}>
+        <div className={`flex min-w-[44px] flex-1 items-center justify-start sm:min-w-[110px] ${noTitle ? "min-w-0" : ""}`}>
           {leading ??
             (backHref && (
               <Link
@@ -90,11 +94,11 @@ export function AppScaffold({
 
         {/* flushMobile (บอร์ดงาน): ไม่มีชื่อหน้าทุกขนาดจอ — แท็บมุมมอง + ปุ่มตัวกรองใน `leading` ใช้แถบนี้แทน
             แบบหน้ารายงาน ("เคลีย space ของ task ... อยากได้แบบของ report") */}
-        <h1 className={`truncate px-1 text-center font-bold text-(--ink) ${flush || flushMobile ? "hidden" : "text-lg sm:text-xl"}`}>
+        <h1 className={`truncate px-1 text-center font-bold text-(--ink) ${noTitle ? "hidden" : "text-lg sm:text-xl"}`}>
           {title}
         </h1>
 
-        <div className={`flex min-w-[44px] items-center justify-end gap-0.5 sm:min-w-[110px] ${flush || flushMobile ? "shrink-0" : "flex-1"}`}>
+        <div className={`flex min-w-[44px] items-center justify-end gap-0.5 sm:min-w-[110px] ${noTitle ? "shrink-0" : "flex-1"}`}>
           {actions}
           {!hideDefaultActions && <AppBarActions />}
         </div>

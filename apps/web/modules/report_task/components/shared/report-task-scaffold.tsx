@@ -145,7 +145,7 @@ function ScaffoldBody({
 }) {
   const leading = useAppBarLeading();
   return (
-    <AppScaffold title={title} leading={leading} backHref={backHref} width="max-w-none" fill={selfScrolling} fillMaxWidth={selfScrolling && !flush} flush={flush} flushMobile={flushMobile}>
+    <AppScaffold title={title} leading={leading} hideTitle={!!leading} backHref={backHref} width="max-w-none" fill={selfScrolling} fillMaxWidth={selfScrolling && !flush} flush={flush} flushMobile={flushMobile}>
       {children}
     </AppScaffold>
   );

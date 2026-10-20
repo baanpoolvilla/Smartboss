@@ -16,6 +16,7 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useProjectStore } from "@/modules/report_task/store/project-store";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { CreateProjectDialog } from "./create-project-dialog";
+import { useSetAppBarLeading } from "@/modules/report_task/components/shared/app-bar-leading";
 import { PersonDot, ProjectStatusChip, askProjectUpdate, fmtDay, todayBkk } from "./project-ui";
 import type { Project, ProjectStatus } from "@/modules/report_task/types";
 import type { TimelineItem } from "@/modules/report_task/lib/project-schedule";
@@ -60,26 +61,58 @@ export function ProjectsPortfolio() {
       .sort((a, b) => (RANK[a.status] ?? 9) - (RANK[b.status] ?? 9) || a.p.endDate.localeCompare(b.p.endDate));
   }, [projects, tasks, me, filter, today]);
 
+  // แท็บ กำลังทำ/ทั้งหมด/ของฉัน + แม่แบบ ขึ้นไปอยู่แถบหัว (แบบหน้างาน) · เอาหัวข้อ "โปรเจกต์" ออก
+  // · สร้างโปรเจกต์ = ปุ่มลอย + มุมขวาล่าง (ผู้ใช้ขอ 20/10/2569 "มีขอบอะไรให้ไปอยู่ข้างบนแบบนั้น")
+  const canCreate = canCreateProject(me);
+  const appBarLeading = useMemo(
+    () => (
+      <div className="flex w-full min-w-0 items-center gap-2 pl-1 sm:pl-2">
+        <div className="flex items-center gap-0.5 rounded-[10px] border border-slate-200 bg-slate-100 p-[3px] sm:gap-1 sm:rounded-xl sm:p-1">
+          {([["active", "กำลังทำ"], ["all", "ทั้งหมด"], ["mine", "ของฉัน"]] as const).map(([k, l]) => (
+            <button
+              key={k}
+              type="button"
+              aria-pressed={filter === k}
+              onClick={() => setFilter(k)}
+              className={cn(
+                "group flex h-[34px] cursor-pointer items-center justify-center rounded-lg px-3 text-[13px] font-semibold transition-all duration-200 active:scale-[0.96] sm:h-auto sm:px-4 sm:py-[7px]",
+                filter === k
+                  ? "bg-[var(--brand-navy)] text-white shadow-[0_2px_10px_rgba(27,37,55,0.3)] hover:bg-[#2b3a52]"
+                  : "text-slate-600 hover:-translate-y-px hover:bg-white hover:text-[var(--brand-navy)] hover:shadow-[0_2px_8px_rgba(27,37,55,0.12)] hover:ring-1 hover:ring-[var(--brand-navy)]/15"
+              )}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+        {canCreate && (
+          <Link
+            href="/report-task/projects/templates"
+            className="ml-auto inline-flex h-[34px] shrink-0 items-center rounded-lg border border-[#cfd6e2] bg-[#eaeef5] px-3 text-[13px] font-semibold text-[var(--brand-navy)] transition-all duration-200 hover:-translate-y-px hover:border-[var(--brand-navy)]/50 hover:bg-[#dde3ee] hover:shadow-[0_2px_8px_rgba(27,37,55,0.12)]"
+          >
+            แม่แบบ
+          </Link>
+        )}
+      </div>
+    ),
+    [filter, canCreate]
+  );
+  useSetAppBarLeading(appBarLeading);
+
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <h1 className="m-0 text-2xl font-bold">โปรเจกต์</h1>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-0.5">
-            {([["active", "กำลังทำ"], ["all", "ทั้งหมด"], ["mine", "ของฉัน"]] as const).map(([k, l]) => (
-              <button key={k} type="button" aria-pressed={filter === k} onClick={() => setFilter(k)}
-                className={cn("rounded-md px-3.5 py-1.5 text-[13px]", filter === k ? "bg-[var(--bg)] font-semibold shadow-sm" : "text-[var(--ink-soft)]")}>{l}</button>
-            ))}
-          </div>
-          {canCreateProject(me) && (
-            <>
-              <Link href="/report-task/projects/templates" className="inline-flex h-9 items-center rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3.5 text-[13px] hover:bg-[var(--bg-soft)]">แม่แบบ</Link>
-              <button type="button" className="h-9 rounded-lg bg-[var(--brand-green)] px-3.5 text-[13px] font-semibold text-white disabled:opacity-50" disabled={!ready} onClick={() => setCreating(true)}>+ สร้างโปรเจกต์</button>
-            </>
-          )}
-        </div>
-      </div>
-
+      {canCreate && (
+        <button
+          type="button"
+          onClick={() => setCreating(true)}
+          disabled={!ready}
+          aria-label="สร้างโปรเจกต์"
+          title="สร้างโปรเจกต์"
+          className="fixed bottom-[82px] right-3.5 z-30 flex h-14 w-14 items-center justify-center rounded-[18px] bg-[var(--brand-green-dark)] text-3xl leading-none text-white shadow-[0_6px_16px_rgba(23,51,47,0.28)] transition-transform hover:brightness-110 active:scale-95 disabled:opacity-50 lg:bottom-6 lg:right-6"
+        >
+          +
+        </button>
+      )}
       {/* ผู้บริหาร (CEO/หัวหน้าแผนก) เห็นภาพรวมก่อน · พนักงานเห็น "งานของฉัน" ก่อน */}
       {ready && canCreateProject(me) && <ExecSummary rows={rows} focus={focus} onFocus={setFocus} me={me} />}
       {ready && <MyProjectTasks onOpen={(id) => openTask(id)} pending={pending} />}
