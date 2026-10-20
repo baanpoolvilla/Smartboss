@@ -34,6 +34,7 @@ import { BoardTab, CalendarTab, DashboardTab, FilesTab, ListTab, MessagesTab } f
 import { PCT_HELP, PersonDot, ProjectStatusChip, STATE_COLOR, STATE_LABEL, StatePill, fmtDay, askProjectUpdate, defaultMemberRole, ensureProjectMembers, notifyAddedToProject, syncChatMember, todayBkk, useCompanyHolidays } from "./project-ui";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { ROLE_OF_DEFAULT } from "./project-roles";
+import { useSetAppBarLeading } from "@/modules/report_task/components/shared/app-bar-leading";
 
 // มุมมองเดียวกับ Asana: Overview · List · Board · Timeline(+Gantt) · Calendar · Dashboard · Messages · Files (+ อัปเดตสถานะ)
 type Tab = "timeline" | "overview" | "list" | "board" | "calendar" | "dashboard" | "messages" | "files" | "updates";
@@ -93,6 +94,40 @@ export function ProjectView({ projectId }: { projectId: string }) {
   const items = useMemo(() => (mineView ? allItems.filter((i) => i.kind === "task" && i.assigneeIds.includes(me)) : allItems), [allItems, mineView, me]);
 
   // ยังโหลดไม่เสร็จ — อย่าเพิ่งขึ้น "ไม่พบโปรเจกต์" (เปิดจากลิงก์แจ้งเตือนจะเห็นแวบหนึ่ง) และกันแก้ก่อนโหลดเสร็จ
+  // แถบหัว: ‹ โปรเจกต์ทั้งหมด ซ้ายบน · บันทึกเป็นแม่แบบ / ⚙ ตั้งค่าโปรเจกต์ ขวาบน · ไม่มีชื่อหน้า "โปรเจกต์"
+  // (20/10/2569 "ย้ายตรงนี้ด้วย") — ต้องเรียกก่อน return ด้านล่าง (กฎของ hook)
+  const headerCanEdit = !!project && canEditProject(project, me);
+  const headerCanPlan = !!project && canPlanProject(project, me);
+  const appBarLeading = useMemo(
+    () => (
+      <div className="flex w-full min-w-0 items-center gap-2 pl-1 sm:pl-2">
+        <Link
+          href="/report-task/projects"
+          className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg px-2.5 text-[13.5px] font-semibold text-[var(--brand-navy)] transition-colors hover:bg-[#eaeef5]"
+        >
+          <span className="text-lg leading-none">‹</span> โปรเจกต์ทั้งหมด
+        </Link>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {project && headerCanEdit && (
+            <button type="button" className="hidden h-9 cursor-pointer rounded-lg border border-[#cfd6e2] bg-[#eaeef5] px-3.5 text-[13px] font-semibold text-[var(--brand-navy)] transition-colors hover:bg-[#dde3ee] disabled:opacity-50 sm:inline-flex sm:items-center" disabled={!templatesReady}
+              onClick={() => {
+                const t = templateFromProject(project, items, (uid) => ROLE_OF_DEFAULT(uid), () => `tpl-${uuid()}`, me);
+                upsertTemplate(t);
+                toast.success("บันทึกเป็นแม่แบบแล้ว · แก้ต่อได้ที่หน้าแม่แบบ");
+                router.push(`/report-task/projects/templates?t=${t.id}`);
+              }}>
+              บันทึกเป็นแม่แบบ
+            </button>
+          )}
+          {project && headerCanPlan && <ProjectSettingsButton project={project} />}
+        </div>
+      </div>
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [project, headerCanEdit, headerCanPlan, templatesReady, items, me]
+  );
+  useSetAppBarLeading(appBarLeading);
+
   if (!ready) return <p className="py-20 text-center text-sm text-[var(--ink-soft)]">กำลังโหลดโปรเจกต์…</p>;
   if (!project) {
     return (
@@ -113,7 +148,6 @@ export function ProjectView({ projectId }: { projectId: string }) {
   return (
     <div className="space-y-3">
       <div className="space-y-3">
-        <Link href="/report-task/projects" className="text-[13px] text-[var(--ink-soft)] hover:text-[var(--ink)]">‹ โปรเจกต์ทั้งหมด</Link>
         <div className="flex flex-wrap items-start gap-3">
           <div className="grid min-w-0 flex-[1_1_320px] gap-2">
             <div className="flex flex-wrap items-center gap-2.5">
@@ -132,20 +166,6 @@ export function ProjectView({ projectId }: { projectId: string }) {
                 <b className="tabular-nums text-[var(--ink)]">{pct}%</b> เสร็จ
               </span>
             </div>
-          </div>
-          <div className="flex flex-wrap gap-2 max-sm:w-full">
-            {canEdit && (
-              <button type="button" className="h-9 rounded-lg border border-[var(--line)] px-3.5 text-[13px] hover:bg-[var(--bg-soft)] disabled:opacity-50" disabled={!templatesReady}
-                onClick={() => {
-                  const t = templateFromProject(project, items, (uid) => ROLE_OF_DEFAULT(uid), () => `tpl-${uuid()}`, me);
-                  upsertTemplate(t);
-                  toast.success("บันทึกเป็นแม่แบบแล้ว · แก้ต่อได้ที่หน้าแม่แบบ");
-                  router.push(`/report-task/projects/templates?t=${t.id}`);
-                }}>
-                บันทึกเป็นแม่แบบ
-              </button>
-            )}
-            {canPlan && <ProjectSettingsButton project={project} />}
           </div>
         </div>
         {suggestLate(project, items) && (
