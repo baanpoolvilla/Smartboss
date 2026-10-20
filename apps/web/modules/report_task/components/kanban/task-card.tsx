@@ -192,7 +192,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
         }
       }}
       className={cn(
-        "group relative rounded-xl border p-3 sm:rounded-2xl sm:p-4 shadow-[0_1px_3px_rgba(16,24,40,0.07),0_1px_2px_rgba(16,24,40,0.04)] transition-all duration-200",
+        "group relative rounded-xl border p-3 sm:rounded-2xl sm:p-4 shadow-[0_2px_8px_rgba(16,24,40,0.10),0_1px_2px_rgba(16,24,40,0.08)] transition-all duration-200",
         onOpen && "cursor-pointer hover:shadow-[0_12px_28px_-10px_rgba(16,24,40,0.22)] hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--brand-green)_35%,var(--line))]",
         // A done card should read as "settled" at a glance even sitting next
         // to open ones in a column that isn't grouped by status (priority,
@@ -295,7 +295,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
                     onClick={(e) => e.stopPropagation()}
                     aria-label={`${kind}: ${meta.label}`}
                     title={`${kind}: ${meta.label}`}
-                    className="-ml-0.5 mt-[3px] flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-full transition-transform hover:scale-125"
+                    className="relative -ml-0.5 mt-[3px] flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-full transition-transform after:absolute after:-inset-2 after:content-[''] hover:scale-125"
                   >
                     <span
                       className="h-2.5 w-2.5 rounded-full"
