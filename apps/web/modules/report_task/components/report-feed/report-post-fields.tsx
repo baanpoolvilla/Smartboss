@@ -221,7 +221,7 @@ export function ReportPostFields({
 
   function makeMentionChip(item: MentionItem): HTMLSpanElement {
     const chip = document.createElement("span");
-    chip.className = "mention-chip inline-flex items-center rounded bg-[var(--accent)] text-[var(--brand-green-dark)] px-1 font-medium";
+    chip.className = "mention-chip inline-flex items-center rounded bg-[#5865f2]/15 text-[#4752c4] px-1 font-medium transition-colors hover:bg-[#5865f2] hover:text-white";
     chip.contentEditable = "false";
     chip.setAttribute("data-mention-type", item.type);
     chip.setAttribute("data-mention-id", item.id);

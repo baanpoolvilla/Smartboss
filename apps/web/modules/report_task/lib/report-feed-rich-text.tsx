@@ -236,7 +236,8 @@ export function htmlEditorToBulletsText(el: HTMLElement): string {
   return collectLines(el).join("\n");
 }
 
-const mentionChipClass = "inline-flex items-center rounded bg-[var(--accent)] text-[var(--brand-green-dark)] px-1 font-medium";
+// สีน้ำเงินแบบ Discord (เดิมเขียว — ผู้ใช้ขอ 20/10/2569) · hover = พื้นน้ำเงินเต็ม ตัวขาว
+const mentionChipClass = "inline-flex items-center rounded bg-[#5865f2]/15 text-[#4752c4] px-1 font-medium transition-colors hover:bg-[#5865f2] hover:text-white";
 
 /** Renders **bold**, *italic*, __underline__, `code`, bare http(s) links, and `@[label](type:id)` mentions written via the bullet toolbar. A topic mention links straight to that room; person/department mentions are just a styled highlight — nothing to navigate to. */
 export function renderRichBulletText(text: string): ReactNode[] {
