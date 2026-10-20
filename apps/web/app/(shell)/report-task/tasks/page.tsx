@@ -220,7 +220,7 @@ function TasksPageContent() {
         {!personBoardId && (
           <>
             {/* แท็บที่เลือก = พื้นกรมท่า (สีตัวอักษร Boss ในโลโก้) — สีกลาง ไม่ใช้เขียวเพราะเขียวในเว็บแปลว่า "เสร็จ" · hover = พื้นขาว */}
-            <div className="flex items-center gap-0.5 rounded-[10px] border border-[var(--line)] bg-[var(--bg-soft)] p-[3px] sm:gap-1 sm:rounded-xl sm:p-1">
+            <div className="flex items-center gap-0.5 rounded-[10px] border border-slate-200 bg-slate-100 p-[3px] sm:gap-1 sm:rounded-xl sm:p-1">
               {tabs.map((t) => {
                 const TabIcon = t.icon;
                 const activeTab = view === t.id;
@@ -234,10 +234,10 @@ function TasksPageContent() {
                     aria-pressed={activeTab}
                     title={t.label}
                     className={cn(
-                      "flex h-[38px] w-10 items-center justify-center gap-1.5 rounded-lg transition-all duration-200 active:scale-[0.96] sm:h-auto sm:w-auto sm:px-3.5 sm:py-1.5 sm:text-xs sm:font-semibold",
+                      "flex h-[38px] w-10 items-center justify-center gap-1.5 rounded-lg transition-all duration-200 active:scale-[0.96] sm:h-auto sm:w-auto sm:px-4 sm:py-[7px] sm:text-[13px] sm:font-semibold",
                       activeTab
-                        ? "bg-[var(--brand-navy)] text-white shadow-[0_2px_8px_rgba(27,37,55,0.25)]"
-                        : "text-[var(--ink-soft)] hover:bg-white hover:text-[var(--brand-navy)] hover:shadow-sm"
+                        ? "bg-[var(--brand-navy)] text-white shadow-[0_2px_10px_rgba(27,37,55,0.3)]"
+                        : "text-slate-600 hover:bg-white hover:text-[var(--brand-navy)] hover:shadow-sm"
                     )}
                   >
                     <TabIcon className="h-[18px] w-[18px] sm:h-3.5 sm:w-3.5" />

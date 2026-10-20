@@ -920,17 +920,20 @@ export function TaskFilters({
               <button
                 type="button"
                 className={cn(
-                  // สีกรมท่าชุดเดียวกับแท็บมุมมอง (ไม่ใช้เขียว = "เสร็จ"): ปกติขาว · hover/เปิดอยู่ = พื้นเทาอ่อน · มีตัวกรองใช้อยู่ = ขอบกรมท่า + เลขบนวงกรมท่า
+                  // สีกรมท่าชุดเดียวกับแท็บมุมมอง (ไม่ใช้เขียว = "เสร็จ"): ปกติขาวขอบเทาเข้ม · hover/เปิดอยู่ = พื้นเทาอ่อนขอบกรมท่า
+                  // · มีตัวกรองใช้อยู่ = พื้นกรมท่าเต็ม ตัวขาว + เลขบนวงขาว (เห็นชัดว่ากำลังกรองอยู่)
                   "group hidden h-[34px] shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold transition-all duration-200 active:scale-[0.97] sm:flex",
-                  activeFilterCount > 0 || desktopPanelOpen
-                    ? "border-[var(--brand-navy)]/45 bg-slate-100 text-[var(--brand-navy)] shadow-[0_2px_8px_rgba(27,37,55,0.12)]"
-                    : "border-[var(--line)] bg-white text-[var(--ink)] hover:border-[var(--brand-navy)]/40 hover:bg-slate-100 hover:text-[var(--brand-navy)] hover:shadow-sm"
+                  activeFilterCount > 0
+                    ? "border-[var(--brand-navy)] bg-[var(--brand-navy)] text-white shadow-[0_2px_10px_rgba(27,37,55,0.3)] hover:brightness-125"
+                    : desktopPanelOpen
+                      ? "border-[var(--brand-navy)]/60 bg-slate-100 text-[var(--brand-navy)] shadow-sm"
+                      : "border-slate-300 bg-white text-[var(--brand-navy)] hover:border-[var(--brand-navy)]/50 hover:bg-slate-100 hover:shadow-sm"
                 )}
               >
-                <SlidersHorizontal className="h-3.5 w-3.5 text-[var(--brand-navy)] transition-transform duration-200 group-hover:scale-110" />
+                <SlidersHorizontal className="h-3.5 w-3.5 transition-transform duration-200 group-hover:scale-110" />
                 ตัวกรอง
                 {activeFilterCount > 0 && (
-                  <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[var(--brand-navy)] px-1 text-[11px] font-bold text-white tabular-nums">
+                  <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-white px-1 text-[11px] font-bold text-[var(--brand-navy)] tabular-nums">
                     {activeFilterCount}
                   </span>
                 )}
