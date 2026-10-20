@@ -1215,7 +1215,9 @@ export function ReportCard({
         flashTargetId === post.id && "bg-[var(--accent)] border-[var(--brand-green)]/40",
         // เปิดมาจากแจ้งเตือน/ลิงก์ — สีแดงค้างไว้ (เดิมฟ้า)จนกว่าจะเปลี่ยนห้องหรือออกจากหน้า (ตอนนี้สีเดียวกับ "แท็กถึงเรา")
         // แจ้งเตือนชี้ไปที่ความคิดเห็น — โพสต์เหลือแค่แถบแดงซ้าย (พื้นแดงอ่อนอยู่ที่ความคิดเห็นแทน ไม่ซ้อนกัน แบบ Discord)
-        highlighted && !replyTargeted && "bg-red-50 hover:bg-red-50",
+        // 20/10/2569: กดมาจากแจ้งเตือน = แถบแดงซ้ายอย่างเดียว ข้างในขาว (หายเมื่อเปลี่ยนห้อง/ออกจากหน้า)
+        // ต่างจาก @แท็กถึงเรา ที่พื้นแดงอ่อนค้างตลอด ("ข้างในขาว ... ต่างจาก mention จะอยู่ตลอด")
+        highlighted && !mentionsMe && "bg-white hover:bg-white",
         // Unread keeps its own accent, now as a ring around the whole card
         // (a plain border-l reads oddly once the corners are rounded).
         isUnread && "ring-2 ring-[var(--danger)]/65 ring-offset-0"

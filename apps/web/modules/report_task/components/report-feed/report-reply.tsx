@@ -122,7 +122,8 @@ export function ReportReply({
           "min-w-0 flex-1 rounded-lg sm:rounded-xl px-2 py-1.5 sm:px-2.5 sm:py-2 border transition-colors duration-500",
           targeted
             ? // พื้นแดงอ่อนอย่างเดียว (เดิมฟ้า) — แถบแดงซ้ายอยู่ที่ตัวโพสต์แล้ว ใส่ซ้ำตรงนี้จะเป็นกรอบซ้อนกัน
-              "bg-red-100 border-transparent dark:bg-red-950/60"
+              // พื้นขาว + ขอบแดง (เดิมพื้นแดงอ่อน) — ข้างในขาวเหมือนตัวโพสต์ แต่ยังรู้ว่าแจ้งเตือนพามาที่ความคิดเห็นไหน
+              "bg-white border-[#dc2626] ring-1 ring-[#dc2626]/30 dark:bg-transparent"
             : flashed
             ? "bg-[var(--accent)] border-[var(--brand-green)]/40"
             : isOwn
