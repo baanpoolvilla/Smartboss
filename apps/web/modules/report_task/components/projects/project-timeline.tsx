@@ -229,12 +229,19 @@ export function ProjectTimeline({
     setPreview(null);
     if (!d) return;
     if (d.moved && (d.start !== d.item.start || d.end !== d.item.end)) { commitMove(d.item, d.start, d.end); setSel(d.item.id); }
+    // มือถือ: แตะแถบงาน = เปิดงานเลย (แผงรายละเอียดอยู่ใต้ไทม์ไลน์ มองไม่เห็นบนจอเล็ก)
+    else if (d.item.kind === "task" && typeof window !== "undefined" && window.innerWidth < 640) onOpenTask(d.item.id);
     else setSel((s) => (s === d.item.id ? null : d.item.id));
   }
 
   // ── ชน/เลยกำหนด ──
   const conflicts = conflictsOf(items);
   const impact = lateImpact(items);
+
+  // มือถือเปิดมาเป็นมุมมอง "สัปดาห์" — วันละช่องกว้างเกินจอ เห็นงานแค่ 2–3 วัน
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 640) setZoom("week");
+  }, []);
 
   useEffect(() => {
     // เปิดมาเลื่อนไปที่วันนี้
@@ -267,9 +274,22 @@ export function ProjectTimeline({
         </div>
       )}
 
-      {/* มือถือ: ไทม์ไลน์แบบการ์ด (MobileTimeline ด้านล่าง) — แถบเครื่องมือกับตารางสองฝั่งเป็นของจอคอม */}
-      <MobileTimeline rows={rows} lo={dayNum(project.startDate)} hi={dayNum(project.endDate)} today={today} canEdit={canEdit}
-        onOpen={(it) => (it.kind === "task" ? onOpenTask(it.id) : setSel(it.id))} onAddTask={onAddTask} />
+      {/* มือถือ: แบบ Asana — แผนเวลาเต็มจอ (ไม่มีคอลัมน์ชื่อ) ชื่องานอยู่บน/ข้างแถบ · ชื่อช่วงงานลอยติดซ้าย
+          เครื่องมือเหลือ วัน/สัปดาห์/เดือน + วันนี้ (20/10/2569 "แผนเวลาบนมือถือ ... ให้เหมือนของเค้า") */}
+      <div className="flex items-center gap-2 sm:hidden">
+        <div className="inline-flex rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-0.5">
+          {(["day", "week", "month"] as Zoom[]).map((z) => (
+            <button key={z} type="button" onClick={() => setZoom(z)} aria-pressed={zoom === z}
+              className={cn("rounded-md px-3 py-1.5 text-[13px]", zoom === z ? "bg-[var(--bg)] font-semibold shadow-sm" : "text-[var(--ink-soft)]")}>
+              {{ day: "วัน", week: "สัปดาห์", month: "เดือน" }[z as "day" | "week" | "month"]}
+            </button>
+          ))}
+        </div>
+        <button type="button" className="ml-auto h-9 rounded-lg border border-[var(--line)] px-3 text-[13px] font-semibold active:bg-[var(--bg-soft)]"
+          onClick={() => { if (rightRef.current) rightRef.current.scrollTo({ left: Math.max(0, (dayNum(today) - lo) * W - 60), behavior: "smooth" }); }}>
+          วันนี้
+        </button>
+      </div>
 
       <div className="hidden flex-wrap items-center gap-2 sm:flex">
         <div className="inline-flex rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-0.5">
@@ -340,9 +360,9 @@ export function ProjectTimeline({
         </div>
       </div>
 
-      <div className="hidden grid-cols-[150px_minmax(0,1fr)] overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--bg)] sm:grid sm:grid-cols-[270px_minmax(0,1fr)]">
-        {/* ซ้าย: ชื่อแถว */}
-        <div className="z-[2] min-w-0 border-r border-[var(--line)] bg-[var(--bg)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--bg)] sm:grid-cols-[270px_minmax(0,1fr)]">
+        {/* ซ้าย: ชื่อแถว (จอคอม) — มือถือไม่มีคอลัมน์นี้ ชื่ออยู่บนแถบแทน */}
+        <div className="z-[2] hidden min-w-0 border-r border-[var(--line)] bg-[var(--bg)] sm:block">
           <div className="flex items-end border-b border-[var(--line)] px-2.5 pb-1.5 text-xs font-semibold text-[var(--ink-soft)]" style={{ height: HEAD }}>
             {groupBy === "section" ? "งาน / ช่วงงาน" : "งาน / คน"}
           </div>
@@ -420,6 +440,16 @@ export function ProjectTimeline({
                   }} />
               );
             })}
+            {/* มือถือ: ชื่อช่วงงานติดซ้ายตลอด อยู่ชั้นบนสุด (เหนือเส้นวันนี้) — เลื่อนไปวันไหนก็รู้ว่าอยู่ช่วงไหน */}
+            {rows.map((r, idx) =>
+              r.kind === "group" ? (
+                <div key={`glabel-${idx}`} className="pointer-events-none absolute inset-x-0 z-[5] sm:hidden" style={{ top: HEAD + idx * ROW, height: ROW }}>
+                  <span className="sticky left-2 mt-[7px] inline-flex max-w-[80vw] items-center gap-1 truncate rounded-md bg-white px-2 py-0.5 text-[13px] font-bold text-[var(--ink)] shadow-sm">
+                    {r.name} <span className="text-[11px] font-normal text-[var(--ink-soft)]">{r.items.length}</span>
+                  </span>
+                </div>
+              ) : null
+            )}
             {/* เส้นนำสายตา: แถวที่ชี้/เลือก — เส้นประจากขอบซ้ายไปถึงหัวแถบ บอกว่าแถบนี้ของงานไหน */}
             {rows.map((r, idx) => {
               if (r.kind !== "item" || (hoverRow !== idx && sel !== r.item.id)) return null;
@@ -440,7 +470,7 @@ export function ProjectTimeline({
               if (r.kind === "group") {
                 if (!r.items.length) return null;
                 const a = Math.min(...r.items.map((i) => dayNum(i.start))), b = Math.max(...r.items.map((i) => dayNum(i.end)));
-                return <div key={`gs-${r.key}`} className="absolute h-1.5 rounded bg-[var(--line)]" style={{ left: (a - lo) * W, width: (b - a + 1) * W, top: y + 16 }} />;
+                return <div key={`gs-${r.key}`} className="absolute hidden h-1.5 rounded bg-[var(--line)] sm:block" style={{ left: (a - lo) * W, width: (b - a + 1) * W, top: y + 16 }} />;
               }
               const it = r.item;
               const pv = preview?.id === it.id ? preview : undefined;
@@ -712,82 +742,3 @@ function currentUserId(): string {
   return useIdentityStore.getState().viewingAsUserId;
 }
 
-/**
- * ไทม์ไลน์บนมือถือ (<640px) — การ์ดเรียงตามช่วงงาน ไม่ต้องเลื่อนซ้าย-ขวา ("ดูง่าย ใช้ง่าย ... เน้นดูรู้เข้าใจสั่งงานได้" 20/10/2569)
- * แต่ละงาน: ชื่อ · คนทำ · วันที่ · สถานะ + แถบเล็กเทียบช่วงทั้งโปรเจกต์ (เส้นแดง = วันนี้) · แตะ = เปิดงาน
- */
-function MobileTimeline({
-  rows,
-  lo,
-  hi,
-  today,
-  canEdit,
-  onOpen,
-  onAddTask,
-}: {
-  rows: Row[];
-  lo: number;
-  hi: number;
-  today: string;
-  canEdit: boolean;
-  onOpen: (it: TimelineItem) => void;
-  onAddTask: (sectionId: string) => void;
-}) {
-  const span = Math.max(1, hi - lo + 1);
-  const pos = (d: number) => Math.min(100, Math.max(0, ((d - lo) / span) * 100));
-  const todayPct = pos(dayNum(today));
-  const groups: { key: string; name: string; items: TimelineItem[] }[] = [];
-  for (const r of rows) {
-    if (r.kind === "group") groups.push({ key: r.key, name: r.name, items: [] });
-    else groups[groups.length - 1]?.items.push(r.item);
-  }
-  return (
-    <div className="space-y-4 sm:hidden">
-      <div className="flex items-center justify-between px-0.5 text-[12px] text-[var(--ink-soft)]">
-        <span>{fmtDay(ymdOfDay(lo))}</span>
-        <span className="flex items-center gap-1 font-semibold text-[var(--chart-red)]"><span className="h-3 w-0.5 bg-[var(--chart-red)]" />วันนี้</span>
-        <span>{fmtDay(ymdOfDay(hi))}</span>
-      </div>
-      {groups.map((g) => (
-        <section key={g.key} className="space-y-2">
-          <div className="flex items-center justify-between px-0.5">
-            <h3 className="m-0 text-[14px] font-bold text-[var(--ink)]">{g.name} <span className="text-[12px] font-normal text-[var(--ink-soft)]">{g.items.length}</span></h3>
-            {canEdit && (
-              <button type="button" onClick={() => onAddTask(g.key)} className="rounded-lg px-2 py-1 text-[13px] font-semibold text-[var(--brand-navy)] active:bg-[#eaeef5]">+ งาน</button>
-            )}
-          </div>
-          {g.items.length === 0 && <p className="m-0 rounded-xl border border-dashed border-[var(--line)] px-3 py-3 text-[13px] text-[var(--ink-soft)]">ยังไม่มีงานในช่วงนี้</p>}
-          {g.items.map((it) => {
-            const a = dayNum(it.start), b = dayNum(it.end);
-            const left = pos(a), right = pos(b + 1);
-            const ms = it.kind === "milestone";
-            return (
-              <button key={it.id} type="button" onClick={() => onOpen(it)}
-                className={cn("block w-full rounded-xl border bg-white px-3 py-2.5 text-left shadow-[0_2px_8px_rgba(16,24,40,0.08)] active:scale-[0.99]",
-                  it.state === "late" ? "border-red-200" : "border-[var(--line)]", it.parentId && "ml-4 w-[calc(100%-1rem)]")}>
-                <div className="flex items-start gap-2">
-                  {ms ? <span className="mt-0.5 text-[13px]" style={{ color: "var(--chart-violet)" }}>◆</span> : it.assigneeIds[0] ? <PersonDot userId={it.assigneeIds[0]} size={22} /> : <span className="w-[22px]" />}
-                  <span className={cn("min-w-0 flex-1 text-[14.5px] font-semibold leading-snug", it.state === "done" && "text-[var(--ink-soft)] line-through")}>{it.name}</span>
-                  {!ms && <StatePill state={it.state} />}
-                </div>
-                <div className="mt-1 flex items-center gap-1.5 pl-[30px] text-[12px] text-[var(--ink-soft)]">
-                  <span>{ms ? fmtDay(it.start) : `${fmtDay(it.start)} – ${fmtDay(it.end)}`}</span>
-                  {it.pct !== undefined && it.state !== "done" && it.pct > 0 && <span>· {it.pct}%</span>}
-                </div>
-                {/* แถบเทียบช่วงทั้งโปรเจกต์ — เห็นว่างานอยู่ตรงไหน เลยวันนี้หรือยัง */}
-                <div className="relative mt-2 ml-[30px] h-2.5 rounded-full bg-slate-100">
-                  {ms ? (
-                    <span className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[2px]" style={{ left: `${left}%`, background: "var(--chart-violet)" }} />
-                  ) : (
-                    <span className="absolute inset-y-0 rounded-full" style={{ left: `${left}%`, width: `${Math.max(2, right - left)}%`, background: STATE_COLOR[it.state] ?? "var(--chart-gray)" }} />
-                  )}
-                  <span className="absolute -inset-y-1 w-0.5 bg-[var(--chart-red)]" style={{ left: `${todayPct}%` }} />
-                </div>
-              </button>
-            );
-          })}
-        </section>
-      ))}
-    </div>
-  );
-}
