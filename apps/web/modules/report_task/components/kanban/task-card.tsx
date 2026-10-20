@@ -113,14 +113,14 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
   const reviewWaiting = isPendingReview && canReviewTask(task.departmentIds, viewingAsUserId, reviewSettings);
   // แถบแดงขอบบนการ์ด บอกตรง ๆ ว่าแดงเพราะ "ยังไม่ได้อ่าน" (ผู้ใช้ขอ 18/10/2569) ไม่ใช่งานมีปัญหา
   // เปิดดูงานแล้ว (markTaskActivityRead) แถบ + พื้นแดงหายเอง · รอตรวจหายเมื่อกด ผ่าน/ไม่ผ่าน
+  // คอมเมนต์ใหม่ไม่ทำให้ทั้งการ์ดแดงแล้ว — ขึ้นแค่ป้ายแดง "N ใหม่" ตรงตัวนับคอมเมนต์ (ผู้ใช้ขอ 20/10/2569 "ขึ้นสีแดงอะไรแบบนั้นพอ")
   const unreadParts = [
-    unreadComments > 0 ? `💬 คอมเมนต์ ${unreadComments}` : null,
     unreadAttachments > 0 ? `📎 ไฟล์ ${unreadAttachments}` : null,
     unreadAssigned > 0 ? "👤 งานที่มอบให้คุณ" : null,
   ].filter(Boolean);
   const pendingBand = unreadParts.length > 0 ? `ยังไม่ได้อ่าน · ${unreadParts.join(" · ")}` : reviewWaiting ? "✅ รอคุณตรวจ · กด ผ่าน / ไม่ผ่าน" : null;
   const pendingHint = unreadParts.length > 0 ? "มีเรื่องใหม่ที่คุณยังไม่ได้อ่าน · เปิดดูแล้วการ์ดจะกลับเป็นสีปกติ" : "งานเสร็จแล้ว รอคุณกด ผ่าน / ไม่ผ่าน";
-  const pendingForMe = reviewWaiting || unreadAssigned > 0 || unreadAttachments > 0 || unreadComments > 0;
+  const pendingForMe = reviewWaiting || unreadAssigned > 0 || unreadAttachments > 0;
   // A group task tracks each assignee's own completion, derived from their
   // own checklist items — the card's status only follows once everyone's
   // marked done (see task-completion.ts). The quick-toggle circle below
@@ -200,9 +200,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
         // subtle to notice (see below), so the whole card recedes too.
         pendingForMe ? "border-[#f3a4a4] bg-[#fdecec]" : "border-[var(--line)] bg-white",
         // งานเสร็จที่ยังรอเราตรวจ ไม่จางลง — ต้องเห็นชัดว่ามีอะไรให้ทำ
-        isDone && dimWhenDone && !pendingForMe && "opacity-70",
-        // คอมเมนต์ยังไม่อ่าน — แถบแดงขอบซ้าย ให้เห็นจากระยะตอนกวาดตาทั้งคอลัมน์
-        unreadComments > 0 && "shadow-[inset_3px_0_0_var(--danger),0_1px_3px_rgba(16,24,40,0.07)]"
+        isDone && dimWhenDone && !pendingForMe && "opacity-70"
       )}
     >
       {pendingBand && (
@@ -214,6 +212,9 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
           <span className="truncate">{pendingBand}</span>
         </div>
       )}
+      {/* แถวบนเหลือเฉพาะป้ายสถานะของงานที่เสร็จแล้ว (เสร็จสิ้น / เสร็จ·รอตรวจสอบ) — ความสำคัญย้ายไปเป็นจุดสีหน้าชื่องาน
+          คอมเมนต์ + แก้กำหนดส่งย้ายไปขวาล่างเหนือรูปคน ให้ชื่องานยาวเต็มการ์ด (ผู้ใช้ขอ 20/10/2569) */}
+      {isDone && (
       <div className="flex items-center gap-2 mb-1.5 sm:mb-2.5">
         {/* Dot + label badge, colored to match whichever attribute it's
             showing — priority's own accent (red/amber/green/gray) normally,
@@ -228,8 +229,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
             task-store.ts — same review the "รอตรวจสอบ" board column tracks),
             switching to the darker "เสร็จสิ้น" only once someone's actually
             checked it. */}
-        {isDone ? (
-          task.reviewedBy ? (
+        {task.reviewedBy ? (
             <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-[color-mix(in_srgb,var(--brand-green)_14%,white)] text-[var(--brand-green-dark)]">
               <Check className="h-2.5 w-2.5" strokeWidth={3} />
               เสร็จสิ้น
@@ -274,50 +274,48 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
               />
               <TooltipContent>ส่งงานแล้ว รอหัวหน้าตรวจสอบยืนยันว่าเสร็จจริง</TooltipContent>
             </Tooltip>
-          )
-        ) : groupedByPriority ? (
-          <span className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-[var(--ink)]">
-            <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: statusMeta[task.status].accentColor }} />
-            {statusMeta[task.status].label}
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-[var(--ink)]">
-            <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: priorityMeta[task.priority].accentColor }} />
-            {priorityMeta[task.priority].label}
-          </span>
-        )}
+          )}
+      </div>
+      )}
 
-        <div className="ml-auto flex items-center gap-1.5">
-          {suspicious && (
-            <Tooltip>
-              <TooltipTrigger
+      {/* Priority dot + completion circle + title */}
+      <div className="flex items-start gap-2">
+        {/* ความสำคัญ (หรือสถานะ ถ้าบอร์ดจัดกลุ่มตามความสำคัญ) เหลือแค่จุดสี — กดจุดแล้วบอกว่าคืออะไร
+            งานเสร็จแล้วไม่มีจุด (ป้ายเสร็จสิ้น/รอตรวจสอบด้านบนบอกแทน) */}
+        {!isDone && (() => {
+          const meta = groupedByPriority ? statusMeta[task.status] : priorityMeta[task.priority];
+          const kind = groupedByPriority ? "สถานะ" : "ความสำคัญ";
+          return (
+            <Popover>
+              <PopoverTrigger
                 render={
-                  <span className="flex items-center justify-center h-5 w-5 rounded-md bg-amber-50 text-[var(--chart-amber)]">
-                    <SearchCheck className="h-3 w-3" />
-                  </span>
+                  <button
+                    type="button"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={`${kind}: ${meta.label}`}
+                    title={`${kind}: ${meta.label}`}
+                    className="-ml-0.5 mt-[3px] flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-full transition-transform hover:scale-125"
+                  >
+                    <span
+                      className="h-2.5 w-2.5 rounded-full"
+                      style={{ backgroundColor: meta.accentColor, boxShadow: `0 0 0 3px color-mix(in srgb, ${meta.accentColor} 20%, transparent)` }}
+                    />
+                  </button>
                 }
               />
-              <TooltipContent>แก้ไขกำหนดส่ง {task.revisions.length} ครั้ง — ควรตรวจสอบ</TooltipContent>
-            </Tooltip>
-          )}
-          {/* คอมเมนต์อยู่มุมขวาบน แทนตัวนับ "แก้กำหนดส่งกี่ครั้ง" (เอาออกตามที่ผู้ใช้ขอ 17/10/2569 — ประวัติเลื่อนวันยังดูได้ในหน้างาน) */}
-          {task.comments.length > 0 && (
-            // ยังไม่อ่าน = ป้ายแดงทึบ "N ใหม่" (เดิมตัวแดง + จุด 6px มองแทบไม่เห็น) · อ่านแล้ว = จำนวนทั้งหมดสีปกติ
-            <span
-              className={cn(
-                "flex items-center gap-1 text-xs font-medium",
-                unreadComments > 0 && "h-5 rounded-full bg-(--danger) pl-1.5 pr-2 font-bold text-white shadow-[0_1px_3px_rgba(229,72,77,0.35)]"
-              )}
-              title={unreadComments > 0 ? `มีความคิดเห็นใหม่ที่ยังไม่ได้อ่าน ${unreadComments} รายการ (ทั้งหมด ${task.comments.length})` : "ความคิดเห็น"}
-            >
-              <MessageSquare className="h-3.5 w-3.5" /> {unreadComments > 0 ? `${unreadComments} ใหม่` : task.comments.length}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Completion circle + title */}
-      <div className="flex items-start gap-2">
+              <PopoverContent
+                align="start"
+                className="flex w-auto flex-row items-center gap-1.5 bg-[var(--brand-navy)] px-2.5 py-1.5 text-xs font-semibold text-white ring-0"
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: meta.accentColor }} />
+                {kind}: {meta.label}
+              </PopoverContent>
+            </Popover>
+          );
+        })()}
         {onOpen && (
           <Tooltip>
             <TooltipTrigger
@@ -468,6 +466,32 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
         </div>
       )}
 
+      {/* ขวาล่างเหนือรูปคน: แก้กำหนดส่ง + คอมเมนต์ ตัวเล็กสีเทา · คอมเมนต์ใหม่ = ป้ายแดง "N ใหม่" (ผู้ใช้ขอ 20/10/2569) */}
+      {(suspicious || task.comments.length > 0) && (
+        <div className="-mb-1 mt-1.5 flex items-center justify-end gap-2 sm:-mb-1.5">
+          {suspicious && (
+            <span
+              className="flex items-center gap-0.5 text-[10px] font-medium text-[var(--chart-gray)]"
+              title={`แก้ไขกำหนดส่ง ${task.revisions.length} ครั้ง — ควรตรวจสอบ`}
+            >
+              <SearchCheck className="h-2.5 w-2.5" />
+              {task.revisions.length}
+            </span>
+          )}
+          {task.comments.length > 0 && (
+            <span
+              className={cn(
+                "flex items-center gap-0.5 text-[10px] font-medium text-[var(--chart-gray)]",
+                unreadComments > 0 && "h-4 gap-1 rounded-full bg-(--danger) px-1.5 font-bold text-white"
+              )}
+              title={unreadComments > 0 ? `มีความคิดเห็นใหม่ที่ยังไม่ได้อ่าน ${unreadComments} รายการ (ทั้งหมด ${task.comments.length})` : "ความคิดเห็น"}
+            >
+              <MessageSquare className="h-2.5 w-2.5" /> {unreadComments > 0 ? `${unreadComments} ใหม่` : task.comments.length}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Divider keeps the meta row visually separate from the body. Single
           row at every width: date/status/counts on the left (min-w-0 +
           flex-wrap, so on a narrow phone card the chips wrap onto a second
@@ -492,7 +516,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
               {task.status === "in_progress" ? statusMeta.in_progress.label : statusMeta.todo.label}
             </span>
           )}
-          <DueDateBadge task={task} className="text-xs" />
+          <DueDateBadge task={task} compact />
           {task.project && !hideProjectChip && <ProjectChip projectId={task.project.projectId} sectionId={task.project.sectionId} />}
           {task.parentId ? <ParentTaskLink parentId={task.parentId} /> : <SubtaskCountChip taskId={task.id} />}
           {task.recurrence && (

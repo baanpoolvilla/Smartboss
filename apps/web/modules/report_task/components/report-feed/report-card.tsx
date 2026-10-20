@@ -1208,25 +1208,25 @@ export function ReportCard({
         // under the pointer gets a clearly darker border + tint, so it's
         // obvious which post you're in without a heavier frame at rest.
         "group/post relative rounded-xl sm:rounded-2xl border border-[var(--line)] bg-[var(--bg)] px-3.5 py-3 sm:px-4 sm:py-3.5 shadow-sm transition-colors duration-150 hover:border-[#b8c2d0] hover:bg-[#fafbfc]",
-        // @mention ถึงเรา — แถบเหลืองเข้มซ้าย + พื้นเหลืองอ่อน แบบ Discord · เดิม 4px สี amber-400 บนพื้นเหลือง
+        // @mention ถึงเรา — แถบแดงซ้าย + พื้นแดงอ่อน (เดิมเหลือง — 20/10/2569 แจ้งเตือนทุกแบบในหน้ารายงานเป็นสีแดงสีเดียว) แบบ Discord · เดิม 4px สี amber-400 บนพื้นเหลือง
         // แถมมุมโค้งของการ์ดกินหัวท้ายแถบ แทบมองไม่เห็น ("อยากได้แถบสีข้าง ๆ แบบดิสคอร์ดเข้ม ๆ")
         // มุมซ้ายโค้งน้อยลงให้แถบตรงเต็มความสูง
-        mentionsMe && "bg-amber-50 hover:bg-amber-50",
+        mentionsMe && "bg-red-50 hover:bg-red-50",
         flashTargetId === post.id && "bg-[var(--accent)] border-[var(--brand-green)]/40",
-        // เปิดมาจากแจ้งเตือน/ลิงก์ — สีฟ้าค้างไว้จนกว่าจะเปลี่ยนห้องหรือออกจากหน้า (ต่างจากเหลืองของ "แท็กถึงเรา")
-        // แจ้งเตือนชี้ไปที่ความคิดเห็น — โพสต์เหลือแค่แถบฟ้าซ้าย (พื้นฟ้าอยู่ที่ความคิดเห็นแทน ไม่ซ้อนกัน แบบ Discord)
-        highlighted && !replyTargeted && "bg-sky-50 hover:bg-sky-50",
+        // เปิดมาจากแจ้งเตือน/ลิงก์ — สีแดงค้างไว้ (เดิมฟ้า)จนกว่าจะเปลี่ยนห้องหรือออกจากหน้า (ตอนนี้สีเดียวกับ "แท็กถึงเรา")
+        // แจ้งเตือนชี้ไปที่ความคิดเห็น — โพสต์เหลือแค่แถบแดงซ้าย (พื้นแดงอ่อนอยู่ที่ความคิดเห็นแทน ไม่ซ้อนกัน แบบ Discord)
+        highlighted && !replyTargeted && "bg-red-50 hover:bg-red-50",
         // Unread keeps its own accent, now as a ring around the whole card
         // (a plain border-l reads oddly once the corners are rounded).
-        isUnread && "ring-2 ring-[var(--chart-blue)]/70 ring-offset-0"
+        isUnread && "ring-2 ring-[var(--danger)]/65 ring-offset-0"
       )}
-      // แถบซ้าย (ฟ้า = เปิดมาจากแจ้งเตือน ชนะเหลือง = แท็กถึงเรา) ใส่เป็น inline style — ทำเป็นคลาส
+      // แถบซ้าย (แดง = เปิดมาจากแจ้งเตือน หรือแท็กถึงเรา (เดิมฟ้า/เหลือง)) ใส่เป็น inline style — ทำเป็นคลาส
       // (border-l-[5px] / rounded-l-md!) แล้วบนเครื่องจริงสีขึ้นแต่ความหนา/มุมโดนคลาสพื้นฐาน (border,
       // rounded-2xl) ที่ CSS อีกไฟล์โหลดทีหลังทับ แถบเลยบาง 1px มุมยังโค้ง — inline ชนะทุกคลาสแน่นอน
       style={
         highlighted || mentionsMe
           ? {
-              borderLeft: `5px solid ${highlighted ? "#0ea5e9" : "#f59e0b"}`,
+              borderLeft: "5px solid #dc2626",
               borderTopLeftRadius: 6,
               borderBottomLeftRadius: 6,
             }
@@ -1521,7 +1521,7 @@ export function ReportCard({
                   </span>
                 )}
                 {isUnread && (
-                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--chart-blue)] shrink-0" aria-label="ยังไม่อ่าน" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--danger)] shrink-0" aria-label="ยังไม่อ่าน" />
                 )}
               </div>
               <p className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-[var(--ink-soft)]">

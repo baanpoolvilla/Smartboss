@@ -121,8 +121,8 @@ export function ReportReply({
           // still rendered as a tall, wide card ("ใหญ่มากกินไปแทบครึ่งหน้า").
           "min-w-0 flex-1 rounded-lg sm:rounded-xl px-2 py-1.5 sm:px-2.5 sm:py-2 border transition-colors duration-500",
           targeted
-            ? // พื้นฟ้าอย่างเดียว — แถบฟ้าซ้ายอยู่ที่ตัวโพสต์แล้ว ใส่ซ้ำตรงนี้จะเป็นกรอบซ้อนกัน
-              "bg-sky-100 border-transparent dark:bg-sky-950/60"
+            ? // พื้นแดงอ่อนอย่างเดียว (เดิมฟ้า) — แถบแดงซ้ายอยู่ที่ตัวโพสต์แล้ว ใส่ซ้ำตรงนี้จะเป็นกรอบซ้อนกัน
+              "bg-red-100 border-transparent dark:bg-red-950/60"
             : flashed
             ? "bg-[var(--accent)] border-[var(--brand-green)]/40"
             : isOwn

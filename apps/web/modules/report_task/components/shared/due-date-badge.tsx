@@ -11,7 +11,7 @@ import type { Task } from "@/modules/report_task/types";
  * quietly; "soon" turns amber and "overdue" turns red with a "เลย N วัน" tail so
  * the slip is obvious at a glance — never wrapping to two lines.
  */
-export function DueDateBadge({ task, className }: { task: Task; className?: string }) {
+export function DueDateBadge({ task, className, compact }: { task: Task; className?: string; compact?: boolean }) {
   const urgency = dueUrgency(task);
   const date = formatShortDate(effectiveDueDate(task));
 
@@ -21,10 +21,18 @@ export function DueDateBadge({ task, className }: { task: Task; className?: stri
     // tail alone, but a plain-styled date (esp. on a "เสร็จสิ้น" card, where
     // there's no other date on the card to contrast it against) is otherwise
     // ambiguous about which date it even is.
+    // compact (การ์ดงานบนบอร์ด 20/10/2569) — เหลือไอคอนปฏิทิน + วันที่ ตัวเทา คำเต็มอยู่ใน title
     return (
-      <span className={cn("inline-flex items-center gap-1 text-[11px] font-medium text-[var(--ink)] whitespace-nowrap", className)}>
+      <span
+        className={cn(
+          "inline-flex items-center gap-1 text-[11px] font-medium whitespace-nowrap",
+          compact ? "text-[var(--ink-soft)]" : "text-[var(--ink)]",
+          className
+        )}
+        title={compact ? `กำหนดส่ง ${date}` : undefined}
+      >
         <CalendarDays className="h-3 w-3" />
-        กำหนดส่ง {date}
+        {compact ? date : `กำหนดส่ง ${date}`}
       </span>
     );
   }
