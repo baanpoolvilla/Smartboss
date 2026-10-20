@@ -447,7 +447,7 @@ export const Composer = forwardRef<
     >
       {/* รายชื่อ @แท็ก */}
       {mentionQuery && candidates.length > 0 && (
-        <div ref={mentionListRef} className="absolute bottom-full left-2 right-2 z-20 mb-1 max-h-64 overflow-y-auto rounded-xl border border-(--line) bg-(--bg) p-1 shadow-xl sm:left-3 sm:right-auto sm:w-72">
+        <div ref={mentionListRef} data-keep-keyboard onMouseDown={(e) => e.preventDefault()} className="absolute bottom-full left-2 right-2 z-20 mb-1 max-h-64 overflow-y-auto overscroll-contain rounded-xl border border-(--line) bg-(--bg) p-1 shadow-xl sm:left-3 sm:right-auto sm:w-72">
           {candidates.map((c, i) => (
             <button
               key={c.id}

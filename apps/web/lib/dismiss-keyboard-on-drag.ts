@@ -18,10 +18,22 @@ function editableFocused(): HTMLElement | null {
   return null;
 }
 
+/**
+ * ลากที่เริ่มในกล่องที่ติด `data-keep-keyboard` (รายชื่อ @แท็กคน ฯลฯ) ไม่ปิดคีย์บอร์ด — event นิ้วของ React
+ * ไหลขึ้นตามต้นไม้คอมโพเนนต์ เลื่อนรายชื่อ @ ที่อยู่ในฟีด = ฟีด "ถูกลาก" ⇒ ช่องพิมพ์หลุดโฟกัส รายชื่อปิดหายกลางทาง
+ * (20/10/2569 "เวลา@แล้วจะเลื่อนเลือกชื่อ ... กดเลื่อนหาไม่ครบแล้วหายไปเลย")
+ */
+export const KEEP_KEYBOARD_ATTR = "data-keep-keyboard";
+
 export function useDismissKeyboardOnDrag() {
   const startY = useRef<number | null>(null);
   return {
     onTouchStart: (e: React.TouchEvent) => {
+      const target = e.target as Element | null;
+      if (target?.closest?.(`[${KEEP_KEYBOARD_ATTR}]`)) {
+        startY.current = null;
+        return;
+      }
       startY.current = e.touches[0]?.clientY ?? null;
     },
     onTouchMove: (e: React.TouchEvent) => {

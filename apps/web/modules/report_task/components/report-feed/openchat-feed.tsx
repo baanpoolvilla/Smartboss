@@ -918,7 +918,9 @@ export function OpenchatFeed({
                       ? { bottom: window.innerHeight - mentionMenu.rect.top + 4 }
                       : { top: mentionMenu.rect.bottom + 4 }),
                   }}
-                  className="z-50 rounded-lg border border-[var(--line)] bg-white shadow-lg py-1 overflow-y-auto"
+                  data-keep-keyboard
+                      onMouseDown={(e) => e.preventDefault()}
+                      className="z-50 rounded-lg border border-[var(--line)] bg-white shadow-lg py-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]"
                 >
                   {matches.length === 0 ? (
                     <p className="px-3 py-2 text-xs text-[var(--ink-soft)]">ไม่พบที่ตรงกับ &quot;{mentionMenu.query}&quot;</p>

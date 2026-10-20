@@ -327,7 +327,8 @@ export function TaskDetailSheet({
   const mentionCandidates = useMemo(() => {
     if (!mentionQuery) return [];
     const q = mentionQuery.query.toLowerCase();
-    return mentionPeople.filter((u) => !q || u.name.toLowerCase().includes(q)).slice(0, 8);
+    // ไม่ตัดที่ 8 คนแล้ว — รายชื่อเลื่อนได้เอง เดิมคนที่ 9 ขึ้นไปเลื่อนหาไม่เจอ ต้องพิมพ์ชื่อเท่านั้น (20/10/2569)
+    return mentionPeople.filter((u) => !q || u.name.toLowerCase().includes(q));
   }, [mentionQuery, mentionPeople]);
 
   function detectMention(value: string, caret: number) {
@@ -2348,7 +2349,11 @@ export function TaskDetailSheet({
             <div className={cn("flex flex-col rounded-xl border border-input bg-white transition-colors focus-within:border-[var(--brand-green)] focus-within:ring-2 focus-within:ring-[var(--brand-green)]/20", chatExpanded && "md:mx-auto md:w-full md:max-w-[760px]")}>
               <div className="relative min-w-0 flex-1">
                 {mentionQuery && mentionCandidates.length > 0 && (
-                  <div className="absolute bottom-full left-0 right-0 z-30 mb-1 max-h-56 overflow-y-auto rounded-lg border border-[var(--line)] bg-white p-1 shadow-lg">
+                  <div
+                    data-keep-keyboard
+                    onMouseDown={(e) => e.preventDefault()}
+                    className="absolute bottom-full left-0 right-0 z-30 mb-1 max-h-56 overflow-y-auto overscroll-contain rounded-lg border border-[var(--line)] bg-white p-1 shadow-lg"
+                  >
                     {mentionCandidates.map((u, i) => (
                       <button
                         key={u.id}
