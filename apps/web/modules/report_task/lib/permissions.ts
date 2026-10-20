@@ -57,7 +57,10 @@ export function canReviewTaskRecord(
   if (settings.headsCanReview && departments.some((d) => d.headId === viewingAsUserId && deptIds.has(d.id))) return true;
   if (!isOwner(viewingAsUserId)) return false;
   if (task.assignedById === viewingAsUserId) return true;
+  // คนมอบหมายงานตรวจได้แล้ว (บรรทัดบน) — งานที่มีคนมอบหมายที่ไม่ใช่ผู้รับผิดชอบเอง ไม่ตกมาที่ CEO (ผู้ใช้ 20/10/2569: CEO เห็นรอตรวจ 9 ทั้งที่ไม่ได้มอบหมาย)
+  const assignerCanReview = !!task.assignedById && !(task.assigneeIds ?? []).includes(task.assignedById);
   const someoneElseCanReview =
+    assignerCanReview ||
     settings.extraReviewerIds.length > 0 ||
     (settings.headsCanReview && departments.some((d) => deptIds.has(d.id) && !!d.headId));
   return !someoneElseCanReview;

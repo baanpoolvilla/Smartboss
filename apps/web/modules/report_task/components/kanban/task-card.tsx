@@ -205,10 +205,10 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
     >
       {pendingBand && (
         <div
-          className="-mx-3 -mt-3 mb-2 flex items-center gap-1.5 rounded-t-xl bg-[#dc2626] px-3 py-1 text-[11px] font-bold leading-4 text-white sm:-mx-4 sm:-mt-3 sm:mb-2.5 sm:rounded-t-2xl sm:px-4"
+          className="-mx-3 -mt-3 mb-2 flex items-center gap-1.5 rounded-t-xl bg-[#fde3e3] px-3 py-1 text-[11px] font-bold leading-4 text-[#b91c1c] sm:-mx-4 sm:-mt-3 sm:mb-2.5 sm:rounded-t-2xl sm:px-4"
           title={pendingHint}
         >
-          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-white" aria-hidden />
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#dc2626]" aria-hidden />
           <span className="truncate">{pendingBand}</span>
         </div>
       )}

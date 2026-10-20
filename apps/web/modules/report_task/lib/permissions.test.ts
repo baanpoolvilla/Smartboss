@@ -131,9 +131,13 @@ describe("canReviewTaskRecord", () => {
   it("CEO ตรวจงานที่คนอื่นมอบหมายไม่ได้ ถ้ามีหัวหน้าแผนกตรวจแทนได้", () => {
     expect(canReviewTaskRecord({ departmentIds: ["dep-eng"], assignedById: ENG_HEAD }, OWNER, S)).toBe(false);
   });
-  it("งานที่ไม่มีใครตรวจได้ (แผนกไม่มีหัวหน้า) → CEO ยังตรวจได้ กันงานค้าง", () => {
-    expect(canReviewTaskRecord({ departmentIds: ["dep-marketing"], assignedById: OTHER_ENG }, OWNER, S)).toBe(true);
-    expect(canReviewTaskRecord({ departmentIds: [], assignedById: OTHER_ENG }, OWNER, S)).toBe(true);
+  it("งานที่ไม่มีใครตรวจได้ (แผนกไม่มีหัวหน้า + คนมอบหมายเป็นผู้รับผิดชอบเอง) → CEO ยังตรวจได้ กันงานค้าง", () => {
+    expect(canReviewTaskRecord({ departmentIds: ["dep-marketing"], assignedById: OTHER_ENG, assigneeIds: [OTHER_ENG] }, OWNER, S)).toBe(true);
+    expect(canReviewTaskRecord({ departmentIds: [], assignedById: OTHER_ENG, assigneeIds: [OTHER_ENG] }, OWNER, S)).toBe(true);
+  });
+  it("แผนกไม่มีหัวหน้า แต่คนมอบหมายตรวจได้ → ไม่ตกมาที่ CEO", () => {
+    expect(canReviewTaskRecord({ departmentIds: ["dep-marketing"], assignedById: OTHER_ENG, assigneeIds: ["usr-03"] }, OWNER, S)).toBe(false);
+    expect(canReviewTaskRecord({ departmentIds: [], assignedById: OTHER_ENG }, OWNER, S)).toBe(false);
   });
   it("มีผู้ตรวจที่ตั้งไว้ → CEO ไม่ต้องรับงานที่ไม่มีหัวหน้า", () => {
     expect(canReviewTaskRecord({ departmentIds: ["dep-marketing"], assignedById: OTHER_ENG }, OWNER, { headsCanReview: true, extraReviewerIds: ["usr-06"] })).toBe(false);
