@@ -971,7 +971,7 @@ export function TaskFilters({
             "relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors active:scale-95 sm:hidden",
             activeFilterCount > 0
               ? "bg-slate-100 text-[var(--brand-navy)]"
-              : "text-(--app-strong) hover:bg-slate-100 hover:text-[var(--brand-navy)]"
+              : "bg-[#eaeef5] text-[var(--brand-navy)] hover:bg-[#dde3ee]"
           )}
         >
           <SlidersHorizontal className="h-5 w-5" />
@@ -995,8 +995,9 @@ export function TaskFilters({
                   activeFilterCount > 0
                     ? "border-[var(--brand-navy)] bg-[var(--brand-navy)] text-white shadow-[0_2px_10px_rgba(27,37,55,0.3)] hover:-translate-y-px hover:bg-[#2b3a52]"
                     : desktopPanelOpen
-                      ? "border-[var(--brand-navy)]/60 bg-slate-100 text-[var(--brand-navy)] shadow-sm"
-                      : "border-slate-300 bg-white text-[var(--brand-navy)] hover:-translate-y-px hover:border-[var(--brand-navy)]/50 hover:bg-slate-100 hover:shadow-[0_2px_8px_rgba(27,37,55,0.12)]"
+                      ? "border-[var(--brand-navy)]/60 bg-[#dde3ee] text-[var(--brand-navy)] shadow-sm"
+                      : // ปกติ = พื้นกรมท่าอ่อน (เดิมพื้นขาว "สีมันขาวไม่สวย อยากได้พื้นหลังมีสี" 20/10/2569) · hover เข้มขึ้น
+                        "border-[#cfd6e2] bg-[#eaeef5] text-[var(--brand-navy)] hover:-translate-y-px hover:border-[var(--brand-navy)]/50 hover:bg-[#dde3ee] hover:shadow-[0_2px_8px_rgba(27,37,55,0.12)]"
                 )}
               >
                 <SlidersHorizontal className="h-3.5 w-3.5 transition-transform duration-200 group-hover:scale-110" />
