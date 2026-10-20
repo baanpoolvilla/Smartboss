@@ -898,7 +898,12 @@ export function TaskFilters({
           type="button"
           onClick={() => setMobileSheetOpen(true)}
           aria-label={activeFilterCount > 0 ? `ตัวกรอง ใช้อยู่ ${activeFilterCount} รายการ` : "ตัวกรอง"}
-          className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-(--app-strong) transition-colors hover:bg-(--bg-soft) sm:hidden"
+          className={cn(
+            "relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors active:scale-95 sm:hidden",
+            activeFilterCount > 0
+              ? "bg-[var(--sidebar-accent)] text-[var(--brand-green-dark)]"
+              : "text-(--app-strong) hover:bg-[var(--sidebar-accent)] hover:text-[var(--brand-green-dark)]"
+          )}
         >
           <SlidersHorizontal className="h-5 w-5" />
           {activeFilterCount > 0 && (
@@ -915,16 +920,21 @@ export function TaskFilters({
               <button
                 type="button"
                 className={cn(
-                  "hidden h-[34px] shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors sm:flex",
-                  activeFilterCount > 0
-                    ? "border-[var(--brand-green)]/40 bg-[var(--accent)] text-[var(--brand-green-dark)]"
-                    : "border-[var(--line)] bg-white text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+                  // สีเขียวแบรนด์ชุดเดียวกับแท็บมุมมอง: ปกติขาว · hover/เปิดอยู่ = พื้นเขียวอ่อน · มีตัวกรองใช้อยู่ = ขอบเขียว + เลขบนวงเขียว
+                  "group hidden h-[34px] shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold transition-all duration-200 active:scale-[0.97] sm:flex",
+                  activeFilterCount > 0 || desktopPanelOpen
+                    ? "border-[var(--brand-green-dark)]/45 bg-[var(--sidebar-accent)] text-[var(--brand-green-dark)] shadow-[0_2px_8px_rgba(30,120,48,0.15)]"
+                    : "border-[var(--line)] bg-white text-[var(--ink)] hover:border-[var(--brand-green-dark)]/40 hover:bg-[var(--sidebar-accent)] hover:text-[var(--brand-green-dark)] hover:shadow-sm"
                 )}
               >
-                <SlidersHorizontal className="h-3.5 w-3.5" />
+                <SlidersHorizontal className="h-3.5 w-3.5 text-[var(--brand-green-dark)] transition-transform duration-200 group-hover:scale-110" />
                 ตัวกรอง
-                {activeFilterCount > 0 && <span className="tabular-nums">{activeFilterCount}</span>}
-                <ChevronDown className="h-3 w-3" />
+                {activeFilterCount > 0 && (
+                  <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[var(--brand-green-dark)] px-1 text-[11px] font-bold text-white tabular-nums">
+                    {activeFilterCount}
+                  </span>
+                )}
+                <ChevronDown className={cn("h-3 w-3 transition-transform duration-200", desktopPanelOpen && "rotate-180")} />
               </button>
             }
           />

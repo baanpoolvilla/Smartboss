@@ -219,7 +219,8 @@ function TasksPageContent() {
         <span className="text-[17px] font-bold text-(--ink) sm:hidden">Tasks</span>
         {!personBoardId && (
           <>
-            <div className="flex items-center gap-0.5 rounded-[10px] bg-[var(--bg-soft)] p-[3px] sm:gap-1 sm:rounded-xl sm:p-1">
+            {/* แท็บที่เลือก = พื้นเขียวแบรนด์ (สีเดียวกับปุ่มลอย +) เห็นชัดว่าอยู่มุมมองไหน · hover = พื้นขาวตัวอักษรเขียว */}
+            <div className="flex items-center gap-0.5 rounded-[10px] border border-[var(--line)] bg-[var(--bg-soft)] p-[3px] sm:gap-1 sm:rounded-xl sm:p-1">
               {tabs.map((t) => {
                 const TabIcon = t.icon;
                 const activeTab = view === t.id;
@@ -233,8 +234,10 @@ function TasksPageContent() {
                     aria-pressed={activeTab}
                     title={t.label}
                     className={cn(
-                      "flex h-[38px] w-10 items-center justify-center gap-1.5 rounded-lg transition-colors sm:h-auto sm:w-auto sm:px-3 sm:py-1.5 sm:text-xs sm:font-semibold",
-                      activeTab ? "bg-white text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
+                      "flex h-[38px] w-10 items-center justify-center gap-1.5 rounded-lg transition-all duration-200 active:scale-[0.96] sm:h-auto sm:w-auto sm:px-3.5 sm:py-1.5 sm:text-xs sm:font-semibold",
+                      activeTab
+                        ? "bg-[var(--brand-green-dark)] text-white shadow-[0_2px_8px_rgba(30,120,48,0.28)]"
+                        : "text-[var(--ink-soft)] hover:bg-white hover:text-[var(--brand-green-dark)] hover:shadow-sm"
                     )}
                   >
                     <TabIcon className="h-[18px] w-[18px] sm:h-3.5 sm:w-3.5" />
