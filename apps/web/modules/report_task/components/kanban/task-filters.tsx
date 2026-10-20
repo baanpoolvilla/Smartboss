@@ -970,13 +970,14 @@ export function TaskFilters({
           className={cn(
             "relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors active:scale-95 sm:hidden",
             activeFilterCount > 0
-              ? "bg-slate-100 text-[var(--brand-navy)]"
-              : "bg-[#eaeef5] text-[var(--brand-navy)] hover:bg-[#dde3ee]"
+              ? "bg-[var(--brand-navy)] text-white shadow-[0_2px_8px_rgba(27,37,55,0.3)]"
+              : // มือถือ: พื้นกรมท่าอ่อนเข้มขึ้น + ขอบบาง ให้เห็นชัดว่าเป็นปุ่ม (เดิมจางจนดูเป็นสีขาว 20/10/2569)
+                "bg-[#dde3ee] text-[var(--brand-navy)] ring-1 ring-inset ring-[#c3cbd9] active:bg-[#cfd6e2]"
           )}
         >
           <SlidersHorizontal className="h-5 w-5" />
           {activeFilterCount > 0 && (
-            <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--brand-navy)] px-1 text-[10.5px] font-bold text-white tabular-nums">
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[10.5px] font-bold text-[var(--brand-navy)] ring-1 ring-[var(--brand-navy)] tabular-nums">
               {activeFilterCount}
             </span>
           )}
