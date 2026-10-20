@@ -292,12 +292,13 @@ export function ReportFeed({
         <button
           type="button"
           onClick={jumpToNextNewReply}
-          className="absolute top-3 left-1/2 z-10 -translate-x-1/2 flex max-w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-full bg-[var(--brand-green-dark)] px-3.5 py-2 text-xs font-semibold text-white shadow-lg transition-transform hover:scale-[1.03] active:scale-95"
+          // แดงอ่อน (เดิมเขียวเข้ม) — แจ้งเตือนในหน้ารายงานเป็นสีแดงชุดเดียวกันหมด (ผู้ใช้ขอ 20/10/2569)
+          className="absolute top-3 left-1/2 z-10 -translate-x-1/2 flex max-w-[calc(100%-1.5rem)] cursor-pointer items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3.5 py-2 text-xs font-semibold text-red-700 shadow-[0_4px_14px_rgba(220,38,38,0.18)] transition-all hover:scale-[1.03] hover:bg-red-100 active:scale-95"
           title="ไปที่คอมเมนต์ใหม่ในโพสต์เก่า (กดซ้ำเพื่อไปโพสต์ถัดไป)"
         >
           <MessagesSquare className="h-4 w-4 shrink-0" />
           <span className="truncate">ตอบกลับใหม่ในโพสต์เก่า</span>
-          <span className="shrink-0 rounded-full bg-white/25 px-1.5 tabular-nums">{newReplyTargets.length}</span>
+          <span className="shrink-0 rounded-full bg-[#dc2626] px-1.5 text-white tabular-nums">{newReplyTargets.length}</span>
           <ArrowUp className="h-3.5 w-3.5 shrink-0" />
         </button>
       )}
