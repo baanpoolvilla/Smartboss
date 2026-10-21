@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { prisma } from "@smartboss/database";
 import { canViewAll, requireOrg } from "@smartboss/auth";
 import { getWorkOrder, updateWorkOrder, addWorkOrderComment } from "@/modules/maintenance/data/work-orders";
 import { workOrderAccess, canSeeWorkOrder } from "@/modules/maintenance/data/work-order-access";
@@ -69,11 +70,14 @@ export async function requestDueDateAction(workOrderId: string, newDate: string,
   await addWorkOrderComment(s.orgId, workOrderId, s.userId, `ขอเลื่อนกำหนดส่ง ${fmtThaiDate(wo.dueDate)} → ${fmtThaiDate(d)} · ${why}`, null, { kind: "log" });
   await log(s, wo, `ขอเลื่อนกำหนดส่ง ${fmtThaiDate(wo.dueDate)} → ${fmtThaiDate(d)} ของ`, { reason: why });
 
-  // แจ้งคนที่อนุมัติได้: CEO + คนเปิดใบงาน (ไม่รวมคนขอ)
-  const approvers = new Set<string>([
-    ...(await usersWithPermission(s.orgId, "core.data.view_all")),
-    ...(wo.createdBy ? [wo.createdBy] : []),
-  ]);
+  // แจ้งคนเปิดใบงาน (อนุมัติเองได้) — CEO/ผู้ดูทั้งบริษัทได้แจ้งเตือนเฉพาะเมื่อไม่มีคนอื่นอนุมัติ: คนเปิดใบคือคนขอเอง
+  // ใบไม่มีคนเปิด หรือคนเปิดปิดบัญชีไปแล้ว (เดิมแจ้ง CEO ทุกใบ ผู้ใช้ขอตัด 21/10/2569 "ไม่เกี่ยวกับ CEO ทำไมยังแจ้ง")
+  // CEO ยังเข้าไปอนุมัติเองได้เหมือนเดิม (canDecideDueRequest ไม่เปลี่ยน)
+  const opener =
+    wo.createdBy && wo.createdBy !== s.userId
+      ? await prisma.user.findFirst({ where: { orgId: s.orgId, id: wo.createdBy, isActive: true }, select: { id: true } })
+      : null;
+  const approvers = new Set<string>(opener ? [opener.id] : await usersWithPermission(s.orgId, "core.data.view_all"));
   approvers.delete(s.userId);
   const who = (await notifyActorName(s.userId)) ?? "ผู้รับผิดชอบ";
   await notifyUsers(s.orgId, [...approvers], {
