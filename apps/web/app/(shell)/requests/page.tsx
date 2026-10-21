@@ -2,6 +2,7 @@ import { prisma } from "@smartboss/database";
 
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { REQ_PERMS } from "@/modules/requests/permissions";
+import { usersWithPermission } from "@/modules/maintenance/data/notify";
 import { pettyBalances, withRequestsTenant } from "@/modules/requests/lib/db";
 import { canDecide, listVisibleRequests } from "@/modules/requests/lib/data";
 import { beneficiaryLabel, isOpen, requestsPage, statusOf } from "@/modules/requests/lib/page";
@@ -38,7 +39,9 @@ export default async function RequestsPage() {
           .map((h) => ({ id: h.id, name: h.name, balance: bal.get(h.id) ?? 0 }));
       })()
     : [];
-  return <Body all={all} viewer={viewer} today={today} month={month} petty={petty} />;
+  const ceoIds = new Set(await usersWithPermission(session.orgId, REQ_PERMS.approveCeo));
+  const pureHr = (await usersWithPermission(session.orgId, REQ_PERMS.approve)).filter((id) => !ceoIds.has(id));
+  return <Body all={all} viewer={viewer} today={today} month={month} petty={petty} pureHr={pureHr} />;
 }
 
 async function Body({
@@ -47,12 +50,14 @@ async function Body({
   today,
   month,
   petty,
+  pureHr,
 }: {
   all: Awaited<ReturnType<typeof listVisibleRequests>> | null;
   viewer: Awaited<ReturnType<typeof requestsPage>>["viewer"];
   today: string;
   month: string;
   petty: { id: string; name: string; balance: number }[];
+  pureHr: string[];
 }) {
   if (!all) {
     return (
@@ -71,6 +76,8 @@ async function Body({
   const unclear = live.filter((r) => r.kind === "cash_advance" && r.status === "paid" && r.clearStatus !== "cleared");
   const overdueClear = unclear.filter((r) => r.clearDueDate && r.clearDueDate < today);
 
+  // ใบระดับ HR มี HR (ที่ไม่ใช่ CEO) อนุมัติได้ไหม — มี = ไม่ขึ้นเป็น "รอฉันอนุมัติ" ของ CEO
+  const hasPureHr = (r: (typeof all)[number]) => pureHr.some((id) => id !== r.createdBy && id !== r.beneficiaryUserId);
   const rows: ListRow[] = all.map((r) => {
     const meta = [
       r.kind === "ot" && r.otMinutes ? `${r.otStart}–${r.otEnd} (${hoursText(r.otMinutes)})` : null,
@@ -92,7 +99,7 @@ async function Body({
       workDate: r.workDate,
       amount: r.netAmount,
       status: statusOf(r),
-      waitingMe: canDecide(r, viewer),
+      waitingMe: canDecide(r, viewer) && (r.approverLevel === "ceo" || !viewer.canApproveCeo || !hasPureHr(r)),
       toPay:
         (viewer.canPay && r.status === "approved" && r.beneficiaryUserId !== viewer.userId && !(r.kind === "ot" && r.beneficiaryKind === "worker")) ||
         (viewer.canPay && r.kind === "cash_advance" && r.clearStatus === "submitted" && r.beneficiaryUserId !== viewer.userId),

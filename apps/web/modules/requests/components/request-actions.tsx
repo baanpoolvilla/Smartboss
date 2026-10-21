@@ -44,7 +44,7 @@ function useRun() {
 
 /* ───────── อนุมัติ ───────── */
 
-export function DecidePanel({ id, level, isOt, forwardsToCeo = false, firstBy = null }: { id: string; level: "hr" | "ceo"; isOt: boolean; forwardsToCeo?: boolean; firstBy?: string | null }) {
+export function DecidePanel({ id, version, level, isOt, forwardsToCeo = false, firstBy = null }: { id: string; version: string; level: "hr" | "ceo"; isOt: boolean; forwardsToCeo?: boolean; firstBy?: string | null }) {
   const { busy, error, run } = useRun();
   const [note, setNote] = useState("");
   return (
@@ -61,11 +61,11 @@ export function DecidePanel({ id, level, isOt, forwardsToCeo = false, firstBy = 
       </label>
       {error && <Notice tone="danger">{error}</Notice>}
       <div className="grid grid-cols-2 gap-2">
-        <button type="button" className={primary} disabled={busy} onClick={() => run(() => decideRequestAction({ id, outcome: "approve", note }))}>
+        <button type="button" className={primary} disabled={busy} onClick={() => run(() => decideRequestAction({ id, outcome: "approve", note, version }))}>
           {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
           {forwardsToCeo ? "อนุมัติ → ส่ง CEO" : "อนุมัติ"}
         </button>
-        <button type="button" className={dangerOutline} disabled={busy || !note.trim()} onClick={() => run(() => decideRequestAction({ id, outcome: "reject", note }))}>
+        <button type="button" className={dangerOutline} disabled={busy || !note.trim()} onClick={() => run(() => decideRequestAction({ id, outcome: "reject", note, version }))}>
           ไม่อนุมัติ
         </button>
       </div>

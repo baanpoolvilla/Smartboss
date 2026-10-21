@@ -137,6 +137,8 @@ export interface RequestView {
   dwOtEntryId: string | null;
   dwPaymentId: string | null;
   maintenanceExpenseId: string | null;
+  /** เวลาแก้ล่าสุด — ใช้ยืนยันว่าผู้อนุมัติเห็นฉบับล่าสุด */
+  updatedAt: string;
   /** ผลรวมการจ่ายที่ยังไม่ถูกยกเลิก */
   paidTotal: number;
   payments: PaymentView[];
@@ -230,6 +232,7 @@ export function toRequest(r: RequestRow, payments: PaymentRow[]): RequestView {
     dwOtEntryId: r.dwOtEntryId,
     dwPaymentId: r.dwPaymentId,
     maintenanceExpenseId: r.maintenanceExpenseId,
+    updatedAt: r.updatedAt.toISOString(),
     paidTotal,
     payments: pays,
   };

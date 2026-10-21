@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { FileText } from "lucide-react";
+import { FileText, Pencil } from "lucide-react";
 import { prisma } from "@smartboss/database";
 
 import { AppScaffold } from "@/components/module/app-scaffold";
@@ -94,7 +94,7 @@ function Files({ files, title, flagsFor }: { files: Attachment[]; title: string;
   );
 }
 
-export default async function RequestDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ created?: string }> }) {
+export default async function RequestDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ created?: string; edited?: string }> }) {
   const { session, viewer } = await requestsPage();
   const { id } = await params;
   const sp = await searchParams;
@@ -195,6 +195,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
     <AppScaffold title={r.code} backHref="/requests" width="max-w-6xl">
       <div className="flex flex-col gap-4">
         {sp.created && <Notice tone="ok">ส่งแล้ว — {st.next}</Notice>}
+        {sp.edited && <Notice tone="ok">บันทึกการแก้ไขแล้ว — ผู้อนุมัติได้แจ้งเตือนยอดใหม่</Notice>}
         {/* มือถือ: หัวเรื่อง → แผงอนุมัติ/จ่าย → รายละเอียด (ไม่ต้องเลื่อนผ่านประวัติก่อนถึงปุ่ม)
             จอ ≥1024: รายละเอียดคอลัมน์ซ้าย · ขั้นตอน + ปุ่มคอลัมน์ขวา */}
         <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -348,7 +349,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
           {/* ───────── ขวา: ขั้นตอน + ปุ่ม ───────── */}
           <aside className="order-2 flex min-w-0 flex-col gap-3 lg:sticky lg:top-4 lg:col-start-2 lg:row-start-1">
             {canDecide(r, viewer) && (
-              <DecidePanel id={r.id} level={r.approverLevel} isOt={r.kind === "ot"} forwardsToCeo={r.approverLevel === "hr" && r.needCeo && !viewer.canApproveCeo} firstBy={r.firstDecidedByName} />
+              <DecidePanel id={r.id} version={r.updatedAt} level={r.approverLevel} isOt={r.kind === "ot"} forwardsToCeo={r.approverLevel === "hr" && r.needCeo && !viewer.canApproveCeo} firstBy={r.firstDecidedByName} />
             )}
             {canPayHere && (
               <PayPanel id={r.id} outstanding={outstanding} methods={methods} holders={payHolders} myUserId={session.userId} today={today} payrollPeriod={period} title={r.kind === "cash_advance" && r.clearedAt ? "จ่ายส่วนต่างที่ใช้เกิน" : "บันทึกการจ่ายเงิน"} />
@@ -367,6 +368,11 @@ export default async function RequestDetailPage({ params, searchParams }: { para
               <Steps steps={steps} />
               <p className="mt-3 border-t border-(--line) pt-2 text-xs text-(--ink-soft)">ต่อไป: {steps.find((x) => x.state === "now")?.title ?? st.next}</p>
             </section>
+            {r.status === "pending" && !r.firstDecidedAt && r.createdBy === session.userId && (
+              <Link href={`/requests/${r.id}/edit`} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-(--radius) border border-(--line) bg-(--bg) text-sm font-semibold text-(--ink) hover:bg-(--bg-soft)">
+                <Pencil className="h-4 w-4" aria-hidden="true" /> แก้ไขใบ
+              </Link>
+            )}
             {canCancel && <CancelButton id={r.id} label={r.status === "pending" ? "ยกเลิกคำขอ" : "ยกเลิกใบนี้"} />}
           </aside>
         </div>

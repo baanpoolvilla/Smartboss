@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 
-import { createRequestAction, previewRequestAction, type Preview, type UploadedFile } from "../actions";
+import { createRequestAction, previewRequestAction, updateRequestAction, type Preview, type UploadedFile } from "../actions";
 import {
   KIND_META,
   amountMismatch,
@@ -43,7 +43,30 @@ const fieldNoW = field.replace("w-full ", "");
 const labelCls = "flex flex-col gap-1.5 text-sm";
 const labelText = "font-semibold text-(--ink)";
 
+/** ค่าเดิมของใบที่กำลังแก้ (หน้า /requests/[id]/edit) */
+export interface EditInitial {
+  beneficiaryUserId: string;
+  onBehalf: boolean;
+  workDate: string;
+  otStart: string;
+  otEnd: string;
+  rateId: string;
+  amount: string;
+  title: string;
+  detail: string;
+  lines: { item: string; amount: string }[];
+  propertyId: string;
+  workOrderId: string;
+  vendorId: string;
+  vendorName: string;
+  vatOn: boolean;
+  whtPercent: number;
+  files: UploadedFile[];
+}
+
 export function RequestForm({
+  editId,
+  initial,
   kinds,
   initialKind,
   me,
@@ -65,26 +88,29 @@ export function RequestForm({
   vendors: FormVendor[];
   settings: RequestSettings;
   today: string;
+  /** มี = แก้ใบเดิม (เปลี่ยนประเภทไม่ได้) */
+  editId?: string;
+  initial?: EditInitial;
 }) {
   const router = useRouter();
   const [kind, setKind] = useState<RequestKind | null>(initialKind && kinds.includes(initialKind) ? initialKind : kinds.length === 1 ? kinds[0]! : null);
-  const [beneficiary, setBeneficiary] = useState<string>("");
-  const [onBehalf, setOnBehalf] = useState(false);
-  const [workDate, setWorkDate] = useState(today);
-  const [otStart, setOtStart] = useState("17:00");
-  const [otEnd, setOtEnd] = useState("19:00");
-  const [rateId, setRateId] = useState(settings.otRates[0]?.id ?? "");
-  const [amount, setAmount] = useState("");
-  const [title, setTitle] = useState("");
-  const [detail, setDetail] = useState("");
-  const [lines, setLines] = useState<{ item: string; amount: string }[]>([{ item: "", amount: "" }]);
-  const [propertyId, setPropertyId] = useState("");
-  const [workOrderId, setWorkOrderId] = useState("");
-  const [vendorId, setVendorId] = useState("");
-  const [vendorName, setVendorName] = useState("");
-  const [vatOn, setVatOn] = useState(false);
-  const [whtPercent, setWhtPercent] = useState(3);
-  const [files, setFiles] = useState<UploadedFile[]>([]);
+  const [beneficiary, setBeneficiary] = useState<string>(initial?.beneficiaryUserId ?? "");
+  const [onBehalf, setOnBehalf] = useState(initial?.onBehalf ?? false);
+  const [workDate, setWorkDate] = useState(initial?.workDate ?? today);
+  const [otStart, setOtStart] = useState(initial?.otStart || "17:00");
+  const [otEnd, setOtEnd] = useState(initial?.otEnd || "19:00");
+  const [rateId, setRateId] = useState(initial?.rateId || (settings.otRates[0]?.id ?? ""));
+  const [amount, setAmount] = useState(initial?.amount ?? "");
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [detail, setDetail] = useState(initial?.detail ?? "");
+  const [lines, setLines] = useState<{ item: string; amount: string }[]>(initial?.lines.length ? initial.lines : [{ item: "", amount: "" }]);
+  const [propertyId, setPropertyId] = useState(initial?.propertyId ?? "");
+  const [workOrderId, setWorkOrderId] = useState(initial?.workOrderId ?? "");
+  const [vendorId, setVendorId] = useState(initial?.vendorId ?? "");
+  const [vendorName, setVendorName] = useState(initial?.vendorName ?? "");
+  const [vatOn, setVatOn] = useState(initial?.vatOn ?? false);
+  const [whtPercent, setWhtPercent] = useState(initial?.whtPercent ?? 3);
+  const [files, setFiles] = useState<UploadedFile[]>(initial?.files ?? []);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -132,15 +158,21 @@ export function RequestForm({
         otEnd,
         otRateId: rateId,
         amount: Number.isFinite(numericAmount) ? numericAmount : 0,
+        exceptRequestId: editId,
       });
       if (n !== seq.current) return;
       setChecking(false);
       if (res.ok) setPreview(res.preview);
     }, 350);
     return () => clearTimeout(t);
-  }, [kind, effectiveBeneficiary, workDate, otStart, otEnd, rateId, numericAmount]);
+  }, [kind, effectiveBeneficiary, workDate, otStart, otEnd, rateId, numericAmount, editId]);
 
+  const vendorInit = useRef(Boolean(editId));
   useEffect(() => {
+    if (vendorInit.current) {
+      vendorInit.current = false;
+      return;
+    }
     if (vendor) {
       setVatOn(vendor.vatRegistered);
       setWhtPercent(vendor.whtPercent);
@@ -164,7 +196,7 @@ export function RequestForm({
     if (!kind) return;
     setError(null);
     startSave(async () => {
-      const res = await createRequestAction({
+      const payload = {
         kind,
         beneficiaryUserId: effectiveBeneficiary,
         vendorId: vendorId || null,
@@ -182,12 +214,13 @@ export function RequestForm({
         vatOn,
         whtPercent,
         attachments: files,
-      });
+      };
+      const res = editId ? await updateRequestAction(editId, payload) : await createRequestAction(payload);
       if (!res.ok) {
         setError(res.error);
         return;
       }
-      router.push(`/requests/${res.id}?created=1`);
+      router.push(`/requests/${res.id}?${editId ? "edited" : "created"}=1`);
     });
   }
 
@@ -272,6 +305,13 @@ export function RequestForm({
 
   return (
     <div className="flex flex-col gap-4">
+      {editId ? (
+        <div className="flex items-center gap-2 rounded-(--radius-lg) border border-(--line) bg-(--bg) px-4 py-3">
+          <KindChip kind={kind} />
+          <span className="text-sm font-bold text-(--ink)">แก้ไข{KIND_META[kind].label}</span>
+          <span className="ml-auto text-xs text-(--ink-soft)">แก้ได้จนกว่าจะมีคนอนุมัติ</span>
+        </div>
+      ) : (
       <details className="group rounded-(--radius-lg) border border-(--line) bg-(--bg)">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3">
           <span className="flex items-center gap-2">
@@ -282,6 +322,7 @@ export function RequestForm({
         </summary>
         <div className="border-t border-(--line) p-3">{picker}</div>
       </details>
+      )}
 
       <div className="flex flex-wrap items-start gap-4">
         {/* ───────── ฟอร์ม ───────── */}
@@ -605,10 +646,10 @@ export function RequestForm({
             className="inline-flex h-12 items-center justify-center gap-2 rounded-(--radius) bg-(--app) px-4 text-base font-semibold text-white hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-            {kind === "ot" ? "ส่งให้ HR ตรวจ" : `ส่งขออนุมัติ${total > 0 ? ` ${baht(total)}` : ""}`}
+            {editId ? `บันทึกการแก้ไข${total > 0 ? ` ${baht(total)}` : ""}` : kind === "ot" ? "ส่งให้ HR ตรวจ" : `ส่งขออนุมัติ${total > 0 ? ` ${baht(total)}` : ""}`}
           </button>
           <p className="text-center text-xs text-(--ink-soft)">
-            {thaiDate(workDate)} · ส่งแล้วแก้ไม่ได้ ยกเลิกแล้วยื่นใหม่ได้ระหว่างรออนุมัติ
+            {thaiDate(workDate)} · แก้ไขได้จนกว่าจะมีคนอนุมัติ
           </p>
         </aside>
       </div>

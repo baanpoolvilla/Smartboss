@@ -24,12 +24,25 @@ interface Brief {
 
 const head = (r: Brief) => `${r.code} · ${KIND_META[r.kind].short} ${baht(r.netAmount)}`;
 
-export async function notifyApprovers(orgId: string, r: Brief, level: ApproverLevel, exclude: string[]) {
-  const ids = await usersWithPermission(orgId, level === "ceo" ? REQ_PERMS.approveCeo : REQ_PERMS.approve);
+/**
+ * คนที่ต้องได้แจ้งเตือน "รออนุมัติ" ของขั้นนี้ — ระดับ HR แจ้ง HR เท่านั้น ไม่แจ้ง CEO ทุกใบ
+ * ("ไม่อยากให้ CEO อนุมัติเยอะ" 21/10/2569 — CEO ถือสิทธิ์อนุมัติระดับ HR ด้วย จึงต้องตัดออกเอง)
+ * ไม่มี HR ที่อนุมัติใบนี้ได้ (เช่น HR เป็นคนยื่น/ผู้ได้เงินเอง) → แจ้ง CEO แทน ไม่ให้ใบค้างเงียบ
+ */
+export async function approverRecipients(orgId: string, level: ApproverLevel, exclude: string[]): Promise<string[]> {
+  const ceo = await usersWithPermission(orgId, REQ_PERMS.approveCeo);
+  if (level === "ceo") return ceo.filter((id) => !exclude.includes(id));
+  const ceoSet = new Set(ceo);
+  const hr = (await usersWithPermission(orgId, REQ_PERMS.approve)).filter((id) => !exclude.includes(id));
+  const pureHr = hr.filter((id) => !ceoSet.has(id));
+  return pureHr.length > 0 ? pureHr : hr;
+}
+
+export async function notifyApprovers(orgId: string, r: Brief, level: ApproverLevel, exclude: string[], prefix = "รออนุมัติ") {
   await notifyUsers(
     orgId,
-    ids.filter((id) => !exclude.includes(id)),
-    { title: `รออนุมัติ: ${head(r)}`, body: `${r.beneficiaryName} · ${r.title}`, type: "req_pending", referenceId: r.id },
+    await approverRecipients(orgId, level, exclude),
+    { title: `${prefix}: ${head(r)}`, body: `${r.beneficiaryName} · ${r.title}`, type: "req_pending", referenceId: r.id },
   );
 }
 

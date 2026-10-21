@@ -90,6 +90,9 @@ async function loadOne(tx: Tx, orgId: string, id: string): Promise<RequestView |
   return r ?? null;
 }
 
+/** ผู้ได้เงินที่ควรได้แจ้งเตือน — คนงานเปิดหน้าโมดูลนี้ไม่ได้ (เห็นยอดที่หน้าคนงานแทน) · ช่างภายนอกไม่มีบัญชี */
+const staffOnly = (r: Pick<RequestView, "beneficiaryKind" | "beneficiaryUserId">) => (r.beneficiaryKind === "staff" ? r.beneficiaryUserId : null);
+
 const brief = (r: Pick<RequestView, "id" | "code" | "kind" | "title" | "netAmount" | "beneficiaryName">) => ({
   id: r.id,
   code: r.code,
@@ -216,6 +219,8 @@ export interface PreviewInput {
   otEnd?: string;
   otRateId?: string;
   amount?: number;
+  /** กำลังแก้ใบนี้ — ไม่นับใบตัวเองเป็น OT ทับเวลา/ยอดเบิกล่วงหน้าที่ใช้ไปแล้ว */
+  exceptRequestId?: string;
 }
 
 export interface Preview {
@@ -257,11 +262,11 @@ async function beneficiaryOf(orgId: string, userId: string | null) {
 }
 
 /** เบิกล่วงหน้าเดือนนั้นของคนนี้ที่ยังมีผล (รออนุมัติ/อนุมัติ/จ่ายแล้ว) */
-async function advanceUsed(tx: Tx, orgId: string, userId: string, month: string): Promise<number> {
+async function advanceUsed(tx: Tx, orgId: string, userId: string, month: string, exceptId?: string): Promise<number> {
   const from = dateOnly(`${month}-01`);
   const to = dateOnly(addDays(`${month}-28`, 4).slice(0, 7) + "-01");
   const rows = await tx.moneyRequest.findMany({
-    where: { orgId, kind: "advance", beneficiaryUserId: userId, status: { in: ["pending", "approved", "paid"] }, workDate: { gte: from, lt: to } },
+    where: { orgId, kind: "advance", beneficiaryUserId: userId, status: { in: ["pending", "approved", "paid"] }, workDate: { gte: from, lt: to }, ...(exceptId ? { id: { not: exceptId } } : {}) },
     select: { netAmount: true },
   });
   return round2(rows.reduce((s, r) => s + Number(r.netAmount), 0));
@@ -345,7 +350,7 @@ async function computePreview(session: OrgSession, input: PreviewInput, settings
       // OT ใบอื่นของคนเดียวกันวันเดียวกัน เวลาทับกัน
       const others = await withRequestsTenant(orgId, (tx) =>
         tx.moneyRequest.findMany({
-          where: { orgId, kind: "ot", beneficiaryUserId: who.userId, workDate: dateOnly(date), status: { in: ["pending", "approved", "paid"] } },
+          where: { orgId, kind: "ot", beneficiaryUserId: who.userId, workDate: dateOnly(date), status: { in: ["pending", "approved", "paid"] }, ...(input.exceptRequestId ? { id: { not: input.exceptRequestId } } : {}) },
           select: { code: true, otStart: true, otEnd: true },
         }),
       );
@@ -366,7 +371,7 @@ async function computePreview(session: OrgSession, input: PreviewInput, settings
     }
     p.cap = advanceCap(settings.advanceCapMode, settings.advanceCapValue, daily);
     if (settings.advanceCapMode === "days" && p.cap === null) p.warns.push("ยังไม่มีค่าแรง/เงินเดือนในระบบ — คิดเพดานแบบจำนวนวันไม่ได้");
-    p.capUsed = await withRequestsTenant(orgId, (tx) => advanceUsed(tx, orgId, who.userId, date.slice(0, 7)));
+    p.capUsed = await withRequestsTenant(orgId, (tx) => advanceUsed(tx, orgId, who.userId, date.slice(0, 7), input.exceptRequestId));
     const amt = Number(input.amount) || 0;
     if (p.cap !== null && p.capUsed + amt > p.cap + 0.005) {
       p.blocks.push(`เกินเพดานเบิกล่วงหน้าเดือนนี้ ${baht(p.cap)} (ใช้ไปแล้ว ${baht(p.capUsed)} เหลือ ${baht(Math.max(0, p.cap - p.capUsed))})`);
@@ -425,156 +430,272 @@ export interface CreateInput {
   attachments: Attachment[];
 }
 
+/** ข้อมูลของใบที่ผ่านการตรวจแล้ว — ใช้ทั้งตอนยื่นและตอนแก้ไข (กติกาเดียวกันทุกข้อ) */
+interface Prepared {
+  fields: {
+    title: string;
+    detail: string;
+    beneficiaryUserId: string | null;
+    beneficiaryName: string;
+    beneficiaryKind: BeneficiaryKind;
+    employmentId: string | null;
+    vendorId: string | null;
+    propertyId: string | null;
+    propertyName: string | null;
+    workOrderId: string | null;
+    workOrderCode: string | null;
+    workDate: Date;
+    otStart: string | null;
+    otEnd: string | null;
+    otMinutes: number | null;
+    otPercent: number | null;
+    otRateLabel: string | null;
+    otBase: number | null;
+    otBaseKind: string | null;
+    amount: number;
+    vatPercent: number;
+    vatAmount: number;
+    whtPercent: number;
+    whtAmount: number;
+    netAmount: number;
+    lines: { item: string; amount: number }[] | null;
+    attachments: Attachment[];
+    approverLevel: "hr" | "ceo";
+    needCeo: boolean;
+  };
+  workDate: string;
+}
+
+async function prepareRequest(session: OrgSession, input: CreateInput, exceptRequestId?: string): Promise<{ error: string } | Prepared> {
+  const orgId = session.orgId;
+  const kind = input.kind;
+  if (!KIND_META[kind]) return { error: "ประเภทคำขอไม่ถูกต้อง" };
+  const fileOthers = hasPermission(session, REQ_PERMS.fileOthers);
+  if ((kind === "ot" || kind === "advance" || kind === "contractor") && !fileOthers) return { error: "ไม่มีสิทธิ์ลงรายการนี้ให้คนอื่น" };
+  const beneficiaryUserId = kind === "contractor" ? null : (input.beneficiaryUserId || session.userId);
+  if (beneficiaryUserId && beneficiaryUserId !== session.userId && !fileOthers) return { error: "ยื่นเบิกได้เฉพาะของตัวเอง" };
+
+  const title = input.title.trim().slice(0, 160);
+  if (!title) return { error: kind === "ot" ? "ใส่ว่าทำอะไร" : "ใส่รายการที่ขอเบิก" };
+  const detail = input.detail.trim().slice(0, 2000);
+  const today = bangkokToday();
+  const workDate = kind === "advance" ? (normalizeDate(input.workDate) || today) : normalizeDate(input.workDate);
+  if (!workDate) return { error: "วันที่ไม่ถูกต้อง" };
+  if (workDate > today) return { error: "เลือกวันที่ในอนาคตไม่ได้" };
+
+  const settings = await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId));
+  const preview = await computePreview(
+    session,
+    { kind, beneficiaryUserId, workDate, otStart: input.otStart, otEnd: input.otEnd, otRateId: input.otRateId, amount: input.amount, exceptRequestId },
+    settings,
+  );
+  if (preview.blocks.length > 0) return { error: preview.blocks[0]! };
+  if (kind !== "contractor" && !preview.beneficiaryKind) return { error: "ไม่พบคนที่ได้เงิน" };
+
+  // ไฟล์แนบ
+  const allowed: AttachmentRole[] = kind === "ot" || kind === "contractor" ? ["evidence", "receipt"] : kind === "expense" ? ["receipt", "evidence"] : ["evidence", "receipt"];
+  const attachments = cleanAttachments(orgId, input.attachments, allowed);
+  if (kind === "contractor" && attachments.length === 0) return { error: "แนบใบเสนอราคา/ใบแจ้งหนี้/รูปงาน อย่างน้อย 1 ไฟล์" };
+  const receipts = attachments.filter((a) => a.role === "receipt");
+  if (kind === "expense" && receipts.length === 0) return { error: "แนบใบเสร็จอย่างน้อย 1 ใบ" };
+
+  // ยอดเงิน
+  let amount = 0;
+  let vat = { vatPercent: 0, vat: 0, whtPercent: 0, wht: 0, net: 0 };
+  let lines: { item: string; amount: number }[] | null = null;
+  let vendor: { id: string | null; name: string } | null = null;
+  if (kind === "ot") {
+    if (preview.baseKind === "manual") {
+      amount = round2(Number(input.amount));
+      if (!Number.isFinite(amount) || amount <= 0) return { error: "กรอกค่า OT (คิดจากเงินเดือนไม่ได้)" };
+    } else amount = preview.amount ?? 0;
+  } else if (kind === "contractor") {
+    if (input.vendorId) {
+      const v = await withRequestsTenant(orgId, (tx) => tx.moneyVendor.findFirst({ where: { orgId, id: input.vendorId!, active: true } }));
+      if (!v) return { error: "ไม่พบช่าง/ร้านนี้ในทะเบียน" };
+      vendor = { id: v.id, name: v.name };
+    } else {
+      const name = (input.vendorName ?? "").trim().slice(0, 120);
+      if (!name) return { error: "เลือกหรือพิมพ์ชื่อช่าง/ร้าน" };
+      vendor = { id: null, name };
+    }
+    const base = round2(Number(input.amount));
+    if (!Number.isFinite(base) || base <= 0) return { error: "กรอกค่าจ้าง (ก่อน VAT)" };
+    const whtPercent = Number(input.whtPercent ?? 0);
+    if (!Number.isFinite(whtPercent) || whtPercent < 0 || whtPercent > 15) return { error: "% หัก ณ ที่จ่ายไม่ถูกต้อง" };
+    const b = contractorBreakdown(base, input.vatOn ? settings.vatPercent : 0, whtPercent);
+    amount = b.base;
+    vat = { vatPercent: b.vatPercent, vat: b.vat, whtPercent: b.whtPercent, wht: b.wht, net: b.net };
+  } else {
+    const cleanLines = (input.lines ?? [])
+      .map((l) => ({ item: String(l.item ?? "").trim().slice(0, 120), amount: round2(Number(l.amount)) }))
+      .filter((l) => l.item && Number.isFinite(l.amount) && l.amount > 0)
+      .slice(0, 30);
+    amount = cleanLines.length > 0 ? round2(cleanLines.reduce((s, l) => s + l.amount, 0)) : round2(Number(input.amount));
+    if (cleanLines.length > 0) lines = cleanLines;
+    if (!Number.isFinite(amount) || amount <= 0) return { error: "กรอกจำนวนเงิน" };
+    if (amount > 1_000_000) return { error: "จำนวนเงินสูงเกินไป ตรวจอีกครั้ง" };
+  }
+  const net = kind === "contractor" ? vat.net : amount;
+
+  // ใบเสร็จ: วันที่ในอนาคต / ไฟล์ซ้ำกับใบอื่น (เช็คซ้ำฝั่งเซิร์ฟเวอร์ ไม่เชื่อธงจากหน้าเว็บ · ไม่นับใบตัวเอง)
+  const used = await withRequestsTenant(orgId, (tx) => usedHashes(tx, orgId, attachments.map((a) => a.sha256), exceptRequestId));
+  for (const a of attachments) {
+    const flags = receiptFlags(a, { claimDate: workDate, today, maxAgeDays: settings.receiptMaxAgeDays, duplicateOf: used.get(a.sha256) ?? null });
+    const block = flags.find((f) => f.level === "block");
+    if (block) return { error: `${a.name}: ${block.text}` };
+  }
+
+  // บ้าน / ใบงาน
+  let property: { id: string; name: string } | null = null;
+  let workOrder: { id: string; code: string; propertyId: string } | null = null;
+  if (input.workOrderId) {
+    workOrder = await prisma.workOrder.findFirst({ where: { orgId, id: input.workOrderId }, select: { id: true, code: true, propertyId: true } });
+    if (!workOrder) return { error: "ไม่พบใบงานที่เลือก" };
+  }
+  const propertyId = input.propertyId || workOrder?.propertyId || null;
+  if (propertyId) {
+    property = await prisma.property.findFirst({ where: { orgId, id: propertyId }, select: { id: true, name: true } });
+  }
+
+  // เส้นทางคิดจากยอดจริงที่จะบันทึก (ไม่ใช้ของ preview ที่คิดจากยอดตอนพิมพ์)
+  const { level, needCeo } = await approverLevelFor(orgId, kind, session.userId, beneficiaryUserId, net, settings.approvalRoutes);
+  const isOt = kind === "ot";
+  return {
+    workDate,
+    fields: {
+      title,
+      detail,
+      beneficiaryUserId,
+      beneficiaryName: kind === "contractor" ? vendor!.name : preview.beneficiaryName!,
+      beneficiaryKind: kind === "contractor" ? "vendor" : preview.beneficiaryKind!,
+      employmentId: preview.employmentId,
+      vendorId: vendor?.id ?? null,
+      propertyId: property?.id ?? null,
+      propertyName: property?.name ?? null,
+      workOrderId: workOrder?.id ?? null,
+      workOrderCode: workOrder?.code ?? null,
+      workDate: dateOnly(workDate),
+      otStart: isOt ? input.otStart! : null,
+      otEnd: isOt ? input.otEnd! : null,
+      otMinutes: isOt ? preview.minutes : null,
+      otPercent: isOt ? preview.percent : null,
+      otRateLabel: isOt ? preview.rateLabel : null,
+      otBase: isOt ? preview.base : null,
+      otBaseKind: isOt ? preview.baseKind : null,
+      amount,
+      vatPercent: vat.vatPercent,
+      vatAmount: vat.vat,
+      whtPercent: vat.whtPercent,
+      whtAmount: vat.wht,
+      netAmount: net,
+      lines,
+      attachments,
+      approverLevel: level,
+      needCeo,
+    },
+  };
+}
+
 export async function createRequestAction(input: CreateInput): Promise<Result<{ id: string; code: string }>> {
   try {
     const session = await guard();
     const orgId = session.orgId;
     const kind = input.kind;
-    if (!KIND_META[kind]) return { error: "ประเภทคำขอไม่ถูกต้อง" };
-    const fileOthers = hasPermission(session, REQ_PERMS.fileOthers);
-    if ((kind === "ot" || kind === "advance" || kind === "contractor") && !fileOthers) return { error: "ไม่มีสิทธิ์ลงรายการนี้ให้คนอื่น" };
-    const beneficiaryUserId = kind === "contractor" ? null : (input.beneficiaryUserId || session.userId);
-    if (beneficiaryUserId && beneficiaryUserId !== session.userId && !fileOthers) return { error: "ยื่นเบิกได้เฉพาะของตัวเอง" };
-
-    const title = input.title.trim().slice(0, 160);
-    if (!title) return { error: kind === "ot" ? "ใส่ว่าทำอะไร" : "ใส่รายการที่ขอเบิก" };
-    const detail = input.detail.trim().slice(0, 2000);
-    const today = bangkokToday();
-    const workDate = kind === "advance" ? today : normalizeDate(input.workDate);
-    if (!workDate) return { error: "วันที่ไม่ถูกต้อง" };
-    if (workDate > today) return { error: "เลือกวันที่ในอนาคตไม่ได้" };
-
-    const settings = await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId));
-    const preview = await computePreview(session, { kind, beneficiaryUserId, workDate, otStart: input.otStart, otEnd: input.otEnd, otRateId: input.otRateId, amount: input.amount }, settings);
-    if (preview.blocks.length > 0) return { error: preview.blocks[0]! };
-    if (kind !== "contractor" && !preview.beneficiaryKind) return { error: "ไม่พบคนที่ได้เงิน" };
-
-    // ไฟล์แนบ
-    const allowed: AttachmentRole[] = kind === "ot" || kind === "contractor" ? ["evidence", "receipt"] : kind === "expense" ? ["receipt", "evidence"] : ["evidence", "receipt"];
-    const attachments = cleanAttachments(orgId, input.attachments, allowed);
-    if (kind === "contractor" && attachments.length === 0) return { error: "แนบใบเสนอราคา/ใบแจ้งหนี้/รูปงาน อย่างน้อย 1 ไฟล์" };
-    const receipts = attachments.filter((a) => a.role === "receipt");
-    if (kind === "expense" && receipts.length === 0) return { error: "แนบใบเสร็จอย่างน้อย 1 ใบ" };
-
-    // ยอดเงิน
-    let amount = 0;
-    let vat = { vatPercent: 0, vat: 0, whtPercent: 0, wht: 0, net: 0 };
-    let lines: { item: string; amount: number }[] | null = null;
-    let vendor: { id: string | null; name: string } | null = null;
-    if (kind === "ot") {
-      if (preview.baseKind === "manual") {
-        amount = round2(Number(input.amount));
-        if (!Number.isFinite(amount) || amount <= 0) return { error: "กรอกค่า OT (คิดจากเงินเดือนไม่ได้)" };
-      } else amount = preview.amount ?? 0;
-    } else if (kind === "contractor") {
-      if (input.vendorId) {
-        const v = await withRequestsTenant(orgId, (tx) => tx.moneyVendor.findFirst({ where: { orgId, id: input.vendorId!, active: true } }));
-        if (!v) return { error: "ไม่พบช่าง/ร้านนี้ในทะเบียน" };
-        vendor = { id: v.id, name: v.name };
-      } else {
-        const name = (input.vendorName ?? "").trim().slice(0, 120);
-        if (!name) return { error: "เลือกหรือพิมพ์ชื่อช่าง/ร้าน" };
-        vendor = { id: null, name };
-      }
-      const base = round2(Number(input.amount));
-      if (!Number.isFinite(base) || base <= 0) return { error: "กรอกค่าจ้าง (ก่อน VAT)" };
-      const whtPercent = Number(input.whtPercent ?? 0);
-      if (!Number.isFinite(whtPercent) || whtPercent < 0 || whtPercent > 15) return { error: "% หัก ณ ที่จ่ายไม่ถูกต้อง" };
-      const b = contractorBreakdown(base, input.vatOn ? settings.vatPercent : 0, whtPercent);
-      amount = b.base;
-      vat = { vatPercent: b.vatPercent, vat: b.vat, whtPercent: b.whtPercent, wht: b.wht, net: b.net };
-    } else {
-      const cleanLines = (input.lines ?? [])
-        .map((l) => ({ item: String(l.item ?? "").trim().slice(0, 120), amount: round2(Number(l.amount)) }))
-        .filter((l) => l.item && Number.isFinite(l.amount) && l.amount > 0)
-        .slice(0, 30);
-      amount = cleanLines.length > 0 ? round2(cleanLines.reduce((s, l) => s + l.amount, 0)) : round2(Number(input.amount));
-      if (cleanLines.length > 0) lines = cleanLines;
-      if (!Number.isFinite(amount) || amount <= 0) return { error: "กรอกจำนวนเงิน" };
-      if (amount > 1_000_000) return { error: "จำนวนเงินสูงเกินไป ตรวจอีกครั้ง" };
-    }
-    const net = kind === "contractor" ? vat.net : amount;
-
-    // ใบเสร็จ: วันที่ในอนาคต / ไฟล์ซ้ำ (เช็คซ้ำฝั่งเซิร์ฟเวอร์ ไม่เชื่อธงจากหน้าเว็บ)
-    const used = await withRequestsTenant(orgId, (tx) => usedHashes(tx, orgId, attachments.map((a) => a.sha256)));
-    for (const a of attachments) {
-      const flags = receiptFlags(a, { claimDate: workDate, today, maxAgeDays: settings.receiptMaxAgeDays, duplicateOf: used.get(a.sha256) ?? null });
-      const block = flags.find((f) => f.level === "block");
-      if (block) return { error: `${a.name}: ${block.text}` };
-    }
-
-    // บ้าน / ใบงาน
-    let property: { id: string; name: string } | null = null;
-    let workOrder: { id: string; code: string; propertyId: string } | null = null;
-    if (input.workOrderId) {
-      workOrder = await prisma.workOrder.findFirst({ where: { orgId, id: input.workOrderId }, select: { id: true, code: true, propertyId: true } });
-      if (!workOrder) return { error: "ไม่พบใบงานที่เลือก" };
-    }
-    const propertyId = input.propertyId || workOrder?.propertyId || null;
-    if (propertyId) {
-      property = await prisma.property.findFirst({ where: { orgId, id: propertyId }, select: { id: true, name: true } });
-    }
-
-    // เส้นทางคิดจากยอดจริงที่จะบันทึก (ไม่ใช้ของ preview ที่คิดจากยอดตอนพิมพ์)
-    const { level, needCeo } = await approverLevelFor(orgId, kind, session.userId, beneficiaryUserId, net, settings.approvalRoutes);
+    const prep = await prepareRequest(session, input);
+    if ("error" in prep) return prep;
+    const f = prep.fields;
     const byName = await nameOf(session.userId);
-    const beneficiaryKind: BeneficiaryKind = kind === "contractor" ? "vendor" : preview.beneficiaryKind!;
-    const beneficiaryName = kind === "contractor" ? vendor!.name : preview.beneficiaryName!;
-    const minutes = kind === "ot" ? preview.minutes : null;
-
     const created = await withRequestsTenantAfter(
       orgId,
       (tx) => nextRequestCode(tx, orgId),
       async (tx, code) => {
+        const { lines, attachments, ...rest } = f;
         const row = await tx.moneyRequest.create({
           data: {
             orgId,
             code,
             kind,
-            title,
-            detail,
-            beneficiaryUserId,
-            beneficiaryName,
-            beneficiaryKind,
-            employmentId: preview.employmentId,
-            vendorId: vendor?.id ?? null,
-            propertyId: property?.id ?? null,
-            propertyName: property?.name ?? null,
-            workOrderId: workOrder?.id ?? null,
-            workOrderCode: workOrder?.code ?? null,
-            workDate: dateOnly(workDate),
-            otStart: kind === "ot" ? input.otStart! : null,
-            otEnd: kind === "ot" ? input.otEnd! : null,
-            otMinutes: minutes,
-            otPercent: kind === "ot" ? preview.percent : null,
-            otRateLabel: kind === "ot" ? preview.rateLabel : null,
-            otBase: kind === "ot" ? preview.base : null,
-            otBaseKind: kind === "ot" ? preview.baseKind : null,
-            amount,
-            vatPercent: vat.vatPercent,
-            vatAmount: vat.vat,
-            whtPercent: vat.whtPercent,
-            whtAmount: vat.wht,
-            netAmount: net,
+            ...rest,
             ...(lines ? { lines } : {}),
             attachments: attachments as unknown as object,
             createdBy: session.userId,
             createdByName: byName,
-            approverLevel: level,
-            needCeo,
           },
         });
         const summary =
           kind === "ot"
-            ? `ลง OT ให้ ${beneficiaryName} ${thai(workDate)} ${input.otStart}–${input.otEnd} (${hoursText(minutes ?? 0)}) ${baht(net)}`
-            : `ยื่น${KIND_META[kind].label} ${baht(net)} ให้ ${beneficiaryName}`;
+            ? `ลง OT ให้ ${f.beneficiaryName} ${thai(prep.workDate)} ${f.otStart}–${f.otEnd} (${hoursText(f.otMinutes ?? 0)}) ${baht(f.netAmount)}`
+            : `ยื่น${KIND_META[kind].label} ${baht(f.netAmount)} ให้ ${f.beneficiaryName}`;
         await insertEvent(tx, orgId, { requestId: row.id, byUserId: session.userId, byName, action: "create", summary });
         return { id: row.id, code: row.code };
       },
     );
-    void notifyApprovers(orgId, { id: created.id, code: created.code, kind, title, netAmount: net, beneficiaryName }, level, [session.userId, beneficiaryUserId ?? ""]);
+    void notifyApprovers(orgId, { id: created.id, code: created.code, kind, title: f.title, netAmount: f.netAmount, beneficiaryName: f.beneficiaryName }, f.approverLevel, [session.userId, f.beneficiaryUserId ?? ""]);
     refresh();
     return { ok: true, ...created };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/**
+ * แก้ไขใบที่ยังรออนุมัติ — เฉพาะคนยื่น และยังไม่มีใครตัดสิน (รวมถึงขั้นแรกของ HR ในใบสองขั้น)
+ * ตรวจใหม่ทุกข้อเหมือนตอนยื่น (ไม่นับใบตัวเองเป็นของซ้ำ) · เส้นทางอนุมัติคิดใหม่จากยอดใหม่
+ * ใบที่อนุมัติแล้วแก้ไม่ได้ (ผู้ใช้ตกลง 21/10/2569) — จ่ายน้อยกว่าทำตอนบันทึกจ่าย มากกว่าต้องยื่นใหม่
+ */
+export async function updateRequestAction(id: string, input: CreateInput): Promise<Result<{ id: string }>> {
+  try {
+    const session = await guard();
+    const orgId = session.orgId;
+    const old = await withRequestsTenant(orgId, (tx) => loadOne(tx, orgId, id));
+    if (!old) return { error: "ไม่พบคำขอ" };
+    if (old.createdBy !== session.userId) return { error: "แก้ได้เฉพาะคนที่ยื่นใบนี้" };
+    if (old.status !== "pending" || old.firstDecidedAt) return { error: "ใบนี้มีคนตัดสินแล้ว แก้ไม่ได้ — ยกเลิกแล้วยื่นใหม่" };
+    if (input.kind !== old.kind) return { error: "เปลี่ยนประเภทของใบไม่ได้ — ยกเลิกแล้วยื่นใหม่" };
+    const prep = await prepareRequest(session, input, id);
+    if ("error" in prep) return prep;
+    const f = prep.fields;
+
+    // สรุปว่าแก้อะไร ให้ผู้อนุมัติเห็นในประวัติ
+    const changes: string[] = [];
+    if (Math.abs(old.netAmount - f.netAmount) > 0.005) changes.push(`ยอด ${baht(old.netAmount)} → ${baht(f.netAmount)}`);
+    if (old.title !== f.title) changes.push(`รายการ "${old.title}" → "${f.title}"`);
+    if (old.beneficiaryName !== f.beneficiaryName) changes.push(`ของ ${old.beneficiaryName} → ${f.beneficiaryName}`);
+    if (old.workDate !== prep.workDate) changes.push(`วันที่ ${thai(old.workDate)} → ${thai(prep.workDate)}`);
+    if (old.otStart !== f.otStart || old.otEnd !== f.otEnd) changes.push(`เวลา ${old.otStart ?? "—"}–${old.otEnd ?? "—"} → ${f.otStart ?? "—"}–${f.otEnd ?? "—"}`);
+    const oldFiles = new Set(old.attachments.map((a) => a.sha256));
+    const newFiles = new Set(f.attachments.map((a) => a.sha256));
+    const added = [...newFiles].filter((x) => !oldFiles.has(x)).length;
+    const removed = [...oldFiles].filter((x) => !newFiles.has(x)).length;
+    if (added) changes.push(`แนบไฟล์เพิ่ม ${added}`);
+    if (removed) changes.push(`เอาไฟล์ออก ${removed}`);
+    if (old.detail !== f.detail) changes.push("แก้รายละเอียด");
+    if ((old.propertyId ?? null) !== f.propertyId || (old.workOrderId ?? null) !== f.workOrderId) changes.push("แก้บ้าน/ใบงาน");
+    if (old.approverLevel !== f.approverLevel || old.needCeo !== f.needCeo) {
+      changes.push(f.needCeo ? "ยอดเกินเกณฑ์ ต้องผ่าน CEO ด้วย" : f.approverLevel === "ceo" ? "ผู้อนุมัติเปลี่ยนเป็น CEO" : "ผู้อนุมัติเปลี่ยนเป็น HR");
+    }
+    if (changes.length === 0) return { ok: true, id };
+
+    const byName = await nameOf(session.userId);
+    const saved = await withRequestsTenant(orgId, async (tx) => {
+      const { lines, attachments, ...rest } = f;
+      // แก้ได้เฉพาะตอนยังไม่มีใครตัดสิน — กันกดแก้พร้อมกับที่ HR กำลังอนุมัติ
+      const res = await tx.moneyRequest.updateMany({
+        where: { orgId, id, status: "pending", firstDecidedAt: null },
+        data: { ...rest, lines: lines ?? [], attachments: attachments as unknown as object },
+      });
+      if (res.count === 0) return false;
+      await insertEvent(tx, orgId, { requestId: id, byUserId: session.userId, byName, action: "edit", summary: `แก้ไข: ${changes.join(" · ")}` });
+      return true;
+    });
+    if (!saved) return { error: "มีคนตัดสินใบนี้ไปก่อนแล้ว — แก้ไม่ได้" };
+
+    // แจ้งเตือนเดิม (ยอดเก่า) หายไป แจ้งใหม่ด้วยยอดใหม่ — ผู้อนุมัติอาจเปลี่ยนตามยอด
+    await clearActionNotifications(orgId, id, ["req_pending"]);
+    void notifyApprovers(orgId, { id, code: old.code, kind: old.kind, title: f.title, netAmount: f.netAmount, beneficiaryName: f.beneficiaryName }, f.approverLevel, [session.userId, f.beneficiaryUserId ?? ""], "แก้ไขแล้ว รออนุมัติ");
+    refresh(id);
+    return { ok: true, id };
   } catch (error) {
     return fail(error);
   }
@@ -587,7 +708,7 @@ const thai = (d: string) => {
 
 /* ═════════════════════════ อนุมัติ / ไม่อนุมัติ / ยกเลิก ═════════════════════════ */
 
-export async function decideRequestAction(input: { id: string; outcome: "approve" | "reject"; note: string }): Promise<Result> {
+export async function decideRequestAction(input: { id: string; outcome: "approve" | "reject"; note: string; version?: string }): Promise<Result> {
   try {
     const session = await guard();
     const orgId = session.orgId;
@@ -598,6 +719,8 @@ export async function decideRequestAction(input: { id: string; outcome: "approve
     const r = await withRequestsTenant(orgId, (tx) => loadOne(tx, orgId, input.id));
     if (!r) return { error: "ไม่พบคำขอ" };
     if (!canDecide(r, viewer)) return { error: r.status !== "pending" ? "ใบนี้ตัดสินไปแล้ว" : "คุณอนุมัติใบนี้ไม่ได้ (ใบของตัวเอง หรือต้องเป็น CEO)" };
+    // คนยื่นเพิ่งแก้ใบระหว่างที่เปิดดูอยู่ — ไม่ให้อนุมัติยอดเก่าที่เห็นบนจอ
+    if (input.version && input.version !== r.updatedAt) return { error: "ใบนี้เพิ่งถูกแก้ไข — โหลดหน้าใหม่เพื่อดูยอดล่าสุดก่อนตัดสิน" };
 
     // ใบยอดเกินเกณฑ์: HR อนุมัติขั้นแรก → ส่งต่อ CEO (ยังไม่มีผล) · CEO กดเองตั้งแต่ขั้นแรก = จบทีเดียว
     if (input.outcome === "approve" && r.approverLevel === "hr" && r.needCeo && !viewer.canApproveCeo) {
@@ -613,7 +736,7 @@ export async function decideRequestAction(input: { id: string; outcome: "approve
       if (!moved) return { error: "มีคนตัดสินใบนี้ไปก่อนแล้ว — รีเฟรช" };
       await clearActionNotifications(orgId, r.id, ["req_pending"]);
       void notifyApprovers(orgId, brief(r), "ceo", [r.createdBy, r.beneficiaryUserId ?? "", session.userId]);
-      void notifyResult(orgId, brief(r), [r.createdBy, r.beneficiaryUserId], "HR ผ่านแล้ว รอ CEO");
+      void notifyResult(orgId, brief(r), [r.createdBy, staffOnly(r)], "HR ผ่านแล้ว รอ CEO");
       refresh(r.id);
       return { ok: true };
     }
@@ -688,10 +811,11 @@ export async function decideRequestAction(input: { id: string; outcome: "approve
 
     await clearActionNotifications(orgId, r.id, ["req_pending"]);
     const b = brief(r);
-    if (input.outcome === "reject") void notifyResult(orgId, b, [r.createdBy, r.beneficiaryUserId], "ไม่อนุมัติ", note);
+    const people = [r.createdBy, staffOnly(r)];
+    if (input.outcome === "reject") void notifyResult(orgId, b, people, "ไม่อนุมัติ", note);
     else {
-      void notifyResult(orgId, b, [r.createdBy, r.beneficiaryUserId], workerOt ? "อนุมัติ OT แล้ว (เข้าบัญชีค่าแรง)" : "อนุมัติแล้ว");
-      if (!workerOt) void notifyPayers(orgId, b, [r.beneficiaryUserId ?? ""]);
+      void notifyResult(orgId, b, people, workerOt ? "อนุมัติ OT แล้ว (เข้าบัญชีค่าแรงคนงาน)" : "อนุมัติแล้ว");
+      if (!workerOt) void notifyPayers(orgId, b, [r.beneficiaryUserId ?? "", session.userId]);
     }
     refresh(r.id);
     return { ok: true };
@@ -730,7 +854,7 @@ export async function cancelRequestAction(input: { id: string; reason: string })
       await insertEvent(tx, orgId, { requestId: r.id, byUserId: session.userId, byName, action: "cancel", summary: `ยกเลิก · ${reason}` });
     });
     await clearActionNotifications(orgId, r.id, ["req_pending", "req_to_pay", "req_clear"]);
-    if (r.createdBy !== session.userId) void notifyResult(orgId, brief(r), [r.createdBy, r.beneficiaryUserId], "ยกเลิกแล้ว", reason);
+    if (r.createdBy !== session.userId) void notifyResult(orgId, brief(r), [r.createdBy, staffOnly(r)], "ยกเลิกแล้ว", reason);
     refresh(r.id);
     return { ok: true };
   } catch (error) {
@@ -874,8 +998,14 @@ export async function recordPaymentAction(input: PayInput): Promise<Result> {
       await clearActionNotifications(orgId, r.id, ["req_to_pay"]);
       if (r.kind === "expense" || r.kind === "contractor") await linkMaintenanceExpense(orgId, r, session.userId, r.kind === "contractor" ? round2(r.amount + r.vatAmount) : r.netAmount);
     }
-    if (method !== "payroll") void notifyResult(orgId, brief(r), [r.beneficiaryUserId], "จ่ายเงินแล้ว", `${baht(amount)} · ${METHOD_LABEL[method]} — กด "ได้รับเงินแล้ว" ในใบ`);
-    if (r.kind === "cash_advance" && result === "full") void notifyClear(orgId, brief(r), [r.beneficiaryUserId], `จ่ายแล้ว · ส่งใบเสร็จ + เงินทอนภายใน ${settings.clearDueDays} วัน`);
+    if (r.kind === "cash_advance" && result === "full") {
+      // แจ้งอันเดียว — บอกทั้งว่าได้เงินแล้ว และต้องส่งใบเสร็จ + เงินทอนเมื่อไหร่
+      void notifyClear(orgId, brief(r), [staffOnly(r)], `จ่ายแล้ว ${baht(amount)} · ส่งใบเสร็จ + เงินทอนภายใน ${settings.clearDueDays} วัน`);
+    } else if (method !== "payroll") {
+      void notifyResult(orgId, brief(r), [staffOnly(r)], "จ่ายเงินแล้ว", `${baht(amount)} · ${METHOD_LABEL[method]} — กด "ได้รับเงินแล้ว" ในใบ`);
+    }
+    // ใบช่างภายนอก: ไม่มีผู้รับในระบบ — แจ้งคนที่ลงใบให้รู้ว่าจ่ายร้านแล้ว
+    if (r.beneficiaryKind === "vendor" && r.createdBy !== session.userId) void notifyResult(orgId, brief(r), [r.createdBy], "จ่ายร้านแล้ว", `${baht(amount)} · ${METHOD_LABEL[method]}`);
     refresh(r.id);
     return { ok: true };
   } catch (error) {
@@ -949,6 +1079,9 @@ export async function voidPaymentAction(input: { paymentId: string; reason: stri
     if (res === "denied") return { error: "ยกเลิกได้เฉพาะ HR หรือคนบันทึกเองภายในวันนั้น" };
     if (res === "deducted") return { error: "หักเงินเดือนไปแล้ว — ยกเลิกการจ่ายไม่ได้" };
     if (res === "cleared") return { error: "ส่งใบเสร็จแล้ว — ยกเลิกการจ่ายไม่ได้" };
+    // คนรับเคยได้แจ้ง "จ่ายแล้ว" — ต้องรู้ว่าถูกยกเลิก · ใบกลับไปรอจ่าย HR ต้องรู้ด้วย
+    void notifyResult(orgId, brief(res), [staffOnly(res), res.beneficiaryKind === "vendor" ? res.createdBy : null], "ยกเลิกการจ่าย", reason);
+    void notifyPayers(orgId, brief(res), [res.beneficiaryUserId ?? "", session.userId]);
     if (res.maintenanceExpenseId) {
       await prisma.expense.deleteMany({ where: { orgId, id: res.maintenanceExpenseId } }).catch(() => null);
       await withRequestsTenant(orgId, (tx) => tx.moneyRequest.update({ where: { id: res.id }, data: { maintenanceExpenseId: null } }));
@@ -1072,8 +1205,8 @@ export async function confirmClearingAction(input: { id: string; returnedTo: str
     });
     await clearActionNotifications(orgId, r.id, ["req_clear"]);
     if (spent > 0) await linkMaintenanceExpense(orgId, r, session.userId, spent);
-    if (owedMore > 0.005) void notifyPayers(orgId, { ...brief(r), netAmount: owedMore }, [r.beneficiaryUserId ?? ""]);
-    void notifyResult(orgId, brief(r), [r.beneficiaryUserId], "ตรวจใบเสร็จแล้ว");
+    if (owedMore > 0.005) void notifyPayers(orgId, { ...brief(r), netAmount: owedMore }, [r.beneficiaryUserId ?? "", session.userId]);
+    void notifyResult(orgId, brief(r), [staffOnly(r)], "ตรวจใบเสร็จแล้ว", shortage > 0.005 ? `ขาดคืน ${baht(shortage)} — หักคืนทีหลัง` : owedMore > 0.005 ? `บริษัทจ่ายเพิ่ม ${baht(owedMore)}` : undefined);
     refresh(r.id);
     return { ok: true };
   } catch (error) {
@@ -1093,6 +1226,7 @@ export async function markPayrollAction(input: { period: string; payIds: string[
     const byName = await nameOf(session.userId);
     const today = bangkokToday();
     let done = 0;
+    const told: { r: RequestView; title: string; body: string }[] = [];
     await withRequestsTenant(orgId, async (tx) => {
       const pays = await loadRequests(tx, orgId, { id: { in: input.payIds.slice(0, 500) }, status: "approved", beneficiaryKind: "staff" }, 500);
       for (const r of pays) {
@@ -1102,6 +1236,7 @@ export async function markPayrollAction(input: { period: string; payIds: string[
         await tx.moneyRequestPayment.create({ data: { orgId, requestId: r.id, amount, method: "payroll", paidOn: dateOnly(today), payrollPeriod: input.period, note: `รวมเงินเดือนงวด ${input.period}`, byUserId: session.userId, byName } });
         await tx.moneyRequest.update({ where: { id: r.id }, data: { status: "paid" } });
         await insertEvent(tx, orgId, { requestId: r.id, byUserId: session.userId, byName, action: "pay", summary: `จ่ายรวมเงินเดือนงวด ${input.period} ${baht(amount)}` });
+        told.push({ r, title: "รวมในเงินเดือนแล้ว", body: `งวด ${input.period} · ${baht(amount)}` });
         done++;
       }
       const deducts = await tx.moneyRequest.findMany({ where: { orgId, id: { in: input.deductIds.slice(0, 500) }, deductedAt: null, deductAmount: { gt: 0 } } });
@@ -1109,9 +1244,12 @@ export async function markPayrollAction(input: { period: string; payIds: string[
         if (r.beneficiaryUserId === session.userId) continue;
         await tx.moneyRequest.update({ where: { id: r.id }, data: { deductedAt: new Date(), deductedByName: byName, deductedPeriod: input.period } });
         await insertEvent(tx, orgId, { requestId: r.id, byUserId: session.userId, byName, action: "deduct", summary: `หักเงินเดือนงวด ${input.period} ${baht(Number(r.deductAmount))}` });
+        const view = (await loadRequests(tx, orgId, { id: r.id }, 1))[0];
+        if (view) told.push({ r: view, title: "หักจากเงินเดือนแล้ว", body: `งวด ${input.period} · ${baht(Number(r.deductAmount))}` });
         done++;
       }
     });
+    for (const t of told) void notifyResult(orgId, brief(t.r), [staffOnly(t.r)], t.title, t.body);
     for (const id of input.payIds) await clearActionNotifications(orgId, id, ["req_to_pay"]);
     revalidatePath("/requests/payroll");
     refresh();
