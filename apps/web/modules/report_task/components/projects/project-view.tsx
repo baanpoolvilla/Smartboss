@@ -166,13 +166,14 @@ export function ProjectView({ projectId }: { projectId: string }) {
     <div className="space-y-3">
       <div className="space-y-3">
         <div className="flex flex-wrap items-start gap-3">
-          <div className="grid min-w-0 flex-[1_1_320px] gap-2">
+          {/* คอม: ข้อมูลโปรเจกต์ (ผู้ดูแล วัน เหลือกี่วัน %เสร็จ) ชิดขวาแถวเดียวกับชื่อ (ผู้ใช้ 21/10/2569) · มือถือ: ใต้ชื่อเหมือนเดิม */}
+          <div className="flex min-w-0 flex-[1_1_320px] flex-wrap items-center gap-x-6 gap-y-2">
             <div className="flex flex-wrap items-center gap-2.5">
               <h1 className="m-0 min-w-0 break-words text-xl font-bold leading-tight sm:text-2xl">{project.name}</h1>
               <ProjectStatusChip status={status} />
             </div>
             {/* แยกข้อมูลเป็นก้อน อ่านทีละอย่าง — เดิมยัดบรรทัดเดียวตัวเล็ก */}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] text-[var(--ink-soft)] sm:gap-x-5">
+            <div className="flex basis-full flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] text-[var(--ink-soft)] sm:ml-auto sm:basis-auto sm:gap-x-5">
               <span className="inline-flex items-center gap-1.5"><PersonDot userId={project.ownerId} size={20} /><span className="text-[var(--ink)]">{getUser(project.ownerId)?.name ?? "—"}</span> ผู้ดูแลโปรเจกต์</span>
               <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-4 w-4" />{fmtDay(project.startDate)} – {fmtDay(project.endDate, true)}</span>
               <span>{project.closedStatus ? "ปิดแล้ว" : dayNum(project.endDate) >= dayNum(today) ? `เหลือ ${dayNum(project.endDate) - dayNum(today)} วัน` : `เลยวันเสร็จมา ${dayNum(today) - dayNum(project.endDate)} วัน`}</span>
