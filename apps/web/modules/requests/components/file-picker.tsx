@@ -70,6 +70,7 @@ export function FilePicker({
   }
 
   const isReceipt = role === "receipt" || role === "clearing";
+  const isSlip = role === "slip";
 
   return (
     <div className="flex flex-col gap-2">
@@ -108,9 +109,11 @@ export function FilePicker({
       {error && <div className="rounded-(--radius) bg-red-50 px-3 py-2 text-sm text-red-900">{error}</div>}
 
       {files.length > 0 && (
-        <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,260px),1fr))] gap-2">
           {files.map((f, i) => {
-            const flags = receiptFlags(f, { claimDate: claimDate ?? today ?? "", today: today ?? "9999-12-31", maxAgeDays, duplicateOf: f.duplicateOf });
+            const flags = isSlip
+              ? [...(f.duplicateOf ? [{ level: "block" as const, text: `สลิปนี้เคยใช้แล้วใน ${f.duplicateOf}` }] : []), ...(f.ai && !f.ai.isReceipt ? [{ level: "warn" as const, text: "ระบบอ่านแล้วไม่เหมือนสลิปโอน — ตรวจรูปอีกครั้ง" }] : [])]
+              : receiptFlags(f, { claimDate: claimDate ?? today ?? "", today: today ?? "9999-12-31", maxAgeDays, duplicateOf: f.duplicateOf });
             return (
               <li key={f.sha256 + i} className="flex gap-3 rounded-(--radius) border border-(--line) bg-(--bg) p-2">
                 <a href={f.url} target="_blank" rel="noreferrer" className="shrink-0">
@@ -130,9 +133,9 @@ export function FilePicker({
                       <X className="h-4 w-4" />
                     </button>
                   </div>
-                  {isReceipt && f.ai && (f.ai.amount || f.ai.date || f.ai.vendor) && (
+                  {(isReceipt || isSlip) && f.ai && (f.ai.amount || f.ai.date || f.ai.vendor) && (
                     <div className="mt-0.5 text-(--ink-soft)">
-                      อ่านได้: {[f.ai.amount ? baht(f.ai.amount) : null, f.ai.date ? thaiDate(f.ai.date) : null, f.ai.vendor].filter(Boolean).join(" · ")}
+                      อ่านได้: {[f.ai.amount ? baht(f.ai.amount) : null, f.ai.date ? thaiDate(f.ai.date) : null, f.ai.vendor ? (isSlip ? `ผู้รับ ${f.ai.vendor}` : f.ai.vendor) : null, isSlip && f.ai.receiptNo ? `อ้างอิง ${f.ai.receiptNo}` : null].filter(Boolean).join(" · ")}
                     </div>
                   )}
                   {isReceipt && !f.ai && f.mime.startsWith("image/") && <div className="mt-0.5 text-(--ink-soft)">อ่านอัตโนมัติไม่ได้ — กรอกยอดเอง</div>}

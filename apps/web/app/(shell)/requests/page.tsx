@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { PenLine } from "lucide-react";
 
+import { prisma } from "@smartboss/database";
+
 import { AppScaffold } from "@/components/module/app-scaffold";
+import { REQ_PERMS } from "@/modules/requests/permissions";
+import { pettyBalances, withRequestsTenant } from "@/modules/requests/lib/db";
 import { canDecide, listVisibleRequests } from "@/modules/requests/lib/data";
 import { beneficiaryLabel, isOpen, requestsPage, statusOf } from "@/modules/requests/lib/page";
 import { RequestList, type ListRow } from "@/modules/requests/components/request-list";
@@ -22,10 +26,37 @@ export default async function RequestsPage() {
     console.error("[requests] list failed", error);
     return null;
   });
-  return <Body all={all} viewer={viewer} today={today} month={month} />;
+  // เงินสดย่อยคงเหลือของคนถือเงินแต่ละคน — เห็นเฉพาะคนถือเงิน/HR/ผู้ดูทั้งหมด (คนถือเห็นแค่ของตัวเอง)
+  const seesPetty = viewer.canPay || viewer.canViewAll || viewer.isPettyHolder;
+  const petty = seesPetty
+    ? await (async () => {
+        const holders = await prisma.user.findMany({
+          where: { orgId: session.orgId, isActive: true, roles: { some: { role: { permissions: { some: { permission: { code: REQ_PERMS.pettyCash } } } } } } },
+          select: { id: true, name: true },
+          orderBy: { name: "asc" },
+        });
+        const bal = await withRequestsTenant(session.orgId, (tx) => pettyBalances(tx, session.orgId)).catch(() => new Map<string, number>());
+        return holders
+          .filter((h) => viewer.canPay || viewer.canViewAll || h.id === viewer.userId)
+          .map((h) => ({ id: h.id, name: h.name, balance: bal.get(h.id) ?? 0 }));
+      })()
+    : [];
+  return <Body all={all} viewer={viewer} today={today} month={month} petty={petty} />;
 }
 
-async function Body({ all, viewer, today, month }: { all: Awaited<ReturnType<typeof listVisibleRequests>> | null; viewer: Awaited<ReturnType<typeof requestsPage>>["viewer"]; today: string; month: string }) {
+async function Body({
+  all,
+  viewer,
+  today,
+  month,
+  petty,
+}: {
+  all: Awaited<ReturnType<typeof listVisibleRequests>> | null;
+  viewer: Awaited<ReturnType<typeof requestsPage>>["viewer"];
+  today: string;
+  month: string;
+  petty: { id: string; name: string; balance: number }[];
+}) {
   if (!all) {
     return (
       <AppScaffold title="เบิกจ่าย & OT" width="max-w-5xl">
@@ -106,6 +137,22 @@ async function Body({ all, viewer, today, month }: { all: Awaited<ReturnType<typ
           <Notice tone="warn">
             เบิกเงินไปก่อนแล้ว<strong>เลยกำหนดเคลียร์ {overdueClear.length} ใบ</strong> ({overdueClear.map((r) => `${r.code} ${r.beneficiaryName}`).join(", ")})
           </Notice>
+        )}
+        {petty.length > 0 && (
+          <section className="rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4">
+            <div className="flex items-baseline justify-between gap-2">
+              <h2 className="text-sm font-bold text-(--ink)">เงินสดย่อยคงเหลือ</h2>
+              <Link href="/requests/petty-cash" className="text-xs font-medium text-(--app-strong) hover:underline">ดูประวัติ / เติมเงิน</Link>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {petty.map((h) => (
+                <Link key={h.id} href={`/requests/petty-cash?holder=${h.id}`} className="min-w-36 flex-1 rounded-(--radius) bg-(--bg-soft) px-3 py-2 hover:brightness-95 sm:flex-none">
+                  <div className="truncate text-xs text-(--ink-soft)">{h.name}</div>
+                  <div className={`text-lg font-bold tabular-nums ${h.balance < 0 ? "text-(--danger)" : "text-(--ink)"}`}>{baht(h.balance)}</div>
+                </Link>
+              ))}
+            </div>
+          </section>
         )}
         <RequestList rows={rows} showPayTab={viewer.canPay} showAllTab={seesAll} />
         <section className="rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4">

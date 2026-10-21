@@ -14,7 +14,7 @@ import {
   voidPaymentAction,
   type UploadedFile,
 } from "../actions";
-import { METHOD_LABEL, baht, parseMoney, round2, type PaymentMethod } from "../lib/types";
+import { METHOD_LABEL, SIMILAR_SLIP_PREFIX, baht, parseMoney, round2, type PaymentMethod } from "../lib/types";
 import { FilePicker } from "./file-picker";
 import { MoneyRow, Notice } from "./ui";
 
@@ -44,14 +44,16 @@ function useRun() {
 
 /* ───────── อนุมัติ ───────── */
 
-export function DecidePanel({ id, level, isOt }: { id: string; level: "hr" | "ceo"; isOt: boolean }) {
+export function DecidePanel({ id, level, isOt, forwardsToCeo = false, firstBy = null }: { id: string; level: "hr" | "ceo"; isOt: boolean; forwardsToCeo?: boolean; firstBy?: string | null }) {
   const { busy, error, run } = useRun();
   const [note, setNote] = useState("");
   return (
     <section className="flex flex-col gap-3 rounded-(--radius-lg) border-2 border-(--app) bg-(--bg) p-4">
       <div>
         <h2 className="text-base font-bold text-(--ink)">รอคุณ{level === "ceo" ? " (CEO)" : ""}อนุมัติ</h2>
-        <p className="text-xs text-(--ink-soft)">{isOt ? "ดูหลักฐานและเวลาสแกนด้านซ้ายว่าทำงานจริง" : "ดูรายการและหลักฐานด้านซ้ายก่อนตัดสิน"}</p>
+        <p className="text-xs text-(--ink-soft)">{isOt ? "ดูเวลาสแกนและหลักฐานด้านซ้ายว่าทำงานจริง" : "ดูรายการและหลักฐานด้านซ้ายก่อนตัดสิน"}</p>
+        {forwardsToCeo && <p className="mt-1 text-xs font-medium text-amber-700">ยอดเกินเกณฑ์ — คุณอนุมัติแล้วจะส่งต่อให้ CEO อนุมัติอีกขั้น</p>}
+        {firstBy && <p className="mt-1 text-xs font-medium text-emerald-700">{firstBy} (HR) ผ่านแล้ว — เหลือ CEO</p>}
       </div>
       <label className="flex flex-col gap-1.5 text-sm">
         <span className="font-semibold text-(--ink)">หมายเหตุ <span className="font-normal text-(--ink-soft)">(ไม่อนุมัติต้องใส่)</span></span>
@@ -60,7 +62,8 @@ export function DecidePanel({ id, level, isOt }: { id: string; level: "hr" | "ce
       {error && <Notice tone="danger">{error}</Notice>}
       <div className="grid grid-cols-2 gap-2">
         <button type="button" className={primary} disabled={busy} onClick={() => run(() => decideRequestAction({ id, outcome: "approve", note }))}>
-          {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}อนุมัติ
+          {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+          {forwardsToCeo ? "อนุมัติ → ส่ง CEO" : "อนุมัติ"}
         </button>
         <button type="button" className={dangerOutline} disabled={busy || !note.trim()} onClick={() => run(() => decideRequestAction({ id, outcome: "reject", note }))}>
           ไม่อนุมัติ
@@ -105,10 +108,28 @@ export function PayPanel({
   const [note, setNote] = useState("");
   const [closeShort, setCloseShort] = useState(false);
   const [slips, setSlips] = useState<UploadedFile[]>([]);
+  // สลิปคล้ายของใบก่อน — แสดงคำถามยืนยันแทน error ธรรมดา
+  const [similar, setSimilar] = useState<string | null>(null);
   const amt = parseMoney(amount);
   const short = Number.isFinite(amt) && amt < outstanding - 0.005;
   const holderBal = holders.find((h) => h.userId === holder)?.balance ?? 0;
   const pettyShort = method === "petty_cash" && Number.isFinite(amt) && amt > holderBal + 0.005;
+  // ยอดที่ระบบอ่านได้จากสลิป เทียบกับยอดที่จะบันทึก (เตือน ไม่บังคับ — สลิปเดียวอาจโอนรวมหลายใบ)
+  const slipRead = slips.map((x) => x.ai?.amount).filter((x): x is number => typeof x === "number" && x > 0);
+  const slipTotal = slipRead.length === slips.length && slipRead.length > 0 ? round2(slipRead.reduce((s, x) => s + x, 0)) : null;
+  const slipMismatch = slipTotal !== null && Number.isFinite(amt) && Math.abs(slipTotal - amt) > 1;
+
+  function pay(confirmSimilar: boolean) {
+    setSimilar(null);
+    run(async () => {
+      const res = await recordPaymentAction({ id, amount: amt, method, paidOn, pettyHolderId: method === "petty_cash" ? holder : null, payrollPeriod: method === "payroll" ? payrollPeriod : null, note, slips, closeShort, confirmSimilar });
+      if (!res.ok && res.error.startsWith(SIMILAR_SLIP_PREFIX)) {
+        setSimilar(res.error.split("|").slice(2).join("|"));
+        return { error: "" };
+      }
+      return res;
+    });
+  }
 
   return (
     <section className="flex flex-col gap-3 rounded-(--radius-lg) border-2 border-(--app) bg-(--bg) p-4">
@@ -149,6 +170,7 @@ export function PayPanel({
       {method !== "payroll" && (
         <FilePicker role="slip" files={slips} onChange={setSlips} label={method === "transfer" ? "สลิปโอน" : "หลักฐานรับเงิน"} hint={method === "transfer" ? "แคปหน้าจอสลิปจากแอปธนาคาร" : "รูปผู้รับเซ็นรับเงิน หรือรูปตอนส่งเงิน"} today={today} />
       )}
+      {slipMismatch && <Notice tone="warn">ยอดในสลิป {baht(slipTotal!)} ไม่ตรงกับยอดที่จะบันทึก {baht(amt)} — ตรวจสลิปอีกครั้ง</Notice>}
       {short && (
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" className="mt-1 h-4 w-4" checked={closeShort} onChange={(e) => setCloseShort(e.target.checked)} />
@@ -163,11 +185,20 @@ export function PayPanel({
         <input className={field} value={note} onChange={(e) => setNote(e.target.value)} />
       </label>
       {error && <Notice tone="danger">{error}</Notice>}
+      {similar && (
+        <div className="flex flex-col gap-2 rounded-(--radius) border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <span>{similar}</span>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className={outline} onClick={() => setSimilar(null)}>เปลี่ยนสลิป</button>
+            <button type="button" className={primary} disabled={busy} onClick={() => pay(true)}>ยืนยันว่าเป็นคนละรายการ แล้วบันทึก</button>
+          </div>
+        </div>
+      )}
       <button
         type="button"
         className={primary}
         disabled={busy || !Number.isFinite(amt) || amt <= 0 || pettyShort || (method !== "payroll" && slips.length === 0) || (short && !note.trim())}
-        onClick={() => run(() => recordPaymentAction({ id, amount: amt, method, paidOn, pettyHolderId: method === "petty_cash" ? holder : null, payrollPeriod: method === "payroll" ? payrollPeriod : null, note, slips, closeShort }))}
+        onClick={() => pay(false)}
       >
         {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
         บันทึกว่าจ่ายแล้ว {Number.isFinite(amt) && amt > 0 ? baht(amt) : ""}

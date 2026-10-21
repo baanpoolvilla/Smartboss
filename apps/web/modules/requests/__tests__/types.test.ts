@@ -78,3 +78,30 @@ test("สถานะบอกขั้นต่อไปถูก", () => {
   assert.equal(statusInfo({ ...base, kind: "cash_advance", status: "paid", beneficiaryKind: "staff", paidTotal: 100 }).label, "จ่ายแล้ว · รอเคลียร์");
   assert.equal(statusInfo({ ...base, kind: "advance", status: "paid", beneficiaryKind: "staff", paidTotal: 100, deductAmount: 100 }).label, "จ่ายแล้ว · รอหักเงินเดือน");
 });
+
+test("เส้นทางอนุมัติ: HR อนุมัติ · ยอดเกินเกณฑ์ต่อ CEO · CEO ทุกใบ", async () => {
+  const { routeFor, routeText } = await import("../lib/types");
+  assert.deepEqual(routeFor({ mode: "hr", ceoAbove: 5000 }, 1000), { level: "hr", needCeo: false });
+  assert.deepEqual(routeFor({ mode: "hr", ceoAbove: 5000 }, 5000), { level: "hr", needCeo: false });
+  assert.deepEqual(routeFor({ mode: "hr", ceoAbove: 5000 }, 5000.01), { level: "hr", needCeo: true });
+  assert.deepEqual(routeFor({ mode: "hr", ceoAbove: null }, 999999), { level: "hr", needCeo: false });
+  assert.deepEqual(routeFor({ mode: "hr", ceoAbove: 0 }, 1), { level: "hr", needCeo: true });
+  assert.deepEqual(routeFor({ mode: "ceo", ceoAbove: null }, 1), { level: "ceo", needCeo: false });
+  assert.equal(routeText({ mode: "hr", ceoAbove: 5000 }), "HR อนุมัติ · เกิน ฿5,000 ต่อ CEO");
+});
+
+test("สถานะอนุมัติสองขั้น", () => {
+  const base = { kind: "contractor" as const, status: "pending" as const, beneficiaryKind: "vendor" as const, paidTotal: 0, netAmount: 10400, clearStatus: null, deductAmount: 0, deductedAt: null };
+  assert.equal(statusInfo({ ...base, approverLevel: "hr", needCeo: true, firstDecidedAt: null }).label, "รอ HR อนุมัติ");
+  assert.equal(statusInfo({ ...base, approverLevel: "ceo", needCeo: true, firstDecidedAt: "2026-10-21T04:00:00Z" }).label, "HR ผ่านแล้ว · รอ CEO");
+});
+
+test("สลิปคล้ายกัน: AI อ่านเลขอ้างอิงพลาด 1 ตัว ยอด/วันเดียวกัน = น่าจะซ้ำ", async () => {
+  const { similarSlip, editDistance } = await import("../lib/types");
+  assert.equal(editDistance("016294101523ATF04512", "016294101523AT04512"), 1);
+  const a = { amount: 120, date: "2026-10-21", vendor: null, receiptNo: "016294101523ATF04512", isReceipt: true, notes: null };
+  assert.equal(similarSlip(a, { ...a, receiptNo: "016294101523AT04512" }), true);
+  assert.equal(similarSlip(a, { ...a, amount: 100, receiptNo: "016294101523AT04512" }), false);
+  assert.equal(similarSlip(a, { ...a, date: "2026-10-22", receiptNo: "016294101523AT04512" }), false);
+  assert.equal(similarSlip(a, { ...a, receiptNo: "2026102198765432" }), false);
+});

@@ -13,12 +13,13 @@ import type { ReceiptAi } from "./types";
 
 const MODEL = process.env.RECEIPT_AI_MODEL || "gpt-4o-mini";
 
-const PROMPT = `คุณอ่านใบเสร็จ/ใบกำกับภาษี/สลิปทางด่วน/บิลน้ำมันของไทย ตอบเป็น JSON เท่านั้น:
+const PROMPT = `คุณอ่านใบเสร็จ/ใบกำกับภาษี/สลิปทางด่วน/บิลน้ำมัน/สลิปโอนเงินจากแอปธนาคารของไทย ตอบเป็น JSON เท่านั้น:
 {"isReceipt": boolean, "amount": number|null, "date": "YYYY-MM-DD"|null, "vendor": string|null, "receiptNo": string|null, "notes": string|null}
 - amount = ยอดรวมที่ต้องจ่ายสุทธิ (รวม VAT แล้ว) เป็นบาท ตัวเลขล้วน
 - date = วันที่บนใบเสร็จ แปลงปี พ.ศ. เป็น ค.ศ. (2569 → 2026) · อ่านไม่ออก = null
 - notes = ภาษาไทยสั้น ๆ เฉพาะเมื่อเห็นสิ่งผิดปกติจริง เช่น ตัวเลขถูกขีดฆ่า/เขียนทับ ฟอนต์ไม่เข้ากัน ยอดรวมไม่ตรงกับรายการ ไม่มีชื่อร้าน · ปกติ = null
-- ไม่ใช่ใบเสร็จ (เช่นรูปคน รูปของ) = isReceipt false`;
+- สลิปโอนเงิน: amount = ยอดโอน · date = วันที่โอน · vendor = ชื่อผู้รับโอน · receiptNo = เลขที่รายการ/เลขอ้างอิง · isReceipt true
+- ไม่ใช่ใบเสร็จหรือสลิป (เช่นรูปคน รูปของ) = isReceipt false`;
 
 export async function readReceipt(buf: Buffer, mime: string): Promise<ReceiptAi | null> {
   const apiKey = process.env.OPENAI_API_KEY;

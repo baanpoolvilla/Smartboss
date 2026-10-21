@@ -39,6 +39,9 @@ import {
   otCalc,
   receiptFlags,
   round2,
+  routeText,
+  similarSlip,
+  SIMILAR_SLIP_PREFIX,
   timesOverlap,
   type Attachment,
   type AttachmentRole,
@@ -161,7 +164,8 @@ export async function uploadFilesAction(formData: FormData): Promise<Result<{ fi
     const out: UploadedFile[] = [];
     for (const p of prepared) {
       const url = await putFile(`${session.orgId}/requests/${session.userId}`, p.file, { ext: EXT[p.mime] });
-      const ai = role === "receipt" || role === "clearing" ? await readReceipt(p.buf, p.mime) : null;
+      // ใบเสร็จ + สลิปโอน ให้ระบบอ่านยอด/วันที่/เลขอ้างอิง มาช่วยเทียบ (หลักฐานรูปงานไม่ต้องอ่าน)
+      const ai = role === "receipt" || role === "clearing" || role === "slip" ? await readReceipt(p.buf, p.mime) : null;
       out.push({
         url,
         name: p.file.name.slice(0, 120),
@@ -235,7 +239,10 @@ export interface Preview {
   blocks: string[];
   warns: string[];
   approverLevel: "hr" | "ceo" | null;
+  /** ยอดเกินเกณฑ์ — HR แล้วต่อ CEO */
+  needCeo: boolean;
   approverNames: string[];
+  ceoNames: string[];
 }
 
 async function beneficiaryOf(orgId: string, userId: string | null) {
@@ -279,7 +286,9 @@ async function computePreview(session: OrgSession, input: PreviewInput, settings
     blocks: [],
     warns: [],
     approverLevel: null,
+    needCeo: false,
     approverNames: [],
+    ceoNames: [],
   };
   const today = bangkokToday();
   const date = normalizeDate(input.workDate) || today;
@@ -365,10 +374,19 @@ async function computePreview(session: OrgSession, input: PreviewInput, settings
   }
 
   if (who || input.kind === "contractor") {
-    p.approverLevel = await approverLevelFor(orgId, input.kind, session.userId, who?.userId ?? null);
+    const amt = input.kind === "ot" ? (p.amount ?? (Number(input.amount) || 0)) : Number(input.amount) || 0;
+    const route = await approverLevelFor(orgId, input.kind, session.userId, who?.userId ?? null, amt, settings.approvalRoutes);
+    p.approverLevel = route.level;
+    p.needCeo = route.needCeo;
     const ids = await eligibleApprovers(orgId, p.approverLevel, session.userId, who?.userId ?? null);
     const users = ids.length ? await prisma.user.findMany({ where: { orgId, id: { in: ids } }, select: { name: true } }) : [];
     p.approverNames = users.map((u) => u.name);
+    if (route.needCeo) {
+      const ceoIds = await eligibleApprovers(orgId, "ceo", session.userId, who?.userId ?? null);
+      const ceos = ceoIds.length ? await prisma.user.findMany({ where: { orgId, id: { in: ceoIds } }, select: { name: true } }) : [];
+      p.ceoNames = ceos.map((u) => u.name);
+      if (ceoIds.length === 0) p.blocks.push("ยอดเกินเกณฑ์ต้องให้ CEO อนุมัติต่อ แต่ไม่มี CEO ที่อนุมัติใบนี้ได้");
+    }
     if (ids.length === 0) p.blocks.push(p.approverLevel === "ceo" ? "ไม่มี CEO ที่อนุมัติใบนี้ได้ (คนยื่น/ผู้ได้เงินอนุมัติเองไม่ได้)" : "ไม่มี HR ที่อนุมัติใบนี้ได้ — ตั้งสิทธิ์ที่ /admin/roles");
   }
   return p;
@@ -434,7 +452,6 @@ export async function createRequestAction(input: CreateInput): Promise<Result<{ 
     // ไฟล์แนบ
     const allowed: AttachmentRole[] = kind === "ot" || kind === "contractor" ? ["evidence", "receipt"] : kind === "expense" ? ["receipt", "evidence"] : ["evidence", "receipt"];
     const attachments = cleanAttachments(orgId, input.attachments, allowed);
-    if (kind === "ot" && attachments.length === 0) return { error: "แนบหลักฐานอย่างน้อย 1 อย่าง (รูปงาน / แชทสั่งงาน)" };
     if (kind === "contractor" && attachments.length === 0) return { error: "แนบใบเสนอราคา/ใบแจ้งหนี้/รูปงาน อย่างน้อย 1 ไฟล์" };
     const receipts = attachments.filter((a) => a.role === "receipt");
     if (kind === "expense" && receipts.length === 0) return { error: "แนบใบเสร็จอย่างน้อย 1 ใบ" };
@@ -498,7 +515,8 @@ export async function createRequestAction(input: CreateInput): Promise<Result<{ 
       property = await prisma.property.findFirst({ where: { orgId, id: propertyId }, select: { id: true, name: true } });
     }
 
-    const level = preview.approverLevel ?? (await approverLevelFor(orgId, kind, session.userId, beneficiaryUserId));
+    // เส้นทางคิดจากยอดจริงที่จะบันทึก (ไม่ใช้ของ preview ที่คิดจากยอดตอนพิมพ์)
+    const { level, needCeo } = await approverLevelFor(orgId, kind, session.userId, beneficiaryUserId, net, settings.approvalRoutes);
     const byName = await nameOf(session.userId);
     const beneficiaryKind: BeneficiaryKind = kind === "contractor" ? "vendor" : preview.beneficiaryKind!;
     const beneficiaryName = kind === "contractor" ? vendor!.name : preview.beneficiaryName!;
@@ -543,6 +561,7 @@ export async function createRequestAction(input: CreateInput): Promise<Result<{ 
             createdBy: session.userId,
             createdByName: byName,
             approverLevel: level,
+            needCeo,
           },
         });
         const summary =
@@ -579,6 +598,25 @@ export async function decideRequestAction(input: { id: string; outcome: "approve
     const r = await withRequestsTenant(orgId, (tx) => loadOne(tx, orgId, input.id));
     if (!r) return { error: "ไม่พบคำขอ" };
     if (!canDecide(r, viewer)) return { error: r.status !== "pending" ? "ใบนี้ตัดสินไปแล้ว" : "คุณอนุมัติใบนี้ไม่ได้ (ใบของตัวเอง หรือต้องเป็น CEO)" };
+
+    // ใบยอดเกินเกณฑ์: HR อนุมัติขั้นแรก → ส่งต่อ CEO (ยังไม่มีผล) · CEO กดเองตั้งแต่ขั้นแรก = จบทีเดียว
+    if (input.outcome === "approve" && r.approverLevel === "hr" && r.needCeo && !viewer.canApproveCeo) {
+      const moved = await withRequestsTenant(orgId, async (tx) => {
+        const res = await tx.moneyRequest.updateMany({
+          where: { orgId, id: r.id, status: "pending", approverLevel: "hr" },
+          data: { approverLevel: "ceo", firstDecidedBy: session.userId, firstDecidedByName: byName, firstDecidedAt: new Date(), firstDecisionNote: note || null },
+        });
+        if (res.count === 0) return false;
+        await insertEvent(tx, orgId, { requestId: r.id, byUserId: session.userId, byName, action: "approve", summary: `HR อนุมัติขั้นแรก → ส่งต่อ CEO (ยอดเกินเกณฑ์)${note ? ` · ${note}` : ""}` });
+        return true;
+      });
+      if (!moved) return { error: "มีคนตัดสินใบนี้ไปก่อนแล้ว — รีเฟรช" };
+      await clearActionNotifications(orgId, r.id, ["req_pending"]);
+      void notifyApprovers(orgId, brief(r), "ceo", [r.createdBy, r.beneficiaryUserId ?? "", session.userId]);
+      void notifyResult(orgId, brief(r), [r.createdBy, r.beneficiaryUserId], "HR ผ่านแล้ว รอ CEO");
+      refresh(r.id);
+      return { ok: true };
+    }
 
     // OT ของคนงาน: อนุมัติ = ลงชั่วโมง OT ในโมดูลคนงาน (ยอดเงินคิดที่บัญชีค่าแรงตามกติกาเดิม)
     let dwOtEntryId: string | null = null;
@@ -713,6 +751,8 @@ export interface PayInput {
   slips: Attachment[];
   /** จ่ายน้อยกว่ายอดแล้วปิดใบเลย (ไม่จ่ายส่วนที่เหลือ) */
   closeShort?: boolean;
+  /** HR ยืนยันแล้วว่าสลิปที่คล้ายใบก่อนเป็นคนละรายการ */
+  confirmSimilar?: boolean;
 }
 
 export async function recordPaymentAction(input: PayInput): Promise<Result> {
@@ -755,6 +795,31 @@ export async function recordPaymentAction(input: PayInput): Promise<Result> {
       const used = await usedHashes(tx, orgId, slips.map((s) => s.sha256));
       const dup = slips.find((s) => used.has(s.sha256));
       if (dup) return `dup:${used.get(dup.sha256)}` as const;
+      // เลขอ้างอิงสลิปเดียวกัน (ถ่ายใหม่/แคปใหม่ ไฟล์ไม่ซ้ำ แต่เป็นรายการโอนเดิม) — ใช้ซ้ำไม่ได้
+      const refs = slips.map((x) => x.ai?.receiptNo?.replace(/\s+/g, "")).filter((x): x is string => !!x && x.length >= 6);
+      if (refs.length > 0) {
+        const rows = await tx.$queryRawUnsafe<{ code: string }[]>(
+          `SELECT r.code FROM requests.payments p JOIN requests.requests r ON r.id = p.request_id, jsonb_array_elements(p.slips) s
+            WHERE p.org_id = $1 AND p.voided_at IS NULL AND regexp_replace(s->'ai'->>'receiptNo', '[[:space:]]+', '', 'g') = ANY($2::text[]) LIMIT 1`,
+          orgId,
+          refs,
+        );
+        if (rows[0]) return `dup:${rows[0].code} (เลขอ้างอิงเดียวกัน)` as const;
+      }
+      // เลขอ้างอิงใกล้เคียง (AI อ่านพลาด 1–3 ตัว) + ยอดและวันเดียวกัน → ถาม HR ก่อน ไม่บล็อกตาย (เลขธนาคารที่เรียงติดกันก็ต่างกันน้อยได้)
+      if (!input.confirmSimilar) {
+        const reads = slips.map((x) => x.ai).filter((x): x is NonNullable<typeof x> => !!x?.receiptNo && x.amount !== null && !!x.date);
+        if (reads.length > 0) {
+          const old = await tx.$queryRawUnsafe<{ code: string; ai: Attachment["ai"] }[]>(
+            `SELECT r.code, s->'ai' AS ai FROM requests.payments p JOIN requests.requests r ON r.id = p.request_id, jsonb_array_elements(p.slips) s
+              WHERE p.org_id = $1 AND p.voided_at IS NULL AND s->'ai'->>'date' = ANY($2::text[])`,
+            orgId,
+            reads.map((x) => x.date!),
+          );
+          const hit = old.find((o) => reads.some((n) => similarSlip(n, o.ai)));
+          if (hit) return `similar:${hit.code}` as const;
+        }
+      }
       if (method === "petty_cash") {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`petty:${orgId}:${pettyHolderId}`}))`;
         const bal = (await pettyBalances(tx, orgId)).get(pettyHolderId!) ?? 0;
@@ -800,6 +865,9 @@ export async function recordPaymentAction(input: PayInput): Promise<Result> {
     });
     if (result === "raced") return { error: "มีคนเพิ่งบันทึกจ่ายใบนี้ — รีเฟรชดูยอดล่าสุด" };
     if (typeof result === "string" && result.startsWith("dup:")) return { error: `สลิปนี้เคยใช้แล้วใน ${result.slice(4)}` };
+    if (typeof result === "string" && result.startsWith("similar:")) {
+      return { error: `${SIMILAR_SLIP_PREFIX}${result.slice(8)}|สลิปนี้คล้ายกับสลิปที่ใช้จ่ายใน ${result.slice(8)} (ยอดและวันเดียวกัน เลขอ้างอิงต่างกันนิดเดียว) — ถ้าแน่ใจว่าเป็นคนละรายการ กดยืนยัน` };
+    }
     if (typeof result === "string" && result.startsWith("petty:")) return { error: `เงินสดย่อยเหลือ ${baht(Number(result.slice(6)))} ไม่พอจ่าย — เติมเงินก่อน` };
 
     if (result === "full") {
@@ -1194,8 +1262,18 @@ export async function saveSettingsAction(input: RequestSettings): Promise<Result
     const maxAge = Math.round(Number(input.receiptMaxAgeDays));
     const clearDays = Math.round(Number(input.clearDueDays));
     if (!(maxAge >= 1 && maxAge <= 3650) || !(clearDays >= 1 && clearDays <= 120)) return { error: "จำนวนวันไม่ถูกต้อง" };
+    // เส้นทางอนุมัติรายประเภท — เกณฑ์ CEO เว้นว่าง = ไม่ต้องผ่าน CEO · 0 = ทุกใบ
+    const approvalRoutes = {} as Record<RequestKind, { mode: "hr" | "ceo"; ceoAbove: number | null }>;
+    for (const k of Object.keys(KIND_META) as RequestKind[]) {
+      const r = input.approvalRoutes?.[k];
+      const mode = r?.mode === "ceo" ? "ceo" : "hr";
+      const above = r?.ceoAbove === null || r?.ceoAbove === undefined || (r.ceoAbove as unknown) === "" ? null : round2(Number(r.ceoAbove));
+      if (above !== null && (!Number.isFinite(above) || above < 0)) return { error: `เกณฑ์ CEO ของ ${KIND_META[k].label} ไม่ถูกต้อง` };
+      approvalRoutes[k] = { mode, ceoAbove: mode === "ceo" ? null : above };
+    }
     const byName = await nameOf(session.userId);
     const data = {
+      approvalRoutes,
       otRates: rates,
       advanceCapMode: input.advanceCapMode,
       advanceCapValue: input.advanceCapMode === "none" ? 0 : capValue,
@@ -1211,7 +1289,7 @@ export async function saveSettingsAction(input: RequestSettings): Promise<Result
         byUserId: session.userId,
         byName,
         action: "settings",
-        summary: `ตั้งค่า: OT ${rates.map((r) => `${r.label} ${r.percent}%`).join(", ")} · เพดานเบิกล่วงหน้า ${input.advanceCapMode === "none" ? "ไม่จำกัด" : input.advanceCapMode === "baht" ? baht(capValue) : `${capValue} วัน`} · VAT ${vat}%`,
+        summary: `ตั้งค่า: อนุมัติ ${(Object.keys(approvalRoutes) as RequestKind[]).map((k) => `${KIND_META[k].short} ${routeText(approvalRoutes[k])}`).join(", ")} · OT ${rates.map((r) => `${r.label} ${r.percent}%`).join(", ")} · เพดานเบิกล่วงหน้า ${input.advanceCapMode === "none" ? "ไม่จำกัด" : input.advanceCapMode === "baht" ? baht(capValue) : `${capValue} วัน`} · VAT ${vat}%`,
       });
     });
     revalidatePath("/requests");

@@ -7,7 +7,7 @@ import { WORKER_ROLE_CODE } from "@/modules/daily_worker/permissions";
 import { usersWithPermission } from "@/modules/maintenance/data/notify";
 import { REQ_PERMS } from "../permissions";
 import { loadRequests, readSettings, withRequestsTenant, type RequestView } from "./db";
-import type { ApproverLevel, RequestKind } from "./types";
+import { routeFor, type ApprovalRoute, type ApproverLevel, type RequestKind } from "./types";
 
 /* ───────────── คน ───────────── */
 
@@ -101,14 +101,26 @@ export async function workerOtOn(orgId: string, employmentId: string, date: stri
 
 /* ───────────── ผู้อนุมัติ / ผู้จ่าย ───────────── */
 
-/** ใครอนุมัติใบนี้: เบิกล่วงหน้า = CEO เสมอ · ใบที่คนยื่นหรือผู้ได้เงินเป็นผู้อนุมัติระดับ HR เอง = CEO */
-export async function approverLevelFor(orgId: string, kind: RequestKind, creatorId: string, beneficiaryId: string | null): Promise<ApproverLevel> {
-  if (kind === "advance") return "ceo";
+/**
+ * ใครอนุมัติใบนี้ — ตามเส้นทางที่บริษัทตั้งไว้รายประเภท (หน้าตั้งค่า) + ยอดเงิน
+ * ใบที่คนยื่นหรือผู้ได้เงินเป็นผู้อนุมัติระดับ HR เอง (ไม่ใช่ CEO) → ข้ามไป CEO ขั้นเดียว (อนุมัติใบตัวเองไม่ได้)
+ * CEO ลงให้คนอื่น (เช่น OT) → HR อนุมัติได้ตามปกติ
+ */
+export async function approverLevelFor(
+  orgId: string,
+  kind: RequestKind,
+  creatorId: string,
+  beneficiaryId: string | null,
+  amount: number,
+  routes: Record<RequestKind, ApprovalRoute>,
+): Promise<{ level: ApproverLevel; needCeo: boolean }> {
+  const route = routeFor(routes[kind], amount);
+  if (route.level === "ceo") return route;
   const hrApprovers = new Set(await usersWithPermission(orgId, REQ_PERMS.approve));
   const ceoApprovers = new Set(await usersWithPermission(orgId, REQ_PERMS.approveCeo));
   const involved = [creatorId, beneficiaryId].filter((x): x is string => !!x);
-  // CEO ลงให้คนอื่น (เช่น OT) → HR อนุมัติได้ตามปกติ — ไม่งั้นติดเพราะ CEO อนุมัติใบตัวเองไม่ได้
-  return involved.some((id) => hrApprovers.has(id) && !ceoApprovers.has(id)) ? "ceo" : "hr";
+  if (involved.some((id) => hrApprovers.has(id) && !ceoApprovers.has(id))) return { level: "ceo", needCeo: false };
+  return route;
 }
 
 /** คนที่อนุมัติใบนี้ได้จริง (ไม่ใช่คนยื่น ไม่ใช่ผู้ได้เงิน) */

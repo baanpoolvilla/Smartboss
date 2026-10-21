@@ -127,11 +127,12 @@ export default async function RequestDetailPage({ params, searchParams }: { para
   const scans = r.kind === "ot" && r.employmentId ? await scansOn(orgId, r.employmentId, r.workDate) : null;
   const scanNote = (() => {
     if (r.kind !== "ot" || !r.otStart || !r.otEnd || !r.employmentId) return null;
-    if (!scans || (!scans.in_hm && !scans.out_hm)) return { tone: "warn" as const, text: "ไม่มีสแกนเข้า-ออกวันนั้นในระบบ — ตรวจจากหลักฐานแทน" };
+    const noEvidence = r.attachments.length === 0 ? " · ไม่ได้แนบหลักฐาน — ถามผู้ลงหรือคนสั่งงานก่อนอนุมัติ" : "";
+    if (!scans || (!scans.in_hm && !scans.out_hm)) return { tone: "warn" as const, text: `ไม่มีสแกนเข้า-ออกวันนั้นในระบบ${noEvidence || " — ตรวจจากหลักฐานแทน"}` };
     const covered = scans.in_hm && scans.out_hm && timesOverlap(scans.in_hm, scans.out_hm, r.otStart, r.otEnd) && scans.out_hm >= r.otEnd;
     return covered
       ? { tone: "ok" as const, text: `สแกนวันนั้น เข้า ${scans.in_hm} · ออก ${scans.out_hm} — ครอบช่วง OT` }
-      : { tone: "warn" as const, text: `สแกนวันนั้น เข้า ${scans.in_hm ?? "—"} · ออก ${scans.out_hm ?? "—"} — ไม่มีสแกนครอบช่วง OT ${r.otStart}–${r.otEnd}` };
+      : { tone: "warn" as const, text: `สแกนวันนั้น เข้า ${scans.in_hm ?? "—"} · ออก ${scans.out_hm ?? "—"} — ไม่มีสแกนครอบช่วง OT ${r.otStart}–${r.otEnd}${noEvidence}` };
   })();
 
   // ผู้ถือเงินสดย่อย (สำหรับจ่ายจากเงินสดย่อย / รับเงินทอน)
@@ -168,8 +169,13 @@ export default async function RequestDetailPage({ params, searchParams }: { para
         ? { title: "ยกเลิก", sub: `${r.cancelledByName} · ${r.cancelReason}`, state: "stop" }
         : r.decidedAt
           ? { title: `${r.decidedByName} อนุมัติ`, sub: `${thaiDateTime(r.decidedAt)}${r.decisionNote ? ` · ${r.decisionNote}` : ""}`, state: "done" }
-          : { title: `${r.approverLevel === "ceo" ? "CEO" : "HR"} อนุมัติ`, sub: "รออยู่", state: "now" },
+          : r.needCeo && !r.firstDecidedAt
+            ? { title: "HR อนุมัติ", sub: "รออยู่ · ยอดเกินเกณฑ์ ต่อ CEO", state: "now" }
+            : { title: `${r.approverLevel === "ceo" ? "CEO" : "HR"} อนุมัติ`, sub: "รออยู่", state: "now" },
   ];
+  // อนุมัติสองขั้น (ยอดเกินเกณฑ์): แทรกขั้น HR ที่ผ่านแล้ว / ขั้น CEO ที่ยังไม่ถึง
+  if (r.firstDecidedAt) steps.splice(1, 0, { title: `${r.firstDecidedByName} (HR) อนุมัติขั้นแรก`, sub: `${thaiDateTime(r.firstDecidedAt)}${r.firstDecisionNote ? ` · ${r.firstDecisionNote}` : ""}`, state: "done" });
+  else if (r.needCeo && r.status === "pending") steps.push({ title: "CEO อนุมัติ", sub: "ยอดเกินเกณฑ์", state: "todo" });
   if (r.status !== "rejected" && !(r.status === "cancelled" && !r.decidedAt)) {
     if (workerOt) steps.push({ title: "เข้าบัญชีค่าแรงคนงาน", sub: r.status === "paid" ? "จ่ายพร้อมค่าแรงที่หน้าจ่ายเงินคนงาน" : undefined, state: r.status === "paid" ? "done" : "todo" });
     else {
@@ -339,7 +345,9 @@ export default async function RequestDetailPage({ params, searchParams }: { para
 
           {/* ───────── ขวา: ขั้นตอน + ปุ่ม ───────── */}
           <aside className="flex min-w-0 flex-[1_1_300px] flex-col gap-3 lg:sticky lg:top-4">
-            {canDecide(r, viewer) && <DecidePanel id={r.id} level={r.approverLevel} isOt={r.kind === "ot"} />}
+            {canDecide(r, viewer) && (
+              <DecidePanel id={r.id} level={r.approverLevel} isOt={r.kind === "ot"} forwardsToCeo={r.approverLevel === "hr" && r.needCeo && !viewer.canApproveCeo} firstBy={r.firstDecidedByName} />
+            )}
             {canPayHere && (
               <PayPanel id={r.id} outstanding={outstanding} methods={methods} holders={payHolders} myUserId={session.userId} today={today} payrollPeriod={period} title={r.kind === "cash_advance" && r.clearedAt ? "จ่ายส่วนต่างที่ใช้เกิน" : "บันทึกการจ่ายเงิน"} />
             )}

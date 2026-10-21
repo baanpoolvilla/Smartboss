@@ -386,7 +386,7 @@ export function RequestForm({
                 <textarea rows={3} className={`${field} h-auto py-2`} value={detail} onChange={(e) => setDetail(e.target.value)} />
               </label>
               {placeFields}
-              <FilePicker role="evidence" files={files} onChange={setFiles} label="หลักฐาน (อย่างน้อย 1)" hint="รูปก่อน/หลังทำ แชทสั่งงาน ใบงาน" today={today} />
+              <FilePicker role="evidence" files={files} onChange={setFiles} label="หลักฐาน (ถ้ามี)" hint="ไม่บังคับ — HR ตรวจจากเวลาสแกนเข้า-ออกได้ ถ้ามีรูปงาน/แชทสั่งงานแนบไว้จะตรวจง่ายขึ้น" today={today} />
             </>
           )}
 
@@ -577,7 +577,13 @@ export function RequestForm({
                 {preview.approverLevel === "ceo" ? "CEO" : "HR"}
                 {preview.approverNames.length > 0 ? ` · ${preview.approverNames.join(", ")}` : ""}
               </div>
-              {kind === "ot" && <div className="mt-1 text-xs text-(--ink-soft)">HR ตรวจหลักฐานว่าทำจริง</div>}
+              {preview.needCeo && (
+                <div className="mt-1 text-(--ink-soft)">
+                  → แล้วต่อ CEO{preview.ceoNames.length > 0 ? ` · ${preview.ceoNames.join(", ")}` : ""}
+                  <span className="block text-xs">ยอดเกินเกณฑ์ที่บริษัทตั้งไว้</span>
+                </div>
+              )}
+              {kind === "ot" && <div className="mt-1 text-xs text-(--ink-soft)">HR ตรวจว่าทำจริง (ดูเวลาสแกน + หลักฐาน)</div>}
             </div>
           )}
 

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 
 import { saveSettingsAction } from "../actions";
-import type { AdvanceCapMode, OtRate, RequestSettings } from "../lib/types";
+import { KIND_META, KINDS, routeText, type AdvanceCapMode, type ApprovalRoute, type OtRate, type RequestKind, type RequestSettings } from "../lib/types";
 import { Notice } from "./ui";
 
 const field = "h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm text-(--ink)";
@@ -17,6 +17,12 @@ export function SettingsForm({ initial }: { initial: RequestSettings }) {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [rates, setRates] = useState<OtRate[]>(initial.otRates);
+  // เกณฑ์ CEO เก็บเป็นข้อความในฟอร์ม — "" = ไม่ต้องผ่าน CEO
+  const [routes, setRoutes] = useState<Record<RequestKind, { mode: "hr" | "ceo"; above: string }>>(
+    Object.fromEntries(KINDS.map((k) => [k, { mode: initial.approvalRoutes[k].mode, above: initial.approvalRoutes[k].ceoAbove === null ? "" : String(initial.approvalRoutes[k].ceoAbove) }])) as Record<RequestKind, { mode: "hr" | "ceo"; above: string }>,
+  );
+  const setRoute = (k: RequestKind, patch: Partial<{ mode: "hr" | "ceo"; above: string }>) => setRoutes((r) => ({ ...r, [k]: { ...r[k], ...patch } }));
+  const toRoute = (k: RequestKind): ApprovalRoute => ({ mode: routes[k].mode, ceoAbove: routes[k].mode === "ceo" || routes[k].above.trim() === "" ? null : Number(routes[k].above.replace(/,/g, "")) });
   const [capMode, setCapMode] = useState<AdvanceCapMode>(initial.advanceCapMode);
   const [capValue, setCapValue] = useState(String(initial.advanceCapValue || ""));
   const [wht, setWht] = useState(initial.whtRates.join(", "));
@@ -29,6 +35,7 @@ export function SettingsForm({ initial }: { initial: RequestSettings }) {
     setSaved(false);
     start(async () => {
       const res = await saveSettingsAction({
+        approvalRoutes: Object.fromEntries(KINDS.map((k) => [k, toRoute(k)])) as Record<RequestKind, ApprovalRoute>,
         otRates: rates,
         advanceCapMode: capMode,
         advanceCapValue: Number(capValue) || 0,
@@ -48,6 +55,43 @@ export function SettingsForm({ initial }: { initial: RequestSettings }) {
 
   return (
     <div className="flex flex-col gap-4">
+      <section className="flex flex-col gap-3 rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4">
+        <div>
+          <h2 className="text-sm font-bold text-(--ink)">ใครอนุมัติ</h2>
+          <p className="text-xs text-(--ink-soft)">ตั้งแยกแต่ละประเภท · ใบที่ HR ยื่นเองหรือเป็นผู้ได้เงินเอง ไป CEO เสมอ (อนุมัติใบตัวเองไม่ได้) · มีผลกับใบที่ยื่นใหม่</p>
+        </div>
+        <ul className="flex flex-col divide-y divide-(--line)">
+          {KINDS.map((k) => (
+            <li key={k} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:gap-4">
+              <div className="min-w-0 sm:w-44">
+                <div className="text-sm font-semibold text-(--ink)">{KIND_META[k].label}</div>
+                <div className="text-xs text-(--ink-soft)">{routeText(toRoute(k))}</div>
+              </div>
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label={`ผู้อนุมัติ ${KIND_META[k].label}`}>
+                {(
+                  [
+                    ["hr", "HR อนุมัติ"],
+                    ["ceo", "CEO อนุมัติทุกใบ"],
+                  ] as ["hr" | "ceo", string][]
+                ).map(([m, label]) => (
+                  <button key={m} type="button" aria-pressed={routes[k].mode === m} onClick={() => setRoute(k, { mode: m })} className={`h-9 rounded-full px-3.5 text-sm ${routes[k].mode === m ? "bg-(--brand-navy) font-semibold text-white" : "border border-(--line)"}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {routes[k].mode === "hr" && (
+                <label className="flex flex-1 items-center gap-2 text-sm">
+                  <span className="shrink-0 text-(--ink-soft)">ยอดเกิน</span>
+                  <input inputMode="decimal" className={`${fieldNoW} w-28 text-right`} value={routes[k].above} placeholder="ไม่ต้อง" onChange={(e) => setRoute(k, { above: e.target.value })} aria-label={`เกณฑ์ส่งต่อ CEO ของ ${KIND_META[k].label}`} />
+                  <span className="text-(--ink-soft)">บาท ต่อ CEO</span>
+                </label>
+              )}
+            </li>
+          ))}
+        </ul>
+        <p className="text-xs text-(--ink-soft)">เว้นช่องว่าง = HR อนุมัติจบ ไม่ผ่าน CEO · ใส่ 0 = ทุกใบต้องผ่าน HR แล้วต่อ CEO</p>
+      </section>
+
       <section className="flex flex-col gap-3 rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4">
         <div>
           <h2 className="text-sm font-bold text-(--ink)">อัตรา OT ของพนักงาน</h2>

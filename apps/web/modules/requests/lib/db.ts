@@ -12,6 +12,7 @@ import {
   type RequestSettings,
   type RequestStatus,
   type AdvanceCapMode,
+  type ApprovalRoute,
 } from "./types";
 
 /**
@@ -109,6 +110,11 @@ export interface RequestView {
   createdByName: string;
   createdAt: string;
   approverLevel: ApproverLevel;
+  needCeo: boolean;
+  firstDecidedBy: string | null;
+  firstDecidedByName: string | null;
+  firstDecidedAt: string | null;
+  firstDecisionNote: string | null;
   decidedBy: string | null;
   decidedByName: string | null;
   decidedAt: string | null;
@@ -197,6 +203,11 @@ export function toRequest(r: RequestRow, payments: PaymentRow[]): RequestView {
     createdByName: r.createdByName,
     createdAt: r.createdAt.toISOString(),
     approverLevel: r.approverLevel as ApproverLevel,
+    needCeo: r.needCeo,
+    firstDecidedBy: r.firstDecidedBy,
+    firstDecidedByName: r.firstDecidedByName,
+    firstDecidedAt: iso(r.firstDecidedAt),
+    firstDecisionNote: r.firstDecisionNote,
     decidedBy: r.decidedBy,
     decidedByName: r.decidedByName,
     decidedAt: iso(r.decidedAt),
@@ -257,7 +268,9 @@ export async function readSettings(tx: Tx, orgId: string): Promise<RequestSettin
   if (!s) return DEFAULT_SETTINGS;
   const rates = (s.otRates as unknown as OtRate[] | null) ?? [];
   const wht = (s.whtRates as unknown as number[] | null) ?? [];
+  const saved = (s.approvalRoutes as Partial<Record<RequestKind, ApprovalRoute>> | null) ?? {};
   return {
+    approvalRoutes: { ...DEFAULT_SETTINGS.approvalRoutes, ...saved },
     otRates: rates.length > 0 ? rates : DEFAULT_SETTINGS.otRates,
     advanceCapMode: (s.advanceCapMode as AdvanceCapMode) ?? "baht",
     advanceCapValue: num0(s.advanceCapValue),

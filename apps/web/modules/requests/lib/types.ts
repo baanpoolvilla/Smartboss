@@ -20,35 +20,35 @@ export const KIND_META: Record<
     label: "OT / งานนอกเวลา",
     short: "OT",
     who: "แอดมินลงให้ (เจ้าตัวลงเองไม่ได้)",
-    approver: "HR ตรวจว่ามีจริง",
+    approver: "HR ตรวจว่ามีจริง (ยอดสูง → CEO)",
     hint: "พนักงาน ช่าง หรือคนงานที่ถูกเรียกมาทำงานนอกเวลา",
   },
   expense: {
     label: "เบิกค่าใช้จ่าย",
     short: "ค่าใช้จ่าย",
     who: "ยื่นเอง พร้อมใบเสร็จ",
-    approver: "HR อนุมัติและจ่าย",
+    approver: "HR อนุมัติและจ่าย (ยอดสูง → CEO)",
     hint: "ทางด่วน น้ำมัน ซื้อของ ที่จ่ายเงินตัวเองไปก่อน",
   },
   cash_advance: {
     label: "เบิกเงินไปก่อน",
     short: "เบิกไปก่อน",
     who: "ยื่นเอง แล้วเคลียร์ด้วยใบเสร็จ",
-    approver: "HR อนุมัติและจ่าย",
+    approver: "HR อนุมัติและจ่าย (ยอดสูง → CEO)",
     hint: "ต้องได้เงินก่อนไปซื้อของ — ซื้อแล้วเอาใบเสร็จ + เงินทอนมาเคลียร์",
   },
   advance: {
     label: "เบิกล่วงหน้า",
     short: "เบิกล่วงหน้า",
     who: "ผู้ดูแลบ้าน / HR ขอให้",
-    approver: "CEO เท่านั้น",
+    approver: "HR อนุมัติ (ยอดสูง → CEO)",
     hint: "เบิกเงินก่อนเงินเดือน/ค่าแรงออก — หักคืนอัตโนมัติ",
   },
   contractor: {
     label: "ค่าช่าง/ร้านภายนอก",
     short: "ช่างภายนอก",
     who: "แอดมินลง",
-    approver: "HR อนุมัติและจ่าย",
+    approver: "HR อนุมัติและจ่าย (ยอดสูง → CEO)",
     hint: "จ้างช่างหรือร้านข้างนอก — คิดภาษีหัก ณ ที่จ่ายให้",
   },
 };
@@ -291,6 +291,8 @@ export function statusInfo(r: {
   kind: RequestKind;
   status: RequestStatus;
   approverLevel: ApproverLevel;
+  needCeo?: boolean;
+  firstDecidedAt?: string | null;
   beneficiaryKind: BeneficiaryKind;
   paidTotal: number;
   netAmount: number;
@@ -301,7 +303,9 @@ export function statusInfo(r: {
   const approver = r.approverLevel === "ceo" ? "CEO" : "HR";
   switch (r.status) {
     case "pending":
-      return { label: `รอ ${approver} อนุมัติ`, tone: "warn", next: r.kind === "ot" ? `${approver} ตรวจว่ามีจริงจากหลักฐาน` : `รอ ${approver} ตัดสิน` };
+      if (r.approverLevel === "ceo" && r.firstDecidedAt) return { label: "HR ผ่านแล้ว · รอ CEO", tone: "warn", next: "CEO อนุมัติ (ยอดเกินเกณฑ์)" };
+      if (r.approverLevel === "hr" && r.needCeo) return { label: "รอ HR อนุมัติ", tone: "warn", next: "HR ตรวจ แล้วต่อ CEO (ยอดเกินเกณฑ์)" };
+      return { label: `รอ ${approver} อนุมัติ`, tone: "warn", next: r.kind === "ot" ? `${approver} ตรวจว่ามีจริง` : `รอ ${approver} ตัดสิน` };
     case "rejected":
       return { label: "ไม่อนุมัติ", tone: "danger", next: "จบแล้ว" };
     case "cancelled":
@@ -355,7 +359,36 @@ export function advanceCap(mode: AdvanceCapMode, value: number, dailyRate: numbe
   return round2(value * dailyRate);
 }
 
+/**
+ * เส้นทางอนุมัติของประเภทหนึ่ง — ตั้งได้รายบริษัท (ผู้ใช้ 21/10/2569)
+ *   mode hr  = HR อนุมัติ · ceoAbove = ยอดเกินเท่านี้ต้องให้ CEO อนุมัติต่ออีกขั้น (null = ไม่ต้อง · 0 = ทุกใบ)
+ *   mode ceo = CEO อนุมัติคนเดียวทุกใบ (ไม่ผ่าน HR)
+ * ใบที่ HR เป็นคนยื่นหรือเป็นผู้ได้เงินเอง ข้ามไป CEO เสมอ (อนุมัติใบของตัวเองไม่ได้)
+ */
+export interface ApprovalRoute {
+  mode: "hr" | "ceo";
+  ceoAbove: number | null;
+}
+
+export const DEFAULT_ROUTE: ApprovalRoute = { mode: "hr", ceoAbove: 5000 };
+
+/** ใบนี้ต้องผ่านใคร: ขั้นแรก + ต้องต่อ CEO ไหม */
+export function routeFor(route: ApprovalRoute | undefined, amount: number): { level: ApproverLevel; needCeo: boolean } {
+  const r = route ?? DEFAULT_ROUTE;
+  if (r.mode === "ceo") return { level: "ceo", needCeo: false };
+  return { level: "hr", needCeo: r.ceoAbove !== null && amount > r.ceoAbove };
+}
+
+export function routeText(route: ApprovalRoute | undefined): string {
+  const r = route ?? DEFAULT_ROUTE;
+  if (r.mode === "ceo") return "CEO อนุมัติทุกใบ";
+  if (r.ceoAbove === null) return "HR อนุมัติ";
+  if (r.ceoAbove === 0) return "HR → CEO ทุกใบ";
+  return `HR อนุมัติ · เกิน ${baht(r.ceoAbove)} ต่อ CEO`;
+}
+
 export interface RequestSettings {
+  approvalRoutes: Record<RequestKind, ApprovalRoute>;
   otRates: OtRate[];
   advanceCapMode: AdvanceCapMode;
   advanceCapValue: number;
@@ -366,6 +399,7 @@ export interface RequestSettings {
 }
 
 export const DEFAULT_SETTINGS: RequestSettings = {
+  approvalRoutes: { ot: DEFAULT_ROUTE, expense: DEFAULT_ROUTE, cash_advance: DEFAULT_ROUTE, advance: DEFAULT_ROUTE, contractor: DEFAULT_ROUTE },
   otRates: DEFAULT_OT_RATES,
   advanceCapMode: "baht",
   advanceCapValue: 3000,
@@ -393,3 +427,27 @@ export function costOf(r: { kind: RequestKind; netAmount: number; clearSpent: nu
   if (r.kind === "cash_advance" && r.clearStatus === "cleared" && r.clearSpent !== null) return r.clearSpent;
   return r.netAmount;
 }
+
+/** จำนวนตัวอักษรที่ต้องแก้ให้สองคำเท่ากัน (Levenshtein) — ใช้เทียบเลขอ้างอิงสลิปที่อ่านด้วย AI พลาดได้ 1–2 ตัว */
+export function editDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j]! + 1, cur[j - 1]! + 1, prev[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length]!;
+}
+
+/** เลขอ้างอิงสลิปสองใบ "น่าจะเป็นรายการเดียวกัน" — ยอด + วันที่ตรง และเลขต่างกันไม่เกิน 3 ตัว (AI อ่านพลาด/แคปจอใหม่) */
+export function similarSlip(a: ReceiptAi | null | undefined, b: ReceiptAi | null | undefined): boolean {
+  if (!a?.receiptNo || !b?.receiptNo || a.amount === null || b.amount === null) return false;
+  if (Math.abs(a.amount - b.amount) > 0.005 || a.date !== b.date) return false;
+  const x = a.receiptNo.replace(/\s+/g, "");
+  const y = b.receiptNo.replace(/\s+/g, "");
+  return x.length >= 8 && y.length >= 8 && editDistance(x, y) <= 3;
+}
+
+/** error จากการบันทึกจ่ายที่ขึ้นต้นแบบนี้ = สลิปคล้ายของใบอื่น หน้าเว็บถามยืนยันก่อนส่งซ้ำ ("SIMILAR|<เลขที่ใบ>|<ข้อความ>") */
+export const SIMILAR_SLIP_PREFIX = "SIMILAR|";

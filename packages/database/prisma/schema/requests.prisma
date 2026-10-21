@@ -62,8 +62,15 @@ model MoneyRequest {
   createdBy       String    @map("created_by")
   createdByName   String    @map("created_by_name")
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  /// hr | ceo — ใครต้องอนุมัติใบนี้ (คำนวณตอนยื่น)
+  /// hr | ceo — ใครต้องอนุมัติ "ขั้นตอนนี้" (สองขั้น: เริ่ม hr แล้วเปลี่ยนเป็น ceo หลัง HR ผ่าน)
   approverLevel   String    @map("approver_level")
+  /// ต้องให้ CEO อนุมัติต่อหลัง HR (ยอดเกินเกณฑ์ที่บริษัทตั้ง) — คำนวณตอนยื่น
+  needCeo         Boolean   @default(false) @map("need_ceo")
+  /// ขั้นแรก (HR) ของใบที่ต้องอนุมัติสองขั้น
+  firstDecidedBy     String?   @map("first_decided_by")
+  firstDecidedByName String?   @map("first_decided_by_name")
+  firstDecidedAt     DateTime? @map("first_decided_at") @db.Timestamptz(6)
+  firstDecisionNote  String?   @map("first_decision_note")
   decidedBy       String?   @map("decided_by")
   decidedByName   String?   @map("decided_by_name")
   decidedAt       DateTime? @map("decided_at") @db.Timestamptz(6)
@@ -218,6 +225,8 @@ model MoneyRequestSettings {
   receiptMaxAgeDays Int      @default(60) @map("receipt_max_age_days")
   /// เบิกเงินไปก่อน ต้องเคลียร์ภายในกี่วัน
   clearDueDays      Int      @default(7) @map("clear_due_days")
+  /// เส้นทางอนุมัติรายประเภท {"ot": {"mode": "hr", "ceoAbove": 5000}, ...} — null = ค่าเริ่มต้น
+  approvalRoutes    Json?    @map("approval_routes")
   updatedBy         String   @map("updated_by")
   updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 

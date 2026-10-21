@@ -29,6 +29,8 @@ export const statusOf = (r: RequestView) =>
     kind: r.kind,
     status: r.status,
     approverLevel: r.approverLevel,
+    needCeo: r.needCeo,
+    firstDecidedAt: r.firstDecidedAt,
     beneficiaryKind: r.beneficiaryKind,
     paidTotal: r.paidTotal,
     netAmount: r.netAmount,
