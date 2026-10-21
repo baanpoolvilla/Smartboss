@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Bell, BellOff, Camera, Crown, ExternalLink, ImagePlus, Link2, Loader2, LogOut, Pencil, Pin, Trash2, UserMinus, UserPlus, X } from "lucide-react";
+import { ArrowLeft, Bell, BellOff, Camera, Crown, ExternalLink, ImagePlus, Link2, Loader2, Lock, LockOpen, LogOut, Pencil, Pin, Trash2, UserMinus, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
 
@@ -163,6 +163,7 @@ export function RoomInfo({
   const [toAdd, setToAdd] = useState<Set<string>>(new Set());
   const [memberMenu, setMemberMenu] = useState<string | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [avatarMenu, setAvatarMenu] = useState(false);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const avatarInput = useRef<HTMLInputElement>(null);
@@ -428,6 +429,37 @@ export function RoomInfo({
         {tab === "note" && <NotesTab key={channel.id} channelId={channel.id} onCreate={onCreateNote} />}
         {tab === "album" && <AlbumsTab key={channel.id} channelId={channel.id} onOpenMedia={onOpenMedia} />}
         {tab !== "members" && tab !== "album" && tab !== "note" && <MediaTab key={`${channel.id}-${tab}`} channelId={channel.id} kind={tab} onOpenMedia={onOpenMedia} />}
+
+        {/* ห้องของโปรเจกต์: ปิดเก็บไว้อ่าน / เปิดอีกครั้ง / ลบห้อง (ผู้ใช้ 20/10/2569) */}
+        {detail?.projectId && (detail.canClose || detail.canDelete) && (
+          <div className="grid gap-2 border-t border-(--line) p-4">
+            {detail.canClose && (
+              <button
+                type="button"
+                onClick={() => void run(() => api.updateChannel(channel.id, { closed: !detail.closed }), detail.closed ? "เปิดห้องอีกครั้งแล้ว" : "ปิดห้องแล้ว · อ่านย้อนหลังได้")}
+                className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-(--line) py-2.5 text-sm font-medium text-(--ink) hover:bg-(--bg-soft)"
+              >
+                {detail.closed ? <LockOpen className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                {detail.closed ? "เปิดห้องอีกครั้ง" : "ปิดห้อง (งานจบ · เก็บไว้อ่าน)"}
+              </button>
+            )}
+            {detail.canDelete && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!confirmDelete) {
+                    setConfirmDelete(true);
+                    return;
+                  }
+                  void run(() => api.deleteChannel(channel.id), "ลบห้องแล้ว").then(onLeft);
+                }}
+                className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-(--danger)/30 py-2.5 text-sm font-medium text-(--danger) hover:bg-(--danger)/5"
+              >
+                <Trash2 className="h-4 w-4" /> {confirmDelete ? "กดอีกครั้งเพื่อยืนยันลบห้อง (หายจากทุกคน)" : "ลบห้องนี้"}
+              </button>
+            )}
+          </div>
+        )}
 
         {editableMembers && (
           <div className="border-t border-(--line) p-4">

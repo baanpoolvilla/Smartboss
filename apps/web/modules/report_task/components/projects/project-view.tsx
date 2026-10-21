@@ -31,6 +31,7 @@ import { useTaskStore } from "@/modules/report_task/store/task-store";
 import type { Project, ProjectStatus } from "@/modules/report_task/types";
 import { ProjectTimeline } from "./project-timeline";
 import { BoardTab, CalendarTab, DashboardTab, FilesTab, ListTab, MessagesTab } from "./project-tabs";
+import { updateChannel } from "@/modules/chat/lib/api";
 import { PCT_HELP, PersonDot, ProjectStatusChip, STATE_COLOR, STATE_LABEL, StatePill, fmtDay, askProjectUpdate, defaultMemberRole, ensureProjectMembers, notifyAddedToProject, syncChatMember, todayBkk, useCompanyHolidays } from "./project-ui";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { ROLE_OF_DEFAULT } from "./project-roles";
@@ -541,7 +542,20 @@ function UpdatesTab({ project, canEdit }: { project: Project; canEdit: boolean }
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-[var(--ink-soft)]">{st === "done" || st === "dropped" || st === "hold" ? "สถานะนี้จะปิดโปรเจกต์ (เปิดใหม่ได้ด้วยอัปเดตครั้งถัดไป)" : ""}</span>
             <button type="button" className="ml-auto rounded-lg bg-[var(--brand-green)] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50" disabled={!text.trim()}
-              onClick={() => { addUpdate(project.id, st, text.trim(), me); setText(""); toast.success("โพสต์อัปเดตแล้ว"); }}>
+              onClick={() => {
+                addUpdate(project.id, st, text.trim(), me);
+                setText("");
+                toast.success("โพสต์อัปเดตแล้ว");
+                // ปิดโปรเจกต์ (เสร็จแล้ว/ยกเลิก) → ปิดห้องแชทของโปรเจกต์ให้ (อ่านย้อนหลังได้) · เปิดโปรเจกต์กลับ → เปิดห้องกลับ
+                // ไม่มีสิทธิ์/ไม่มีห้อง = เงียบไว้ (ผู้ใช้ 20/10/2569)
+                const wasClosed = project.closedStatus === "done" || project.closedStatus === "dropped";
+                const nowClosed = st === "done" || st === "dropped";
+                if (project.chatChannelId && wasClosed !== nowClosed) {
+                  updateChannel(project.chatChannelId, { closed: nowClosed })
+                    .then(() => toast.success(nowClosed ? "ปิดห้องแชทของโปรเจกต์ให้แล้ว · อ่านย้อนหลังได้" : "เปิดห้องแชทของโปรเจกต์อีกครั้งแล้ว"))
+                    .catch(() => {});
+                }
+              }}>
               โพสต์อัปเดต
             </button>
           </div>

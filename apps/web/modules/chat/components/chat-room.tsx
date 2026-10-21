@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Bookmark, ChevronDown, ChevronUp, Info, Loader2, Megaphone, Phone, Search, Upload, X } from "lucide-react";
+import { ArrowLeft, Bookmark, ChevronDown, ChevronUp, Info, Loader2, Lock, Megaphone, Phone, Search, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
 
@@ -10,7 +10,7 @@ import type { ChatAttachment, ChatChannelSummary, ChatMessageDTO } from "../type
 import { isKeepChannelId } from "../types";
 import * as api from "../lib/api";
 import { attachmentLabel, channelTitle, formatDayLabel, formatClock, formatMessageTime } from "../lib/format";
-import { jumpToMessage } from "../lib/chat-actions";
+import { jumpToMessage, loadChannels, loadDetail } from "../lib/chat-actions";
 import { ChannelAvatar } from "./channel-list";
 import { ChatAvatar } from "./chat-avatar";
 import { Composer, type ComposerHandle } from "./composer";
@@ -265,17 +265,22 @@ export function ChatRoom({
           onShowReaders={onShowReaders}
         />
 
-        <Composer
-          ref={composerRef}
-          channelId={channel.id}
-          channelType={channel.type}
-          mentionable={mentionable}
-          meId={meId}
-          users={users}
-          replyTo={replyTo}
-          onCancelReply={() => setReplyTo(null)}
-          onCreateNote={() => setCreatingNote(true)}
-        />
+        {/* ห้องของโปรเจกต์ที่ปิดแล้ว (งานจบ) — อ่านย้อนหลังได้ ส่งใหม่ไม่ได้ (ผู้ใช้ 20/10/2569) */}
+        {detail?.closed ? (
+          <ClosedRoomBar channelId={channel.id} canReopen={detail.canClose ?? false} />
+        ) : (
+          <Composer
+            ref={composerRef}
+            channelId={channel.id}
+            channelType={channel.type}
+            mentionable={mentionable}
+            meId={meId}
+            users={users}
+            replyTo={replyTo}
+            onCancelReply={() => setReplyTo(null)}
+            onCreateNote={() => setCreatingNote(true)}
+          />
+        )}
 
         {dragging && (
           <div className="pointer-events-none absolute inset-2 z-40 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-(--chat-accent) bg-(--chat-accent-soft)/90 text-(--chat-accent-strong)">
@@ -367,6 +372,39 @@ export function ChatRoom({
             )}
           </div>
         </ChatModal>
+      )}
+    </div>
+  );
+}
+
+/** แทนช่องพิมพ์ในห้องที่ปิดแล้ว — คนที่ปิดได้ (ผู้ดูแลโปรเจกต์/แอดมินห้อง) เปิดกลับได้ทันที */
+export function ClosedRoomBar({ channelId, canReopen }: { channelId: string; canReopen: boolean }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-t border-(--line) bg-(--bg-soft) px-4 py-3 text-sm text-(--ink-soft)">
+      <Lock className="h-4 w-4 shrink-0" />
+      <span className="min-w-0 flex-1">ห้องนี้ปิดแล้ว · อ่านย้อนหลังได้ แต่ส่งข้อความใหม่ไม่ได้</span>
+      {canReopen && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await api.updateChannel(channelId, { closed: false });
+              toast.success("เปิดห้องอีกครั้งแล้ว");
+              void loadDetail(channelId);
+              void loadChannels();
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : "เปิดห้องไม่สำเร็จ");
+            } finally {
+              setBusy(false);
+            }
+          }}
+          className="shrink-0 cursor-pointer rounded-lg border border-(--line) bg-(--bg) px-3 py-1.5 text-xs font-semibold text-(--ink) hover:bg-(--bg-soft) disabled:opacity-50"
+        >
+          เปิดห้องอีกครั้ง
+        </button>
       )}
     </div>
   );

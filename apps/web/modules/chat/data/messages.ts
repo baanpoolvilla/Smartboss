@@ -1,4 +1,5 @@
 import "server-only";
+import { isChannelClosed } from "./project-room";
 import { NOT_WORKER } from "@/lib/worker-role";
 import { DEPT_MENTION_PREFIX } from "../constants";
 import { isSingleEmoji } from "@/lib/emoji";
@@ -108,6 +109,10 @@ export async function createMessage(
   input: CreateMessageInput
 ): Promise<{ message: ChatMessageDTO; created: boolean; channelType: string; memberIds: string[] }> {
   const access = await getChannelAccess(actor, channelId);
+  // ห้องของโปรเจกต์ที่ปิดแล้ว (งานจบ) — อ่านได้ ส่งใหม่ไม่ได้ (project-room.ts)
+  if (access.type === "group" && (await isChannelClosed(actor.orgId, channelId))) {
+    throw new ChatError("ห้องนี้ปิดแล้ว — อ่านย้อนหลังได้ แต่ส่งข้อความใหม่ไม่ได้", 403);
+  }
   const clientId = typeof input.clientId === "string" ? input.clientId.slice(0, 64) : null;
 
   if (clientId) {

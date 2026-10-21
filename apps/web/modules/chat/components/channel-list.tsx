@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useMemo, useState } from "react";
-import { BellOff, Bookmark, Building2, Clock, MoreHorizontal, Pin, Search, Settings, SquarePen, Users } from "lucide-react";
+import { BellOff, Bookmark, Building2, Clock, Lock, MoreHorizontal, Pin, Search, Settings, SquarePen, Users } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
 
@@ -140,6 +140,7 @@ const ChannelRow = memo(function ChannelRow({
             <span className={cn("truncate text-[14.5px] text-(--ink)", unread ? "font-semibold" : "font-medium")}>{title}</span>
             {memberCount != null && <span className="shrink-0 text-[12px] text-(--ink-soft)">({memberCount})</span>}
             {channel.muted && <BellOff className="h-3.5 w-3.5 shrink-0 text-(--ink-soft)" aria-label="ปิดเสียงอยู่" />}
+            {channel.closed && <Lock className="h-3.5 w-3.5 shrink-0 text-(--ink-soft)" aria-label="ห้องปิดแล้ว" />}
             <span className="ml-auto shrink-0 pl-1 text-[11px] text-(--ink-soft)">{formatListTime(channel.activityAt)}</span>
           </div>
           <div className="mt-0.5 flex items-center gap-1.5">

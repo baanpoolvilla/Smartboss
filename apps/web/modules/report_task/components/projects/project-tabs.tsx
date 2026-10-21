@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { Lock, LockOpen, MessageSquare, Pencil, Trash2 } from "lucide-react";
 
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { TaskCard } from "@/modules/report_task/components/kanban/task-card";
@@ -14,9 +15,9 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useProjectStore } from "@/modules/report_task/store/project-store";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import type { Attachment, Project, TaskStatus } from "@/modules/report_task/types";
-import { addChannelMembers, createGroupChannel, fetchMessages, sendMessage } from "@/modules/chat/lib/api";
+import { addChannelMembers, createGroupChannel, deleteChannel, fetchMessages, sendMessage, updateChannel } from "@/modules/chat/lib/api";
 import { CHAT_PAGE_PATH } from "@/modules/chat/constants";
-import type { ChatMessageDTO } from "@/modules/chat/types";
+import type { ChatChannelDetail, ChatMessageDTO } from "@/modules/chat/types";
 import { PersonDot, STATE_COLOR, STATE_LABEL, StatePill, TH_MONTH_SHORT, ensureProjectMembers, fmtDay } from "./project-ui";
 
 const seg = (on: boolean) => cn("rounded-md px-3 py-1 text-xs", on ? "bg-[var(--bg)] font-semibold shadow-sm" : "text-[var(--ink-soft)]");
@@ -426,24 +427,44 @@ export function MessagesTab({ project, canEdit }: { project: Project; canEdit: b
   const [msgs, setMsgs] = useState<ChatMessageDTO[] | null>(null);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  // ห้อง: ชื่อ · ปิดแล้วไหม · สิทธิ์ (เซิร์ฟเวอร์ตัดสิน) — "gone" = ห้องถูกลบ/เข้าไม่ได้แล้ว (ผู้ใช้ 20/10/2569)
+  const [room, setRoom] = useState<ChatChannelDetail | "gone" | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const memberIds = [...new Set([project.ownerId, ...project.members.map((m) => m.userId)])];
   const ch = project.chatChannelId;
+
+  const loadRoom = useCallback(() => {
+    if (!ch) return;
+    // เรียกตรงแทน fetchChannelDetail — ต้องรู้สถานะ 403/404 (ห้องถูกลบ) แยกจากเน็ตหลุด
+    fetch(`/api/chat/channels/${encodeURIComponent(ch)}`)
+      .then(async (r) => {
+        if (r.status === 403 || r.status === 404) return setRoom("gone");
+        if (!r.ok) return;
+        const body = (await r.json()) as { channel: ChatChannelDetail };
+        setRoom(body.channel);
+      })
+      .catch(() => {});
+  }, [ch]);
 
   useEffect(() => {
     if (!ch) return;
     let stop = false;
     const load = () => fetchMessages(ch).then((p) => { if (!stop) setMsgs(p.messages); }).catch(() => { if (!stop) setMsgs([]); });
     load();
-    const t = setInterval(load, 15000);
+    loadRoom();
+    const t = setInterval(() => { load(); loadRoom(); }, 15000);
     return () => { stop = true; clearInterval(t); };
-  }, [ch]);
+  }, [ch, loadRoom]);
   useEffect(() => { endRef.current?.scrollIntoView({ block: "nearest" }); }, [msgs]);
 
   async function createRoom() {
     setBusy(true);
     try {
       const { channelId } = await createGroupChannel(`📁 ${project.name}`, memberIds.filter((id) => id !== me));
+      setRoom(null);
+      setMsgs(null);
       updateProject(project.id, { chatChannelId: channelId });
       toast.success("สร้างห้องแชทของโปรเจกต์แล้ว · สมาชิกโปรเจกต์อยู่ในห้องครบ");
     } catch (err) {
@@ -464,50 +485,148 @@ export function MessagesTab({ project, canEdit }: { project: Project; canEdit: b
       toast.error(err instanceof Error ? err.message : "ส่งไม่สำเร็จ");
     }
   }
+  async function act(fn: () => Promise<unknown>, ok: string) {
+    setBusy(true);
+    try {
+      await fn();
+      toast.success(ok);
+      loadRoom();
+      if (ch) fetchMessages(ch).then((p) => setMsgs(p.messages)).catch(() => {});
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "ทำรายการไม่สำเร็จ");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function deleteRoom() {
+    if (!ch) return;
+    setBusy(true);
+    try {
+      await deleteChannel(ch);
+      updateProject(project.id, { chatChannelId: undefined });
+      setRoom(null);
+      setMsgs(null);
+      setConfirmDelete(false);
+      toast.success("ลบห้องแชทแล้ว · สร้างห้องใหม่ได้ถ้าต้องการ");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "ลบห้องไม่สำเร็จ");
+    } finally {
+      setBusy(false);
+    }
+  }
 
-  if (!ch) {
+  // ห้องถูกลบจากหน้าแชท/เข้าไม่ได้แล้ว — ให้สร้างใหม่ได้ (ไม่ค้างกับห้องที่ไม่มีอยู่)
+  if (!ch || room === "gone") {
     return (
       <div className="grid max-w-xl place-items-start gap-2 rounded-xl border border-dashed border-[var(--line)] p-5">
         <b>คุยกันในโปรเจกต์</b>
-        <p className="m-0 text-sm text-[var(--ink-soft)]">สร้างห้องแชทของโปรเจกต์นี้ ใส่สมาชิกโปรเจกต์ {memberIds.length} คนให้อัตโนมัติ คุยที่นี่หรือในเมนูแชทก็ได้ แจ้งเตือนและ LINE ทำงานเหมือนห้องแชทปกติ</p>
+        <p className="m-0 text-sm text-[var(--ink-soft)]">
+          {room === "gone" ? "ห้องแชทเดิมของโปรเจกต์นี้ถูกลบแล้ว หรือคุณไม่ได้อยู่ในห้อง · " : ""}
+          สร้างห้องแชทของโปรเจกต์นี้ ใส่สมาชิกโปรเจกต์ {memberIds.length} คนให้อัตโนมัติ คุยที่นี่หรือในเมนูแชทก็ได้ แจ้งเตือนและ LINE ทำงานเหมือนห้องแชทปกติ
+        </p>
         {canEdit ? (
           <button type="button" disabled={busy} onClick={createRoom} className="rounded-lg bg-[var(--brand-green)] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-60">สร้างห้องแชทของโปรเจกต์</button>
         ) : <p className="m-0 text-xs text-[var(--ink-soft)]">ให้ผู้ดูแลโปรเจกต์หรือสมาชิกที่แก้ได้เป็นคนสร้าง</p>}
       </div>
     );
   }
+
+  const detail = room;
+  const closed = !!detail?.closed;
+  const btn = "inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-[var(--line)] px-3 text-xs hover:bg-[var(--bg-soft)] disabled:opacity-50";
   return (
     <div className="grid max-w-3xl gap-2">
+      {/* หัวห้อง: ชื่อห้อง (เปลี่ยนได้) · ปิดห้อง/เปิดอีกครั้ง · ลบห้อง — สิทธิ์มาจากเซิร์ฟเวอร์ (ผู้ดูแลโปรเจกต์ + สมาชิก "แก้ได้") */}
       <div className="flex flex-wrap items-center gap-2">
-        <Link href={`${CHAT_PAGE_PATH}?c=${encodeURIComponent(ch)}`} className="rounded-lg border border-[var(--line)] px-3 py-1 text-xs hover:bg-[var(--bg-soft)]">เปิดในหน้าแชท (ส่งรูป/ไฟล์/สติกเกอร์)</Link>
-        {canEdit && (
-          <button type="button" className="rounded-lg border border-[var(--line)] px-3 py-1 text-xs hover:bg-[var(--bg-soft)]"
-            onClick={() => addChannelMembers(ch, memberIds).then(() => toast.success("เพิ่มสมาชิกโปรเจกต์เข้าห้องครบแล้ว")).catch((e) => toast.error(e instanceof Error ? e.message : "ไม่สำเร็จ"))}>
+        {renaming !== null ? (
+          <form
+            className="flex min-w-0 basis-full items-center gap-1.5 sm:flex-[1_1_320px] sm:basis-auto"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const name = renaming.trim();
+              if (!name || !ch) return;
+              void act(() => updateChannel(ch, { name }), "เปลี่ยนชื่อห้องแล้ว").then(() => setRenaming(null));
+            }}
+          >
+            <input id="project-room-name" autoFocus value={renaming} maxLength={100} onChange={(e) => setRenaming(e.target.value)}
+              className="h-8 min-w-0 flex-1 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-2.5 text-base sm:text-sm" />
+            <button type="submit" disabled={busy || !renaming.trim()} className={cn(btn, "border-[var(--brand-navy)] bg-[var(--brand-navy)] font-semibold text-white hover:bg-[var(--brand-navy)]")}>บันทึก</button>
+            <button type="button" className={btn} onClick={() => setRenaming(null)}>ยกเลิก</button>
+          </form>
+        ) : (
+          <div className="flex min-w-0 basis-full items-center gap-1.5 sm:flex-[1_1_220px] sm:basis-auto">
+            <MessageSquare className="h-4 w-4 shrink-0 text-[var(--ink-soft)]" />
+            <b className="truncate text-sm">{detail?.name ?? "ห้องแชทของโปรเจกต์"}</b>
+            {closed && <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--bg-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--ink-soft)]"><Lock className="h-3 w-3" />ปิดแล้ว</span>}
+            {detail?.canRename && (
+              <button type="button" className="shrink-0 cursor-pointer rounded-md p-1 text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)]" title="เปลี่ยนชื่อห้อง" aria-label="เปลี่ยนชื่อห้อง"
+                onClick={() => setRenaming(detail.name ?? "")}>
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        )}
+        <Link href={`${CHAT_PAGE_PATH}?c=${encodeURIComponent(ch)}`} className={btn}>เปิดในหน้าแชท</Link>
+        {canEdit && !closed && (
+          <button type="button" className={btn} disabled={busy}
+            onClick={() => void act(() => addChannelMembers(ch, memberIds), "เพิ่มสมาชิกโปรเจกต์เข้าห้องครบแล้ว")}>
             ดึงสมาชิกโปรเจกต์เข้าห้อง
           </button>
+        )}
+        {detail?.canClose && (
+          <button type="button" className={btn} disabled={busy}
+            title={closed ? "ให้ทุกคนส่งข้อความได้อีกครั้ง" : "งานจบแล้ว — เก็บแชทไว้อ่านย้อนหลัง ส่งข้อความใหม่ไม่ได้"}
+            onClick={() => void act(() => updateChannel(ch, { closed: !closed }), closed ? "เปิดห้องอีกครั้งแล้ว" : "ปิดห้องแล้ว · อ่านย้อนหลังได้")}>
+            {closed ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+            {closed ? "เปิดห้องอีกครั้ง" : "ปิดห้อง (งานจบ)"}
+          </button>
+        )}
+        {detail?.canDelete && (
+          confirmDelete ? (
+            <span className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-2 py-1 text-xs text-red-700">
+              ลบห้องนี้? หายจากทุกคน
+              <button type="button" disabled={busy} onClick={() => void deleteRoom()} className="cursor-pointer rounded-md bg-[#dc2626] px-2 py-0.5 font-semibold text-white disabled:opacity-50">ลบเลย</button>
+              <button type="button" onClick={() => setConfirmDelete(false)} className="cursor-pointer rounded-md px-1.5 py-0.5 hover:bg-red-100">ยกเลิก</button>
+            </span>
+          ) : (
+            <button type="button" className={cn(btn, "text-red-600 hover:bg-red-50")} disabled={busy} onClick={() => setConfirmDelete(true)}>
+              <Trash2 className="h-3.5 w-3.5" /> ลบห้อง
+            </button>
+          )
         )}
       </div>
       <div className="grid max-h-[55dvh] min-h-48 content-start gap-2 overflow-y-auto rounded-xl border border-[var(--line)] p-3">
         {msgs === null ? <p className="text-sm text-[var(--ink-soft)]">กำลังโหลด…</p> : msgs.filter((m) => !m.deleted && (m.body || m.attachments.length)).length === 0 ? <p className="text-sm text-[var(--ink-soft)]">ยังไม่มีข้อความ เริ่มคุยได้เลย</p> : (
-          msgs.filter((m) => !m.deleted && (m.body || m.attachments.length)).map((m) => (
-            <div key={m.id} className={cn("flex gap-2", m.authorId === me && "flex-row-reverse")}>
-              <PersonDot userId={m.authorId} size={26} />
-              <div className={cn("max-w-[78%] rounded-2xl px-3 py-1.5 text-sm", m.authorId === me ? "bg-[var(--accent)]" : "bg-[var(--bg-soft)]")}>
-                <div className="text-[11px] text-[var(--ink-soft)]">{getUser(m.authorId)?.name ?? ""} · {new Date(m.createdAt).toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</div>
-                {m.body && <p className="m-0 whitespace-pre-wrap break-words">{m.body}</p>}
-                {m.attachments.length > 0 && <p className="m-0 text-xs text-[var(--ink-soft)]">📎 {m.attachments.length} ไฟล์ — ดูในหน้าแชท</p>}
+          msgs.filter((m) => !m.deleted && (m.body || m.attachments.length)).map((m) =>
+            m.kind === "system" ? (
+              <p key={m.id} className="m-0 text-center text-[11.5px] text-[var(--ink-soft)]">{m.body}</p>
+            ) : (
+              <div key={m.id} className={cn("flex gap-2", m.authorId === me && "flex-row-reverse")}>
+                <PersonDot userId={m.authorId} size={26} />
+                <div className={cn("max-w-[78%] rounded-2xl px-3 py-1.5 text-sm", m.authorId === me ? "bg-[var(--accent)]" : "bg-[var(--bg-soft)]")}>
+                  <div className="text-[11px] text-[var(--ink-soft)]">{getUser(m.authorId)?.name ?? ""} · {new Date(m.createdAt).toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</div>
+                  {m.body && <p className="m-0 whitespace-pre-wrap break-words">{m.body}</p>}
+                  {m.attachments.length > 0 && <p className="m-0 text-xs text-[var(--ink-soft)]">📎 {m.attachments.length} ไฟล์ — ดูในหน้าแชท</p>}
+                </div>
               </div>
-            </div>
-          ))
+            )
+          )
         )}
         <div ref={endRef} />
       </div>
-      <div className="flex gap-2">
-        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder="พิมพ์ข้อความถึงทุกคนในโปรเจกต์"
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
-          className="min-w-0 flex-1 rounded-xl border border-[var(--line)] bg-[var(--bg)] px-3 py-2 text-base sm:text-sm" />
-        <button type="button" disabled={!text.trim()} onClick={() => void send()} className="rounded-xl bg-[var(--brand-green)] px-4 text-sm font-semibold text-white disabled:opacity-50">ส่ง</button>
-      </div>
+      {closed ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl bg-[var(--bg-soft)] px-3 py-2.5 text-sm text-[var(--ink-soft)]">
+          <Lock className="h-4 w-4 shrink-0" />
+          <span className="min-w-0 flex-1">ห้องนี้ปิดแล้ว · อ่านย้อนหลังได้ แต่ส่งข้อความใหม่ไม่ได้</span>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <textarea id="project-room-text" value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder="พิมพ์ข้อความถึงทุกคนในโปรเจกต์"
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
+            className="min-w-0 flex-1 rounded-xl border border-[var(--line)] bg-[var(--bg)] px-3 py-2 text-base sm:text-sm" />
+          <button type="button" disabled={!text.trim()} onClick={() => void send()} className="rounded-xl bg-[var(--brand-green)] px-4 text-sm font-semibold text-white disabled:opacity-50">ส่ง</button>
+        </div>
+      )}
     </div>
   );
 }

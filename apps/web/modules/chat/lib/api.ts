@@ -63,9 +63,14 @@ export function createGroupChannel(name: string, memberIds: string[]): Promise<{
 
 export function updateChannel(
   id: string,
-  patch: { name?: string; announcementId?: string | null; pinned?: boolean; muted?: boolean }
+  patch: { name?: string; announcementId?: string | null; pinned?: boolean; muted?: boolean; closed?: boolean }
 ): Promise<{ ok: true }> {
   return send(ch(id), "PATCH", patch);
+}
+
+/** ลบห้องของโปรเจกต์ (เก็บเข้าคลัง ไม่ลบข้อความ) — ผู้ดูแลโปรเจกต์ / CEO / แอดมินแชท */
+export function deleteChannel(id: string): Promise<{ ok: true }> {
+  return send(ch(id), "DELETE");
 }
 
 /** ตั้งรูปห้อง (ย่อรูปในเครื่องมาก่อนแล้ว) — สิทธิ์: คนสร้างกลุ่ม / แอดมินแชทสำหรับห้องที่ระบบสร้าง */

@@ -10,6 +10,7 @@ import { notifyUsers } from "@/modules/maintenance/data/notify";
 import { CHAT_ORG_CHANNEL_NAME } from "../constants";
 import { CLOCK_CHANNEL_PREFIX, isKeepChannelId, type ChatChannelDetail, type ChatChannelSummary, type ChatRealtimeEvent } from "../types";
 import { ensureKeepChannel } from "./keep";
+import { closedChannels, forgetProjectRooms, isChannelClosed, projectRoomOf, writeChannelClosed } from "./project-room";
 import { ChatError, firstAttachmentKind, hydrateMessages, type ChatActor } from "./serialize";
 import { CHAT_PAGE_PATH } from "../constants";
 
@@ -76,13 +77,18 @@ export async function getChannelAccess(actor: ChatActor, channelId: string): Pro
   const member = channel?.members[0];
   if (!channel || !member) throw new ChatError("ไม่มีสิทธิ์เข้าห้องนี้", 403);
   const role = member.role === "admin" ? "admin" : "member";
+  let canManage = channel.type !== "dm" && (role === "admin" || actor.isChatAdmin);
+  // ห้องของโปรเจกต์: ผู้ดูแลโปรเจกต์ + สมาชิก "แก้ได้" จัดการห้องได้เหมือนแอดมินห้อง ไม่ว่าใครกดสร้าง (ผู้ใช้ 20/10/2569)
+  if (!canManage && channel.type === "group") {
+    canManage = (await projectRoomOf(actor.orgId, channel.id))?.managerIds.has(actor.userId) ?? false;
+  }
   return {
     id: channel.id,
     type: channel.type,
     name: channel.name,
     departmentId: channel.departmentId,
     role,
-    canManage: channel.type !== "dm" && (role === "admin" || actor.isChatAdmin),
+    canManage,
   };
 }
 
@@ -377,6 +383,7 @@ export async function listChannelsForUser(orgId: string, userId: string): Promis
     membersByChannel.set(m.channelId, list);
   }
 
+  const closedMap = await closedChannels(orgId);
   const summaries: ChatChannelSummary[] = channels.map((c) => {
     const last = lastByChannel.get(c.id);
     const read = readByChannel.get(c.id);
@@ -404,6 +411,7 @@ export async function listChannelsForUser(orgId: string, userId: string): Promis
           }
         : null,
       activityAt: (last?.created_at ?? c.createdAt).toISOString(),
+      ...(c.id in closedMap ? { closed: true } : {}),
     };
   });
 
@@ -435,6 +443,8 @@ export async function getChannelDetail(actor: ChatActor, channelId: string): Pro
     }),
   ]);
   if (!channel) throw new ChatError("ไม่พบห้องนี้", 404);
+  const projectRoom = access.type === "group" ? await projectRoomOf(actor.orgId, channelId) : null;
+  const closed = projectRoom ? await isChannelClosed(actor.orgId, channelId) : false;
 
   let announcement = null;
   if (channel.announcementId) {
@@ -454,11 +464,16 @@ export async function getChannelDetail(actor: ChatActor, channelId: string): Pro
     readSeqs: Object.fromEntries(reads.map((r) => [r.userId, r.lastReadSeq!.toString()])),
     announcement: announcement ?? null,
     canManage: access.canManage,
-    canRename: canRename(
-      actor,
-      { id: channel.id, type: access.type, departmentId: channel.departmentId, createdById: access.type === "org" ? null : channel.createdById },
-      access.role,
-    ),
+    canRename:
+      canRename(
+        actor,
+        { id: channel.id, type: access.type, departmentId: channel.departmentId, createdById: access.type === "org" ? null : channel.createdById },
+        access.role,
+      ) || !!projectRoom?.managerIds.has(actor.userId),
+    projectId: projectRoom?.projectId ?? null,
+    closed,
+    canClose: !!projectRoom && access.canManage,
+    canDelete: !!projectRoom && (projectRoom.ownerId === actor.userId || !!actor.isTopAdmin || actor.isChatAdmin),
     canChangeAvatar: canChangeAvatar(actor, {
       id: channel.id,
       type: access.type,
@@ -574,7 +589,10 @@ function canRename(actor: ChatActor, channel: { id: string; type: string; depart
 export async function renameChannel(actor: ChatActor, channelId: string, name: string): Promise<void> {
   const access = await getChannelAccess(actor, channelId);
   const row = await prisma.chatChannel.findFirst({ where: { id: channelId, orgId: actor.orgId }, select: { createdById: true } });
-  if (!canRename(actor, { id: channelId, type: access.type, departmentId: access.departmentId, createdById: row?.createdById ?? null }, access.role)) {
+  if (
+    !canRename(actor, { id: channelId, type: access.type, departmentId: access.departmentId, createdById: row?.createdById ?? null }, access.role) &&
+    !(await projectRoomOf(actor.orgId, channelId))?.managerIds.has(actor.userId)
+  ) {
     throw new ChatError("เปลี่ยนชื่อห้องนี้ไม่ได้", 403);
   }
   const clean = name.trim().slice(0, 100);
@@ -766,4 +784,45 @@ export async function listOrgUsersForPicker(orgId: string) {
     departmentId: u.departmentId,
     departmentName: u.department?.name ?? null,
   }));
+}
+
+// ─── ห้องของโปรเจกต์: ปิดเก็บ / ลบ (project-room.ts) ──────────────────────────
+
+async function requireProjectRoom(actor: ChatActor, channelId: string) {
+  const access = await getChannelAccess(actor, channelId);
+  const room = access.type === "group" ? await projectRoomOf(actor.orgId, channelId) : null;
+  if (!room) throw new ChatError("ปิด/ลบได้เฉพาะห้องแชทของโปรเจกต์", 400);
+  return { access, room };
+}
+
+/** ปิดห้อง = อ่านย้อนหลังได้ ส่งข้อความใหม่ไม่ได้ · เปิดอีกครั้งได้ — ผู้ดูแลโปรเจกต์ / สมาชิก "แก้ได้" / แอดมินห้อง */
+export async function setChannelClosed(actor: ChatActor, channelId: string, closed: boolean): Promise<void> {
+  const { access } = await requireProjectRoom(actor, channelId);
+  requireManage(access);
+  if (!(await writeChannelClosed(actor.orgId, channelId, closed, actor.userId))) return;
+  const names = await userNames(actor.orgId, [actor.userId]);
+  const who = names.get(actor.userId) ?? "ผู้ใช้";
+  await postSystemMessage(
+    actor.orgId,
+    channelId,
+    actor.userId,
+    closed ? `${who} ปิดห้องนี้แล้ว — อ่านย้อนหลังได้ ส่งข้อความใหม่ไม่ได้` : `${who} เปิดห้องนี้อีกครั้ง`,
+  );
+  await broadcastToChannel(actor.orgId, channelId, { type: "chat.channel", channelId });
+}
+
+/**
+ * ลบห้องของโปรเจกต์ — ห้องหายจากทุกคน แต่เก็บเข้าคลัง (archived) ไม่ลบข้อความทิ้ง กู้คืนได้ด้วย SQL
+ * สิทธิ์: ผู้ดูแลโปรเจกต์ / CEO · ผู้ดูแลระบบสูงสุด · IT / แอดมินแชท
+ */
+export async function deleteProjectChannel(actor: ChatActor, channelId: string): Promise<void> {
+  const { room } = await requireProjectRoom(actor, channelId);
+  if (room.ownerId !== actor.userId && !actor.isTopAdmin && !actor.isChatAdmin) {
+    throw new ChatError("ลบห้องได้เฉพาะผู้ดูแลโปรเจกต์", 403);
+  }
+  const memberIds = await channelMemberIds(actor.orgId, channelId);
+  await prisma.chatChannel.update({ where: { id: channelId }, data: { archived: true } });
+  await writeChannelClosed(actor.orgId, channelId, false, actor.userId).catch(() => false);
+  forgetProjectRooms(actor.orgId);
+  publishToUsers(memberIds, { type: "chat.channel", channelId });
 }

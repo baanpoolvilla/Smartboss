@@ -211,6 +211,8 @@ export interface ChatChannelSummary {
   } | null;
   /** เวลาล่าสุดของห้อง (ข้อความล่าสุด หรือวันสร้างห้อง) — ใช้เรียงรายการ */
   activityAt: string;
+  /** ห้องของโปรเจกต์ที่ปิดแล้ว — อ่านย้อนหลังได้ ส่งใหม่ไม่ได้ */
+  closed?: boolean;
 }
 
 export interface ChatChannelMemberDTO {
@@ -235,6 +237,14 @@ export interface ChatChannelDetail {
   canChangeAvatar: boolean;
   /** เปลี่ยนชื่อห้องได้ — CEO / ผู้ดูแลสูงสุด / IT ทุกห้อง · คนสร้างห้อง · แอดมินกลุ่ม (กลุ่มที่สร้างเอง) */
   canRename: boolean;
+  /** ห้องนี้เป็นห้องแชทของโปรเจกต์ไหน (null = ห้องทั่วไป) */
+  projectId?: string | null;
+  /** ปิดแล้ว — อ่านย้อนหลังได้ ส่งข้อความใหม่ไม่ได้ (เฉพาะห้องของโปรเจกต์) */
+  closed?: boolean;
+  /** ปิด/เปิดห้องได้ — ผู้ดูแลโปรเจกต์ / สมาชิก "แก้ได้" / แอดมินห้อง */
+  canClose?: boolean;
+  /** ลบห้องได้ — ผู้ดูแลโปรเจกต์ / CEO / แอดมินแชท */
+  canDelete?: boolean;
 }
 
 /** หยุดวันนี้แบบไหน (data/off-today.ts) — name = ชื่อประเภทจากโมดูลบุคคล ใช้เป็นคำอธิบายตอนชี้ */
