@@ -226,7 +226,7 @@ async function orgUserId(
 }
 
 /**
- * แจ้งคนที่เกี่ยวกับใบนี้ (คนเปิด PR / CEO ที่มอบหมาย / คนไปซื้อ — ผู้เรียกเลือกเอง)
+ * แจ้งคนที่เกี่ยวกับใบนี้ (คนเปิด PR / คนไปซื้อ / คนรับของ — ผู้เรียกเลือกเอง) · คนกดอนุมัติไม่ได้รับสถานะหลังอนุมัติ
  * ตัดคนที่เพิ่งกดเองออก ไม่ต้องแจ้งตัวเอง
  */
 async function notifyPoParties(
@@ -468,11 +468,12 @@ export async function confirmOrderAction(formData: FormData) {
 กดยืนยันรับของในระบบ Smartboss เมื่อของมาถึง`,
     });
   }
-  // คนเปิด PR + CEO ที่มอบหมาย — รู้ว่าสั่งซื้อแล้ว (กำลังดำเนินการ)
+  // คนเปิด PR — รู้ว่าสั่งซื้อแล้ว (กำลังดำเนินการ) · ไม่แจ้งคนกดอนุมัติ (poCreatedBy = CEO ที่อนุมัติ)
+  // อนุมัติแล้วถือว่าจบส่วนของเขา สถานะหลังจากนั้นไม่ต้องเด้งหา (ผู้ใช้ขอ 21/10/2569 "ไม่เกี่ยวกับ CEO ทำไมยังแจ้ง")
   await notifyPoParties(
     s.orgId,
     po,
-    [po.createdBy, po.poCreatedBy].filter((x) => x !== receiver),
+    [po.createdBy].filter((x) => x !== receiver),
     s.userId,
     { emoji: "🚚", text: "สั่งซื้อแล้ว รอรับของ", body: `ยอด ฿${total.toLocaleString()}` }
   );
@@ -507,7 +508,7 @@ export async function receiveAction(formData: FormData) {
   if (!changed && urls.length > 0) await deleteFiles(urls).catch(() => 0);
   if (changed) {
     await poLog(s, po, "status", `รับของ${urls.length > 0 ? ` (ใบเสร็จ ${urls.length} รูป)` : ""}`);
-    await notifyPoParties(s.orgId, po, [po.createdBy, po.poCreatedBy, po.poAssignedTo], s.userId, {
+    await notifyPoParties(s.orgId, po, [po.createdBy, po.poAssignedTo], s.userId, {
       emoji: "📥",
       text: "รับของแล้ว",
     });
@@ -552,7 +553,7 @@ export async function selfReceiveAction(formData: FormData) {
   if (changed) {
     await poExpense(s.orgId, po, total, s.userId, "(ซื้อเอง)");
     await poLog(s, po, "status", `ซื้อเองและรับของ ยอด ฿${total.toLocaleString()}`, { items });
-    await notifyPoParties(s.orgId, po, [po.createdBy, po.poCreatedBy, po.poAssignedTo], s.userId, {
+    await notifyPoParties(s.orgId, po, [po.createdBy, po.poAssignedTo], s.userId, {
       emoji: "📥",
       text: "ซื้อและรับของแล้ว",
       body: `ยอด ฿${total.toLocaleString()}`,
