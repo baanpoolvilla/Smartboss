@@ -8,6 +8,7 @@ import { Button } from "@smartboss/ui/components/button";
 import { compressImage } from "@/modules/chat/lib/image-compress";
 import { updateOwnAvatarAction } from "./actions";
 import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
+import { AvatarCropper } from "@/components/avatar-cropper";
 
 /**
  * อัปโหลดรูปโปรไฟล์ — ย่อรูปในเครื่องก่อนส่ง รูปจากกล้องมือถือ (5–12MB) เดิมเกินเพดาน 5MB แล้ว
@@ -18,11 +19,18 @@ export function AvatarForm() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  // เลือกรูปแล้วเปิดหน้าปรับตำแหน่ง/ซูมก่อน (ผู้ใช้ 21/10/2569) — GIF ข้าม ตัดแล้วจะไม่ขยับ
+  const [cropFile, setCropFile] = useState<File | null>(null);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const file = inputRef.current?.files?.[0];
     if (!file) return toast.error("กรุณาเลือกไฟล์รูปภาพ");
+    if (file.type !== "image/gif") return setCropFile(file);
+    await upload(file);
+  }
+
+  async function upload(file: File) {
     setBusy(true);
     try {
       const { full, thumb } = await compressImage(file);
@@ -54,12 +62,27 @@ export function AvatarForm() {
         data-file-guard="off"
         accept="image/jpeg,image/png,image/webp,image/gif"
         required
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f && f.type.startsWith("image/") && f.type !== "image/gif") setCropFile(f);
+        }}
         className="block w-full text-sm text-(--ink-soft) file:mr-3 file:rounded-(--radius) file:border-0 file:bg-(--bg-soft) file:px-3 file:py-2 file:text-sm file:font-medium file:text-(--ink) hover:file:bg-(--line)"
       />
       <Button type="submit" variant="outline" className="h-11 shrink-0" disabled={busy}>
         {busy ? "กำลังอัปโหลด…" : "อัปโหลด"}
       </Button>
     </form>
+    {cropFile && (
+      <AvatarCropper
+        file={cropFile}
+        title="ปรับรูปโปรไฟล์"
+        onCancel={() => setCropFile(null)}
+        onDone={(f) => {
+          setCropFile(null);
+          void upload(f);
+        }}
+      />
+    )}
     </PasteDropFiles>
   );
 }

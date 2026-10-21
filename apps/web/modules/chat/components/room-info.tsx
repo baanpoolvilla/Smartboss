@@ -12,6 +12,7 @@ import * as api from "../lib/api";
 import { channelTitle, formatDayLabel, formatFileSize } from "../lib/format";
 import { loadChannels, loadDetail } from "../lib/chat-actions";
 import { ChatAvatar } from "./chat-avatar";
+import { AvatarCropper } from "@/components/avatar-cropper";
 import { ChannelAvatar } from "./channel-list";
 import { compressImage } from "../lib/image-compress";
 import { downloadUrl } from "./lightbox";
@@ -166,6 +167,8 @@ export function RoomInfo({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [avatarMenu, setAvatarMenu] = useState(false);
   const [avatarBusy, setAvatarBusy] = useState(false);
+  // รูปที่เพิ่งเลือก รอปรับตำแหน่ง/ซูมก่อนอัปโหลด (GIF ข้ามขั้นนี้ — ตัดแล้วจะไม่ขยับ)
+  const [cropFile, setCropFile] = useState<File | null>(null);
   const avatarInput = useRef<HTMLInputElement>(null);
 
   const title = channelTitle(channel, meId, users);
@@ -256,9 +259,23 @@ export function RoomInfo({
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     e.target.value = "";
-                    if (file) void uploadAvatar(file);
+                    if (file) {
+                      if (file.type === "image/gif") void uploadAvatar(file);
+                      else setCropFile(file);
+                    }
                   }}
                 />
+                {cropFile && (
+                  <AvatarCropper
+                    file={cropFile}
+                    title="ปรับรูปกลุ่ม"
+                    onCancel={() => setCropFile(null)}
+                    onDone={(f) => {
+                      setCropFile(null);
+                      void uploadAvatar(f);
+                    }}
+                  />
+                )}
                 <button
                   type="button"
                   disabled={avatarBusy}

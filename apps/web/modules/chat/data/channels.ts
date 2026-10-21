@@ -614,7 +614,9 @@ export async function renameChannel(actor: ChatActor, channelId: string, name: s
 
 /**
  * ใครเปลี่ยนรูปห้องนี้ได้ — กลุ่มที่คนสร้างเอง: เฉพาะคนสร้าง · ห้องที่ระบบสร้างให้ (ห้องรวมทั้งบริษัท,
- * กลุ่มแผนก): แอดมินแชท ("เฉพาะคนสร้างเปลี่ยนได้ ถ้าเป็นที่ระบบสร้างให้ แอดมินเปลี่ยนได้")
+ * กลุ่มแผนก, ห้อง "ทีมหน้างาน"): แอดมินแชท + CEO/ADMIN ("เฉพาะคนสร้างเปลี่ยนได้ ถ้าเป็นที่ระบบสร้างให้ แอดมินเปลี่ยนได้")
+ * ห้องทีมหน้างานถูกสร้างตอนมีคนเปิดครั้งแรก createdById จึงเป็นคนนั้น ไม่ใช่เจ้าของห้องจริง — เดิมเลยไม่มีแอดมินคนไหน
+ * เปลี่ยนรูปได้เลย ("ทีมหน้างาน พี่เปลี่ยนรูปไม่ได้" 21/10/2569)
  * DM ใช้รูปของอีกฝั่ง · ห้อง "ระบบลงเวลา" ใช้รูปนาฬิกาของระบบเสมอ (channel-list.tsx) — ตั้งไม่ได้ทั้งคู่
  */
 function canChangeAvatar(
@@ -622,7 +624,7 @@ function canChangeAvatar(
   channel: { id: string; type: string; departmentId: string | null; createdById: string | null }
 ): boolean {
   if (channel.type === "dm" || channel.id.startsWith(CLOCK_CHANNEL_PREFIX) || isKeepChannelId(channel.id)) return false;
-  if (channel.type === "org" || channel.departmentId) return actor.isChatAdmin;
+  if (channel.type === "org" || channel.departmentId || channel.id.startsWith(WORKER_CHANNEL_PREFIX)) return actor.isChatAdmin || !!actor.isTopAdmin;
   return channel.createdById === actor.userId;
 }
 
@@ -638,7 +640,7 @@ export async function setChannelAvatar(actor: ChatActor, channelId: string, url:
   });
   if (!canChangeAvatar(actor, { id: channelId, type: access.type, departmentId: access.departmentId, createdById: before?.createdById ?? null })) {
     throw new ChatError(
-      access.type === "group" && !access.departmentId ? "เฉพาะคนสร้างกลุ่มเท่านั้นที่เปลี่ยนรูปได้" : "เฉพาะแอดมินแชทเท่านั้นที่เปลี่ยนรูปห้องนี้ได้",
+      access.type === "group" && !access.departmentId && !channelId.startsWith(WORKER_CHANNEL_PREFIX) ? "เฉพาะคนสร้างกลุ่มเท่านั้นที่เปลี่ยนรูปได้" : "เฉพาะแอดมินเท่านั้นที่เปลี่ยนรูปห้องนี้ได้",
       403
     );
   }

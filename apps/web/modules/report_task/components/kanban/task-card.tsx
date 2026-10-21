@@ -178,6 +178,23 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
   const visibleChecklist = isShared && iAmAssignee ? task.checklist.filter((c) => c.ownerId === viewingAsUserId) : task.checklist;
   const doneChecklist = visibleChecklist.filter((c) => c.done).length;
 
+  const pillMeta = groupedByPriority ? statusMeta[task.status] : priorityMeta[task.priority];
+  const pillKind = groupedByPriority ? "สถานะ" : "ความสำคัญ";
+  const priorityPill = (
+    <span
+      title={`${pillKind}: ${pillMeta.label}`}
+      aria-label={`${pillKind}: ${pillMeta.label}`}
+      className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold leading-4"
+      style={{
+        backgroundColor: `color-mix(in srgb, ${pillMeta.accentColor} 14%, white)`,
+        color: `color-mix(in srgb, ${pillMeta.accentColor} 60%, black)`,
+      }}
+    >
+      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: pillMeta.accentColor }} aria-hidden />
+      {pillMeta.label}
+    </span>
+  );
+
   return (
     <>
     <div
@@ -283,42 +300,6 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
 
       {/* Priority dot + completion circle + title */}
       <div className="flex items-start gap-2">
-        {/* ความสำคัญ (หรือสถานะ ถ้าบอร์ดจัดกลุ่มตามความสำคัญ) เหลือแค่จุดสี — กดจุดแล้วบอกว่าคืออะไร
-            งานเสร็จแล้วไม่มีจุด (ป้ายเสร็จสิ้น/รอตรวจสอบด้านบนบอกแทน) */}
-        {!isDone && (() => {
-          const meta = groupedByPriority ? statusMeta[task.status] : priorityMeta[task.priority];
-          const kind = groupedByPriority ? "สถานะ" : "ความสำคัญ";
-          return (
-            <Popover>
-              <PopoverTrigger
-                render={
-                  <button
-                    type="button"
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={(e) => e.stopPropagation()}
-                    aria-label={`${kind}: ${meta.label}`}
-                    title={`${kind}: ${meta.label}`}
-                    className="relative -ml-0.5 mt-[3px] flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-full transition-transform after:absolute after:-inset-2 after:content-[''] hover:scale-125"
-                  >
-                    <span
-                      className="h-2.5 w-2.5 rounded-full"
-                      style={{ backgroundColor: meta.accentColor, boxShadow: `0 0 0 3px color-mix(in srgb, ${meta.accentColor} 20%, transparent)` }}
-                    />
-                  </button>
-                }
-              />
-              <PopoverContent
-                align="start"
-                className="flex w-auto flex-row items-center gap-1.5 bg-[var(--brand-navy)] px-2.5 py-1.5 text-xs font-semibold text-white ring-0"
-                onClick={(e) => e.stopPropagation()}
-                onPointerDown={(e) => e.stopPropagation()}
-              >
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: meta.accentColor }} />
-                {kind}: {meta.label}
-              </PopoverContent>
-            </Popover>
-          );
-        })()}
         {onOpen && (
           <Tooltip>
             <TooltipTrigger
@@ -382,11 +363,17 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
         </div>
       </div>
 
+      {/* ความสำคัญ (หรือสถานะ ถ้าบอร์ดจัดกลุ่มตามความสำคัญ) เป็นป้าย จุดสี + คำ ซ้ายล่าง แทนจุดหน้าชื่องาน
+          (ผู้ใช้ขอ 21/10/2569 "ย้ายสถานะลงมาซ้ายล่าง") — ชื่องานเหลือวงกลมติ๊กเสร็จอย่างเดียว อ่านง่ายกว่า
+          อยู่แถวเดียวกับแถบ checklist (0/2) ถ้ามี · งานเสร็จแล้วไม่มีป้ายนี้ (ป้ายเสร็จสิ้น/รอตรวจสอบด้านบนบอกแทน) */}
+      {!isDone && visibleChecklist.length === 0 && <div className="mt-1.5 flex sm:mt-2">{priorityPill}</div>}
+
       {/* Checklist progress at a glance — the fraction alone (in the meta row
           below) is easy to skim past; a bar reads instantly even at a glance
           across a busy column. */}
       {visibleChecklist.length > 0 && (
         <div className="mt-1.5 flex items-center gap-2 sm:mt-2">
+          {!isDone && priorityPill}
           {/* --primary is scoped via inline style, not a global theme edit —
               only this bar (only on a "รอตรวจสอบ" card) picks up greenPale,
               every other Progress bar in the app keeps the normal brand
