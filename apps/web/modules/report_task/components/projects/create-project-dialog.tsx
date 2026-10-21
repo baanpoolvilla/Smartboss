@@ -159,7 +159,7 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
                 ⚠ งานในแม่แบบต้องใช้เวลาถึง {fmtDay(effEnd, true)} แต่ตั้งวันเสร็จไว้ {fmtDay(end, true)} (ช้ากว่า {Math.round((Date.parse(effEnd) - Date.parse(end)) / 864e5)} วัน) · กดสร้างเลยได้ ระบบจะเลื่อนวันเสร็จเป็น {fmtDay(effEnd, true)} ให้ หรือเลือกวันเริ่มให้เร็วขึ้น
               </p>
             )}
-            <label className="grid gap-1 text-xs text-[var(--ink-soft)]">เจ้าของโปรเจกต์ (คุมแผน เลื่อนกำหนดส่งได้)
+            <label className="grid gap-1 text-xs text-[var(--ink-soft)]">ผู้ดูแลโปรเจกต์ (คุมแผน เลื่อนกำหนดส่งได้)
               <select className={field} value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>{users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select>
             </label>
             <div className="grid gap-1 text-xs text-[var(--ink-soft)]">สมาชิก (นอกจากคนที่ได้งานจากแม่แบบ ซึ่งเข้าให้อัตโนมัติ)
@@ -208,7 +208,7 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
                       <select className={field} value={personFor(r)} onChange={(e) => setRoleMap({ ...roleMap, [r]: e.target.value })} aria-label={`คนทำตำแหน่ง ${r}`}>
                         {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
                       </select>
-                      {!roleMap[r] && !guessed(r) && <span className="text-[11px] text-[var(--ink-soft)]">ไม่เจอคนตำแหน่งนี้ ใส่เป็นเจ้าของโปรเจกต์ไว้ก่อน</span>}
+                      {!roleMap[r] && !guessed(r) && <span className="text-[11px] text-[var(--ink-soft)]">ไม่เจอคนตำแหน่งนี้ ใส่เป็นผู้ดูแลโปรเจกต์ไว้ก่อน</span>}
                     </span>
                   </div>
                 ))}

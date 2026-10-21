@@ -142,7 +142,7 @@ export function ProjectsPortfolio() {
 type Row = { p: Project; status: ProjectStatus; pct: number; next?: TimelineItem; count: number; late: number; mine: number; timePct: number; daysLeft: number; staleDays: number };
 
 type Focus = "all" | "late" | "risk" | "stale";
-const FOCUS_LABEL: Record<Focus, string> = { all: "ทั้งหมด", late: "ล่าช้า", risk: "มีความเสี่ยง", stale: "ไม่อัปเดตเกิน 7 วัน" };
+const FOCUS_LABEL: Record<Focus, string> = { all: "ทั้งหมด", late: "ล่าช้า", risk: "อาจไม่ทัน", stale: "ไม่อัปเดตเกิน 7 วัน" };
 const STALE_DAYS = 7;
 const isOpen = (r: Row) => !["done", "dropped"].includes(r.status);
 const isStale = (r: Row) => isOpen(r) && r.status !== "hold" && r.staleDays > STALE_DAYS;
@@ -160,7 +160,7 @@ function problemsOf(r: Row, today: string): { text: string; hot: boolean }[] {
   if (r.daysLeft < 0) out.push({ text: `เลยวันเสร็จ ${-r.daysLeft} วัน`, hot: true });
   if (r.count > 0 && r.timePct - r.pct >= 20) out.push({ text: `เวลาผ่านไป ${r.timePct}% งานเสร็จ ${r.pct}%`, hot: false });
   if (isStale(r)) out.push({ text: `ไม่อัปเดตสถานะ ${r.staleDays} วัน`, hot: false });
-  if (r.status === "risk" && !out.length) out.push({ text: "เจ้าของแจ้งว่ามีความเสี่ยง", hot: false });
+  if (r.status === "risk" && !out.length) out.push({ text: "ผู้ดูแลแจ้งว่าอาจไม่ทัน", hot: false });
   return out;
 }
 
@@ -185,7 +185,7 @@ function ExecSummary({ rows, focus, onFocus, me }: { rows: Row[]; focus: Focus; 
   const tiles: { f: Focus; label: string; tone: string }[] = [
     { f: "all", label: "กำลังทำ", tone: "" },
     { f: "late", label: "🔴 ล่าช้า", tone: "text-red-600" },
-    { f: "risk", label: "🟠 มีความเสี่ยง", tone: "text-amber-600" },
+    { f: "risk", label: "🟠 อาจไม่ทัน", tone: "text-amber-600" },
     { f: "stale", label: `⏰ ไม่อัปเดตเกิน ${STALE_DAYS} วัน`, tone: "text-[var(--ink-soft)]" },
   ];
   if (!open.length) return null;

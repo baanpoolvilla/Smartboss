@@ -39,12 +39,13 @@ import { useSetAppBarLeading } from "@/modules/report_task/components/shared/app
 // มุมมองเดียวกับ Asana: Overview · List · Board · Timeline(+Gantt) · Calendar · Dashboard · Messages · Files (+ อัปเดตสถานะ)
 type Tab = "timeline" | "overview" | "list" | "board" | "calendar" | "dashboard" | "messages" | "files" | "updates";
 // แท็บหลักโชว์ตลอด ที่เหลืออยู่ใต้ "เพิ่มเติม ▾" — 9 แท็บเรียงกันบนมือถือต้องเลื่อนหา คนทั่วไปงง
-const PRIMARY_TABS: Tab[] = ["overview", "list", "board", "timeline", "messages"];
+// 20/10/2569 (ตามเอกสาร Asana): เหลือ 4 แท็บ ภาพรวม · รายการ · บอร์ด · ไทม์ไลน์ — ข้อความ/อื่น ๆ อยู่ใน "เพิ่มเติม"
+const PRIMARY_TABS: Tab[] = ["overview", "list", "board", "timeline"];
 const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: "overview", label: "ภาพรวม", icon: LayoutGrid },
   { id: "list", label: "รายการ", icon: List },
   { id: "board", label: "บอร์ด", icon: SquareKanban },
-  { id: "timeline", label: "แผนเวลา", icon: GanttChart },
+  { id: "timeline", label: "ไทม์ไลน์", icon: GanttChart },
   { id: "calendar", label: "ปฏิทิน", icon: CalendarDays },
   { id: "dashboard", label: "แดชบอร์ด", icon: ChartColumn },
   { id: "messages", label: "ข้อความ", icon: MessageSquare },
@@ -145,6 +146,21 @@ export function ProjectView({ projectId }: { projectId: string }) {
   const status = projectStatusOf(project, allItems);
   const pct = progressOf(allItems);
 
+  // ปุ่ม "งานของฉัน" — คอม: ท้ายแถวแท็บ · มือถือ: ท้ายบรรทัดข้อมูลโปรเจกต์ (แถวแท็บมือถือแคบ ใส่แล้วแท็บถูกบีบ)
+  const mineToggle = (where: "desk" | "mobile") =>
+    myCount > 0 && MINE_TABS.includes(tab) ? (
+          <button type="button" aria-pressed={mineOnly} onClick={() => setMineOnly((v) => !v)}
+            title={mineOnly ? "กำลังดูเฉพาะงานที่คุณรับผิดชอบ · กดเพื่อดูทั้งหมด" : "ดูเฉพาะงานที่คุณรับผิดชอบ"}
+            className={cn(
+              where === "desk" ? "mb-1.5 ml-auto hidden h-8 sm:inline-flex" : "ml-auto inline-flex h-8 sm:hidden",
+              "shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 text-[12.5px] font-semibold transition-colors",
+              mineOnly ? "border-[var(--brand-navy)] bg-[var(--brand-navy)] text-white" : "border-[#cfd6e2] bg-[#eaeef5] text-[var(--brand-navy)] hover:bg-[#dde3ee]"
+            )}>
+            <span aria-hidden>👤</span><span className="hidden sm:inline">งานของฉัน</span><span className="sm:hidden">ของฉัน</span>
+            <span className={cn("rounded-full px-1.5 text-[11px] tabular-nums leading-[16px]", mineOnly ? "bg-white text-[var(--brand-navy)]" : "bg-white/80")}>{myCount}</span>
+          </button>
+    ) : null;
+
   return (
     <div className="space-y-3">
       <div className="space-y-3">
@@ -155,16 +171,17 @@ export function ProjectView({ projectId }: { projectId: string }) {
               <ProjectStatusChip status={status} />
             </div>
             {/* แยกข้อมูลเป็นก้อน อ่านทีละอย่าง — เดิมยัดบรรทัดเดียวตัวเล็ก */}
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[13px] text-[var(--ink-soft)]">
-              <span className="inline-flex items-center gap-1.5"><PersonDot userId={project.ownerId} size={20} /><span className="text-[var(--ink)]">{getUser(project.ownerId)?.name ?? "—"}</span> เจ้าของ</span>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] text-[var(--ink-soft)] sm:gap-x-5">
+              <span className="inline-flex items-center gap-1.5"><PersonDot userId={project.ownerId} size={20} /><span className="text-[var(--ink)]">{getUser(project.ownerId)?.name ?? "—"}</span> ผู้ดูแลโปรเจกต์</span>
               <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-4 w-4" />{fmtDay(project.startDate)} – {fmtDay(project.endDate, true)}</span>
               <span>{project.closedStatus ? "ปิดแล้ว" : dayNum(project.endDate) >= dayNum(today) ? `เหลือ ${dayNum(project.endDate) - dayNum(today)} วัน` : `เลยวันเสร็จมา ${dayNum(today) - dayNum(project.endDate)} วัน`}</span>
               <span className="inline-flex items-center gap-2" title={PCT_HELP}>
-                <span className="h-2 w-28 overflow-hidden rounded-full bg-[var(--bg-soft)] ring-1 ring-[var(--line)]">
+                <span className="h-2 w-14 overflow-hidden rounded-full sm:w-28 bg-[var(--bg-soft)] ring-1 ring-[var(--line)]">
                   <span className="block h-full rounded-full bg-[var(--brand-green)]" style={{ width: `${pct}%` }} />
                 </span>
                 <b className="tabular-nums text-[var(--ink)]">{pct}%</b> เสร็จ
               </span>
+              {mineToggle("mobile")}
             </div>
           </div>
         </div>
@@ -179,8 +196,8 @@ export function ProjectView({ projectId }: { projectId: string }) {
         <div role="tablist" className="flex min-w-0 gap-1 overflow-x-auto">
           {TABS.filter((t) => PRIMARY_TABS.includes(t.id)).map((t) => (
             <button key={t.id} role="tab" type="button" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
-              className={cn("inline-flex items-center gap-1.5 whitespace-nowrap px-3.5 py-2.5 text-[14px] transition-colors", tab === t.id ? "font-bold text-[var(--brand-green-dark)] shadow-[inset_0_-2px_0_var(--brand-green)]" : "text-[var(--ink-soft)] hover:text-[var(--ink)]")}>
-              <t.icon className="h-4 w-4" />
+              className={cn("inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-2.5 text-[14px] transition-colors sm:px-3.5", tab === t.id ? "font-bold text-[var(--brand-navy)] shadow-[inset_0_-2px_0_var(--brand-navy)]" : "text-[var(--ink-soft)] hover:text-[var(--ink)]")}>
+              <t.icon className="hidden h-4 w-4 sm:block" />
               {t.label}
               {/* เลขแดง = งานในโปรเจกต์นี้ที่มีเรื่องรอเรา (แท็บที่โชว์งาน) */}
               {(t.id === "list" || t.id === "board") && pending.length > 0 && (
@@ -190,22 +207,9 @@ export function ProjectView({ projectId }: { projectId: string }) {
           ))}
         </div>
         <MoreTabs tab={tab} onPick={setTab} />
+        {/* "งานของฉัน" เป็นปุ่มเปิด/ปิดปุ่มเดียวท้ายแถวแท็บ (เดิมเป็นแถว "งานของฉัน | ทั้งหมด" แยก) — ประหยัดความสูงหัวโปรเจกต์ */}
+        {mineToggle("desk")}
       </div>
-
-      {myCount > 0 && MINE_TABS.includes(tab) && (
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-xl border border-[var(--line)] bg-[var(--bg-soft)] p-1" role="group" aria-label="แสดงงาน">
-            {([[true, `👤 งานของฉัน`, myCount], [false, "ทั้งหมด", allItems.filter((i) => i.kind === "task").length]] as const).map(([v, label, n]) => (
-              <button key={String(v)} type="button" aria-pressed={mineOnly === v} onClick={() => setMineOnly(v)}
-                className={cn("inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-[13.5px]", mineOnly === v ? "bg-[var(--bg)] font-bold text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)]")}>
-                {label}
-                <span className={cn("rounded-full px-1.5 text-[11.5px] font-semibold tabular-nums", mineOnly === v ? "bg-[var(--accent)] text-[var(--brand-green-dark)]" : "bg-[var(--bg)]")}>{n}</span>
-              </button>
-            ))}
-          </div>
-          {mineView && <span className="text-[12.5px] text-[var(--ink-soft)]">กำลังดูเฉพาะงานที่คุณรับผิดชอบ</span>}
-        </div>
-      )}
 
       {allItems.length === 0 && EMPTY_TABS.includes(tab) ? (
         <EmptyProject canEdit={canEdit} onAddTask={() => setNewTaskSection(project.sections[0]?.id ?? "")} onTemplates={() => router.push("/report-task/projects/templates")} />
@@ -254,7 +258,7 @@ function MoreTabs({ tab, onPick }: { tab: Tab; onPick: (t: Tab) => void }) {
   return (
     <div className="relative shrink-0">
       <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)}
-        className={cn("inline-flex items-center gap-1.5 whitespace-nowrap px-3.5 py-2.5 text-[14px]", active ? "font-bold text-[var(--brand-green-dark)] shadow-[inset_0_-2px_0_var(--brand-green)]" : "text-[var(--ink-soft)] hover:text-[var(--ink)]")}>
+        className={cn("inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-2.5 text-[14px] sm:px-3.5", active ? "font-bold text-[var(--brand-navy)] shadow-[inset_0_-2px_0_var(--brand-navy)]" : "text-[var(--ink-soft)] hover:text-[var(--ink)]")}>
         {active && <active.icon className="h-4 w-4" />}
         {active ? active.label : "เพิ่มเติม"} ▾
       </button>
@@ -264,7 +268,7 @@ function MoreTabs({ tab, onPick }: { tab: Tab; onPick: (t: Tab) => void }) {
           <div className="absolute right-0 top-full z-30 mt-1 grid w-max min-w-40 rounded-xl border border-[var(--line)] bg-[var(--bg)] p-1 shadow-xl">
             {rest.map((t) => (
               <button key={t.id} type="button" onClick={() => { onPick(t.id); setOpen(false); }}
-                className={cn("inline-flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-[var(--bg-soft)]", tab === t.id && "font-bold text-[var(--brand-green-dark)]")}>
+                className={cn("inline-flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-[var(--bg-soft)]", tab === t.id && "font-bold text-[var(--brand-navy)]")}>
                 <t.icon className="h-4 w-4 text-[var(--ink-soft)]" />
                 {t.label}
               </button>
@@ -289,7 +293,7 @@ function EmptyProject({ canEdit, onAddTask, onTemplates }: { canEdit: boolean; o
             <button type="button" className="rounded-lg border border-[var(--line)] px-4 py-1.5 text-sm" onClick={onTemplates}>ดูแม่แบบ</button>
           </div>
         </>
-      ) : <p className="m-0 text-sm text-[var(--ink-soft)]">รอเจ้าของโปรเจกต์เพิ่มงาน</p>}
+      ) : <p className="m-0 text-sm text-[var(--ink-soft)]">รอผู้ดูแลโปรเจกต์เพิ่มงาน</p>}
     </div>
   );
 }
@@ -411,7 +415,7 @@ function Overview({ project, items, pct, today, canEdit, onOpen }: { project: Pr
                   );
                 })}
               </ul>
-            ) : <p className="m-0 text-[13.5px] text-[var(--ink-soft)]">ยังไม่มีจุดสำคัญ · เพิ่มได้ในแท็บแผนเวลา</p>}
+            ) : <p className="m-0 text-[13.5px] text-[var(--ink-soft)]">ยังไม่มีจุดสำคัญ · เพิ่มได้ในแท็บไทม์ไลน์</p>}
           </section>
           <section className={card}>
             <h3 className={cn(h, "mb-2")}>สมาชิก <span className="ml-1 text-[12px] font-normal text-[var(--ink-soft)]">{project.members.filter((m) => m.userId !== project.ownerId).length + 1} คน</span></h3>
@@ -421,7 +425,7 @@ function Overview({ project, items, pct, today, canEdit, onOpen }: { project: Pr
                   <PersonDot userId={m.userId} size={26} />
                   <span className="min-w-0 flex-1 truncate">{getUser(m.userId)?.name ?? "—"}</span>
                   <span className={cn("rounded-full px-2 py-0.5 text-[11.5px] font-semibold", m.role === "owner" ? "bg-[var(--accent)] text-[var(--brand-green-dark)]" : "bg-[var(--bg-soft)] text-[var(--ink-soft)]")}>
-                    {{ owner: "เจ้าของ", editor: "แก้ได้", viewer: "ดูอย่างเดียว" }[m.role]}
+                    {{ owner: "ผู้ดูแลโปรเจกต์", editor: "แก้ได้", viewer: "ดูอย่างเดียว" }[m.role]}
                   </span>
                 </li>
               ))}
@@ -577,7 +581,7 @@ function ProjectSettingsButton({ project }: { project: Project }) {
               <label className="grid gap-1 text-xs text-[var(--ink-soft)]">วันเริ่ม<DatePickerField className="text-[var(--ink)]" value={project.startDate} onChange={(v) => v && updateProject(project.id, { startDate: v })} /></label>
               <label className="grid gap-1 text-xs text-[var(--ink-soft)]">วันเสร็จเป้าหมาย<DatePickerField className="text-[var(--ink)]" value={project.endDate} minDate={project.startDate} onChange={(v) => v && updateProject(project.id, { endDate: v })} /></label>
             </div>
-            <label className="grid gap-1 text-xs text-[var(--ink-soft)]">เจ้าของโปรเจกต์ (คุมแผน เลื่อนกำหนดส่งได้)
+            <label className="grid gap-1 text-xs text-[var(--ink-soft)]">ผู้ดูแลโปรเจกต์ (คุมแผน เลื่อนกำหนดส่งได้)
               <select className={field} value={project.ownerId}
                 onChange={(e) => {
                   const next = e.target.value;
@@ -585,9 +589,9 @@ function ProjectSettingsButton({ project }: { project: Project }) {
                   // เจ้าของเดิมยังอยู่ต่อเป็นสมาชิก "แก้ได้" · เจ้าของใหม่ไม่ซ้ำในรายชื่อสมาชิก
                   const members = [...project.members.filter((m) => m.userId !== next && m.userId !== project.ownerId), { userId: project.ownerId, role: "editor" as const }];
                   updateProject(project.id, { ownerId: next, members });
-                  useNotificationStore.getState().notifyMany([next], me, `${getUser(me)?.name ?? "มีคน"} ตั้งให้คุณเป็นเจ้าของโปรเจกต์ "${project.name}"`, undefined, `/report-task/projects/${project.id}`);
+                  useNotificationStore.getState().notifyMany([next], me, `${getUser(me)?.name ?? "มีคน"} ตั้งให้คุณเป็นผู้ดูแลโปรเจกต์ "${project.name}"`, undefined, `/report-task/projects/${project.id}`);
                   if (!memberIds.has(next)) syncChatMember(project, next, "add");
-                  toast.success(`เปลี่ยนเจ้าของเป็น ${getUser(next)?.name ?? ""} แล้ว`);
+                  toast.success(`เปลี่ยนผู้ดูแลโปรเจกต์เป็น ${getUser(next)?.name ?? ""} แล้ว`);
                 }}>
                 {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>

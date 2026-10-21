@@ -21,7 +21,7 @@ import type {
 
 export const PROJECT_STATUS_META: Record<ProjectStatus, { label: string; tone: "ok" | "risk" | "late" | "muted" | "info" }> = {
   ok: { label: "ตามแผน", tone: "ok" },
-  risk: { label: "มีความเสี่ยง", tone: "risk" },
+  risk: { label: "อาจไม่ทัน", tone: "risk" },
   late: { label: "ล่าช้า", tone: "late" },
   hold: { label: "พักไว้", tone: "info" },
   done: { label: "เสร็จแล้ว", tone: "muted" },

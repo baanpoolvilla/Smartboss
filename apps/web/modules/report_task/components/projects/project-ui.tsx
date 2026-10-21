@@ -42,7 +42,7 @@ export function defaultMemberRole(userId: string): "editor" | "viewer" {
 export function askProjectUpdate(project: { id: string; name: string; ownerId: string }, actorId: string) {
   const name = getUser(actorId)?.name ?? "มีคน";
   useNotificationStore.getState().notifyMany([project.ownerId], actorId, `${name} ขอให้อัปเดตสถานะโปรเจกต์ "${project.name}"`, undefined, `/report-task/projects/${project.id}`);
-  toast.success(`ส่งคำขอให้ ${getUser(project.ownerId)?.name ?? "เจ้าของ"} แล้ว`);
+  toast.success(`ส่งคำขอให้ ${getUser(project.ownerId)?.name ?? "ผู้ดูแลโปรเจกต์"} แล้ว`);
 }
 
 /** มอบงานในโปรเจกต์ให้คนที่ยังไม่ใช่สมาชิก → เพิ่มเป็นสมาชิกให้เลย (สิทธิ์ตาม defaultMemberRole) (เหมือนตอนสร้างจากแม่แบบ) + แจ้ง + เข้าห้องแชท */

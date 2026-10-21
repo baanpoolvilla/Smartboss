@@ -150,7 +150,7 @@ export function ProjectTimeline({
   const meId = currentUserId;
   function commitMove(item: TimelineItem, start: string, end: string) {
     const delta = dayNum(start) - dayNum(item.start);
-    applyMove({ id: item.id, kind: item.kind, start, end }, `เลื่อนจากแผนเวลาโปรเจกต์ "${project.name}"`);
+    applyMove({ id: item.id, kind: item.kind, start, end }, `เลื่อนจากไทม์ไลน์โปรเจกต์ "${project.name}"`);
     const next = items.map((i) => (i.id === item.id ? { ...i, start, end } : i));
     let extra = "";
     if (project.shiftMode === "keep" && delta !== 0) {
@@ -260,7 +260,7 @@ export function ProjectTimeline({
         <div className="hidden items-center gap-2 rounded-lg border border-[#d5dbe6] bg-[#eaeef5] px-2.5 py-1.5 text-[12px] text-[var(--brand-navy)] sm:flex">
           <span aria-hidden>💡</span>
           <span className="min-w-0 flex-1 leading-snug">
-            <b>ลากแถบ</b> = เลื่อนวัน{canPlan ? "" : " (เฉพาะเจ้าของโปรเจกต์/CEO)"} · <b>ลากขอบขวา</b> = ยืด/หดวัน · <b>ลากจุดกลมท้ายแถบ</b> ไปวางบนอีกงาน = ต้องรอกัน · <b>กดแถบ</b> = เปิดงาน
+            <b>ลากแถบ</b> = เลื่อนวัน{canPlan ? "" : " (เฉพาะผู้ดูแลโปรเจกต์/CEO)"} · <b>ลากขอบขวา</b> = ยืด/หดวัน · <b>ลากจุดกลมท้ายแถบ</b> ไปวางบนอีกงาน = ต้องรอกัน · <b>กดแถบ</b> = เปิดงาน
           </span>
           <button
             type="button"
@@ -318,7 +318,7 @@ export function ProjectTimeline({
           </>
         )}
         {tipHidden && (
-          <button type="button" className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-lg border border-[var(--line)] px-2.5 text-[12.5px] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--brand-navy)]" title="วิธีใช้แผนเวลา" aria-label="วิธีใช้แผนเวลา"
+          <button type="button" className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-lg border border-[var(--line)] px-2.5 text-[12.5px] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--brand-navy)]" title="วิธีใช้ไทม์ไลน์" aria-label="วิธีใช้ไทม์ไลน์"
             onClick={() => { setTipHidden(false); try { localStorage.removeItem("project-timeline-tip"); } catch {} }}>ⓘ วิธีใช้</button>
         )}
         <details className="relative">
@@ -334,7 +334,7 @@ export function ProjectTimeline({
               ))}
             </div>
             <label className="flex items-center gap-1.5"><input type="checkbox" checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} className="accent-[var(--brand-green)]" />ซ่อนงานที่เสร็จแล้ว</label>
-            <span className="text-[var(--ink-soft)]">เมื่อเลื่อนงาน {canPlan ? "" : "(ตั้งได้เฉพาะเจ้าของโปรเจกต์)"}</span>
+            <span className="text-[var(--ink-soft)]">เมื่อเลื่อนงาน {canPlan ? "" : "(ตั้งได้เฉพาะผู้ดูแลโปรเจกต์)"}</span>
             <select disabled={!canPlan} value={project.shiftMode} onChange={(e) => updateProject(project.id, { shiftMode: e.target.value as Project["shiftMode"] })}
               className="rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-1 text-base sm:text-xs">
               <option value="ask">ถามก่อนเลื่อนงานที่รออยู่</option>
@@ -553,7 +553,7 @@ export function ProjectTimeline({
           <span>⚠ <b>{conflicts.length} งานเริ่มก่อนงานที่ต้องรอเสร็จ:</b> {conflicts.map(([a, b]) => `${b.name} (รอ ${a.name})`).join(", ")}</span>
           {canPlan && (
             <button type="button" className="ml-auto rounded-lg border border-red-200 bg-[var(--bg)] px-3 py-1 text-xs text-[var(--ink)] dark:border-red-900"
-              onClick={() => { const plan = cascadePlan(items); plan.forEach((m) => applyMove(m, "เลื่อนตามงานที่ต้องรอ (แผนเวลา)")); toast.success(`เลื่อนงานที่ต่อกันแล้ว ${plan.length} รายการ · แจ้งผู้รับผิดชอบแล้ว`); }}>
+              onClick={() => { const plan = cascadePlan(items); plan.forEach((m) => applyMove(m, "เลื่อนตามงานที่ต้องรอ (ไทม์ไลน์)")); toast.success(`เลื่อนงานที่ต่อกันแล้ว ${plan.length} รายการ · แจ้งผู้รับผิดชอบแล้ว`); }}>
               เลื่อนงานที่ต่อกันตาม
             </button>
           )}
@@ -729,7 +729,7 @@ function ItemDetail({
           )
         )}
         {!canMove && item.state !== "done" && item.kind === "task" && (
-          <span className="self-center text-xs text-[var(--ink-soft)]">เลื่อนวันได้เฉพาะเจ้าของโปรเจกต์/CEO · ผู้รับผิดชอบกด &quot;ขอเลื่อน&quot; ในหน้างาน</span>
+          <span className="self-center text-xs text-[var(--ink-soft)]">เลื่อนวันได้เฉพาะผู้ดูแลโปรเจกต์/CEO · ผู้รับผิดชอบกด &quot;ขอเลื่อน&quot; ในหน้างาน</span>
         )}
       </div>
       {item.state === "late" && dayNum(item.end) < dayNum(today) && <p className="m-0 text-xs text-red-600">เลยกำหนดมา {dayNum(today) - dayNum(item.end)} วัน</p>}

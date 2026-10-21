@@ -107,7 +107,7 @@ export function ListTab({ project, items, canEdit = false, canPlan = false, onOp
         </select>
         <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} className="accent-[var(--brand-green)]" />ซ่อนที่เสร็จแล้ว</label>
       </div>
-      {canEdit && <p className="m-0 hidden text-xs text-[var(--ink-soft)] sm:block">แก้ชื่อ{canPlan ? " วัน" : ""} และคนรับผิดชอบได้ในตารางเลย · กด ↗ เพื่อเปิดรายละเอียดงาน{!canPlan ? " · เลื่อนวันได้เฉพาะเจ้าของโปรเจกต์" : ""}</p>}
+      {canEdit && <p className="m-0 hidden text-xs text-[var(--ink-soft)] sm:block">แก้ชื่อ{canPlan ? " วัน" : ""} และคนรับผิดชอบได้ในตารางเลย · กด ↗ เพื่อเปิดรายละเอียดงาน{!canPlan ? " · เลื่อนวันได้เฉพาะผู้ดูแลโปรเจกต์" : ""}</p>}
       {/* มือถือ: การ์ด กดแล้วเปิดงาน */}
       <div className="grid gap-4 sm:hidden">
         {groups.map((g) => (
@@ -472,7 +472,7 @@ export function MessagesTab({ project, canEdit }: { project: Project; canEdit: b
         <p className="m-0 text-sm text-[var(--ink-soft)]">สร้างห้องแชทของโปรเจกต์นี้ ใส่สมาชิกโปรเจกต์ {memberIds.length} คนให้อัตโนมัติ คุยที่นี่หรือในเมนูแชทก็ได้ แจ้งเตือนและ LINE ทำงานเหมือนห้องแชทปกติ</p>
         {canEdit ? (
           <button type="button" disabled={busy} onClick={createRoom} className="rounded-lg bg-[var(--brand-green)] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-60">สร้างห้องแชทของโปรเจกต์</button>
-        ) : <p className="m-0 text-xs text-[var(--ink-soft)]">ให้เจ้าของโปรเจกต์หรือสมาชิกที่แก้ได้เป็นคนสร้าง</p>}
+        ) : <p className="m-0 text-xs text-[var(--ink-soft)]">ให้ผู้ดูแลโปรเจกต์หรือสมาชิกที่แก้ได้เป็นคนสร้าง</p>}
       </div>
     );
   }
