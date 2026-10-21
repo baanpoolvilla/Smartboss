@@ -61,6 +61,7 @@ export async function notifyNewMessage(
     const authorName = author?.name ?? "เพื่อนร่วมงาน";
     const preview =
       (message.kind === "note" ? `📝 โน้ต: ${message.body ?? ""}`.slice(0, 140) : null) ||
+      (message.kind === "album" ? `🖼️ ${message.body ?? "เพิ่มรูปในอัลบั้ม"}`.slice(0, 140) : null) ||
       message.body?.slice(0, 140) ||
       (message.attachments[0]?.kind === "sticker"
         ? "ส่งสติกเกอร์"

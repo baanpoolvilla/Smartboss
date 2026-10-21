@@ -4,8 +4,9 @@ import { prisma } from "@smartboss/database";
 import { deleteFiles } from "@/lib/storage";
 import { keptUrls } from "./keep";
 import type { ChatAlbumDTO, ChatAlbumItemDTO, ChatAttachment } from "../types";
-import { getChannelAccess } from "./channels";
-import { ChatError, type ChatActor } from "./serialize";
+import { broadcastToChannel, channelMemberIds, getChannelAccess } from "./channels";
+import { notifyNewMessage } from "./notify";
+import { ChatError, hydrateMessages, type ChatActor } from "./serialize";
 
 /**
  * อัลบั้มของห้องแชท (แบบ LINE) — ที่เก็บรูป/วิดีโอถาวร ส่วนในแชทหมดอายุ (lib/retention.ts)
@@ -13,6 +14,7 @@ import { ChatError, type ChatActor } from "./serialize";
  * รายการในอัลบั้มชี้ไปที่ไฟล์เดิมใน chat.files ไม่ได้ก๊อป ⇒ บันทึกรูปจากแชทไม่เปลืองพื้นที่เพิ่ม
  * ใครอยู่ในห้องก็ดู/สร้าง/เพิ่มรูปได้ · ลบรูปออก = คนที่เพิ่มรูปนั้น หรือแอดมินห้อง
  * · เปลี่ยนชื่อ/ลบอัลบั้ม = คนสร้างอัลบั้ม หรือแอดมินห้อง
+ * · เพิ่มรูปแล้วโพสต์การ์ด "X เพิ่มรูป N รูปในอัลบั้ม …" ลงห้อง (แบบ LINE — ผู้ใช้ขอ 21/10/2569)
  */
 
 const MAX_ALBUMS_PER_CHANNEL = 100;
@@ -108,7 +110,7 @@ export async function addAlbumItems(
   albumId: string,
   input: unknown
 ): Promise<{ added: number }> {
-  const { album } = await albumWithAccess(actor, albumId);
+  const { album, access } = await albumWithAccess(actor, albumId);
   const raw = Array.isArray(input) ? input.slice(0, MAX_ITEMS_PER_ADD) : [];
   const wanted = raw.filter((i): i is { url: string; thumbUrl?: unknown; name?: unknown; width?: unknown; height?: unknown; sourceMessageId?: unknown } => typeof i?.url === "string");
   if (wanted.length === 0) throw new ChatError("ไม่มีรูปให้เพิ่ม", 400);
@@ -151,9 +153,57 @@ export async function addAlbumItems(
       addedById: actor.userId,
     });
   }
+  const before = await prisma.chatAlbumItem.count({ where: { orgId: actor.orgId, albumId } });
   const res = await prisma.chatAlbumItem.createMany({ data: rows, skipDuplicates: true });
   await prisma.chatAlbum.update({ where: { id: albumId }, data: { updatedAt: new Date() } });
+  // รูปที่มีอยู่แล้ว (กดบันทึกซ้ำ) ไม่นับ — ไม่มีอะไรใหม่ก็ไม่โพสต์การ์ด
+  if (res.count > 0) {
+    await postAlbumCard(actor, access, album, rows, res.count, before === 0).catch(
+      (err) => console.error("[chat] album card failed", err)
+    );
+  }
   return { added: res.count };
+}
+
+/**
+ * การ์ดอัลบั้มลงห้อง — นับยังไม่อ่าน เด้งแจ้งเตือนเหมือนข้อความ (เหมือนการ์ดโน้ต) · คนเพิ่มถือว่าอ่านแล้ว
+ * รูปตัวอย่างเก็บใน meta (ไม่ใช่ attachments) — ไม่ไปปนแท็บรูป/วิดีโอ และไม่โดนนับอายุไฟล์แชท
+ */
+async function postAlbumCard(
+  actor: ChatActor,
+  access: Awaited<ReturnType<typeof getChannelAccess>>,
+  album: { id: string; channelId: string; name: string },
+  rows: { url: string; thumbUrl: string | null; kind: string }[],
+  count: number,
+  created: boolean
+) {
+  const body = created
+    ? `สร้างอัลบั้ม "${album.name}" · ${count} รายการ`
+    : `เพิ่มเนื้อหา ${count} รายการในอัลบั้ม "${album.name}"`;
+  const meta = { albumId: album.id, count, created, items: rows.slice(0, 5).map((r) => ({ url: r.url, thumbUrl: r.thumbUrl, kind: r.kind })) };
+  const card = await prisma.$transaction(async (tx) => {
+    const card = await tx.chatMessage.create({
+      data: { orgId: actor.orgId, channelId: album.channelId, authorId: actor.userId, kind: "album", body, meta },
+    });
+    await tx.chatReadState.upsert({
+      where: { channelId_userId: { channelId: album.channelId, userId: actor.userId } },
+      update: { lastReadSeq: card.seq, lastReadAt: card.createdAt },
+      create: { channelId: album.channelId, userId: actor.userId, orgId: actor.orgId, lastReadSeq: card.seq, lastReadAt: card.createdAt },
+    });
+    return card;
+  });
+  const memberIds = access.type === "org" ? [] : await channelMemberIds(actor.orgId, album.channelId);
+  const [[message], author] = await Promise.all([
+    hydrateMessages(actor.orgId, [card]),
+    prisma.user.findUnique({ where: { id: actor.userId }, select: { name: true } }),
+  ]);
+  await broadcastToChannel(
+    actor.orgId,
+    album.channelId,
+    { type: "chat.message", channelId: album.channelId, message: message!, authorName: author?.name, channelName: access.name, channelType: access.type },
+    memberIds
+  );
+  void notifyNewMessage(actor, album.channelId, access.type, memberIds, message!);
 }
 
 export async function removeAlbumItem(actor: ChatActor, albumId: string, itemId: string): Promise<void> {

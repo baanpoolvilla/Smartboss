@@ -107,6 +107,7 @@ function onEvent(raw: RealtimeEventMessage) {
   const who = event.authorName ?? "ข้อความใหม่";
   const preview =
     (message.kind === "note" ? `📝 โน้ต: ${message.body ?? ""}`.slice(0, 120) : null) ||
+    (message.kind === "album" ? `🖼️ ${message.body ?? "เพิ่มรูปในอัลบั้ม"}`.slice(0, 120) : null) ||
     message.body?.slice(0, 120) ||
     attachmentLabel(message.attachments[0]?.kind ?? null);
   const title = event.channelType === "dm" || !event.channelName ? who : `${event.channelName}`;

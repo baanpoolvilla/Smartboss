@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
 
-import type { ChatAttachment, ChatAttachmentKind, ChatMessageDTO, ChatNotePreview, ChatReactionDTO, ChatReplyPreview } from "../types";
+import type { ChatAttachment, ChatAttachmentKind, ChatMessageDTO, ChatNotePreview, ChatReactionDTO, ChatReplyPreview, ChatAlbumCard } from "../types";
 import { EXPIRING_KINDS, mediaExpiresAt } from "../lib/retention";
 import { isKeepChannelId } from "../types";
 
@@ -39,6 +39,8 @@ export interface MessageRow {
   clientId: string | null;
   deletedAt: Date | null;
   createdAt: Date;
+  /** การ์ดอัลบั้ม (kind "album") — { albumId, count, created, items } */
+  meta?: unknown;
 }
 
 /** ข้อความย่อของโน้ต (บรรทัดแรก ๆ) — ใช้เป็นเนื้อการ์ดในห้อง, รายการห้อง, แจ้งเตือน */
@@ -99,7 +101,9 @@ export async function hydrateMessages(orgId: string, rows: MessageRow[]): Promis
   const replyIds = Array.from(new Set(rows.map((r) => r.replyToId).filter((id): id is string => Boolean(id))));
 
   const noteMessageIds = rows.filter((r) => r.kind === "note").map((r) => r.id);
-  const [reactionRows, replyRows, noteRows] = await Promise.all([
+  const albumMeta = (r: MessageRow) => (r.kind === "album" && r.meta && typeof r.meta === "object" ? (r.meta as Partial<ChatAlbumCard>) : null);
+  const albumIds = Array.from(new Set(rows.map((r) => albumMeta(r)?.albumId).filter((id): id is string => typeof id === "string")));
+  const [reactionRows, replyRows, noteRows, albumRows] = await Promise.all([
     prisma.chatReaction.findMany({
       where: { orgId, messageId: { in: ids } },
       orderBy: { createdAt: "asc" },
@@ -117,7 +121,24 @@ export async function hydrateMessages(orgId: string, rows: MessageRow[]): Promis
           select: { id: true, body: true, attachments: true, messageId: true },
         })
       : Promise.resolve([]),
+    // ชื่ออัลบั้มปัจจุบัน — ไม่เจอ = ถูกลบไปแล้ว (การ์ดขึ้น "อัลบั้มนี้ถูกลบแล้ว")
+    albumIds.length > 0
+      ? prisma.chatAlbum.findMany({ where: { orgId, id: { in: albumIds } }, select: { id: true, name: true } })
+      : Promise.resolve([]),
   ]);
+  const albumName = new Map(albumRows.map((a) => [a.id, a.name]));
+  const albumCard = (row: MessageRow): ChatAlbumCard | null => {
+    const m = albumMeta(row);
+    const name = m?.albumId ? albumName.get(m.albumId) : undefined;
+    if (!m?.albumId || name === undefined) return null;
+    return {
+      albumId: m.albumId,
+      name,
+      count: typeof m.count === "number" ? m.count : 0,
+      created: m.created === true,
+      items: Array.isArray(m.items) ? m.items.slice(0, 5) : [],
+    };
+  };
   const noteByMessage = new Map(noteRows.map((n) => [n.messageId!, notePreview(n)]));
 
   const reactions = groupReactions(reactionRows);
@@ -160,6 +181,7 @@ export async function hydrateMessages(orgId: string, rows: MessageRow[]): Promis
       authorId: row.authorId,
       kind: row.kind,
       ...(row.kind === "note" ? { note: deleted ? null : (noteByMessage.get(row.id) ?? null) } : {}),
+      ...(row.kind === "album" ? { album: deleted ? null : albumCard(row) } : {}),
       body: deleted ? null : row.body,
       attachments: deleted ? [] : withExpiry(row),
       replyTo: deleted || !row.replyToId ? null : (replies.get(row.replyToId) ?? null),

@@ -115,9 +115,22 @@ export interface ChatNoteCommentDTO {
   canDelete: boolean;
 }
 
+/** การ์ดอัลบั้มในห้อง (ChatMessage kind "album") — "X เพิ่มรูป N รูปในอัลบั้ม …" แบบ LINE · กดแล้วเปิดอัลบั้ม */
+export interface ChatAlbumCard {
+  albumId: string;
+  /** ชื่ออัลบั้มตอนนี้ (เปลี่ยนชื่อทีหลังก็ตามชื่อใหม่) */
+  name: string;
+  /** จำนวนรูป/วิดีโอที่เพิ่มในรอบนั้น */
+  count: number;
+  /** รอบแรกของอัลบั้ม (อัลบั้มยังว่างตอนเพิ่ม) ⇒ "สร้างอัลบั้ม" */
+  created: boolean;
+  /** รูปตัวอย่างของรอบนั้น ไม่เกิน 5 (การ์ดเรียงแบบ LINE — เกินขึ้น +N) */
+  items: { url: string; thumbUrl: string | null; kind: string }[];
+}
+
 /** ข้อความที่คนพิมพ์/โพสต์ (ไม่ใช่ข้อความระบบ) — นับยังไม่อ่าน เด้งแจ้งเตือน มีเสียง */
 export function isUserMessageKind(kind: string): boolean {
-  return kind === "text" || kind === "note";
+  return kind === "text" || kind === "note" || kind === "album";
 }
 
 /** ห้อง "🕐 ระบบลงเวลา" ส่วนตัวของแต่ละคน (lib/attendance-chat.ts) — id ขึ้นต้นด้วยนี้ */
@@ -169,10 +182,12 @@ export interface ChatMessageDTO {
   seq: string;
   channelId: string;
   authorId: string;
-  /** "text" | "system" | "note" (การ์ดโน้ต — ดู note) */
+  /** "text" | "system" | "note" (การ์ดโน้ต — ดู note) | "album" (การ์ดอัลบั้ม — ดู album) */
   kind: string;
   /** kind "note" เท่านั้น — null = โน้ตถูกลบไปแล้ว */
   note?: ChatNotePreview | null;
+  /** kind "album" เท่านั้น — null = อัลบั้มถูกลบไปแล้ว */
+  album?: ChatAlbumCard | null;
   body: string | null;
   attachments: ChatAttachment[];
   replyTo: ChatReplyPreview | null;

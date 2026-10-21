@@ -87,6 +87,7 @@ export function channelPreview(channel: ChatChannelSummary, meId: string, users:
   const who = last.authorId === meId ? "คุณ" : firstName(users[last.authorId]?.name) || "สมาชิก";
   if (last.deleted) return `${who} ยกเลิกข้อความ`;
   if (last.kind === "note") return `${who} สร้างโน้ต: ${last.body?.replace(/\s+/g, " ") ?? ""}`;
+  if (last.kind === "album") return `${who} ${last.body ?? "เพิ่มรูปในอัลบั้ม"}`;
   const text = last.body?.replace(/\s+/g, " ") || attachmentLabel(last.attachmentKind);
   // Keep Memo มีแต่ของตัวเอง — ไม่ต้องขึ้น "คุณ:"
   return (channel.type === "dm" && last.authorId !== meId) || keep ? text : `${who}: ${text}`;

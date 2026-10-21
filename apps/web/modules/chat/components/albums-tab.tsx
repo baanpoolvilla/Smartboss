@@ -17,12 +17,21 @@ import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 export function AlbumsTab({
   channelId,
   onOpenMedia,
+  openRequest,
 }: {
   channelId: string;
   onOpenMedia: (items: ChatAttachment[], i: number) => void;
+  /** เปิดอัลบั้มนี้เลย (กดการ์ดอัลบั้มในแชท) */
+  openRequest?: { id: string; n: number } | null;
 }) {
   const [albums, setAlbums] = useState<ChatAlbumDTO[] | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(openRequest?.id ?? null);
+  // คำขอเปิดใหม่ (กดการ์ดอีกใบ/ใบเดิมซ้ำ) — ปรับตอน render ตามแนวของ React ไม่ใช้ effect
+  const [seenRequest, setSeenRequest] = useState(openRequest);
+  if (openRequest !== seenRequest) {
+    setSeenRequest(openRequest);
+    if (openRequest) setOpenId(openRequest.id);
+  }
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
 

@@ -108,12 +108,14 @@ model ChatMessage {
   channelId String @map("channel_id")
   authorId  String @map("author_id")
 
-  /// "text" | "system" (เช่น "สมชายเพิ่มนภาเข้ากลุ่ม")
+  /// "text" | "system" (เช่น "สมชายเพิ่มนภาเข้ากลุ่ม") | "note" | "album" (การ์ดเพิ่มรูปในอัลบั้ม)
   kind String  @default("text")
   body String?
   /// [{ url, name, mime, size, kind, thumbUrl?, width?, height?, durationMs? }]
   /// kind: "image" | "file" | "audio" | "video"
   attachments Json      @default("[]")
+  /// ข้อมูลประกอบของการ์ดพิเศษ — kind "album": { albumId, count, created, items: [{ url, thumbUrl, kind }] } (data/albums.ts)
+  meta        Json?
   /// ข้อความที่ตอบกลับ (quote) — ไม่ใช่ FK เพราะต้นทางถูกยกเลิกได้
   replyToId   String?   @map("reply_to_id")
   /// userId ที่ถูก @แท็ก ("all" = ทุกคนในห้อง)

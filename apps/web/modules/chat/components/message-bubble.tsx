@@ -16,6 +16,7 @@ import { ChatAvatar } from "./chat-avatar";
 import { downloadUrl } from "./lightbox";
 import { daysUntilExpiry } from "../lib/retention";
 import { NoteCard } from "./notes";
+import { AlbumCard } from "./album-card";
 import { MessageText } from "./message-text";
 import { useBackToClose, useBackToCloseOnTouch } from "@/lib/back-to-close";
 
@@ -605,6 +606,8 @@ export const MessageBubble = memo(function MessageBubble(props: MessageBubblePro
   const parts: React.ReactNode[] = [
     m.kind === "note" ? (
               <NoteCard key="note" message={m} mine={mine} />
+            ) : m.kind === "album" ? (
+              <AlbumCard key="album" message={m} mine={mine} />
             ) : m.body && !m.replyTo && isJumboEmoji(m.body) ? (
               <p key="emoji" className="px-1 text-[44px] leading-tight">{m.body.trim()}</p>
             ) : (m.body || m.replyTo) && (

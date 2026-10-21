@@ -19,6 +19,7 @@ import { AlbumPicker } from "./album-picker";
 import { MessageList } from "./message-list";
 import { ChatModal } from "./new-chat-dialog";
 import { RoomInfo } from "./room-info";
+import { OPEN_ALBUM_EVENT, type OpenAlbumDetail } from "./album-card";
 import { NoteEditor, NoteViewer, useNoteParam } from "./notes";
 import { useBackToClose } from "@/lib/back-to-close";
 import { startCall, useCallStore } from "../lib/call-controller";
@@ -141,6 +142,18 @@ export function ChatRoom({
   const [searching, setSearching] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   useBackToClose(infoOpen, () => setInfoOpen(false));
+  // กดการ์ดอัลบั้มในแชท → เปิดแผงข้อมูลห้องที่แท็บอัลบั้ม ตรงอัลบั้มนั้น (album-card.tsx)
+  const [albumRequest, setAlbumRequest] = useState<{ id: string; n: number } | null>(null);
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const d = (e as CustomEvent<OpenAlbumDetail>).detail;
+      if (d?.channelId !== channel.id) return;
+      setAlbumRequest((prev) => ({ id: d.albumId, n: (prev?.n ?? 0) + 1 }));
+      setInfoOpen(true);
+    };
+    window.addEventListener(OPEN_ALBUM_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_ALBUM_EVENT, onOpen);
+  }, [channel.id]);
   const [dragging, setDragging] = useState(false);
   const [creatingNote, setCreatingNote] = useState(false);
   const { noteId, close: closeNote } = useNoteParam(channel.id);
@@ -292,7 +305,14 @@ export function ChatRoom({
 
       {infoOpen && (
         <div className="fixed inset-0 z-50 lg:static lg:z-auto lg:w-80 lg:shrink-0 lg:border-l lg:border-(--line)">
-          <RoomInfo channel={channel} onClose={() => setInfoOpen(false)} onOpenMedia={onOpenMedia} onLeft={onBack} onCreateNote={() => setCreatingNote(true)} />
+          <RoomInfo
+            channel={channel}
+            onClose={() => setInfoOpen(false)}
+            onOpenMedia={onOpenMedia}
+            onLeft={onBack}
+            onCreateNote={() => setCreatingNote(true)}
+            openAlbum={albumRequest}
+          />
         </div>
       )}
 

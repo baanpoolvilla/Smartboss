@@ -143,12 +143,15 @@ export function RoomInfo({
   onOpenMedia,
   onLeft,
   onCreateNote,
+  openAlbum,
 }: {
   channel: ChatChannelSummary;
   onClose: () => void;
   onOpenMedia: (items: ChatAttachment[], i: number) => void;
   onLeft: () => void;
   onCreateNote: () => void;
+  /** กดการ์ดอัลบั้มในแชท — n เปลี่ยนทุกครั้งที่กด (กดอัลบั้มเดิมซ้ำก็เปิดใหม่) */
+  openAlbum?: { id: string; n: number } | null;
 }) {
   const detail = useChatStore((s) => s.details[channel.id]);
   const users = useChatStore((s) => s.users);
@@ -158,6 +161,12 @@ export function RoomInfo({
   // Keep Memo = ห้องของคนเดียว ไม่มีแท็บสมาชิก/ปุ่มเพิ่มคน/ออกจากกลุ่ม (เหมือน DM)
   const isKeep = isKeepChannelId(channel.id);
   const [tab, setTab] = useState<Tab>(channel.type === "dm" || isKeep ? "media" : "members");
+  // กดการ์ดอัลบั้มในแชท → สลับมาแท็บอัลบั้ม (AlbumsTab เปิดอัลบั้มนั้นเอง) — ปรับตอน render ไม่ใช้ effect
+  const [seenAlbum, setSeenAlbum] = useState<typeof openAlbum>(null);
+  if (openAlbum !== seenAlbum) {
+    setSeenAlbum(openAlbum);
+    if (openAlbum) setTab("album");
+  }
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(channel.name ?? "");
   const [adding, setAdding] = useState(false);
@@ -444,7 +453,7 @@ export function RoomInfo({
           </div>
         )}
         {tab === "note" && <NotesTab key={channel.id} channelId={channel.id} onCreate={onCreateNote} />}
-        {tab === "album" && <AlbumsTab key={channel.id} channelId={channel.id} onOpenMedia={onOpenMedia} />}
+        {tab === "album" && <AlbumsTab key={channel.id} channelId={channel.id} onOpenMedia={onOpenMedia} openRequest={openAlbum} />}
         {tab !== "members" && tab !== "album" && tab !== "note" && <MediaTab key={`${channel.id}-${tab}`} channelId={channel.id} kind={tab} onOpenMedia={onOpenMedia} />}
 
         {/* ห้องของโปรเจกต์: ปิดเก็บไว้อ่าน / เปิดอีกครั้ง / ลบห้อง (ผู้ใช้ 20/10/2569) */}
