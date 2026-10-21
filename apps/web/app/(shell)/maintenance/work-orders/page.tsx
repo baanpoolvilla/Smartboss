@@ -29,8 +29,8 @@ function titleFor(
   if (filter === "today") return "งานใหม่วันนี้";
   if (filter === "urgent") return "งานด่วน";
   if (filter === "no-expense") return "ยังไม่บันทึกค่าใช้จ่าย";
-  if (propertyName) return `ใบงาน: ${propertyName}`;
-  return "ใบงานทั้งหมด";
+  if (propertyName) return `แจ้งซ่อม: ${propertyName}`;
+  return "แจ้งซ่อมทั้งหมด";
 }
 
 export default async function WorkOrdersPage({

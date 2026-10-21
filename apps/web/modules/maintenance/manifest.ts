@@ -27,7 +27,7 @@ export const maintenanceManifest: ModuleManifest = {
   menus: [
     { label: "แดชบอร์ด", path: "/maintenance", permission: MAINT_PERMS.access, icon: "LayoutDashboard" },
     {
-      label: "ใบงาน",
+      label: "แจ้งซ่อม",
       path: "/maintenance/work-orders",
       permission: MAINT_PERMS.workorderView,
       icon: "ClipboardList",

@@ -21,7 +21,7 @@ import {
   type PriorityGroup,
 } from "@/modules/maintenance/lib/priority";
 
-/** แจ้งเตือนหมวดเดียวกับเลขแดงที่เมนู "ใบงาน" (manifest.ts) */
+/** แจ้งเตือนหมวดเดียวกับเลขแดงที่เมนู "แจ้งซ่อม" (manifest.ts) */
 const WO_CATEGORIES: NotifCategory[] = ["work_order"];
 
 export interface BoardOrder {
