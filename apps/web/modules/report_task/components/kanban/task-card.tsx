@@ -178,6 +178,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
   const visibleChecklist = isShared && iAmAssignee ? task.checklist.filter((c) => c.ownerId === viewingAsUserId) : task.checklist;
   const doneChecklist = visibleChecklist.filter((c) => c.done).length;
 
+  const pillInFooterRow = !isDone && visibleChecklist.length === 0;
   const pillMeta = groupedByPriority ? statusMeta[task.status] : priorityMeta[task.priority];
   const pillKind = groupedByPriority ? "สถานะ" : "ความสำคัญ";
   const priorityPill = (
@@ -365,8 +366,8 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
 
       {/* ความสำคัญ (หรือสถานะ ถ้าบอร์ดจัดกลุ่มตามความสำคัญ) เป็นป้าย จุดสี + คำ ซ้ายล่าง แทนจุดหน้าชื่องาน
           (ผู้ใช้ขอ 21/10/2569 "ย้ายสถานะลงมาซ้ายล่าง") — ชื่องานเหลือวงกลมติ๊กเสร็จอย่างเดียว อ่านง่ายกว่า
-          อยู่แถวเดียวกับแถบ checklist (0/2) ถ้ามี · งานเสร็จแล้วไม่มีป้ายนี้ (ป้ายเสร็จสิ้น/รอตรวจสอบด้านบนบอกแทน) */}
-      {!isDone && visibleChecklist.length === 0 && <div className="mt-1.5 flex sm:mt-2">{priorityPill}</div>}
+          อยู่แถวเดียวกับแถบ checklist (0/2) ถ้ามี · ไม่มี checklist = แถวเดียวกับคอมเมนต์เหนือเส้นคั่น (ด้านล่าง)
+          งานเสร็จแล้วไม่มีป้ายนี้ (ป้ายเสร็จสิ้น/รอตรวจสอบด้านบนบอกแทน) */}
 
       {/* Checklist progress at a glance — the fraction alone (in the meta row
           below) is easy to skim past; a bar reads instantly even at a glance
@@ -457,8 +458,10 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
       )}
 
       {/* ขวาล่างเหนือรูปคน: แก้กำหนดส่ง + คอมเมนต์ ตัวเล็กสีเทา · คอมเมนต์ใหม่ = ป้ายแดง "N ใหม่" (ผู้ใช้ขอ 20/10/2569) */}
-      {(suspicious || task.comments.length > 0) && (
+      {/* ป้ายความสำคัญ (งานไม่มี checklist) ซ้ายสุดแถวนี้ ชิดเส้นคั่น — ผู้ใช้ขอ 21/10/2569 ให้ลงมาอยู่ตรงนี้ ไม่กินแถวแยก */}
+      {(pillInFooterRow || suspicious || task.comments.length > 0) && (
         <div className="-mb-1 mt-1.5 flex items-center justify-end gap-2 sm:-mb-1.5">
+          {pillInFooterRow && <div className="mr-auto flex">{priorityPill}</div>}
           {suspicious && (
             <span
               className="flex items-center gap-0.5 text-[10px] font-medium text-[var(--chart-gray)]"
