@@ -21,6 +21,7 @@ import { useTaskStore, SYSTEM_USER_ID } from "@/modules/report_task/store/task-s
 import { usePenaltySettingsStore } from "@/modules/report_task/store/penalty-settings-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canOverrideAutoPenalty, canSeePenaltyStatus } from "@/modules/report_task/lib/permissions";
+import { isPersonalTask } from "@/modules/report_task/lib/personal-task";
 import type { Task } from "@/modules/report_task/types";
 import { toast } from "sonner";
 
@@ -61,6 +62,9 @@ export function PenaltyChip({
   // action affordance hidden from anyone who can't actually use it (see
   // canSeePenaltyStatus).
   if (!canSeePenaltyStatus(task, viewingAsUserId)) return null;
+  // งานส่วนตัว (เปิดให้ตัวเอง) ไม่มีผลกับคะแนน — ระบบไม่หักอัตโนมัติอยู่แล้ว (task-penalty-sweep.ts) จึงไม่เสนอปุ่ม
+  // "กดเพื่อหักเอง" ด้วย (ผู้ใช้ถาม 21/10/2569) · ถ้าเคยถูกหักไว้ก่อนแล้วยังแสดง ให้เจ้าของระบบกดยกเลิกได้
+  if (!penalty && isPersonalTask(task)) return null;
 
   function submitOverride() {
     const reason = overrideReason.trim();
