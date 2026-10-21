@@ -14,6 +14,7 @@ const MAX_ZOOM = 4;
 
 export function AvatarCropper({ file, title = "ปรับรูป", onCancel, onDone }: { file: File; title?: string; onCancel: () => void; onDone: (out: File) => void }) {
   const stageRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [stage, setStage] = useState(280);
   const [zoom, setZoom] = useState(1);
@@ -74,6 +75,30 @@ export function AvatarCropper({ file, title = "ปรับรูป", onCancel,
     [img, baseScale, zoom, stage, pos, clamp],
   );
 
+  // ล้อเมาส์: ซูมรูปอย่างเดียว ไม่ให้หน้าข้างหลังเลื่อนตาม (ผู้ใช้แจ้ง 21/10/2569) — onWheel ของ React เป็น passive
+  // เรียก preventDefault ไม่ได้ จึงผูก listener เองแบบ passive:false · หมุนนอกรูป (ในหน้าต่าง/พื้นมืด) ก็ไม่เลื่อนหน้า
+  const zoomRef = useRef(zoomTo);
+  zoomRef.current = zoomTo;
+  const zoomNow = useRef(zoom);
+  zoomNow.current = zoom;
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      if (stageRef.current?.contains(e.target as Node)) zoomRef.current(zoomNow.current * (e.deltaY < 0 ? 1.08 : 1 / 1.08));
+    };
+    root.addEventListener("wheel", onWheel, { passive: false });
+    // ล็อกหน้าข้างหลังระหว่างเปิด (มือถือลากนิ้วนอกรูปก็ไม่เลื่อนหน้า) แล้วคืนค่าเดิมตอนปิด
+    const html = document.documentElement;
+    const prev = html.style.overflow;
+    html.style.overflow = "hidden";
+    return () => {
+      root.removeEventListener("wheel", onWheel);
+      html.style.overflow = prev;
+    };
+  }, []);
+
   function onPointerDown(e: React.PointerEvent) {
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -119,7 +144,7 @@ export function AvatarCropper({ file, title = "ปรับรูป", onCancel,
 
   if (typeof document === "undefined") return null;
   return createPortal(
-    <div className="fixed inset-0 z-[95] flex items-end justify-center bg-black/50 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label={title} onClick={onCancel}>
+    <div ref={rootRef} className="fixed inset-0 z-[95] flex items-end justify-center overscroll-contain bg-black/50 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label={title} onClick={onCancel}>
       <div className="flex w-full max-w-sm flex-col overflow-hidden rounded-t-[20px] bg-(--bg) sm:rounded-[20px]" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-(--line) px-4 py-3">
           <h2 className="text-base font-bold text-(--ink)">{title}</h2>
@@ -136,7 +161,6 @@ export function AvatarCropper({ file, title = "ปรับรูป", onCancel,
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
-            onWheel={(e) => zoomTo(zoom * (e.deltaY < 0 ? 1.08 : 1 / 1.08))}
           >
             {img ? (
               // eslint-disable-next-line @next/next/no-img-element
