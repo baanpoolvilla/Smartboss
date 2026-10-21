@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, ClipboardList, Clock, Inbox, PenLine, Search, SlidersHorizontal, Wallet, X } from "lucide-react";
+import { ChevronDown, ClipboardList, Clock, Inbox, PenLine, Plus, Search, SlidersHorizontal, Wallet, X } from "lucide-react";
 
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { KIND_META, KINDS, baht, thaiDate, type BeneficiaryKind, type RequestKind, type StatusInfo } from "../lib/types";
@@ -217,10 +217,6 @@ export function RequestsHome({
           </div>
         )}
       </div>
-      <Link href="/requests/new" className="flex h-10 items-center gap-1.5 rounded-xl bg-(--app) px-3 text-[13px] font-semibold text-white hover:brightness-95" aria-label="ยื่นคำขอ">
-        <PenLine className="h-4 w-4" aria-hidden="true" />
-        <span className="hidden sm:inline">ยื่นคำขอ</span>
-      </Link>
     </div>
   );
 
@@ -273,8 +269,26 @@ export function RequestsHome({
   );
 
   return (
-    <AppScaffold title="เบิกจ่าย & OT" hideTitle leading={leading} actions={actions} width="max-w-[1600px]">
-      <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-start">
+    <AppScaffold
+      title="เบิกจ่าย & OT"
+      hideTitle
+      leading={leading}
+      actions={actions}
+      width="max-w-[1600px]"
+      // ยื่นคำขอ = ปุ่มลอย + มุมขวาล่าง แบบบอร์ดงาน (ผู้ใช้ขอ 21/10/2569) — มือถือลอยเหนือเมนูล่าง
+      fab={
+        <Link
+          href="/requests/new"
+          aria-label="ยื่นคำขอ"
+          title="ยื่นคำขอ"
+          className="fixed bottom-[84px] right-4 z-40 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-(--app) text-white shadow-[0_4px_14px_rgba(124,58,237,0.4)] transition-transform hover:brightness-105 active:scale-95 lg:bottom-6 lg:right-6"
+        >
+          <Plus className="h-6 w-6" aria-hidden="true" />
+        </Link>
+      }
+    >
+      {/* เว้นท้ายหน้าให้ปุ่มลอยไม่บังยอดรวม/รายการสุดท้าย */}
+      <div className="flex flex-col gap-4 pb-20 lg:pb-16 2xl:flex-row 2xl:items-start">
         <div className="flex min-w-0 flex-1 flex-col gap-3">
           {/* มือถือ: แท็บเป็นแถวเลื่อนใต้แถบหัว (แถบหัวแคบ ใส่แท็บแล้วตกขอบ) */}
           <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5 sm:hidden" role="tablist" aria-label="มุมมองรายการ">
