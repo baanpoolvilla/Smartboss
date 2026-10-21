@@ -9,6 +9,13 @@ import { KINDS, bangkokToday, type RequestKind } from "@/modules/requests/lib/ty
 
 export const dynamic = "force-dynamic";
 
+const ROLE_TH: Record<string, string> = {
+  ADMIN: "แอดมิน", MANAGER: "ผู้จัดการ", HR_OFFICER: "HR", ACCOUNTANT: "บัญชี", SALE_ADMIN: "แอดมินฝ่ายขาย",
+  MARKETING: "การตลาด", CEO: "CEO", TECHNICIAN: "ช่าง", CARETAKER: "ผู้ดูแลบ้าน", STAFF: "พนักงาน",
+};
+/** บทบาทหลักของคนนั้นเป็นภาษาไทย — ใช้แยกคนชื่อซ้ำในช่องค้นหา */
+const roleLabel = (roles: string[]) => roles.map((r) => ROLE_TH[r]).find(Boolean) ?? null;
+
 /** ยื่นคำขอ — ประเภทที่เห็นขึ้นกับสิทธิ์: ทุกคนเบิกค่าใช้จ่าย/เบิกไปก่อนของตัวเองได้ · OT เบิกล่วงหน้า ช่างภายนอก = คนที่ลงให้คนอื่นได้ */
 export default async function NewRequestPage({ searchParams }: { searchParams: Promise<{ kind?: string }> }) {
   const { session, viewer } = await requestsPage();
@@ -27,13 +34,13 @@ export default async function NewRequestPage({ searchParams }: { searchParams: P
   const initialKind = KINDS.includes(sp.kind as RequestKind) ? (sp.kind as RequestKind) : null;
 
   return (
-    <AppScaffold title="ยื่นคำขอ" backHref="/requests" width="max-w-5xl">
+    <AppScaffold title="ยื่นคำขอ" backHref="/requests" width="max-w-6xl">
       <RequestForm
         kinds={kinds}
         initialKind={initialKind}
         me={{ userId: session.userId, name: me?.name ?? "" }}
         canFileOthers={viewer.canFileOthers}
-        people={people.map((p) => ({ userId: p.userId, name: p.name, isWorker: p.isWorker, departmentName: p.departmentName }))}
+        people={people.map((p) => ({ userId: p.userId, name: p.name, email: p.email, roleLabel: roleLabel(p.roles), isWorker: p.isWorker, departmentName: p.departmentName }))}
         properties={properties}
         workOrders={workOrders}
         vendors={vendors.map((v) => ({ id: v.id, name: v.name, whtPercent: v.whtPercent, vatRegistered: v.vatRegistered }))}

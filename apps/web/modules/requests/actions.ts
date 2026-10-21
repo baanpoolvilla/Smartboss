@@ -875,7 +875,7 @@ export async function recordPaymentAction(input: PayInput): Promise<Result> {
       if (r.kind === "expense" || r.kind === "contractor") await linkMaintenanceExpense(orgId, r, session.userId, r.kind === "contractor" ? round2(r.amount + r.vatAmount) : r.netAmount);
     }
     if (method !== "payroll") void notifyResult(orgId, brief(r), [r.beneficiaryUserId], "จ่ายเงินแล้ว", `${baht(amount)} · ${METHOD_LABEL[method]} — กด "ได้รับเงินแล้ว" ในใบ`);
-    if (r.kind === "cash_advance" && result === "full") void notifyClear(orgId, brief(r), [r.beneficiaryUserId], `จ่ายแล้ว · เคลียร์ภายใน ${settings.clearDueDays} วัน`);
+    if (r.kind === "cash_advance" && result === "full") void notifyClear(orgId, brief(r), [r.beneficiaryUserId], `จ่ายแล้ว · ส่งใบเสร็จ + เงินทอนภายใน ${settings.clearDueDays} วัน`);
     refresh(r.id);
     return { ok: true };
   } catch (error) {
@@ -948,7 +948,7 @@ export async function voidPaymentAction(input: { paymentId: string; reason: stri
     if (res === "ledger") return { error: "OT คนงานยกเลิกที่ตัวใบ (ปุ่มยกเลิกคำขอ)" };
     if (res === "denied") return { error: "ยกเลิกได้เฉพาะ HR หรือคนบันทึกเองภายในวันนั้น" };
     if (res === "deducted") return { error: "หักเงินเดือนไปแล้ว — ยกเลิกการจ่ายไม่ได้" };
-    if (res === "cleared") return { error: "ส่งเคลียร์แล้ว — ยกเลิกการจ่ายไม่ได้" };
+    if (res === "cleared") return { error: "ส่งใบเสร็จแล้ว — ยกเลิกการจ่ายไม่ได้" };
     if (res.maintenanceExpenseId) {
       await prisma.expense.deleteMany({ where: { orgId, id: res.maintenanceExpenseId } }).catch(() => null);
       await withRequestsTenant(orgId, (tx) => tx.moneyRequest.update({ where: { id: res.id }, data: { maintenanceExpenseId: null } }));
@@ -994,8 +994,8 @@ export async function submitClearingAction(input: { id: string; spent: number; r
     if (spent > 0 && receipts.length === 0) return { error: "แนบใบเสร็จของที่ซื้อ" };
     const r = await withRequestsTenant(orgId, (tx) => loadOne(tx, orgId, input.id));
     if (!r || r.kind !== "cash_advance") return { error: "ไม่พบคำขอ" };
-    if (r.beneficiaryUserId !== session.userId && r.createdBy !== session.userId) return { error: "ส่งเคลียร์ได้เฉพาะคนที่เบิก" };
-    if (r.status !== "paid" || r.clearStatus) return { error: r.clearStatus ? "ส่งเคลียร์ไปแล้ว" : "ยังไม่ได้รับเงิน" };
+    if (r.beneficiaryUserId !== session.userId && r.createdBy !== session.userId) return { error: "ส่งใบเสร็จได้เฉพาะคนที่เบิก" };
+    if (r.status !== "paid" || r.clearStatus) return { error: r.clearStatus ? "ส่งใบเสร็จไปแล้ว" : "ยังไม่ได้รับเงิน" };
     if (spent + returned > r.paidTotal + 0.005 && returned > 0) return { error: `ใช้จริง + เงินทอนเกินยอดที่ได้ไป ${baht(r.paidTotal)}` };
     const used = await withRequestsTenant(orgId, (tx) => usedHashes(tx, orgId, receipts.map((a) => a.sha256), r.id));
     const dup = receipts.find((a) => used.has(a.sha256));
@@ -1005,10 +1005,10 @@ export async function submitClearingAction(input: { id: string; spent: number; r
         where: { id: r.id },
         data: { clearStatus: "submitted", clearSpent: spent, clearReturned: returned, clearNote: input.note.trim().slice(0, 500) || null, attachments: [...r.attachments, ...receipts] as unknown as object },
       });
-      await insertEvent(tx, orgId, { requestId: r.id, byUserId: session.userId, byName, action: "clear_submit", summary: `ส่งเคลียร์ · ใช้จริง ${baht(spent)} · คืนเงินทอน ${baht(returned)} · ใบเสร็จ ${receipts.length} ใบ` });
+      await insertEvent(tx, orgId, { requestId: r.id, byUserId: session.userId, byName, action: "clear_submit", summary: `ส่งใบเสร็จ · ใช้จริง ${baht(spent)} · คืนเงินทอน ${baht(returned)} · ใบเสร็จ ${receipts.length} ใบ` });
     });
     const payers = await prisma.user.findMany({ where: { orgId, isActive: true, roles: { some: { role: { permissions: { some: { permission: { code: REQ_PERMS.pay } } } } } } }, select: { id: true } });
-    void notifyClear(orgId, brief(r), payers.map((p) => p.id).filter((id) => id !== session.userId), "ส่งเคลียร์แล้ว รอตรวจ");
+    void notifyClear(orgId, brief(r), payers.map((p) => p.id).filter((id) => id !== session.userId), "ส่งใบเสร็จ + เงินทอนแล้ว รอตรวจ");
     refresh(r.id);
     return { ok: true };
   } catch (error) {
@@ -1025,11 +1025,11 @@ export async function confirmClearingAction(input: { id: string; returnedTo: str
     const session = await guard();
     const orgId = session.orgId;
     const viewer = viewerOf(session);
-    if (!viewer.canPay) return { error: "ตรวจเคลียร์ได้เฉพาะ HR" };
+    if (!viewer.canPay) return { error: "ตรวจใบเสร็จได้เฉพาะ HR" };
     const byName = await nameOf(session.userId);
     const r = await withRequestsTenant(orgId, (tx) => loadOne(tx, orgId, input.id));
-    if (!r || r.kind !== "cash_advance" || r.clearStatus !== "submitted") return { error: "ใบนี้ยังไม่ได้ส่งเคลียร์" };
-    if (r.beneficiaryUserId === session.userId) return { error: "ตรวจเคลียร์ใบของตัวเองไม่ได้" };
+    if (!r || r.kind !== "cash_advance" || r.clearStatus !== "submitted") return { error: "ใบนี้ยังไม่ได้ส่งใบเสร็จ" };
+    if (r.beneficiaryUserId === session.userId) return { error: "ตรวจใบของตัวเองไม่ได้" };
     const spent = r.clearSpent ?? 0;
     const returned = r.clearReturned ?? 0;
     const shortage = round2(r.paidTotal - spent - returned);
@@ -1063,7 +1063,7 @@ export async function confirmClearingAction(input: { id: string; returnedTo: str
           ...(dwPaymentId ? { dwPaymentId } : {}),
         },
       });
-      const parts = [`ตรวจเคลียร์แล้ว · ใช้จริง ${baht(spent)}`];
+      const parts = [`ตรวจใบเสร็จแล้ว · ใช้จริง ${baht(spent)}`];
       if (returned > 0) parts.push(`รับเงินทอน ${baht(returned)}${input.returnedTo ? " เข้าเงินสดย่อย" : ""}`);
       if (owedMore > 0.005) parts.push(`บริษัทค้างจ่ายเพิ่ม ${baht(owedMore)}`);
       if (shortage > 0.005) parts.push(r.beneficiaryKind === "worker" ? `ขาดคืน ${baht(shortage)} หักจากค่าแรง` : `ขาดคืน ${baht(shortage)} รอหักเงินเดือน`);
@@ -1073,7 +1073,7 @@ export async function confirmClearingAction(input: { id: string; returnedTo: str
     await clearActionNotifications(orgId, r.id, ["req_clear"]);
     if (spent > 0) await linkMaintenanceExpense(orgId, r, session.userId, spent);
     if (owedMore > 0.005) void notifyPayers(orgId, { ...brief(r), netAmount: owedMore }, [r.beneficiaryUserId ?? ""]);
-    void notifyResult(orgId, brief(r), [r.beneficiaryUserId], "ตรวจเคลียร์แล้ว");
+    void notifyResult(orgId, brief(r), [r.beneficiaryUserId], "ตรวจใบเสร็จแล้ว");
     refresh(r.id);
     return { ok: true };
   } catch (error) {

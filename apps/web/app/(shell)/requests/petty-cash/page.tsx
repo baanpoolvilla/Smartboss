@@ -38,7 +38,7 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
     : new Map<string, string>();
 
   return (
-    <AppScaffold title="เงินสดย่อย" backHref="/requests" width="max-w-5xl">
+    <AppScaffold title="เงินสดย่อย" backHref="/requests" width="max-w-6xl">
       <div className="flex flex-col gap-4">
         <section className="grid grid-cols-2 gap-2 lg:grid-cols-4">
           {holders.map((h) => (

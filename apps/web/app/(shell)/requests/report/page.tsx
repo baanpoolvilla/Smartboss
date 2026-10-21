@@ -25,7 +25,7 @@ export default async function RequestsReportPage({ searchParams }: { searchParam
   const wht = round2(rows.reduce((s, r) => s + r.whtAmount, 0));
 
   return (
-    <AppScaffold title="รายงานเบิกจ่าย & OT" backHref="/requests" width="max-w-6xl">
+    <AppScaffold title="รายงาน" backHref="/requests" width="max-w-7xl">
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-2 print:hidden">
           <Link href={`?month=${shiftMonthOf(month, -1)}`} aria-label="เดือนก่อน" className="rounded-full border border-(--line) bg-(--bg) p-2 hover:bg-(--bg-soft)"><ChevronLeft className="h-4 w-4" /></Link>
@@ -84,7 +84,26 @@ export default async function RequestsReportPage({ searchParams }: { searchParam
 
         <section className="rounded-(--radius-lg) border border-(--line) bg-(--bg)">
           <h2 className="border-b border-(--line) px-4 py-3 text-sm font-bold">ทุกใบ</h2>
-          <div className="overflow-x-auto">
+          {/* มือถือ: การ์ดทีละใบ (ตารางกว้างเกินจอ) */}
+          <ul className="divide-y divide-(--line) sm:hidden print:hidden">
+            {rows.map((r) => (
+              <li key={r.id}>
+                <Link href={`/requests/${r.id}`} className="flex items-start justify-between gap-3 px-4 py-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5"><KindChip kind={r.kind} /><span className="truncate text-sm font-semibold">{r.title}</span></div>
+                    <div className="mt-0.5 truncate text-xs text-(--ink-soft)">{r.code} · {thaiDate(r.workDate)} · {r.beneficiaryName}</div>
+                    <div className="mt-1"><StatusChip info={statusOf(r)} /></div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <div className="text-sm font-bold tabular-nums">{baht(costOf(r))}</div>
+                    <div className="text-[11px] text-(--ink-soft)">จ่ายแล้ว {baht(r.paidTotal)}</div>
+                  </div>
+                </Link>
+              </li>
+            ))}
+            <li className="flex justify-between px-4 py-2.5 text-sm font-bold"><span>รวม {rows.length} ใบ</span><span className="tabular-nums">{baht(total)}</span></li>
+          </ul>
+          <div className="hidden overflow-x-auto sm:block print:block">
             <table className="w-full min-w-[820px] text-sm">
               <thead className="bg-(--bg-soft) text-left text-xs text-(--ink-soft)">
                 <tr>

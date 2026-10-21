@@ -1,6 +1,3 @@
-import Link from "next/link";
-import { PenLine } from "lucide-react";
-
 import { prisma } from "@smartboss/database";
 
 import { AppScaffold } from "@/components/module/app-scaffold";
@@ -8,9 +5,9 @@ import { REQ_PERMS } from "@/modules/requests/permissions";
 import { pettyBalances, withRequestsTenant } from "@/modules/requests/lib/db";
 import { canDecide, listVisibleRequests } from "@/modules/requests/lib/data";
 import { beneficiaryLabel, isOpen, requestsPage, statusOf } from "@/modules/requests/lib/page";
-import { RequestList, type ListRow } from "@/modules/requests/components/request-list";
+import { RequestsHome, type ListRow } from "@/modules/requests/components/request-list";
 import { Notice } from "@/modules/requests/components/ui";
-import { KIND_META, bangkokToday, baht, costOf, hoursText, monthTitle, round2, type RequestKind } from "@/modules/requests/lib/types";
+import { bangkokToday, baht, costOf, hoursText, monthTitle, round2, type RequestKind } from "@/modules/requests/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -89,6 +86,7 @@ async function Body({
       title: r.title,
       meta,
       beneficiaryName: r.beneficiaryName,
+      beneficiaryKind: r.beneficiaryKind,
       beneficiaryLabel: beneficiaryLabel(r),
       createdByName: r.createdByName,
       workDate: r.workDate,
@@ -112,62 +110,18 @@ async function Body({
   ];
 
   return (
-    <AppScaffold
-      title="เบิกจ่าย & OT"
-      width="max-w-5xl"
-      actions={
-        <Link href="/requests/new" className="inline-flex h-9 items-center gap-1.5 rounded-full bg-(--app) px-3.5 text-sm font-semibold text-white hover:brightness-95">
-          <PenLine className="h-4 w-4" aria-hidden="true" /> ยื่นคำขอ
-        </Link>
+    <RequestsHome
+      rows={rows}
+      stats={seesAll ? stats : null}
+      statsTitle={monthTitle(month)}
+      petty={petty}
+      overdueNote={
+        overdueClear.length > 0 && seesAll
+          ? `เบิกเงินไปซื้อของแล้วเลยกำหนดส่งใบเสร็จ ${overdueClear.length} ใบ (${overdueClear.map((r) => `${r.code} ${r.beneficiaryName}`).join(", ")})`
+          : null
       }
-    >
-      <div className="flex flex-col gap-4">
-        {seesAll && (
-          <section aria-label={`ยอดเดือน ${monthTitle(month)}`} className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-            {stats.map((s) => (
-              <div key={s.label} className="rounded-(--radius-lg) border border-(--line) bg-(--bg) p-3.5">
-                <div className="text-xs text-(--ink-soft)">{s.label} · {monthTitle(month)}</div>
-                <div className="mt-0.5 text-xl font-bold tabular-nums text-(--ink)">{baht(s.value)}</div>
-                <div className="mt-0.5 text-[11px] text-(--ink-soft)">{s.sub}</div>
-              </div>
-            ))}
-          </section>
-        )}
-        {overdueClear.length > 0 && seesAll && (
-          <Notice tone="warn">
-            เบิกเงินไปก่อนแล้ว<strong>เลยกำหนดเคลียร์ {overdueClear.length} ใบ</strong> ({overdueClear.map((r) => `${r.code} ${r.beneficiaryName}`).join(", ")})
-          </Notice>
-        )}
-        {petty.length > 0 && (
-          <section className="rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4">
-            <div className="flex items-baseline justify-between gap-2">
-              <h2 className="text-sm font-bold text-(--ink)">เงินสดย่อยคงเหลือ</h2>
-              <Link href="/requests/petty-cash" className="text-xs font-medium text-(--app-strong) hover:underline">ดูประวัติ / เติมเงิน</Link>
-            </div>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {petty.map((h) => (
-                <Link key={h.id} href={`/requests/petty-cash?holder=${h.id}`} className="min-w-36 flex-1 rounded-(--radius) bg-(--bg-soft) px-3 py-2 hover:brightness-95 sm:flex-none">
-                  <div className="truncate text-xs text-(--ink-soft)">{h.name}</div>
-                  <div className={`text-lg font-bold tabular-nums ${h.balance < 0 ? "text-(--danger)" : "text-(--ink)"}`}>{baht(h.balance)}</div>
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
-        <RequestList rows={rows} showPayTab={viewer.canPay} showAllTab={seesAll} />
-        <section className="rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4">
-          <h2 className="text-sm font-bold text-(--ink)">ใครยื่น · ใครอนุมัติ · เงินไปลงที่ไหน</h2>
-          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {(["ot", "expense", "cash_advance", "advance", "contractor"] as RequestKind[]).map((k) => (
-              <div key={k} className="rounded-(--radius) bg-(--bg-soft) p-3 text-xs text-(--ink-soft)">
-                <div className="text-sm font-semibold text-(--ink)">{KIND_META[k].label}</div>
-                <div className="mt-0.5">{KIND_META[k].who} → {KIND_META[k].approver}</div>
-                <div className="mt-0.5">{KIND_META[k].hint}</div>
-              </div>
-            ))}
-          </div>
-        </section>
-      </div>
-    </AppScaffold>
+      showPayTab={viewer.canPay}
+      showAllTab={seesAll}
+    />
   );
 }

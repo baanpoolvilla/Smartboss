@@ -20,11 +20,14 @@ import {
   type RequestSettings,
 } from "../lib/types";
 import { FilePicker } from "./file-picker";
+import { PersonPicker, type PickItem } from "./person-picker";
 import { KindChip, MoneyRow, Notice } from "./ui";
 
 export interface FormPerson {
   userId: string;
   name: string;
+  email: string | null;
+  roleLabel: string | null;
   isWorker: boolean;
   departmentName: string | null;
 }
@@ -225,47 +228,45 @@ export function RequestForm({
     );
   }
 
-  const peopleOptions = (exclude: string | null) => (
-    <>
-      <option value="">— เลือกคน —</option>
-      <optgroup label="พนักงาน">
-        {people.filter((p) => !p.isWorker && p.userId !== exclude).map((p) => (
-          <option key={p.userId} value={p.userId}>
-            {p.name}
-            {p.departmentName ? ` · ${p.departmentName}` : ""}
-          </option>
-        ))}
-      </optgroup>
-      <optgroup label="คนงานรายวัน">
-        {people.filter((p) => p.isWorker && p.userId !== exclude).map((p) => (
-          <option key={p.userId} value={p.userId}>
-            {p.name}
-          </option>
-        ))}
-      </optgroup>
-    </>
-  );
+  // รายชื่อสำหรับช่องค้นหา — บรรทัดรองแยกคนชื่อซ้ำ (แผนก · บทบาท · อีเมล)
+  const peopleItems = (exclude: string | null): PickItem[] =>
+    people
+      .filter((p) => p.userId !== exclude)
+      .map((p) => ({
+        id: p.userId,
+        name: p.name,
+        badge: p.isWorker ? "คนงาน" : undefined,
+        sub: [p.departmentName, p.isWorker ? "คนงานรายวัน" : p.roleLabel, p.email].filter(Boolean).join(" · "),
+        keywords: p.email ?? "",
+      }));
 
   const placeFields = (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      <label className={labelCls}>
-        <span className={labelText}>บ้าน / สถานที่ <span className="font-normal text-(--ink-soft)">(ถ้ามี)</span></span>
-        <select className={field} value={propertyId} onChange={(e) => { setPropertyId(e.target.value); setWorkOrderId(""); }}>
-          <option value="">— ไม่ระบุ —</option>
-          {properties.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
-      </label>
-      <label className={labelCls}>
-        <span className={labelText}>ใบงานที่เกี่ยวข้อง <span className="font-normal text-(--ink-soft)">(ถ้ามี)</span></span>
-        <select className={field} value={workOrderId} onChange={(e) => setWorkOrderId(e.target.value)}>
-          <option value="">— ไม่ผูกใบงาน —</option>
-          {wos.map((w) => (
-            <option key={w.id} value={w.id}>{w.code} · {w.title}</option>
-          ))}
-        </select>
-      </label>
+      <PersonPicker
+        label="บ้าน / สถานที่ (ถ้ามี)"
+        placeholder="พิมพ์ชื่อบ้าน"
+        emptyText="ไม่พบบ้านนี้"
+        allowClear
+        items={properties.map((p) => ({ id: p.id, name: p.name, sub: "" }))}
+        value={propertyId}
+        onChange={(v) => {
+          setPropertyId(v);
+          setWorkOrderId("");
+        }}
+      />
+      <PersonPicker
+        label="ใบงานที่เกี่ยวข้อง (ถ้ามี)"
+        placeholder="พิมพ์เลขใบงานหรือชื่องาน"
+        emptyText="ไม่พบใบงาน"
+        allowClear
+        items={wos.map((w) => ({ id: w.id, name: `${w.code} · ${w.title}`, sub: properties.find((p) => p.id === w.propertyId)?.name ?? "" }))}
+        value={workOrderId}
+        onChange={(v) => {
+          setWorkOrderId(v);
+          const wo = wos.find((w) => w.id === v);
+          if (wo && !propertyId) setPropertyId(wo.propertyId);
+        }}
+      />
     </div>
   );
 
@@ -288,15 +289,18 @@ export function RequestForm({
           {/* ใคร */}
           {kind === "contractor" ? (
             <div className="flex flex-col gap-2">
-              <label className={labelCls}>
-                <span className={labelText}>จ้างใคร</span>
-                <select className={field} value={vendorId} onChange={(e) => { setVendorId(e.target.value); if (e.target.value) setVendorName(""); }}>
-                  <option value="">— พิมพ์ชื่อใหม่ด้านล่าง —</option>
-                  {vendors.map((v) => (
-                    <option key={v.id} value={v.id}>{v.name}</option>
-                  ))}
-                </select>
-              </label>
+              <PersonPicker
+                label="จ้างใคร"
+                placeholder="พิมพ์ชื่อช่าง/ร้าน"
+                emptyText="ยังไม่มีในทะเบียน — พิมพ์ชื่อในช่องด้านล่าง"
+                allowClear
+                items={vendors.map((v) => ({ id: v.id, name: v.name, sub: [v.whtPercent ? `หัก ณ ที่จ่าย ${v.whtPercent}%` : "ไม่หัก ณ ที่จ่าย", v.vatRegistered ? "จด VAT" : ""].filter(Boolean).join(" · ") }))}
+                value={vendorId}
+                onChange={(v) => {
+                  setVendorId(v);
+                  if (v) setVendorName("");
+                }}
+              />
               {!vendorId && (
                 <input className={field} placeholder="ชื่อช่าง/ร้าน (ยังไม่อยู่ในทะเบียน)" value={vendorName} onChange={(e) => setVendorName(e.target.value)} aria-label="ชื่อช่างหรือร้าน" />
               )}
@@ -318,22 +322,17 @@ export function RequestForm({
                   )}
                 </div>
               ) : (
-                <label className={labelCls}>
-                  <span className={labelText}>ยื่นแทนใคร</span>
-                  <select className={field} value={beneficiary} onChange={(e) => setBeneficiary(e.target.value)}>
-                    {peopleOptions(null)}
-                  </select>
-                </label>
+                <PersonPicker label="ยื่นแทนใคร" items={peopleItems(null)} value={beneficiary} onChange={setBeneficiary} />
               )}
             </div>
           ) : (
-            <label className={labelCls}>
-              <span className={labelText}>{kind === "ot" ? "ทำ OT ให้ใคร" : "ขอเบิกให้ใคร"}</span>
-              <select className={field} value={beneficiary} onChange={(e) => setBeneficiary(e.target.value)}>
-                {peopleOptions(me.userId)}
-              </select>
-              <span className="text-xs text-(--ink-soft)">{kind === "ot" ? "ลง OT ให้ตัวเองไม่ได้" : "ขอให้ตัวเองไม่ได้ — CEO เป็นคนอนุมัติ"}</span>
-            </label>
+            <PersonPicker
+              label={kind === "ot" ? "ใครทำ OT" : "เบิกให้ใคร"}
+              items={peopleItems(me.userId)}
+              value={beneficiary}
+              onChange={setBeneficiary}
+              hint={kind === "ot" ? "ลง OT ให้ตัวเองไม่ได้" : "ขอให้ตัวเองไม่ได้"}
+            />
           )}
           {person?.isWorker && (kind === "ot" || kind === "advance") && (
             <Notice tone="warn">
@@ -367,7 +366,7 @@ export function RequestForm({
                       <option key={r.id} value={r.id}>{r.label} · {r.percent}%</option>
                     ))}
                   </select>
-                  <span className="text-xs text-(--ink-soft)">แก้อัตราได้ที่ ตั้งค่า</span>
+                  <span className="text-xs text-(--ink-soft)">เปลี่ยนอัตราได้ที่เมนู ตั้งค่า</span>
                 </label>
               )}
               {manualOt && (
@@ -454,7 +453,7 @@ export function RequestForm({
                 <input className={field} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="เช่น ซื้ออะไหล่ปั๊มสระ BS-M1" maxLength={160} />
               </label>
               <label className={labelCls}>
-                <span className={labelText}>ขอเงินไปก่อน (บาท)</span>
+                <span className={labelText}>ขอเงิน (บาท)</span>
                 <input inputMode="decimal" className={field} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" />
               </label>
               {placeFields}
@@ -462,7 +461,7 @@ export function RequestForm({
                 <span className={labelText}>รายละเอียด</span>
                 <textarea rows={2} className={`${field} h-auto py-2`} value={detail} onChange={(e) => setDetail(e.target.value)} />
               </label>
-              <Notice>ได้เงินแล้วต้องเคลียร์ภายใน <strong>{settings.clearDueDays} วัน</strong> — ส่งใบเสร็จของที่ซื้อ + คืนเงินทอน ระบบเตือนเมื่อถึงกำหนด</Notice>
+              <Notice>ได้เงินแล้ว ซื้อเสร็จต้อง<strong>ส่งใบเสร็จ + คืนเงินทอนภายใน {settings.clearDueDays} วัน</strong> — ระบบเตือนเมื่อใกล้ครบกำหนด</Notice>
               <FilePicker role="evidence" files={files} onChange={setFiles} label="ไฟล์ประกอบ (ถ้ามี)" hint="ใบเสนอราคา รูปของที่จะซื้อ" today={today} />
             </>
           )}
@@ -541,7 +540,11 @@ export function RequestForm({
                   <span className="text-(--ink)">{otMinutes ? `${otStart}–${otEnd} · ${hoursText(otMinutes)}` : "—"}</span>
                 </div>
                 {preview?.formula && <div className="rounded-(--radius) bg-(--bg-soft) px-2.5 py-2 text-xs text-(--ink-soft)">{preview.formula}</div>}
-                <MoneyRow strong label="ค่า OT" value={Number.isFinite(otAmount ?? NaN) ? (otAmount as number) : 0} hint={person?.isWorker ? "คิดตามค่าแรงในโมดูลคนงาน" : preview?.rateLabel ?? undefined} />
+                {person ? (
+                  <MoneyRow strong label="ค่า OT" value={Number.isFinite(otAmount ?? NaN) ? (otAmount as number) : 0} hint={person.isWorker ? "คิดตามค่าแรงในโมดูลคนงาน" : preview?.rateLabel ?? undefined} />
+                ) : (
+                  <div className="border-t border-(--line) pt-2 text-sm text-(--ink-soft)">เลือกคนที่ทำ OT ก่อน ระบบจะคิดค่า OT ให้</div>
+                )}
               </>
             )}
             {kind === "expense" && (
@@ -553,7 +556,7 @@ export function RequestForm({
                 {mismatch && <Notice tone="warn">{mismatch}</Notice>}
               </>
             )}
-            {(kind === "cash_advance" || kind === "advance") && <MoneyRow strong label={kind === "advance" ? "เบิกล่วงหน้า" : "ขอเงินไปก่อน"} value={Number.isFinite(parseMoney(amount)) ? parseMoney(amount) : 0} />}
+            {(kind === "cash_advance" || kind === "advance") && <MoneyRow strong label={kind === "advance" ? "เบิกล่วงหน้า" : "ขอเงินไปซื้อของ"} value={Number.isFinite(parseMoney(amount)) ? parseMoney(amount) : 0} />}
             {kind === "advance" && preview && (
               <div className="rounded-(--radius) bg-(--bg-soft) px-2.5 py-2 text-xs text-(--ink-soft)">
                 {preview.cap === null ? "ไม่จำกัดเพดาน" : `เพดานเดือนนี้ ${baht(preview.cap)} · ใช้ไปแล้ว ${baht(preview.capUsed)} · เหลือ ${baht(Math.max(0, preview.cap - preview.capUsed))}`}

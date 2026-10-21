@@ -180,7 +180,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
     if (workerOt) steps.push({ title: "เข้าบัญชีค่าแรงคนงาน", sub: r.status === "paid" ? "จ่ายพร้อมค่าแรงที่หน้าจ่ายเงินคนงาน" : undefined, state: r.status === "paid" ? "done" : "todo" });
     else {
       steps.push({ title: "HR จ่ายเงิน + หลักฐาน", sub: r.paidTotal > 0 ? `จ่ายแล้ว ${baht(r.paidTotal)}${outstanding > 0.005 ? ` · เหลือ ${baht(outstanding)}` : ""}` : undefined, state: r.status === "paid" ? "done" : r.status === "approved" ? "now" : "todo" });
-      if (r.kind === "cash_advance") steps.push({ title: "ผู้เบิกส่งใบเสร็จ + เงินทอน → HR ตรวจ", sub: r.clearedAt ? `ตรวจแล้ว · ${r.clearedByName}` : r.clearStatus === "submitted" ? "ส่งแล้ว รอ HR ตรวจ" : r.clearDueDate ? `ภายใน ${thaiDate(r.clearDueDate)}` : undefined, state: r.clearedAt ? "done" : r.status === "paid" ? "now" : "todo" });
+      if (r.kind === "cash_advance") steps.push({ title: "คนเบิกส่งใบเสร็จ + เงินทอน → HR ตรวจ", sub: r.clearedAt ? `ตรวจแล้ว · ${r.clearedByName}` : r.clearStatus === "submitted" ? "ส่งแล้ว รอ HR ตรวจ" : r.clearDueDate ? `ภายใน ${thaiDate(r.clearDueDate)}` : undefined, state: r.clearedAt ? "done" : r.status === "paid" ? "now" : "todo" });
       if (r.beneficiaryKind !== "vendor") steps.push({ title: "ผู้รับยืนยันได้รับเงิน", sub: r.receivedAt ? thaiDateTime(r.receivedAt) : undefined, state: r.receivedAt ? "done" : r.paidTotal > 0 && !r.payments.every((p) => p.method === "payroll") ? "now" : "todo" });
       if (r.kind === "advance" && r.beneficiaryKind === "worker") steps.push({ title: "หักคืนจากค่าแรงอัตโนมัติ", sub: "ลงเป็น \"เบิกล่วงหน้า\" ในบัญชีค่าแรงแล้ว", state: r.status === "paid" ? "done" : "todo" });
       else if (r.deductAmount > 0) steps.push({ title: r.beneficiaryKind === "worker" ? "หักคืนจากค่าแรงอัตโนมัติ" : "หักคืนในงวดเงินเดือน", sub: r.deductedAt ? `หักแล้ว งวด ${r.deductedPeriod}` : baht(r.deductAmount), state: r.deductedAt || r.beneficiaryKind === "worker" ? "done" : "now" });
@@ -192,13 +192,15 @@ export default async function RequestDetailPage({ params, searchParams }: { para
   const vendor = r.vendorId ? await withRequestsTenant(orgId, (tx) => tx.moneyVendor.findFirst({ where: { orgId, id: r.vendorId! } })) : null;
 
   return (
-    <AppScaffold title={r.code} backHref="/requests" width="max-w-5xl">
+    <AppScaffold title={r.code} backHref="/requests" width="max-w-6xl">
       <div className="flex flex-col gap-4">
         {sp.created && <Notice tone="ok">ส่งแล้ว — {st.next}</Notice>}
-        <div className="flex flex-wrap items-start gap-4">
+        {/* มือถือ: หัวเรื่อง → แผงอนุมัติ/จ่าย → รายละเอียด (ไม่ต้องเลื่อนผ่านประวัติก่อนถึงปุ่ม)
+            จอ ≥1024: รายละเอียดคอลัมน์ซ้าย · ขั้นตอน + ปุ่มคอลัมน์ขวา */}
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
           {/* ───────── ซ้าย: ข้อมูล ───────── */}
-          <div className="flex min-w-0 flex-[999_1_540px] flex-col gap-4">
-            <section className="rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4 sm:p-5">
+          <div className="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-4">
+            <section className="order-1 rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4 sm:p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -208,7 +210,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
                   <h1 className="mt-1.5 text-lg font-bold text-(--ink)">{r.title}</h1>
                   <div className="text-xs text-(--ink-soft)">{r.code} · {meta.label}</div>
                 </div>
-                <div className="text-right">
+                <div className="sm:text-right">
                   <div className="text-xs text-(--ink-soft)">{r.kind === "contractor" ? "จ่ายร้านจริง" : "ยอด"}</div>
                   <div className="text-2xl font-bold tabular-nums text-(--ink)">{baht(r.netAmount)}</div>
                 </div>
@@ -236,7 +238,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
             </section>
 
             {/* ตัวเลข */}
-            <section className="flex flex-col gap-2 rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4 sm:p-5">
+            <section className="order-3 flex flex-col gap-2 rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4 sm:p-5">
               <h2 className="text-sm font-bold text-(--ink)">ที่มาของยอดเงิน</h2>
               {r.kind === "ot" && (
                 <>
@@ -269,7 +271,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
               )}
               {r.kind === "cash_advance" && (
                 <>
-                  <MoneyRow label="ขอเงินไปก่อน" value={r.amount} />
+                  <MoneyRow label="ขอเงินไปซื้อของ" value={r.amount} />
                   {r.paidTotal > 0 && <MoneyRow label="ได้รับไปแล้ว" value={r.paidTotal} />}
                   {r.clearSpent !== null && <MoneyRow label="ใช้จริงตามใบเสร็จ" value={r.clearSpent} minus />}
                   {r.clearReturned !== null && r.clearReturned > 0 && <MoneyRow label="คืนเงินทอน" value={r.clearReturned} minus />}
@@ -299,16 +301,16 @@ export default async function RequestDetailPage({ params, searchParams }: { para
 
             {/* หลักฐาน */}
             {r.attachments.length > 0 && (
-              <section className="flex flex-col gap-4 rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4 sm:p-5">
+              <section className="order-3 flex flex-col gap-4 rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4 sm:p-5">
                 <Files title="ใบเสร็จจากผู้ยื่น" files={receipts} flagsFor={flagsFor} />
                 <Files title="หลักฐาน / ไฟล์ประกอบ" files={r.attachments.filter((a) => a.role === "evidence")} flagsFor={(a) => (dups.get(a.sha256) ? [{ level: "warn", text: `ไฟล์เดียวกับใน ${dups.get(a.sha256)}` }] : [])} />
-                <Files title="ใบเสร็จตอนเคลียร์" files={r.attachments.filter((a) => a.role === "clearing")} flagsFor={(a) => receiptFlags(a, { claimDate: r.workDate, today, maxAgeDays: settings.receiptMaxAgeDays, duplicateOf: dups.get(a.sha256) ?? null }).filter((f) => !f.text.startsWith("วันที่บนใบเสร็จ") || f.level === "block")} />
+                <Files title="ใบเสร็จของที่ซื้อ (ตอนส่งคืนเงินทอน)" files={r.attachments.filter((a) => a.role === "clearing")} flagsFor={(a) => receiptFlags(a, { claimDate: r.workDate, today, maxAgeDays: settings.receiptMaxAgeDays, duplicateOf: dups.get(a.sha256) ?? null }).filter((f) => !f.text.startsWith("วันที่บนใบเสร็จ") || f.level === "block")} />
               </section>
             )}
 
             {/* การจ่าย */}
             {r.payments.length > 0 && (
-              <section className="flex flex-col gap-3 rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4 sm:p-5">
+              <section className="order-3 flex flex-col gap-3 rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4 sm:p-5">
                 <h2 className="text-sm font-bold text-(--ink)">การจ่ายเงิน</h2>
                 {r.payments.map((p) => (
                   <div key={p.id} className={`rounded-(--radius) border border-(--line) p-3 ${p.voided ? "opacity-60" : ""}`}>
@@ -330,7 +332,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
             )}
 
             {/* ประวัติ */}
-            <section className="rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4 sm:p-5">
+            <section className="order-3 rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4 sm:p-5">
               <h2 className="text-sm font-bold text-(--ink)">ประวัติ</h2>
               <ol className="mt-2 flex flex-col gap-2">
                 {events.map((e) => (
@@ -344,7 +346,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
           </div>
 
           {/* ───────── ขวา: ขั้นตอน + ปุ่ม ───────── */}
-          <aside className="flex min-w-0 flex-[1_1_300px] flex-col gap-3 lg:sticky lg:top-4">
+          <aside className="order-2 flex min-w-0 flex-col gap-3 lg:sticky lg:top-4 lg:col-start-2 lg:row-start-1">
             {canDecide(r, viewer) && (
               <DecidePanel id={r.id} level={r.approverLevel} isOt={r.kind === "ot"} forwardsToCeo={r.approverLevel === "hr" && r.needCeo && !viewer.canApproveCeo} firstBy={r.firstDecidedByName} />
             )}

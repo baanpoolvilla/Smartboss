@@ -75,7 +75,7 @@ test("สถานะบอกขั้นต่อไปถูก", () => {
   const base = { approverLevel: "hr" as const, paidTotal: 0, netAmount: 100, clearStatus: null, deductAmount: 0, deductedAt: null };
   assert.equal(statusInfo({ ...base, kind: "advance", status: "pending", approverLevel: "ceo", beneficiaryKind: "worker" }).label, "รอ CEO อนุมัติ");
   assert.equal(statusInfo({ ...base, kind: "ot", status: "paid", beneficiaryKind: "worker" }).label, "เข้าบัญชีค่าแรงแล้ว");
-  assert.equal(statusInfo({ ...base, kind: "cash_advance", status: "paid", beneficiaryKind: "staff", paidTotal: 100 }).label, "จ่ายแล้ว · รอเคลียร์");
+  assert.equal(statusInfo({ ...base, kind: "cash_advance", status: "paid", beneficiaryKind: "staff", paidTotal: 100 }).label, "จ่ายแล้ว · รอส่งใบเสร็จ");
   assert.equal(statusInfo({ ...base, kind: "advance", status: "paid", beneficiaryKind: "staff", paidTotal: 100, deductAmount: 100 }).label, "จ่ายแล้ว · รอหักเงินเดือน");
 });
 
@@ -87,7 +87,7 @@ test("เส้นทางอนุมัติ: HR อนุมัติ · �
   assert.deepEqual(routeFor({ mode: "hr", ceoAbove: null }, 999999), { level: "hr", needCeo: false });
   assert.deepEqual(routeFor({ mode: "hr", ceoAbove: 0 }, 1), { level: "hr", needCeo: true });
   assert.deepEqual(routeFor({ mode: "ceo", ceoAbove: null }, 1), { level: "ceo", needCeo: false });
-  assert.equal(routeText({ mode: "hr", ceoAbove: 5000 }), "HR อนุมัติ · เกิน ฿5,000 ต่อ CEO");
+  assert.equal(routeText({ mode: "hr", ceoAbove: 5000 }), "HR อนุมัติ · ยอดเกิน ฿5,000 ต้องผ่าน CEO ด้วย");
 });
 
 test("สถานะอนุมัติสองขั้น", () => {

@@ -81,15 +81,15 @@ export function SettingsForm({ initial }: { initial: RequestSettings }) {
               </div>
               {routes[k].mode === "hr" && (
                 <label className="flex flex-1 items-center gap-2 text-sm">
-                  <span className="shrink-0 text-(--ink-soft)">ยอดเกิน</span>
+                  <span className="shrink-0 text-(--ink-soft)">ถ้ายอดเกิน</span>
                   <input inputMode="decimal" className={`${fieldNoW} w-28 text-right`} value={routes[k].above} placeholder="ไม่ต้อง" onChange={(e) => setRoute(k, { above: e.target.value })} aria-label={`เกณฑ์ส่งต่อ CEO ของ ${KIND_META[k].label}`} />
-                  <span className="text-(--ink-soft)">บาท ต่อ CEO</span>
+                  <span className="text-(--ink-soft)">บาท ต้องผ่าน CEO ด้วย</span>
                 </label>
               )}
             </li>
           ))}
         </ul>
-        <p className="text-xs text-(--ink-soft)">เว้นช่องว่าง = HR อนุมัติจบ ไม่ผ่าน CEO · ใส่ 0 = ทุกใบต้องผ่าน HR แล้วต่อ CEO</p>
+        <p className="text-xs text-(--ink-soft)">เว้นช่องว่าง = HR อนุมัติจบเลย ไม่ต้องผ่าน CEO · ใส่ 0 = ทุกใบผ่าน HR แล้วต่อ CEO</p>
       </section>
 
       <section className="flex flex-col gap-3 rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4">
@@ -162,7 +162,7 @@ export function SettingsForm({ initial }: { initial: RequestSettings }) {
           <input inputMode="numeric" className={field} value={maxAge} onChange={(e) => setMaxAge(e.target.value)} />
         </label>
         <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-semibold">เบิกเงินไปก่อน ต้องเคลียร์ภายใน (วัน)</span>
+          <span className="font-semibold">เบิกเงินไปซื้อของ ต้องส่งใบเสร็จภายใน (วัน)</span>
           <input inputMode="numeric" className={field} value={clearDays} onChange={(e) => setClearDays(e.target.value)} />
         </label>
       </section>

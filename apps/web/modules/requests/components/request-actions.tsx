@@ -51,7 +51,7 @@ export function DecidePanel({ id, level, isOt, forwardsToCeo = false, firstBy = 
     <section className="flex flex-col gap-3 rounded-(--radius-lg) border-2 border-(--app) bg-(--bg) p-4">
       <div>
         <h2 className="text-base font-bold text-(--ink)">รอคุณ{level === "ceo" ? " (CEO)" : ""}อนุมัติ</h2>
-        <p className="text-xs text-(--ink-soft)">{isOt ? "ดูเวลาสแกนและหลักฐานด้านซ้ายว่าทำงานจริง" : "ดูรายการและหลักฐานด้านซ้ายก่อนตัดสิน"}</p>
+        <p className="text-xs text-(--ink-soft)">{isOt ? "ดูเวลาสแกนและหลักฐานในใบว่าทำงานจริง" : "ดูรายการและหลักฐานในใบก่อนตัดสิน"}</p>
         {forwardsToCeo && <p className="mt-1 text-xs font-medium text-amber-700">ยอดเกินเกณฑ์ — คุณอนุมัติแล้วจะส่งต่อให้ CEO อนุมัติอีกขั้น</p>}
         {firstBy && <p className="mt-1 text-xs font-medium text-emerald-700">{firstBy} (HR) ผ่านแล้ว — เหลือ CEO</p>}
       </div>
@@ -175,8 +175,8 @@ export function PayPanel({
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" className="mt-1 h-4 w-4" checked={closeShort} onChange={(e) => setCloseShort(e.target.checked)} />
           <span>
-            ปิดยอดที่ {baht(amt)} (ไม่จ่ายส่วนที่เหลือ {baht(round2(outstanding - amt))})
-            <span className="block text-xs text-(--ink-soft)">ไม่ติ๊ก = จ่ายบางส่วน ที่เหลือจ่ายทีหลังได้</span>
+            จ่ายแค่ {baht(amt)} แล้วจบใบนี้ (ไม่จ่ายอีก {baht(round2(outstanding - amt))})
+            <span className="block text-xs text-(--ink-soft)">ไม่ติ๊ก = จ่ายก่อนบางส่วน ส่วนที่เหลือจ่ายทีหลังได้</span>
           </span>
         </label>
       )}
@@ -267,7 +267,7 @@ export function ConfirmReceivedButton({ id, amount }: { id: string; amount: numb
   return (
     <section className="flex flex-col gap-2 rounded-(--radius-lg) border-2 border-(--app) bg-(--bg) p-4">
       <h2 className="text-base font-bold text-(--ink)">ได้รับเงิน {baht(amount)} แล้วหรือยัง</h2>
-      <p className="text-xs text-(--ink-soft)">ดูสลิปด้านซ้าย ถ้าได้รับแล้วกดยืนยัน — เป็นหลักฐานฝั่งผู้รับ</p>
+      <p className="text-xs text-(--ink-soft)">ดูสลิปในใบ ถ้าได้รับแล้วกดยืนยัน — เป็นหลักฐานฝั่งผู้รับ</p>
       {error && <Notice tone="danger">{error}</Notice>}
       <button type="button" className={primary} disabled={busy} onClick={() => run(() => confirmReceivedAction({ id }))}>
         {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}ได้รับเงินแล้ว
@@ -291,8 +291,8 @@ export function ClearingSubmit({ id, paid, dueDate, today, maxAgeDays }: { id: s
   return (
     <section className="flex flex-col gap-3 rounded-(--radius-lg) border-2 border-(--app) bg-(--bg) p-4">
       <div>
-        <h2 className="text-base font-bold text-(--ink)">เคลียร์เงินที่เบิกไป {baht(paid)}</h2>
-        {dueDate && <p className={`text-xs ${overdue ? "font-semibold text-red-700" : "text-(--ink-soft)"}`}>{overdue ? "เลยกำหนดเคลียร์แล้ว" : "ต้องเคลียร์ภายใน"} {dueDate}</p>}
+        <h2 className="text-base font-bold text-(--ink)">ส่งใบเสร็จ + เงินทอน <span className="font-normal text-(--ink-soft)">(เบิกไป {baht(paid)})</span></h2>
+        {dueDate && <p className={`text-xs ${overdue ? "font-semibold text-red-700" : "text-(--ink-soft)"}`}>{overdue ? "เลยกำหนดส่งแล้ว" : "ส่งภายใน"} {dueDate}</p>}
       </div>
       <FilePicker
         role="clearing"
@@ -331,7 +331,7 @@ export function ClearingSubmit({ id, paid, dueDate, today, maxAgeDays }: { id: s
       </label>
       {error && <Notice tone="danger">{error}</Notice>}
       <button type="button" className={primary} disabled={busy || !Number.isFinite(s) || s < 0 || (s > 0 && receipts.length === 0)} onClick={() => run(() => submitClearingAction({ id, spent: s, returned: Number.isFinite(r) ? r : 0, note, receipts }))}>
-        {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}ส่งเคลียร์ให้ HR ตรวจ
+        {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}ส่งให้ HR ตรวจ
       </button>
     </section>
   );
@@ -344,7 +344,7 @@ export function ClearingConfirm({ id, paid, spent, returned, holders, worker }: 
   const diff = round2(paid - spent - returned);
   return (
     <section className="flex flex-col gap-3 rounded-(--radius-lg) border-2 border-(--app) bg-(--bg) p-4">
-      <h2 className="text-base font-bold text-(--ink)">ตรวจเคลียร์</h2>
+      <h2 className="text-base font-bold text-(--ink)">ตรวจใบเสร็จ + เงินทอน</h2>
       <div className="rounded-(--radius) bg-(--bg-soft) p-3">
         <MoneyRow label="เบิกไป" value={paid} />
         <MoneyRow label="ใช้จริง (ตามใบเสร็จ)" value={spent} minus />
@@ -370,7 +370,7 @@ export function ClearingConfirm({ id, paid, spent, returned, holders, worker }: 
       </label>
       {error && <Notice tone="danger">{error}</Notice>}
       <button type="button" className={primary} disabled={busy} onClick={() => run(() => confirmClearingAction({ id, returnedTo: returnedTo || null, note }))}>
-        {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}ยืนยันเคลียร์ถูกต้อง
+        {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}ยืนยันว่าถูกต้อง
       </button>
     </section>
   );

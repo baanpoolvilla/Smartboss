@@ -29,7 +29,7 @@ export async function remindRequests(): Promise<{ pending: number; overdueClear:
       if (clear.length > 0) {
         const payers = await usersWithPermission(org.id, REQ_PERMS.pay);
         for (const r of clear) {
-          await notifyClear(org.id, r, [r.beneficiaryUserId, r.createdBy, ...payers.filter((p) => p !== r.beneficiaryUserId)], "เลยกำหนดเคลียร์เงิน");
+          await notifyClear(org.id, r, [r.beneficiaryUserId, r.createdBy, ...payers.filter((p) => p !== r.beneficiaryUserId)], "เลยกำหนดส่งใบเสร็จ + เงินทอน");
           out.overdueClear++;
         }
       }

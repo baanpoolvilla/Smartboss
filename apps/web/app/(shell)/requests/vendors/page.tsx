@@ -25,7 +25,7 @@ export default async function VendorsPage() {
   }));
 
   return (
-    <AppScaffold title="ช่าง/ร้านภายนอก" backHref="/requests" width="max-w-5xl">
+    <AppScaffold title="ช่าง/ร้านภายนอก" backHref="/requests" width="max-w-6xl">
       <div className="flex flex-wrap items-start gap-4">
         <div className="flex min-w-0 flex-[999_1_520px] flex-col gap-3">
           {vendors.length === 0 && <div className="rounded-(--radius-lg) border border-dashed border-(--line) bg-(--bg) p-6 text-center text-sm text-(--ink-soft)">ยังไม่มีในทะเบียน — เพิ่มทางขวา</div>}

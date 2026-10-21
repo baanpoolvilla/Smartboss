@@ -31,25 +31,25 @@ export const KIND_META: Record<
     hint: "ทางด่วน น้ำมัน ซื้อของ ที่จ่ายเงินตัวเองไปก่อน",
   },
   cash_advance: {
-    label: "เบิกเงินไปก่อน",
-    short: "เบิกไปก่อน",
-    who: "ยื่นเอง แล้วเคลียร์ด้วยใบเสร็จ",
+    label: "เบิกเงินไปซื้อของ",
+    short: "เบิกไปซื้อของ",
+    who: "ยื่นเอง ซื้อเสร็จส่งใบเสร็จ + เงินทอน",
     approver: "HR อนุมัติและจ่าย (ยอดสูง → CEO)",
-    hint: "ต้องได้เงินก่อนไปซื้อของ — ซื้อแล้วเอาใบเสร็จ + เงินทอนมาเคลียร์",
+    hint: "ต้องได้เงินก่อนไปซื้อ — ซื้อเสร็จส่งใบเสร็จและคืนเงินทอน",
   },
   advance: {
     label: "เบิกล่วงหน้า",
     short: "เบิกล่วงหน้า",
     who: "ผู้ดูแลบ้าน / HR ขอให้",
     approver: "HR อนุมัติ (ยอดสูง → CEO)",
-    hint: "เบิกเงินก่อนเงินเดือน/ค่าแรงออก — หักคืนอัตโนมัติ",
+    hint: "ขอเงินก่อนเงินเดือน/ค่าแรงออก — หักคืนจากเงินเดือน/ค่าแรงทีหลัง",
   },
   contractor: {
     label: "ค่าช่าง/ร้านภายนอก",
     short: "ช่างภายนอก",
     who: "แอดมินลง",
     approver: "HR อนุมัติและจ่าย (ยอดสูง → CEO)",
-    hint: "จ้างช่างหรือร้านข้างนอก — คิดภาษีหัก ณ ที่จ่ายให้",
+    hint: "จ้างช่างหรือร้านข้างนอก — ระบบคิด VAT และภาษีหัก ณ ที่จ่ายให้",
   },
 };
 
@@ -320,8 +320,8 @@ export function statusInfo(r: {
       if (r.kind === "advance" && r.beneficiaryKind === "worker") return { label: "จ่ายแล้ว · หักจากค่าแรงอัตโนมัติ", tone: "ok", next: "ระบบคนงานหักจากค่าแรงวันถัดไปเอง" };
       if (r.kind === "cash_advance" && r.clearStatus !== "cleared") {
         return r.clearStatus === "submitted"
-          ? { label: "ส่งเคลียร์แล้ว · รอ HR ตรวจ", tone: "warn", next: "HR ตรวจใบเสร็จ + เงินทอน" }
-          : { label: "จ่ายแล้ว · รอเคลียร์", tone: "warn", next: "ผู้เบิกส่งใบเสร็จ + เงินทอน" };
+          ? { label: "ส่งใบเสร็จแล้ว · รอ HR ตรวจ", tone: "warn", next: "HR ตรวจใบเสร็จและเงินทอน" }
+          : { label: "จ่ายแล้ว · รอส่งใบเสร็จ", tone: "warn", next: "คนเบิกส่งใบเสร็จ + คืนเงินทอน" };
       }
       if (r.deductAmount > 0 && !r.deductedAt) {
         return { label: r.beneficiaryKind === "worker" ? "จ่ายแล้ว · หักจากค่าแรงอัตโนมัติ" : "จ่ายแล้ว · รอหักเงินเดือน", tone: "info", next: r.beneficiaryKind === "worker" ? "ระบบคนงานหักเอง" : "HR หักในงวดเงินเดือน" };
@@ -383,8 +383,8 @@ export function routeText(route: ApprovalRoute | undefined): string {
   const r = route ?? DEFAULT_ROUTE;
   if (r.mode === "ceo") return "CEO อนุมัติทุกใบ";
   if (r.ceoAbove === null) return "HR อนุมัติ";
-  if (r.ceoAbove === 0) return "HR → CEO ทุกใบ";
-  return `HR อนุมัติ · เกิน ${baht(r.ceoAbove)} ต่อ CEO`;
+  if (r.ceoAbove === 0) return "ทุกใบผ่าน HR แล้วต่อ CEO";
+  return `HR อนุมัติ · ยอดเกิน ${baht(r.ceoAbove)} ต้องผ่าน CEO ด้วย`;
 }
 
 export interface RequestSettings {

@@ -17,7 +17,7 @@ export default async function RequestSettingsPage() {
   const { session } = await requestsPage(REQ_PERMS.settings);
   const settings = await loadSettings(session.orgId);
   return (
-    <AppScaffold title="ตั้งค่าเบิกจ่าย & OT" backHref="/requests" width="max-w-3xl">
+    <AppScaffold title="ตั้งค่าเบิกจ่าย & OT" backHref="/requests" width="max-w-4xl">
       <div className="flex flex-col gap-4">
         <SettingsForm initial={settings} />
         <section className="rounded-(--radius-lg) border border-dashed border-(--line) bg-(--bg) p-4">
