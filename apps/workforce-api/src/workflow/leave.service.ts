@@ -878,6 +878,22 @@ export class LeaveService {
         if (swapFromRequest === undefined) {
           throw AppError.validation('the day off to swap from was not found or already released');
         }
+        // วันเดิมมีคำขอสลับค้างอยู่แล้ว — ยื่นซ้ำแล้วอนุมัติทั้งคู่ วันใหม่จะได้ทั้งสองวัน (หยุดเกินสิทธิ์)
+        const pendingSwaps = await uow.tx
+          .select({ id: schema.leaveRequests.id })
+          .from(schema.leaveRequests)
+          .where(
+            and(
+              eq(schema.leaveRequests.employmentId, input.employment_id),
+              eq(schema.leaveRequests.leaveTypeId, input.leave_type_id),
+              eq(schema.leaveRequests.swapFromDate, input.swap_from_date),
+              eq(schema.leaveRequests.status, 'SUBMITTED'),
+            ),
+          )
+          .limit(1);
+        if (pendingSwaps.length > 0) {
+          throw AppError.validation('this day off already has a swap request waiting for approval');
+        }
       }
 
       const startsOn = LocalDate.parse(input.starts_on);

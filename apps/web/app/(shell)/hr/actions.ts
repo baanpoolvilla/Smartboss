@@ -99,6 +99,9 @@ function leaveErrorMessage(raw: string): string {
   if (raw.includes("swap from was not found")) {
     return "วันเดิมที่จะสลับไม่มีผลแล้ว (อาจถูกยกเลิกไปก่อน) — รีเฟรชหน้าแล้วลองใหม่";
   }
+  if (raw.includes("already has a swap request")) {
+    return "วันนี้มีคำขอสลับรออนุมัติอยู่แล้ว — ยกเลิกคำขอเดิมก่อนถ้าจะเปลี่ยนวันใหม่";
+  }
   return raw;
 }
 

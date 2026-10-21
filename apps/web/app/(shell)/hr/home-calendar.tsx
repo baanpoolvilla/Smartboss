@@ -138,12 +138,22 @@ export async function renderCalendarTab(monthParam: string | undefined): Promise
     }
   }
 
+  // คำขอสลับวันหยุดที่ยังรออนุมัติยังไม่มีผล — ไม่ขึ้นที่วันใหม่ (วันเดิมยังเป็นวันหยุดอยู่
+  // จนกว่าจะอนุมัติ) แต่ผูกไว้กับวันเดิมแทน คีย์ "employment:วันเดิม"
+  const isPendingSwap = (e: { swap_from_date: string | null; status: string }) =>
+    e.swap_from_date !== null && e.status === "PENDING";
+  const pendingSwapByOldDay = new Map(
+    (calendar?.items ?? []).filter(isPendingSwap).map((e) => [`${e.employment_id}:${e.swap_from_date}`, e]),
+  );
+
   // วางคำขอลงปฏิทินรายวัน — endpoint คืนเฉพาะใบที่ยังมีผล (PENDING/APPROVED)
   const entriesByDate: Record<string, DayEntry[]> = {};
   for (const entry of calendar?.items ?? []) {
+    if (isPendingSwap(entry)) continue;
     for (const date of datesBetween(entry.starts_on, entry.ends_on)) {
       if (date < from || date > to) continue;
       const isMine = entry.employment_id === me.employment_id;
+      const swap = pendingSwapByOldDay.get(`${entry.employment_id}:${date}`);
       (entriesByDate[date] ??= []).push({
         employmentId: entry.employment_id,
         name: entry.display_name,
@@ -156,6 +166,8 @@ export async function renderCalendarTab(monthParam: string | undefined): Promise
         // สิทธิ์ (เช่น "วันหยุดประจำเดือน") ไม่ใช่การลา — ให้ปฏิทินแยกมันออก
         // จากลาจริงแทนที่จะปนกันเป็น "ลา" เหมือนเดิม
         autoApprove: entry.leave_type_auto_approve === true,
+        pendingSwapTo: swap?.starts_on,
+        pendingSwapRequestId: swap && isMine ? myRequestIdByDate.get(swap.starts_on) : undefined,
       });
     }
   }
@@ -163,7 +175,7 @@ export async function renderCalendarTab(monthParam: string | undefined): Promise
   // รายชื่อในแถบซ้าย — เอาจากคนที่มีวันหยุดเดือนนี้ เรียงตามชื่อให้หาเจอง่าย
   const legend: PersonLegend[] = [
     ...new Map(
-      (calendar?.items ?? []).map((e) => [
+      (calendar?.items ?? []).filter((e) => !isPendingSwap(e)).map((e) => [
         e.employment_id,
         { id: e.employment_id, name: e.display_name },
       ]),

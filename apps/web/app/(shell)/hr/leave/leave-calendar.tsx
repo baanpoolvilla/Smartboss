@@ -41,6 +41,10 @@ export interface DayEntry {
   leaveTypeId?: string;
   /** true = สิทธิ์ (เช่น "วันหยุดประจำเดือน") ไม่ใช่การลาที่ต้องรออนุมัติ */
   autoApprove: boolean;
+  /** วันนี้มีคำขอสลับไปวันอื่นค้างรออนุมัติ — วันใหม่ยังไม่ขึ้นปฏิทินจนกว่าจะอนุมัติ */
+  pendingSwapTo?: string;
+  /** id คำขอสลับนั้น — มีเฉพาะแถวของตัวเอง ใช้ปุ่มยกเลิกคำขอสลับ */
+  pendingSwapRequestId?: string;
 }
 
 export interface PersonLegend {
@@ -691,7 +695,7 @@ export function LeaveCalendar({
                       return (
                         <span
                           key={`${entry.employmentId}-${index}`}
-                          title={`${labelOf(entry)} · ${entry.autoApprove ? "วันหยุดประจำ (สิทธิ์)" : entry.status === "APPROVED" ? "ลา · อนุมัติแล้ว" : "ลา · รออนุมัติ"}`}
+                          title={`${labelOf(entry)} · ${entry.autoApprove ? "วันหยุดประจำ (สิทธิ์)" : entry.status === "APPROVED" ? "ลา · อนุมัติแล้ว" : "ลา · รออนุมัติ"}${entry.pendingSwapTo ? ` · ขอสลับไป ${entry.pendingSwapTo} (รออนุมัติ)` : ""}`}
                           className={`truncate rounded-sm px-1.5 text-[10.5px] leading-[18px] ${index >= MAX_PER_DAY ? "hidden xl:block" : ""}`}
                           style={{
                             borderLeft: `3px solid hsl(${hue} 65% 45%)`,
@@ -909,6 +913,11 @@ function DayDialog({
               ? "มีผลแล้ว"
               : "รออนุมัติ — ยังถูกนับเป็นขาดงานจนกว่าจะอนุมัติ"}
           </p>
+          {mine.pendingSwapTo && (
+            <p className="rounded-(--radius) border border-(--line) bg-(--bg) px-3 py-2 text-sm text-(--ink)">
+              ขอสลับไปวันที่ <strong>{mine.pendingSwapTo}</strong> แล้ว · รออนุมัติ — วันนี้ยังเป็นวันหยุดของคุณจนกว่าจะอนุมัติ
+            </p>
+          )}
 
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-(--ink-soft)">ชื่อที่แสดงบนปฏิทิน</span>
@@ -925,7 +934,7 @@ function DayDialog({
           </label>
 
           <div className="flex flex-col gap-2 border-t border-(--line) pt-3">
-            {mine.requestId && mine.leaveTypeId && (
+            {mine.requestId && mine.leaveTypeId && !mine.pendingSwapTo && (
               <Button
                 type="button"
                 variant="outline"
@@ -933,6 +942,16 @@ function DayDialog({
                 onClick={() => onStartSwap(mine)}
               >
                 ⇄ สลับวันหยุดนี้ไปวันอื่น (ต้องรออนุมัติ)
+              </Button>
+            )}
+            {mine.pendingSwapRequestId && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                onClick={() => onCancelDay(mine.pendingSwapRequestId!)}
+              >
+                ยกเลิกคำขอสลับ (วันหยุดอยู่วันนี้ตามเดิม)
               </Button>
             )}
             {mine.requestId && (
