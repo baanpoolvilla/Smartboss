@@ -9,6 +9,7 @@ import { companyFilesManifest } from "@/modules/company-files/manifest";
 import { exampleManifest } from "@/modules/example/manifest";
 import { hrManifest } from "@/modules/hr/manifest";
 import { dailyWorkerManifest } from "@/modules/daily_worker/manifest";
+import { requestsManifest } from "@/modules/requests/manifest";
 import { maintenanceManifest } from "@/modules/maintenance/manifest";
 import { reportTaskManifest } from "@/modules/report_task/manifest";
 import { chatReportManifest } from "@/modules/report_task/chat-report-manifest";
@@ -82,6 +83,8 @@ export const moduleRegistry: ModuleManifest[] = [
   hrManifest,
   // คนงานรายวัน — เปิดตามโมดูลบุคคล เห็นเฉพาะคนที่มีสิทธิ์ (modules/daily_worker)
   dailyWorkerManifest,
+  // เบิกจ่าย & OT — เปิดตามโมดูลบุคคล (modules/requests)
+  requestsManifest,
   // พอร์ตมาจากแอป easyboss-workspace ที่เคยรันเดี่ยว ๆ
   reportTaskManifest,
   // แชท + รายงาน — แยกออกจากรายงานและงานเป็นโมดูลหลักของตัวเอง (เปิดตาม report_task)

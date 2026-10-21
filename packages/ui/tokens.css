@@ -80,6 +80,18 @@
 }
 
 /**
+ * ธีมของโมดูลเบิกจ่าย & OT — ขาว-ม่วง ใช้สีประจำโมดูลการเงิน (--mod-financial) เป็นแกน
+ */
+[data-app="requests"] {
+  --app: #7c3aed; /* violet 600 */
+  --app-strong: #6d28d9; /* violet 700 — ตัวอักษร/ไอคอนบนพื้นอ่อน */
+  --app-accent: #7c3aed;
+  --app-soft: #ede9fe; /* violet 100 — แถบเมนูที่เลือก */
+  --app-pale: var(--mod-financial-bg); /* #F4F0FF */
+  --brand-green: #7c3aed;
+}
+
+/**
  * ธีมของโมดูลรายงานและงาน — ขาว-เทา (Slate) ตามสีประจำโมดูลในข้อ 4 ของ spec
  * ใช้ค่าจาก --mod-report เป็นแกน ไม่ประกาศ hex ใหม่นอกไฟล์นี้
  *

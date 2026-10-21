@@ -240,6 +240,8 @@ export function maintenanceHrefFor(type: string, referenceId: string | null): st
   if (type === "purchase_order" && referenceId) return `/maintenance/purchase-orders/${referenceId}`;
   if (type === "pm") return "/maintenance/pm";
   if (type === "expense") return "/maintenance/expenses";
+  // เบิกจ่าย & OT — referenceId = id ของคำขอ (modules/requests/lib/notify.ts)
+  if (type.startsWith("req_") && referenceId) return `/requests/${referenceId}`;
   // HR ไม่มีหน้ารายละเอียดต่อคำขอแยกให้ลิงก์ตรง (และคำขอลาหลายวันในครั้ง
   // เดียวก็กลายเป็นหลาย request id แยกกันอยู่แล้ว — ดู hr-notify.ts) พาไปหน้า
   // รายการที่อนุมัติได้เลยแทน

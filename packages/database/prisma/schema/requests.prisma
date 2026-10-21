@@ -1,0 +1,226 @@
+// ═══════════════════════════════════════════════════════════════════════
+//  schema "requests" — โมดูลเบิกจ่าย & OT (OT · เบิกล่วงหน้า · เบิกค่าใช้จ่าย ·
+//  เบิกเงินไปก่อนแล้วเคลียร์ · ค่าช่าง/ร้านภายนอก · เงินสดย่อย · ทะเบียนผู้รับจ้าง)
+//
+//  แยกตามบริษัทด้วย org_id + RLS (FORCE) แบบเดียวกับ schema daily_worker — อ่าน/เขียนได้
+//  เฉพาะใน withRequestsTenant() (apps/web/modules/requests/lib/db.ts) · application role
+//  ไม่มีสิทธิ์ DELETE: ยกเลิกด้วยช่อง voided/cancelled เก็บประวัติไว้เสมอ (ผู้ใช้ 21/10/2569)
+// ═══════════════════════════════════════════════════════════════════════
+
+/// คำขอหนึ่งใบ — ใครยื่น ของใคร เท่าไหร่ ใครอนุมัติ จ่ายแล้วเท่าไหร่ หลักฐานอะไร
+model MoneyRequest {
+  id              String    @id @default(uuid())
+  orgId           String    @map("org_id")
+  /// REQ-2569-0001
+  code            String
+  /// ot | advance | expense | cash_advance | contractor
+  kind            String
+  /// pending | approved | rejected | paid | cancelled
+  status          String    @default("pending")
+  title           String
+  detail          String    @default("")
+
+  /// ผู้ได้เงิน — พนักงาน/คนงาน (core.users.id) · ค่าช่างภายนอกใช้ vendor แทน
+  beneficiaryUserId String? @map("beneficiary_user_id")
+  beneficiaryName   String  @map("beneficiary_name")
+  /// staff | worker | vendor
+  beneficiaryKind   String  @map("beneficiary_kind")
+  /// workforce.employments.id ของผู้ได้เงิน (คนงาน: ผูกบัญชีค่าแรง · พนักงาน: เงินเดือน)
+  employmentId      String? @map("employment_id")
+  vendorId          String? @map("vendor_id")
+
+  propertyId      String?   @map("property_id")
+  propertyName    String?   @map("property_name")
+  workOrderId     String?   @map("work_order_id")
+  workOrderCode   String?   @map("work_order_code")
+
+  /// วันที่ทำงาน (OT) / วันที่จ่าย-ซื้อ (ค่าใช้จ่าย) ตามเวลาไทย
+  workDate        DateTime  @map("work_date") @db.Date
+  otStart         String?   @map("ot_start")
+  otEnd           String?   @map("ot_end")
+  otMinutes       Int?      @map("ot_minutes")
+  otPercent       Decimal?  @map("ot_percent") @db.Decimal(6, 2)
+  otRateLabel     String?   @map("ot_rate_label")
+  /// ฐานที่ใช้คิด (เงินเดือน/ค่าแรงต่อวัน) ณ ตอนยื่น — เก็บไว้ ยอดไม่เปลี่ยนตามการปรับเงินเดือนทีหลัง
+  otBase          Decimal?  @map("ot_base") @db.Decimal(12, 2)
+  /// monthly | daily | manual
+  otBaseKind      String?   @map("ot_base_kind")
+
+  /// ยอดก่อนภาษี (ค่าช่างภายนอก) / ยอดที่ขอ (อื่น ๆ)
+  amount          Decimal   @db.Decimal(12, 2)
+  vatPercent      Decimal   @default(0) @map("vat_percent") @db.Decimal(5, 2)
+  vatAmount       Decimal   @default(0) @map("vat_amount") @db.Decimal(12, 2)
+  whtPercent      Decimal   @default(0) @map("wht_percent") @db.Decimal(5, 2)
+  whtAmount       Decimal   @default(0) @map("wht_amount") @db.Decimal(12, 2)
+  /// ยอดที่ต้องจ่ายจริง = amount + vat − wht
+  netAmount       Decimal   @map("net_amount") @db.Decimal(12, 2)
+  /// รายการย่อย [{item, amount}]
+  lines           Json?
+  /// ไฟล์แนบ [{url,name,mime,size,sha256,role,by,at,ai?}] — role: evidence|receipt|slip|clearing
+  attachments     Json      @default("[]")
+
+  createdBy       String    @map("created_by")
+  createdByName   String    @map("created_by_name")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// hr | ceo — ใครต้องอนุมัติใบนี้ (คำนวณตอนยื่น)
+  approverLevel   String    @map("approver_level")
+  decidedBy       String?   @map("decided_by")
+  decidedByName   String?   @map("decided_by_name")
+  decidedAt       DateTime? @map("decided_at") @db.Timestamptz(6)
+  decisionNote    String?   @map("decision_note")
+  cancelledByName String?   @map("cancelled_by_name")
+  cancelledAt     DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason    String?   @map("cancel_reason")
+
+  /// ผู้รับกด "ได้รับเงินแล้ว"
+  receivedAt      DateTime? @map("received_at") @db.Timestamptz(6)
+
+  /// ส่วนที่ต้องหักคืน (เบิกล่วงหน้าของพนักงาน / เงินเบิกไปก่อนที่ไม่คืน) — หักผ่านงวดเงินเดือน
+  deductAmount    Decimal   @default(0) @map("deduct_amount") @db.Decimal(12, 2)
+  deductedAt      DateTime? @map("deducted_at") @db.Timestamptz(6)
+  deductedByName  String?   @map("deducted_by_name")
+  deductedPeriod  String?   @map("deducted_period")
+
+  /// เบิกเงินไปก่อน: วันกำหนดเคลียร์ · ยอดใช้จริง · เงินทอนที่คืน · สถานะเคลียร์ (submitted | cleared)
+  clearDueDate    DateTime? @map("clear_due_date") @db.Date
+  clearStatus     String?   @map("clear_status")
+  clearSpent      Decimal?  @map("clear_spent") @db.Decimal(12, 2)
+  clearReturned   Decimal?  @map("clear_returned") @db.Decimal(12, 2)
+  clearNote       String?   @map("clear_note")
+  clearedAt       DateTime? @map("cleared_at") @db.Timestamptz(6)
+  clearedByName   String?   @map("cleared_by_name")
+
+  /// ลิงก์ไปของในโมดูลอื่นที่ใบนี้สร้างให้ (ไว้ยกเลิกตามกัน และกันลงซ้ำ)
+  dwOtEntryId     String?   @map("dw_ot_entry_id")
+  dwPaymentId     String?   @map("dw_payment_id")
+  maintenanceExpenseId String? @map("maintenance_expense_id")
+
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([orgId, code])
+  @@index([orgId, status])
+  @@index([orgId, workDate])
+  @@index([orgId, beneficiaryUserId])
+  @@map("requests")
+  @@schema("requests")
+}
+
+/// การจ่ายเงินของคำขอ — จ่ายหลายครั้งได้ · ยกเลิกด้วย voided_* (ไม่ลบ)
+model MoneyRequestPayment {
+  id            String    @id @default(uuid())
+  orgId         String    @map("org_id")
+  requestId     String    @map("request_id")
+  amount        Decimal   @db.Decimal(12, 2)
+  /// transfer | cash | petty_cash | payroll | worker_ledger
+  method        String
+  paidOn        DateTime  @map("paid_on") @db.Date
+  /// เงินสดย่อยของใคร (method = petty_cash)
+  pettyHolderId String?   @map("petty_holder_id")
+  payrollPeriod String?   @map("payroll_period")
+  slips         Json      @default("[]")
+  note          String    @default("")
+  byUserId      String    @map("by_user_id")
+  byName        String    @map("by_name")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  voidedAt      DateTime? @map("voided_at") @db.Timestamptz(6)
+  voidedByName  String?   @map("voided_by_name")
+  voidReason    String?   @map("void_reason")
+
+  @@index([orgId, requestId])
+  @@map("payments")
+  @@schema("requests")
+}
+
+/// ประวัติทุกการกระทำของคำขอ — เพิ่มได้อย่างเดียว
+model MoneyRequestEvent {
+  id        String   @id @default(uuid())
+  orgId     String   @map("org_id")
+  requestId String?  @map("request_id")
+  at        DateTime @default(now()) @db.Timestamptz(6)
+  byUserId  String   @map("by_user_id")
+  byName    String   @map("by_name")
+  /// create | approve | reject | cancel | pay | pay_void | receive | clear_submit | clear_confirm | deduct | vendor | petty | settings
+  action    String
+  summary   String
+  detail    Json?
+
+  @@index([orgId, requestId])
+  @@index([orgId, at])
+  @@map("events")
+  @@schema("requests")
+}
+
+/// ทะเบียนช่าง/ร้านภายนอก
+model MoneyVendor {
+  id            String   @id @default(uuid())
+  orgId         String   @map("org_id")
+  name          String
+  /// person | company
+  kind          String   @default("person")
+  taxId         String   @default("") @map("tax_id")
+  phone         String   @default("")
+  address       String   @default("")
+  bankName      String   @default("") @map("bank_name")
+  bankAccount   String   @default("") @map("bank_account")
+  accountName   String   @default("") @map("account_name")
+  /// % หัก ณ ที่จ่ายตั้งต้นของรายนี้
+  whtPercent    Decimal  @default(3) @map("wht_percent") @db.Decimal(5, 2)
+  /// จด VAT (ราคาที่กรอกเป็นก่อน VAT แล้วบวก VAT ให้)
+  vatRegistered Boolean  @default(false) @map("vat_registered")
+  note          String   @default("")
+  active        Boolean  @default(true)
+  createdBy     String   @map("created_by")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([orgId])
+  @@map("vendors")
+  @@schema("requests")
+}
+
+/// เงินสดย่อย — คนถือเงิน (แอดมิน/HR) แต่ละคนมียอดของตัวเอง = ผลรวม delta ที่ยังไม่ยกเลิก
+model MoneyPettyCashEntry {
+  id           String    @id @default(uuid())
+  orgId        String    @map("org_id")
+  holderUserId String    @map("holder_user_id")
+  holderName   String    @map("holder_name")
+  /// top_up (+) | spend (−) | return (+) | adjust (±)
+  kind         String
+  delta        Decimal   @db.Decimal(12, 2)
+  requestId    String?   @map("request_id")
+  paymentId    String?   @map("payment_id")
+  note         String    @default("")
+  attachments  Json      @default("[]")
+  byUserId     String    @map("by_user_id")
+  byName       String    @map("by_name")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  voidedAt     DateTime? @map("voided_at") @db.Timestamptz(6)
+  voidedByName String?   @map("voided_by_name")
+  voidReason   String?   @map("void_reason")
+
+  @@index([orgId, holderUserId])
+  @@map("petty_cash_entries")
+  @@schema("requests")
+}
+
+/// ค่าตั้งของบริษัท
+model MoneyRequestSettings {
+  orgId             String   @id @map("org_id")
+  /// [{id,label,percent}] — อัตรา OT ให้เลือกตอนลง (ค่าแรก = ค่าเริ่มต้น)
+  otRates           Json     @map("ot_rates")
+  /// none | baht | days — เพดานเบิกล่วงหน้าต่อคนต่อเดือน
+  advanceCapMode    String   @default("baht") @map("advance_cap_mode")
+  advanceCapValue   Decimal  @default(3000) @map("advance_cap_value") @db.Decimal(12, 2)
+  /// [0,1,2,3,5] — % หัก ณ ที่จ่ายให้เลือก
+  whtRates          Json     @map("wht_rates")
+  vatPercent        Decimal  @default(7) @map("vat_percent") @db.Decimal(5, 2)
+  /// ใบเสร็จเก่ากว่านี้ (วัน) ขึ้นเตือน
+  receiptMaxAgeDays Int      @default(60) @map("receipt_max_age_days")
+  /// เบิกเงินไปก่อน ต้องเคลียร์ภายในกี่วัน
+  clearDueDays      Int      @default(7) @map("clear_due_days")
+  updatedBy         String   @map("updated_by")
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("settings")
+  @@schema("requests")
+}

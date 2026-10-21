@@ -24,6 +24,7 @@ import {
 } from "@/lib/workforce-provisioning";
 import { assertManageableUser, syncUserToWorkforce } from "@/modules/admin/data/user-guards";
 import { DW_PERMS } from "@/modules/daily_worker/permissions";
+import { REQ_PERMS } from "@/modules/requests/permissions";
 import {
   BASELINE_PERMS,
   ENABLED_MODULES,
@@ -459,6 +460,11 @@ export async function setRolePermissionsAction(formData: FormData) {
   if (picked.some((p) => p.code === DW_PERMS.manage || p.code === DW_PERMS.override || p.code === DW_PERMS.pay) && !picked.some((p) => p.code === DW_PERMS.view)) {
     const view = await prisma.permission.findUnique({ where: { code: DW_PERMS.view }, select: { id: true, code: true } });
     if (view) valid.push(view);
+  }
+  // เบิกจ่าย & OT: ได้สิทธิ์ตัวไหนของโมดูลก็ต้องเข้าโมดูลได้ (เมนูหลักผูกกับ access) — ติ๊กให้เอง
+  if (picked.some((p) => p.code.startsWith("requests.") && p.code !== REQ_PERMS.access) && !valid.some((p) => p.code === REQ_PERMS.access)) {
+    const access = await prisma.permission.findUnique({ where: { code: REQ_PERMS.access }, select: { id: true, code: true } });
+    if (access) valid.push(access);
   }
 
   await prisma.$transaction([

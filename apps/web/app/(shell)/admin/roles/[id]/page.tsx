@@ -12,6 +12,7 @@ import { HR_PERM_LABELS } from "@/modules/hr/permissions";
 import { MAINT_PERM_LABELS } from "@/modules/maintenance/permissions";
 import { ADS_PERM_LABELS } from "@/modules/ads/permissions";
 import { DW_PERM_LABELS } from "@/modules/daily_worker/permissions";
+import { REQ_PERM_LABELS } from "@/modules/requests/permissions";
 import { getRole, listPermissionCatalog, listRoleHolders } from "@/modules/admin/data/roles";
 import { listDepartments } from "@/modules/admin/data/departments";
 import {
@@ -38,6 +39,7 @@ const PERM_LABELS: Record<string, string> = {
   ...MAINT_PERM_LABELS,
   ...ADS_PERM_LABELS,
   ...DW_PERM_LABELS,
+  ...REQ_PERM_LABELS,
 };
 
 export default async function RoleDetailPage({

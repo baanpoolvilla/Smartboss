@@ -132,6 +132,15 @@ export const DAILY_WORKER_PERMS = ["daily_worker.view", "daily_worker.manage", "
 export const DAILY_WORKER_PAY_PERM = "daily_worker.pay";
 
 /**
+ * โมดูลเบิกจ่าย & OT (apps/web/modules/requests/permissions.ts) — อยู่ในแคตตาล็อกใต้โมดูล hr
+ * migration 20261021120000_requests_module ให้บริษัทที่มีอยู่แล้วด้วยชุดเดียวกับข้างล่าง
+ */
+export const REQUESTS_PERMS = [
+  "requests.access", "requests.file_others", "requests.approve", "requests.approve_ceo",
+  "requests.pay", "requests.petty_cash", "requests.view_all", "requests.settings",
+];
+
+/**
  * สิทธิ์พื้นฐานที่ **ทุกบทบาทได้รับ** — คือคำตอบของกติกา "ทุกคนเห็นและเข้าถึงได้
  * ทุกโมดูล แต่สิทธิ์การใช้งานในแต่ละโมดูลต่างกัน"
  *
@@ -183,6 +192,8 @@ export const BASELINE_PERMS = [
   // ยังต้องเป็น ADMIN — เห็นเมนูเฉพาะบริษัทที่เปิดใช้โมดูลนี้ที่ /admin/modules
   "company_files.access",
   "company_files.upload",
+  // เบิกจ่าย & OT — ทุกคนยื่นเบิกค่าใช้จ่ายของตัวเองได้ (ทางด่วน น้ำมัน ซื้อของ)
+  "requests.access",
 ];
 
 /**
@@ -192,7 +203,9 @@ export const BASELINE_PERMS = [
 const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
   // อนุมัติ PR/PO เป็นของ CEO คนเดียว (หน้า PR ขึ้น "รอ CEO อนุมัติ") — IT ดูแล/ลบ/ดำเนินการได้
   // ผ่าน maintenance.admin แต่ไม่อนุมัติ และไม่ต้องได้แจ้งเตือน PR ใหม่ทุกใบ
-  ADMIN: [...CORE_PERMS, ...HR_PERMS, ...MAINT_PERMS.filter((p) => p !== "maintenance.po.approve"), ...REPORT_TASK_PERMS, ...CHAT_PERMS, ...COMPANY_FILES_PERMS, ...ADS_PERMS],
+  ADMIN: [...CORE_PERMS, ...HR_PERMS, ...MAINT_PERMS.filter((p) => p !== "maintenance.po.approve"), ...REPORT_TASK_PERMS, ...CHAT_PERMS, ...COMPANY_FILES_PERMS, ...ADS_PERMS,
+    // เบิกจ่าย & OT: แอดมินลง OT/ค่าช่างให้คนอื่น ถือเงินสดย่อย ดูทุกใบ (ไม่อนุมัติ ไม่จ่าย)
+    "requests.file_others", "requests.petty_cash", "requests.view_all"],
   CEO: [
     "core.admin", "core.user.view", "core.role.view", "core.audit.view",
     // ผู้บริหารเป็นคนกำหนดว่าบริษัทนี้ถือว่าอะไรคือ "ทำงานได้ดี"
@@ -213,6 +226,8 @@ const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
     "chat.sticker.manage",
     // คนงานรายวัน: ดูยอดเงิน + ตั้งค่าแรง (ไม่ทำงานหน้างาน) — ผู้ใช้ตกลง 19/10/2569
     "daily_worker.view", DAILY_WORKER_PAY_PERM,
+    // เบิกจ่าย & OT: อนุมัติทุกระดับ (เบิกล่วงหน้า + ใบที่ HR ยื่นเอง) — ผู้ใช้กำหนด 21/10/2569
+    "requests.file_others", "requests.approve", "requests.approve_ceo", "requests.view_all", "requests.settings",
   ],
   // หัวหน้างานเข้าหลังบ้านได้ แต่ได้แค่ "ดูแลคน" ไม่ใช่ "ตั้งค่าระบบ" —
   // จัดการผู้ใช้และดูบทบาทได้ แต่แก้บทบาท/สิทธิ์ เปิดปิดโมดูล ตั้งค่าบริษัท
@@ -233,6 +248,7 @@ const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
     // หัวหน้างานมอบหมายงาน จัดปฏิทินทีม คุมหัวข้อรายงาน และรับเรื่องแจ้งปัญหาได้
     "report_task.task.manage", "report_task.calendar.manage", "report_task.report.manage",
     "report_task.activity.view", "report_task.issue.manage",
+    "requests.file_others",
   ],
   // เจ้าหน้าที่บุคคล = ผู้ "จัดทำ" งวดเงินเดือน — ไม่ได้สิทธิ์อนุมัติ
   // แยกหน้าที่ตามที่ workforce บังคับ: คนเตรียมงวดอนุมัติงวดตัวเองไม่ได้
@@ -243,6 +259,8 @@ const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
     "report_task.calendar.manage",
     ...DAILY_WORKER_PERMS,
     DAILY_WORKER_PAY_PERM,
+    // เบิกจ่าย & OT: HR อนุมัติ + จ่ายเงิน + ถือเงินสดย่อย (ใบที่ HR ยื่นเองไป CEO)
+    "requests.file_others", "requests.approve", "requests.pay", "requests.petty_cash", "requests.view_all", "requests.settings",
   ],
   // งานการเงิน — ตัวเลขจัดซื้อและค่าใช้จ่ายของงานซ่อมบำรุงที่ไม่อยู่ในชุดพื้นฐาน
   ACCOUNTANT: [
@@ -251,6 +269,8 @@ const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
   CARETAKER: [
     // ผู้ดูแลบ้านคุมคนงานหน้างาน — ลงวันหยุด/OT ให้คนงาน (โมดูลคนงานรายวัน)
     ...DAILY_WORKER_PERMS,
+    // ขอเบิกล่วงหน้า/ลง OT ให้คนงานที่ดูแล
+    "requests.file_others",
     "maintenance.workorder.manage",
     "maintenance.asset.manage", "maintenance.pm.manage",
     "maintenance.po.view", "maintenance.expense.view",

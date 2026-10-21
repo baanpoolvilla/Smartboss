@@ -46,6 +46,8 @@ export const TENANT_SCOPED_MODELS = new Set<string>([
   "AdsAccount", "AdsCampaign", "AdsAdGroup", "AdsCampaignDaily", "AdsAdGroupDaily",
   "AdsKeywordDaily", "AdsSearchTermDaily", "AdsKpiBenchmark", "AdsAnalysisSetting",
   "AdsAiReport", "AdsAiAction", "AdsSyncLog",
+  // requests (เบิกจ่าย & OT) — มี RLS ของตัวเองด้วย ชั้นนี้เป็นตัวเตือนเพิ่ม
+  "MoneyRequest", "MoneyRequestPayment", "MoneyRequestEvent", "MoneyVendor", "MoneyPettyCashEntry", "MoneyRequestSettings",
 ]);
 
 /** operation ที่ "ต้อง" มี where ผูก orgId (list/bulk) — findUnique/update/delete

@@ -16,6 +16,7 @@ import { claimSweep, releaseSweep } from "@/modules/report_task/lib/server/sweep
 import { runReportPenaltySweep } from "@/modules/report_task/lib/server/report-penalty-sweep-run";
 import { runTaskPenaltySweep } from "@/modules/report_task/lib/server/task-penalty-sweep-run";
 import { remindProjectStatusUpdates } from "@/modules/report_task/lib/server/project-reminders";
+import { remindRequests } from "@/modules/requests/lib/cron";
 
 export const runtime = "nodejs";
 
@@ -153,6 +154,10 @@ export async function GET(req: NextRequest) {
     Object.assign(result, { otPending: await notifyPendingOvertime() });
   }
   // วันศุกร์: เตือนเจ้าของโปรเจกต์ที่ยังไม่อัปเดตสถานะสัปดาห์นี้ (วันอื่นข้ามเอง · &force=1 รันได้ทุกวัน)
+  // เบิกจ่าย & OT — เตือนใบรออนุมัติเกิน 24 ชม. + เบิกเงินไปก่อนที่เลยกำหนดเคลียร์ (modules/requests/lib/cron.ts)
+  if (task === "requests" || task === "all") {
+    Object.assign(result, { requests: await remindRequests().catch((error: unknown) => ({ error: String(error) })) });
+  }
   if (task === "project-reminders" || task === "all") {
     try {
       Object.assign(result, { projectReminders: await remindProjectStatusUpdates({ force: url.searchParams.get("force") === "1" }) });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@smartboss/auth";
 import { canServeCompanyFileKey } from "@/modules/company-files/lib/serve-access";
+import { canServeRequestFileKey } from "@/modules/requests/lib/serve-access";
 import {
   getSignedFileUrl,
   readStoredFile,
@@ -67,6 +68,11 @@ export async function GET(
    */
   if (ownedByOrg && session.orgId && joined.startsWith(`${session.orgId}/company-files/`)) {
     const allowed = await canServeCompanyFileKey(session.orgId, session.userId, joined);
+    if (!allowed) return new NextResponse("Forbidden", { status: 403 });
+  }
+  // เบิกจ่าย & OT — ใบเสร็จ/สลิปเห็นเฉพาะคนที่เกี่ยวกับใบนั้น (modules/requests/lib/serve-access.ts)
+  if (ownedByOrg && session.orgId && joined.startsWith(`${session.orgId}/requests/`)) {
+    const allowed = await canServeRequestFileKey(session.orgId, session, joined);
     if (!allowed) return new NextResponse("Forbidden", { status: 403 });
   }
 
