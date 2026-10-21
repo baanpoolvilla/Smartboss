@@ -109,7 +109,7 @@ export function RequestsHome({
   }, [rows, tab, kinds, who, q]);
   const sum = shown.reduce((s, r) => s + r.amount, 0);
 
-  const tabButtons = (mobile: boolean) =>
+  const tabButtons = () =>
     tabs
       .filter((t) => t.show)
       .map((t) => {
@@ -123,16 +123,14 @@ export function RequestsHome({
             aria-selected={on}
             onClick={() => setTab(t.id)}
             title={t.label}
-            className={`group flex shrink-0 items-center justify-center gap-1.5 rounded-lg text-[13px] font-semibold transition-all duration-200 active:scale-[0.96] ${
-              mobile ? "h-9 px-3" : "px-3 py-[7px] lg:px-4"
-            } ${
+            className={`group flex shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-[7px] text-[13px] font-semibold transition-all duration-200 active:scale-[0.96] lg:px-4 ${
               on
                 ? "bg-(--brand-navy) text-white shadow-[0_2px_10px_rgba(27,37,55,0.3)]"
                 : "text-slate-600 hover:-translate-y-px hover:bg-white hover:text-(--brand-navy) hover:shadow-[0_2px_8px_rgba(27,37,55,0.12)]"
             }`}
           >
             <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-            <span className={mobile || on ? "" : "hidden md:inline"}>{t.label}</span>
+            <span className={on ? "" : "hidden md:inline"}>{t.label}</span>
             {t.n !== undefined && t.n > 0 && (
               <span className={`rounded-full px-1.5 text-[11px] leading-[18px] ${on ? "bg-white/20 text-white" : t.alert ? "bg-red-500 text-white" : "bg-slate-200 text-slate-700"}`}>{t.n}</span>
             )}
@@ -140,11 +138,41 @@ export function RequestsHome({
         );
       });
 
+  /** มือถือ: แท็บแบบแถบคอลัมน์ของบอร์ดงาน — ป้ายมีกรอบทุกอัน [จำนวน] ชื่อ · ที่เลือกอยู่ = กรอบ+พื้นกรมท่าอ่อน (ไม่ใช้เขียว) */
+  const mobileTabs = tabs
+    .filter((t) => t.show)
+    .map((t) => {
+      const on = tab === t.id;
+      return (
+        <button
+          key={t.id}
+          type="button"
+          role="tab"
+          aria-selected={on}
+          onClick={() => setTab(t.id)}
+          className={`flex h-9 shrink-0 items-center gap-2 rounded-full border px-3.5 text-[13px] transition-colors ${
+            on ? "border-(--brand-navy) bg-[#dde3ee] font-bold text-(--ink)" : "border-(--line) bg-white font-medium text-(--ink-soft)"
+          }`}
+        >
+          {t.n !== undefined && (
+            <span
+              className={`flex h-5 min-w-5 items-center justify-center rounded-md px-1.5 text-[11.5px] font-bold tabular-nums ${
+                on ? "bg-(--brand-navy) text-white" : t.alert && t.n > 0 ? "bg-red-500 text-white" : "bg-(--bg-soft) text-(--ink)"
+              }`}
+            >
+              {t.n}
+            </span>
+          )}
+          <span className="whitespace-nowrap">{t.label}</span>
+        </button>
+      );
+    });
+
   const leading = (
     <div className="flex w-full min-w-0 items-center gap-2 pl-1 sm:pl-2">
       <span className="text-[17px] font-bold text-(--ink) sm:hidden">เบิกจ่าย & OT</span>
       <div className="hidden min-w-0 items-center gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1 sm:flex" role="tablist" aria-label="มุมมองรายการ">
-        {tabButtons(false)}
+        {tabButtons()}
       </div>
     </div>
   );
@@ -156,11 +184,21 @@ export function RequestsHome({
           type="button"
           onClick={() => setFilterOpen((v) => !v)}
           aria-expanded={filterOpen}
-          className={`flex h-10 items-center gap-1.5 rounded-xl px-3 text-[13px] font-semibold transition-colors ${activeFilters ? "bg-(--brand-navy) text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
+          aria-label={activeFilters > 0 ? `ตัวกรอง ใช้อยู่ ${activeFilters} รายการ` : "ตัวกรอง"}
+          // มือถือ: ไอคอนกลมแบบบอร์ดงาน พื้นกรมท่าอ่อน + ขอบบาง (เดิมเทาจางจนดูไม่ออกว่าเป็นปุ่ม) · จอใหญ่: ปุ่ม "ตัวกรอง" มีข้อความ
+          className={`relative flex h-10 w-10 items-center justify-center gap-1.5 rounded-full text-[13px] font-semibold transition-colors active:scale-95 sm:w-auto sm:rounded-xl sm:px-3 ${
+            activeFilters
+              ? "bg-(--brand-navy) text-white shadow-[0_2px_8px_rgba(27,37,55,0.3)]"
+              : "bg-[#dde3ee] text-(--brand-navy) ring-1 ring-inset ring-[#c3cbd9] hover:bg-[#cfd6e2]"
+          }`}
         >
-          <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+          <SlidersHorizontal className="h-5 w-5 sm:h-4 sm:w-4" aria-hidden="true" />
           <span className="hidden sm:inline">ตัวกรอง</span>
-          {activeFilters > 0 && <span className="rounded-full bg-white/25 px-1.5 text-[11px]">{activeFilters}</span>}
+          {activeFilters > 0 && (
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[10.5px] font-bold tabular-nums text-(--brand-navy) ring-1 ring-(--brand-navy) sm:static sm:h-auto sm:bg-white/25 sm:text-[11px] sm:font-normal sm:text-white sm:ring-0">
+              {activeFilters}
+            </span>
+          )}
           <ChevronDown className="hidden h-3.5 w-3.5 sm:block" aria-hidden="true" />
         </button>
         {filterOpen && (
@@ -291,8 +329,12 @@ export function RequestsHome({
       <div className="flex flex-col gap-4 pb-20 lg:pb-16 2xl:flex-row 2xl:items-start">
         <div className="flex min-w-0 flex-1 flex-col gap-3">
           {/* มือถือ: แท็บเป็นแถวเลื่อนใต้แถบหัว (แถบหัวแคบ ใส่แท็บแล้วตกขอบ) */}
-          <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5 sm:hidden" role="tablist" aria-label="มุมมองรายการ">
-            {tabButtons(true)}
+          <div
+            className="-mx-4 -mt-4 flex items-center gap-2 overflow-x-auto border-b border-(--line) bg-white px-3 py-2 [scrollbar-width:none] sm:hidden [&::-webkit-scrollbar]:hidden"
+            role="tablist"
+            aria-label="มุมมองรายการ"
+          >
+            {mobileTabs}
           </div>
           {strip}
           {overdueNote && <Notice tone="warn">{overdueNote}</Notice>}
