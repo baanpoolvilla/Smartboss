@@ -178,22 +178,19 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
   const visibleChecklist = isShared && iAmAssignee ? task.checklist.filter((c) => c.ownerId === viewingAsUserId) : task.checklist;
   const doneChecklist = visibleChecklist.filter((c) => c.done).length;
 
-  const pillInFooterRow = !isDone && visibleChecklist.length === 0;
+  // ทุกการ์ด (มี/ไม่มี checklist) อยู่แถวเดียวกับคอมเมนต์เหนือเส้นคั่น — ผู้ใช้ขอ 21/10/2569 "เอาแค่สีพอ อยู่แถวเดียวกับคอมเมนต์"
+  const pillInFooterRow = !isDone;
   const pillMeta = groupedByPriority ? statusMeta[task.status] : priorityMeta[task.priority];
   const pillKind = groupedByPriority ? "สถานะ" : "ความสำคัญ";
+  // จุดสีอย่างเดียว ไม่มีคำ ("เอาเป็นแค่สีพอ") — ชี้ค้างเห็นชื่อระดับ
   const priorityPill = (
     <span
+      role="img"
       title={`${pillKind}: ${pillMeta.label}`}
       aria-label={`${pillKind}: ${pillMeta.label}`}
-      className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold leading-4"
-      style={{
-        backgroundColor: `color-mix(in srgb, ${pillMeta.accentColor} 14%, white)`,
-        color: `color-mix(in srgb, ${pillMeta.accentColor} 60%, black)`,
-      }}
-    >
-      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: pillMeta.accentColor }} aria-hidden />
-      {pillMeta.label}
-    </span>
+      className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+      style={{ backgroundColor: pillMeta.accentColor }}
+    />
   );
 
   return (
@@ -364,17 +361,14 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
         </div>
       </div>
 
-      {/* ความสำคัญ (หรือสถานะ ถ้าบอร์ดจัดกลุ่มตามความสำคัญ) เป็นป้าย จุดสี + คำ ซ้ายล่าง แทนจุดหน้าชื่องาน
-          (ผู้ใช้ขอ 21/10/2569 "ย้ายสถานะลงมาซ้ายล่าง") — ชื่องานเหลือวงกลมติ๊กเสร็จอย่างเดียว อ่านง่ายกว่า
-          อยู่แถวเดียวกับแถบ checklist (0/2) ถ้ามี · ไม่มี checklist = แถวเดียวกับคอมเมนต์เหนือเส้นคั่น (ด้านล่าง)
-          งานเสร็จแล้วไม่มีป้ายนี้ (ป้ายเสร็จสิ้น/รอตรวจสอบด้านบนบอกแทน) */}
+      {/* ความสำคัญ (หรือสถานะ ถ้าบอร์ดจัดกลุ่มตามความสำคัญ) = จุดสีซ้ายสุดของแถวคอมเมนต์เหนือเส้นคั่น (ด้านล่าง)
+          แทนจุดหน้าชื่องาน (ผู้ใช้ขอ 21/10/2569) · งานเสร็จแล้วไม่มี (ป้ายเสร็จสิ้น/รอตรวจสอบด้านบนบอกแทน) */}
 
       {/* Checklist progress at a glance — the fraction alone (in the meta row
           below) is easy to skim past; a bar reads instantly even at a glance
           across a busy column. */}
       {visibleChecklist.length > 0 && (
         <div className="mt-1.5 flex items-center gap-2 sm:mt-2">
-          {!isDone && priorityPill}
           {/* --primary is scoped via inline style, not a global theme edit —
               only this bar (only on a "รอตรวจสอบ" card) picks up greenPale,
               every other Progress bar in the app keeps the normal brand
