@@ -17,6 +17,7 @@ import { runReportPenaltySweep } from "@/modules/report_task/lib/server/report-p
 import { runTaskPenaltySweep } from "@/modules/report_task/lib/server/task-penalty-sweep-run";
 import { remindProjectStatusUpdates } from "@/modules/report_task/lib/server/project-reminders";
 import { remindRequests } from "@/modules/requests/lib/cron";
+import { runCutoffReminders } from "@/lib/score-requests";
 
 export const runtime = "nodejs";
 
@@ -129,6 +130,15 @@ export async function GET(req: NextRequest) {
       }
     }
     Object.assign(result, { sweeps: await runScoreSweepsAllOrgs() });
+    // วันตัดรอบ 08:59 / 14:59 — เตือนคนที่ยังมีคำขอแก้คะแนนค้าง (แต่ละคนได้เฉพาะใบที่ตัวเองต้องตัดสิน)
+    if (task === "score-hourly") {
+      try {
+        Object.assign(result, { scoreRequestReminders: await runCutoffReminders({ force: url.searchParams.get("force") === "1" }) });
+      } catch (error) {
+        console.error("[cron] score request reminders", error);
+        Object.assign(result, { scoreRequestReminders: { error: error instanceof Error ? error.message : String(error) } });
+      }
+    }
   }
   if (task === "performance" || task === "all") {
     // สองแหล่ง: งานซ่อมบำรุงที่ปล่อยค้าง และผลลงเวลาจาก workforce

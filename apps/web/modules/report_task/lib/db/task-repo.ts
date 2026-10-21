@@ -10,6 +10,7 @@ import { listDirectory } from "./employee-directory";
 import type { Sticker, Task, TaskReaction } from "../../types";
 import { reactionRecipients } from "@/modules/report_task/lib/sticker-target";
 import { isOthersPersonalTask, isPersonalTask } from "@/modules/report_task/lib/personal-task";
+import { closePendingScoreRequests } from "@/lib/score-request-store";
 
 /**
  * งานในบอร์ด Kanban — เก็บเป็นตารางจริง หนึ่งแถวต่อหนึ่งงาน
@@ -215,6 +216,8 @@ export async function writeTasks(
   const stickerChanges: { task: Task; newReactions: TaskReaction[] }[] = [];
   // สติกเกอร์ที่หายไปจากงาน (ยกเลิกเอง หรือทั้งงานถูกลบ) — ต้องคืนคะแนนที่เคยหักไว้
   const removedReactions: { task: Task; reaction: TaskReaction }[] = [];
+  // การหักคะแนนที่เพิ่งถูกยกเว้น (penalty.waived) โดยเจ้าของระบบ — ต้องออก event คืนคะแนนหลังบันทึก
+  const waivers: WaiverChange[] = [];
 
   // R4 — gating the sticker picker in the UI stops a normal click, but Task
   // writes the whole collection in one PUT: a client that just edits the
@@ -286,6 +289,15 @@ export async function writeTasks(
         if (!keptReactionIds.has(gone.id)) removedReactions.push({ task: priorById.get(task.id)!, reaction: gone });
       }
 
+      // ยกเว้นการหักคะแนน — เหมือน R4 ข้างบน: client แก้ body เองได้ จึงรับเฉพาะของเจ้าของระบบ
+      // (ระบบเอง userId null = คำขอแก้คะแนนที่อนุมัติแล้ว ซึ่งออก event คืนคะแนนเองใน lib/score-requests.ts)
+      const fresh = newlyWaived(priorById.get(task.id), task);
+      if (fresh.length > 0 && userId !== null) {
+        const owners = await ownerIds();
+        if (owners.has(userId)) waivers.push(...fresh);
+        else task = withoutNewWaivers(priorById.get(task.id), task);
+      }
+
       const cols = columnsOf(task);
       const known = codeById.get(task.id);
 
@@ -343,9 +355,76 @@ export async function writeTasks(
     publishToOrg(orgId, { type: "store.changed", key: "tasks", version: result.version });
     await recordStickerEvents(orgId, stickerChanges);
     await recordStickerUndoEvents(orgId, removedReactions, userId);
+    await recordWaiverUndoEvents(orgId, waivers, userId);
   }
 
   return result;
+}
+
+interface WaiverChange {
+  refId: string;
+  reason: string;
+}
+
+/** penalty ที่เพิ่งมี `waived` ในการบันทึกนี้ (งานเดี่ยว: refId = taskId · งานกลุ่ม: `${taskId}:${userId}`) */
+function newlyWaived(prior: Task | undefined, task: Task): WaiverChange[] {
+  const out: WaiverChange[] = [];
+  if (task.penalty?.waived && !prior?.penalty?.waived) out.push({ refId: task.id, reason: task.penalty.waived.reason });
+  for (const [uid, p] of Object.entries(task.penalties ?? {})) {
+    if (p.waived && !prior?.penalties?.[uid]?.waived) out.push({ refId: `${task.id}:${uid}`, reason: p.waived.reason });
+  }
+  return out;
+}
+
+/** ไม่ใช่เจ้าของระบบ — เอา `waived` ที่เพิ่งใส่ออก คงสถานะเดิมของงานไว้ */
+function withoutNewWaivers(prior: Task | undefined, task: Task): Task {
+  const strip = <P extends { waived?: unknown }>(p: P, before: P | null | undefined): P => {
+    if (before?.waived) return p;
+    const { waived: _drop, ...rest } = p;
+    return rest as P;
+  };
+  return {
+    ...task,
+    penalty: task.penalty ? strip(task.penalty, prior?.penalty) : task.penalty,
+    ...(task.penalties
+      ? { penalties: Object.fromEntries(Object.entries(task.penalties).map(([uid, p]) => [uid, strip(p, prior?.penalties?.[uid])])) }
+      : {}),
+  };
+}
+
+/**
+ * คืนคะแนนการหัก "ส่งงานเลยกำหนด" ที่เจ้าของระบบเพิ่งยกเว้น — event ตรงข้าม "task_undo" (refId เดียวกับของเดิม)
+ * เท่าที่หักไปจริง ลงวันเดียวกับที่หัก · ไม่มี event เดิม (ยังไม่ทันบันทึก/ระบบคืนไปแล้ว) = ไม่ต้องคืน
+ * คำขอแก้คะแนนที่ค้างของรายการเดียวกันปิดไปด้วย ไม่งั้นอนุมัติซ้ำได้
+ */
+async function recordWaiverUndoEvents(orgId: string, waivers: WaiverChange[], userId: string | null) {
+  if (waivers.length === 0) return;
+  const originals = await prisma.performanceEvent.findMany({
+    where: { orgId, source: "report_task", category: "task_late", refType: "task", refId: { in: waivers.map((w) => w.refId) } },
+    select: { userId: true, points: true, occurredAt: true, refId: true },
+  });
+  if (originals.length === 0) return;
+  const reasonOf = new Map(waivers.map((w) => [w.refId, w.reason]));
+  await prisma.performanceEvent.createMany({
+    data: originals.map((o) => ({
+      orgId,
+      userId: o.userId,
+      source: "report_task",
+      category: "task_late",
+      points: -Number(o.points),
+      occurredAt: o.occurredAt,
+      refType: "task_undo",
+      refId: o.refId,
+      note: `ยกเลิกการหักคะแนน: ${reasonOf.get(o.refId!) ?? ""}`.trim(),
+      createdBy: userId,
+    })),
+    skipDuplicates: true,
+  });
+  await closePendingScoreRequests(
+    orgId,
+    originals.map((o) => ({ category: "task_late", refId: o.refId! })),
+    "เจ้าของระบบยกเลิกการหักคะแนนครั้งนี้แล้ว"
+  );
 }
 
 /** ล้างงานทั้งหมดของบริษัท — ใช้ตอนรีเซ็ตข้อมูลเท่านั้น */

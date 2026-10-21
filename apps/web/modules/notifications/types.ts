@@ -20,6 +20,10 @@ export type NotifCategory =
   | "purchase_order"
   | "hr_leave"
   | "hr_attendance"
+  /** คำขอแก้คะแนน (งาน/ใบงาน/PM เลยกำหนด) — lib/score-requests.ts */
+  | "score"
+  /** ผลคำขอแก้คะแนน (ถึงคนที่ขอ) — แยกจาก "score" ไม่ให้เลขแดงที่เมนูคิวอนุมัตินับรวม */
+  | "score_result"
   | "general";
 
 /** Normalized shape both notification sources (report_task's client store +

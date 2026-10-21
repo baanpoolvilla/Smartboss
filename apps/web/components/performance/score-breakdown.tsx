@@ -78,6 +78,7 @@ export function ScoreBreakdown({
   events,
   attendanceHref,
   details,
+  actions,
 }: {
   rows: BreakdownRow[];
   events: BreakdownEvent[];
@@ -85,6 +86,8 @@ export function ScoreBreakdown({
   details?: Map<string, EventDetail>;
   /** ลิงก์ "ดูวันนั้น" ของเหตุการณ์ลงเวลา — ไม่ส่ง = ไม่มีลิงก์ (คนที่ไม่มีสิทธิ์ดูหน้าลงเวลารวม) */
   attendanceHref?: (workDate: string) => string;
+  /** ปุ่ม "ขอแก้ไข"/สถานะคำขอ ใต้รายการ (event id → ปุ่ม) — หน้า "คะแนนของฉัน" เท่านั้น */
+  actions?: Map<string, React.ReactNode>;
 }) {
   const { reversalOf, matched } = pairReversals(events);
   // คืนคะแนนไปแล้วกี่ครั้งต่อหมวด — หมวดที่ถูกคืนหมด (0 ครั้ง 0 คะแนน) ยังต้องโชว์ ไม่งั้นยื่นคำร้องแล้ว
@@ -176,10 +179,21 @@ export function ScoreBreakdown({
                     </span>
                   </>
                 );
+                const act = actions?.get(ev.id);
+                // ปุ่ม/สถานะอยู่ใต้ชื่อรายการ (เยื้องตรงคอลัมน์วันที่) — ไม่อยู่ใน <summary> กดแล้วรายการไม่พับ/กาง
+                const actRow = act ? <div className="sm:pl-27">{act}</div> : null;
                 if (!detail) {
+                  if (!actRow) {
+                    return (
+                      <li key={ev.id} className="flex items-start gap-3 px-4 py-2 pl-11 text-sm">
+                        {line}
+                      </li>
+                    );
+                  }
                   return (
-                    <li key={ev.id} className="flex items-start gap-3 px-4 py-2 pl-11 text-sm">
-                      {line}
+                    <li key={ev.id} className="px-4 py-2 pl-11 text-sm">
+                      <div className="flex items-start gap-3">{line}</div>
+                      {actRow}
                     </li>
                   );
                 }
@@ -201,6 +215,7 @@ export function ScoreBreakdown({
                         )}
                       </div>
                     </details>
+                    {actRow && <div className="px-4 pb-2 pl-11">{actRow}</div>}
                   </li>
                 );
               })}

@@ -60,7 +60,19 @@ export const hrManifest: ModuleManifest = {
     // เห็นได้ทุกคน (เข้าดูสถานะคำร้องของตัวเองได้) — หน้าเองเช็คซ้ำว่าอนุมัติได้
     // เฉพาะ CEO เท่านั้น (ดู penalty-requests/page.tsx) ก่อนหน้านี้อยู่ในเมนูของ
     // โมดูล "รายงานและงาน" ทั้งที่เนื้อหาเป็นเรื่องคะแนนผลงาน/HR — ย้ายมาที่นี่
-    { label: "คำร้องขอแก้ไขคะแนน", path: "/hr/penalty-requests", permission: HR_PERMS.access, icon: "ShieldAlert", hideForRoles: [WORKER_ROLE_CODE] },
+    {
+      label: "คำร้องขอแก้ไขคะแนน",
+      path: "/hr/penalty-requests",
+      permission: HR_PERMS.access,
+      icon: "ShieldAlert",
+      hideForRoles: [WORKER_ROLE_CODE],
+      // คำขอแก้คะแนนที่รอคุณ (เจ้าของเรื่อง / CEO) — lib/score-requests.ts
+      badge: createElement(NotifCountBadge, {
+        categories: ["score"],
+        className:
+          "ml-auto flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-(--danger) px-1 text-[10px] font-bold text-white",
+      }),
+    },
   ],
   permissions: Object.values(HR_PERMS),
 };

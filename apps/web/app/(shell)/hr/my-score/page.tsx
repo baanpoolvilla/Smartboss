@@ -8,7 +8,8 @@ import { buildUserMonthlyScores, gradeColor, buildPeriodScorecards, listUserPeri
 import { hasBreakdown, ScoreBreakdown } from "@/components/performance/score-breakdown";
 import { buildMyEventDetails } from "@/lib/performance-details";
 import { monthDisplay, shiftMonth } from "@/lib/performance-month";
-import { MissedReportsList } from "./missed-reports-list";
+import { ScoreRowAction } from "./score-row-action";
+import { buildRowActions } from "./row-actions";
 import { hasPassed, resolveScorePeriodParam, scorePeriodLabel, scorePeriodOf } from "@/lib/score-period";
 import { loadScorePeriodConfig, loadScorePeriodReadyAt } from "@/lib/score-period-config";
 import { ScorePeriodNotice, thaiDateTime } from "@/components/score-period-notice";
@@ -147,6 +148,9 @@ export default async function MyScorePage({
         // ดึงเสมอ (ไม่ใช่แค่ตอนมีหมวดที่ติดลบ) — หมวดที่ได้คืนคะแนนหมดแล้วยังต้องเห็นว่า "คืนแล้ว"
         const events = await listUserPeriodEvents(session.orgId, session.userId, period, month);
         const details = await buildMyEventDetails(session.orgId, events);
+        // ปุ่ม "ขอแก้ไข"/สถานะคำขอใต้ทุกรายการที่โดนหัก — ทุกหมวดยื่นได้จากหน้านี้หน้าเดียว (ผู้ใช้ขอ 21/10/2569)
+        const specs = await buildRowActions(session.orgId, session.userId, events, period);
+        const actions = new Map([...specs].map(([id, spec]) => [id, <ScoreRowAction key={id} spec={spec} />]));
 
         return (
           <div className="flex flex-col gap-4">
@@ -171,19 +175,12 @@ export default async function MyScorePage({
                 <p className="text-sm text-(--ink-soft)">ไม่มีเลย — คะแนนเต็มอยู่</p>
               ) : (
                 <>
-                  <p className="-mt-2 mb-3 text-xs text-(--ink-soft)">กดหมวดเพื่อดูวันที่ แล้วกดรายการเพื่อดูว่าหักจากอะไร</p>
-                  <ScoreBreakdown rows={card.byCategory} events={events} details={details} />
+                  <p className="-mt-2 mb-3 text-xs text-(--ink-soft)">
+                    กดหมวดเพื่อดูวันที่ แล้วกดรายการเพื่อดูว่าหักจากอะไร · โดนหักผิดหรือมีเหตุสุดวิสัย กด &quot;ขอแก้ไข&quot; ที่รายการนั้นได้เลย
+                  </p>
+                  <ScoreBreakdown rows={card.byCategory} events={events} details={details} actions={actions} />
                 </>
               )}
-            </div>
-
-            <div className="rounded-2xl border border-(--line) bg-white p-5">
-              <p className="text-sm font-semibold text-(--ink)">รายงานที่พลาด/ส่งช้า</p>
-              <p className="mb-3 text-xs text-(--ink-soft)">
-                คิดว่าถูกหักคะแนนผิด หรือมีเหตุสุดวิสัย (ป่วยกะทันหัน ระบบขัดข้อง) — กด &quot;ขอแก้ไข&quot;
-                ที่แถวนั้นเพื่อยื่นให้ CEO พิจารณาได้เลย
-              </p>
-              <MissedReportsList userId={card.userId} />
             </div>
 
             {historyCard}

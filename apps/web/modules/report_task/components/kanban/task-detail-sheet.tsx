@@ -1424,7 +1424,13 @@ export function TaskDetailSheet({
                   {Object.entries(task.penalties ?? {}).map(([uid, p]) => (
                     <div key={uid} className="flex items-center justify-between text-xs rounded-lg bg-[var(--bg-soft)] px-3 py-1.5">
                       <span className="font-medium">{displayName(uid)}</span>
-                      <span className="text-[var(--chart-red)] font-semibold">−{Math.abs(p.points)} คะแนน</span>
+                      {p.waived ? (
+                        <span className="font-semibold text-emerald-700" title={`เหตุผล: ${p.waived.reason}`}>
+                          คืนคะแนนแล้ว +{Math.abs(p.points)}
+                        </span>
+                      ) : (
+                        <span className="text-[var(--chart-red)] font-semibold">−{Math.abs(p.points)} คะแนน</span>
+                      )}
                     </div>
                   ))}
                 </div>

@@ -46,7 +46,12 @@ function Row({ item, late }: { item: ScoreWatchItem; late: boolean }) {
         >
           {dueLabel(item.dueDate)}
         </span>
-        {late && item.docked !== null && (
+        {late && item.docked !== null && item.waived && (
+          <span className="shrink-0 rounded-full bg-(--bg-soft) px-2 py-0.5 text-[11px] font-medium text-(--tone-ok)" title="คำขอแก้คะแนนได้รับอนุมัติแล้ว">
+            คืนคะแนนแล้ว
+          </span>
+        )}
+        {late && item.docked !== null && !item.waived && (
           <span className="w-7 shrink-0 text-right text-xs font-semibold tabular-nums text-[#DC2626]">
             −{Math.abs(item.docked)}
           </span>

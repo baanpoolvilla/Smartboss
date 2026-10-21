@@ -38,7 +38,7 @@ function stickerPoints(taskList: Task[], stickers: Sticker[], userId?: string) {
 
 /** Total of the discretionary missed-deadline docks a lead applied to these tasks. */
 export function manualPenaltyPoints(taskList: Task[]) {
-  return taskList.reduce((sum, t) => sum + (t.penalty?.points ?? 0), 0);
+  return taskList.reduce((sum, t) => sum + (t.penalty && !t.penalty.waived ? t.penalty.points : 0), 0);
 }
 
 function scoreFor(

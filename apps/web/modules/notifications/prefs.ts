@@ -228,6 +228,9 @@ export function topicForCoreType(type: string): string {
     case "hr_leave_submitted": return "hr.leave_pending";
     case "hr_attendance_correction_submitted": return "hr.correction_pending";
     case "hr_overtime_pending": return "hr.ot_pending";
+    // คำขอแก้คะแนนรออนุมัติ = งานที่ต้องกดตัดสินเหมือนคำขอแก้เวลา · ผลการพิจารณา = ผลของฉัน
+    case "score_req": return "hr.correction_pending";
+    case "score_req_decided": return "hr.my_results";
     case "hr_leave_decided":
     case "hr_attendance_correction_decided":
     case "hr_overtime_decided": return "hr.my_results";

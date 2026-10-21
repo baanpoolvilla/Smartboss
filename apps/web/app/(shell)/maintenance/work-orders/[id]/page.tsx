@@ -69,6 +69,8 @@ import {
 } from "../actions";
 import { EditWorkOrderProperties } from "@/modules/maintenance/components/edit-work-order-properties";
 import { WorkOrderDueRequest, type DueRequestView } from "@/modules/maintenance/components/work-order-due-request";
+import { buildScoreQueue } from "@/lib/score-request-views";
+import { ScoreRequestCard } from "@/app/(shell)/hr/penalty-requests/score-requests-queue";
 import { listDueRequests } from "@/modules/maintenance/data/work-order-due-requests";
 import { canDecideDueRequest, canEditDueDate } from "@/modules/maintenance/lib/due-request-access";
 
@@ -207,6 +209,8 @@ export default async function WorkOrderDetailPage({
     .filter((u) => u !== "");
   const externalNotes = externalPhotos.filter((p) => p.note);
 
+  const scoreQueue = await buildScoreQueue(session, (r) => r.target.kind === "work_order" && r.target.id === wo.id);
+
   return (
     <AppScaffold
       title="รายละเอียดใบงาน"
@@ -214,6 +218,16 @@ export default async function WorkOrderDetailPage({
       backHref={fromTasks ? "/report-task/tasks" : "/maintenance/work-orders"}
     >
       <MarkReadOnView referenceId={wo.id} />
+
+      {/* ─── คำขอแก้คะแนนของใบนี้ที่รอคุณ (คนเปิดใบงาน / CEO) — เหตุผลและผลบันทึกลงประวัติใบงานด้วย ─── */}
+      {scoreQueue.pending.length > 0 && (
+        <div className="mb-4 flex flex-col gap-2">
+          <p className="text-sm font-semibold text-(--ink)">🛡️ ขอแก้คะแนน รออนุมัติ</p>
+          {scoreQueue.pending.map((item) => (
+            <ScoreRequestCard key={item.id} item={item} />
+          ))}
+        </div>
+      )}
 
       {/* ─── หัวข้อ + ข้อมูลใบงาน ─── */}
       <Card className="mb-4 p-4 sm:p-5">

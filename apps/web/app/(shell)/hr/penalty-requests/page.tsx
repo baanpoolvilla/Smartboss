@@ -2,6 +2,8 @@ import { requireOrg, hasRole, isSuperAdmin } from "@smartboss/auth";
 import { HrPage } from "@/modules/hr/components/hr-page";
 import { HR_PERMS } from "@/modules/hr/permissions";
 import { PenaltyRequestsQueue } from "./penalty-requests-queue";
+import { ScoreRequestsQueue } from "./score-requests-queue";
+import { buildScoreQueue } from "@/lib/score-request-views";
 
 /**
  * คิวคำร้องขอแก้ไข/ขอส่งย้อนหลังของคะแนนรายงาน — ย้ายมาอยู่ในระบบบุคคล
@@ -19,16 +21,30 @@ export default async function PenaltyRequestsPage() {
       load={async () => {
         const session = await requireOrg();
         const canDecide = hasRole(session, "CEO") || isSuperAdmin(session);
+        // คำขอแก้คะแนน งาน/ใบงาน/PM — เจ้าของเรื่อง (คนสั่งงาน/คนเปิดใบงาน/คนสร้างแผน PM) อนุมัติได้ด้วย ไม่ใช่แค่ CEO
+        const score = await buildScoreQueue(session);
+        const scoreQueue = <ScoreRequestsQueue pending={score.pending} decided={score.decided} isCeo={score.isCeo} />;
 
         if (!canDecide) {
-          return (
-            <div className="rounded-2xl border border-(--line) bg-white p-6 text-sm text-(--ink-soft)">
-              หน้านี้อนุมัติได้เฉพาะ CEO ครับ
-            </div>
-          );
+          if (score.pending.length === 0 && score.decided.length === 0) {
+            return (
+              <div className="rounded-2xl border border-(--line) bg-white p-6 text-sm text-(--ink-soft)">
+                ไม่มีคำขอแก้คะแนนที่รอคุณพิจารณา — คำร้องเรื่องรายงานอนุมัติได้เฉพาะ CEO
+              </div>
+            );
+          }
+          return scoreQueue;
         }
 
-        return <PenaltyRequestsQueue />;
+        return (
+          <div className="flex flex-col gap-8">
+            {scoreQueue}
+            <div className="flex flex-col gap-3">
+              <h2 className="text-sm font-semibold text-(--ink)">คำร้องเรื่องรายงาน · CEO อนุมัติ</h2>
+              <PenaltyRequestsQueue />
+            </div>
+          </div>
+        );
       }}
     />
   );

@@ -108,19 +108,39 @@ export function ManualAttendanceForm({
   employees,
   selfEmploymentId,
   issues = {},
+  initialDate,
+  initialIntent,
+  onSubmitted,
 }: {
   employees: Employment[];
   /** พนักงานยื่นให้ตัวเอง — ไม่มีช่องเลือกพนักงาน (action ฝั่ง server ล็อกเป็นของตัวเองอีกชั้น) */
   selfEmploymentId?: string;
   issues?: Record<string, AttendanceIssue[]>;
+  /** เปิดจากแถวที่โดนหักในหน้า "คะแนนของฉัน" — กรอกวันที่/ประเภทไว้ให้ */
+  initialDate?: string;
+  initialIntent?: "CLOCK_IN" | "CLOCK_OUT";
+  /** มี = ส่งแล้วเรียกกลับ (ปิดหน้าต่าง) และโชว์ข้อผิดพลาดในฟอร์มเอง แทนหน้า error */
+  onSubmitted?: () => void;
 }) {
   const [employmentId, setEmploymentId] = useState(selfEmploymentId ?? "");
-  const [workDate, setWorkDate] = useState("");
-  const [intent, setIntent] = useState<"CLOCK_IN" | "CLOCK_OUT">("CLOCK_IN");
+  const [workDate, setWorkDate] = useState(initialDate ?? "");
+  const [intent, setIntent] = useState<"CLOCK_IN" | "CLOCK_OUT">(initialIntent ?? "CLOCK_IN");
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const personIssues = employmentId ? (issues[employmentId] ?? []) : [];
+  const action = onSubmitted
+    ? async (fd: FormData) => {
+        setSubmitError(null);
+        try {
+          await requestManualAttendanceAction(fd);
+          onSubmitted();
+        } catch (err) {
+          setSubmitError(err instanceof Error ? err.message : "ส่งคำขอไม่สำเร็จ ลองใหม่อีกครั้ง");
+        }
+      }
+    : requestManualAttendanceAction;
 
   return (
-    <form action={requestManualAttendanceAction} className="grid grid-cols-1 gap-3 sm:grid-cols-6">
+    <form action={action} className="grid grid-cols-1 gap-3 sm:grid-cols-6">
       {selfEmploymentId ? (
         <input type="hidden" name="employment_id" value={selfEmploymentId} />
       ) : (
@@ -223,6 +243,12 @@ export function ManualAttendanceForm({
       <div className="flex items-end">
         <Button type="submit">ส่งคำขอ</Button>
       </div>
+
+      {submitError && (
+        <p className="text-sm sm:col-span-6" style={{ color: "var(--danger)" }}>
+          {submitError}
+        </p>
+      )}
 
       <p className="text-xs text-(--ink-soft) sm:col-span-6">
         {selfEmploymentId ? (

@@ -10,6 +10,7 @@ import {
   Heart,
   ReceiptText,
   RotateCcw,
+  ShieldAlert,
   TriangleAlert,
   UserPlus,
   type LucideIcon,
@@ -117,6 +118,10 @@ export function maintenanceCategoryFor(type: string): NotifCategory {
     case "hr_overtime_pending":
     case "hr_clock_event":
       return "hr_attendance";
+    case "score_req":
+      return "score";
+    case "score_req_decided":
+      return "score_result";
     case "issue_ticket_new":
     case "issue_ticket_reply_reporter":
     case "issue_ticket_status_reporter":
@@ -133,7 +138,7 @@ export function maintenanceCategoryFor(type: string): NotifCategory {
  * (แถวจาก core.notifications) — ฝั่ง report_task (reportCategoryFor) รู้ตัว
  * module ของตัวเองอยู่แล้วโดยไม่ต้องผ่านฟังก์ชันนี้ */
 export function moduleForCategory(cat: NotifCategory): NotifModule {
-  if (cat === "hr_leave" || cat === "hr_attendance") return "hr";
+  if (cat === "hr_leave" || cat === "hr_attendance" || cat === "score" || cat === "score_result") return "hr";
   if (cat === "ticket") return "report";
   return "maintenance";
 }
@@ -197,6 +202,8 @@ const CATEGORY_META: Record<NotifCategory, ActionMeta> = {
   purchase_order: { Icon: ReceiptText, color: "#4CAF50" },
   hr_leave: { Icon: CalendarClock, color: "#8B5CF6" },
   hr_attendance: { Icon: Clock, color: "#F59E0B" },
+  score: { Icon: ShieldAlert, color: "#6366F1" },
+  score_result: { Icon: ShieldAlert, color: "#16A34A" },
   general: { Icon: Bell, color: "#6B7280" },
 };
 
@@ -223,6 +230,8 @@ const CATEGORY_LABEL: Record<NotifCategory, string> = {
   purchase_order: "ใบสั่งซื้อ",
   hr_leave: "คำขอลา",
   hr_attendance: "แก้ไขเวลาเข้า-ออกงาน",
+  score: "คำขอแก้คะแนน",
+  score_result: "ผลคำขอแก้คะแนน",
   general: "ทั่วไป",
 };
 
@@ -242,6 +251,9 @@ export function maintenanceHrefFor(type: string, referenceId: string | null): st
   if (type === "expense") return "/maintenance/expenses";
   // เบิกจ่าย & OT — referenceId = id ของคำขอ (modules/requests/lib/notify.ts)
   if (type.startsWith("req_") && referenceId) return `/requests/${referenceId}`;
+  // คำขอแก้คะแนน — คนอนุมัติไปหน้าคิว · ผลการพิจารณาไปหน้าคะแนนของตัวเอง (lib/score-requests.ts)
+  if (type === "score_req") return "/hr/penalty-requests";
+  if (type === "score_req_decided") return "/hr/my-score";
   // HR ไม่มีหน้ารายละเอียดต่อคำขอแยกให้ลิงก์ตรง (และคำขอลาหลายวันในครั้ง
   // เดียวก็กลายเป็นหลาย request id แยกกันอยู่แล้ว — ดู hr-notify.ts) พาไปหน้า
   // รายการที่อนุมัติได้เลยแทน

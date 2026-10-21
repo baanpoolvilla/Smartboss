@@ -72,6 +72,9 @@ const taskPenaltySchema = z.object({
   byUserId: z.string(),
   appliedAt: z.string(),
   reason: z.string().optional(),
+  // ยกเว้นการหักแล้ว (types/index.ts TaskPenalty.waived) — ต้องอยู่ในสคีมา ไม่งั้น z.object ตัดทิ้งทุกครั้งที่ client บันทึก
+  // การ์ดกลับมาขึ้น −3 ทั้งที่คืนคะแนนไปแล้ว · ใครใส่ได้ตรวจซ้ำใน task-repo.ts (เจ้าของระบบเท่านั้น)
+  waived: z.object({ byUserId: z.string(), at: z.string(), reason: z.string() }).optional(),
 });
 
 export const taskSchema = z.object({

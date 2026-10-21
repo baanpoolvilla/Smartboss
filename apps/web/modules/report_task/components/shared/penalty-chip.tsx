@@ -65,6 +65,32 @@ export function PenaltyChip({
   // งานส่วนตัว (เปิดให้ตัวเอง) ไม่มีผลกับคะแนน — ระบบไม่หักอัตโนมัติอยู่แล้ว (task-penalty-sweep.ts) จึงไม่เสนอปุ่ม
   // "กดเพื่อหักเอง" ด้วย (ผู้ใช้ถาม 21/10/2569) · ถ้าเคยถูกหักไว้ก่อนแล้วยังแสดง ให้เจ้าของระบบกดยกเลิกได้
   if (!penalty && isPersonalTask(task)) return null;
+  // ยกเว้นแล้ว (เจ้าของระบบกดยกเลิก / คำขอแก้คะแนนได้รับอนุมัติ) — คะแนนคืนแล้ว ไม่มีอะไรให้กดต่อ
+  if (penalty?.waived) {
+    const who = penalty.waived.byUserId === SYSTEM_USER_ID ? "ระบบ" : (getUser(penalty.waived.byUserId)?.name ?? "—");
+    return (
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <span
+              onPointerDown={(e) => e.stopPropagation()}
+              className={cn(
+                "inline-flex h-5 items-center gap-1 whitespace-nowrap rounded-md bg-emerald-50 px-1.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200",
+                className
+              )}
+            >
+              {variant === "card" ? `คืน +${Math.abs(penalty.points)}` : `คืนคะแนนแล้ว +${Math.abs(penalty.points)}`}
+            </span>
+          }
+        />
+        <TooltipContent className="text-xs">
+          <p className="font-medium">คืนคะแนน {Math.abs(penalty.points)} คะแนนแล้ว · ไม่นับการหักครั้งนี้</p>
+          <p className="opacity-80">เหตุผล: {penalty.waived.reason}</p>
+          <p className="opacity-80">โดย {who} · {formatShortDate(penalty.waived.at)}</p>
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
 
   function submitOverride() {
     const reason = overrideReason.trim();

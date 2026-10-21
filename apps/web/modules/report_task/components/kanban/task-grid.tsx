@@ -317,7 +317,7 @@ export function TaskGrid({
   const summary = useMemo(() => {
     const done = tasks.filter((t) => t.status === "done").length;
     const overdue = tasks.filter((t) => dueUrgency(t) === "overdue").length;
-    const docked = tasks.filter((t) => t.penalty).length;
+    const docked = tasks.filter((t) => t.penalty && !t.penalty.waived).length;
     // ใบงานซ่อมนับรวมด้วย — เป็นงานชุดเดียวกับที่เห็นในตาราง
     const mxDone = maintenance.filter((i) => i.column === "done").length;
     const mxOverdue = maintenance.filter((i) => i.overdue).length;
@@ -560,7 +560,7 @@ export function TaskGrid({
           }
           return (
             <div className="flex flex-wrap items-center gap-1">
-              {t.penalty && (
+              {t.penalty && !t.penalty.waived && (
                 <span
                   title={`ถูกหัก ${Math.abs(t.penalty.points)} คะแนน (เลยกำหนด)`}
                   className="inline-flex items-center h-5 rounded-md px-1.5 text-[10px] font-semibold text-white bg-red-600 tabular-nums"

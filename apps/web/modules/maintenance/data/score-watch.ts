@@ -24,6 +24,8 @@ export interface ScoreWatchItem {
   responsibleName: string | null;
   /** คะแนนที่หักใบนี้ไปแล้ว (ติดลบ) — null = ยังไม่โดนหัก (ยังอยู่ในระยะผ่อนผัน/ใบเก่าก่อนเริ่มนับ) */
   docked: number | null;
+  /** คำขอแก้คะแนนได้รับอนุมัติแล้ว — คืนคะแนนการหักครั้งนี้ (event work_order_undo) */
+  waived?: boolean;
 }
 
 export interface ScoreWatch {
@@ -102,6 +104,16 @@ export async function maintenanceScoreWatch(
     prisma.workOrder.count({ where: { ...openVisible, dueDate: null } }),
   ]);
 
+  const monthUndos = await prisma.performanceEvent.count({
+    where: {
+      orgId,
+      source: "maintenance",
+      category: { in: ["workorder_overdue", "pm_missed"] },
+      refType: { endsWith: "_undo" },
+      occurredAt: { gte: scorePeriodRange(period, scorePeriodOf(period, new Date())).from },
+      ...(orgWide ? {} : { userId: access.userId }),
+    },
+  });
   const rows = [...overdueRows, ...soonRows];
   const responsibleIds = [
     ...new Set(rows.map((r) => r.assignedTo ?? r.property?.caretakerId).filter((x): x is string => !!x)),
@@ -118,12 +130,14 @@ export async function maintenanceScoreWatch(
             category: "workorder_overdue",
             refId: { in: overdueRows.map((r) => r.id) },
           },
-          select: { refId: true, points: true },
+          select: { refId: true, points: true, refType: true },
         })
       : [],
   ]);
   const nameOf = new Map(users.map((u) => [u.id, u.name]));
-  const dockOf = new Map(docks.map((d) => [d.refId, Number(d.points)]));
+  // event คืนคะแนน (work_order_undo) อยู่ใต้ refId เดียวกัน — แยกออก ไม่งั้นทับค่าที่หักจนขึ้น +3
+  const dockOf = new Map(docks.filter((d) => d.refType === "work_order").map((d) => [d.refId, Number(d.points)]));
+  const waivedIds = new Set(docks.filter((d) => d.refType === "work_order_undo").map((d) => d.refId));
 
   const toItem = (r: (typeof rows)[number]): ScoreWatchItem => {
     const who = r.assignedTo ?? r.property?.caretakerId ?? null;
@@ -135,6 +149,7 @@ export async function maintenanceScoreWatch(
       dueDate: r.dueDate!,
       responsibleName: who ? (nameOf.get(who) ?? null) : null,
       docked: dockOf.get(r.id) ?? null,
+      waived: waivedIds.has(r.id),
     };
   };
 
@@ -145,8 +160,9 @@ export async function maintenanceScoreWatch(
     dueSoonCount,
     laterCount,
     noDueCount,
+    // ยอดรวมนับ event คืนคะแนน (+) ด้วยอยู่แล้ว · จำนวนครั้ง: ตัดทั้งตัวคืนและครั้งที่ถูกคืนออก
     monthPoints: Number(month._sum.points ?? 0),
-    monthDocks: month._count,
+    monthDocks: Math.max(0, month._count - 2 * monthUndos),
     orgWide,
   };
 }

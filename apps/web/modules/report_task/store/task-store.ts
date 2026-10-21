@@ -1527,7 +1527,9 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
             ? x
             : {
                 ...x,
-                penalty: null,
+                // เดิม penalty: null — การ์ดหายแต่คะแนนในระบบกลางไม่เคยคืน และงานที่ยังค้าง sweep หักใหม่ทันที
+                // ตอนนี้ทำเครื่องหมายยกเว้นไว้ เซิร์ฟเวอร์เห็นแล้วออก event คืนคะแนน (task-repo.ts)
+                penalty: x.penalty ? { ...x.penalty, waived: { byUserId, at: new Date().toISOString(), reason } } : null,
                 comments: [
                   ...x.comments,
                   {

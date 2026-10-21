@@ -3,6 +3,7 @@ import { prisma } from "@smartboss/database";
 import { crossOrg } from "@smartboss/database/cross-org";
 
 import { nextWorkOrderCode } from "@/lib/document-code";
+import { closePendingScoreRequests } from "@/lib/score-request-store";
 import { fmtThaiDate } from "@/modules/maintenance/lib/format";
 import { notifyUser, notifyUsers, propertyCaretaker } from "@/modules/maintenance/data/notify";
 import { logActivity } from "@/modules/maintenance/data/activity";
@@ -734,10 +735,41 @@ async function revokeInvalidMaintenanceDocks(
     prisma.performanceEvent.deleteMany({ where: { id: { in: toRevoke }, createdBy: null } }),
   );
 
+  // การหักที่เคยคืนไปแล้วด้วยคำขอแก้คะแนน (<refType>_undo) — ของเดิมหายแล้ว การคืนต้องหายตาม
+  // ไม่งั้นได้ +คะแนนเกิน (คืนสองรอบ) · คนนั้นได้คะแนนคืนไปแล้วตั้งแต่ตอนอนุมัติ จึงไม่ต้องแจ้ง "คืนคะแนน" ซ้ำ
+  const undoRefType = (category: string) => (category === "workorder_overdue" ? "work_order_undo" : "pm_schedule_undo");
+  const undone = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.performanceEvent.findMany({
+      where: {
+        OR: revokedDocks.map(({ dock: d }) => ({
+          orgId: d.orgId, source: "maintenance", category: d.category, refType: undoRefType(d.category), refId: d.refId,
+        })),
+      },
+      select: { id: true, orgId: true, category: true, refId: true },
+    }),
+  );
+  if (undone.length > 0) {
+    await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+      prisma.performanceEvent.deleteMany({ where: { id: { in: undone.map((u) => u.id) } } }),
+    );
+  }
+  const undoneKey = new Set(undone.map((u) => `${u.orgId}|${u.category}|${u.refId}`));
+  const byOrg = new Map<string, { category: string; refId: string }[]>();
+  for (const { dock: d } of revokedDocks) {
+    if (!d.refId) continue;
+    const list = byOrg.get(d.orgId) ?? [];
+    list.push({ category: d.category, refId: d.refId });
+    byOrg.set(d.orgId, list);
+  }
+  for (const [orgId, refs] of byOrg) {
+    await closePendingScoreRequests(orgId, refs, "ระบบคืนคะแนนให้แล้ว (เลื่อนกำหนด / ยกเลิกใบงาน / ย้ายผู้รับผิดชอบ)");
+  }
+
   // แจ้งคนที่ได้คะแนนคืนด้วย — คู่กับแจ้งตอนโดนหัก ไม่งั้นคะแนนกลับมาเองแล้วงงว่ามาจากไหน
   for (const { dock: d, reason } of revokedDocks) {
     const pts = -Number(d.points);
     if (!pts) continue;
+    if (undoneKey.has(`${d.orgId}|${d.category}|${d.refId}`)) continue;
     const isWo = d.category === "workorder_overdue";
     // ต้นเรื่องถูกลบไปแล้ว — ไม่ใส่ลิงก์ ไม่งั้นกดแล้วเจอหน้าไม่พบ
     const gone = reason === "ใบงานถูกลบ" || reason === "แผน PM ถูกลบ";

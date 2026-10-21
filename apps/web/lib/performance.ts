@@ -277,16 +277,36 @@ export async function revokePerformanceEvents(input: {
   refIds: string[];
 }): Promise<number> {
   if (input.refIds.length === 0) return 0;
-  const result = await prisma.performanceEvent.deleteMany({
-    where: {
-      orgId: input.orgId,
-      source: input.source,
-      category: input.category,
-      refType: input.refType,
-      refId: { in: input.refIds },
-      createdBy: null,
-    },
-  });
+  const where = {
+    orgId: input.orgId,
+    source: input.source,
+    category: input.category,
+    refType: input.refType,
+    refId: { in: input.refIds },
+    createdBy: null,
+  };
+  const gone = await prisma.performanceEvent.findMany({ where, select: { refId: true } });
+  const result = await prisma.performanceEvent.deleteMany({ where });
+  // ของเดิมหายไปแล้ว ⇒ การคืนคะแนนของมัน (<refType>_undo — คำขอแก้คะแนนที่อนุมัติ / เจ้าของระบบยกเลิก)
+  // ต้องหายตาม ไม่งั้นได้ +คะแนนลอย ๆ (คืนสองรอบ) · คำขอที่ยังค้างของรายการนี้ปิดไปเลย
+  const goneRefIds = gone.map((g) => g.refId).filter((x): x is string => !!x);
+  if (goneRefIds.length > 0) {
+    await prisma.performanceEvent.deleteMany({
+      where: {
+        orgId: input.orgId,
+        source: input.source,
+        category: input.category,
+        refType: `${input.refType}_undo`,
+        refId: { in: goneRefIds },
+      },
+    });
+    const { closePendingScoreRequests } = await import("@/lib/score-request-store");
+    await closePendingScoreRequests(
+      input.orgId,
+      goneRefIds.map((refId) => ({ category: input.category, refId })),
+      "ระบบคืนคะแนนให้แล้ว (เลื่อนกำหนดส่งทัน / ปิดงานทันกำหนด)"
+    );
+  }
   return result.count;
 }
 

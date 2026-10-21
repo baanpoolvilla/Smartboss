@@ -544,9 +544,10 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
             </span>
           )}
           {onOpen && !isShared && <PenaltyChip task={task} variant="card" />}
-          {onOpen && isShared && Object.keys(task.penalties ?? {}).length > 0 && (
+          {/* ที่ยกเว้นแล้ว (คืนคะแนน) ไม่นับ — หมดแล้วป้ายแดงหายไป */}
+          {onOpen && isShared && Object.values(task.penalties ?? {}).some((p) => !p.waived) && (
             <span className="flex items-center gap-0.5 h-5 rounded-md px-1.5 text-[10px] font-semibold bg-red-600 text-white" title="มีคนถูกหักคะแนน">
-              −{Object.values(task.penalties ?? {}).reduce((sum, p) => sum + Math.abs(p.points), 0)}
+              −{Object.values(task.penalties ?? {}).reduce((sum, p) => sum + (p.waived ? 0 : Math.abs(p.points)), 0)}
             </span>
           )}
           {task.attachments.length > 0 && (

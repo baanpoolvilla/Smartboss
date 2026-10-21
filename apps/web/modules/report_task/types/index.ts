@@ -154,6 +154,12 @@ export interface TaskPenalty {
   byUserId: string;
   appliedAt: string;
   reason?: string;
+  /**
+   * ยกเว้นการหักครั้งนี้แล้ว (คืนคะแนน) — เจ้าของระบบกดยกเลิก หรือคำขอแก้คะแนนได้รับอนุมัติ
+   * ไม่ลบ penalty ทิ้ง เพราะงานที่ยังค้างเลยกำหนด sweep จะหักใหม่ทันทีถ้าไม่มี penalty
+   * คะแนนจริงคืนด้วย event "task_undo" (task-repo.ts / lib/score-requests.ts)
+   */
+  waived?: { byUserId: string; at: string; reason: string };
 }
 
 export interface Task {
