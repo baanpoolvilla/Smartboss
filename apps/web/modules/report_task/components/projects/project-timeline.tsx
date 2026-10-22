@@ -129,7 +129,16 @@ export function ProjectTimeline({
   // ── สถานะการลาก (เก็บใน ref ไม่ re-render ทุกพิกเซล) ──
   // ลากหลายงานพร้อมกัน ⇒ ตัวอย่างวันใหม่เป็นรายงาน (id → วันใหม่)
   const [previews, setPreviews] = useState<Record<string, { start: string; end: string }> | null>(null);
-  const pvOf = (id: string) => previews?.[id];
+  // มือถือ (ลากด้วยนิ้วไม่ได้ ชนกับเลื่อนจอ): โหมด "เลือกเลื่อน" — แตะแถบเพื่อเลือก แล้วกด −7/−1/+1/+7 วัน → บันทึก
+  const [selectMode, setSelectMode] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const tap = useRef<{ id: string; x: number; y: number } | null>(null);
+  const pvOf = (id: string) => {
+    if (previews?.[id]) return previews[id];
+    if (!selectMode || !offset || !picked.has(id)) return undefined;
+    const it = byId.get(id);
+    return it ? { start: shiftDays(it.start, offset), end: shiftDays(it.end, offset) } : undefined;
+  };
   // เลือกหลายงาน (Shift/Ctrl+คลิก · ลากกรอบในที่ว่าง) แล้วลากแถบไหนก็ได้ในชุด = เลื่อนพร้อมกัน (ผู้ใช้ขอ 21/10/2569)
   const [picked, setPicked] = useState<Set<string>>(() => new Set());
   const [box, setBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
@@ -152,7 +161,8 @@ export function ProjectTimeline({
     return { x1: x, x2: (dayNum(e) - lo + 1) * W, y: y + ROW / 2, left: x + 1, w: Math.max((dayNum(e) - dayNum(s) + 1) * W - 2, 8) };
   };
 
-  const canDrag = (i: TimelineItem) => !coarse && (i.kind === "milestone" ? canEdit : canPlan) && i.state !== "done";
+  const canMove = (i: TimelineItem) => (i.kind === "milestone" ? canEdit : canPlan) && i.state !== "done";
+  const canDrag = (i: TimelineItem) => !coarse && canMove(i);
 
   // ── นำการเปลี่ยนวันไปใช้จริง ──
   function applyMove(m: ItemMove, why: string) {
@@ -235,6 +245,11 @@ export function ProjectTimeline({
     }
     const item = byId.get(el.dataset.bar!);
     if (!item) return;
+    // จอสัมผัส: จำไว้ว่าแตะแถบไหน (ไม่จับ pointer — นิ้วยังเลื่อนจอได้) · ตัดสินตอนปล่อยนิ้ว
+    if (coarse) {
+      tap.current = { id: item.id, x: e.clientX, y: e.clientY };
+      return;
+    }
     // Shift/Ctrl/⌘ + คลิก = เพิ่ม/เอาออกจากชุดที่เลือก (ไม่ลาก)
     if (additive && !coarse && canDrag(item)) {
       setPicked((prev) => {
@@ -301,6 +316,31 @@ export function ProjectTimeline({
     setPreviews({ [it.id]: { start: d.start, end: d.end } });
   }
   function onPointerUp(e: RPointerEvent<HTMLDivElement>) {
+    if (tap.current) {
+      const t = tap.current;
+      tap.current = null;
+      // นิ้วเลื่อนไปไกล = เลื่อนจอ ไม่ใช่แตะ
+      if (Math.abs(e.clientX - t.x) > 10 || Math.abs(e.clientY - t.y) > 10) return;
+      const item = byId.get(t.id);
+      if (!item) return;
+      if (selectMode) {
+        if (!canMove(item)) {
+          toast.message(item.state === "done" ? "งานนี้เสร็จแล้ว เลื่อนไม่ได้" : "คุณไม่มีสิทธิ์เลื่อนงานนี้");
+          return;
+        }
+        setPicked((prev) => {
+          const next = new Set(prev);
+          if (next.has(item.id)) next.delete(item.id);
+          else next.add(item.id);
+          return next;
+        });
+        return;
+      }
+      // แตะแถบงาน = เปิดงาน (แผงรายละเอียดอยู่ใต้ไทม์ไลน์ มองไม่เห็นบนจอเล็ก) · จุดสำคัญ = เลือกดูรายละเอียด
+      if (item.kind === "task") onOpenTask(item.id);
+      else setSel((cur) => (cur === item.id ? null : item.id));
+      return;
+    }
     if (link.current) {
       const from = link.current.from;
       link.current = null;
@@ -388,6 +428,14 @@ export function ProjectTimeline({
           onClick={() => { if (rightRef.current) rightRef.current.scrollTo({ left: Math.max(0, (dayNum(today) - lo) * W - 60), behavior: "smooth" }); }}>
           วันนี้
         </button>
+        {canPlan && (
+          <button type="button" aria-pressed={selectMode}
+            className={cn("h-9 rounded-lg border px-3 text-[13px] font-semibold",
+              selectMode ? "border-[var(--brand-navy)] bg-[#dde3ee] text-[var(--brand-navy)]" : "border-[var(--line)] active:bg-[var(--bg-soft)]")}
+            onClick={() => { setSelectMode((v) => !v); setPicked(new Set()); setOffset(0); }}>
+            {selectMode ? "เสร็จ" : "เลือกเลื่อน"}
+          </button>
+        )}
       </div>
 
       <div className="hidden flex-wrap items-center gap-2 sm:flex">
@@ -503,7 +551,7 @@ export function ProjectTimeline({
         {/* ขวา: แถบเวลา */}
         <div ref={rightRef} className="relative overflow-x-auto">
           <div ref={canvasRef} className="relative" style={{ width, height }}
-            onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
+            onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => { tap.current = null; }}>
             {Array.from({ length: hi - lo + 1 }, (_, k) => {
               const d = lo + k, s = ymdOfDay(d), dt = new Date(d * 864e5), dow = dt.getUTCDay(), x = k * W;
               const hol = holidays.has(s), we = dow === 0 || dow === 6;
@@ -679,6 +727,48 @@ export function ProjectTimeline({
           {impact.affected.length > 0 && <> · มีงานรออยู่ {impact.affected.length} รายการ{impact.affected.some((a) => a.kind === "milestone") && <> รวมจุดสำคัญ <b>{impact.affected.filter((a) => a.kind === "milestone").map((a) => a.name).join(", ")}</b></>}</>}
         </div>
       ) : null}
+
+      {/* มือถือ: แผงเลื่อนวันของงานที่เลือก — ลอยเหนือเมนูล่าง */}
+      {selectMode && (
+        <div className="fixed inset-x-3 bottom-[84px] z-40 rounded-2xl border border-[var(--line)] bg-[var(--bg)] p-3 shadow-[0_8px_30px_rgba(0,0,0,0.18)] sm:hidden">
+          <div className="flex items-center justify-between gap-2 text-[13px]">
+            <span className="font-semibold text-[var(--ink)]">
+              {picked.size ? `เลือก ${picked.size} งาน` : "แตะแถบงานที่จะเลื่อน (แตะได้หลายอัน)"}
+            </span>
+            <button type="button" className="rounded-md px-2 py-1 text-[var(--ink-soft)] active:bg-[var(--bg-soft)]"
+              onClick={() => { setSelectMode(false); setPicked(new Set()); setOffset(0); }}>
+              ยกเลิก
+            </button>
+          </div>
+          <div className="mt-2 flex items-center gap-1.5">
+            {[-7, -1].map((n) => (
+              <button key={n} type="button" disabled={!picked.size} onClick={() => setOffset((o) => o + n)}
+                className="h-10 flex-1 rounded-lg border border-[var(--line)] text-[13px] font-semibold active:bg-[var(--bg-soft)] disabled:opacity-40">
+                {n} วัน
+              </button>
+            ))}
+            <span className="w-16 shrink-0 text-center text-[15px] font-bold tabular-nums text-[var(--brand-navy)]">
+              {offset > 0 ? `+${offset}` : offset} วัน
+            </span>
+            {[1, 7].map((n) => (
+              <button key={n} type="button" disabled={!picked.size} onClick={() => setOffset((o) => o + n)}
+                className="h-10 flex-1 rounded-lg border border-[var(--line)] text-[13px] font-semibold active:bg-[var(--bg-soft)] disabled:opacity-40">
+                +{n} วัน
+              </button>
+            ))}
+          </div>
+          <button type="button" disabled={!picked.size || !offset}
+            className="mt-2 h-10 w-full rounded-lg bg-[var(--brand-navy)] text-[14px] font-semibold text-white disabled:opacity-40"
+            onClick={() => {
+              commitGroupMove(items.filter((i) => picked.has(i.id) && canMove(i)), offset);
+              setOffset(0);
+              setPicked(new Set());
+              setSelectMode(false);
+            }}>
+            บันทึก{picked.size && offset ? ` · เลื่อน ${picked.size} งาน ${offset > 0 ? "+" : ""}${offset} วัน` : ""}
+          </button>
+        </div>
+      )}
 
       {selItem && (
         <ItemDetail
