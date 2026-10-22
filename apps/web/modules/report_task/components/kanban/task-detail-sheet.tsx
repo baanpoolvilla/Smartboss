@@ -928,13 +928,20 @@ export function TaskDetailSheet({
           {/* A group task's completion is derived from each person's own
               checklist section below — no separate manual toggle here
               anymore, the checklist itself is the completion surface. */}
-          {isShared && iAmAssignee && task.status !== "done" && (
-            <div className="rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-3">
-              <p className="text-xs font-medium text-[var(--ink-soft)]">
-                {completedCount}/{task.assigneeIds.length} คนเสร็จแล้ว — ติ๊กเช็คลิสต์ของคุณให้ครบด้านล่างเพื่อปิดส่วนของคุณ
-              </p>
-            </div>
-          )}
+          {isShared && iAmAssignee && task.status !== "done" && (() => {
+            // ข้อความตามกติกาปิดงาน — "คนใดคนหนึ่ง" ไม่ต้องรอคนอื่น ใครครบก่อนงานปิดเลย
+            const hasOwnItems = task.checklist.some((c) => c.ownerId === viewingAsUserId);
+            const how = hasOwnItems ? "ติ๊กเช็คลิสต์ของคุณด้านล่างให้ครบ" : "ติ๊กช่องที่ชื่อคุณในเช็คลิสต์ด้านล่าง";
+            return (
+              <div className="rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-3">
+                <p className="text-xs font-medium text-[var(--ink-soft)]">
+                  {task.completionRule === "any"
+                    ? `ปิดงานเมื่อคนใดคนหนึ่งเสร็จ — ${how} งานปิดทันที ไม่ต้องรอคนอื่น`
+                    : `${completedCount}/${task.assigneeIds.length} คนเสร็จแล้ว — ${how} เพื่อปิดส่วนของคุณ (งานปิดเมื่อครบทุกคน)`}
+                </p>
+              </div>
+            );
+          })()}
 
           {/* Status + priority */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
