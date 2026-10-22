@@ -599,12 +599,13 @@ export function CalendarView() {
   );
   const canSeeScheduleOf = (userId: string | undefined) =>
     !userId || ((!scheduleUserScope || scheduleUserScope.has(userId)) && !hiddenUserIds.includes(userId));
+  // คนงานรายวัน (WORKER) ไม่ขึ้นปฏิทินทีม/ตารางวันหยุดของทีม — วันหยุดคนงานจัดในโมดูลคนงานรายวัน
   const visibleLeaves = useMemo(
-    () => leaves.filter((l) => !l.userId || ((!scheduleUserScope || scheduleUserScope.has(l.userId)) && !hiddenUserIds.includes(l.userId))),
+    () => leaves.filter((l) => !l.userId || ((!scheduleUserScope || scheduleUserScope.has(l.userId)) && !hiddenUserIds.includes(l.userId) && !getUser(l.userId)?.isWorker)),
     [leaves, hiddenUserIds, scheduleUserScope]
   );
   const visibleOvertime = useMemo(
-    () => overtime.filter((o) => !o.userId || ((!scheduleUserScope || scheduleUserScope.has(o.userId)) && !hiddenUserIds.includes(o.userId))),
+    () => overtime.filter((o) => !o.userId || ((!scheduleUserScope || scheduleUserScope.has(o.userId)) && !hiddenUserIds.includes(o.userId) && !getUser(o.userId)?.isWorker)),
     [overtime, hiddenUserIds, scheduleUserScope]
   );
 
