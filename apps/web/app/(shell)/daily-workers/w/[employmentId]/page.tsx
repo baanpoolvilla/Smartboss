@@ -6,7 +6,7 @@ import { requireOrg, hasPermission } from "@smartboss/auth";
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { DW_PERMS } from "@/modules/daily_worker/permissions";
 import { bangkokToday, loadMoney, summarize } from "@/modules/daily_worker/lib/data";
-import { baht, changedAfterPay, minutesToHm, owedOn, shiftMonth } from "@/modules/daily_worker/lib/types";
+import { baht, changedAfterPay, owedOn, shiftLabel, shiftMonth } from "@/modules/daily_worker/lib/types";
 import { MoneySource } from "@/modules/daily_worker/components/money-source";
 import { PayForm, VoidPayment } from "@/modules/daily_worker/components/pay-form";
 import { AuditList } from "@/modules/daily_worker/components/audit-list";
@@ -59,7 +59,7 @@ export default async function WorkerLedgerPage({ params, searchParams }: { param
           <div className="min-w-0 flex-1 basis-56">
             <b className="text-base">{w.name}</b>
             <p className="text-xs text-(--ink-soft)">
-              {w.employeeCode ?? ""} · กะ {w.shiftId ? `${minutesToHm(w.shiftStart)}–${minutesToHm(w.shiftEnd)}` : "ยังไม่ผูก"} ·{" "}
+              {w.employeeCode ?? ""} · กะ {shiftLabel(w) ?? "ยังไม่ผูก"} ·{" "}
               {w.dailyWage === null ? <span className="text-(--tone-warn)">ยังไม่ตั้งค่าแรง</span> : `ค่าแรง ${baht(w.dailyWage)}/วัน`} · OT {w.otPercent ?? res.data.otPercent}%
               {w.otPercent === null && " (กลาง)"}
             </p>

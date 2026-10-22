@@ -5,7 +5,7 @@ import { requireOrg, hasPermission } from "@smartboss/auth";
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { DW_PERMS } from "@/modules/daily_worker/permissions";
 import { bangkokToday, loadMonth, summarize } from "@/modules/daily_worker/lib/data";
-import { hoursLabel, minutesToHm } from "@/modules/daily_worker/lib/types";
+import { hoursLabel, shiftLabel } from "@/modules/daily_worker/lib/types";
 import { WorkerRoster } from "@/modules/daily_worker/components/worker-roster";
 import { syncUserToWorkforce } from "@/modules/admin/data/user-guards";
 
@@ -81,7 +81,7 @@ export default async function DailyWorkersPage({ searchParams }: { searchParams:
                             w.name
                           )}
                         </td>
-                        <td className="px-3 py-2 text-(--ink-soft)">{w.shiftId ? `${minutesToHm(w.shiftStart)}–${minutesToHm(w.shiftEnd)}` : "ยังไม่ผูกกะ"}</td>
+                        <td className="px-3 py-2 text-(--ink-soft)">{shiftLabel(w) ?? "ยังไม่ผูกกะ"}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{s.present}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-(--tone-warn)">{dash ? "—" : s.late ? `${s.late} (${s.lateMin} น.)` : 0}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-(--tone-danger)">{dash ? "—" : s.absent}</td>

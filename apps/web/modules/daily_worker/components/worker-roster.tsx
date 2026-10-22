@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 
 import { cn } from "@smartboss/ui/cn";
 import { assignShiftAction, deleteOtAction, saveOtAction, setDaysOffAction } from "../actions";
-import { baht, hoursLabel, minutesToHm, otMinutes, shiftMonth, type DayCell, type MonthData, type WorkerMonth } from "../lib/types";
+import { baht, hoursLabel, minutesToHm, otMinutes, shiftLabel, shiftMonth, shiftOnDate, WEEKDAY_SHORT, type DayCell, type MonthData, type WorkerMonth } from "../lib/types";
 import { TimeEditFix } from "./time-edit-fix";
 
 const WD = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
@@ -60,7 +60,8 @@ export function WorkerRoster({ data, canManage, canOverride }: { data: MonthData
   const [status, setStatus] = useState<string | null>(null);
   const [otForm, setOtForm] = useState<null | { day: number; employmentIds: string[]; start: string; end: string; note: string }>(null);
   const [focus, setFocus] = useState<null | { employmentId: string; day: number }>(null);
-  const [shiftFor, setShiftFor] = useState<null | { employmentId: string; name: string; shiftId: string; from: string }>(null);
+  // ผูกกะ: ทุกวันกะเดียวกัน หรือแยกรายวัน (week จันทร์ → อาทิตย์) · all = ใช้กับคนงานทุกคน
+  const [shiftFor, setShiftFor] = useState<null | { employmentId: string; name: string; perDay: boolean; week: string[]; from: string; all: boolean }>(null);
 
   const isCurrentMonth = data.today.startsWith(data.month);
   const todayDay = isCurrentMonth ? Number(data.today.slice(8, 10)) : 0;
@@ -281,7 +282,7 @@ export function WorkerRoster({ data, canManage, canOverride }: { data: MonthData
                         {w.employeeCode ?? "ไม่มีทะเบียน"} ·{" "}
                         {w.shiftId ? (
                           <>
-                            {minutesToHm(w.shiftStart)}–{minutesToHm(w.shiftEnd)}
+                            {shiftLabel(w)}
                             {w.shiftFrom && <span className="text-(--tone-warn)"> (เริ่ม {Number(w.shiftFrom.slice(8))}/{Number(w.shiftFrom.slice(5, 7))})</span>}
                           </>
                         ) : (
@@ -290,7 +291,11 @@ export function WorkerRoster({ data, canManage, canOverride }: { data: MonthData
                         {canManage && w.employmentId && (
                           <button
                             type="button"
-                            onClick={() => setShiftFor({ employmentId: w.employmentId!, name: w.name, shiftId: w.shiftId ?? data.shifts[0]?.id ?? "", from: data.today })}
+                            onClick={() => {
+                              const fallback = w.shiftId ?? data.shifts[0]?.id ?? "";
+                              const week = w.week ? w.week.map((s) => s?.id ?? fallback) : Array<string>(7).fill(fallback);
+                              setShiftFor({ employmentId: w.employmentId!, name: w.name, perDay: new Set(week).size > 1, week, from: data.today, all: false });
+                            }}
                             className="ml-1 underline"
                           >
                             {w.shiftId ? "เปลี่ยน" : "ผูกกะ"}
@@ -404,8 +409,8 @@ export function WorkerRoster({ data, canManage, canOverride }: { data: MonthData
                 date={focusDate}
                 inAt={focusCell?.inAt ?? null}
                 outAt={focusCell?.outAt ?? null}
-                shiftStart={focusWorker.shiftId ? minutesToHm(focusWorker.shiftStart) : null}
-                shiftEnd={focusWorker.shiftId ? minutesToHm(focusWorker.shiftEnd) : null}
+                shiftStart={focusWorker.shiftId ? minutesToHm(focusCell?.shift?.start ?? shiftOnDate(focusWorker, focusDate).start) : null}
+                shiftEnd={focusWorker.shiftId ? minutesToHm(focusCell?.shift?.end ?? shiftOnDate(focusWorker, focusDate).end) : null}
                 cell={focusCell ?? null}
               />
             </div>
@@ -469,46 +474,97 @@ export function WorkerRoster({ data, canManage, canOverride }: { data: MonthData
         </div>
       )}
 
-      {shiftFor && (
-        <div className="rounded-2xl border border-(--line) bg-(--bg) p-4 text-sm">
-          <b>ผูกกะ · {shiftFor.name}</b>
-          {data.shifts.length === 0 ? (
-            <p className="mt-2 text-(--ink-soft)">ยังไม่มีกะในระบบบุคคล — ให้ HR สร้างกะที่ HR → ตั้งค่า → กะทำงาน ก่อน</p>
-          ) : (
-            <div className="mt-3 flex flex-wrap items-end gap-3">
-              <label className="flex flex-col gap-1">
-                กะ
-                <select id="dw-shift" value={shiftFor.shiftId} onChange={(e) => setShiftFor({ ...shiftFor, shiftId: e.target.value })} className="rounded-lg border border-(--line) bg-(--bg) px-2 py-1">
-                  {data.shifts.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} · {minutesToHm(s.start)}–{minutesToHm(s.end)}
-                    </option>
+      {shiftFor && (() => {
+        const withEmployment = data.workers.filter((w) => w.employmentId);
+        const shiftSelect = (value: string, onChange: (v: string) => void, id: string, label?: string) => (
+          <select id={id} aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} className="rounded-lg border border-(--line) bg-(--bg) px-2 py-1">
+            {!data.shifts.some((s) => s.id === value) && <option value="">— เลือกกะ —</option>}
+            {data.shifts.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} · {minutesToHm(s.start)}–{minutesToHm(s.end)}
+              </option>
+            ))}
+          </select>
+        );
+        return (
+          <div className="rounded-2xl border border-(--line) bg-(--bg) p-4 text-sm">
+            <b>ผูกกะ · {shiftFor.all ? `คนงานทุกคน (${withEmployment.length} คน)` : shiftFor.name}</b>
+            {data.shifts.length === 0 ? (
+              <p className="mt-2 text-(--ink-soft)">ยังไม่มีกะในระบบบุคคล — ให้ HR สร้างกะที่ HR → ตั้งค่า → กะทำงาน ก่อน</p>
+            ) : (
+              <div className="mt-3 flex flex-col gap-3">
+                <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="รูปแบบกะ">
+                  {[
+                    { v: false, label: "ทุกวันเวลาเดียวกัน" },
+                    { v: true, label: "แยกเวลารายวัน" },
+                  ].map((o) => (
+                    <button
+                      key={o.label}
+                      type="button"
+                      role="radio"
+                      aria-checked={shiftFor.perDay === o.v}
+                      onClick={() => setShiftFor({ ...shiftFor, perDay: o.v, week: o.v ? shiftFor.week : Array<string>(7).fill(shiftFor.week[0] ?? "") })}
+                      className={cn(
+                        "rounded-full border px-3 py-1",
+                        shiftFor.perDay === o.v ? "border-(--brand-navy) bg-(--brand-navy)/10 font-semibold text-(--brand-navy)" : "border-(--line) text-(--ink-soft)",
+                      )}
+                    >
+                      {o.label}
+                    </button>
                   ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1">
-                เริ่มใช้ตั้งแต่
-                <input id="dw-shift-from" type="date" value={shiftFor.from} onChange={(e) => setShiftFor({ ...shiftFor, from: e.target.value })} className="rounded-lg border border-(--line) bg-(--bg) px-2 py-1" />
-              </label>
-              <button
-                type="button"
-                disabled={pending || !shiftFor.shiftId}
-                onClick={() => {
-                  const f = shiftFor;
-                  run(() => assignShiftAction({ employmentId: f.employmentId, shiftId: f.shiftId, from: f.from }), () => `ผูกกะให้ ${f.name} แล้ว`);
-                  setShiftFor(null);
-                }}
-                className="rounded-full bg-(--ink) px-4 py-1.5 font-semibold text-(--bg) disabled:opacity-40"
-              >
-                บันทึกกะ
-              </button>
-              <button type="button" onClick={() => setShiftFor(null)} className="rounded-full border border-(--line) px-4 py-1.5">
-                ยกเลิก
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+                </div>
+                {shiftFor.perDay ? (
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                    {WEEKDAY_SHORT.map((d, i) => (
+                      <label key={d} className="flex items-center gap-2">
+                        <span className="w-6 shrink-0 font-semibold">{d}</span>
+                        {shiftSelect(shiftFor.week[i] ?? "", (v) => setShiftFor({ ...shiftFor, week: shiftFor.week.map((x, j) => (j === i ? v : x)) }), `dw-shift-${i}`, `กะวัน${d}`)}
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <label className="flex flex-col gap-1">
+                    กะ
+                    {shiftSelect(shiftFor.week[0] ?? "", (v) => setShiftFor({ ...shiftFor, week: Array<string>(7).fill(v) }), "dw-shift")}
+                  </label>
+                )}
+                <p className="text-xs text-(--ink-soft)">ไม่มีเวลาที่ต้องการ (เช่น 09:00–17:00) — สร้างกะเพิ่มที่ HR → ตั้งค่า → กะทำงาน แล้วกลับมาเลือก</p>
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="flex flex-col gap-1">
+                    เริ่มใช้ตั้งแต่
+                    <input id="dw-shift-from" type="date" value={shiftFor.from} onChange={(e) => setShiftFor({ ...shiftFor, from: e.target.value })} className="rounded-lg border border-(--line) bg-(--bg) px-2 py-1" />
+                  </label>
+                  {withEmployment.length > 1 && (
+                    <label className="flex items-center gap-2 py-1">
+                      <input type="checkbox" checked={shiftFor.all} onChange={(e) => setShiftFor({ ...shiftFor, all: e.target.checked })} />
+                      ใช้กับคนงานทุกคน ({withEmployment.length} คน)
+                    </label>
+                  )}
+                </div>
+                {shiftFor.from < data.today && <p className="text-xs text-(--tone-warn)">ย้อนหลัง — สาย/ขาดของวันที่ผ่านมาจะคิดใหม่ตามกะนี้ (เวลาที่แก้และ OT ที่ลงไว้ไม่หาย)</p>}
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={pending || shiftFor.week.some((id) => !id)}
+                    onClick={() => {
+                      const f = shiftFor;
+                      const employmentIds = f.all ? withEmployment.map((w) => w.employmentId!) : [f.employmentId];
+                      run(() => assignShiftAction({ employmentIds, week: f.week, from: f.from }), () => `ผูกกะให้ ${f.all ? `คนงาน ${employmentIds.length} คน` : f.name} แล้ว`);
+                      setShiftFor(null);
+                    }}
+                    className="rounded-full bg-(--ink) px-4 py-1.5 font-semibold text-(--bg) disabled:opacity-40"
+                  >
+                    บันทึกกะ
+                  </button>
+                  <button type="button" onClick={() => setShiftFor(null)} className="rounded-full border border-(--line) px-4 py-1.5">
+                    ยกเลิก
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { prisma } from "@smartboss/database";
 
 import { wfFetch as wfFetchRaw, WorkforceError } from "@/modules/hr/lib/api";
 import { syncUserToWorkforce } from "@/modules/admin/data/user-guards";
+import { invalidateAttendanceThrottle } from "@/modules/hr/lib/auto-recalculate";
 import { DW_PERMS } from "./permissions";
 import { bangkokToday, loadMoney, loadMonth, OT_KEY, OVERRIDE_KEY, updateStoreList } from "./lib/data";
 import { insertAudit, logDw, withDailyWorkerTenant } from "./lib/db";
@@ -246,25 +247,52 @@ export async function removeOverrideAction(input: { employmentId: string; date: 
 
 const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
-/** ผูกกะให้คนงาน — ทุกวันกะเดียวกัน (วันหยุดมาจากใบ Day-Off) แบบเดียวกับ setRecurringPatternAction ของ HR */
-export async function assignShiftAction(input: { employmentId: string; shiftId: string; from: string }): Promise<Result> {
+/**
+ * ผูกกะให้คนงาน (วันหยุดมาจากใบ Day-Off) — ทุกวันกะเดียวกัน หรือแยกรายวัน (`week` จันทร์ → อาทิตย์
+ * เช่น อาทิตย์เข้า 09:00) ตารางประจำของระบบบุคคลรองรับรายวันอยู่แล้ว · ใส่หลายคนพร้อมกันได้
+ * เริ่มใช้ย้อนหลัง = คำนวณผลลงเวลาของวันที่ผ่านมาใหม่ตามกะใหม่ (สาย/ขาดเปลี่ยนตาม)
+ */
+export async function assignShiftAction(input: { employmentIds: string[]; week: string[]; from: string }): Promise<Result> {
   try {
     const wfFetch = makeWf();
     const session = await guard(DW_PERMS.manage);
-    if (!input.employmentId || !input.shiftId || !DATE_RE.test(input.from)) return { error: "ข้อมูลไม่ครบ" };
-    await wfFetch("/recurring-work-patterns", {
-      method: "POST",
-      body: {
-        employment_id: input.employmentId,
-        ...Object.fromEntries(WEEKDAYS.map((d) => [`${d}_shift_id`, input.shiftId])),
-        effective_from: input.from,
-        effective_to: null,
-        supersede_current: true,
-      },
+    const ids = [...new Set(input.employmentIds.filter(Boolean))];
+    if (ids.length === 0 || input.week.length !== 7 || input.week.some((id) => !id) || !DATE_RE.test(input.from)) return { error: "ข้อมูลไม่ครบ — เลือกกะให้ครบทุกวัน" };
+    for (const employmentId of ids) {
+      await wfFetch("/recurring-work-patterns", {
+        method: "POST",
+        body: {
+          employment_id: employmentId,
+          ...Object.fromEntries(WEEKDAYS.map((d, i) => [`${d}_shift_id`, input.week[i]])),
+          effective_from: input.from,
+          effective_to: null,
+          supersede_current: true,
+        },
+      });
+    }
+    // ย้อนหลัง: ผลลงเวลาเดิมยังเทียบกับกะเก่า — คำนวณใหม่ถึงวันนี้ (ไม่สำเร็จก็ไม่ล้ม กะบันทึกแล้ว ระบบคำนวณรอบถัดไปให้เอง)
+    const today = bangkokToday();
+    let recalcFailed = false;
+    if (input.from <= today) {
+      invalidateAttendanceThrottle(session.orgId!);
+      for (const employmentId of ids) {
+        await wfFetch("/attendance-results:recalculate", { method: "POST", body: { employment_id: employmentId, from: input.from, to: today } }).catch(() => {
+          recalcFailed = true;
+        });
+      }
+    }
+    const perDay = new Set(input.week).size > 1;
+    await logDw(session.orgId!, {
+      byUserId: session.userId,
+      byName: await nameOf(session.userId),
+      action: "shift",
+      employmentIds: ids,
+      workDate: input.from,
+      summary: `ผูกกะใหม่${perDay ? " (แยกรายวัน)" : ""}${ids.length > 1 ? ` ${ids.length} คน` : ""} มีผลตั้งแต่ ${input.from}`,
+      detail: { week: input.week },
     });
-    await logDw(session.orgId!, { byUserId: session.userId, byName: await nameOf(session.userId), action: "shift", employmentIds: [input.employmentId], workDate: input.from, summary: `ผูกกะใหม่ มีผลตั้งแต่ ${input.from}`, detail: { shiftId: input.shiftId } });
     revalidatePath("/daily-workers");
-    return { ok: true };
+    return recalcFailed ? { error: "บันทึกกะแล้ว แต่คำนวณวันที่ผ่านมาใหม่ไม่สำเร็จ — ระบบจะคำนวณให้รอบถัดไป" } : { ok: true };
   } catch (error) {
     return { error: message(error) };
   }

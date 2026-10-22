@@ -12,6 +12,7 @@ import {
   judgeDay,
   judgeTimes,
   minutesToHm,
+  shiftOnDate,
   type DayCell,
   type DwSettings,
   type MonthData,
@@ -22,6 +23,7 @@ import {
   type DayMoney,
   walkLedger,
   type TimeEditEntry,
+  type WeekShift,
   type WorkerMonth,
 } from "./types";
 
@@ -115,6 +117,8 @@ interface EmploymentRow {
   shift_start: number | null;
   shift_end: number | null;
   shift_from: string | null;
+  /** กะของแต่ละวัน จันทร์ → อาทิตย์ (ตารางประจำ) */
+  week: (string | null)[] | null;
   linked: boolean;
 }
 interface ResultRow {
@@ -131,6 +135,11 @@ interface ResultRow {
   sched_in: number | null;
   /** ความยาวกะ (นาที) — ข้ามคืนได้ */
   sched_len: number | null;
+}
+interface ShiftDefRow {
+  id: string;
+  start_minutes: number;
+  end_minutes: number;
 }
 interface WageRow {
   employment_id: string;
@@ -162,14 +171,14 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
 
   const wf =
     subjects.length === 0
-      ? { employments: [] as EmploymentRow[], results: [] as ResultRow[], leaves: [] as LeaveRow[], dayOffTypeId: null as string | null, shifts: [] as { id: string; name: string; start_minutes: number; end_minutes: number }[], firstIn: [] as { employment_id: string; day: string }[], wages: [] as WageRow[] }
+      ? { employments: [] as EmploymentRow[], results: [] as ResultRow[], leaves: [] as LeaveRow[], dayOffTypeId: null as string | null, shifts: [] as { id: string; name: string; start_minutes: number; end_minutes: number }[], firstIn: [] as { employment_id: string; day: string }[], wages: [] as WageRow[], weekDefs: [] as ShiftDefRow[] }
       : await withWorkforceTenant(orgId, async (tx) => {
           // สัญญาจ้างที่ยังทำงานอยู่ของแต่ละคน + กะที่มีผลวันนี้ (ตารางประจำ — ทุกวันกะเดียวกัน ดู setRecurringPatternAction)
           // ผูกคนกับทะเบียนพนักงาน: principal.person_id (ที่ระบบบุคคลใช้ตอนลงเวลา) ก่อน ไม่มีค่อยเทียบอีเมล
           // (ผู้ใช้ที่ยังไม่เคย sync ไประบบบุคคล principal ยังไม่มี/ยังไม่ผูก person — เจอจริง 2026-10-15)
           const employments = await tx.$queryRawUnsafe<EmploymentRow[]>(
             `SELECT DISTINCT ON (u.subject) u.subject, e.id::text AS employment_id, e.employee_code,
-                    s.id::text AS shift_id, s.name AS shift_name, s.start_minutes AS shift_start, s.end_minutes AS shift_end, pat.shift_from,
+                    s.id::text AS shift_id, s.name AS shift_name, s.start_minutes AS shift_start, s.end_minutes AS shift_end, pat.shift_from, pat.week,
                     COALESCE(pe.id = p.person_id, false) AS linked
                FROM unnest($1::text[], $3::text[]) AS u(subject, email)
                LEFT JOIN workforce.principals p ON p.subject = u.subject
@@ -179,7 +188,9 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
                LEFT JOIN LATERAL (
                  SELECT COALESCE(r.monday_shift_id, r.tuesday_shift_id, r.wednesday_shift_id, r.thursday_shift_id,
                                  r.friday_shift_id, r.saturday_shift_id, r.sunday_shift_id) AS shift_id,
-                        to_char(r.effective_from, 'YYYY-MM-DD') AS shift_from
+                        to_char(r.effective_from, 'YYYY-MM-DD') AS shift_from,
+                        ARRAY[r.monday_shift_id::text, r.tuesday_shift_id::text, r.wednesday_shift_id::text, r.thursday_shift_id::text,
+                              r.friday_shift_id::text, r.saturday_shift_id::text, r.sunday_shift_id::text] AS week
                    FROM workforce.recurring_work_patterns r
                   WHERE r.employment_id = e.id AND (r.effective_to IS NULL OR r.effective_to >= $2::date)
                   -- ตัวที่มีผลวันนี้ก่อน ไม่มีค่อยเอาตัวที่จะเริ่มเร็วที่สุด (ผูกกะไว้ให้เริ่มพรุ่งนี้ ไม่ใช่ "ยังไม่ผูกกะ")
@@ -195,7 +206,7 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
             workers.map((w) => w.email ?? ""),
           );
           const ids = employments.map((e) => e.employment_id);
-          if (ids.length === 0) return { employments, results: [], leaves: [], dayOffTypeId: null, shifts: [], firstIn: [], wages: [] as WageRow[] };
+          if (ids.length === 0) return { employments, results: [], leaves: [], dayOffTypeId: null, shifts: [], firstIn: [], wages: [] as WageRow[], weekDefs: [] as ShiftDefRow[] };
           // วันแรกที่ลงเวลาจริงของแต่ละคน (ทั้งประวัติ) — ก่อนวันนั้นไม่นับ "ไม่มา" (ยังไม่เริ่มใช้ระบบ/ยังไม่เริ่มงาน)
           const firstIn = await tx.$queryRawUnsafe<{ employment_id: string; day: string }[]>(
             `SELECT employment_id::text AS employment_id, to_char(min(work_date), 'YYYY-MM-DD') AS day
@@ -258,7 +269,16 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
               from,
               to,
             );
-          return { employments, results, leaves, dayOffTypeId: types[0]?.id ?? null, shifts, firstIn, wages };
+          // เวลาของกะที่ตารางประจำอ้างถึง (รวมกะที่ปิดใช้แล้ว) — ใช้หากะของแต่ละวันในสัปดาห์
+          const weekIds = [...new Set(employments.flatMap((e) => e.week ?? []).filter((id): id is string => !!id))];
+          const weekDefs =
+            weekIds.length === 0
+              ? []
+              : await tx.$queryRawUnsafe<ShiftDefRow[]>(
+                  `SELECT id::text AS id, start_minutes, end_minutes FROM workforce.shift_definitions WHERE id = ANY($1::uuid[])`,
+                  weekIds,
+                );
+          return { employments, results, leaves, dayOffTypeId: types[0]?.id ?? null, shifts, firstIn, wages, weekDefs };
         });
 
   const [{ list: ot }, { list: overrides }, edits, settings, rates] = await Promise.all([
@@ -289,12 +309,21 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
     return w ? { wage: Number(w.amount), otPercent: settings.otPercent, origin: "hr", byName: null, from: w.effective_from, otFromCompany: true } : undefined;
   };
   const empBySubject = new Map(wf.employments.map((e) => [e.subject, e]));
+  const defById = new Map(wf.weekDefs.map((d) => [d.id, d]));
+  const weekOf = (e: EmploymentRow | null): WeekShift[] | null => {
+    if (!e?.week || !e.shift_id) return null;
+    return e.week.map((id) => {
+      const d = id ? defById.get(id) : undefined;
+      return d ? { id: d.id, start: d.start_minutes, end: d.end_minutes } : null;
+    });
+  };
   const firstInByEmp = new Map(wf.firstIn.map((f) => [f.employment_id, f.day]));
 
   // วันอ้างอิงของ "ค่าแรงตอนนี้" — เดือนนี้ = วันนี้ · เดือนก่อน = สิ้นเดือนนั้น · เดือนหน้า = วันที่ 1
   const refDay = today < from ? from : today > to ? to : today;
   const rows: WorkerMonth[] = workers.map((w) => {
     const emp = empBySubject.get(w.userId) ?? null;
+    const week = weekOf(emp);
     const cells: Record<number, DayCell> = {};
     if (emp) {
       const res = new Map(wf.results.filter((r) => r.employment_id === emp.employment_id).map((r) => [r.day, r]));
@@ -315,8 +344,10 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
           cell.edit = { inAt: ed.inAt, outAt: ed.outAt, scannedIn: r?.in_hm ?? null, scannedOut: r?.out_hm ?? null, reason: ed.reason, byName: ed.byName, at: ed.at };
         }
         // กะของวันนั้น (จากผลลงเวลาของวันนั้น) ก่อน ไม่มีค่อยใช้กะปัจจุบัน — เปลี่ยนกะกลางเดือนแล้ววันเก่าไม่ถูกตัดสินด้วยกะใหม่
-        const dayStart = r?.sched_in ?? emp.shift_start;
-        const dayEnd = r?.sched_in != null && r.sched_len != null ? r.sched_in + r.sched_len : emp.shift_end;
+        // ไม่มีผลลงเวลาของวันนั้น = กะของวันนั้นตามตารางประจำ (แยกรายวันได้ เช่น อาทิตย์เข้า 09:00)
+        const planned = shiftOnDate({ week, shiftStart: emp.shift_start, shiftEnd: emp.shift_end }, date);
+        const dayStart = r?.sched_in ?? planned.start;
+        const dayEnd = r?.sched_in != null && r.sched_len != null ? r.sched_in + r.sched_len : planned.end;
         if (inAt) {
           cell.inAt = inAt;
           if (outAt) cell.outAt = outAt;
@@ -378,6 +409,7 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
       shiftName: emp?.shift_name ?? null,
       shiftStart: emp?.shift_start ?? null,
       shiftEnd: emp?.shift_end ?? null,
+      week,
       shiftFrom: emp?.shift_from && emp.shift_from > today ? emp.shift_from : null,
       // ค่าแรงที่มีผลวันนี้ (ดูเดือนก่อน = ณ สิ้นเดือนนั้น)
       dailyWage: emp ? wageOn(emp.employment_id, refDay) : null,
@@ -481,23 +513,27 @@ export async function loadDay(orgId: string, date: string, now: Date = new Date(
     const mine = events.filter((e) => e.employment_id === w.employmentId);
     const inAt = cell?.inAt ?? mine[0]?.hm ?? null;
     const outAt = cell?.outAt ?? (mine.length > 1 ? mine[mine.length - 1]!.hm : null);
-    const shift = w.shiftId ? `${minutesToHm(w.shiftStart)}–${minutesToHm(w.shiftEnd)}` : null;
+    // กะของวันที่ดู (แยกรายวันได้) — ผลลงเวลามีกะของวันนั้นแล้วใช้ตัวนั้นก่อน
+    const planned = cell?.shift ?? shiftOnDate(w, date);
+    const sStart = planned.start;
+    const sEnd = planned.end;
+    const shift = w.shiftId && sStart !== null ? `${minutesToHm(sStart)}–${minutesToHm(sEnd)}` : null;
     let status: DayRow["status"];
     if (cell?.s === "o" || cell?.s === "l" || cell?.s === "r") status = cell.s;
     else if (cell?.override) status = "m";
     else if (inAt) {
       if (cell?.s === "m" || cell?.s === "s" || cell?.s === "x") status = cell.s;
-      else if (w.shiftStart === null) status = "m";
-      else status = toMin(inAt) > w.shiftStart % 1440 ? "s" : "m";
+      else if (sStart === null) status = "m";
+      else status = toMin(inAt) > sStart % 1440 ? "s" : "m";
     } else if (!w.shiftId) status = "ns";
     // วันก่อนหน้า: ไม่มา เฉพาะวันที่มีกะจริง (ก่อนเริ่มกะ = ไม่มีกะวันนั้น)
     else if (date < month.today) status = cell?.s === "n" ? "n" : "none";
     else if (date > month.today) status = "w";
     // ยังไม่เคยลงเวลาเลย = ยังไม่เริ่ม — เลิกกะแล้วก็ยังไม่นับไม่มา
-    else status = w.startedOn !== null && w.shiftEnd !== null && toMin(nowHm) > w.shiftEnd % 1440 ? "n" : "w";
+    else status = w.startedOn !== null && sEnd !== null && toMin(nowHm) > sEnd % 1440 ? "n" : "w";
     const early =
       !!cell?.early ||
-      (!cell?.ot && !!outAt && w.shiftEnd !== null && w.shiftEnd < 1440 && toMin(outAt) < w.shiftEnd && (date < month.today || mine.length > 1));
+      (!cell?.ot && !!outAt && sEnd !== null && sEnd < 1440 && toMin(outAt) < sEnd && (date < month.today || mine.length > 1));
     return {
       userId: w.userId,
       name: w.name,
@@ -509,7 +545,7 @@ export async function loadDay(orgId: string, date: string, now: Date = new Date(
       source: mine[0]?.source_type ?? null,
       status,
       early,
-      lateMin: cell?.lateMin ?? (status === "s" && inAt && w.shiftStart !== null ? judgeTimes(w.shiftStart, w.shiftEnd ?? w.shiftStart, toMin(inAt), null).lateMin : 0),
+      lateMin: cell?.lateMin ?? (status === "s" && inAt && sStart !== null ? judgeTimes(sStart, sEnd ?? sStart, toMin(inAt), null).lateMin : 0),
       cell,
     };
   });

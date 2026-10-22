@@ -2,7 +2,7 @@ import { requireOrg, hasPermission } from "@smartboss/auth";
 
 import { DW_PERMS } from "@/modules/daily_worker/permissions";
 import { bangkokToday, loadMonth, summarize } from "@/modules/daily_worker/lib/data";
-import { minutesToHm } from "@/modules/daily_worker/lib/types";
+import { shiftLabel } from "@/modules/daily_worker/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
   for (const w of data.workers) {
     const s = summarize(w);
     rows.push([
-      w.name, w.employeeCode ?? "", w.shiftId ? `${minutesToHm(w.shiftStart)}-${minutesToHm(w.shiftEnd)}` : "ยังไม่ผูกกะ",
+      w.name, w.employeeCode ?? "", shiftLabel(w) ?? "ยังไม่ผูกกะ",
       s.present, s.late, s.lateMin, s.absent, s.early, s.earlyMin, s.noShow, s.off, s.leave, +(s.otMinutes / 60).toFixed(2),
       w.dailyWage ?? "", s.pay.wage, s.pay.deduct, s.pay.ot, s.pay.total, s.pay.unpaidDays,
     ]);

@@ -50,6 +50,8 @@ export interface WorkerMonth {
   shiftName: string | null;
   shiftStart: number | null;
   shiftEnd: number | null;
+  /** กะแยกรายวันในสัปดาห์ (0 = จันทร์ … 6 = อาทิตย์) จากตารางประจำ — null = ยังไม่ผูกกะ */
+  week: WeekShift[] | null;
   /** วันแรกที่ลงเวลาจริง — ก่อนวันนั้นไม่นับ "ไม่มา" · null = ยังไม่เคยลงเวลา (ยังไม่นับไม่มาเลย) */
   startedOn: string | null;
   /** กะเริ่มมีผลวันข้างหน้า (ผูกไว้ล่วงหน้า) — null = มีผลแล้ว */
@@ -195,6 +197,46 @@ export function minutesToHm(minutes: number | null): string {
   if (minutes === null) return "—";
   const m = ((minutes % 1440) + 1440) % 1440;
   return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+}
+
+/** กะของวันหนึ่งในตารางประจำ — วันไหนไม่ได้ผูกกะ = null */
+export type WeekShift = { id: string; start: number; end: number } | null;
+
+/** ชื่อย่อวัน เรียง จันทร์ → อาทิตย์ (ลำดับเดียวกับ WorkerMonth.week) */
+export const WEEKDAY_SHORT = ["จ", "อ", "พ", "พฤ", "ศ", "ส", "อา"] as const;
+
+/** ลำดับวันของวันที่ YYYY-MM-DD — 0 = จันทร์ … 6 = อาทิตย์ */
+export function weekdayIndex(date: string): number {
+  return (new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7;
+}
+
+/**
+ * กะของคนงานในวันนั้นตามตารางประจำ (แยกรายวันได้ เช่น อาทิตย์เข้า 09:00)
+ * ไม่มีตารางรายวัน = ใช้กะหลักแบบเดิม
+ */
+export function shiftOnDate(w: Pick<WorkerMonth, "week" | "shiftStart" | "shiftEnd">, date: string): { start: number | null; end: number | null } {
+  if (!w.week) return { start: w.shiftStart, end: w.shiftEnd };
+  const s = w.week[weekdayIndex(date)];
+  return s ? { start: s.start, end: s.end } : { start: null, end: null };
+}
+
+/**
+ * กะที่แสดงข้างชื่อ — ทุกวันเหมือนกัน = "08:00–17:00" · มีวันที่ต่าง = "08:00–17:00 · อา 09:00–17:00"
+ * (เวลาที่ใช้มากที่สุดเป็นตัวหลัก วันที่ต่างไล่ตามหลัง)
+ */
+export function shiftLabel(w: Pick<WorkerMonth, "shiftId" | "week" | "shiftStart" | "shiftEnd">): string | null {
+  if (!w.shiftId) return null;
+  const range = (s: WeekShift) => (s ? `${minutesToHm(s.start)}–${minutesToHm(s.end)}` : "ไม่มีกะ");
+  if (!w.week) return `${minutesToHm(w.shiftStart)}–${minutesToHm(w.shiftEnd)}`;
+  const labels = w.week.map(range);
+  const counts = new Map<string, number>();
+  for (const l of labels) counts.set(l, (counts.get(l) ?? 0) + 1);
+  const main = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]![0];
+  const others = new Map<string, string[]>();
+  labels.forEach((l, i) => {
+    if (l !== main) others.set(l, [...(others.get(l) ?? []), WEEKDAY_SHORT[i]!]);
+  });
+  return [main, ...[...others.entries()].map(([l, days]) => `${days.join(",")} ${l}`)].join(" · ");
 }
 
 export function hoursLabel(minutes: number): string {

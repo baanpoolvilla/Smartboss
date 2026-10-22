@@ -4,7 +4,7 @@ import { hasPermission, requireOrg } from "@smartboss/auth";
 
 import { DW_PERMS } from "@/modules/daily_worker/permissions";
 import { bangkokToday, loadMoney, summarize, type WorkerMoney } from "@/modules/daily_worker/lib/data";
-import { baht, minutesToHm } from "@/modules/daily_worker/lib/types";
+import { baht, shiftLabel } from "@/modules/daily_worker/lib/types";
 import { PrintButton } from "@/modules/daily_worker/components/print-button";
 
 export const dynamic = "force-dynamic";
@@ -191,7 +191,7 @@ function WorkerDays({ r, month }: { r: WorkerMoney; month: string }) {
         {w.name} {w.employeeCode && <span className="font-normal text-neutral-500">({w.employeeCode})</span>} · {thMonth(month)}
       </h2>
       <p className="mb-2 text-xs text-neutral-600">
-        กะ {w.shiftId ? `${minutesToHm(w.shiftStart)}–${minutesToHm(w.shiftEnd)}` : "-"} · ค่าแรง {w.dailyWage === null ? "ยังไม่ตั้ง" : `${baht(w.dailyWage)} บาท/วัน`} · ยกมา {baht(r.opening)}
+        กะ {shiftLabel(w) ?? "-"} · ค่าแรง {w.dailyWage === null ? "ยังไม่ตั้ง" : `${baht(w.dailyWage)} บาท/วัน`} · ยกมา {baht(r.opening)}
       </p>
       <table>
         <thead>

@@ -1,7 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { type DayInput, type PaymentEntry, changedAfterPay, owedOn, walkLedger, dayPay, daysInMonth, hoursLabel, judgeDay, judgeTimes, minutesToHm, otMinutes, shiftMonth } from "./types";
+import { type DayInput, type PaymentEntry, changedAfterPay, owedOn, walkLedger, dayPay, daysInMonth, hoursLabel, judgeDay, judgeTimes, minutesToHm, otMinutes, shiftLabel, shiftMonth, shiftOnDate, weekdayIndex } from "./types";
 
 describe("daily worker helpers", () => {
+  it("shifts per weekday — Sunday can start later", () => {
+    const eight = { id: "a", start: 480, end: 1020 };
+    const nine = { id: "b", start: 540, end: 1020 };
+    const w = { shiftId: "a", shiftStart: 480, shiftEnd: 1020, week: [eight, eight, eight, eight, eight, eight, nine] };
+    expect(weekdayIndex("2026-10-18")).toBe(6); // อาทิตย์
+    expect(weekdayIndex("2026-10-19")).toBe(0); // จันทร์
+    expect(shiftOnDate(w, "2026-10-18")).toEqual({ start: 540, end: 1020 });
+    expect(shiftOnDate(w, "2026-10-19")).toEqual({ start: 480, end: 1020 });
+    expect(shiftLabel(w)).toBe("08:00–17:00 · อา 09:00–17:00");
+    expect(shiftLabel({ ...w, week: Array(7).fill(eight) })).toBe("08:00–17:00");
+    expect(shiftLabel({ ...w, week: null })).toBe("08:00–17:00");
+    expect(shiftLabel({ ...w, shiftId: null })).toBeNull();
+    expect(shiftOnDate({ ...w, week: null }, "2026-10-18")).toEqual({ start: 480, end: 1020 });
+  });
   it("OT hours come from the start–end the supervisor typed, crossing midnight too", () => {
     expect(otMinutes("17:00", "19:00")).toBe(120);
     expect(otMinutes("17:00", "18:30")).toBe(90);
