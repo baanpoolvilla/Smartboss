@@ -101,6 +101,8 @@ model MoneyRequest {
   dwOtEntryId     String?   @map("dw_ot_entry_id")
   dwPaymentId     String?   @map("dw_payment_id")
   maintenanceExpenseId String? @map("maintenance_expense_id")
+  /// OT ที่ HR อนุมัติจากเวลาสแกน (workforce.overtime_requests.id) — ใบนี้สร้างให้อัตโนมัติ
+  hrOvertimeRequestId String? @map("hr_overtime_request_id")
 
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -108,6 +110,7 @@ model MoneyRequest {
   @@index([orgId, status])
   @@index([orgId, workDate])
   @@index([orgId, beneficiaryUserId])
+  @@index([orgId, hrOvertimeRequestId])
   @@map("requests")
   @@schema("requests")
 }

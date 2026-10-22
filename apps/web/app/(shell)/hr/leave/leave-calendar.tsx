@@ -52,6 +52,24 @@ export interface PersonLegend {
   name: string;
 }
 
+/** OT ที่อนุมัติแล้วของคนหนึ่งในวันหนึ่ง (รวมทุกใบ) — ปฏิทินบอกแค่ชั่วโมง ไม่บอกเงิน */
+export interface OtMark {
+  employmentId: string;
+  name: string;
+  minutes: number;
+  /** "17:00–20:00" (หลายช่วงคั่นด้วย ", ") · null = รู้แค่จำนวนนาที (OT จากเวลาสแกนที่ยังไม่มีใบ) */
+  times: string | null;
+}
+
+/** สีของแถบ OT — ส้ม ไม่ชนกับเขียว (Day-Off) / น้ำเงิน (Holiday) / ประเภทลา */
+const OT_HUE = 28;
+
+function otHours(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h === 0 ? `${m} นาที` : m === 0 ? `${h} ชม.` : `${h} ชม. ${m} น.`;
+}
+
 export type { LeaveTypeChoice };
 
 /** ชื่อประเภทที่ไม่รู้ (HR ตั้งให้ไม่แสดงประเภทบนปฏิทินรวม) — กลุ่มของมันในตัวกรอง */
@@ -258,6 +276,7 @@ export function LeaveCalendar({
   myName,
   leaveTypes,
   entriesByDate,
+  otByDate = {},
   people,
   toolbarStart,
 }: {
@@ -270,6 +289,8 @@ export function LeaveCalendar({
   myName: string;
   leaveTypes: LeaveTypeChoice[];
   entriesByDate: Record<string, DayEntry[]>;
+  /** OT ที่อนุมัติแล้วรายวัน — ใครมาทำ OT วันไหน (คนลง Day-Off แต่มาทำก็ขึ้น) */
+  otByDate?: Record<string, OtMark[]>;
   people: PersonLegend[];
 }) {
   const [state, formAction, pending] = useActionState(submitLeaveAction, EMPTY);
@@ -281,6 +302,13 @@ export function LeaveCalendar({
    * เก็บเป็น "ชื่อประเภทที่ซ่อนอยู่" — ประเภทใหม่ที่ HR เพิ่มทีหลังจึงแสดงเองโดยไม่ต้องไปเปิด
    */
   const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
+  // แถบ OT เปิด/ปิดได้จากตัวกรอง (เปิดอยู่เป็นค่าเริ่มต้น) · ซ่อนคนไหนก็ซ่อน OT ของคนนั้นด้วย
+  const [showOt, setShowOt] = useState(true);
+  const otsOn = (iso: string) => (showOt ? (otByDate[iso] ?? []).filter((o) => !hidden.has(o.employmentId)) : []);
+  // วันนั้นคนนี้ลงวันหยุด/ลาไว้ด้วย = "มาทำ OT" ในวันหยุด
+  const offThatDay = (iso: string, id: string) => (entriesByDate[iso] ?? []).some((e) => e.employmentId === id);
+  const otLabel = (iso: string, o: OtMark) => `${o.name} - ${offThatDay(iso, o.employmentId) ? "มาทำ OT" : "OT"} ${otHours(o.minutes)}`;
+  const hasOt = Object.keys(otByDate).some((d) => d.startsWith(month));
   const [personQuery, setPersonQuery] = useState("");
   // ประเภทของบริษัท (จากฟอร์ม) + ประเภทที่มีอยู่จริงบนปฏิทินเดือนนี้ (เผื่อประเภทที่เราเองยื่นไม่ได้)
   const types = useMemo(() => {
@@ -439,12 +467,12 @@ export function LeaveCalendar({
           onClick={() => setPeopleOpen((v) => !v)}
           aria-expanded={peopleOpen}
           className="ml-auto flex h-8 items-center gap-1.5 rounded-lg border border-(--line) px-3 text-xs font-medium text-(--ink) hover:bg-(--bg-soft)"
-          style={peopleOpen || hidden.size + hiddenTypes.size > 0 ? { backgroundColor: "var(--app-soft)" } : undefined}
+          style={peopleOpen || hidden.size + hiddenTypes.size + (showOt ? 0 : 1) > 0 ? { backgroundColor: "var(--app-soft)" } : undefined}
         >
           <SlidersHorizontal className="h-3.5 w-3.5" />
           ตัวกรอง
-          {hidden.size + hiddenTypes.size > 0 && (
-            <span className="rounded-full bg-(--app) px-1.5 text-[10px] font-bold text-white">{hidden.size + hiddenTypes.size}</span>
+          {hidden.size + hiddenTypes.size + (showOt ? 0 : 1) > 0 && (
+            <span className="rounded-full bg-(--app) px-1.5 text-[10px] font-bold text-white">{hidden.size + hiddenTypes.size + (showOt ? 0 : 1)}</span>
           )}
         </button>
         <div className={`${peopleOpen ? "hidden sm:flex" : "hidden"} order-last shrink-0 flex-wrap items-center gap-1.5`}>
@@ -473,6 +501,7 @@ export function LeaveCalendar({
               onClick={() => toggleType(t.name)}
             />
           ))}
+          {hasOt && <FilterChip label="OT" hue={OT_HUE} off={!showOt} onClick={() => setShowOt(!showOt)} />}
         </div>
         {/* ตอนกางตัวกรอง: ชิปทั้งหมดขึ้นบรรทัดใหม่ใต้แถบเครื่องมือ */}
         {peopleOpen && <span className="order-[90] basis-full" aria-hidden="true" />}
@@ -516,6 +545,7 @@ export function LeaveCalendar({
                   {dayLabel}
                   <span className="ml-1.5 text-xs font-normal text-(--ink-soft)">
                     {dayEntries.length === 0 ? "ไม่มีใครหยุด" : `หยุด ${dayEntries.length} คน`}
+                    {otsOn(selectedDay).length > 0 ? ` · OT ${otsOn(selectedDay).length} คน` : ""}
                   </span>
                 </p>
                 <Button
@@ -552,6 +582,16 @@ export function LeaveCalendar({
                   </div>
                 );
               })}
+              {otsOn(selectedDay).map((o) => (
+                <div
+                  key={`ot-${o.employmentId}`}
+                  className="flex items-center gap-2 rounded-sm px-2 py-1 text-sm font-medium"
+                  style={{ borderLeft: `3px solid hsl(${OT_HUE} 85% 48%)`, backgroundColor: `hsl(${OT_HUE} 90% 94%)`, color: `hsl(${OT_HUE} 70% 28%)` }}
+                >
+                  <span className="min-w-0 flex-1 truncate">{otLabel(selectedDay, o)}</span>
+                  {o.times && <span className="shrink-0 text-[11px] font-normal">{o.times}</span>}
+                </div>
+              ))}
             </div>
           );
         })()}
@@ -624,6 +664,7 @@ export function LeaveCalendar({
                   (e) =>
                     !hidden.has(e.employmentId) && !hiddenTypes.has(e.leaveTypeName ?? UNNAMED_TYPE),
                 );
+                const ots = otsOn(cell.iso);
                 const iAmOff = all.some((e) => e.mine);
                 const isToday = cell.iso === today;
                 // เตือนวันที่คนหยุดพร้อมกันเยอะผิดปกติ — ปัญหาจริงของธุรกิจที่พึ่ง
@@ -667,7 +708,7 @@ export function LeaveCalendar({
                       (full-calendar-view.tsx) — จุดละหนึ่งคนที่หยุด สีตามประเภท เกินที่วางได้ขึ้น "+N"
                       แตะวันเพื่อดูว่าใครหยุด · ช่องวันกว้างราว 50px ใส่ชื่อแล้วอ่านยากและรก ("ลอกมาเลย")
                     */}
-                    {entries.length > 0 && (
+                    {entries.length + ots.length > 0 && (
                       <span className="flex max-w-full flex-nowrap items-center justify-center gap-px overflow-hidden px-0.5 pb-0.5 sm:hidden">
                         {entries.slice(0, entries.length > MOBILE_DOT_CAP ? MOBILE_DOT_CAP - 1 : MOBILE_DOT_CAP).map((entry, index) => (
                           <span
@@ -684,6 +725,14 @@ export function LeaveCalendar({
                             +{entries.length - (MOBILE_DOT_CAP - 1)}
                           </span>
                         )}
+                        {/* OT = จุดส้มขอบ (ต่างจากจุดวันหยุด) ไม่เกิน 2 จุด */}
+                        {ots.slice(0, 2).map((o) => (
+                          <span
+                            key={`ot-${o.employmentId}`}
+                            className="h-1.5 w-1.5 shrink-0 rounded-full border"
+                            style={{ borderColor: `hsl(${OT_HUE} 85% 45%)`, backgroundColor: `hsl(${OT_HUE} 90% 80%)` }}
+                          />
+                        ))}
                       </span>
                     )}
 
@@ -717,6 +766,27 @@ export function LeaveCalendar({
                       <span className={`self-start px-1.5 text-[11px] font-semibold text-(--app-strong) ${entries.length > MAX_PER_DAY_WIDE ? "" : "xl:hidden"}`}>
                         <span className="xl:hidden">+{entries.length - MAX_PER_DAY}</span>
                         <span className="hidden xl:inline">+{entries.length - MAX_PER_DAY_WIDE}</span> เพิ่มเติม
+                      </span>
+                    )}
+
+                    {/* OT ที่อนุมัติแล้ว — แถบส้ม ต่อท้ายวันหยุด/ลา ("มาทำ OT" = วันนั้นลงวันหยุดไว้ด้วย) */}
+                    {ots.slice(0, 2).map((o) => (
+                      <span
+                        key={`ot-${o.employmentId}`}
+                        title={`${otLabel(cell.iso, o)}${o.times ? ` · ${o.times}` : ""} · อนุมัติแล้ว`}
+                        className="truncate rounded-sm px-1.5 text-[10.5px] leading-[18px] font-medium"
+                        style={{
+                          borderLeft: `3px solid hsl(${OT_HUE} 85% 48%)`,
+                          backgroundColor: `hsl(${OT_HUE} 90% 93%)`,
+                          color: `hsl(${OT_HUE} 70% 28%)`,
+                        }}
+                      >
+                        {otLabel(cell.iso, o)}
+                      </span>
+                    ))}
+                    {ots.length > 2 && (
+                      <span className="self-start px-1.5 text-[11px] font-semibold" style={{ color: `hsl(${OT_HUE} 70% 32%)` }}>
+                        +{ots.length - 2} OT
                       </span>
                     )}
                     </span>

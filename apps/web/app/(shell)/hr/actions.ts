@@ -28,6 +28,7 @@ import { syncAllUserNames, syncUserName } from "@/modules/hr/lib/name-sync";
 import { clearApprovalNotifications, notifyApprovers, notifyRequester } from "@/modules/hr/lib/hr-notify";
 import { dockAttendance } from "@/lib/attendance-performance";
 import { thaiHolidayEvents } from "@/modules/report_task/data/thai-holidays";
+import { createOtFromHrApproval } from "@/modules/requests/lib/hr-ot-link";
 
 /**
  * อนุมัติลา / แก้เวลาแล้ว → คำนวณผลลงเวลาใหม่และคืนคะแนนที่หักไปแล้วทันที ไม่ต้องรอ cron 08:00/17:00
@@ -2146,8 +2147,9 @@ export async function decideOvertimeAction(formData: FormData) {
     approvedMinutes = n;
   }
 
+  let decided: { id: string; status: string; ot_category: string; approved_minutes: number };
   try {
-    await wfFetch("/overtime-requests:decide", {
+    decided = await wfFetch("/overtime-requests:decide", {
       method: "POST",
       body: {
         employment_id: employmentId,
@@ -2159,6 +2161,17 @@ export async function decideOvertimeAction(formData: FormData) {
     });
   } catch (error) {
     throw new Error(toMessage(error));
+  }
+  // อนุมัติแล้ว → ใบ OT ในเบิกจ่าย & OT สร้างให้เอง (คิดเงิน/ส่งเข้าเงินเดือนที่นั่น) — พลาดก็ไม่ล้มการอนุมัติที่สำเร็จไปแล้ว
+  if (decided?.status === "FINAL_APPROVED") {
+    await createOtFromHrApproval(session, {
+      overtimeRequestId: decided.id,
+      employmentId,
+      workDate,
+      category: decided.ot_category,
+      approvedMinutes: decided.approved_minutes,
+    }).catch((error: unknown) => console.error("[hr] auto OT request failed", error));
+    revalidatePath("/requests");
   }
   void notifyRequester(
     session.orgId,

@@ -26,6 +26,7 @@ import {
   Td,
 } from "@/modules/hr/components/ui";
 import { decideLeaveAction } from "./actions";
+import { loadOtMarks } from "./calendar-ot";
 import {
   LeaveCalendar,
   type DayEntry,
@@ -182,6 +183,12 @@ export async function renderCalendarTab(monthParam: string | undefined): Promise
     ).values(),
   ].sort((a, b) => a.name.localeCompare(b.name, "th"));
 
+  // OT ที่อนุมัติแล้ว — ใครมาทำ OT วันไหน (คนลง Day-Off แต่มาทำก็เห็น) · ชื่อแบบเดียวกับแถบวันหยุด
+  const calendarName = new Map((calendar?.items ?? []).map((e) => [e.employment_id, e.display_name]));
+  const otByDate = await loadOtMarks(session.orgId, from, to, (id, fallback) =>
+    calendarName.get(id) ?? nameOf.get(id) ?? (fallback || "ไม่ทราบชื่อ"),
+  );
+
   const pending = requests?.items ?? [];
   const [y, m] = month.split("-").map(Number);
 
@@ -202,6 +209,7 @@ export async function renderCalendarTab(monthParam: string | undefined): Promise
             availableDays: t.accrues_from_holidays ? (availableByType.get(t.id) ?? 0) : null,
           }))}
           entriesByDate={entriesByDate}
+          otByDate={otByDate}
           people={legend}
           // แถบเครื่องมือแถวเดียวแบบ Google Calendar / Teams: วันนี้ ‹ › ชื่อเดือน ทางซ้าย · ตัวกรอง/พิมพ์ ทางขวา (ใน LeaveCalendar)
           toolbarStart={

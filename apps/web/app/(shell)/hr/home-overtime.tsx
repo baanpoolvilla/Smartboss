@@ -1,3 +1,6 @@
+import Link from "next/link";
+import { requireOrg } from "@smartboss/auth";
+import { withRequestsTenant } from "@/modules/requests/lib/db";
 import {
   wfTry,
   type Employment,
@@ -89,6 +92,23 @@ export async function renderOvertimeTab(): Promise<React.ReactNode> {
     (r) => r.status === "FINAL_APPROVED" || r.status === "REJECTED",
   );
   const decidedKeys = new Set(decided.map((r) => `${r.employment_id}|${r.work_date}`));
+  // ใบ OT ในเบิกจ่าย & OT ที่สร้างให้เองตอนอนุมัติ — โชว์เลขใบให้กดไปดูยอดเงิน/สถานะ
+  const approvedIds = decided.filter((r) => r.status === "FINAL_APPROVED").map((r) => r.id);
+  const { orgId } = await requireOrg();
+  const linked =
+    approvedIds.length === 0
+      ? []
+      : await withRequestsTenant(orgId, (tx) =>
+          tx.moneyRequest.findMany({
+            where: { orgId, hrOvertimeRequestId: { in: approvedIds } },
+            select: { id: true, code: true, hrOvertimeRequestId: true },
+            orderBy: { code: "asc" },
+          }),
+        ).catch(() => []);
+  const linkedByOt = new Map<string, { id: string; code: string }[]>();
+  for (const l of linked) {
+    if (l.hrOvertimeRequestId) linkedByOt.set(l.hrOvertimeRequestId, [...(linkedByOt.get(l.hrOvertimeRequestId) ?? []), l]);
+  }
 
   const pending: OvertimeItem[] = results.items
     .filter(
@@ -124,7 +144,8 @@ export async function renderOvertimeTab(): Promise<React.ReactNode> {
         <HelpPopover label="OT มาจากไหน">
           ระบบนับ OT ให้เองเมื่อมาทำงานในวันหยุด (วันหยุดตามกะ วันนักขัตฤกษ์ หรือวันหยุดประจำเดือน)
           หรือทำงานเกินเวลากะเมื่อนโยบายเปิดให้นับ OT ในวันทำงาน — <strong>เข้ารอบจ่ายเฉพาะรายการที่อนุมัติแล้ว</strong> ลดนาทีได้
-          แต่เกินที่ตรวจพบไม่ได้ และอนุมัติ OT ของตัวเองไม่ได้ · วันนี้ยังไม่จบจึงยังไม่ขึ้นในรายการ
+          แต่เกินที่ตรวจพบไม่ได้ และอนุมัติ OT ของตัวเองไม่ได้ · วันนี้ยังไม่จบจึงยังไม่ขึ้นในรายการ · อนุมัติแล้วระบบสร้างใบ OT
+          ในเบิกจ่าย &amp; OT ให้เอง (คิดเงินและส่งเข้าเงินเดือนที่นั่น ไม่ต้องลงซ้ำ · คนงานรายวันลง OT ที่โมดูลคนงาน)
         </HelpPopover>
       </h2>
 
@@ -159,7 +180,14 @@ export async function renderOvertimeTab(): Promise<React.ReactNode> {
                   </p>
                 </div>
                 {r.status === "FINAL_APPROVED" ? (
-                  <Pill tone="var(--tone-ok)">อนุมัติ {hhmm(r.approved_minutes)} ชม.</Pill>
+                  <span className="flex flex-wrap items-center gap-2">
+                    {(linkedByOt.get(r.id) ?? []).map((l) => (
+                      <Link key={l.id} href={`/requests/${l.id}`} className="text-xs font-medium text-(--app-strong) underline">
+                        {l.code} ›
+                      </Link>
+                    ))}
+                    <Pill tone="var(--tone-ok)">อนุมัติ {hhmm(r.approved_minutes)} ชม.</Pill>
+                  </span>
                 ) : (
                   <Pill tone="var(--tone-danger)">ไม่อนุมัติ</Pill>
                 )}
