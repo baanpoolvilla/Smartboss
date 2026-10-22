@@ -5,6 +5,7 @@ import { REQ_PERMS } from "@/modules/requests/permissions";
 import { monthRequests } from "@/modules/requests/lib/report";
 import { beneficiaryLabel, statusOf } from "@/modules/requests/lib/page";
 import { KIND_META, METHOD_LABEL, bangkokToday, costOf } from "@/modules/requests/lib/types";
+import { maskRequest, payPrivacy } from "@/modules/requests/lib/pay-privacy";
 
 /** ส่งออกทุกใบของเดือนเป็น CSV (เปิดใน Excel ได้ภาษาไทยไม่เพี้ยน — มี BOM) ให้ฝ่ายบัญชี */
 export async function GET(req: Request) {
@@ -22,7 +23,9 @@ export async function GET(req: Request) {
     canViewAll: true,
     canFileOthers: hasPermission(session, REQ_PERMS.fileOthers),
   };
-  const rows = await monthRequests(session.orgId, viewer, month);
+  // ยอด OT พนักงานประจำ: ไฟล์ของคนที่ไม่ใช่ CEO/ผู้ดูแลเงินเดือนไม่มีตัวเลข (lib/pay-privacy.ts)
+  const privacy = await payPrivacy(session);
+  const rows = (await monthRequests(session.orgId, viewer, month)).map((r) => maskRequest(privacy, r));
   const head = [
     "วันที่", "เลขที่", "ประเภท", "ของใคร", "ประเภทผู้รับ", "รายการ", "บ้าน", "ใบงาน", "เวลา OT", "ชั่วโมง OT",
     "ยอดก่อนภาษี", "VAT", "หัก ณ ที่จ่าย", "ยอดสุทธิ", "ค่าใช้จ่ายจริง", "จ่ายแล้ว", "วิธีจ่าย", "รอหักคืน", "สถานะ", "ผู้ยื่น", "ผู้อนุมัติ",
@@ -43,12 +46,12 @@ export async function GET(req: Request) {
       r.workOrderCode ?? "",
       r.otStart ? `${r.otStart}-${r.otEnd}` : "",
       r.otMinutes ? (r.otMinutes / 60).toFixed(2) : "",
-      r.amount.toFixed(2),
+      r.payHidden ? "ซ่อนยอด" : r.amount.toFixed(2),
       r.vatAmount.toFixed(2),
       r.whtAmount.toFixed(2),
-      r.netAmount.toFixed(2),
-      costOf(r).toFixed(2),
-      r.paidTotal.toFixed(2),
+      r.payHidden ? "ซ่อนยอด" : r.netAmount.toFixed(2),
+      r.payHidden ? "" : costOf(r).toFixed(2),
+      r.payHidden ? "" : r.paidTotal.toFixed(2),
       [...new Set(r.payments.filter((p) => !p.voided).map((p) => METHOD_LABEL[p.method]))].join(" + "),
       r.deductAmount > 0 && !r.deductedAt ? r.deductAmount.toFixed(2) : "",
       statusOf(r).label,

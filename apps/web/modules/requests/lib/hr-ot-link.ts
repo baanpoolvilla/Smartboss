@@ -134,7 +134,8 @@ export async function createOtFromHrApproval(session: OrgSession, input: HrOtApp
             kind: "ot",
             status: done ? "approved" : "pending",
             title: `OT ${categoryText} (จากเวลาสแกน)`,
-            detail: `HR อนุมัติในแท็บ "OT รออนุมัติ" · ${part.rate.label}${calc ? ` · ${calc.formula}` : ""}`,
+            // ไม่ใส่สูตร (มีเงินเดือนอยู่ในนั้น) — หน้าใบประกอบสูตรจาก otBase ให้เฉพาะคนที่เห็นเงินเดือนได้
+            detail: `HR อนุมัติในแท็บ "OT รออนุมัติ" · ${part.rate.label}`,
             beneficiaryUserId: user.id,
             beneficiaryName: user.name,
             beneficiaryKind: "staff",

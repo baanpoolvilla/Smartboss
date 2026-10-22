@@ -251,6 +251,10 @@ export function maintenanceHrefFor(type: string, referenceId: string | null): st
   if (type === "expense") return "/maintenance/expenses";
   // เบิกจ่าย & OT — referenceId = id ของคำขอ (modules/requests/lib/notify.ts)
   if (type.startsWith("req_") && referenceId) return `/requests/${referenceId}`;
+  // เงินเดือน — รอบ (CEO อนุมัติ/ส่งกลับ) · สลิปพร้อม (พนักงาน) · รายชื่อคนเห็นเงินเดือนเปลี่ยน (CEO)
+  if (type === "salary_run" && referenceId) return `/salary/runs/${referenceId}`;
+  if (type === "salary_slip" && referenceId) return `/salary/my/${referenceId}`;
+  if (type === "salary_access") return "/salary/settings";
   // คำขอแก้คะแนน — คนอนุมัติไปหน้าคิว · ผลการพิจารณาไปหน้าคะแนนของตัวเอง (lib/score-requests.ts)
   if (type === "score_req") return "/hr/penalty-requests";
   if (type === "score_req_decided") return "/hr/my-score";

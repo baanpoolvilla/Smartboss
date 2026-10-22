@@ -81,5 +81,5 @@ export function Notice({ tone = "info", children }: { tone?: "info" | "warn" | "
         : tone === "ok"
           ? "border-emerald-200 bg-emerald-50 text-emerald-900"
           : "border-violet-200 bg-violet-50 text-violet-900";
-  return <div className={`rounded-(--radius) border px-3 py-2 text-sm ${cls}`}>{children}</div>;
+  return <div role={tone === "danger" ? "alert" : "status"} className={`rounded-(--radius) border px-3 py-2 text-sm ${cls}`}>{children}</div>;
 }

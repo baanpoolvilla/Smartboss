@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { canSeePay, hideBaht, maskRequest, payPrivacy, HIDDEN_PAY_LABEL } from "@/modules/requests/lib/pay-privacy";
 import { notFound } from "next/navigation";
 import { FileText, Pencil } from "lucide-react";
 import { prisma } from "@smartboss/database";
@@ -120,6 +121,11 @@ export default async function RequestDetailPage({ params, searchParams }: { para
   });
   if (!loaded || !canSee(loaded.r, viewer)) notFound();
   const { r, events, settings, balances, dups } = loaded;
+  // ยอด OT พนักงานประจำ: คนที่ไม่ใช่เจ้าตัว/CEO/ผู้ดูแลเงินเดือนเห็นแค่ชั่วโมง (lib/pay-privacy.ts)
+  // ตัวเลขที่ส่งลงหน้าเว็บมาจาก `shown` (ถูกตัดแล้ว) — `r` ใช้คิดขั้นตอนฝั่งเซิร์ฟเวอร์เท่านั้น
+  const privacy = await payPrivacy(session);
+  const payHidden = !canSeePay(privacy, r);
+  const shown = maskRequest(privacy, r);
   const today = bangkokToday();
   const st = statusOf(r);
   const meta = KIND_META[r.kind];
@@ -147,7 +153,8 @@ export default async function RequestDetailPage({ params, searchParams }: { para
   const isBeneficiary = r.beneficiaryUserId === session.userId;
   const outstanding = round2(r.netAmount - r.paidTotal);
   const workerOt = r.kind === "ot" && r.beneficiaryKind === "worker";
-  const canPayHere = r.status === "approved" && !workerOt && !isBeneficiary && (viewer.canPay || viewer.isPettyHolder) && outstanding > 0.005;
+  // ยอดซ่อน = จ่ายผ่านรอบเงินเดือน (ผู้ดูแลเงินเดือนทำ) ไม่ใช่ที่หน้านี้ — จ่ายเงินโดยไม่รู้ยอดไม่ได้
+  const canPayHere = r.status === "approved" && !workerOt && !isBeneficiary && !payHidden && (viewer.canPay || viewer.isPettyHolder) && outstanding > 0.005;
   const methods: PaymentMethod[] = viewer.canPay
     ? (["transfer", "cash", ...(holders.length ? (["petty_cash"] as PaymentMethod[]) : []), ...(r.beneficiaryKind === "staff" && r.kind !== "advance" ? (["payroll"] as PaymentMethod[]) : [])] as PaymentMethod[])
     : ["petty_cash"];
@@ -179,7 +186,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
   if (r.status !== "rejected" && !(r.status === "cancelled" && !r.decidedAt)) {
     if (workerOt) steps.push({ title: "เข้าบัญชีค่าแรงคนงาน", sub: r.status === "paid" ? "จ่ายพร้อมค่าแรงที่หน้าจ่ายเงินคนงาน" : undefined, state: r.status === "paid" ? "done" : "todo" });
     else {
-      steps.push({ title: "HR จ่ายเงิน + หลักฐาน", sub: r.paidTotal > 0 ? `จ่ายแล้ว ${baht(r.paidTotal)}${outstanding > 0.005 ? ` · เหลือ ${baht(outstanding)}` : ""}` : undefined, state: r.status === "paid" ? "done" : r.status === "approved" ? "now" : "todo" });
+      steps.push({ title: "HR จ่ายเงิน + หลักฐาน", sub: payHidden ? (r.kind === "ot" ? "รวมกับเงินเดือน (ผู้ดูแลเงินเดือนทำ)" : undefined) : r.paidTotal > 0 ? `จ่ายแล้ว ${baht(r.paidTotal)}${outstanding > 0.005 ? ` · เหลือ ${baht(outstanding)}` : ""}` : undefined, state: r.status === "paid" ? "done" : r.status === "approved" ? "now" : "todo" });
       if (r.kind === "cash_advance") steps.push({ title: "คนเบิกส่งใบเสร็จ + เงินทอน → HR ตรวจ", sub: r.clearedAt ? `ตรวจแล้ว · ${r.clearedByName}` : r.clearStatus === "submitted" ? "ส่งแล้ว รอ HR ตรวจ" : r.clearDueDate ? `ภายใน ${thaiDate(r.clearDueDate)}` : undefined, state: r.clearedAt ? "done" : r.status === "paid" ? "now" : "todo" });
       if (r.beneficiaryKind !== "vendor") steps.push({ title: "ผู้รับยืนยันได้รับเงิน", sub: r.receivedAt ? thaiDateTime(r.receivedAt) : undefined, state: r.receivedAt ? "done" : r.paidTotal > 0 && !r.payments.every((p) => p.method === "payroll") ? "now" : "todo" });
       if (r.kind === "advance" && r.beneficiaryKind === "worker") steps.push({ title: "หักคืนจากค่าแรงอัตโนมัติ", sub: "ลงเป็น \"เบิกล่วงหน้า\" ในบัญชีค่าแรงแล้ว", state: r.status === "paid" ? "done" : "todo" });
@@ -213,7 +220,11 @@ export default async function RequestDetailPage({ params, searchParams }: { para
                 </div>
                 <div className="sm:text-right">
                   <div className="text-xs text-(--ink-soft)">{r.kind === "contractor" ? "จ่ายร้านจริง" : "ยอด"}</div>
-                  <div className="text-2xl font-bold tabular-nums text-(--ink)">{baht(r.netAmount)}</div>
+                  {payHidden ? (
+                    <div className="max-w-[14rem] text-sm font-medium text-(--ink-soft)">ซ่อนยอด · {HIDDEN_PAY_LABEL}</div>
+                  ) : (
+                    <div className="text-2xl font-bold tabular-nums text-(--ink)">{baht(r.netAmount)}</div>
+                  )}
                 </div>
               </div>
               <dl className="mt-4 grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
@@ -235,13 +246,22 @@ export default async function RequestDetailPage({ params, searchParams }: { para
                   </div>
                 )}
               </dl>
-              {r.detail && <p className="mt-3 whitespace-pre-line rounded-(--radius) bg-(--bg-soft) px-3 py-2 text-sm text-(--ink)">{r.detail}</p>}
+              {shown.detail && <p className="mt-3 whitespace-pre-line rounded-(--radius) bg-(--bg-soft) px-3 py-2 text-sm text-(--ink)">{shown.detail}</p>}
             </section>
 
             {/* ตัวเลข */}
             <section className="order-3 flex flex-col gap-2 rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4 sm:p-5">
               <h2 className="text-sm font-bold text-(--ink)">ที่มาของยอดเงิน</h2>
-              {r.kind === "ot" && (
+              {r.kind === "ot" && payHidden && (
+                <>
+                  <div className="rounded-(--radius) bg-(--bg-soft) px-3 py-2 text-sm text-(--ink)">
+                    {hoursText(r.otMinutes ?? 0)} × {r.otPercent}% ({r.otRateLabel})
+                    <div className="text-xs text-(--ink-soft)">ระบบคิดเงินให้จากเงินเดือน · ยอดเงิน{HIDDEN_PAY_LABEL} (ยอด OT บอกเงินเดือนได้)</div>
+                  </div>
+                  {scanNote && <Notice tone={scanNote.tone}>{scanNote.text}</Notice>}
+                </>
+              )}
+              {r.kind === "ot" && !payHidden && (
                 <>
                   {r.otBaseKind === "manual" ? (
                     <div className="text-sm text-(--ink-soft)">ไม่มีเงินเดือนในระบบตอนยื่น — แอดมินกรอกค่า OT เอง</div>
@@ -313,11 +333,11 @@ export default async function RequestDetailPage({ params, searchParams }: { para
             {r.payments.length > 0 && (
               <section className="order-3 flex flex-col gap-3 rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4 sm:p-5">
                 <h2 className="text-sm font-bold text-(--ink)">การจ่ายเงิน</h2>
-                {r.payments.map((p) => (
+                {shown.payments.map((p) => (
                   <div key={p.id} className={`rounded-(--radius) border border-(--line) p-3 ${p.voided ? "opacity-60" : ""}`}>
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
                       <div className="text-sm">
-                        <span className={`font-bold tabular-nums ${p.voided ? "line-through" : ""}`}>{baht(p.amount)}</span> · {METHOD_LABEL[p.method]}
+                        <span className={`font-bold tabular-nums ${p.voided ? "line-through" : ""}`}>{payHidden ? "฿•••" : baht(p.amount)}</span> · {METHOD_LABEL[p.method]}
                         {p.payrollPeriod ? ` งวด ${p.payrollPeriod}` : ""}
                         {p.pettyHolderId ? ` (${holders.find((h) => h.userId === p.pettyHolderId)?.name ?? ""})` : ""}
                       </div>
@@ -339,7 +359,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
                 {events.map((e) => (
                   <li key={e.id} className="text-xs">
                     <span className="text-(--ink-soft)">{thaiDateTime(e.at.toISOString())} · {e.byName}</span>
-                    <div className="text-sm text-(--ink)">{e.summary}</div>
+                    <div className="text-sm text-(--ink)">{payHidden ? hideBaht(e.summary) : e.summary}</div>
                   </li>
                 ))}
               </ol>

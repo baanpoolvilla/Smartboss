@@ -30,8 +30,9 @@ export const HR_PERM_LABELS: Record<string, string> = {
   [HR_PERMS.access]: "เข้าใช้โมดูลบุคคล",
   [HR_PERMS.employeeView]: "ดูทะเบียนพนักงาน",
   [HR_PERMS.employeeManage]: "เพิ่ม/แก้ไข/ลบพนักงาน",
-  [HR_PERMS.salaryView]: "ดูฐานเงินเดือน",
-  [HR_PERMS.salaryManage]: "ตั้ง/แก้ไขฐานเงินเดือน",
+  // ไม่ใช้ตัดสินแล้ว — ผู้ใช้กำหนด 22/10/2569 ให้เห็น/แก้เงินเดือนได้เฉพาะ CEO + คนที่ CEO เลือก (modules/salary/lib/access.ts)
+  [HR_PERMS.salaryView]: "ดูฐานเงินเดือน (ไม่ใช้แล้ว — CEO เลือกคนที่ เงินเดือน › ตั้งค่า)",
+  [HR_PERMS.salaryManage]: "ตั้ง/แก้ไขฐานเงินเดือน (ไม่ใช้แล้ว — CEO เลือกคนที่ เงินเดือน › ตั้งค่า)",
   [HR_PERMS.payrollView]: "ดูรอบจ่ายและสลิปเงินเดือน",
   [HR_PERMS.payrollManage]: "สร้าง/คำนวณรอบจ่าย",
   [HR_PERMS.payrollApprove]: "อนุมัติและปิดรอบจ่าย",

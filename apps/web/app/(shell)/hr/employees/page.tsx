@@ -3,6 +3,7 @@ import { requireOrg, hasPermission } from "@smartboss/auth";
 import { Fab } from "@/components/module/app-scaffold";
 import { HrPage } from "@/modules/hr/components/hr-page";
 import { HR_PERMS } from "@/modules/hr/permissions";
+import { salaryAccess } from "@/modules/salary/lib/access";
 import { ADMIN_PERMS } from "@/modules/admin/permissions";
 import { renderRegistryTab } from "./registry-tab";
 import { renderScoreTab } from "./score-tab";
@@ -21,7 +22,7 @@ type TabId = keyof typeof TAB_TITLE;
  * ทุกประการ — HrPage เช็คได้แค่สิทธิ์เดียวระดับหน้า จึงต้องเช็คสิทธิ์ของแท็บนี้
  * เองก่อนตัดสินว่าจะโชว์แท็บให้เลือกไหม (ไม่ใช่แค่ตอนกดเข้าไป)
  *
- * แท็บค่าคอมเป็นตัวเลขเงินรายคน จึงใช้สิทธิ์ฐานเงินเดือน (ดู = salary.view, แก้ = salary.manage)
+ * แท็บค่าคอมเป็นตัวเลขเงินรายคน — เห็น/แก้เฉพาะ CEO + คนที่ CEO เลือก (modules/salary/lib/access.ts)
  */
 export default async function EmployeesPage({
   searchParams,
@@ -37,8 +38,9 @@ export default async function EmployeesPage({
   const session = await requireOrg();
   const canManage = hasPermission(session, HR_PERMS.employeeManage);
   const canSeeScore = hasPermission(session, ADMIN_PERMS.performanceView);
-  const canManageCommission = hasPermission(session, HR_PERMS.salaryManage);
-  const canSeeCommission = canManageCommission || hasPermission(session, HR_PERMS.salaryView);
+  // ค่าคอมรายคนเป็นตัวเงินรายคน — CEO + คนที่ CEO เลือก (เงินเดือน › ตั้งค่า) เท่านั้น
+  const canManageCommission = (await salaryAccess(session)).canEdit;
+  const canSeeCommission = canManageCommission;
 
   const sp = await searchParams;
   const allowed: Record<TabId, boolean> = {

@@ -2,6 +2,14 @@ import "server-only";
 import { prisma } from "@smartboss/database";
 import { isSuperAdmin, type OrgSession } from "@smartboss/auth";
 import { setWorkforcePrincipalStatus, syncWorkforcePrincipal } from "@/lib/workforce-provisioning";
+import { userCanEditSalary } from "@/modules/salary/lib/access";
+
+/**
+ * สิทธิ์ข้อมูลเงินเดือนรายคนฝั่งระบบบุคคล — ไม่ยึดตามบทบาทแล้ว ยึดตาม CEO + รายชื่อที่ CEO เลือก
+ * (ผู้ใช้กำหนด 22/10/2569) ⇒ ตัดออกจากสิทธิ์ที่มากับบทบาท แล้วใส่คืนเฉพาะคนที่แก้เงินเดือนได้
+ * กันแอดมินไปติ๊ก hr.salary.* ให้บทบาทอื่นที่ /admin/roles แล้ว API ของระบบบุคคลเปิดฐานเงินเดือนให้
+ */
+const PAY_DATA_PERMS = new Set(["hr.salary.view", "hr.salary.manage", "hr.payroll.view", "hr.payroll.manage", "hr.payroll.approve"]);
 
 /**
  * แยกออกมาจาก app/(shell)/admin/actions.ts (ไฟล์ "use server" — export อะไร
@@ -74,15 +82,16 @@ export async function syncUserToWorkforce(
       return;
     }
 
+    const roleCodes = user.roles.map((r) => r.role.code);
+    const fromRoles = user.roles.flatMap((r) => r.role.permissions.map((p) => p.permission.code)).filter((code) => !PAY_DATA_PERMS.has(code));
+    const payData = (await userCanEditSalary(user.orgId, user.id)) ? ["hr.salary.view", "hr.salary.manage"] : [];
     await syncWorkforcePrincipal({
       orgId: user.orgId,
       userId: user.id,
       displayName: user.name,
       email: user.email,
-      roleCodes: user.roles.map((r) => r.role.code),
-      permissionCodes: user.roles.flatMap((r) =>
-        r.role.permissions.map((p) => p.permission.code)
-      ),
+      roleCodes,
+      permissionCodes: [...fromRoles, ...payData],
       actorId,
     });
 

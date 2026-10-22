@@ -22,7 +22,8 @@ interface Brief {
   beneficiaryName: string;
 }
 
-const head = (r: Brief) => `${r.code} · ${KIND_META[r.kind].short} ${baht(r.netAmount)}`;
+// OT ไม่ใส่ยอดเงินในแจ้งเตือน — ยอด OT บอกเงินเดือนได้ และแจ้งเตือนขึ้นบนหน้าจอล็อกให้คนข้าง ๆ เห็น (lib/pay-privacy.ts)
+const head = (r: Brief) => (r.kind === "ot" ? `${r.code} · ${KIND_META[r.kind].short}` : `${r.code} · ${KIND_META[r.kind].short} ${baht(r.netAmount)}`);
 
 /**
  * คนที่ต้องได้แจ้งเตือน "รออนุมัติ" ของขั้นนี้ — ระดับ HR แจ้ง HR เท่านั้น ไม่แจ้ง CEO ทุกใบ

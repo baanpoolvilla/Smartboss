@@ -8,6 +8,7 @@ import { requestsPage, statusOf, beneficiaryLabel } from "@/modules/requests/lib
 import { groupBy, kindTotals, monthRequests } from "@/modules/requests/lib/report";
 import { KindChip, StatusChip } from "@/modules/requests/components/ui";
 import { KINDS, KIND_META, bangkokToday, baht, costOf, monthTitle, round2, shiftMonthOf, thaiDate } from "@/modules/requests/lib/types";
+import { maskRequest, payPrivacy } from "@/modules/requests/lib/pay-privacy";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,10 @@ export default async function RequestsReportPage({ searchParams }: { searchParam
   const { session, viewer } = await requestsPage(REQ_PERMS.viewAll);
   const sp = await searchParams;
   const month = sp.month && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.month) ? sp.month : bangkokToday().slice(0, 7);
-  const rows = await monthRequests(session.orgId, viewer, month);
+  // ยอด OT พนักงานประจำ: เห็นเฉพาะเจ้าตัว/CEO/ผู้ดูแลเงินเดือน — ที่เหลือเป็น 0 + "ซ่อนยอด" (lib/pay-privacy.ts)
+  const privacy = await payPrivacy(session);
+  const rows = (await monthRequests(session.orgId, viewer, month)).map((r) => maskRequest(privacy, r));
+  const hiddenCount = rows.filter((r) => r.payHidden).length;
   const kinds = kindTotals(rows);
   const total = round2(rows.reduce((s, r) => s + costOf(r), 0));
   const paid = round2(rows.reduce((s, r) => s + r.paidTotal, 0));
@@ -38,6 +42,11 @@ export default async function RequestsReportPage({ searchParams }: { searchParam
           <PrintButton />
         </div>
         <h1 className="hidden text-lg font-bold print:block">รายงานเบิกจ่าย & OT · {monthTitle(month)}</h1>
+        {hiddenCount > 0 && (
+          <p className="rounded-(--radius) border border-(--line) bg-(--bg-soft) px-3 py-2 text-xs text-(--ink-soft)">
+            ยอดรวมไม่รวม OT พนักงานประจำ {hiddenCount} ใบ — ยอด OT บอกเงินเดือนได้ จึงเห็นเฉพาะเจ้าตัว / CEO / ผู้ดูแลเงินเดือน
+          </p>
+        )}
 
         <section className="grid grid-cols-2 gap-2 lg:grid-cols-3">
           <div className="rounded-(--radius-lg) border border-(--line) bg-(--bg) p-3.5">
@@ -95,8 +104,8 @@ export default async function RequestsReportPage({ searchParams }: { searchParam
                     <div className="mt-1"><StatusChip info={statusOf(r)} /></div>
                   </div>
                   <div className="shrink-0 text-right">
-                    <div className="text-sm font-bold tabular-nums">{baht(costOf(r))}</div>
-                    <div className="text-[11px] text-(--ink-soft)">จ่ายแล้ว {baht(r.paidTotal)}</div>
+                    <div className="text-sm font-bold tabular-nums">{r.payHidden ? "ซ่อนยอด" : baht(costOf(r))}</div>
+                    {!r.payHidden && <div className="text-[11px] text-(--ink-soft)">จ่ายแล้ว {baht(r.paidTotal)}</div>}
                   </div>
                 </Link>
               </li>
@@ -125,8 +134,8 @@ export default async function RequestsReportPage({ searchParams }: { searchParam
                     <td className="px-3 py-2"><KindChip kind={r.kind} /></td>
                     <td className="px-3 py-2">{r.beneficiaryName}</td>
                     <td className="px-3 py-2">{r.title}{r.propertyName ? <span className="text-xs text-(--ink-soft)"> · {r.propertyName}</span> : null}</td>
-                    <td className="whitespace-nowrap px-3 py-2 text-right font-semibold tabular-nums">{baht(costOf(r))}</td>
-                    <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{baht(r.paidTotal)}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right font-semibold tabular-nums">{r.payHidden ? <span className="text-xs font-normal text-(--ink-soft)">ซ่อนยอด</span> : baht(costOf(r))}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{r.payHidden ? "—" : baht(r.paidTotal)}</td>
                     <td className="px-3 py-2"><StatusChip info={statusOf(r)} /></td>
                   </tr>
                 ))}

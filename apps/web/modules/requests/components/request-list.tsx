@@ -20,6 +20,8 @@ export interface ListRow {
   createdByName: string;
   workDate: string;
   amount: number;
+  /** ยอด OT พนักงานประจำที่คนดูไม่มีสิทธิ์เห็น (บอกเงินเดือนได้) — แสดง "ซ่อนยอด" แทนตัวเลข */
+  amountHidden?: boolean;
   status: StatusInfo;
   waitingMe: boolean;
   toPay: boolean;
@@ -107,7 +109,8 @@ export function RequestsHome({
       return true;
     });
   }, [rows, tab, kinds, who, q]);
-  const sum = shown.reduce((s, r) => s + r.amount, 0);
+  const sum = shown.reduce((s, r) => s + (r.amountHidden ? 0 : r.amount), 0);
+  const hiddenCount = shown.filter((r) => r.amountHidden).length;
 
   const tabButtons = () =>
     tabs
@@ -398,7 +401,9 @@ export function RequestsHome({
                       <div className="col-start-1 row-start-2 xl:col-auto xl:row-auto">
                         <StatusChip info={r.status} />
                       </div>
-                      <div className="row-span-2 self-center text-right text-base font-bold tabular-nums text-(--ink) xl:row-span-1">{baht(r.amount)}</div>
+                      <div className="row-span-2 self-center text-right text-base font-bold tabular-nums text-(--ink) xl:row-span-1">
+                        {r.amountHidden ? <span className="text-xs font-medium text-(--ink-soft)" title="ยอด OT บอกเงินเดือนได้ — เห็นเฉพาะเจ้าตัว / CEO / ผู้ดูแลเงินเดือน">ซ่อนยอด</span> : baht(r.amount)}
+                      </div>
                     </Link>
                   </li>
                 ))}
@@ -407,6 +412,7 @@ export function RequestsHome({
                 <span>{shown.length} รายการ</span>
                 <span>
                   รวม <strong className="text-(--ink)">{baht(sum)}</strong>
+                  {hiddenCount > 0 && <> (ไม่รวม OT ที่ซ่อนยอด {hiddenCount} ใบ)</>}
                 </span>
               </div>
             </div>

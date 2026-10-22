@@ -141,6 +141,14 @@ export const REQUESTS_PERMS = [
 ];
 
 /**
+ * โมดูลเงินเดือน (apps/web/modules/salary/permissions.ts) — อยู่ในแคตตาล็อกใต้โมดูล hr
+ * migration 20261022150000_salary_module ให้บริษัทที่มีอยู่แล้วด้วยชุดเดียวกับข้างล่าง
+ * มีแค่ "ดูสลิปของตัวเอง" — คนเห็น/แก้เงินเดือนของคนอื่นคือ CEO + รายชื่อที่ CEO เลือกในตั้งค่าเงินเดือน
+ * (ไม่ผูกกับบทบาท ผู้ใช้กำหนด 22/10/2569) ดู apps/web/modules/salary/lib/access.ts
+ */
+export const SALARY_PERMS = ["salary.access"];
+
+/**
  * สิทธิ์พื้นฐานที่ **ทุกบทบาทได้รับ** — คือคำตอบของกติกา "ทุกคนเห็นและเข้าถึงได้
  * ทุกโมดูล แต่สิทธิ์การใช้งานในแต่ละโมดูลต่างกัน"
  *
@@ -194,16 +202,26 @@ export const BASELINE_PERMS = [
   "company_files.upload",
   // เบิกจ่าย & OT — ทุกคนยื่นเบิกค่าใช้จ่ายของตัวเองได้ (ทางด่วน น้ำมัน ซื้อของ)
   "requests.access",
+  // เงินเดือน — ทุกคนดูสลิปของตัวเองได้ (คนงานไม่เห็นเมนู — จ่ายรายวันที่โมดูลคนงาน)
+  "salary.access",
 ];
 
 /**
  * สิทธิ์ "เพิ่มจากพื้นฐาน" ของแต่ละบทบาท — สิทธิ์จริงที่ได้ = BASELINE_PERMS ∪ ชุดนี้
  * (ประกอบร่างใน ROLE_GRANTS ข้างล่าง) บริษัทปรับเองได้ที่ /admin/roles
  */
+/**
+ * สิทธิ์ฐานเงินเดือน/งวดเงินเดือนรายคน — ให้แค่ CEO (ผู้ใช้กำหนด 22/10/2569 "มีแค่ CEO และหัวหน้า HR")
+ * หัวหน้า HR ได้สิทธิ์จากรายชื่อที่ CEO เลือกใน เงินเดือน › ตั้งค่า ไม่ใช่จากบทบาท
+ * (apps/web/modules/salary/lib/access.ts · migration 20261022170000_salary_privacy)
+ */
+const PAY_DATA_PERMS = new Set(["hr.salary.view", "hr.salary.manage", "hr.payroll.view", "hr.payroll.manage", "hr.payroll.approve"]);
+const notPayData = (p: string) => !PAY_DATA_PERMS.has(p);
+
 const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
   // อนุมัติ PR/PO เป็นของ CEO คนเดียว (หน้า PR ขึ้น "รอ CEO อนุมัติ") — IT ดูแล/ลบ/ดำเนินการได้
   // ผ่าน maintenance.admin แต่ไม่อนุมัติ และไม่ต้องได้แจ้งเตือน PR ใหม่ทุกใบ
-  ADMIN: [...CORE_PERMS, ...HR_PERMS, ...MAINT_PERMS.filter((p) => p !== "maintenance.po.approve"), ...REPORT_TASK_PERMS, ...CHAT_PERMS, ...COMPANY_FILES_PERMS, ...ADS_PERMS,
+  ADMIN: [...CORE_PERMS, ...HR_PERMS.filter(notPayData), ...MAINT_PERMS.filter((p) => p !== "maintenance.po.approve"), ...REPORT_TASK_PERMS, ...CHAT_PERMS, ...COMPANY_FILES_PERMS, ...ADS_PERMS,
     // เบิกจ่าย & OT: แอดมินลง OT/ค่าช่างให้คนอื่น ถือเงินสดย่อย ดูทุกใบ (ไม่อนุมัติ ไม่จ่าย)
     "requests.file_others", "requests.petty_cash", "requests.view_all"],
   CEO: [
@@ -237,7 +255,7 @@ const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
     // หัวหน้างานดูคะแนนลูกทีมได้ แต่แก้เกณฑ์ไม่ได้ — ไม่งั้นแก้เกณฑ์ให้ทีมตัวเองดูดีได้
     "core.performance.view",
     "core.department.view",
-    "hr.access", "hr.employee.view", "hr.employee.manage", "hr.payroll.view",
+    "hr.access", "hr.employee.view", "hr.employee.manage",
     "maintenance.access",
     "maintenance.workorder.view", "maintenance.workorder.manage", "maintenance.workorder.complete",
     "maintenance.property.view", "maintenance.property.manage",
@@ -254,7 +272,7 @@ const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
   // แยกหน้าที่ตามที่ workforce บังคับ: คนเตรียมงวดอนุมัติงวดตัวเองไม่ได้
   // (ถ้าให้ทั้งสองอย่าง mapSmartbossRoles จะมองว่าเป็นผู้อนุมัติ แล้วจะไม่มีใครจัดทำงวดได้เลย)
   HR_OFFICER: [
-    ...HR_PERMS.filter((p) => p !== "hr.payroll.approve"),
+    ...HR_PERMS.filter(notPayData),
     // วันหยุด/ประเภทการลาบนปฏิทินทีมเป็นงานของฝ่ายบุคคลโดยตรง
     "report_task.calendar.manage",
     ...DAILY_WORKER_PERMS,

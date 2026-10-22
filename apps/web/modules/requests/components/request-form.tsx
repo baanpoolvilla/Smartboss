@@ -581,7 +581,11 @@ export function RequestForm({
                   <span className="text-(--ink)">{otMinutes ? `${otStart}–${otEnd} · ${hoursText(otMinutes)}` : "—"}</span>
                 </div>
                 {preview?.formula && <div className="rounded-(--radius) bg-(--bg-soft) px-2.5 py-2 text-xs text-(--ink-soft)">{preview.formula}</div>}
-                {person ? (
+                {person && preview?.payHidden ? (
+                  <div className="border-t border-(--line) pt-2 text-sm text-(--ink-soft)">
+                    ค่า OT: ระบบคิดจากเงินเดือนให้เอง ({preview.rateLabel ?? `${preview.percent ?? ""}%`}) — ยอดเงินเห็นเฉพาะเจ้าตัว / CEO / ผู้ดูแลเงินเดือน
+                  </div>
+                ) : person ? (
                   <MoneyRow strong label="ค่า OT" value={Number.isFinite(otAmount ?? NaN) ? (otAmount as number) : 0} hint={person.isWorker ? "คิดตามค่าแรงในโมดูลคนงาน" : preview?.rateLabel ?? undefined} />
                 ) : (
                   <div className="border-t border-(--line) pt-2 text-sm text-(--ink-soft)">เลือกคนที่ทำ OT ก่อน ระบบจะคิดค่า OT ให้</div>

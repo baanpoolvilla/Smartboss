@@ -29,6 +29,7 @@ import { clearApprovalNotifications, notifyApprovers, notifyRequester } from "@/
 import { dockAttendance } from "@/lib/attendance-performance";
 import { thaiHolidayEvents } from "@/modules/report_task/data/thai-holidays";
 import { createOtFromHrApproval } from "@/modules/requests/lib/hr-ot-link";
+import { salaryAccess } from "@/modules/salary/lib/access";
 
 /**
  * อนุมัติลา / แก้เวลาแล้ว → คำนวณผลลงเวลาใหม่และคืนคะแนนที่หักไปแล้วทันที ไม่ต้องรอ cron 08:00/17:00
@@ -45,6 +46,18 @@ function refreshAttendanceScores() {
  * สิทธิ์ถูกตรวจสองชั้น: ชั้นนี้กันไม่ให้ยิงถ้าไม่มีสิทธิ์ใน Smartboss
  * และ workforce ตรวจซ้ำจาก role ของ principal เองเสมอ (การซ่อนปุ่มไม่ใช่ security control)
  */
+/**
+ * ข้อมูลเงินเดือนรายคน (ฐานเงินเดือน ค่าคอม) — CEO + คนที่ CEO เลือกเท่านั้น ไม่ใช่ตามบทบาท
+ * (ผู้ใช้กำหนด 22/10/2569 · modules/salary/lib/access.ts)
+ */
+async function guardSalary() {
+  const session = await requireOrg();
+  if (!(await salaryAccess(session)).canEdit) {
+    throw new Error("เฉพาะ CEO และคนที่ CEO เลือก (เงินเดือน › ตั้งค่า) เท่านั้นที่แก้ข้อมูลเงินเดือนได้");
+  }
+  return session;
+}
+
 async function guard(permission: string) {
   const session = await requireOrg();
   if (!hasPermission(session, permission)) {
@@ -242,7 +255,7 @@ export async function createEmployeeAction(formData: FormData) {
   // คนที่เพิ่มพนักงานได้อาจตั้งเงินเดือนไม่ได้ ซึ่งถูกต้องตามการแยกหน้าที่
   // ⇒ ล้มตรงนี้ต้องไม่ทำให้ดูเหมือนสร้างพนักงานไม่สำเร็จ (พนักงานถูกสร้างไปแล้วจริง)
   const amount = String(formData.get("amount") ?? "").trim();
-  if (amount !== "") {
+  if (amount !== "" && (await salaryAccess(await requireOrg())).canEdit) {
     try {
       await wfFetch("/compensation-rates", {
         method: "POST",
@@ -282,7 +295,9 @@ export async function createEmployeeAction(formData: FormData) {
  * ล้มทีละแถว ไม่ล้มทั้งชุด — คนที่สำเร็จต้องไม่ถูก rollback เพราะเพื่อนกรอกรหัสซ้ำ
  */
 export async function importEmployeesAction(formData: FormData) {
-  await guard(HR_PERMS.employeeManage);
+  const importer = await guard(HR_PERMS.employeeManage);
+  // ฐานเงินเดือนตั้งได้เฉพาะ CEO + คนที่ CEO เลือก — คนอื่นนำเข้าพนักงานได้แต่ช่องเงินถูกข้าม (หน้าจอก็ไม่แสดงช่อง)
+  const canSetPay = (await salaryAccess(importer)).canEdit;
 
   const companyId = String(formData.get("company_id") ?? "");
   if (!companyId) throw new Error("ยังไม่มีบริษัทในระบบบุคคล");
@@ -307,6 +322,7 @@ export async function importEmployeesAction(formData: FormData) {
   }
 
   let created = 0;
+  const linked: string[] = [];
   const failures: string[] = [];
 
   for (const userId of picked) {
@@ -360,11 +376,12 @@ export async function importEmployeesAction(formData: FormData) {
         },
       });
       created += 1;
+      linked.push(userId);
 
       // ตั้งฐานค่าจ้างให้เลยถ้ากรอกมา — ใช้สิทธิ์คนละตัว (hr.salary.manage)
       // คนที่นำเข้าพนักงานได้อาจตั้งเงินเดือนไม่ได้ ซึ่งถูกต้องตามการแยกหน้าที่
       // ⇒ ล้มตรงนี้ต้องไม่ทำให้ดูเหมือนนำเข้าไม่สำเร็จ (พนักงานถูกสร้างไปแล้วจริง)
-      if (amount !== "") {
+      if (amount !== "" && canSetPay) {
         try {
           await wfFetch("/compensation-rates", {
             method: "POST",
@@ -383,6 +400,22 @@ export async function importEmployeesAction(formData: FormData) {
       }
     } catch (error) {
       failures.push(`${label}: ${toMessage(error)}`);
+    }
+  }
+
+  // ผูกบัญชีผู้ใช้กับทะเบียนที่เพิ่งสร้างเลย (เดิมรอจนเจ้าตัวเปิดแอป) — ระหว่างรอ สลิปเงินเดือนของเจ้าตัวไม่ขึ้น
+  // ล้มก็ไม่เป็นไร: เจ้าตัวเปิดแอปเมื่อไหร่ก็ผูกเองเหมือนเดิม
+  if (linked.length > 0) {
+    const { syncUserToWorkforce } = await import("@/modules/admin/data/user-guards");
+    const { prisma } = await import("@smartboss/database");
+    // id มาจากฟอร์ม — ผูกเฉพาะผู้ใช้ของบริษัทตัวเอง
+    const own = await prisma.user.findMany({ where: { orgId: importer.orgId, id: { in: linked } }, select: { id: true } });
+    for (const { id: userId } of own) {
+      try {
+        await syncUserToWorkforce(userId, importer.orgId, importer.userId);
+      } catch {
+        /* ผูกทีหลังได้ */
+      }
     }
   }
 
@@ -405,7 +438,7 @@ export async function importEmployeesAction(formData: FormData) {
 }
 
 export async function addCompensationRateAction(formData: FormData) {
-  await guard(HR_PERMS.salaryManage);
+  await guardSalary();
   const employmentId = String(formData.get("employment_id") ?? "");
   const amount = String(formData.get("amount") ?? "").trim();
   const effectiveFrom = String(formData.get("effective_from") ?? "");
@@ -431,8 +464,8 @@ export async function addCompensationRateAction(formData: FormData) {
   } catch (error) {
     if (error instanceof WorkforceError && error.status === 403) {
       throw new Error(
-        "บัญชีนี้ยังไม่ได้สิทธิ์ตั้งฐานค่าจ้างในระบบบุคคล — ต้องมีสิทธิ์ “ตั้ง/แก้ไขฐานเงินเดือน” " +
-          "แล้วบันทึกบทบาทผู้ใช้ใหม่อีกครั้ง (หรือให้ผู้ดูแลเซิร์ฟเวอร์รัน pnpm wf:sync)",
+        "ระบบบุคคลยังไม่ได้เปิดสิทธิ์ฐานเงินเดือนให้บัญชีนี้ — ให้ CEO เอาชื่อออกแล้วเพิ่มใหม่ที่ เงินเดือน › ตั้งค่า " +
+          "(ระบบจะส่งสิทธิ์ไปให้ใหม่) แล้วลองอีกครั้ง",
       );
     }
     throw new Error(toMessage(error));
@@ -443,7 +476,7 @@ export async function addCompensationRateAction(formData: FormData) {
 /* ═══════════════════ ค่าคอม Pool ═══════════════════ */
 
 export async function saveCommissionPoolAction(formData: FormData) {
-  const session = await guard(HR_PERMS.salaryManage);
+  const session = await guardSalary();
   await saveCommissionPool({
     orgId: session.orgId,
     userId: session.userId,
@@ -455,7 +488,7 @@ export async function saveCommissionPoolAction(formData: FormData) {
 }
 
 export async function saveCommissionWeightsAction(formData: FormData) {
-  const session = await guard(HR_PERMS.salaryManage);
+  const session = await guardSalary();
   await saveCommissionWeights({
     orgId: session.orgId,
     userId: session.userId,

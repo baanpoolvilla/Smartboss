@@ -7,6 +7,7 @@ import { pettyBalances, withRequestsTenant } from "@/modules/requests/lib/db";
 import { canDecide, listVisibleRequests } from "@/modules/requests/lib/data";
 import { beneficiaryLabel, isOpen, requestsPage, statusOf } from "@/modules/requests/lib/page";
 import { RequestsHome, type ListRow } from "@/modules/requests/components/request-list";
+import { maskRequest, payPrivacy } from "@/modules/requests/lib/pay-privacy";
 import { Notice } from "@/modules/requests/components/ui";
 import { bangkokToday, baht, costOf, hoursText, monthTitle, round2, type RequestKind } from "@/modules/requests/lib/types";
 
@@ -20,10 +21,14 @@ export default async function RequestsPage() {
   const { session, viewer } = await requestsPage();
   const today = bangkokToday();
   const month = today.slice(0, 7);
-  const all = await listVisibleRequests(session.orgId, viewer).catch((error: unknown) => {
-    console.error("[requests] list failed", error);
-    return null;
-  });
+  // ยอด OT พนักงานประจำตัดทิ้งก่อนส่งหน้าเว็บ สำหรับคนที่ไม่ใช่เจ้าตัว/CEO/ผู้ดูแลเงินเดือน (lib/pay-privacy.ts)
+  const privacy = await payPrivacy(session);
+  const all = await listVisibleRequests(session.orgId, viewer)
+    .then((list) => list.map((r) => maskRequest(privacy, r)))
+    .catch((error: unknown) => {
+      console.error("[requests] list failed", error);
+      return null;
+    });
   // เงินสดย่อยคงเหลือของคนถือเงินแต่ละคน — เห็นเฉพาะคนถือเงิน/HR/ผู้ดูทั้งหมด (คนถือเห็นแค่ของตัวเอง)
   const seesPetty = viewer.canPay || viewer.canViewAll || viewer.isPettyHolder;
   const petty = seesPetty
@@ -52,7 +57,7 @@ async function Body({
   petty,
   pureHr,
 }: {
-  all: Awaited<ReturnType<typeof listVisibleRequests>> | null;
+  all: ReturnType<typeof maskRequest>[] | null;
   viewer: Awaited<ReturnType<typeof requestsPage>>["viewer"];
   today: string;
   month: string;
@@ -68,7 +73,8 @@ async function Body({
   }
   const live = all.filter((r) => r.status !== "rejected" && r.status !== "cancelled");
   const thisMonth = live.filter((r) => r.workDate.startsWith(month));
-  const sumKind = (kinds: RequestKind[]) => round2(thisMonth.filter((r) => kinds.includes(r.kind)).reduce((s, r) => s + costOf(r), 0));
+  const sumKind = (kinds: RequestKind[]) => round2(thisMonth.filter((r) => kinds.includes(r.kind) && !r.payHidden).reduce((s, r) => s + costOf(r), 0));
+  const hiddenOt = thisMonth.filter((r) => r.kind === "ot" && r.payHidden).length;
   const otMinutes = thisMonth.filter((r) => r.kind === "ot").reduce((s, r) => s + (r.otMinutes ?? 0), 0);
   const advanceOutstanding = round2(
     live.filter((r) => r.kind === "advance" && r.beneficiaryKind === "staff" && r.deductAmount > 0 && !r.deductedAt).reduce((s, r) => s + r.deductAmount, 0),
@@ -98,6 +104,7 @@ async function Body({
       createdByName: r.createdByName,
       workDate: r.workDate,
       amount: r.netAmount,
+      amountHidden: r.payHidden,
       status: statusOf(r),
       waitingMe: canDecide(r, viewer) && (r.approverLevel === "ceo" || !viewer.canApproveCeo || !hasPureHr(r)),
       toPay:
@@ -110,7 +117,11 @@ async function Body({
   const seesAll = viewer.canViewAll || viewer.canApprove || viewer.canApproveCeo || viewer.canPay;
 
   const stats = [
-    { label: "OT", value: sumKind(["ot"]), sub: `${thisMonth.filter((r) => r.kind === "ot").length} รายการ · ${hoursText(otMinutes)}` },
+    {
+      label: "OT",
+      value: sumKind(["ot"]),
+      sub: `${thisMonth.filter((r) => r.kind === "ot").length} รายการ · ${hoursText(otMinutes)}${hiddenOt > 0 ? ` · ยอดไม่รวม OT พนักงาน ${hiddenOt} ใบ (ซ่อนยอด)` : ""}`,
+    },
     { label: "เบิกค่าใช้จ่าย", value: sumKind(["expense", "cash_advance"]), sub: "ทางด่วน น้ำมัน ซื้อของ" },
     { label: "เบิกล่วงหน้า", value: sumKind(["advance"]), sub: advanceOutstanding > 0 ? `พนักงานยังรอหักคืน ${baht(advanceOutstanding)}` : "คนงานหักคืนจากค่าแรงอัตโนมัติ" },
     { label: "ช่าง/ร้านภายนอก", value: sumKind(["contractor"]), sub: `${thisMonth.filter((r) => r.kind === "contractor").length} งาน` },

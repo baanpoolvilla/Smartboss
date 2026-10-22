@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireOrg } from "@smartboss/auth";
+import { salaryAccess } from "@/modules/salary/lib/access";
 import { Card } from "@smartboss/ui/components/card";
 import { Button } from "@smartboss/ui/components/button";
 import { HrPage } from "@/modules/hr/components/hr-page";
@@ -58,6 +59,8 @@ export default async function ImportEmployeesPage({
 
         const company = companies.items[0];
         if (company === undefined) return <NotProvisioned what="นำเข้าพนักงาน" />;
+        // ฐานค่าจ้าง: ช่องขึ้นเฉพาะ CEO + คนที่ CEO เลือก (เซิร์ฟเวอร์ก็ข้ามช่องนี้ให้คนอื่นอยู่แล้ว)
+        const canSetPay = (await salaryAccess(session)).canEdit;
 
         /*
          * "นำเข้าไปแล้ว" = มีทะเบียนจ้างงานอยู่จริง ไม่ใช่แค่มี person
@@ -188,14 +191,16 @@ export default async function ImportEmployeesPage({
                           <option value="HOURLY">รายชั่วโมง</option>
                         </select>
                       </Field>
-                      <Field label="ฐานค่าจ้าง" hint="เว้นว่างได้ ตั้งทีหลังก็ได้">
-                        <input
-                          name={`amount.${user.id}`}
-                          inputMode="decimal"
-                          placeholder="0.00"
-                          className={inputClass}
-                        />
-                      </Field>
+                      {canSetPay && (
+                        <Field label="ฐานค่าจ้าง" hint="เว้นว่างได้ ตั้งทีหลังก็ได้">
+                          <input
+                            name={`amount.${user.id}`}
+                            inputMode="decimal"
+                            placeholder="0.00"
+                            className={inputClass}
+                          />
+                        </Field>
+                      )}
                     </div>
                   </Card>
                 ))}

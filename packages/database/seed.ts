@@ -7,6 +7,7 @@ import {
   DAILY_WORKER_PERMS,
   DAILY_WORKER_PAY_PERM,
   REQUESTS_PERMS,
+  SALARY_PERMS,
   CHAT_PERMS,
   COMPANY_FILES_PERMS,
   CORE_PERMS,
@@ -178,7 +179,7 @@ async function main() {
 
   await registerModulePerms("example", ["example.view", "example.manage"]);
   await registerModulePerms("maintenance", MAINT_PERMS);
-  await registerModulePerms("hr", [...HR_PERMS, ...DAILY_WORKER_PERMS, DAILY_WORKER_PAY_PERM, ...REQUESTS_PERMS]);
+  await registerModulePerms("hr", [...HR_PERMS, ...DAILY_WORKER_PERMS, DAILY_WORKER_PAY_PERM, ...REQUESTS_PERMS, ...SALARY_PERMS]);
   await registerModulePerms("chat", CHAT_PERMS);
   await registerModulePerms("company_files", COMPANY_FILES_PERMS);
   await registerModulePerms("ads", ADS_PERMS);

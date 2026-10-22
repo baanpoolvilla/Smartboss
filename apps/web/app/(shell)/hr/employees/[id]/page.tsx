@@ -4,6 +4,7 @@ import { requireOrg, hasPermission } from "@smartboss/auth";
 import { Button } from "@smartboss/ui/components/button";
 import { HrPage } from "@/modules/hr/components/hr-page";
 import { HR_PERMS } from "@/modules/hr/permissions";
+import { salaryAccess } from "@/modules/salary/lib/access";
 import {
   wfFetch,
   wfTry,
@@ -120,11 +121,13 @@ export default async function EmployeeDetailPage({
   const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.month ?? "")
     ? sp.month!
     : new Date().toISOString().slice(0, 7);
-  const tab: TabId = TABS.some((t) => t.id === sp.tab) ? (sp.tab as TabId) : "info";
   const session = await requireOrg();
   const canManage = hasPermission(session, HR_PERMS.employeeManage);
-  const canManageSalary = hasPermission(session, HR_PERMS.salaryManage);
-  const canSeeCommission = canManageSalary || hasPermission(session, HR_PERMS.salaryView);
+  // ค่าจ้าง/ค่าคอมรายคน: CEO + คนที่ CEO เลือกเท่านั้น (ผู้ใช้กำหนด 22/10/2569) — คนอื่นไม่เห็นแท็บค่าจ้างเลย
+  const canManageSalary = (await salaryAccess(session)).canEdit;
+  const canSeeCommission = canManageSalary;
+  const tabs = TABS.filter((t) => t.id !== "wage" || canManageSalary);
+  const tab: TabId = tabs.some((t) => t.id === sp.tab) ? (sp.tab as TabId) : "info";
 
   return (
     <HrPage
@@ -169,8 +172,8 @@ export default async function EmployeeDetailPage({
           leaveTypes,
           leaveRequests,
         ] = await Promise.all([
-            // อัตราค่าจ้างเป็นข้อมูลอ่อนไหว — คนที่ไม่มีสิทธิ์จะได้ null
-            wfTry<Paged<CompensationRate>>(`/compensation-rates?employment_id=${id}`),
+            // อัตราค่าจ้างเป็นข้อมูลอ่อนไหว — ไม่ใช่ CEO/คนที่ CEO เลือก ไม่ขอเลย (API ก็ปฏิเสธอยู่แล้ว)
+            canManageSalary ? wfTry<Paged<CompensationRate>>(`/compensation-rates?employment_id=${id}`) : Promise.resolve(null),
             wfTry<Paged<Company>>("/companies"),
             wfTry<Paged<{ id: string; code: string; name: string; rest_day: boolean; start_minutes: number; end_minutes: number }>>(
               "/shifts",
@@ -332,7 +335,7 @@ export default async function EmployeeDetailPage({
                 .then((r) => r.cards.find((c) => c.email.toLowerCase() === email) ?? null)
                 .catch(() => null);
 
-        const wageIncomplete = rates === null || rates.items.length === 0;
+        const wageIncomplete = canManageSalary && (rates === null || rates.items.length === 0);
 
         /*
          * รายการหักคะแนนแยกทีละครั้งพร้อมวันที่ — เดิมเห็นแค่ยอดรวมตามหมวด
@@ -386,7 +389,7 @@ export default async function EmployeeDetailPage({
             </div>
 
             <div className="flex gap-1 overflow-x-auto border-b border-(--line)">
-              {TABS.map((t) => (
+              {tabs.map((t) => (
                 <Link
                   key={t.id}
                   href={t.id === "info" ? `/hr/employees/${id}` : `/hr/employees/${id}?tab=${t.id}`}

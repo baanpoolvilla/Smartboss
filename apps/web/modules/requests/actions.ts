@@ -25,6 +25,7 @@ import {
 import { dateOnly, insertEvent, loadRequests, pettyBalances, readSettings, withRequestsTenant, withRequestsTenantAfter, ymd, type RequestView, type Tx } from "./lib/db";
 import { clearActionNotifications, notifyApprovers, notifyClear, notifyPayers, notifyResult } from "./lib/notify";
 import { readReceipt } from "./lib/receipt-ai";
+import { payPrivacy, payrollHandoffBlock } from "./lib/pay-privacy";
 import {
   KIND_META,
   METHOD_LABEL,
@@ -248,6 +249,8 @@ export interface Preview {
   needCeo: boolean;
   approverNames: string[];
   ceoNames: string[];
+  /** ยอด OT พนักงานประจำถูกซ่อนจากคนกรอก (บอกเงินเดือนได้ — lib/pay-privacy.ts) */
+  payHidden: boolean;
 }
 
 async function beneficiaryOf(orgId: string, userId: string | null) {
@@ -294,6 +297,7 @@ async function computePreview(session: OrgSession, input: PreviewInput, settings
     needCeo: false,
     approverNames: [],
     ceoNames: [],
+    payHidden: false,
   };
   const today = bangkokToday();
   const date = normalizeDate(input.workDate) || today;
@@ -401,7 +405,15 @@ export async function previewRequestAction(input: PreviewInput): Promise<Result<
   try {
     const session = await guard();
     const settings = await withRequestsTenant(session.orgId, (tx) => readSettings(tx, session.orgId));
-    return { ok: true, preview: await computePreview(session, input, settings) };
+    const preview = await computePreview(session, input, settings);
+    // OT พนักงานประจำที่คิดจากเงินเดือน: คนกรอก (แอดมิน) เห็นชั่วโมงและ % แต่ไม่เห็นบาท/สูตรเงินเดือน
+    if (input.kind === "ot" && preview.beneficiaryKind === "staff" && preview.baseKind === "monthly") {
+      const privacy = await payPrivacy(session);
+      if (!privacy.canSeeAll && input.beneficiaryUserId !== session.userId) {
+        Object.assign(preview, { amount: null, base: null, formula: null, payHidden: true });
+      }
+    }
+    return { ok: true, preview };
   } catch (error) {
     return fail(error);
   }
@@ -1222,6 +1234,9 @@ export async function markPayrollAction(input: { period: string; payIds: string[
     const session = await guard();
     const orgId = session.orgId;
     if (!hasPermission(session, REQ_PERMS.pay)) return { error: "เฉพาะ HR" };
+    // ใช้โมดูลเงินเดือนแล้ว / ไม่ใช่ผู้ดูแลเงินเดือน — ห้ามทำที่นี่ (lib/pay-privacy.ts payrollHandoffBlock)
+    const block = await payrollHandoffBlock(session);
+    if (block) return { error: block };
     if (!/^\d{4}-\d{2}$/.test(input.period)) return { error: "งวดไม่ถูกต้อง" };
     const byName = await nameOf(session.userId);
     const today = bangkokToday();

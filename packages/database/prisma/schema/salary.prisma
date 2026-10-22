@@ -1,0 +1,240 @@
+// ═══════════════════════════════════════════════════════════════════════
+//  schema "salary" — โมดูลเงินเดือนพนักงานประจำ (ผู้ใช้สั่งทำ 22/10/2569)
+//
+//  ตั้งค่าต่อบริษัท (งวด วันจ่าย ผู้อนุมัติ สาย/ขาด) · อัตราประกันสังคม/ภาษีแบบมีวันเริ่มมีผล
+//  (ไม่ฝังในโค้ด) · รายการเงินได้/หักที่ HR ตั้งชื่อเอง · รายการประจำรายคน · รอบจ่าย + ผลรายคน
+//
+//  แยกตามบริษัทด้วย org_id + RLS (FORCE) แบบเดียวกับ schema requests — อ่าน/เขียนผ่าน
+//  withSalaryTenant() (apps/web/modules/salary/lib/db.ts) เท่านั้น · role แอปไม่มีสิทธิ์ DELETE
+//  รอบที่จ่ายแล้ว (status paid) แก้ตัวเลขไม่ได้ — trigger ใน migration กันไว้
+// ═══════════════════════════════════════════════════════════════════════
+
+/// ตั้งค่าเงินเดือนของบริษัท — หนึ่งแถวต่อบริษัท
+model SalarySettings {
+  orgId              String   @id @map("org_id")
+  /// ตัดงวดทุกวันที่ (1–31 · 31 = สิ้นเดือน)
+  cutoffDay          Int      @default(25) @map("cutoff_day")
+  /// จ่ายทุกวันที่ (0 = สิ้นเดือน)
+  payDay             Int      @default(0) @map("pay_day")
+  /// ceo | ceo_on_change | hr
+  approvalMode       String   @default("ceo") @map("approval_mode")
+  /// ceo_on_change: ยอดสุทธิรวมต่างจากงวดก่อนเกินกี่ % ต้องผ่าน CEO
+  changeThreshold    Decimal  @default(5) @map("change_threshold") @db.Decimal(6, 2)
+  deductLate         Boolean  @default(false) @map("deduct_late")
+  /// minute = ตามนาทีจริง · per_time = ครั้งละ late_per_time บาท
+  lateMode           String   @default("minute") @map("late_mode")
+  latePerTime        Decimal  @default(0) @map("late_per_time") @db.Decimal(12, 2)
+  deductAbsent       Boolean  @default(false) @map("deduct_absent")
+  deductUnpaidLeave  Boolean  @default(true) @map("deduct_unpaid_leave")
+  /// คนที่เห็น/แก้เงินเดือนได้นอกจาก CEO (CEO เลือก) — core.users.id
+  editorUserIds      String[] @default([]) @map("editor_user_ids")
+  /// SUPER_ADMIN เห็นข้อมูลเงินเดือนได้ (ช่วงติดตั้ง) — CEO ปิดเมื่อพร้อมใช้จริง
+  superAdminAccess   Boolean  @default(true) @map("super_admin_access")
+  companyTaxId       String   @default("") @map("company_tax_id")
+  ssoEmployerNo      String   @default("") @map("sso_employer_no")
+  ssoBranch          String   @default("000000") @map("sso_branch")
+  payBankName        String   @default("") @map("pay_bank_name")
+  payBankAccount     String   @default("") @map("pay_bank_account")
+  /// ค่า OT นับเป็นค่าจ้างคิดประกันสังคม
+  otSsoBase          Boolean  @default(true) @map("ot_sso_base")
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  updatedByName      String   @default("") @map("updated_by_name")
+
+  @@map("settings")
+  @@schema("salary")
+}
+
+/// อัตราตามกฎหมายแบบมีวันเริ่มมีผล — ปรับเมื่อไหร่เพิ่มแถวใหม่ งวดเก่าคิดด้วยอัตราเดิม
+model SalaryRate {
+  id            String   @id @default(uuid())
+  orgId         String   @map("org_id")
+  /// sso | tax
+  kind          String
+  effectiveFrom DateTime @map("effective_from") @db.Date
+  /// sso: {employeeRate, employerRate, wageCeiling, maxContribution}
+  /// tax: {expenseRate, expenseCap, personalAllowance, brackets:[{upTo|null, rate}]}
+  params        Json
+  createdByName String   @map("created_by_name")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([orgId, kind, effectiveFrom])
+  @@map("rates")
+  @@schema("salary")
+}
+
+/// รายการเงินได้/รายการหักที่บริษัทตั้งชื่อเอง (ค่าตำแหน่ง เบี้ยขยัน ผ่อนของ ฯลฯ)
+model SalaryItem {
+  id        String   @id @default(uuid())
+  orgId     String   @map("org_id")
+  name      String
+  /// earning | deduction
+  kind      String
+  /// เงินได้: นับเป็นเงินได้คิดภาษี
+  taxable   Boolean  @default(true)
+  /// เงินได้: นับเป็นค่าจ้างคิดประกันสังคม
+  ssoBase   Boolean  @default(false) @map("sso_base")
+  active    Boolean  @default(true)
+  sort      Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([orgId])
+  @@map("items")
+  @@schema("salary")
+}
+
+/// รายการประจำรายคน — ตั้งครั้งเดียว เข้าทุกงวดในช่วง from–to เอง ไม่ต้องกรอกทุกเดือน
+model SalaryEmployeeItem {
+  id            String    @id @default(uuid())
+  orgId         String    @map("org_id")
+  employmentId  String    @map("employment_id")
+  itemId        String    @map("item_id")
+  amount        Decimal   @db.Decimal(12, 2)
+  /// งวดแรกที่มีผล YYYY-MM (เดือนของวันตัดงวด)
+  fromPeriod    String    @map("from_period")
+  /// งวดสุดท้าย (รวม) · null = ไม่มีกำหนด
+  toPeriod      String?   @map("to_period")
+  note          String    @default("")
+  createdByName String    @map("created_by_name")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// เลิกใช้ (แทนการลบ)
+  endedAt       DateTime? @map("ended_at") @db.Timestamptz(6)
+  endedByName   String?   @map("ended_by_name")
+
+  @@index([orgId, employmentId])
+  @@map("employee_items")
+  @@schema("salary")
+}
+
+/// ข้อมูลเงินเดือนรายคนที่ไม่ใช่ตัวเงินเดือน (เงินเดือนอยู่ที่ระบบบุคคล workforce.compensation_rates)
+model SalaryProfile {
+  orgId           String   @map("org_id")
+  employmentId    String   @map("employment_id")
+  ssoExempt       Boolean  @default(false) @map("sso_exempt")
+  ssoExemptReason String   @default("") @map("sso_exempt_reason")
+  /// ลดหย่อนภาษีเพิ่มทั้งปี (นอกจากส่วนตัว + ประกันสังคม) จาก ล.ย.01
+  extraAllowance  Decimal  @default(0) @map("extra_allowance") @db.Decimal(12, 2)
+  bankName        String   @default("") @map("bank_name")
+  bankAccount     String   @default("") @map("bank_account")
+  accountName     String   @default("") @map("account_name")
+  /// transfer | cash
+  payChannel      String   @default("transfer") @map("pay_channel")
+  /// auto | fixed | none
+  taxMode         String   @default("auto") @map("tax_mode")
+  taxFixedAmount  Decimal  @default(0) @map("tax_fixed_amount") @db.Decimal(12, 2)
+  taxNoneReason   String   @default("") @map("tax_none_reason")
+  /// ค่าลดหย่อนตาม ล.ย.01 [{key, label, amount}] — extraAllowance = ผลรวม
+  allowances      Json     @default("[]")
+  /// ยอดสะสมของปี prevYear ที่ไม่ได้จ่ายผ่านระบบนี้ — ที่ทำงานเดิม (คนเข้ากลางปี) และ/หรือบริษัทนี้ก่อนเริ่มใช้ระบบ
+  prevIncome      Decimal  @default(0) @map("prev_income") @db.Decimal(12, 2)
+  prevTax         Decimal  @default(0) @map("prev_tax") @db.Decimal(12, 2)
+  prevSso         Decimal  @default(0) @map("prev_sso") @db.Decimal(12, 2)
+  prevYear        Int?     @map("prev_year")
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  updatedByName   String   @default("") @map("updated_by_name")
+
+  @@id([orgId, employmentId])
+  @@map("profiles")
+  @@schema("salary")
+}
+
+/// รอบจ่ายหนึ่งงวด
+model SalaryRun {
+  id             String    @id @default(uuid())
+  orgId          String    @map("org_id")
+  /// YYYY-MM — เดือนของวันตัดงวด (งวด 26 ก.ย.–25 ต.ค. = 2026-10)
+  period         String
+  startsOn       DateTime  @map("starts_on") @db.Date
+  endsOn         DateTime  @map("ends_on") @db.Date
+  payDate        DateTime  @map("pay_date") @db.Date
+  /// draft | submitted | approved | paid
+  status         String    @default("draft")
+  /// {people, gross, deductions, net, ssoEmployee, ssoEmployer, tax}
+  totals         Json      @default("{}")
+  computedAt     DateTime? @map("computed_at") @db.Timestamptz(6)
+  submittedBy    String?   @map("submitted_by")
+  submittedByName String?  @map("submitted_by_name")
+  submittedAt    DateTime? @map("submitted_at") @db.Timestamptz(6)
+  approvedBy     String?   @map("approved_by")
+  approvedByName String?   @map("approved_by_name")
+  approvedAt     DateTime? @map("approved_at") @db.Timestamptz(6)
+  approvalNote   String?   @map("approval_note")
+  returnedReason String?   @map("returned_reason")
+  paidByName     String?   @map("paid_by_name")
+  paidAt         DateTime? @map("paid_at") @db.Timestamptz(6)
+  /// วันที่โอนจริง
+  paidOn         DateTime? @map("paid_on") @db.Date
+  /// โน้ตของรอบ (เห็นเฉพาะคนที่เห็นเงินเดือน)
+  note           String    @default("")
+  /// ค่าธรรมเนียมโอนที่บริษัทจ่าย (บันทึกตอนจ่าย)
+  bankFee        Decimal   @default(0) @map("bank_fee") @db.Decimal(12, 2)
+  /// ไม่จ่ายงวดนี้ [{employmentId, name, reason, byName, at}]
+  excluded       Json      @default("[]")
+  createdBy      String    @map("created_by")
+  createdByName  String    @map("created_by_name")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([orgId, period])
+  @@index([orgId, status])
+  @@map("runs")
+  @@schema("salary")
+}
+
+/// ผลรายคนของรอบ — คำนวณใหม่ได้ระหว่าง draft · อนุมัติแล้วตัวเลขนี้คือที่จ่ายจริง
+model SalaryRunLine {
+  id            String   @id @default(uuid())
+  orgId         String   @map("org_id")
+  runId         String   @map("run_id")
+  employmentId  String   @map("employment_id")
+  userId        String?  @map("user_id")
+  name          String
+  department    String   @default("")
+  employeeCode  String   @default("") @map("employee_code")
+  /// [{key, label, kind: earning|deduction|employer, amount, source, detail, taxable, ssoBase, refId?}]
+  lines         Json     @default("[]")
+  gross         Decimal  @db.Decimal(12, 2)
+  deductions    Decimal  @db.Decimal(12, 2)
+  net           Decimal  @db.Decimal(12, 2)
+  ssoEmployee   Decimal  @default(0) @map("sso_employee") @db.Decimal(12, 2)
+  ssoEmployer   Decimal  @default(0) @map("sso_employer") @db.Decimal(12, 2)
+  tax           Decimal  @default(0) @db.Decimal(12, 2)
+  /// เงินได้คิดภาษีของงวดนี้ (ไว้รวมยอดสะสมทั้งปี)
+  taxable       Decimal  @default(0) @db.Decimal(12, 2)
+  /// ["ข้อความเตือน"]
+  warnings      Json     @default("[]")
+  /// รายการที่ HR เพิ่ม/หักเองครั้งนี้ [{id, label, kind, amount, reason, byName, at}] — คำนวณใหม่ไม่หาย
+  adjustments   Json     @default("[]")
+  /// ข้อมูลประกอบ เช่น เวลาทำงาน เกรด (แสดงอย่างเดียว)
+  info          Json     @default("{}")
+  bankName      String   @default("") @map("bank_name")
+  bankAccount   String   @default("") @map("bank_account")
+  accountName   String   @default("") @map("account_name")
+  /// transfer | cash ณ ตอนคำนวณ
+  payChannel    String   @default("transfer") @map("pay_channel")
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  /// เงินสด: พนักงานกดได้รับเงินแล้ว
+  receivedAt    DateTime? @map("received_at") @db.Timestamptz(6)
+
+  @@unique([runId, employmentId])
+  @@index([orgId, employmentId])
+  @@map("run_lines")
+  @@schema("salary")
+}
+
+/// ประวัติของรอบ (ใครทำอะไร เมื่อไหร่)
+model SalaryEvent {
+  id       String   @id @default(uuid())
+  orgId    String   @map("org_id")
+  runId    String?  @map("run_id")
+  at       DateTime @default(now()) @db.Timestamptz(6)
+  byUserId String   @map("by_user_id")
+  byName   String   @map("by_name")
+  /// create | compute | adjust | submit | approve | return | paid | settings | rate | item | employee
+  action   String
+  summary  String
+  detail   Json?
+
+  @@index([orgId, runId])
+  @@map("events")
+  @@schema("salary")
+}

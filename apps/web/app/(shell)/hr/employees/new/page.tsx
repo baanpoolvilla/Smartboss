@@ -5,6 +5,8 @@ import { HR_PERMS } from "@/modules/hr/permissions";
 import { wfFetch, type Company, type Paged } from "@/modules/hr/lib/api";
 import { Field, NotProvisioned, inputClass, selectClass } from "@/modules/hr/components/ui";
 import { createEmployeeAction } from "../../actions";
+import { requireOrg } from "@smartboss/auth";
+import { salaryAccess } from "@/modules/salary/lib/access";
 
 export default async function NewEmployeePage() {
   return (
@@ -18,6 +20,8 @@ export default async function NewEmployeePage() {
         const company = companies.items[0];
 
         if (!company) return <NotProvisioned what="เพิ่มพนักงาน" />;
+        // ฐานค่าจ้าง: ช่องนี้ขึ้นเฉพาะ CEO + คนที่ CEO เลือก (คนอื่นสร้างพนักงานได้ แต่ไม่เห็น/ไม่กรอกเงินเดือน)
+        const canSetPay = (await salaryAccess(await requireOrg())).canEdit;
 
         const today = new Date().toISOString().slice(0, 10);
 
@@ -90,17 +94,19 @@ export default async function NewEmployeePage() {
                     className={inputClass}
                   />
                 </Field>
-                <Field
-                  label="ฐานค่าจ้าง"
-                  hint="เว้นว่างได้ แต่ต้องตั้งก่อนคำนวณเงินเดือน"
-                >
-                  <input
-                    name="amount"
-                    inputMode="decimal"
-                    placeholder="0.00"
-                    className={inputClass}
-                  />
-                </Field>
+                {canSetPay && (
+                  <Field
+                    label="ฐานค่าจ้าง"
+                    hint="เว้นว่างได้ แต่ต้องตั้งก่อนคำนวณเงินเดือน"
+                  >
+                    <input
+                      name="amount"
+                      inputMode="decimal"
+                      placeholder="0.00"
+                      className={inputClass}
+                    />
+                  </Field>
+                )}
               </div>
             </Card>
 

@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { AppScaffold } from "@/components/module/app-scaffold";
+import { payrollHandoffBlock } from "@/modules/requests/lib/pay-privacy";
 import { loadScorePeriodConfig } from "@/lib/score-period-config";
 import { scorePeriodLabel, scorePeriodOf, scorePeriodRange } from "@/lib/score-period";
 import { REQ_PERMS } from "@/modules/requests/permissions";
@@ -17,6 +19,25 @@ export const dynamic = "force-dynamic";
 export default async function RequestsPayrollPage() {
   const { session } = await requestsPage(REQ_PERMS.pay);
   const orgId = session.orgId;
+  // ตั้งแต่บริษัทเริ่มใช้โมดูลเงินเดือน: OT/เบิกล่วงหน้าเข้ารอบเงินเดือนเอง — หน้านี้ใช้ซ้ำไม่ได้แล้ว
+  // (กดที่นี่ = ใบถูกนับว่าจ่ายผ่านเงินเดือน รอบเงินเดือนจะไม่ดึงมาอีก ⇒ เงินไม่เข้าจริง)
+  // ยอด OT พนักงานบอกเงินเดือนได้ — ทำหน้านี้ได้เฉพาะ CEO/ผู้ดูแลเงินเดือน (lib/pay-privacy.ts)
+  const block = await payrollHandoffBlock(session);
+  if (block) {
+    return (
+      <AppScaffold title="ส่งเข้าเงินเดือน" backHref="/requests" width="max-w-4xl">
+        <div className="rounded-(--radius-lg) border border-(--line) bg-(--bg) px-4 py-3 text-sm text-(--ink)">
+          {block}
+          {block.startsWith("ตั้งแต่") && (
+            <>
+              {" "}
+              <Link href="/salary" className="font-semibold text-(--app-strong) underline">ไปที่เงินเดือน</Link>
+            </>
+          )}
+        </div>
+      </AppScaffold>
+    );
+  }
   const config = await loadScorePeriodConfig(orgId);
   const period = scorePeriodOf(config, new Date());
   const range = scorePeriodRange(config, period);
