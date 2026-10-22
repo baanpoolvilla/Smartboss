@@ -127,9 +127,21 @@ export function ProjectTimeline({
   const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
 
   // ── สถานะการลาก (เก็บใน ref ไม่ re-render ทุกพิกเซล) ──
-  const [preview, setPreview] = useState<{ id: string; start: string; end: string } | null>(null);
+  // ลากหลายงานพร้อมกัน ⇒ ตัวอย่างวันใหม่เป็นรายงาน (id → วันใหม่)
+  const [previews, setPreviews] = useState<Record<string, { start: string; end: string }> | null>(null);
+  const pvOf = (id: string) => previews?.[id];
+  // เลือกหลายงาน (Shift/Ctrl+คลิก · ลากกรอบในที่ว่าง) แล้วลากแถบไหนก็ได้ในชุด = เลื่อนพร้อมกัน (ผู้ใช้ขอ 21/10/2569)
+  const [picked, setPicked] = useState<Set<string>>(() => new Set());
+  const [box, setBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const marquee = useRef<{ x0: number; y0: number; add: boolean; base: Set<string> } | null>(null);
+  useEffect(() => {
+    if (picked.size === 0) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setPicked(new Set());
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [picked.size]);
   const [linkLine, setLinkLine] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
-  const drag = useRef<{ item: TimelineItem; x0: number; resize: boolean; moved: boolean; start: string; end: string } | null>(null);
+  const drag = useRef<{ item: TimelineItem; x0: number; resize: boolean; moved: boolean; start: string; end: string; group: TimelineItem[]; dd: number } | null>(null);
   const link = useRef<{ from: string; x: number; y: number } | null>(null);
 
   const geo = (i: TimelineItem, override?: { start: string; end: string }) => {
@@ -165,6 +177,34 @@ export function ProjectTimeline({
     toast.success(`"${item.name}" → ${fmtDay(start)}${item.kind === "task" ? ` – ${fmtDay(end)}` : ""}${extra}`);
   }
 
+  /** เลื่อนหลายงานพร้อมกันเท่ากัน `delta` วัน — งานที่รอพวกนี้อยู่เลื่อนตามกติกาของโปรเจกต์ (นับครั้งเดียว ไม่ซ้ำ) */
+  function commitGroupMove(group: TimelineItem[], delta: number) {
+    if (!delta || group.length === 0) return;
+    const ids = new Set(group.map((g) => g.id));
+    const moves: ItemMove[] = group.map((g) => ({ id: g.id, kind: g.kind, start: shiftDays(g.start, delta), end: shiftDays(g.end, delta) }));
+    moves.forEach((m) => applyMove(m, `เลื่อนพร้อมกัน ${group.length} งานจากไทม์ไลน์โปรเจกต์ "${project.name}"`));
+    const moved = new Map(moves.map((m) => [m.id, m]));
+    const next = items.map((i) => {
+      const m = moved.get(i.id);
+      return m ? { ...i, start: m.start, end: m.end } : i;
+    });
+    let followers: ItemMove[] = [];
+    if (project.shiftMode === "keep") {
+      const seen = new Set<string>();
+      for (const g of group) {
+        for (const m of keepGapPlan(next, g.id, delta)) {
+          if (ids.has(m.id) || seen.has(m.id)) continue;
+          seen.add(m.id);
+          followers.push(m);
+        }
+      }
+    } else if (project.shiftMode === "auto" && conflictsOf(next).length) {
+      followers = cascadePlan(next).filter((m) => !ids.has(m.id));
+    }
+    followers.forEach((m) => applyMove(m, "เลื่อนตามงานที่เลื่อนพร้อมกัน"));
+    toast.success(`เลื่อน ${group.length} งาน ${delta > 0 ? "+" : ""}${delta} วัน${followers.length ? ` · งานที่รออยู่เลื่อนตาม ${followers.length} รายการ` : ""}`);
+  }
+
   function addDependency(fromId: string, toId: string) {
     const to = byId.get(toId), from = byId.get(fromId);
     if (!to || !from || fromId === toId) return;
@@ -182,9 +222,30 @@ export function ProjectTimeline({
 
   function onPointerDown(e: RPointerEvent<HTMLDivElement>) {
     const el = (e.target as HTMLElement).closest<HTMLElement>("[data-bar]");
-    if (!el) return;
+    const additive = e.shiftKey || e.ctrlKey || e.metaKey;
+    if (!el) {
+      // ลากกรอบในที่ว่าง = เลือกทุกงานในกรอบ (Shift/Ctrl = เพิ่มจากที่เลือกไว้) · คลิกเฉย ๆ = ล้างที่เลือก
+      if (!canPlan || coarse || e.button !== 0) return;
+      const r = canvasRef.current!.getBoundingClientRect();
+      const x = e.clientX - r.left, y = e.clientY - r.top;
+      if (y < HEAD) return;
+      marquee.current = { x0: x, y0: y, add: additive, base: additive ? new Set(picked) : new Set() };
+      canvasRef.current?.setPointerCapture(e.pointerId);
+      return;
+    }
     const item = byId.get(el.dataset.bar!);
     if (!item) return;
+    // Shift/Ctrl/⌘ + คลิก = เพิ่ม/เอาออกจากชุดที่เลือก (ไม่ลาก)
+    if (additive && !coarse && canDrag(item)) {
+      setPicked((prev) => {
+        const next = new Set(prev);
+        if (next.has(item.id)) next.delete(item.id);
+        else next.add(item.id);
+        return next;
+      });
+      e.preventDefault();
+      return;
+    }
     if ((e.target as HTMLElement).closest("[data-cn]") && canEdit && !coarse) {
       const g = geo(item);
       link.current = { from: item.id, x: g.x2, y: g.y };
@@ -193,7 +254,10 @@ export function ProjectTimeline({
       return;
     }
     if (!canDrag(item)) return;
-    drag.current = { item, x0: e.clientX, resize: !!(e.target as HTMLElement).closest("[data-rz]"), moved: false, start: item.start, end: item.end };
+    const resize = !!(e.target as HTMLElement).closest("[data-rz]");
+    // แถบที่อยู่ในชุดที่เลือก (2 งานขึ้นไป) = ลากทั้งชุด · ยืด/หดยังทำทีละงาน
+    const group = !resize && picked.has(item.id) && picked.size > 1 ? items.filter((i) => picked.has(i.id) && canDrag(i)) : [];
+    drag.current = { item, x0: e.clientX, resize, moved: false, start: item.start, end: item.end, group, dd: 0 };
     canvasRef.current?.setPointerCapture(e.pointerId);
   }
   function onPointerMove(e: RPointerEvent<HTMLDivElement>) {
@@ -202,10 +266,31 @@ export function ProjectTimeline({
       setLinkLine({ x1: link.current.x, y1: link.current.y, x2: e.clientX - r.left, y2: e.clientY - r.top });
       return;
     }
+    if (marquee.current) {
+      const r = canvasRef.current!.getBoundingClientRect();
+      const m = marquee.current;
+      const b = { x0: m.x0, y0: m.y0, x1: e.clientX - r.left, y1: e.clientY - r.top };
+      setBox(b);
+      const L = Math.min(b.x0, b.x1), R = Math.max(b.x0, b.x1), T = Math.min(b.y0, b.y1), B = Math.max(b.y0, b.y1);
+      const hit = new Set(m.base);
+      for (const it of items) {
+        if (!rowIndex.has(it.id) || !canDrag(it)) continue;
+        const g = geo(it);
+        const top = HEAD + (rowIndex.get(it.id) ?? 0) * ROW + 6, bottom = top + ROW - 12;
+        if (g.left + g.w >= L && g.left <= R && bottom >= T && top <= B) hit.add(it.id);
+      }
+      setPicked(hit);
+      return;
+    }
     const d = drag.current;
     if (!d) return;
     const dd = Math.round((e.clientX - d.x0) / W);
     if (dd !== 0) d.moved = true;
+    if (d.group.length > 0) {
+      d.dd = dd;
+      setPreviews(Object.fromEntries(d.group.map((g) => [g.id, { start: shiftDays(g.start, dd), end: shiftDays(g.end, dd) }])));
+      return;
+    }
     const it = d.item;
     if (d.resize && it.kind === "task") {
       const ne = Math.max(dayNum(it.start), dayNum(it.end) + dd);
@@ -213,7 +298,7 @@ export function ProjectTimeline({
     } else {
       d.start = shiftDays(it.start, dd); d.end = shiftDays(it.end, dd);
     }
-    setPreview({ id: it.id, start: d.start, end: d.end });
+    setPreviews({ [it.id]: { start: d.start, end: d.end } });
   }
   function onPointerUp(e: RPointerEvent<HTMLDivElement>) {
     if (link.current) {
@@ -224,10 +309,24 @@ export function ProjectTimeline({
       if (target?.dataset.bar) addDependency(from, target.dataset.bar);
       return;
     }
+    if (marquee.current) {
+      const m = marquee.current;
+      marquee.current = null;
+      const tiny = !box || (Math.abs(box.x1 - box.x0) < 4 && Math.abs(box.y1 - box.y0) < 4);
+      setBox(null);
+      if (tiny && !m.add) setPicked(new Set());
+      return;
+    }
     const d = drag.current;
     drag.current = null;
-    setPreview(null);
+    setPreviews(null);
     if (!d) return;
+    if (d.group.length > 0) {
+      if (d.moved && d.dd !== 0) commitGroupMove(d.group, d.dd);
+      return;
+    }
+    // คลิก/ลากงานเดี่ยวนอกชุด = เลิกเลือกหลายงาน
+    if (picked.size > 0) setPicked(new Set());
     if (d.moved && (d.start !== d.item.start || d.end !== d.item.end)) { commitMove(d.item, d.start, d.end); setSel(d.item.id); }
     // มือถือ: แตะแถบงาน = เปิดงานเลย (แผงรายละเอียดอยู่ใต้ไทม์ไลน์ มองไม่เห็นบนจอเล็ก)
     else if (d.item.kind === "task" && typeof window !== "undefined" && window.innerWidth < 640) onOpenTask(d.item.id);
@@ -260,7 +359,7 @@ export function ProjectTimeline({
         <div className="hidden items-center gap-2 rounded-lg border border-[#d5dbe6] bg-[#eaeef5] px-2.5 py-1.5 text-[12px] text-[var(--brand-navy)] sm:flex">
           <span aria-hidden>💡</span>
           <span className="min-w-0 flex-1 leading-snug">
-            <b>ลากแถบ</b> = เลื่อนวัน{canPlan ? "" : " (เฉพาะผู้ดูแลโปรเจกต์/CEO)"} · <b>ลากขอบขวา</b> = ยืด/หดวัน · <b>ลากจุดกลมท้ายแถบ</b> ไปวางบนอีกงาน = ต้องรอกัน · <b>กดแถบ</b> = เปิดงาน
+            <b>ลากแถบ</b> = เลื่อนวัน{canPlan ? "" : " (เฉพาะผู้ดูแลโปรเจกต์/CEO)"} · <b>ลากขอบขวา</b> = ยืด/หดวัน · <b>ลากจุดกลมท้ายแถบ</b> ไปวางบนอีกงาน = ต้องรอกัน · <b>กดแถบ</b> = เปิดงาน · <b>Shift/Ctrl+คลิก</b> หรือ <b>ลากกรอบในที่ว่าง</b> = เลือกหลายงาน แล้วลากพร้อมกัน
           </span>
           <button
             type="button"
@@ -304,6 +403,14 @@ export function ProjectTimeline({
           onClick={() => { if (rightRef.current) rightRef.current.scrollTo({ left: Math.max(0, (dayNum(today) - lo) * W - 200), behavior: "smooth" }); }}>
           ไปที่วันนี้
         </button>
+        {picked.size > 0 && (
+          <span className="inline-flex h-8 items-center gap-2 rounded-lg border border-[var(--brand-navy)] bg-[#dde3ee] px-2.5 text-[12.5px] font-semibold text-[var(--brand-navy)]">
+            เลือก {picked.size} งาน · ลากแถบใดก็ได้เพื่อเลื่อนพร้อมกัน
+            <button type="button" className="cursor-pointer rounded px-1 font-normal underline hover:bg-white" onClick={() => setPicked(new Set())}>
+              ล้าง
+            </button>
+          </span>
+        )}
         {canEdit && (
           <>
             <button type="button" className="h-8 rounded-lg border border-[var(--line)] px-3 text-[13px] hover:bg-[var(--bg-soft)]" onClick={() => onAddTask(project.sections[0]?.id ?? "")}>+ งาน</button>
@@ -453,7 +560,7 @@ export function ProjectTimeline({
             {/* เส้นนำสายตา: แถวที่ชี้/เลือก — เส้นประจากขอบซ้ายไปถึงหัวแถบ บอกว่าแถบนี้ของงานไหน */}
             {rows.map((r, idx) => {
               if (r.kind !== "item" || (hoverRow !== idx && sel !== r.item.id)) return null;
-              const g = geo(r.item, preview?.id === r.item.id ? preview : undefined);
+              const g = geo(r.item, pvOf(r.item.id));
               if (g.left < 8) return null;
               return (
                 // สีเส้นใส่ inline — globals.css มี `* { border-color }` นอก @layer ทับคลาสสีขอบทุกตัว
@@ -473,14 +580,15 @@ export function ProjectTimeline({
                 return <div key={`gs-${r.key}`} className="absolute hidden h-1.5 rounded bg-[var(--line)] sm:block" style={{ left: (a - lo) * W, width: (b - a + 1) * W, top: y + 16 }} />;
               }
               const it = r.item;
-              const pv = preview?.id === it.id ? preview : undefined;
+              const pv = pvOf(it.id);
+              const isPicked = picked.has(it.id);
               const g = geo(it, pv);
               const draggable = canDrag(it);
               if (it.kind === "milestone") {
                 return (
                   <div key={it.id}>
                     <div data-bar={it.id} title={`${it.name} · ${fmtDay(pv?.start ?? it.start)}`}
-                      className={cn("absolute z-[2] h-4 w-4 rotate-45 rounded-[2px]", draggable ? "cursor-grab" : "cursor-pointer", sel === it.id && "outline outline-2 outline-offset-2 outline-[var(--ink)]")}
+                      className={cn("absolute z-[2] h-4 w-4 rotate-45 rounded-[2px]", draggable ? "cursor-grab" : "cursor-pointer", sel === it.id && "outline outline-2 outline-offset-2 outline-[var(--ink)]", isPicked && "outline outline-2 outline-offset-2 outline-[var(--brand-navy)] ring-4 ring-[var(--brand-navy)]/20")}
                       style={{ left: g.left, top: y + 11, background: it.state === "done" ? STATE_COLOR.done : it.state === "late" ? STATE_COLOR.late : "var(--chart-violet)" }}>
                       {canEdit && !coarse && <span data-cn="1" className="absolute -right-4 top-0.5 h-2.5 w-2.5 -rotate-45 cursor-crosshair rounded-full border-2 border-[var(--ink)] bg-[var(--bg)] opacity-0 hover:opacity-100" />}
                     </div>
@@ -498,7 +606,7 @@ export function ProjectTimeline({
               return (
                 <div key={it.id} data-bar={it.id} title={`${it.name} · ${fmtDay(pv?.start ?? it.start)} – ${fmtDay(pv?.end ?? it.end)}`}
                   className={cn("group absolute z-[2] flex select-none items-center gap-1 rounded-md px-2 font-semibold shadow-sm", sub ? "text-[10.5px]" : "text-[12px]",
-                    draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer", sel === it.id && "outline outline-2 outline-offset-1 outline-[var(--ink)]")}
+                    draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer", sel === it.id && "outline outline-2 outline-offset-1 outline-[var(--ink)]", isPicked && "outline outline-2 outline-offset-1 outline-[var(--brand-navy)] ring-4 ring-[var(--brand-navy)]/25")}
                   style={{ left: g.left, width: g.w, top: y + (ROW - barH) / 2, height: barH, background: bs.background, color: bs.color, border: bs.border, opacity: it.state === "done" ? 0.75 : 1, touchAction: draggable ? "none" : "auto" }}>
                   {it.pct !== undefined && it.state !== "done" && it.pct > 0 && <span className="pointer-events-none absolute inset-y-0 left-0 rounded-l-md" style={{ width: `${it.pct}%`, background: it.state === "todo" ? "color-mix(in srgb, var(--chart-blue) 30%, transparent)" : "rgba(255,255,255,.25)" }} />}
                   <span className="relative truncate">{it.state === "done" ? "✓ " : ""}{fits && !sub ? it.name : ""}</span>
@@ -516,6 +624,12 @@ export function ProjectTimeline({
               );
             })}
 
+            {/* กรอบเลือกหลายงาน */}
+            {box && (
+              <div className="pointer-events-none absolute z-[4] rounded-sm border border-dashed border-[var(--brand-navy)] bg-[rgba(27,37,55,0.08)]"
+                style={{ left: Math.min(box.x0, box.x1), top: Math.min(box.y0, box.y1), width: Math.abs(box.x1 - box.x0), height: Math.abs(box.y1 - box.y0) }} />
+            )}
+
             {/* เส้นงานที่ต้องรอ */}
             <svg className="pointer-events-none absolute left-0 top-0 z-[1] overflow-visible" width={width} height={height}>
               <defs>
@@ -526,9 +640,10 @@ export function ProjectTimeline({
                 it.deps.map((d) => {
                   const pre = byId.get(d);
                   if (!pre || !rowIndex.has(it.id) || !rowIndex.has(pre.id)) return null;
-                  const a = geo(pre, preview?.id === pre.id ? preview : undefined), b = geo(it, preview?.id === it.id ? preview : undefined);
+                  const pa = pvOf(pre.id), pb = pvOf(it.id);
+                  const a = geo(pre, pa), b = geo(it, pb);
                   const rule = it.depRules[d];
-                  const bad = dayNum(preview?.id === it.id ? preview.start : it.start) < earliestAfter(preview?.id === pre.id ? { ...pre, start: preview.start, end: preview.end } : pre, rule);
+                  const bad = dayNum(pb?.start ?? it.start) < earliestAfter(pa ? { ...pre, start: pa.start, end: pa.end } : pre, rule);
                   const lag = Math.max(0, Math.round(rule?.lag ?? 0));
                   const tag = lag ? <text key={`${d}>${it.id}-t`} x={b.x1 - 4} y={b.y - 7} textAnchor="end" fontSize="10" fontWeight="700" fill={bad ? "var(--chart-red)" : "var(--ink-soft)"}>+{lag}ว</text> : null;
                   // เริ่มพร้อมกันได้: ลากเส้นจาก "หัว" งานก่อนหน้า ไปหัวงานนี้
