@@ -37,7 +37,7 @@ export interface LineInfo {
   workedDays: number;
   leaveDays: number;
   lateCount: number;
-  overrides: { sso?: Override; tax?: Override };
+  overrides: { sso?: Override; tax?: Override; commission?: Override };
   /** ใบเบิกล่วงหน้าที่เลื่อนไปหักงวดหน้า */
   deferAdvances: string[];
   deferredAdvances: { refId: string; code: string; amount: number }[];
@@ -47,6 +47,8 @@ export interface LineInfo {
   terminatedOn: string | null;
   ssoComputed: number;
   taxComputed: number;
+  /** ค่าคอมที่ระบบคิดได้ (ไม่มี = รอบเก่า/ไม่มีค่าคอม) */
+  commissionComputed?: number;
   ssoWage: number;
   monthlySalary: number;
   /** ยอดยกมา ณ ตอนคำนวณ (ไม่มี = ไม่ได้กรอก) */
@@ -178,6 +180,7 @@ export async function computeRun(orgId: string, runId: string, actor: Actor): Pr
         terminatedOn: s.terminatedOn,
         opening: s.opening,
         ssoComputed: r.ssoComputed,
+        commissionComputed: r.commissionComputed,
         taxBreak: r.taxBreak,
         taxComputed: r.taxComputed,
         ssoWage: r.ssoWage,

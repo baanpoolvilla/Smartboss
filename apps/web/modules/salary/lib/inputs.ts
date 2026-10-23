@@ -6,7 +6,7 @@ import { periodsEmployedBefore } from "./compute";
 import { fillSubjectsByEmail } from "./people";
 import { loadRequests } from "@/modules/requests/lib/db";
 import { hoursText, otCalc } from "@/modules/requests/lib/types";
-import { loadCommissionMonth } from "@/modules/hr/lib/commission-data";
+import { commissionForUser, loadCommissionMonth } from "@/modules/hr/lib/commission-data";
 import { loadScorePeriodConfig, loadScorePeriodReadyAt } from "@/lib/score-period-config";
 import type { AutoItem, CommissionInput, RecurringItem, SalarySegment } from "./compute";
 import { num, ymd, type Tx } from "./db";
@@ -328,32 +328,33 @@ export async function loadPeriodInputs(
 export { ymd };
 
 /**
- * ค่าคอมของเดือน (YYYY-MM เดียวกับงวด) จากแท็บค่าคอมของระบบบุคคล — Pool ÷ ตัวคูณเกรด
- * ไม่ได้ใส่ Pool ของเดือนนั้น = บริษัทไม่ได้จ่ายค่าคอมเดือนนี้ → ไม่มีบรรทัด ไม่เตือน
+ * ค่าคอมของเดือน (YYYY-MM เดียวกับงวด) ตามวิธีที่บริษัทเลือกในแท็บค่าคอมของระบบบุคคล
+ * (Pool ÷ ตัวคูณ · % ของเงินเดือน · บาทต่อเกรด · ไม่คิด) และเฉพาะคนที่ได้ค่าคอม
+ * ไม่คิด / Pool ไม่ได้ใส่ = ไม่มีบรรทัด ไม่เตือน
  * เกรดยังไม่ปิด (ก่อนเวลาพร้อมใช้) → ไม่ใส่ยอด แต่เตือนให้กด "ดึงข้อมูลใหม่" หลังเกรดปิด (ตัวเลขยังเปลี่ยนได้)
  * ภาษี/ประกันสังคมตามรายการชื่อ "คอมมิชชั่น" ในตั้งค่า (ไม่มี = คิดทั้งคู่)
  */
 async function loadCommissionFor(orgId: string, month: string, items: { name: string; kind: string; taxable: boolean; ssoBase: boolean }[]) {
   const data = await loadCommissionMonth(orgId, month);
-  if (!data.pool || data.pool.satang <= 0) return null;
+  if (data.method === "off" || (data.method === "pool" && (!data.pool || data.pool.satang <= 0))) return null;
   const config = await loadScorePeriodConfig(orgId);
   const readyAt = await loadScorePeriodReadyAt(orgId, config, month);
   const label = periodLabel(month);
   const flags = items.find((i) => i.kind === "earning" && i.name.trim() === "คอมมิชชั่น");
   const taxable = flags?.taxable ?? true;
   const ssoBase = flags?.ssoBase ?? true;
-  if (Date.now() < readyAt.getTime()) {
-    const when = readyAt.toLocaleString("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-    const pending = `ค่าคอม ${label} ยังไม่ใส่ — เกรดยังไม่ปิด (พร้อม ${when} น.) · กด "ดึงข้อมูลใหม่" หลังจากนั้น`;
-    return { forUser: (userId: string): CommissionInput | undefined => (data.split.shares.some((x) => x.userId === userId) ? { amount: 0, detail: "", taxable, ssoBase, pending } : undefined) };
-  }
-  const perUnit = data.split.perUnitSatang;
+  const pending =
+    Date.now() < readyAt.getTime()
+      ? `ค่าคอม ${label} ยังไม่ใส่ — เกรดยังไม่ปิด (พร้อม ${readyAt.toLocaleString("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} น.) · กด "ดึงข้อมูลใหม่" หลังจากนั้น`
+      : null;
   return {
     forUser: (userId: string): CommissionInput | undefined => {
-      const share = data.split.shares.find((x) => x.userId === userId);
-      if (!share || share.amountSatang <= 0) return undefined;
-      const unit = perUnit !== null ? ` × ${(perUnit / 100).toLocaleString("th-TH", { maximumFractionDigits: 2 })} บาทต่อหน่วย` : "";
-      return { amount: share.amountSatang / 100, detail: `เกรด ${share.grade} (ตัวคูณ ${share.weight})${unit} · Pool ${label}`, taxable, ssoBase };
+      const m = data.members.find((x) => x.userId === userId);
+      if (!m || !m.eligible) return undefined;
+      if (pending) return { amount: 0, detail: "", taxable, ssoBase, pending };
+      const c = commissionForUser(data, userId, label);
+      if (!c) return undefined;
+      return c.kind === "percent" ? { amount: 0, percent: c.percent, detail: c.detail, taxable, ssoBase } : { amount: c.satang / 100, detail: c.detail, taxable, ssoBase };
     },
   };
 }

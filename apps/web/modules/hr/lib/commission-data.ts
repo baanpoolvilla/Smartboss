@@ -5,10 +5,18 @@ import { monthRange } from "@/lib/performance-month";
 import { wfTry, type Employment, type Paged, type Person } from "@/modules/hr/lib/api";
 import {
   commissionGradeOrder,
+  formatSatang,
+  isCommissionEligible,
   parseBahtToSatang,
+  parseGradeValue,
   parseGradeWeight,
+  resolveGradeValues,
   resolveGradeWeights,
   splitCommissionPool,
+  toCommissionMethod,
+  type CommissionEligibility,
+  type CommissionFor,
+  type CommissionMethod,
   type CommissionSplit,
 } from "./commission";
 import { loadScorePeriodConfig } from "@/lib/score-period-config";
@@ -23,12 +31,20 @@ export interface CommissionMonth {
   weights: Record<string, number>;
   /** บริษัทเคยตั้งตัวคูณเองแล้วหรือยัง — ยัง = ใช้ค่าตั้งต้น */
   weightsCustomized: boolean;
+  /** แบ่ง Pool เฉพาะคนที่ได้ค่าคอม (วิธี pool) */
   split: CommissionSplit;
+  method: CommissionMethod;
+  /** % หรือบาทต่อเกรด (วิธี percent/fixed) */
+  values: Record<string, number>;
+  eligibility: CommissionEligibility;
+  /** ทุกคนที่มีเกรดเดือนนั้น พร้อมว่าได้ค่าคอมไหม */
+  members: { userId: string; name: string; email: string; grade: string; score: number; departmentId: string | null; eligible: boolean }[];
+  departments: { id: string; name: string }[];
   /**
    * registry = เฉพาะคนในทะเบียนพนักงานที่ทำงานอยู่ในเดือนนั้น
    * all-users = อ่านทะเบียนไม่ได้ (ไม่มีสิทธิ์/ระบบบุคคลล่ม) จึงนับผู้ใช้ที่เปิดใช้งานทุกคน
    */
-  eligibility: "registry" | "all-users";
+  registry: "registry" | "all-users";
 }
 
 /** อ่านทุกหน้าของรายการ — ทะเบียนเกิน 200 คนต้องไม่ถูกตัดทิ้งเงียบ ๆ */
@@ -81,32 +97,69 @@ function toObject(value: unknown): Record<string, unknown> {
 export async function loadCommissionMonth(orgId: string, month: string): Promise<CommissionMonth> {
   // เกรดของค่าคอม = รอบเกรดเดียวกับหน้าคะแนน (ตัดวันที่ 25 — score-period.ts)
   const period = await loadScorePeriodConfig(orgId);
-  const [scores, setting, pool, emails] = await Promise.all([
+  const [scores, setting, pool, emails, departments] = await Promise.all([
     buildPeriodScorecards(orgId, period, month),
     prisma.commissionSetting.findUnique({ where: { orgId } }),
     prisma.commissionPool.findUnique({ where: { orgId_month: { orgId, month } } }),
     employedEmails(month),
+    prisma.department.findMany({ where: { orgId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
 
   const gradeNames = scores.settings.gradeThresholds.map(([grade]) => grade);
   const saved = toObject(setting?.gradeWeights);
   const weights = resolveGradeWeights(gradeNames, saved);
 
-  const members = scores.cards
-    .filter((c) => emails === null || emails.has(c.email.toLowerCase()))
-    .map((c) => ({ userId: c.userId, name: c.name, email: c.email, grade: c.grade, score: c.score }));
+  const method = toCommissionMethod(setting?.method);
+  const order = commissionGradeOrder(gradeNames);
+  // ค่าแยกตามวิธี ({ percent: {...}, fixed: {...} }) — สลับวิธีไปมาแล้วตัวเลขไม่ปนกัน (3,000 บาท ไม่กลายเป็น 3,000%)
+  const values = resolveGradeValues(order, toObject(toObject(setting?.gradeValues)[method]), method);
+  const eligibility: CommissionEligibility = { departmentIds: setting?.eligibleDepartmentIds ?? [], excludedUserIds: setting?.excludedUserIds ?? [] };
+
+  const cards = scores.cards.filter((c) => emails === null || emails.has(c.email.toLowerCase()));
+  const deptOf = new Map(
+    (await prisma.user.findMany({ where: { orgId, id: { in: cards.map((c) => c.userId) } }, select: { id: true, departmentId: true } })).map((u) => [u.id, u.departmentId]),
+  );
+  const all = cards.map((c) => {
+    const departmentId = deptOf.get(c.userId) ?? null;
+    return { userId: c.userId, name: c.name, email: c.email, grade: c.grade, score: c.score, departmentId, eligible: isCommissionEligible({ userId: c.userId, departmentId }, eligibility) };
+  });
+  const members = all.filter((m) => m.eligible).map(({ userId, name, email, grade, score }) => ({ userId, name, email, grade, score }));
 
   const poolSatang = pool === null ? 0 : Math.round(Number(pool.amount.toString()) * 100);
 
   return {
     month,
     pool: pool === null ? null : { satang: poolSatang, note: pool.note, updatedAt: pool.updatedAt },
-    gradeOrder: commissionGradeOrder(gradeNames),
+    gradeOrder: order,
     weights,
     weightsCustomized: Object.keys(saved).length > 0,
     split: splitCommissionPool(poolSatang, members, weights),
-    eligibility: emails === null ? "all-users" : "registry",
+    method,
+    values,
+    eligibility,
+    members: all,
+    departments,
+    registry: emails === null ? "all-users" : "registry",
   };
+}
+
+/**
+ * ค่าคอมของคนหนึ่งในเดือนนั้นตามวิธีที่บริษัทเลือก — ใช้ทั้งแท็บค่าคอมและงวดเงินเดือน
+ * null = ไม่ได้ (ไม่คิดจากเกรด · ไม่อยู่ในกลุ่มที่ได้ · เกรดได้ 0 · Pool ยังไม่ใส่)
+ */
+export function commissionForUser(data: CommissionMonth, userId: string, label: string): CommissionFor {
+  const m = data.members.find((x) => x.userId === userId);
+  if (!m || !m.eligible || data.method === "off") return null;
+  if (data.method === "pool") {
+    const share = data.split.shares.find((x) => x.userId === userId);
+    if (!data.pool || !share || share.amountSatang <= 0) return null;
+    const unit = data.split.perUnitSatang !== null ? ` × ${formatSatang(Math.round(data.split.perUnitSatang))} บาทต่อหน่วย` : "";
+    return { kind: "amount", satang: share.amountSatang, detail: `เกรด ${m.grade} (ตัวคูณ ${share.weight})${unit} · Pool ${label}` };
+  }
+  const v = data.values[m.grade] ?? 0;
+  if (v <= 0) return null;
+  if (data.method === "fixed") return { kind: "amount", satang: Math.round(v * 100), detail: `เกรด ${m.grade} ได้ ${formatSatang(Math.round(v * 100))} บาท · เกรด ${label}` };
+  return { kind: "percent", percent: v, detail: `เกรด ${m.grade} ได้ ${v}% ของเงินเดือน · เกรด ${label}` };
 }
 
 /** ใส่/แก้ยอด Pool ของเดือน · ช่องยอดว่าง = ลบยอดของเดือนนั้น */
@@ -163,4 +216,44 @@ export async function saveCommissionWeights(input: {
     update: { gradeWeights, updatedBy: input.userId },
     create: { orgId: input.orgId, gradeWeights, updatedBy: input.userId },
   });
+}
+
+/** เลือกวิธีคิดค่าคอม */
+export async function saveCommissionMethod(input: { orgId: string; userId: string; method: string }): Promise<void> {
+  const method = toCommissionMethod(input.method);
+  await prisma.commissionSetting.upsert({
+    where: { orgId: input.orgId },
+    update: { method, updatedBy: input.userId },
+    create: { orgId: input.orgId, method, updatedBy: input.userId },
+  });
+}
+
+/** % หรือบาทต่อเกรด (วิธี percent/fixed) — คู่ gradeName[i] กับ value[i] จากฟอร์ม */
+export async function saveCommissionValues(input: { orgId: string; userId: string; grades: string[]; values: string[] }): Promise<void> {
+  const setting = await prisma.commissionSetting.findUnique({ where: { orgId: input.orgId }, select: { method: true, gradeValues: true } });
+  const method = toCommissionMethod(setting?.method);
+  const gradeValues: Record<string, number> = {};
+  input.grades.forEach((grade, i) => {
+    const name = grade.trim();
+    if (!name) return;
+    const value = parseGradeValue(input.values[i] ?? "", method);
+    if (value === null) throw new Error(method === "percent" ? `% ของเกรด ${name} ไม่ถูกต้อง — ใส่ 0 ถึง 100` : `จำนวนเงินของเกรด ${name} ไม่ถูกต้อง`);
+    gradeValues[name] = value;
+  });
+  const all = { ...toObject(setting?.gradeValues), [method]: gradeValues };
+  await prisma.commissionSetting.upsert({
+    where: { orgId: input.orgId },
+    update: { gradeValues: all, updatedBy: input.userId },
+    create: { orgId: input.orgId, gradeValues: all, updatedBy: input.userId },
+  });
+}
+
+/** ใครได้ค่าคอม: แผนกที่ได้ (ว่าง = ทุกแผนก) + ยกเว้นรายคน — รับเฉพาะ id ของบริษัทนี้ */
+export async function saveCommissionEligibility(input: { orgId: string; userId: string; departmentIds: string[]; excludedUserIds: string[] }): Promise<void> {
+  const [depts, users] = await Promise.all([
+    prisma.department.findMany({ where: { orgId: input.orgId, id: { in: input.departmentIds } }, select: { id: true } }),
+    prisma.user.findMany({ where: { orgId: input.orgId, id: { in: input.excludedUserIds } }, select: { id: true } }),
+  ]);
+  const data = { eligibleDepartmentIds: depts.map((d) => d.id), excludedUserIds: users.map((u) => u.id), updatedBy: input.userId };
+  await prisma.commissionSetting.upsert({ where: { orgId: input.orgId }, update: data, create: { orgId: input.orgId, ...data } });
 }

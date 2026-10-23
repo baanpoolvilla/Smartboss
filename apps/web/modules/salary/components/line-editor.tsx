@@ -26,7 +26,7 @@ export interface EditorData {
   expectUpdatedAt: string;
   lines: PayLine[];
   adjustments: Adjustment[];
-  overrides: { sso?: { amount: number; reason: string }; tax?: { amount: number; reason: string } };
+  overrides: { sso?: { amount: number; reason: string }; tax?: { amount: number; reason: string }; commission?: { amount: number; reason: string } };
   deferred: { refId: string; code: string; amount: number }[];
   items: { id: string; name: string; kind: "earning" | "deduction"; taxable: boolean; ssoBase: boolean }[];
   gross: number;
@@ -35,6 +35,8 @@ export interface EditorData {
   ssoEmployer: number;
   ssoComputed: number;
   taxComputed: number;
+  /** ค่าคอมตามเกรดที่ระบบคิดได้ (0 = ไม่มี) */
+  commissionComputed: number;
   warnings: string[];
   /** วิธีคิดภาษีทีละขั้น (รอบที่คำนวณก่อนมีระบบนี้ไม่มี) */
   taxBreak?: TaxBreak;
@@ -56,7 +58,10 @@ const BADGE: Record<string, { text: string; cls: string }> = {
  * ประกันสังคม/ภาษีปรับเองได้ ต้องมีเหตุผล และโชว์ยอดที่ระบบคิดได้คู่กันเสมอ
  */
 export function LineEditor({ d }: { d: EditorData }) {
-  const earn = d.lines.filter((l) => l.kind === "earning" && l.source !== "salary");
+  const earn = d.lines.filter((l) => l.kind === "earning" && l.source !== "salary" && l.source !== "commission");
+  const commission = d.lines.find((l) => l.source === "commission");
+  // รวมกรณีเกรดยังไม่ปิด (มีเตือนค่าคอม) — ใส่ยอดเองได้เลยไม่ต้องรอ
+  const showCommission = !!commission || d.commissionComputed > 0 || !!d.overrides.commission || d.warnings.some((w) => w.startsWith("ค่าคอม"));
   const salary = d.lines.find((l) => l.source === "salary");
   const sso = d.lines.find((l) => l.key === "sso");
   const tax = d.lines.find((l) => l.key === "tax");
@@ -109,7 +114,19 @@ export function LineEditor({ d }: { d: EditorData }) {
 
             <section className="flex flex-col gap-2">
               <h3 className="text-sm font-bold text-emerald-800">รายการปรับเพิ่ม</h3>
-              {earn.length === 0 && <p className={hint}>ไม่มี</p>}
+              {showCommission && (
+                <OverrideRow
+                  which="commission"
+                  title="ค่าคอม (ตามเกรด)"
+                  line={commission}
+                  computed={d.commissionComputed}
+                  current={d.overrides.commission}
+                  ctx={ctx}
+                  editable={d.editable}
+                  fallbackHow={d.overrides.commission ? `ปรับเป็น 0 · ${d.overrides.commission.reason}` : undefined}
+                />
+              )}
+              {earn.length === 0 && !showCommission && <p className={hint}>ไม่มี</p>}
               {earn.map((l) => (
                 <Row
                   key={l.key}
@@ -247,8 +264,9 @@ function OverrideRow({
   ctx,
   editable,
   help,
+  fallbackHow,
 }: {
-  which: "sso" | "tax";
+  which: "sso" | "tax" | "commission";
   title: string;
   line?: PayLine;
   computed: number;
@@ -256,7 +274,10 @@ function OverrideRow({
   ctx: { runId: string; employmentId: string; expectUpdatedAt: string };
   editable: boolean;
   help?: React.ReactNode;
+  /** คำอธิบายเมื่อไม่มีบรรทัด (เช่น ปรับค่าคอมเป็น 0) */
+  fallbackHow?: string;
 }) {
+  const earning = which === "commission";
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState(String(current?.amount ?? computed));
   const [reason, setReason] = useState(current?.reason ?? "");
@@ -269,9 +290,13 @@ function OverrideRow({
             {title}{" "}
             <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${current ? BADGE.adjustment!.cls : BADGE.auto!.cls}`}>{current ? "ปรับเอง" : "อัตโนมัติ"}</span>
           </div>
-          <div className="text-xs text-(--ink-soft)">{line?.how}</div>
+          <div className="text-xs text-(--ink-soft)">{line?.how ?? fallbackHow}</div>
         </div>
-        <span className="shrink-0 text-sm font-semibold tabular-nums text-red-800">({fmtBaht(line?.amount ?? 0)})</span>
+        {earning ? (
+          <span className="shrink-0 text-sm font-semibold tabular-nums text-emerald-800">{fmtBaht(line?.amount ?? 0)}</span>
+        ) : (
+          <span className="shrink-0 text-sm font-semibold tabular-nums text-red-800">({fmtBaht(line?.amount ?? 0)})</span>
+        )}
       </div>
       {help}
       {editable && !open && (
@@ -288,7 +313,11 @@ function OverrideRow({
         <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[8rem_1fr_auto]">
           <input aria-label={`${title} ยอดใหม่`} inputMode="decimal" className={field} value={amount} onChange={(e) => setAmount(e.target.value)} />
           <input aria-label="เหตุผล" className={field} placeholder="เหตุผล (จำเป็น)" value={reason} onChange={(e) => setReason(e.target.value)} />
-          <p className={`${hint} sm:col-span-3 sm:order-last`}>ใช้เมื่อยอดต้องต่างจากที่ระบบคิดจริง ๆ เช่น พนักงานขอให้หักภาษีเพิ่ม · CEO เห็นยอดนี้คู่กับที่ระบบคิดตอนอนุมัติ</p>
+          <p className={`${hint} sm:col-span-3 sm:order-last`}>
+            {earning
+              ? "เช่น เพิ่ม/ลดตามผลงานจริง หรือใส่ 0 = ไม่ให้ค่าคอมงวดนี้ · CEO เห็นยอดนี้คู่กับที่ระบบคิดตอนอนุมัติ"
+              : "ใช้เมื่อยอดต้องต่างจากที่ระบบคิดจริง ๆ เช่น พนักงานขอให้หักภาษีเพิ่ม · CEO เห็นยอดนี้คู่กับที่ระบบคิดตอนอนุมัติ"}
+          </p>
           <div className="flex gap-1.5">
             <button type="button" className={outline} onClick={() => setOpen(false)} disabled={busy}>ยกเลิก</button>
             <button type="button" className={navy} disabled={busy || !reason.trim()} onClick={() => run(() => overrideAction({ ...ctx, which, amount: Number(amount.replace(/,/g, "")), reason }), () => setOpen(false))}>บันทึก</button>

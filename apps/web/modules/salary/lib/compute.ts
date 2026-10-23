@@ -57,7 +57,10 @@ export interface RecurringItem {
 }
 
 export interface CommissionInput {
+  /** บาท (วิธี pool/fixed) — วิธี percent ใช้ percent แทน */
   amount: number;
+  /** % ของเงินเดือนงวดนี้ (วิธี percent) */
+  percent?: number;
   detail: string;
   taxable: boolean;
   ssoBase: boolean;
@@ -96,7 +99,7 @@ export interface ComputeInput {
   /** ค่าคอม Pool ตามเกรดของเดือนนี้ (ระบบบุคคล › พนักงาน › ค่าคอม) — pending = ยังไม่ใส่ เพราะเกรดยังไม่ปิด */
   commission?: CommissionInput;
   adjustments: Adjustment[];
-  overrides: { sso?: Override; tax?: Override };
+  overrides: { sso?: Override; tax?: Override; commission?: Override };
   profile: {
     ssoExempt: boolean;
     ssoExemptReason: string;
@@ -161,6 +164,8 @@ export interface ComputeResult {
   ssoComputed: number;
   /** วิธีคิดภาษีทีละขั้น (บาท) — ให้หน้าจอ/สลิปแสดงเป็นตาราง */
   taxBreak: TaxBreak;
+  /** ค่าคอมที่ระบบคิดได้ (ก่อน HR ปรับ) — 0 = ไม่มี */
+  commissionComputed: number;
   warnings: string[];
 }
 
@@ -277,6 +282,7 @@ export function computePay(input: ComputeInput): ComputeResult {
     salary = segs.reduce((sum, g) => sum + Math.min(s(g.monthly), Math.round((s(g.monthly) * g.days) / 30)), 0);
     salaryHow = `ทำงาน ${employedDays} จาก ${periodDays} วัน: ${segs.map((g) => `${fmt(s(g.monthly))} ÷ 30 × ${g.days}`).join(" + ")}`;
   }
+  let commissionComputed = 0;
   // อัตราต่อวันใช้เงินเดือนล่าสุดในงวด
   const monthlyRate = segs.length > 0 ? s(segs[segs.length - 1]!.monthly) : 0;
   if (salary > 0) lines.push({ key: "salary", label: "เงินเดือน", kind: "earning", amount: toBaht(salary), how: salaryHow, source: "salary", auto: true });
@@ -339,13 +345,25 @@ export function computePay(input: ComputeInput): ComputeResult {
       lines.push({ key: `rec:${r.refId}`, label: r.name, kind: "deduction", amount: toBaht(amt), how: r.detail ?? "รายการหักประจำทุกเดือน", source: "recurring", auto: true, refId: r.refId });
     }
   }
-  if (input.commission?.pending) warnings.push(input.commission.pending);
-  else if (input.commission && input.commission.amount > 0) {
-    const amt = s(input.commission.amount);
-    // จ่ายไม่สม่ำเสมอ (แล้วแต่เกรด/ยอด Pool) — คิดภาษีแบบเงินได้ไม่ประจำ เหมือน OT/โบนัส
-    lines.push({ key: "commission", label: "ค่าคอม (ตามเกรด)", kind: "earning", amount: toBaht(amt), how: input.commission.detail, source: "commission", auto: true });
-    if (input.commission.taxable) irregularEarn += amt;
-    if (input.commission.ssoBase) ssoExtra += amt;
+  // ค่าคอมตามเกรด — วิธี percent คูณเงินเดือนงวดนี้ (หลังแบ่งวันเข้า/ออก ก่อนหักลา) · HR ปรับ/ตัดรายคนได้ (ต้องมีเหตุผล)
+  const comm = input.commission;
+  if (comm?.percent !== undefined && comm.percent > 0) commissionComputed = Math.round((salary * comm.percent) / 100);
+  else if (comm && !comm.pending) commissionComputed = s(comm.amount);
+  const commOverride = input.overrides.commission;
+  if (comm?.pending && !commOverride) warnings.push(comm.pending);
+  const commAmt = commOverride ? Math.max(0, s(commOverride.amount)) : commissionComputed;
+  if (commAmt > 0 || commOverride) {
+    const how = commOverride
+      ? `ปรับโดย ${commOverride.byName}: ${commOverride.reason} (ระบบคิดได้ ${fmt(commissionComputed)})`
+      : comm?.percent !== undefined
+        ? `${comm.detail} → ${comm.percent}% × ${fmt(salary)} = ${fmt(commAmt)}`
+        : (comm?.detail ?? "");
+    if (commAmt > 0) {
+      // จ่ายไม่สม่ำเสมอ (แล้วแต่เกรด) — คิดภาษีแบบเงินได้ไม่ประจำ เหมือน OT/โบนัส
+      lines.push({ key: "commission", label: "ค่าคอม (ตามเกรด)", kind: "earning", amount: toBaht(commAmt), how, source: "commission", auto: !commOverride });
+      if (comm?.taxable ?? true) irregularEarn += commAmt;
+      if (comm?.ssoBase ?? true) ssoExtra += commAmt;
+    }
   }
   for (const a of input.adjustments) {
     const amt = s(a.amount);
@@ -506,6 +524,7 @@ export function computePay(input: ComputeInput): ComputeResult {
     taxComputed: toBaht(taxComputed),
     ssoComputed: toBaht(ssoComputed),
     taxBreak,
+    commissionComputed: toBaht(commissionComputed),
     warnings,
   };
 }

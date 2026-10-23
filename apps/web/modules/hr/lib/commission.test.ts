@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   commissionGradeOrder,
   defaultGradeWeights,
+  isCommissionEligible,
   parseBahtToSatang,
+  parseGradeValue,
+  resolveGradeValues,
+  toCommissionMethod,
   parseGradeWeight,
   resolveGradeWeights,
   splitCommissionPool,
@@ -82,5 +86,25 @@ describe("แปลงค่าจากช่องกรอก", () => {
     expect(parseGradeWeight("0.75")).toBe(0.75);
     expect(parseGradeWeight("101")).toBeNull();
     expect(parseGradeWeight("abc")).toBeNull();
+  });
+});
+
+describe("ค่าคอมแบบยืดหยุ่น — เลือกคน/วิธีคิด", () => {
+  it("แผนกที่เลือก + ยกเว้นรายคน", () => {
+    const e = { departmentIds: ["sales"], excludedUserIds: ["u2"] };
+    expect(isCommissionEligible({ userId: "u1", departmentId: "sales" }, e)).toBe(true);
+    expect(isCommissionEligible({ userId: "u2", departmentId: "sales" }, e)).toBe(false);
+    expect(isCommissionEligible({ userId: "u3", departmentId: "it" }, e)).toBe(false);
+    expect(isCommissionEligible({ userId: "u3", departmentId: null }, { departmentIds: [], excludedUserIds: [] })).toBe(true);
+  });
+
+  it("ค่าต่อเกรด: % ไม่เกิน 100 · ว่าง = 0 · ผิดรูป = null", () => {
+    expect(parseGradeValue("10", "percent")).toBe(10);
+    expect(parseGradeValue("150", "percent")).toBeNull();
+    expect(parseGradeValue("3,000", "fixed")).toBe(3000);
+    expect(parseGradeValue("", "fixed")).toBe(0);
+    expect(parseGradeValue("abc", "fixed")).toBeNull();
+    expect(toCommissionMethod("weird")).toBe("pool");
+    expect(resolveGradeValues(["A", "B", "F"], { A: 10, B: -1 }, "percent")).toEqual({ A: 10, B: 0, F: 0 });
   });
 });

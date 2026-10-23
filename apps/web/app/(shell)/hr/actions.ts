@@ -23,7 +23,7 @@ import {
   overrideDaysFor,
   saveDayOffQuota,
 } from "@/lib/day-off-quota";
-import { saveCommissionPool, saveCommissionWeights } from "@/modules/hr/lib/commission-data";
+import { saveCommissionEligibility, saveCommissionMethod, saveCommissionPool, saveCommissionValues, saveCommissionWeights } from "@/modules/hr/lib/commission-data";
 import { syncAllUserNames, syncUserName } from "@/modules/hr/lib/name-sync";
 import { clearApprovalNotifications, notifyApprovers, notifyRequester } from "@/modules/hr/lib/hr-notify";
 import { dockAttendance } from "@/lib/attendance-performance";
@@ -494,6 +494,37 @@ export async function saveCommissionWeightsAction(formData: FormData) {
     userId: session.userId,
     grades: formData.getAll("gradeName").map(String),
     weights: formData.getAll("weight").map(String),
+  });
+  revalidatePath("/hr/employees");
+}
+
+/** เลือกวิธีคิดค่าคอม (pool · percent · fixed · off) */
+export async function saveCommissionMethodAction(formData: FormData) {
+  const session = await guardSalary();
+  await saveCommissionMethod({ orgId: session.orgId, userId: session.userId, method: String(formData.get("method") ?? "") });
+  revalidatePath("/hr/employees");
+}
+
+/** % หรือบาทต่อเกรด */
+export async function saveCommissionValuesAction(formData: FormData) {
+  const session = await guardSalary();
+  await saveCommissionValues({
+    orgId: session.orgId,
+    userId: session.userId,
+    grades: formData.getAll("gradeName").map(String),
+    values: formData.getAll("value").map(String),
+  });
+  revalidatePath("/hr/employees");
+}
+
+/** ใครได้ค่าคอม — แผนกที่ติ๊ก (ไม่ติ๊กเลย = ทุกแผนก) · คนที่ติ๊ก "ไม่ได้" */
+export async function saveCommissionEligibilityAction(formData: FormData) {
+  const session = await guardSalary();
+  await saveCommissionEligibility({
+    orgId: session.orgId,
+    userId: session.userId,
+    departmentIds: formData.getAll("departmentId").map(String),
+    excludedUserIds: formData.getAll("excludedUserId").map(String),
   });
   revalidatePath("/hr/employees");
 }

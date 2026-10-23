@@ -146,3 +146,67 @@ export function formatSatang(satang: number): string {
     maximumFractionDigits: 2,
   }).format(satang / 100);
 }
+
+/* ═════════════════ วิธีคิดแบบอื่น (เลือกได้ต่อบริษัท) ═════════════════ */
+
+/**
+ * pool    = ใส่ยอดรวมทุกเดือน แบ่งตามตัวคูณเกรด (แบบเดิม)
+ * percent = เกรดไหนได้กี่ % ของเงินเดือนคนนั้น (ยอดเงินคิดในงวดเงินเดือน — ที่นี่ไม่รู้เงินเดือน)
+ * fixed   = เกรดไหนได้กี่บาท เท่ากันทุกคน
+ * off     = ไม่คิดค่าคอมจากเกรด (บริษัทที่ไม่ผูกเกรดกับเงิน — ใส่ค่าคอมเองรายคนในงวดเงินเดือนได้)
+ */
+export type CommissionMethod = "pool" | "percent" | "fixed" | "off";
+export const COMMISSION_METHODS: { id: CommissionMethod; label: string; hint: string }[] = [
+  { id: "pool", label: "แบ่งจากยอดรวม (Pool) ตามตัวคูณเกรด", hint: "ใส่ยอดรวมทุกเดือน ระบบแบ่งให้ตามเกรด เช่น A ได้ 1 ส่วน B ได้ 0.75 ส่วน" },
+  { id: "percent", label: "% ของเงินเดือน ตามเกรด", hint: "เช่น A ได้ 10% B ได้ 5% ของเงินเดือนคนนั้น — ไม่ต้องใส่ยอดทุกเดือน" },
+  { id: "fixed", label: "จำนวนเงินตายตัว ตามเกรด", hint: "เช่น A ได้ 3,000 B ได้ 1,500 บาท เท่ากันทุกคนในเกรดเดียวกัน" },
+  { id: "off", label: "ไม่คิดค่าคอมจากเกรด", hint: "เกรดไม่เกี่ยวกับเงิน — ถ้ามีค่าคอม ใส่เองรายคนในงวดเงินเดือน" },
+];
+export function toCommissionMethod(v: unknown): CommissionMethod {
+  return v === "percent" || v === "fixed" || v === "off" ? v : "pool";
+}
+
+/** % ไม่เกิน 100 · บาทไม่เกินขีดของ Pool */
+export const MAX_GRADE_PERCENT = 100;
+
+/** ค่าต่อเกรดของวิธี percent/fixed — ไม่ได้ตั้ง = 0 (ไม่ได้ค่าคอม) */
+export function resolveGradeValues(order: readonly string[], saved: Record<string, unknown>, method: CommissionMethod): Record<string, number> {
+  const max = method === "percent" ? MAX_GRADE_PERCENT : MAX_POOL_BAHT;
+  const out: Record<string, number> = {};
+  for (const grade of order) {
+    const v = saved[grade];
+    out[grade] = typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= max ? v : 0;
+  }
+  return out;
+}
+
+/** ช่องกรอกค่าต่อเกรด — ทศนิยมไม่เกิน 2 ตำแหน่ง · ผิด/เกินขีด = null */
+export function parseGradeValue(input: string, method: CommissionMethod): number | null {
+  const raw = input.replace(/[,\s฿%]/g, "");
+  if (raw === "") return 0;
+  if (!/^\d+(\.\d{1,2})?$/.test(raw)) return null;
+  const value = Number(raw);
+  return value <= (method === "percent" ? MAX_GRADE_PERCENT : MAX_POOL_BAHT) ? value : null;
+}
+
+export interface CommissionEligibility {
+  /** ว่าง = ทุกแผนก */
+  departmentIds: string[];
+  excludedUserIds: string[];
+}
+
+/** ได้ค่าคอมไหม: อยู่ในแผนกที่เลือก (ไม่ได้เลือก = ทุกแผนก) และไม่ถูกยกเว้นรายคน */
+export function isCommissionEligible(m: { userId: string; departmentId?: string | null }, e: CommissionEligibility): boolean {
+  if (e.excludedUserIds.includes(m.userId)) return false;
+  if (e.departmentIds.length === 0) return true;
+  return !!m.departmentId && e.departmentIds.includes(m.departmentId);
+}
+
+/**
+ * ค่าคอมของคนหนึ่งตามวิธีที่บริษัทเลือก (หลังกรองคนที่ได้แล้ว)
+ * percent คืน % ไว้ให้งวดเงินเดือนคูณเงินเดือนเอง · pool ใช้ส่วนแบ่งจาก splitCommissionPool
+ */
+export type CommissionFor =
+  | { kind: "amount"; satang: number; detail: string }
+  | { kind: "percent"; percent: number; detail: string }
+  | null;

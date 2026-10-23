@@ -538,18 +538,18 @@ export async function removeAdjustmentAction(input: { runId: string; employmentI
 }
 
 /** ปรับยอดประกันสังคม/ภาษีงวดนี้เอง (ต้องมีเหตุผล) · amount null = กลับไปใช้ที่ระบบคิด */
-export async function overrideAction(input: { runId: string; employmentId: string; expectUpdatedAt: string | null; which: "sso" | "tax"; amount: number | null; reason: string }): Promise<Result> {
+export async function overrideAction(input: { runId: string; employmentId: string; expectUpdatedAt: string | null; which: "sso" | "tax" | "commission"; amount: number | null; reason: string }): Promise<Result> {
   try {
     const { orgId, actor } = await guardFor(input.employmentId);
-    if (input.which !== "sso" && input.which !== "tax") return { error: "รายการไม่ถูกต้อง" };
+    if (input.which !== "sso" && input.which !== "tax" && input.which !== "commission") return { error: "รายการไม่ถูกต้อง" };
     const reason = text(input.reason, 300);
-    const amount = input.amount === null ? null : money(input.amount, input.which === "sso" ? "ประกันสังคม" : "ภาษี", 1_000_000);
+    const name = input.which === "sso" ? "ประกันสังคม" : input.which === "tax" ? "ภาษี" : "ค่าคอม";
+    const amount = input.amount === null ? null : money(input.amount, name, input.which === "commission" ? 10_000_000 : 1_000_000);
     if (amount !== null && !reason) return { error: "ใส่เหตุผลที่ปรับ" };
     await editLine(orgId, actor, input, (line) => {
       const overrides = { ...(line.info.overrides ?? {}) };
       if (amount === null) delete overrides[input.which];
       else overrides[input.which] = { amount, reason, byName: actor.name };
-      const name = input.which === "sso" ? "ประกันสังคม" : "ภาษี";
       return { adjustments: line.adjustments, info: { ...line.info, overrides }, summary: amount === null ? `${name}กลับไปใช้ที่ระบบคิด` : `ปรับ${name}เป็น ${fmtBaht(amount)} · ${reason}` };
     });
     refresh(input.runId);

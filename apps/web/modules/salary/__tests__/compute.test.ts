@@ -361,3 +361,28 @@ describe("ค่าคอม Pool ตามเกรด (ระบบบุค�
     expect(r.warnings.some((w) => w.includes("เกรดยังไม่ปิด"))).toBe(true);
   });
 });
+
+describe("ค่าคอมแบบยืดหยุ่น", () => {
+  it("% ของเงินเดือน: 10% × 18,000 = 1,800 · คนเข้ากลางงวดคิดจากเงินเดือนที่ได้จริง", () => {
+    const pct = { amount: 0, percent: 10, detail: "เกรด A ได้ 10% ของเงินเดือน", taxable: true, ssoBase: true };
+    expect(line(computePay(base({ commission: pct })), "commission")?.amount).toBe(1800);
+    const half = computePay(base({ commission: pct, salary: [{ monthly: 18000, from: "2026-10-11", to: "2026-10-25" }] }));
+    expect(line(half, "commission")?.amount).toBe(900);
+  });
+
+  it("HR ปรับยอดรายคน: ใช้ยอดที่ปรับ และบอกยอดที่ระบบคิดได้ · ปรับเป็น 0 = ไม่มีบรรทัด", () => {
+    const comm = { amount: 3000, detail: "Pool", taxable: true, ssoBase: true };
+    const r = computePay(base({ commission: comm, overrides: { commission: { amount: 2500, reason: "ขาดงาน", byName: "HR" } } }));
+    expect(line(r, "commission")?.amount).toBe(2500);
+    expect(line(r, "commission")?.how).toContain("ระบบคิดได้ 3,000");
+    expect(r.commissionComputed).toBe(3000);
+    const zero = computePay(base({ commission: comm, overrides: { commission: { amount: 0, reason: "ทดลองงาน", byName: "HR" } } }));
+    expect(line(zero, "commission")).toBeUndefined();
+  });
+
+  it("ปรับยอดเองได้แม้เกรดยังไม่ปิด และไม่ขึ้นเตือนซ้ำ", () => {
+    const r = computePay(base({ commission: { amount: 0, detail: "", taxable: true, ssoBase: true, pending: "เกรดยังไม่ปิด" }, overrides: { commission: { amount: 1000, reason: "ตกลงไว้", byName: "HR" } } }));
+    expect(line(r, "commission")?.amount).toBe(1000);
+    expect(r.warnings.some((w) => w.includes("เกรดยังไม่ปิด"))).toBe(false);
+  });
+});
