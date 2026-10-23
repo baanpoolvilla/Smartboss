@@ -5,7 +5,7 @@ import { Switch } from "@/modules/report_task/components/ui/switch";
 import { Badge } from "@/modules/report_task/components/ui/badge";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
-import { useReminderSettingsStore } from "@/modules/report_task/store/reminder-settings-store";
+import { DEFAULT_TASK_MORNING_TIME, useReminderSettingsStore } from "@/modules/report_task/store/reminder-settings-store";
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
 import { trackedTopicsOf } from "@/modules/report_task/lib/report-feed-compliance";
 import { REMINDER_OPTIONS } from "@/modules/report_task/components/calendar/add-todo-dialog";
@@ -145,7 +145,7 @@ function MixedUnitLeadPointsEditor({ values, onChange }: { values: number[]; onC
         />
         <Select value={unit} onValueChange={(v) => setUnit(v as typeof unit)}>
           <SelectTrigger className="h-6 w-16 border-0 px-1 text-xs shadow-none">
-            <SelectValue />
+            <SelectValue>{LEAD_UNITS.find((u) => u.key === unit)?.label}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             {LEAD_UNITS.map((u) => (
@@ -201,7 +201,7 @@ export function DeadlineReminderSettingsPanel() {
   // or a room with no submission round configured has nothing for the
   // global lock to apply to in the first place, so listing it here would
   // just be a checkbox that does nothing either way.
-  const lockableTopics = trackedTopicsOf(topics).slice().sort((a, b) => a.name.localeCompare(b.name, "th"));
+  const lockableTopics = trackedTopicsOf(topics).slice().sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", "th"));
 
   function toggleRecipient(setFn: (patch: Record<string, boolean>) => void, key: string, current: boolean) {
     setFn({ [key]: !current });
@@ -219,8 +219,7 @@ export function DeadlineReminderSettingsPanel() {
       </div>
 
       <Badge variant="outline" className="w-fit text-[10px] font-normal bg-[var(--bg-soft)] text-[var(--ink-soft)] whitespace-normal">
-        ตัวยิงแจ้งเตือนทำงานเมื่อมีคนเปิดแอปอยู่ (เช็คทุก 60 วินาที) เหมือนระบบหักคะแนนงานเลยกำหนดที่มีอยู่แล้ว —
-        ยังไม่ใช่ cron ฝั่งเซิร์ฟเวอร์ที่ทำงานได้แม้ไม่มีใครเปิดแอปเลย
+        เซิร์ฟเวอร์เช็กให้ทุก 5 นาที แม้ไม่มีใครเปิดแอป (และเช็กเพิ่มทุก 60 วินาทีระหว่างมีคนเปิดแอปอยู่)
       </Badge>
 
       {/* งาน */}
@@ -232,7 +231,7 @@ export function DeadlineReminderSettingsPanel() {
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold">งาน (Task)</p>
             <p className="text-[11px] text-[var(--ink-soft)]">
-              แจ้งก่อนถึงกำหนดส่ง — งานที่ตั้งเวลากำหนดส่งไว้ (ไม่ใช่แค่วันที่) เลือกเป็นชั่วโมง/นาทีก่อนได้ด้วย
+              จุดที่เป็นวัน (เช่น 3 วัน, 1 วันก่อน) เตือนตอนเช้าตามเวลาด้านล่าง · จุดชั่วโมง/นาทีใช้กับงานที่ใส่เวลาส่งไว้
             </p>
           </div>
           <Switch checked={settings.task.enabled} onCheckedChange={(v) => setTaskSettings({ enabled: v })} />
@@ -242,6 +241,20 @@ export function DeadlineReminderSettingsPanel() {
             values={settings.task.leadMinutes}
             onChange={(leadMinutes) => setTaskSettings({ leadMinutes })}
           />
+          <div className="flex flex-wrap items-center gap-2 pl-[46px]">
+            <span className="text-[11px] text-[var(--ink-faint)]">เวลาเตือน:</span>
+            <TimePickerField
+              className="w-[104px] shrink-0"
+              value={settings.task.morningTime ?? DEFAULT_TASK_MORNING_TIME}
+              onChange={(time) => setTaskSettings({ morningTime: time || DEFAULT_TASK_MORNING_TIME })}
+              aria-label="เวลาเตือนงานใกล้ครบกำหนด"
+            />
+            <span className="text-[11px] text-[var(--ink-soft)]">น. ของวันนั้น</span>
+          </div>
+          <label className="flex items-center gap-2 pl-[46px] text-xs">
+            <Checkbox checked={settings.task.remindOnDueDay !== false} onCheckedChange={(v) => setTaskSettings({ remindOnDueDay: v === true })} />
+            เตือนเช้าวันครบกำหนดด้วย (&quot;ครบกำหนดวันนี้&quot;)
+          </label>
           <div className="flex flex-wrap items-center gap-2 pl-[46px]">
             <span className="text-[11px] text-[var(--ink-faint)]">แจ้งใคร:</span>
             <RecipientPill active={settings.task.notifyAssignee} label="ผู้รับผิดชอบ" onClick={() => toggleRecipient(setTaskSettings, "notifyAssignee", settings.task.notifyAssignee)} />

@@ -10,6 +10,10 @@ export interface TaskReminderSettings {
    * count down to. Still perfectly fine to only ever add whole-day points
    * (1440-minute multiples) if that's all a given task needs. */
   leadMinutes: number[];
+  /** "HH:mm" — จุดที่เป็นวันเต็ม (3 วัน/1 วันก่อน) + เช้าวันครบกำหนด เตือนเวลานี้ (ไม่ตั้ง = 08:30) */
+  morningTime?: string;
+  /** เตือนเช้าวันครบกำหนดด้วย (ไม่ตั้ง = เปิด) */
+  remindOnDueDay?: boolean;
   notifyAssignee: boolean;
   notifyAssigner: boolean;
   notifyDeptHead: boolean;
@@ -78,8 +82,11 @@ export interface ReminderSettings {
   submissionLock: ReportSubmissionLockSettings;
 }
 
+/** เวลาเตือนตอนเช้าของจุด "N วันก่อน" ของงาน เมื่อบริษัทยังไม่ได้ตั้ง */
+export const DEFAULT_TASK_MORNING_TIME = "08:30";
+
 export const defaultReminderSettings: ReminderSettings = {
-  task: { enabled: true, leadMinutes: [4320, 1440], notifyAssignee: true, notifyAssigner: false, notifyDeptHead: false },
+  task: { enabled: true, leadMinutes: [4320, 1440], morningTime: "08:30", remindOnDueDay: true, notifyAssignee: true, notifyAssigner: false, notifyDeptHead: false },
   meeting: { enabled: true, leadMinutes: [15], notifyAttendees: true },
   report: { enabled: true, leadMinutes: [30], weeklyLeadMinutes: [30], monthlyLeadMinutes: [30], notifyPending: true, notifyManagerSummary: false },
   todo: { enabled: true, defaultLeadMinutes: 0 },

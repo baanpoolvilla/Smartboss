@@ -258,6 +258,8 @@ export function topicForReportNotification(n: { message: string; kind?: string |
   if (n.kind === "task_comment" || n.kind === "task_attachment") return "pm.comment";
   if (n.kind === "sticker_settings") return "pm.activity";
 
+  // เตือนงานใกล้ครบกำหนด (reminder-sweep.ts taskDueRounds) — ก่อนกฎคำอื่น เพราะชื่องานอาจมีคำว่า "ประชุม"/"ตรวจงาน"
+  if (/^งาน ".*" ครบกำหนด(วันนี้|พรุ่งนี้|อีก )/.test(m)) return "pm.due_soon";
   if (m.includes("ตั๋ว") || m.includes("แจ้งปัญหา")) return "bug.all";
   if (m.includes("ประชุม")) return "pm.meeting";
   if (m.startsWith("สิ่งที่ต้องทำ")) return "pm.todo";

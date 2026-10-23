@@ -1,0 +1,106 @@
+import "server-only";
+
+import { randomUUID } from "node:crypto";
+
+import { createStoreIfAbsent, readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
+import { readTasks } from "@/modules/report_task/lib/db/task-repo";
+import { computeReminders } from "@/modules/report_task/lib/reminder-sweep";
+import { defaultReminderSettings, type ReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
+import type { ReportAlbum, ReportPost, ReportTopic, SubmitterGroup } from "@/modules/report_task/store/report-feed-store";
+import type { AppNotification } from "@/modules/report_task/store/notification-store";
+import type { CalendarEvent, TodoItem } from "@/modules/report_task/types";
+
+const SETTINGS_KEY = "reminder-settings";
+const SENT_LOG_KEY = "reminder-sent-log";
+const NOTIFICATIONS_KEY = "notifications";
+const MEETINGS_KEY = "meetings";
+const TODOS_KEY = "todos";
+const REPORT_FEED_KEY = "report-feed";
+// Dedup keys accumulate roughly one per (task × lead-day) and (person × room
+// × day × lead) — capped so a company running this for years doesn't grow
+// the row unbounded. Old keys aging out just means a years-old task/day
+// could theoretically re-notify, which never happens in practice since the
+// underlying task/day is long gone by then anyway.
+const MAX_SENT_KEYS = 20_000;
+
+/**
+ * รอบเตือน "ใกล้ถึงกำหนด" ของบริษัทเดียว — เรียกได้ทั้งจากแท็บที่เปิดอยู่ (route reminders/sweep)
+ * และจาก cron ฝั่งเซิร์ฟเวอร์ทุก 5 นาที (task=reminders) ที่ไม่ต้องรอให้มีคนเปิดเว็บ
+ * ผู้เรียกต้อง claimSweep("reminders", orgId) ก่อน — สองทางนี้ใช้คีย์เดียวกัน ไม่ทำซ้อนกัน
+ */
+export async function runReminderSweep(orgId: string, actorId: string | null) {
+  const [{ data: settingsRaw }, { tasks }, { data: meetings }, { data: todos }, { data: reportFeed }] = await Promise.all([
+    readStore<ReminderSettings>(orgId, SETTINGS_KEY),
+    readTasks(orgId),
+    readStore<CalendarEvent[]>(orgId, MEETINGS_KEY),
+    readStore<TodoItem[]>(orgId, TODOS_KEY),
+    readStore<{ topics: ReportTopic[]; posts: ReportPost[]; albums: ReportAlbum[]; submitterGroups?: SubmitterGroup[] }>(orgId, REPORT_FEED_KEY),
+  ]);
+  // Merged field-by-field, not a plain `?? default` — a row saved before
+  // `task.leadMinutes`/`todo` existed on ReminderSettings only has the old
+  // shape (`task.leadDays`, no `todo` key at all), and computeReminders reads
+  // `settings.task.leadMinutes.length`/`settings.todo.enabled` unconditionally.
+  // That combination 500'd this route on every org still on old data — the
+  // client store already migrates the same way (store-hydrator.tsx), this
+  // route just never went through it since it reads the DB directly.
+  const rawTask = settingsRaw?.task as (Partial<ReminderSettings["task"]> & { leadDays?: number[] }) | undefined;
+  const migratedLeadMinutes = rawTask?.leadMinutes ?? rawTask?.leadDays?.map((d) => d * 1440);
+  const settings: ReminderSettings = {
+    task: { ...defaultReminderSettings.task, ...rawTask, ...(migratedLeadMinutes ? { leadMinutes: migratedLeadMinutes } : {}) },
+    meeting: { ...defaultReminderSettings.meeting, ...settingsRaw?.meeting },
+    report: { ...defaultReminderSettings.report, ...settingsRaw?.report },
+    todo: { ...defaultReminderSettings.todo, ...settingsRaw?.todo },
+    submissionLock: { ...defaultReminderSettings.submissionLock, ...settingsRaw?.submissionLock },
+  };
+
+  const { data: sentLog, version: sentVersion } = await readStore<string[]>(orgId, SENT_LOG_KEY);
+  const alreadySent = new Set(sentLog ?? []);
+
+  const result = computeReminders({
+    tasks,
+    meetings: meetings ?? [],
+    todos: todos ?? [],
+    topics: reportFeed?.topics ?? [],
+    posts: reportFeed?.posts ?? [],
+    settings,
+    alreadySent,
+    groups: reportFeed?.submitterGroups ?? [],
+  });
+
+  if (result.newSentKeys.length === 0) {
+    return { ok: true, sent: 0 };
+  }
+
+  const nextSentLog = [...result.newSentKeys, ...(sentLog ?? [])].slice(0, MAX_SENT_KEYS);
+  // "จอง" ว่ารอบนี้เป็นคนส่ง — ทุกแท็บที่เปิดอยู่ (คอม + มือถือ) ยิง route นี้ทุก 60 วิ สองคำขอที่มาพร้อมกัน
+  // อ่าน sent-log ชุดเดียวกัน คิดได้แจ้งเตือนชุดเดียวกัน เดิมไม่ดูผลการเขียน ⇒ ทั้งคู่ส่ง = แจ้งเตือนซ้ำ
+  // ตอนนี้เขียนแบบตรวจ version: แพ้ (อีกคำขอเขียนไปก่อน) = ไม่ส่ง ให้คำขอนั้นส่งไปแล้ว
+  // ยังไม่เคยมีแถว (version 0) — writeStore ตอนนั้นเป็น upsert ไม่ตรวจ version ใช้สร้างแบบใครมาก่อนชนะแทน
+  const claimed =
+    sentVersion === 0
+      ? await createStoreIfAbsent(orgId, SENT_LOG_KEY, nextSentLog, actorId ?? undefined)
+      : await writeStore(orgId, SENT_LOG_KEY, nextSentLog, sentVersion, actorId ?? undefined);
+  if (!claimed.ok) return { ok: true, sent: 0, raced: true };
+
+  if (result.notifications.length > 0) {
+    const fresh: AppNotification[] = result.notifications.flatMap((n) =>
+      n.recipients.map((userId) => ({
+        id: `notif-${randomUUID()}`,
+        userId,
+        byUserId: n.byUserId,
+        message: n.message,
+        link: n.link,
+        createdAt: new Date().toISOString(),
+        read: false,
+      }))
+    );
+    // ก้อนแจ้งเตือนมีคนเขียนตลอด (กดอ่าน, คอมเมนต์ ฯลฯ) — ชนแล้วอ่านใหม่ต่อท้ายใหม่ ไม่ทิ้งแจ้งเตือนที่จองไว้แล้ว
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { data: existing, version: v } = await readStore<AppNotification[]>(orgId, NOTIFICATIONS_KEY);
+      const written = await writeStore(orgId, NOTIFICATIONS_KEY, [...fresh, ...(existing ?? [])], v, actorId ?? undefined);
+      if (written.ok) break;
+    }
+  }
+
+  return { ok: true, sent: result.notifications.length };
+}

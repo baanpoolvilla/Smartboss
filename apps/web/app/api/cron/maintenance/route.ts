@@ -8,6 +8,7 @@ import {
 import { dockAttendance, dockFinishedShifts, refundAttendanceDocks } from "@/lib/attendance-performance";
 import { purgeExpiredChatMedia } from "@/modules/chat/data/media-retention";
 import { runNotesMaintenance } from "@/modules/report_task/lib/notes/server";
+import { runReminderSweep } from "@/modules/report_task/lib/server/reminder-sweep-run";
 import { notifyLateArrivals } from "@/lib/attendance-late-alerts";
 import { postAttendanceToChat } from "@/lib/attendance-chat";
 import { notifyPendingOvertime } from "@/modules/hr/lib/hr-notify";
@@ -42,11 +43,36 @@ export const runtime = "nodejs";
  *   - เตือนเจ้าของโปรเจกต์อัปเดตสถานะทุกวันศุกร์ (?task=project-reminders — อยู่ใน all, &force=1 รันวันอื่นได้)
  *   - โน้ตของห้องรายงาน (?task=notes — อยู่ใน all และ score-hourly ที่รันทุกชั่วโมงอยู่แล้ว): บีบชุดแก้ที่ค้าง,
  *     พักประวัติหน้าที่แก้แล้วเงียบไป, ลบถาวรหน้าที่อยู่ในถังขยะเกิน 30 วัน
+ *   - แจ้งเตือนใกล้ถึงกำหนด งาน/ประชุม/รีพอต ของทุกบริษัท (?task=reminders — crontab แยก ทุก 5 นาที · ไม่อยู่ใน all)
+ *     ตัวเดียวกับที่แท็บที่เปิดอยู่เรียก ⇒ เตือนเช้าตรงเวลาแม้ไม่มีใครเปิดเว็บ
  *   - ?task=all รันทั้งหมด
  * เรียกด้วย header `Authorization: Bearer $CRON_SECRET` หรือ `?key=$CRON_SECRET`
  * route นี้อยู่นอก auth ของ proxy จึงกันด้วย CRON_SECRET เท่านั้น →
  * บน production ถ้าไม่ตั้ง secret ต้อง **ปิด** ไม่ใช่เปิดโล่ง (dev ยังเรียกได้เลย)
  */
+/** รอบเตือนใกล้ถึงกำหนดของทุกบริษัท — ข้ามบริษัทที่แท็บเพิ่งรันไป (คีย์ throttle เดียวกัน) */
+async function runRemindersAllOrgs() {
+  const orgs = await prisma.organization.findMany({ where: { isActive: true }, select: { id: true } });
+  const out = { orgs: orgs.length, ran: 0, sent: 0, skipped: 0, errors: [] as string[] };
+  for (const { id } of orgs) {
+    if (!claimSweep("reminders", id)) {
+      out.skipped++;
+      continue;
+    }
+    try {
+      const r = await runReminderSweep(id, null);
+      out.ran++;
+      out.sent += r.sent;
+    } catch (error) {
+      console.error("[cron] reminders", id, error);
+      out.errors.push(`${id}: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      releaseSweep("reminders", id);
+    }
+  }
+  return out;
+}
+
 /** รอบหักคะแนนรายงาน + งานเลยกำหนดของทุกบริษัท (ตัวเดียวกับที่แท็บที่เปิดอยู่เรียก) — ข้ามบริษัทที่เพิ่งรันไป */
 async function runScoreSweepsAllOrgs() {
   const orgs = await prisma.organization.findMany({ where: { isActive: true }, select: { id: true } });
@@ -107,6 +133,9 @@ export async function GET(req: NextRequest) {
   }
   if (task === "attendance-chat") {
     Object.assign(result, { attendanceChat: await postAttendanceToChat() });
+  }
+  if (task === "reminders") {
+    Object.assign(result, { reminders: await runRemindersAllOrgs() });
   }
   if (task === "notes" || task === "all" || task === "score-hourly") {
     Object.assign(result, { notes: await runNotesMaintenance().catch((e) => ({ error: String(e) })) });

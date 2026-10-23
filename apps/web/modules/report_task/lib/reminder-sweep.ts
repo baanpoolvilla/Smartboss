@@ -3,7 +3,7 @@ import { calendarDateOf, localDateStr, now, todayIso } from "@/modules/report_ta
 import { pendingToday } from "@/modules/report_task/lib/report-feed-compliance";
 import { effectiveRoundsOf, roundRunsOnDay, roundFrequencyOf, resolveRoundSubmitters } from "@/modules/report_task/lib/submission-rounds";
 import { SYSTEM_USER_ID } from "@/modules/report_task/lib/task-penalty-sweep";
-import type { ReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
+import { DEFAULT_TASK_MORNING_TIME, type ReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
 import type { ReportPost, ReportTopic, SubmissionRound, SubmitterGroup } from "@/modules/report_task/store/report-feed-store";
 import type { CalendarEvent, Task, TodoItem } from "@/modules/report_task/types";
 import { isPersonalTask } from "@/modules/report_task/lib/personal-task";
@@ -14,6 +14,62 @@ const DAY_MINUTES = 1440;
 export const REVIEW_STALE_DAYS = 60;
 /** เกินกี่ชิ้นต่อคนในรอบเดียว แล้วรวมเป็นแจ้งเตือนเดียว */
 const REVIEW_STALE_GROUP_OVER = 3;
+
+/** รอบที่เลยเวลามาไม่เกินนี้ยังเตือน (เช่น ไม่มีใครเปิดเว็บตอน 08:30 แต่เปิดตอน 09:00) — เกินนี้ข้าม ไม่เตือนย้อนหลังกลางดึก */
+export const TASK_ROUND_GRACE_MS = 6 * 3600_000;
+
+export interface TaskDueRound {
+  /** ใช้ในคีย์กันส่งซ้ำ: d{N} = เช้าของ N วันก่อน · m{นาที} = ก่อนเวลาส่ง */
+  tag: string;
+  fireAt: number;
+  dueMs: number;
+  /** ต่อท้าย `งาน "ชื่อ" ` */
+  text: string;
+}
+
+/** "ศ. 24 ต.ค." */
+function thaiShortDay(day: string): string {
+  return new Date(`${day}T00:00:00`).toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" });
+}
+
+/** 90 → "1 ชม. 30 นาที" */
+function hoursMinutesLabel(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return [h ? `${h} ชม.` : "", m ? `${m} นาที` : ""].filter(Boolean).join(" ");
+}
+
+/**
+ * รอบเตือนของงานหนึ่งชิ้น (ยังไม่ดูว่าถึงเวลาหรือส่งไปแล้ว)
+ *  - จุดที่เป็นวันเต็ม (3 วัน, 1 วัน) → เช้าของวันนั้นตามเวลาที่ตั้ง (ค่าเริ่มต้น 08:30)
+ *  - เช้าวันครบกำหนด (ปิดได้ในตั้งค่า)
+ *  - จุดชั่วโมง/นาที → นับถอยจากเวลาส่ง ใช้เฉพาะงานที่ใส่เวลาส่ง (งานไม่มีเวลา = 23:59 นับแล้วได้เวลากลางดึก)
+ * รอบที่ตกหลังเวลาส่งไปแล้ว (เช่น ส่ง 08:00 แต่ตั้งเตือนเช้า 08:30) ตัดทิ้ง
+ */
+export function taskDueRounds(t: Task, s: ReminderSettings["task"]): TaskDueRound[] {
+  const day = calendarDateOf(t.dueDate);
+  const dueMs = new Date(`${day}T${t.dueTime || "23:59"}:00`).getTime();
+  if (!Number.isFinite(dueMs)) return [];
+  const morning = /^\d{2}:\d{2}$/.test(s.morningTime ?? "") ? s.morningTime! : DEFAULT_TASK_MORNING_TIME;
+  const dayLeads = new Set(s.leadMinutes.filter((l) => l > 0 && l % DAY_MINUTES === 0).map((l) => l / DAY_MINUTES));
+  if (s.remindOnDueDay !== false) dayLeads.add(0);
+  const rounds: TaskDueRound[] = [];
+  for (const n of dayLeads) {
+    const fireAt = new Date(`${addDays(day, -n)}T${morning}:00`).getTime();
+    if (fireAt >= dueMs) continue;
+    const text =
+      n === 0
+        ? `ครบกำหนดวันนี้${t.dueTime ? ` เวลา ${t.dueTime} น.` : ""}`
+        : `ครบกำหนด${n === 1 ? "พรุ่งนี้" : `อีก ${n} วัน`} (${thaiShortDay(day)}${t.dueTime ? ` ${t.dueTime} น.` : ""})`;
+    rounds.push({ tag: `d${n}`, fireAt, dueMs, text });
+  }
+  if (t.dueTime) {
+    for (const l of new Set(s.leadMinutes.filter((x) => x > 0 && x % DAY_MINUTES !== 0))) {
+      rounds.push({ tag: `m${l}`, fireAt: dueMs - l * 60_000, dueMs, text: `ครบกำหนดอีก ${hoursMinutesLabel(l)} (${t.dueTime} น.)` });
+    }
+  }
+  return rounds;
+}
 
 /** "20/10/2569" — วันที่แบบที่คนในบริษัทอ่าน (พ.ศ.) */
 function formatThaiDay(iso: string): string {
@@ -117,46 +173,51 @@ export function computeReminders(input: {
   const notifications: ReminderNotification[] = [];
   const newSentKeys: string[] = [];
 
-  // ---- Tasks: N minutes before the due moment (dueDate's day + dueTime, 23:59 if unset) ----
-  if (settings.task.enabled && settings.task.leadMinutes.length > 0) {
+  // ---- งานใกล้ครบกำหนด ----
+  // จุด "N วันก่อน" เตือนตอนเช้าตามเวลาที่ตั้ง (เดิมนับถึง 23:59 ของวันครบกำหนด ⇒ เด้งตอนเที่ยงคืน "ไม่สะดวกดูแจ้งเตือน" 23/10/2569)
+  // + เช้าวันครบกำหนด · จุดชั่วโมง/นาทีใช้กับงานที่ใส่เวลาส่งเท่านั้น — ดู taskDueRounds
+  if (settings.task.enabled) {
     const nowMs = now().getTime();
     for (const t of tasks) {
       if (t.status === "done") continue;
-      const dueMs = new Date(`${calendarDateOf(t.dueDate)}T${t.dueTime || "23:59"}:00`).getTime();
-      const minutesUntil = (dueMs - nowMs) / 60_000;
-      if (minutesUntil < 0) continue; // already overdue — that's task-penalty-sweep's job, not this one
-      {
-        const crossed = crossedLeads(settings.task.leadMinutes, minutesUntil);
-        if (!claimLeads(crossed, (lead) => `task:${t.id}:${lead}`, alreadySent, newSentKeys)) continue;
-        const recipients = new Set<string>();
-        if (settings.task.notifyAssignee) for (const id of t.assigneeIds) recipients.add(id);
-        // งานส่วนตัว (เปิดให้ตัวเอง): เตือนเจ้าของเสมอ ไม่ว่าตั้งค่าจะปิดการเตือนผู้รับงานไว้ไหม
-        // และไม่เตือนหัวหน้า — หัวหน้ามองไม่เห็นงานนี้ ชื่องานห้ามหลุดไปทางแจ้งเตือน (personal-task.ts)
-        if (isPersonalTask(t)) {
-          recipients.clear();
-          recipients.add(t.assignedById);
-        } else if (settings.task.notifyDeptHead) {
-          for (const d of departments) {
-            if (t.departmentIds.includes(d.id)) recipients.add(d.headId);
-          }
+      const rounds = taskDueRounds(t, settings.task);
+      if (rounds.length === 0 || nowMs >= rounds[0]!.dueMs) continue; // เลยกำหนดแล้ว — งานของ task-penalty-sweep
+      const keyOf = (r: TaskDueRound) => `taskr:${t.id}:${calendarDateOf(t.dueDate)}T${t.dueTime ?? ""}:${r.tag}`;
+      // ทุกรอบที่ถึงเวลาแล้ว บันทึกว่าส่งทั้งหมด — แต่เตือนแค่รอบล่าสุดรอบเดียว (ไม่เด้งรัว ๆ ย้อนหลัง)
+      const reached = rounds.filter((r) => r.fireAt <= nowMs).sort((a, b) => b.fireAt - a.fireAt);
+      const unsent = reached.filter((r) => !alreadySent.has(keyOf(r)));
+      if (unsent.length === 0) continue;
+      for (const r of unsent) newSentKeys.push(keyOf(r));
+      const latest = reached[0]!;
+      if (alreadySent.has(keyOf(latest))) continue;
+      // เลยเวลารอบนั้นนานแล้ว (ไม่มีใครเปิดเว็บ/เซิร์ฟเวอร์ปิด) หรือรอบนั้นผ่านไปก่อนสร้างงาน — ไม่เตือนย้อนหลัง
+      if (nowMs - latest.fireAt > TASK_ROUND_GRACE_MS) continue;
+      const createdMs = Date.parse(t.createdAt);
+      if (Number.isFinite(createdMs) && createdMs > latest.fireAt) continue;
+
+      const recipients = new Set<string>();
+      if (settings.task.notifyAssignee) for (const id of t.assigneeIds) recipients.add(id);
+      // งานส่วนตัว (เปิดให้ตัวเอง): เตือนเจ้าของเสมอ ไม่ว่าตั้งค่าจะปิดการเตือนผู้รับงานไว้ไหม
+      // และไม่เตือนหัวหน้า — หัวหน้ามองไม่เห็นงานนี้ ชื่องานห้ามหลุดไปทางแจ้งเตือน (personal-task.ts)
+      if (isPersonalTask(t)) {
+        recipients.clear();
+        recipients.add(t.assignedById);
+      } else if (settings.task.notifyDeptHead) {
+        for (const d of departments) {
+          if (t.departmentIds.includes(d.id)) recipients.add(d.headId);
         }
-        // ไม่เตือนคนมอบหมายงาน (19/10/2569 "ให้แจ้งเตือนกับคนที่มอบหมายงานไปให้พอ มันจะรกเกินไป")
-        // แม้จะเป็นหัวหน้าแผนกของงานนั้นก็ตาม — ยกเว้นตัวเองก็เป็นผู้รับผิดชอบด้วย หรือเป็นงานส่วนตัว
-        // ตั้งค่า notifyAssigner เดิมยังเก็บไว้ใน store แต่ไม่ใช้แล้ว
-        if (!isPersonalTask(t) && !t.assigneeIds.includes(t.assignedById)) recipients.delete(t.assignedById);
-        if (recipients.size === 0) continue;
-        // Whole days read as "3 วัน", not "4320 นาที" — anything shorter than
-        // a day falls back to the same ชม./นาที phrasing the meeting
-        // reminder above already uses, since it's the same kind of lead time.
-        const remainingLabel =
-          minutesUntil < 1 ? "ตอนนี้" : minutesUntil % 1440 === 0 ? `อีก ${minutesUntil / 1440} วัน` : minutesUntil >= 60 ? `อีก ${Math.round(minutesUntil / 60)} ชม.` : `อีก ${Math.round(minutesUntil)} นาที`;
-        notifications.push({
-          recipients: [...recipients],
-          byUserId: SYSTEM_USER_ID,
-          message: `งาน "${t.title}" ใกล้ถึงกำหนดส่ง${minutesUntil < 1 ? "" : `ใน${remainingLabel}`}`,
-          link: `/report-task/tasks?task=${t.id}`,
-        });
       }
+      // ไม่เตือนคนมอบหมายงาน (19/10/2569 "ให้แจ้งเตือนกับคนที่มอบหมายงานไปให้พอ มันจะรกเกินไป")
+      // แม้จะเป็นหัวหน้าแผนกของงานนั้นก็ตาม — ยกเว้นตัวเองก็เป็นผู้รับผิดชอบด้วย หรือเป็นงานส่วนตัว
+      // ตั้งค่า notifyAssigner เดิมยังเก็บไว้ใน store แต่ไม่ใช้แล้ว
+      if (!isPersonalTask(t) && !t.assigneeIds.includes(t.assignedById)) recipients.delete(t.assignedById);
+      if (recipients.size === 0) continue;
+      notifications.push({
+        recipients: [...recipients],
+        byUserId: SYSTEM_USER_ID,
+        message: `งาน "${t.title}" ${latest.text}`,
+        link: `/report-task/tasks?task=${t.id}`,
+      });
     }
   }
 

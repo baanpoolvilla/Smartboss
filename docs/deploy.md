@@ -465,6 +465,9 @@ sudo crontab -e
 # เด้งเวลาเข้า/ออกงานเข้าห้องแชท "🕐 ระบบลงเวลา" ของแต่ละคน — ทุกนาที (ไม่มีอะไรใหม่ = จบเร็ว)
 * * * * * bash /opt/smartboss/deploy/cron-run.sh attendance-chat >> /var/log/smartboss-cron.log 2>&1
 
+# แจ้งเตือนใกล้ถึงกำหนด งาน/ประชุม/รีพอต — ทุก 5 นาที (เตือนเช้าตรงเวลาที่ตั้งไว้ แม้ไม่มีใครเปิดเว็บ · ไม่มีอะไรถึงเวลา = จบเร็ว)
+*/5 * * * * bash /opt/smartboss/deploy/cron-run.sh reminders >> /var/log/smartboss-cron.log 2>&1
+
 # กวาดคะแนนผลงานอีกรอบตอนเย็น ให้ผู้บริหารเห็นของวันนี้ก่อนเลิกงาน
 0 17 * * * bash /opt/smartboss/deploy/cron-run.sh performance >> /var/log/smartboss-cron.log 2>&1
 

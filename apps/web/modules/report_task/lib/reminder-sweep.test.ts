@@ -53,60 +53,116 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 
-describe("แจ้งเตือนใกล้ถึงกำหนดส่ง", () => {
+describe("แจ้งเตือนงานใกล้ครบกำหนด — เตือนตอนเช้า ไม่ใช่เที่ยงคืน", () => {
+  // งานครบกำหนด 2 ต.ค. (ไม่มีเวลา) · สร้างไว้ตั้งแต่ 25 ก.ย. · ค่าเริ่มต้น: 3 วัน + 1 วันก่อน + เช้าวันครบกำหนด เวลา 08:30
+  const due = (over: Partial<Task> = {}) =>
+    ({ ...task(), dueDate: "2026-10-02", originalDueDate: "2026-10-02", createdAt: new Date("2026-09-25T09:00:00").toISOString(), ...over }) as Task;
+  const at = (local: string, opts: Parameters<typeof run>[0] = {}) => {
+    vi.setSystemTime(new Date(local));
+    return run({ tasks: [due()], ...opts });
+  };
+  const taskMsgs = (r: ReturnType<typeof run>) => r.notifications.filter((n) => n.message.startsWith('งาน "test"')).map((n) => n.message);
+
+  it("เที่ยงคืนไม่เด้ง — รอบ 3 วันก่อนเลยมานานแล้ว บันทึกเฉย ๆ", () => {
+    const r = at("2026-10-01T00:05:00");
+    expect(taskMsgs(r)).toEqual([]);
+    expect(r.newSentKeys).toEqual(["taskr:t1:2026-10-02T:d3"]);
+  });
+
+  it("08:30 วันก่อนครบกำหนด → \"ครบกำหนดพรุ่งนี้\" บอกวันที่ด้วย", () => {
+    const r = at("2026-10-01T08:31:00", { alreadySent: new Set(["taskr:t1:2026-10-02T:d3"]) });
+    expect(taskMsgs(r)).toHaveLength(1);
+    expect(taskMsgs(r)[0]).toMatch(/^งาน "test" ครบกำหนดพรุ่งนี้ \(.*2.*\)$/);
+    expect(r.notifications[0]!.recipients).toEqual(["u1"]);
+  });
+
+  it("ยังไม่ถึงเวลาเช้า (08:29) = ยังไม่เตือน", () => {
+    expect(taskMsgs(at("2026-10-01T08:29:00", { alreadySent: new Set(["taskr:t1:2026-10-02T:d3"]) }))).toEqual([]);
+  });
+
+  it("เช้าวันครบกำหนด → \"ครบกำหนดวันนี้\" · รอบถัดไปไม่เตือนซ้ำ", () => {
+    const first = at("2026-10-02T09:00:00", { alreadySent: new Set(["taskr:t1:2026-10-02T:d3", "taskr:t1:2026-10-02T:d1"]) });
+    expect(taskMsgs(first)).toEqual(['งาน "test" ครบกำหนดวันนี้']);
+    const again = at("2026-10-02T09:01:00", { alreadySent: new Set(["taskr:t1:2026-10-02T:d3", "taskr:t1:2026-10-02T:d1", ...first.newSentKeys]) });
+    expect(again.notifications).toHaveLength(0);
+    expect(again.newSentKeys).toHaveLength(0);
+  });
+
+  it("3 วันก่อน → \"ครบกำหนดอีก 3 วัน\"", () => {
+    expect(taskMsgs(at("2026-09-29T08:30:00"))[0]).toMatch(/^งาน "test" ครบกำหนดอีก 3 วัน \(/);
+  });
+
+  it("เลยเวลาเช้าไปเกิน 6 ชม. (ไม่มีใครเปิดเว็บทั้งวัน) = ไม่เตือนย้อนหลังตอนดึก", () => {
+    expect(taskMsgs(at("2026-10-01T15:00:00", { alreadySent: new Set(["taskr:t1:2026-10-02T:d3"]) }))).toEqual([]);
+  });
+
+  it("สร้างงานหลังรอบเช้าไปแล้ว = ไม่เตือนทันทีตอนสร้าง", () => {
+    vi.setSystemTime(new Date("2026-10-02T10:00:00"));
+    const r = run({ tasks: [due({ createdAt: new Date("2026-10-02T09:55:00").toISOString() })] });
+    expect(taskMsgs(r)).toEqual([]);
+  });
+
+  it("ตั้งเวลาเตือนเองได้ (07:00)", () => {
+    const settings = { task: { ...defaultReminderSettings.task, morningTime: "07:00" } };
+    expect(taskMsgs(at("2026-10-01T06:59:00", { settings, alreadySent: new Set(["taskr:t1:2026-10-02T:d3"]) }))).toEqual([]);
+    expect(taskMsgs(at("2026-10-01T07:00:00", { settings, alreadySent: new Set(["taskr:t1:2026-10-02T:d3"]) }))).toHaveLength(1);
+  });
+
+  it("ปิดเตือนวันครบกำหนด = ไม่มี \"ครบกำหนดวันนี้\"", () => {
+    const settings = { task: { ...defaultReminderSettings.task, remindOnDueDay: false } };
+    expect(taskMsgs(at("2026-10-02T09:00:00", { settings, alreadySent: new Set(["taskr:t1:2026-10-02T:d3", "taskr:t1:2026-10-02T:d1"]) }))).toEqual([]);
+  });
+
+  it("งานที่ใส่เวลาส่ง + จุด 2 ชม. → เตือนก่อนเวลาส่ง 2 ชม.", () => {
+    const settings = { task: { ...defaultReminderSettings.task, leadMinutes: [1440, 120] } };
+    vi.setSystemTime(new Date("2026-10-02T14:01:00"));
+    const r = run({ tasks: [due({ dueTime: "16:00" })], settings, alreadySent: new Set(["taskr:t1:2026-10-02T16:00:d1", "taskr:t1:2026-10-02T16:00:d0"]) });
+    expect(taskMsgs(r)).toEqual(['งาน "test" ครบกำหนดอีก 2 ชม. (16:00 น.)']);
+  });
+
+  it("จุดชั่วโมงไม่ใช้กับงานที่ไม่มีเวลาส่ง (ไม่งั้นนับถึง 23:59 ได้เวลากลางดึก)", () => {
+    const settings = { task: { ...defaultReminderSettings.task, leadMinutes: [120] } };
+    expect(taskMsgs(at("2026-10-02T22:00:00", { settings, alreadySent: new Set(["taskr:t1:2026-10-02T:d0"]) }))).toEqual([]);
+  });
+
+  it("เลื่อนกำหนดส่ง = นับรอบใหม่ของวันใหม่", () => {
+    vi.setSystemTime(new Date("2026-10-01T08:31:00"));
+    const moved = due({ dueDate: "2026-10-02" });
+    const r = run({ tasks: [moved], alreadySent: new Set(["taskr:t1:2026-09-30T:d0", "taskr:t1:2026-09-30T:d1", "taskr:t1:2026-10-02T:d3"]) });
+    expect(taskMsgs(r)).toHaveLength(1);
+  });
+
   it("งานส่วนตัว (เปิดให้ตัวเอง) เตือนเจ้าของคนเดียวเสมอ แม้ปิดการเตือนผู้รับงาน", () => {
-    const personal = { ...task(), assigneeIds: ["u1"], assignedById: "u1" } as Task;
-    const result = run({
+    vi.setSystemTime(new Date("2026-10-02T09:00:00"));
+    const personal = due({ assigneeIds: ["u1"], assignedById: "u1" });
+    const r = run({
       tasks: [personal],
       settings: { task: { ...defaultReminderSettings.task, notifyAssignee: false, notifyAssigner: false, notifyDeptHead: true } },
     });
-    const taskNotes = result.notifications.filter((n) => n.message.includes('งาน "test"'));
-    expect(taskNotes).toHaveLength(1);
-    expect(taskNotes[0]!.recipients).toEqual(["u1"]);
+    expect(r.notifications.filter((n) => n.message.includes('งาน "test"')).map((n) => n.recipients)).toEqual([["u1"]]);
   });
 
   it("ไม่เตือนคนมอบหมายงาน แม้ตั้งค่าเดิมเปิดไว้ — เตือนเฉพาะผู้รับผิดชอบ", () => {
-    const result = run({ settings: { task: { ...defaultReminderSettings.task, notifyAssignee: true, notifyAssigner: true } } });
-    const taskNotes = result.notifications.filter((n) => n.message.includes('งาน "test"'));
-    expect(taskNotes).toHaveLength(1);
-    expect(taskNotes[0]!.recipients).toEqual(["u1"]);
+    vi.setSystemTime(new Date("2026-10-02T09:00:00"));
+    const r = run({ tasks: [due()], settings: { task: { ...defaultReminderSettings.task, notifyAssignee: true, notifyAssigner: true } } });
+    expect(r.notifications.map((n) => n.recipients)).toEqual([["u1"]]);
   });
 
   it("คนมอบหมายที่เป็นผู้รับผิดชอบด้วย ยังได้เตือน", () => {
-    const both = { ...task(), assigneeIds: ["u1", "boss"] } as Task;
-    const result = run({ tasks: [both] });
-    expect(result.notifications[0]!.recipients.sort()).toEqual(["boss", "u1"]);
+    vi.setSystemTime(new Date("2026-10-02T09:00:00"));
+    const r = run({ tasks: [due({ assigneeIds: ["u1", "boss"] })] });
+    expect(r.notifications[0]!.recipients.sort()).toEqual(["boss", "u1"]);
   });
 
-  it("อยู่ในหลายช่วงพร้อมกัน (3 วัน + 1 วัน) = เตือนครั้งเดียว", () => {
-    const result = run();
-    const taskNotes = result.notifications.filter((n) => n.message.includes('งาน "test"'));
-    expect(taskNotes).toHaveLength(1);
-    expect(taskNotes[0]!.message).toContain("อีก 9 ชม.");
-    // ทั้งสองช่วงถูกบันทึกว่าส่งแล้ว — ช่วง 3 วันจะไม่โผล่มาทีหลัง
-    expect(result.newSentKeys).toEqual(expect.arrayContaining(["task:t1:1440", "task:t1:4320"]));
+  it("งานเสร็จแล้ว / เลยกำหนดแล้ว = ไม่เตือน", () => {
+    vi.setSystemTime(new Date("2026-10-02T09:00:00"));
+    expect(run({ tasks: [due({ status: "done" })] }).notifications).toHaveLength(0);
+    vi.setSystemTime(new Date("2026-10-03T09:00:00"));
+    expect(run({ tasks: [due()] }).notifications).toHaveLength(0);
   });
+});
 
-  it("รอบถัดไปไม่เตือนซ้ำ", () => {
-    const first = run();
-    const second = run({ alreadySent: new Set(first.newSentKeys) });
-    expect(second.notifications).toHaveLength(0);
-    expect(second.newSentKeys).toHaveLength(0);
-  });
-
-  it("เพิ่มช่วงใหม่ที่เลยไปแล้วในตั้งค่า = บันทึกเฉย ๆ ไม่เตือนย้อนหลัง", () => {
-    const result = run({ alreadySent: new Set(["task:t1:1440"]) });
-    expect(result.notifications).toHaveLength(0);
-    expect(result.newSentKeys).toEqual(["task:t1:4320"]);
-  });
-
-  it("ยังไม่เข้าช่วงใกล้สุด แต่อยู่ในช่วงใหญ่ = เตือนตามช่วงใหญ่ครั้งเดียว", () => {
-    const later = { ...task(), dueDate: "2026-10-02T00:00:00.000Z" }; // เหลือ ~2 วัน: อยู่ในช่วง 3 วัน ไม่อยู่ในช่วง 1 วัน
-    const result = run({ tasks: [later] });
-    expect(result.notifications).toHaveLength(1);
-    expect(result.newSentKeys).toEqual(["task:t1:4320"]);
-  });
-
+describe("ประชุม", () => {
   it("ประชุมตั้งหลายช่วง (30 + 15 นาที) ตอนเหลือ 10 นาที = เตือนครั้งเดียว", () => {
     const meeting = { id: "m1", title: "ประชุม", start: new Date(NOW.getTime() + 10 * 60_000).toISOString(), attendeeIds: ["u1"] } as CalendarEvent;
     const result = run({
