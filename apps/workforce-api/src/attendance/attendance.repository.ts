@@ -503,6 +503,21 @@ export class AttendanceRepository {
       );
   }
 
+  /** exception ทุกสถานะที่ผูกกับผลลงเวลาหนึ่ง version — ใช้เทียบว่าคำนวณใหม่แล้วมีอะไรเปลี่ยนไหม */
+  async listExceptionsOfResult(
+    tx: Tx,
+    resultId: string,
+  ): Promise<{ code: string; blocking: boolean; detail: string }[]> {
+    return tx
+      .select({
+        code: schema.attendanceExceptions.code,
+        blocking: schema.attendanceExceptions.blocking,
+        detail: schema.attendanceExceptions.detail,
+      })
+      .from(schema.attendanceExceptions)
+      .where(eq(schema.attendanceExceptions.resultId, resultId));
+  }
+
   async findCurrentResult(
     tx: Tx,
     employmentId: string,

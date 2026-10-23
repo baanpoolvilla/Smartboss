@@ -706,6 +706,44 @@ describe('corrections', () => {
       await setApprovalsRequired(2);
     }
   });
+  // 23/10/2569: เว็บสั่งคำนวณทุก 5 นาทีที่มีคนเปิดหน้าบุคคล — เดิมทุกครั้งเขียน version ใหม่
+  // (วันเดียวมีเกือบ 200 version ต่อคนบนระบบจริง) และ exception ที่ HR ยกเว้นไว้กลับมาเป็น OPEN
+  it('does not write a new version when nothing changed, and keeps a waived exception waived', async () => {
+    const employmentId = await createEmployment('คำนวณซ้ำ');
+    await assignPattern(employmentId, dayShiftId);
+    await addEvent(employmentId, '2026-08-04T01:00:00Z', 'CLOCK_IN');
+
+    const first = await recalculate(employmentId, '2026-08-04');
+    expect(first['result_version']).toBe(1);
+    expect(first['has_blocking_exception']).toBe(true);
+
+    // HR ยกเว้นความผิดปกติไว้
+    await withTenant(harness.database.db, tenant.tenantId, async (tx) =>
+      tx
+        .update(schema.attendanceExceptions)
+        .set({ status: 'WAIVED', resolutionReason: 'ทดสอบ' })
+        .where(and(eq(schema.attendanceExceptions.employmentId, employmentId), eq(schema.attendanceExceptions.workDate, '2026-08-04'))),
+    );
+
+    for (let i = 0; i < 3; i += 1) {
+      const again = await recalculate(employmentId, '2026-08-04');
+      expect(again['result_version']).toBe(1);
+    }
+    const state = await withTenant(harness.database.db, tenant.tenantId, async (tx) => ({
+      results: await tx.select().from(schema.attendanceResults).where(and(eq(schema.attendanceResults.employmentId, employmentId), eq(schema.attendanceResults.workDate, '2026-08-04'))),
+      exceptions: await tx.select().from(schema.attendanceExceptions).where(and(eq(schema.attendanceExceptions.employmentId, employmentId), eq(schema.attendanceExceptions.workDate, '2026-08-04'))),
+    }));
+    expect(state.results).toHaveLength(1);
+    expect(state.exceptions.length).toBeGreaterThan(0);
+    expect(state.exceptions.every((e) => e.status === 'WAIVED')).toBe(true);
+
+    // ข้อมูลเปลี่ยน (สแกนออก) → version ใหม่ตามเดิม
+    await addEvent(employmentId, '2026-08-04T10:00:00Z', 'CLOCK_OUT');
+    const changed = await recalculate(employmentId, '2026-08-04');
+    expect(changed['result_version']).toBe(2);
+    expect(changed['worked_minutes']).toBe(480);
+  });
+
   it('creates a new result version instead of editing the raw event', async () => {
     const employmentId = await createEmployment('แก้เวลา');
     await assignPattern(employmentId, dayShiftId);
@@ -1069,7 +1107,8 @@ describe('result versioning', () => {
         ),
     );
 
-    expect(rows.length).toBeGreaterThanOrEqual(4);
+    // input เดิมทุกรอบ → ไม่เขียน version ซ้ำ (23/10/2569 — เดิมได้ ≥ 4 แถวที่เหมือนกันทุกช่อง)
+    expect(rows).toHaveLength(1);
     expect(rows.filter((row) => row.isCurrent)).toHaveLength(1);
     // ผลลัพธ์ต้องเท่าเดิมทุกครั้ง — input เดิม กฎเดิม ผลเดิม (spec §17)
     const worked = new Set(rows.map((row) => row.workedMinutes));

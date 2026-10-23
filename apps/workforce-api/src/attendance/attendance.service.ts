@@ -472,6 +472,19 @@ export class AttendanceService {
       dayOff,
     });
 
+    // ผลเท่าเดิมทุกตัว (ข้อมูลดิบ กะ นโยบาย ตัวเลข และ exception) = ไม่เขียน version ใหม่
+    // เดิมเขียนทุกครั้งที่สั่งคำนวณ — เว็บสั่งคำนวณทั้งเดือนให้ทุกคนทุก 5 นาทีที่มีคนเปิดหน้าบุคคล
+    // วันเดียวกันจึงมี version ซ้ำ ๆ เกือบ 200 ชุดต่อคนในไม่กี่วัน (เจอบนระบบจริง 23/10/2569)
+    // และ exception ที่ HR กด "ยกเว้น" ไว้ถูกสร้างใหม่เป็น OPEN ทุกรอบ
+    const inputDigest = digestInput(punches, shiftId, policyRow?.id ?? null);
+    const current = await this.repository.findCurrentResult(uow.tx, employmentId, workDateText);
+    if (current !== undefined && sameAsCurrent(current, result, shiftId, policyRow?.id ?? null, inputDigest)) {
+      const currentExceptions = await this.repository.listExceptionsOfResult(uow.tx, current.id);
+      if (sameExceptions(currentExceptions, result.exceptions)) {
+        return toResultView(result, current.id, current.resultVersion);
+      }
+    }
+
     const previousVersion = await this.repository.supersedeCurrentResult(
       uow.tx,
       employmentId,
@@ -511,7 +524,7 @@ export class AttendanceService {
       calculatedAt: this.clock.now(),
       calculationReason: reason,
       // digest ของ input ที่ใช้คำนวณ — พิสูจน์ได้ว่า version นี้มาจากข้อมูลชุดไหน
-      inputDigest: digestInput(punches, shiftId, policyRow?.id ?? null),
+      inputDigest,
     });
 
     await this.repository.insertPunches(
@@ -1222,6 +1235,52 @@ function toEngineShift(
       autoDeduct: rule.autoDeduct,
     })),
   };
+}
+
+const timeOf = (value: Date | string | null | undefined): number | null =>
+  value === null || value === undefined ? null : new Date(value).getTime();
+
+/** ผลที่คำนวณได้ตรงกับ version ปัจจุบันทุกช่องที่เก็บ (ไม่นับเวลาที่คำนวณและเหตุผล) */
+function sameAsCurrent(
+  current: typeof schema.attendanceResults.$inferSelect,
+  next: AttendanceResult,
+  shiftId: string | null,
+  policyId: string | null,
+  inputDigest: Buffer,
+): boolean {
+  const blocking = next.exceptions.some((exception) => exception.blocking);
+  return (
+    current.shiftId === shiftId &&
+    current.workPolicyId === policyId &&
+    Buffer.from(current.inputDigest).equals(inputDigest) &&
+    timeOf(current.scheduledInAt) === timeOf(next.scheduledInAt) &&
+    timeOf(current.scheduledOutAt) === timeOf(next.scheduledOutAt) &&
+    timeOf(current.actualInAt) === timeOf(next.actualInAt) &&
+    timeOf(current.actualOutAt) === timeOf(next.actualOutAt) &&
+    current.lateMinutes === next.lateMinutes &&
+    current.absenceMinutes === next.absenceMinutes &&
+    current.earlyOutMinutes === next.earlyOutMinutes &&
+    current.workedMinutes === next.workedMinutes &&
+    current.paidMinutes === next.paidMinutes &&
+    current.breakMinutes === next.breakMinutes &&
+    current.unpaidBreakMinutes === next.unpaidBreakMinutes &&
+    current.otCandidateMinutes === next.otCandidateMinutes &&
+    current.isRestDay === next.isRestDay &&
+    current.isHoliday === next.isHoliday &&
+    current.isOnLeave === next.isOnLeave &&
+    current.hasBlockingException === blocking
+  );
+}
+
+/** exception ชุดเดียวกัน (รหัส · blocking · รายละเอียด) ไม่สนลำดับและสถานะที่ HR จัดการไปแล้ว */
+function sameExceptions(
+  current: readonly { code: string; blocking: boolean; detail: string }[],
+  next: AttendanceResult['exceptions'],
+): boolean {
+  const key = (e: { code: string; blocking: boolean; detail?: string | null }) => `${e.code}|${e.blocking}|${e.detail ?? ''}`;
+  const a = current.map(key).sort();
+  const b = next.map(key).sort();
+  return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
 function digestInput(punches: readonly Punch[], shiftId: string | null, policyId: string | null): Buffer {
