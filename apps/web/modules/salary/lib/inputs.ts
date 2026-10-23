@@ -5,7 +5,7 @@ import { withWorkforceTenant } from "@/modules/report_task/lib/db/workforce-cale
 import { periodsEmployedBefore } from "./compute";
 import { fillSubjectsByEmail } from "./people";
 import { loadRequests } from "@/modules/requests/lib/db";
-import { hoursText } from "@/modules/requests/lib/types";
+import { hoursText, otCalc } from "@/modules/requests/lib/types";
 import type { AutoItem, RecurringItem, SalarySegment } from "./compute";
 import { num, ymd, type Tx } from "./db";
 import { daysBetweenInclusive, periodLabel, thaiDate, type AllowanceEntry, type ItemKind, type PayChannel, type TaxMode } from "./types";
@@ -234,6 +234,9 @@ export async function loadPeriodInputs(
           amount: remaining,
           minutes: r.otMinutes ?? 0,
           detail: `${r.code} · ${thaiDate(r.workDate, false)} ${r.otStart ?? ""}–${r.otEnd ?? ""} · ${hoursText(r.otMinutes ?? 0)} × ${r.otPercent ?? ""}%`,
+          ...(r.otBase && r.otPercent && r.otMinutes
+            ? { formula: `${otCalc(r.otBaseKind === "daily" ? "daily" : "monthly", r.otBase, r.otPercent, r.otMinutes).formula}${remaining < r.netAmount ? ` (จ่ายไปแล้ว ${r.paidTotal.toFixed(2)} เหลือ ${remaining.toFixed(2)})` : ""}` }
+            : {}),
         };
       })
       .filter((o) => o.amount > 0);

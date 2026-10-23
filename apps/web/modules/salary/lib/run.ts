@@ -1,7 +1,7 @@
 import "server-only";
 
 import { insertEvent as insertReqEvent, loadRequests } from "@/modules/requests/lib/db";
-import { computePay, type Adjustment, type Override, type PayLine } from "./compute";
+import { computePay, type Adjustment, type Override, type PayLine, type TaxBreak } from "./compute";
 import { dateOnly, insertEvent, num, readRates, readSettings, withSalaryTenant, ymd, type Tx } from "./db";
 import { loadPeriodInputs } from "./inputs";
 import {
@@ -51,6 +51,8 @@ export interface LineInfo {
   monthlySalary: number;
   /** ยอดยกมา ณ ตอนคำนวณ (ไม่มี = ไม่ได้กรอก) */
   opening?: { income: number; tax: number; sso: number } | null;
+  /** วิธีคิดภาษีทีละขั้น ณ ตอนคำนวณ (รอบเก่าไม่มี — แสดงแค่คำอธิบายบรรทัด) */
+  taxBreak?: TaxBreak;
 }
 
 export interface ExcludedEntry {
@@ -175,6 +177,7 @@ export async function computeRun(orgId: string, runId: string, actor: Actor): Pr
         terminatedOn: s.terminatedOn,
         opening: s.opening,
         ssoComputed: r.ssoComputed,
+        taxBreak: r.taxBreak,
         taxComputed: r.taxComputed,
         ssoWage: r.ssoWage,
         monthlySalary: s.salary.length ? s.salary[s.salary.length - 1]!.monthly : 0,

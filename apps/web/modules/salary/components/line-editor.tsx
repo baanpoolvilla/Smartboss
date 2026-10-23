@@ -6,8 +6,11 @@ import { Loader2, X } from "lucide-react";
 
 import { Notice } from "@/modules/requests/components/ui";
 import { addAdjustmentAction, deferAdvanceAction, excludeAction, overrideAction, removeAdjustmentAction } from "../actions";
-import type { Adjustment, PayLine } from "../lib/compute";
-import { fmtBaht } from "../lib/types";
+import type { Adjustment, PayLine, TaxBreak } from "../lib/compute";
+import { fmtBaht, type SsoParams } from "../lib/types";
+import { AdvanceExplain, FlagsExplain, SalaryExplain, SsoExplain } from "./explain-content";
+import { Explain } from "./help";
+import { TaxSteps } from "./tax-steps";
 import { dangerOutline, field, hint, label, labelText, navy, outline } from "./ui";
 import { useRun } from "./use-run";
 
@@ -33,6 +36,9 @@ export interface EditorData {
   ssoComputed: number;
   taxComputed: number;
   warnings: string[];
+  /** วิธีคิดภาษีทีละขั้น (รอบที่คำนวณก่อนมีระบบนี้ไม่มี) */
+  taxBreak?: TaxBreak;
+  sso: SsoParams;
   closeHref: string;
   employeeHref: string;
   slipHref: string;
@@ -81,16 +87,39 @@ export function LineEditor({ d }: { d: EditorData }) {
 
             <section className="flex flex-col gap-2">
               <h3 className="text-sm font-bold text-(--ink)">ข้อมูลเงินเดือน</h3>
-              <Row label="เงินเดือน" how={salary?.how ?? "ไม่มี"} amount={salary?.amount ?? 0} extra={<Link href={d.employeeHref} className="text-xs font-semibold text-(--app-strong) underline">แก้เงินเดือน/ขึ้นเงินเดือน</Link>} />
-              <OverrideRow which="sso" title="ประกันสังคม" line={sso} computed={d.ssoComputed} current={d.overrides.sso} ctx={ctx} editable={d.editable} />
-              <OverrideRow which="tax" title="ภาษีหัก ณ ที่จ่าย" line={tax} computed={d.taxComputed} current={d.overrides.tax} ctx={ctx} editable={d.editable} />
+              <Row
+                label="เงินเดือน"
+                how={salary?.how ?? "ไม่มี"}
+                amount={salary?.amount ?? 0}
+                extra={<Link href={d.employeeHref} className="text-xs font-semibold text-(--app-strong) underline">แก้เงินเดือน/ขึ้นเงินเดือน</Link>}
+                help={<Explain q="คิดยังไง?"><SalaryExplain /></Explain>}
+              />
+              <OverrideRow which="sso" title="ประกันสังคม" line={sso} computed={d.ssoComputed} current={d.overrides.sso} ctx={ctx} editable={d.editable} help={<Explain q="คิดยังไง?"><SsoExplain p={d.sso} /></Explain>} />
+              <OverrideRow
+                which="tax"
+                title="ภาษีหัก ณ ที่จ่าย"
+                line={tax}
+                computed={d.taxComputed}
+                current={d.overrides.tax}
+                ctx={ctx}
+                editable={d.editable}
+                help={d.taxBreak ? <Explain q="ดูวิธีคิดทีละขั้น"><TaxSteps b={d.taxBreak} /></Explain> : undefined}
+              />
             </section>
 
             <section className="flex flex-col gap-2">
               <h3 className="text-sm font-bold text-emerald-800">รายการปรับเพิ่ม</h3>
               {earn.length === 0 && <p className={hint}>ไม่มี</p>}
               {earn.map((l) => (
-                <Row key={l.key} label={l.label} how={l.how} amount={l.amount} badge={l.source === "ot" ? "auto" : l.source} remove={l.source === "adjustment" && d.editable ? { ...ctx, adjustmentId: l.refId! } : undefined} />
+                <Row
+                  key={l.key}
+                  label={l.label}
+                  how={l.how}
+                  amount={l.amount}
+                  badge={l.source === "ot" ? "auto" : l.source}
+                  remove={l.source === "adjustment" && d.editable ? { ...ctx, adjustmentId: l.refId! } : undefined}
+                  help={l.formula ? <Explain q="คิดยังไง?"><div>{l.formula}</div><div className="text-(--ink-soft)">ใบ OT ที่อนุมัติแล้วในเบิกจ่าย &amp; OT เข้ารอบเอง · อนุมัติหลังจ่ายงวดนี้ไปแล้วจะเข้างวดถัดไป</div></Explain> : undefined}
+                />
               ))}
               {d.editable && <AddForm kind="earning" items={d.items} ctx={ctx} />}
             </section>
@@ -108,6 +137,7 @@ export function LineEditor({ d }: { d: EditorData }) {
                   badge={l.source === "adjustment" ? "adjustment" : l.source === "recurring" ? "recurring" : "auto"}
                   remove={l.source === "adjustment" && d.editable ? { ...ctx, adjustmentId: l.refId! } : undefined}
                   defer={l.source === "advance" && d.editable ? { ...ctx, requestId: l.refId!, defer: true } : undefined}
+                  help={l.source === "advance" ? <Explain q="คืออะไร?"><AdvanceExplain /></Explain> : undefined}
                 />
               ))}
               {d.deferred.map((x) => (
@@ -152,6 +182,7 @@ function Row({
   extra,
   remove,
   defer,
+  help,
 }: {
   label: string;
   how: string;
@@ -161,6 +192,7 @@ function Row({
   extra?: React.ReactNode;
   remove?: { runId: string; employmentId: string; expectUpdatedAt: string; adjustmentId: string };
   defer?: { runId: string; employmentId: string; expectUpdatedAt: string; requestId: string; defer: boolean };
+  help?: React.ReactNode;
 }) {
   const b = badge ? BADGE[badge] : undefined;
   const { busy, error, run } = useRun();
@@ -173,6 +205,7 @@ function Row({
           </div>
           <div className="text-xs text-(--ink-soft)">{how}</div>
           {extra}
+          {help}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           <span className={`text-sm font-semibold tabular-nums ${minus ? "text-red-800" : "text-(--ink)"}`}>{minus ? `(${fmtBaht(amount)})` : fmtBaht(amount)}</span>
@@ -213,6 +246,7 @@ function OverrideRow({
   current,
   ctx,
   editable,
+  help,
 }: {
   which: "sso" | "tax";
   title: string;
@@ -221,6 +255,7 @@ function OverrideRow({
   current?: { amount: number; reason: string };
   ctx: { runId: string; employmentId: string; expectUpdatedAt: string };
   editable: boolean;
+  help?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState(String(current?.amount ?? computed));
@@ -238,6 +273,7 @@ function OverrideRow({
         </div>
         <span className="shrink-0 text-sm font-semibold tabular-nums text-red-800">({fmtBaht(line?.amount ?? 0)})</span>
       </div>
+      {help}
       {editable && !open && (
         <div className="mt-1.5 flex gap-3">
           <button type="button" className="text-xs font-semibold text-(--app-strong) underline" onClick={() => setOpen(true)}>ปรับยอด</button>
@@ -252,6 +288,7 @@ function OverrideRow({
         <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[8rem_1fr_auto]">
           <input aria-label={`${title} ยอดใหม่`} inputMode="decimal" className={field} value={amount} onChange={(e) => setAmount(e.target.value)} />
           <input aria-label="เหตุผล" className={field} placeholder="เหตุผล (จำเป็น)" value={reason} onChange={(e) => setReason(e.target.value)} />
+          <p className={`${hint} sm:col-span-3 sm:order-last`}>ใช้เมื่อยอดต้องต่างจากที่ระบบคิดจริง ๆ เช่น พนักงานขอให้หักภาษีเพิ่ม · CEO เห็นยอดนี้คู่กับที่ระบบคิดตอนอนุมัติ</p>
           <div className="flex gap-1.5">
             <button type="button" className={outline} onClick={() => setOpen(false)} disabled={busy}>ยกเลิก</button>
             <button type="button" className={navy} disabled={busy || !reason.trim()} onClick={() => run(() => overrideAction({ ...ctx, which, amount: Number(amount.replace(/,/g, "")), reason }), () => setOpen(false))}>บันทึก</button>
@@ -315,6 +352,7 @@ function AddForm({ kind, items, ctx }: { kind: "earning" | "deduction"; items: E
             <div className="flex flex-wrap gap-4 text-sm">
               <label className="flex items-center gap-2"><input type="checkbox" checked={taxable} onChange={(e) => setTaxable(e.target.checked)} className="h-4 w-4" /> คิดภาษี</label>
               <label className="flex items-center gap-2"><input type="checkbox" checked={ssoBase} onChange={(e) => setSsoBase(e.target.checked)} className="h-4 w-4" /> นับเป็นค่าจ้างคิดประกันสังคม</label>
+              <div className="basis-full"><Explain q="ติ๊กอันไหนดี?"><FlagsExplain /></Explain></div>
             </div>
           )}
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={saveName} onChange={(e) => setSaveName(e.target.checked)} className="h-4 w-4" /> จำชื่อนี้ไว้ใช้ครั้งหน้า</label>

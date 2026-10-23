@@ -4,9 +4,9 @@ import { prisma } from "@smartboss/database";
 import { withWorkforceTenant } from "@/modules/report_task/lib/db/workforce-calendar";
 import { fillSubjectsByEmail } from "./people";
 import type { Adjustment, PayLine } from "./compute";
-import { num, ymd, withSalaryTenant, type Tx } from "./db";
+import { num, readRates, ymd, withSalaryTenant, type Tx } from "./db";
 import { previousPaid, type ExcludedEntry, type LineInfo, type RunTotals } from "./run";
-import { bangkokToday, type AllowanceEntry, type PayChannel, type RunStatus, type TaxMode } from "./types";
+import { DEFAULT_SSO, bangkokToday, rateOn, type AllowanceEntry, type PayChannel, type RunStatus, type SsoParams, type TaxMode } from "./types";
 
 /** ข้อมูลสำหรับหน้าจอ — อ่านอย่างเดียว ผ่าน RLS ของบริษัทเสมอ */
 
@@ -321,6 +321,8 @@ export interface SlipData {
   status: RunStatus;
   line: LineView;
   ytd: { gross: number; tax: number; sso: number };
+  /** อัตราประกันสังคม ณ วันจ่าย — ใช้อธิบายบนสลิป */
+  sso: SsoParams;
 }
 
 /** สลิปของคนหนึ่งในรอบหนึ่ง — พนักงานเห็นของตัวเองเฉพาะรอบที่จ่ายแล้ว (ผู้เรียกตรวจสิทธิ์) */
@@ -349,6 +351,7 @@ export async function loadSlip(orgId: string, runId: string, by: { employmentId?
       paidOn: run.paidOn ? ymd(run.paidOn) : null,
       status: run.status as RunStatus,
       line: toLineView(line),
+      sso: rateOn((await readRates(tx, orgId)).sso, ymd(run.payDate), DEFAULT_SSO),
       // สะสมทั้งปี = รอบที่จ่ายผ่านระบบ + ยอดยกมาที่ใช้ตอนคำนวณงวดนี้
       ytd: (() => {
         const o = (line.info as { opening?: { income: number; tax: number; sso: number } | null } | null)?.opening ?? null;

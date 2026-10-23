@@ -1,11 +1,12 @@
 import Link from "next/link";
 
 /** แท็บของหน้าจัดการเงินเดือน (CEO + คนที่ CEO เลือก) */
-export function SalaryTabs({ active }: { active: "runs" | "employees" | "settings" | "my" }) {
+export function SalaryTabs({ active }: { active: "runs" | "employees" | "settings" | "guide" | "my" }) {
   const tabs = [
     { id: "runs", label: "รายการเงินเดือน", href: "/salary" },
     { id: "employees", label: "รายชื่อพนักงาน", href: "/salary/employees" },
     { id: "settings", label: "ตั้งค่า", href: "/salary/settings" },
+    { id: "guide", label: "คู่มือ", href: "/salary/guide" },
     { id: "my", label: "สลิปของฉัน", href: "/salary/my" },
   ] as const;
   return (

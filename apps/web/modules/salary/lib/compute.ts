@@ -41,6 +41,8 @@ export interface AutoItem {
   /** บาท */
   amount: number;
   detail: string;
+  /** สูตรเป็นตัวเลขจริง เช่น "เงินเดือน ฿15,000 ÷ 30 ÷ 8 = ฿62.50/ชม. × 150% × 3 ชม." (OT) */
+  formula?: string;
 }
 
 export interface RecurringItem {
@@ -128,6 +130,8 @@ export interface PayLine {
   /** ระบบคิด/ดึงมาให้เอง (ไม่ใช่ HR พิมพ์) */
   auto: boolean;
   refId?: string;
+  /** คำอธิบายละเอียด (กดดู) — ตอนนี้ใช้กับ OT */
+  formula?: string;
 }
 
 export interface ComputeResult {
@@ -145,7 +149,38 @@ export interface ComputeResult {
   /** ภาษีที่ระบบคิดได้ (ก่อน HR ปรับ/โหมดคงที่) — ไว้เทียบ */
   taxComputed: number;
   ssoComputed: number;
+  /** วิธีคิดภาษีทีละขั้น (บาท) — ให้หน้าจอ/สลิปแสดงเป็นตาราง */
+  taxBreak: TaxBreak;
   warnings: string[];
+}
+
+/** ตัวเลขทุกขั้นของการคิดภาษีงวดนี้ (บาท) — ขั้นเดียวกับ annualTax ไม่มีสูตรแยก */
+export interface TaxBreak {
+  /** เงินได้ประจำงวดนี้ที่ใช้ประมาณทั้งปี */
+  regular: number;
+  /** จำนวนงวดที่คูณ (งวดที่เหลือ + งวดที่ยังไม่มีข้อมูล) */
+  regularPeriods: number;
+  /** เงินได้ที่จ่ายไปแล้ว/ยอดยกมา */
+  ytdIncome: number;
+  /** เงินได้ไม่ประจำงวดนี้ (OT โบนัส) */
+  irregular: number;
+  income: number;
+  expense: number;
+  personal: number;
+  sso: number;
+  extra: number;
+  net: number;
+  annualTax: number;
+  withheld: number;
+  assumedGap: number;
+  gap: number;
+  periodsLeft: number;
+  spread: number;
+  regularPart: number;
+  irregularPart: number;
+  computed: number;
+  /** ขั้นบันไดที่ใช้ตอนคิด (อัตราที่มีผล ณ งวดนี้) */
+  brackets: TaxParams["brackets"];
 }
 
 /* ───────────── ภาษีขั้นบันได ───────────── */
@@ -279,7 +314,7 @@ export function computePay(input: ComputeInput): ComputeResult {
   for (const o of input.ot) {
     const amt = s(o.amount);
     if (amt <= 0) continue;
-    lines.push({ key: `ot:${o.refId}`, label: o.label, kind: "earning", amount: toBaht(amt), how: o.detail, source: "ot", auto: true, refId: o.refId });
+    lines.push({ key: `ot:${o.refId}`, label: o.label, kind: "earning", amount: toBaht(amt), how: o.detail, source: "ot", auto: true, refId: o.refId, ...(o.formula ? { formula: o.formula } : {}) });
     irregularEarn += amt;
     if (input.settings.otSsoBase) ssoExtra += amt;
   }
@@ -365,6 +400,29 @@ export function computePay(input: ComputeInput): ComputeResult {
   let tax = taxComputed;
   let taxHow: string;
   const breakdown = annualBreakdown(annualRegular + irregularEarn, annualSso, extra, input.tax);
+  const incomeAll = annualRegular + irregularEarn;
+  const taxBreak: TaxBreak = {
+    regular: toBaht(regular),
+    regularPeriods: R + gap,
+    ytdIncome: toBaht(ytdTaxable),
+    irregular: toBaht(irregularEarn),
+    income: toBaht(incomeAll),
+    expense: toBaht(Math.min(Math.round((incomeAll * input.tax.expenseRate) / 100), s(input.tax.expenseCap))),
+    personal: input.tax.personalAllowance,
+    sso: toBaht(annualSso),
+    extra: toBaht(extra),
+    net: toBaht(withIrr.net),
+    annualTax: toBaht(withIrr.tax),
+    withheld: toBaht(ytdTax),
+    assumedGap: toBaht(Math.round(assumedGapTax)),
+    gap,
+    periodsLeft: R,
+    spread,
+    regularPart: toBaht(Math.round(regularPart)),
+    irregularPart: toBaht(Math.round(irregularPart)),
+    computed: toBaht(taxComputed),
+    brackets: input.tax.brackets,
+  };
   if (taxComputed === 0) {
     taxHow = base.tax <= ytdTax && ytdTax > 0
       ? `หักไว้ครบตามที่ประมาณทั้งปีแล้ว (${breakdown} · ภาษีทั้งปี ${fmt(withIrr.tax)} หักไปแล้ว ${fmt(ytdTax)})`
@@ -429,6 +487,7 @@ export function computePay(input: ComputeInput): ComputeResult {
     ssoWage: toBaht(ssoWage),
     taxComputed: toBaht(taxComputed),
     ssoComputed: toBaht(ssoComputed),
+    taxBreak,
     warnings,
   };
 }

@@ -4,14 +4,15 @@ import { Download, FileText, Printer } from "lucide-react";
 
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { Notice } from "@/modules/requests/components/ui";
+import { Example, InfoTip, PageTour, type TourStep } from "@/modules/salary/components/help";
 import { IncludeButton } from "@/modules/salary/components/include-button";
 import { LineEditor, type EditorData } from "@/modules/salary/components/line-editor";
 import { ApproveBar, PayDialog, RecomputeButton, RunNote, SubmitButton } from "@/modules/salary/components/run-actions";
 import { STATUS_LABEL, card, hint, outline } from "@/modules/salary/components/ui";
-import { readSettings, withSalaryTenant } from "@/modules/salary/lib/db";
+import { readRates, readSettings, withSalaryTenant } from "@/modules/salary/lib/db";
 import { salaryPage } from "@/modules/salary/lib/page";
 import { approvalSummary, loadRun, type ChangeItem } from "@/modules/salary/lib/views";
-import { fmtBaht, periodLabel, thaiDate } from "@/modules/salary/lib/types";
+import { DEFAULT_SSO, TH_MONTH, fmtBaht, periodLabel, rateOn, thaiDate } from "@/modules/salary/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,10 @@ export default async function RunPage({ params, searchParams }: { params: Promis
   const orgId = session.orgId;
   const run = await loadRun(orgId, id);
   if (!run) notFound();
-  const settings = await withSalaryTenant(orgId, (tx) => readSettings(tx, orgId));
+  const { settings, rates } = await withSalaryTenant(orgId, async (tx) => ({ settings: await readSettings(tx, orgId), rates: await readRates(tx, orgId) }));
+  const ssoP = rateOn(rates.sso, run.payDate, DEFAULT_SSO);
+  // เดือนที่ต้องยื่นภาษี/ส่งประกันสังคม = เดือนถัดจากวันจ่าย
+  const fileMonth = `${TH_MONTH[Number(run.payDate.slice(5, 7)) % 12]} ${Number(run.payDate.slice(0, 4)) + (run.payDate.slice(5, 7) === "12" ? 1 : 0) + 543}`;
   const items = await withSalaryTenant(orgId, (tx) => tx.salaryItem.findMany({ where: { orgId, active: true }, orderBy: [{ sort: "asc" }, { name: "asc" }] }));
   const st = STATUS_LABEL[run.status]!;
   const editable = run.status === "draft";
@@ -72,6 +76,8 @@ export default async function RunPage({ params, searchParams }: { params: Promis
         ssoComputed: editLine.info?.ssoComputed ?? editLine.ssoEmployee,
         taxComputed: editLine.info?.taxComputed ?? editLine.tax,
         warnings: editLine.warnings,
+        taxBreak: editLine.info?.taxBreak,
+        sso: ssoP,
         closeHref: `/salary/runs/${run.id}`,
         employeeHref: `/salary/employees/${editLine.employmentId}`,
         slipHref: `/salary/runs/${run.id}/slip/${editLine.employmentId}`,
@@ -84,6 +90,58 @@ export default async function RunPage({ params, searchParams }: { params: Promis
     { id: "paid", text: "จ่ายแล้ว · ส่งสลิป" },
   ];
   const stepIdx = steps.findIndex((s) => s.id === run.status);
+  const firstWarn = run.lines.findIndex((l) => l.warnings.length > 0);
+  const plusTotal = Math.round((t.gross - salaryTotal) * 100) / 100;
+  const stepHelp: Record<string, React.ReactNode> = {
+    draft: (
+      <>
+        <span>HR ตรวจและแก้ได้ทุกอย่างในขั้นนี้ — กดชื่อคนเพื่อเพิ่ม/หักรายการ</span>
+        <span>อนุมัติ OT/เบิกเพิ่มทีหลัง หรือแก้เงินเดือน → กด &quot;ดึงข้อมูลใหม่&quot; (รายการที่เพิ่มเองไม่หาย)</span>
+        <span>เสร็จแล้วกด &quot;ส่งให้ CEO อนุมัติ&quot; — ส่งแล้วแก้ไม่ได้จนกว่า CEO ส่งกลับ</span>
+      </>
+    ),
+    submitted: (
+      <>
+        <span><strong>อนุมัติจ่าย</strong> — ตัวเลขล็อก แล้วโหลดไฟล์โอนได้</span>
+        <span><strong>ส่งกลับให้ HR แก้</strong> — ใส่เหตุผล HR เห็นแล้วแก้ส่งใหม่</span>
+        <span>ดูกล่อง &quot;ควรดู&quot; ก่อน — รวมทุกอย่างที่ต่างจากเดือนก่อนหรือ HR ใส่เอง</span>
+      </>
+    ),
+    approved: (
+      <>
+        <span>1. โหลด &quot;ไฟล์โอนธนาคาร&quot; → โอนในแอปธนาคาร (คนรับเงินสดอยู่ท้ายไฟล์)</span>
+        <span>2. โอนเสร็จจริงแล้วค่อยกด &quot;บันทึกการจ่ายเงินเดือน&quot; → สลิปส่งถึงพนักงานเอง</span>
+        <Example>เจอผิดก่อนกดบันทึกจ่าย? CEO กด &quot;ยกเลิกอนุมัติ (ส่งกลับแก้)&quot; ได้</Example>
+      </>
+    ),
+    paid: (
+      <>
+        <span>รอบนี้ล็อกถาวร (กันตัวเลขเปลี่ยนหลังโอนแล้ว)</span>
+        <span>เจอผิดภายหลัง → แก้ในรอบเดือนถัดไปด้วยรายการ &quot;ปรับปรุงงวดก่อน&quot; (จ่ายขาดใส่ปรับเพิ่ม จ่ายเกินใส่ปรับลด)</span>
+        <span>ยื่น ภ.ง.ด.1 และส่งประกันสังคมภายใน {fileMonth} ด้วยไฟล์สรุปด้านบน</span>
+      </>
+    ),
+  };
+  const tourSteps: TourStep[] =
+    run.status === "draft"
+      ? [
+          { target: "row-name", title: "กดชื่อเพื่อดูทีละบรรทัด", body: "ทุกตัวเลขบอกที่มา — เงินเดือน ประกันสังคม ภาษี OT เบิกล่วงหน้า · เพิ่ม/หักเฉพาะคนที่ต่างจากปกติตรงนั้น" },
+          { target: "row-warn", title: "ดูแถวที่มี ⚠ ก่อน", body: "ระบบเตือนเมื่อมีอะไรต้องเช็ก เช่น ไม่มีเลขบัญชี ยังไม่มียอดยกมา ยอดติดลบ · แถวที่ไม่มี ⚠ ปกติไม่ต้องแตะ" },
+          { target: "recompute", title: "อนุมัติใบ OT เพิ่ม? กดดึงข้อมูลใหม่", body: "OT เบิกล่วงหน้า ลา และเงินเดือนที่เปลี่ยน ดึงมาใหม่ทั้งหมด · รายการที่คุณเพิ่มเองไม่หาย" },
+          { target: "submit", title: "เสร็จแล้วส่งให้ CEO", body: "CEO ได้แจ้งเตือน ดูสรุป “ควรดู” แล้วอนุมัติหรือส่งกลับพร้อมเหตุผล" },
+        ]
+      : run.status === "submitted"
+        ? [
+            { target: "review", title: "ดูกล่อง “ควรดู”", body: "รวมทุกอย่างที่ต่างจากเดือนก่อน หรือ HR ใส่เอง พร้อมเหตุผล — ไม่ต้องไล่ดูทุกคน" },
+            { target: "row-name", title: "อยากดูละเอียด กดชื่อ", body: "เห็นทุกบรรทัดว่าได้อะไร หักอะไร คิดยังไง" },
+            { target: "approve", title: "อนุมัติ หรือส่งกลับ", body: "อนุมัติแล้วตัวเลขล็อก HR โหลดไฟล์โอนได้ · ส่งกลับต้องใส่เหตุผล" },
+          ]
+        : run.status === "approved"
+          ? [
+              { target: "bankfile", title: "โหลดไฟล์โอนก่อน", body: "เอาไปโอนในแอป/เว็บธนาคาร · คนรับเงินสดหรือยังไม่มีเลขบัญชีอยู่ท้ายไฟล์" },
+              { target: "pay", title: "โอนเสร็จแล้วค่อยกดบันทึกจ่าย", body: "รอบล็อกถาวร สลิปส่งถึงพนักงานเอง ใบ OT/เบิกในรอบปิดให้เอง" },
+            ]
+          : [{ target: "downloads", title: "ไฟล์สำหรับยื่นและเก็บ", body: `สรุปประกันสังคมและ ภ.ง.ด.1 ใช้ยื่นภายใน ${fileMonth} · พิมพ์สลิปทั้งหมดได้ที่นี่` }];
 
   return (
     <AppScaffold title={`เงินเดือน ${periodLabel(run.period)}`} backHref="/salary" width="max-w-6xl">
@@ -103,24 +161,50 @@ export default async function RunPage({ params, searchParams }: { params: Promis
               </dl>
             </div>
             <div className="flex gap-6 text-right">
-              <div><div className={hint}>ยอดรวมเงินได้</div><div className="text-2xl font-bold tabular-nums text-(--ink-soft)">{fmtBaht(t.gross)}</div></div>
-              <div><div className={hint}>รวมจ่ายสุทธิ</div><div className="text-3xl font-bold tabular-nums text-(--ink)">{fmtBaht(t.net)}</div></div>
+              <div>
+                <div className={`${hint} flex items-center justify-end`}>
+                  ยอดรวมเงินได้
+                  <InfoTip label="ยอดรวมเงินได้" title="ยอดรวมเงินได้ คือ" align="right">
+                    <span>เงินทุกอย่างที่พนักงานได้ <strong>ก่อนหัก</strong> = เงินเดือน + OT + ค่าตำแหน่ง + โบนัส ฯลฯ</span>
+                    <Example>รอบนี้: เงินเดือน {fmtBaht(salaryTotal)} + ปรับเพิ่ม {fmtBaht(plusTotal)} = <strong>{fmtBaht(t.gross)}</strong></Example>
+                    <span className="text-(--ink-soft)">ยอดที่ต้องโอนจริงคือ &quot;รวมจ่ายสุทธิ&quot; (หลังหักแล้ว)</span>
+                  </InfoTip>
+                </div>
+                <div className="text-2xl font-bold tabular-nums text-(--ink-soft)">{fmtBaht(t.gross)}</div>
+              </div>
+              <div>
+                <div className={`${hint} flex items-center justify-end`}>
+                  รวมจ่ายสุทธิ
+                  <InfoTip label="รวมจ่ายสุทธิ" title="รวมจ่ายสุทธิ คือ" align="right">
+                    <span>เงินที่เข้ากระเป๋าพนักงานจริง = เงินได้ − ประกันสังคม − ภาษี − รายการหักอื่น (เบิกล่วงหน้า ผ่อนของ)</span>
+                    <Example>{fmtBaht(t.gross)} − {fmtBaht(t.deductions)} = <strong>{fmtBaht(t.net)}</strong> → โอน {fmtBaht(t.transferNet)} · เงินสด {fmtBaht(t.cashNet)}</Example>
+                    <span className="text-(--ink-soft)">บริษัทยังต้องจ่ายประกันสังคมส่วนบริษัทอีก {fmtBaht(t.ssoEmployer)} แยกต่างหาก (ไม่หักจากพนักงาน)</span>
+                  </InfoTip>
+                </div>
+                <div className="text-3xl font-bold tabular-nums text-(--ink)">{fmtBaht(t.net)}</div>
+              </div>
             </div>
           </div>
           <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="ขั้นตอน">
             {steps.map((s, i) => (
               <li key={s.id} className={`flex items-center gap-2 rounded-(--radius) border px-3 py-2 text-xs font-semibold ${i < stepIdx ? "border-emerald-200 bg-emerald-50 text-emerald-900" : i === stepIdx ? "border-(--brand-navy,#1b2537) text-(--ink)" : "border-(--line) text-(--ink-soft)"}`} aria-current={i === stepIdx ? "step" : undefined}>
                 <span aria-hidden="true">{i < stepIdx ? "✓" : i + 1}</span> {s.text}
+                {i === stepIdx && (
+                  <InfoTip label={`ขั้น ${s.text}`} title={`ขั้นนี้: ${s.text}`}>
+                    {stepHelp[run.status]}
+                  </InfoTip>
+                )}
               </li>
             ))}
           </ol>
           {run.returnedReason && run.status === "draft" && <Notice tone="warn">ถูกส่งกลับให้แก้: {run.returnedReason}</Notice>}
           {/* ปุ่มตามขั้น */}
           <div className="flex flex-wrap items-start justify-end gap-2">
+            <PageTour id={`run-${run.status}`} steps={tourSteps} />
             {run.status === "draft" && (
               <>
-                <RecomputeButton runId={run.id} />
-                <SubmitButton runId={run.id} mode={settings.approvalMode} negatives={t.negatives} />
+                <span data-tour="recompute" className="inline-flex"><RecomputeButton runId={run.id} /></span>
+                <span data-tour="submit" className="inline-flex"><SubmitButton runId={run.id} mode={settings.approvalMode} negatives={t.negatives} /></span>
               </>
             )}
             {run.status === "submitted" && !access.canApprove && <Notice tone="info">ส่งให้ CEO แล้ว{run.submittedByName ? ` โดย ${run.submittedByName}` : ""} — รออนุมัติ</Notice>}
@@ -128,8 +212,8 @@ export default async function RunPage({ params, searchParams }: { params: Promis
               <>
                 {access.canApprove && <ApproveBar runId={run.id} net={t.net} canApprove approved />}
                 {/* ขั้น 3 โอนเงิน: ต้องได้ไฟล์โอนก่อนโอนจริง แล้วค่อยกดบันทึกจ่าย */}
-                <a href={`/salary/runs/${run.id}/export?type=bank`} className={outline}><Download className="h-4 w-4" aria-hidden="true" /> ไฟล์โอนธนาคาร</a>
-                <PayDialog
+                <a data-tour="bankfile" href={`/salary/runs/${run.id}/export?type=bank`} className={outline}><Download className="h-4 w-4" aria-hidden="true" /> ไฟล์โอนธนาคาร</a>
+                <span data-tour="pay" className="inline-flex"><PayDialog
                   runId={run.id}
                   period={`${thaiDate(run.startsOn)} – ${thaiDate(run.endsOn)}`}
                   payDate={run.payDate}
@@ -137,11 +221,11 @@ export default async function RunPage({ params, searchParams }: { params: Promis
                   transferNet={t.transferNet}
                   cashNet={t.cashNet}
                   rows={run.lines.map((l) => ({ name: l.name, channel: l.payChannel === "cash" ? "เงินสด" : `${l.bankName || "ธนาคาร"} ${l.bankAccount ? `•••${l.bankAccount.slice(-4)}` : "ยังไม่มีเลขบัญชี"}`, net: l.net }))}
-                />
+                /></span>
               </>
             )}
             {run.status === "paid" && (
-              <div className="flex flex-wrap gap-2">
+              <div data-tour="downloads" className="flex flex-wrap gap-2">
                 <Link href={`/salary/slips/${run.id}`} className={outline} target="_blank"><Printer className="h-4 w-4" aria-hidden="true" /> พิมพ์/ดาวน์โหลดสลิปทั้งหมด</Link>
                 <a href={`/salary/runs/${run.id}/export?type=bank`} className={outline}><Download className="h-4 w-4" aria-hidden="true" /> ไฟล์โอนธนาคาร</a>
                 <a href={`/salary/runs/${run.id}/export?type=sso`} className={outline}><Download className="h-4 w-4" aria-hidden="true" /> สรุปประกันสังคม</a>
@@ -155,7 +239,7 @@ export default async function RunPage({ params, searchParams }: { params: Promis
         {/* CEO: สรุปสิ่งที่เปลี่ยน + อนุมัติ */}
         {run.status === "submitted" && summary && (
           <section className={`${card} flex flex-col gap-3 border-2 border-(--brand-navy,#1b2537) p-4 sm:p-5`}>
-            <div className="flex flex-wrap items-end justify-between gap-3">
+            <div data-tour="review" className="flex flex-wrap items-end justify-between gap-3">
               <div>
                 <h2 className="text-base font-bold text-(--ink)">{access.canApprove ? "รอคุณอนุมัติ" : "รอ CEO อนุมัติ"}</h2>
                 <p className="text-sm text-(--ink-soft)">
@@ -187,7 +271,7 @@ export default async function RunPage({ params, searchParams }: { params: Promis
               )}
             </div>
             <p className={hint}>กดชื่อในตารางด้านล่างเพื่อดูว่าแต่ละคนได้อะไร หักอะไร คิดยังไง</p>
-            <ApproveBar runId={run.id} net={t.net} canApprove={access.canApprove} approved={false} />
+            <div data-tour="approve"><ApproveBar runId={run.id} net={t.net} canApprove={access.canApprove} approved={false} /></div>
           </section>
         )}
 
@@ -201,7 +285,17 @@ export default async function RunPage({ params, searchParams }: { params: Promis
                 <th className="px-3 py-2.5 font-semibold">ช่องทางรับชำระ</th>
                 <th className="px-3 py-2.5 text-right font-semibold">เงินเดือน</th>
                 <th className="px-3 py-2.5 text-right font-semibold">รวมปรับเพิ่ม</th>
-                <th className="px-3 py-2.5 text-right font-semibold">รวมปรับลด</th>
+                <th className="px-3 py-2.5 text-right font-semibold">
+                  <span className="inline-flex items-center">
+                    รวมปรับลด
+                    <InfoTip label="รวมปรับลด" title="รวมปรับลด รวมอะไรบ้าง" align="right">
+                      <span>• ประกันสังคม และภาษีหัก ณ ที่จ่าย (ระบบคิดให้)</span>
+                      <span>• เบิกล่วงหน้า (ดึงจากเบิกจ่าย &amp; OT เอง)</span>
+                      <span>• รายการหักที่ตั้งไว้หรือ HR ใส่ เช่น ผ่อนของ ค่าเสียหาย</span>
+                      <span className="text-(--ink-soft)">ตัวเลขในวงเล็บ = ยอดที่หักออก · กดชื่อคนเพื่อดูทีละบรรทัด</span>
+                    </InfoTip>
+                  </span>
+                </th>
                 <th className="px-3 py-2.5 text-right font-semibold">ยอดจ่ายสุทธิ</th>
                 <th className="px-3 py-2.5"><span className="sr-only">แก้ไข</span></th>
               </tr>
@@ -215,11 +309,26 @@ export default async function RunPage({ params, searchParams }: { params: Promis
                   <tr key={l.id} className={manual ? "bg-sky-50/60" : undefined}>
                     <td className="px-3 py-3 text-(--ink-soft)">{i + 1}</td>
                     <td className="px-3 py-3">
-                      <Link href={`/salary/runs/${run.id}?edit=${l.employmentId}`} className="font-semibold text-(--ink) hover:underline">{l.name}</Link>
+                      <Link data-tour={i === 0 ? "row-name" : undefined} href={`/salary/runs/${run.id}?edit=${l.employmentId}`} className="font-semibold text-(--ink) hover:underline">{l.name}</Link>
                       <div className="text-xs text-(--ink-soft)">{[l.employeeCode, l.department].filter(Boolean).join(" · ")}</div>
                       {/* มือถือ: เห็นยอดสุทธิเลยโดยไม่ต้องเลื่อนตารางไปขวา */}
                       <div className="mt-0.5 text-xs tabular-nums text-(--ink) sm:hidden">สุทธิ <strong>{fmtBaht(l.net)}</strong> · เลื่อนตารางดูรายละเอียด →</div>
-                      {l.warnings.length > 0 && <div className="mt-0.5 text-xs font-medium text-amber-800">⚠ {l.warnings[0]}{l.warnings.length > 1 ? ` (+${l.warnings.length - 1})` : ""}</div>}
+                      {l.warnings.length > 0 && (
+                        <div data-tour={i === firstWarn ? "row-warn" : undefined} className="mt-0.5 flex items-center text-xs font-medium text-amber-800">
+                          <span>⚠ {l.warnings[0]}{l.warnings.length > 1 ? ` (+${l.warnings.length - 1})` : ""}</span>
+                          {l.warnings[0]!.startsWith("ยังไม่มียอดยกมา") && (
+                            <InfoTip label="ยอดยกมา" title="ยอดยกมา คืออะไร ทำไมต้องใส่">
+                              <span>ภาษีเงินเดือนคิด &quot;ทั้งปี&quot; แล้วเฉลี่ยหักทุกเดือน แต่ระบบไม่มีข้อมูลเดือนก่อนเริ่มใช้ระบบ จึงไม่รู้ว่าเดือนเหล่านั้นได้เงินเท่าไหร่ หักภาษีไปเท่าไหร่</span>
+                              <Example>
+                                <span className="block"><strong>ไม่ใส่</strong> → ระบบประมาณจากเงินเดือนตอนนี้ (หักไม่ขาด แต่อาจคลาดเล็กน้อย)</span>
+                                <span className="block"><strong>ใส่</strong> → ภาษีตรงเป๊ะ · ใส่ครั้งเดียวต่อปี</span>
+                              </Example>
+                              <span>เอาตัวเลขจาก Excel/ระบบเงินเดือนเดิม หรือ 50 ทวิ ของที่ทำงานเดิม (คนเข้ากลางปี)</span>
+                              <Link href={`/salary/employees/${l.employmentId}`} className="font-semibold text-(--brand-navy,#1b2537) underline">ไปใส่ยอดยกมาของ {l.name} →</Link>
+                            </InfoTip>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className="px-3 py-3 text-xs">
                       {l.payChannel === "cash" ? "เงินสด" : l.bankAccount ? <>{l.bankName || "ธนาคาร"}<div className="text-(--ink-soft)">•••{l.bankAccount.slice(-4)}</div></> : <span className="text-amber-800">ยังไม่มีเลขบัญชี</span>}
@@ -284,8 +393,37 @@ export default async function RunPage({ params, searchParams }: { params: Promis
             <div className="flex justify-between"><span>รวมรายการปรับลด</span><span className="tabular-nums text-red-800">({fmtBaht(t.deductions)})</span></div>
             <div className="flex justify-between border-t border-(--line) pt-1.5 text-base font-bold"><span>รวมจ่ายสุทธิ</span><span className="tabular-nums">{fmtBaht(t.net)}</span></div>
             <div className="mt-2 flex justify-between text-xs text-(--ink-soft)"><span>โอนเข้าบัญชี / เงินสด</span><span className="tabular-nums">{fmtBaht(t.transferNet)} / {fmtBaht(t.cashNet)}</span></div>
-            <div className="flex justify-between text-xs text-(--ink-soft)"><span>ประกันสังคม ลูกจ้าง + บริษัท</span><span className="tabular-nums">{fmtBaht(t.ssoEmployee)} + {fmtBaht(t.ssoEmployer)}</span></div>
-            <div className="flex justify-between text-xs text-(--ink-soft)"><span>ภาษีหัก ณ ที่จ่าย (นำส่ง)</span><span className="tabular-nums">{fmtBaht(t.tax)}</span></div>
+            <div className="flex items-center justify-between text-xs text-(--ink-soft)">
+              <span className="flex items-center">
+                ประกันสังคม ลูกจ้าง + บริษัท
+                <InfoTip label="ประกันสังคม" title="ประกันสังคม (มาตรา 33)">
+                  <span>หัก {ssoP.employeeRate}% ของค่าจ้าง โดยคิดจากค่าจ้างไม่ต่ำกว่า {fmtBaht(ssoP.wageFloor)} และไม่เกิน {fmtBaht(ssoP.wageCeiling)} → หักมากสุด {fmtBaht(ssoP.maxContribution)}/เดือน · บริษัทจ่ายเพิ่มอีก {ssoP.employerRate}%</span>
+                  <Example>
+                    {run.lines.slice(0, 6).map((l) => {
+                      const x = l.lines.find((y) => y.key === "sso");
+                      return <span key={l.id} className="block">{l.name}: {x?.how} = {fmtBaht(x?.amount ?? 0)}</span>;
+                    })}
+                    {run.lines.length > 6 && <span className="block">… และอีก {run.lines.length - 6} คน</span>}
+                    <span className="mt-1 block font-semibold">ลูกจ้าง {fmtBaht(t.ssoEmployee)} + บริษัท {fmtBaht(t.ssoEmployer)} = นำส่ง {fmtBaht(t.ssoEmployee + t.ssoEmployer)}</span>
+                  </Example>
+                  <span className="text-amber-900">นำส่งประกันสังคม (สปส.1-10) ภายในวันที่ 15 {fileMonth}</span>
+                </InfoTip>
+              </span>
+              <span className="tabular-nums">{fmtBaht(t.ssoEmployee)} + {fmtBaht(t.ssoEmployer)}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs text-(--ink-soft)">
+              <span className="flex items-center">
+                ภาษีหัก ณ ที่จ่าย (นำส่ง)
+                <InfoTip label="ภาษีนำส่ง" title="ภาษีที่หักไว้ ต้องนำส่งสรรพากร">
+                  <span>ยื่น <strong>ภ.ง.ด.1</strong> พร้อมเงินภาษีที่หักไว้ ภายในวันที่ 7 {fileMonth} (ยื่นออนไลน์ได้ถึงวันที่ 15)</span>
+                  <Example>
+                    {t.tax > 0 ? <>รอบนี้หักไว้รวม <strong>{fmtBaht(t.tax)}</strong> จาก {run.lines.filter((l) => l.tax > 0).length} คน</> : <>รอบนี้ไม่มีภาษีที่หักไว้ — ทุกคนเงินได้สุทธิทั้งปียังไม่ถึงเกณฑ์เสียภาษี</>}
+                  </Example>
+                  <span className="text-(--ink-soft)">กดชื่อคน → ภาษี → &quot;ดูวิธีคิดทีละขั้น&quot; · <Link href="/salary/guide" className="underline">อ่านในคู่มือ</Link></span>
+                </InfoTip>
+              </span>
+              <span className="tabular-nums">{fmtBaht(t.tax)}</span>
+            </div>
             {run.status === "paid" && <div className="flex justify-between text-xs text-(--ink-soft)"><span>ค่าธรรมเนียมโอน</span><span className="tabular-nums">{fmtBaht(run.bankFee)}</span></div>}
           </section>
         </div>

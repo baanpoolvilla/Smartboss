@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { Notice } from "@/modules/requests/components/ui";
 import { addRecurringAction, endRecurringAction, saveProfileAction, setSalaryAction, type ProfileInput } from "../actions";
 import { ALLOWANCE_FIELDS, fmtBaht, normalizeAllowances, periodLabel, thaiDate, type AllowanceEntry } from "../lib/types";
+import { Example, InfoTip } from "./help";
 import { card, field, hint, label, labelText, navy, outline } from "./ui";
 import { useRun } from "./use-run";
 
@@ -21,7 +22,14 @@ export function SalarySection({ employmentId, salary, history, hiredOn, today }:
   return (
     <section className={`${card} flex flex-col gap-3 p-4 sm:p-5`}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-base font-bold text-(--ink)">1. เงินเดือน</h2>
+        <h2 className="flex items-center text-base font-bold text-(--ink)">
+          1. เงินเดือน
+          <InfoTip label="เงินเดือนและวันมีผล" title="ตั้ง/ขึ้นเงินเดือน">
+            <span>ใส่ &quot;มีผลตั้งแต่&quot; ตามวันจริง ระบบแบ่งคิดในงวดให้เอง ไม่ต้องคำนวณเอง</span>
+            <Example>ขึ้นจาก 25,000 เป็น 27,000 มีผล 11 ต.ค. (งวด 26 ก.ย.–25 ต.ค.) → 25,000 × 15 วัน + 27,000 × 15 วัน ÷ 30 = 26,000</Example>
+            <span className="text-(--ink-soft)">ประวัติเก่ายังอยู่ · ถ้ารอบงวดนั้นยังเป็นร่าง ให้กด &quot;ดึงข้อมูลใหม่&quot; ที่หน้ารอบ</span>
+          </InfoTip>
+        </h2>
         {salary !== null && !open && <button type="button" className="text-sm font-semibold text-(--app-strong) underline" onClick={() => setOpen(true)}>ปรับ/ขึ้นเงินเดือน</button>}
       </div>
       {salary !== null && <div className="text-2xl font-bold tabular-nums text-(--ink)">{fmtBaht(salary)} <span className="text-sm font-normal text-(--ink-soft)">/ เดือน</span></div>}
@@ -124,7 +132,14 @@ export function ProfileSection({ employmentId, initial, year }: { employmentId: 
       </section>
 
       <section className={`${card} flex flex-col gap-3 p-4 sm:p-5`}>
-        <h2 className="text-base font-bold text-(--ink)">3. ประกันสังคม</h2>
+        <h2 className="flex items-center text-base font-bold text-(--ink)">
+          3. ประกันสังคม
+          <InfoTip label="ประกันสังคม" title="หักประกันสังคมเมื่อไหร่">
+            <span>ลูกจ้างทั่วไปต้องหักทุกคน (มาตรา 33) — ระบบคิด 5% จากค่าจ้าง มีขั้นต่ำและเพดานตามที่ตั้งค่า</span>
+            <span>ไม่หักเฉพาะกรณีที่กฎหมายยกเว้น เช่น เริ่มงานครั้งแรกตอนอายุเกิน 60 ปี หรือเป็นกรรมการ/เจ้าของที่ไม่ใช่ลูกจ้าง</span>
+            <span className="text-(--ink-soft)">ไม่แน่ใจให้ถามนักบัญชีหรือสำนักงานประกันสังคม · CEO เห็นคนที่ไม่หักในกล่อง &quot;ควรดู&quot; ทุกเดือน</span>
+          </InfoTip>
+        </h2>
         <label className="flex min-h-11 items-center gap-3 text-sm">
           <input type="checkbox" className="h-5 w-5" checked={!v.ssoExempt} onChange={(e) => set({ ssoExempt: !e.target.checked })} />
           หักประกันสังคม (มาตรา 33) — ระบบคิดให้ตามอัตราในตั้งค่า
@@ -147,7 +162,14 @@ export function ProfileSection({ employmentId, initial, year }: { employmentId: 
       </section>
 
       <section className={`${card} flex flex-col gap-3 p-4 sm:p-5`}>
-        <h2 className="text-base font-bold text-(--ink)">4. ภาษีหัก ณ ที่จ่าย</h2>
+        <h2 className="flex items-center text-base font-bold text-(--ink)">
+          4. ภาษีหัก ณ ที่จ่าย
+          <InfoTip label="วิธีหักภาษี" title="เลือกวิธีหักภาษีแบบไหน">
+            <span><strong>ระบบคิดให้ (แนะนำ)</strong> — คิดจากรายได้ทั้งปีแล้วเฉลี่ยหักทุกเดือน ปรับเองเมื่อขึ้นเงินเดือน/มีโบนัส ใช้กับเกือบทุกคน</span>
+            <span><strong>หักเท่ากันทุกเดือน</strong> — เมื่อพนักงานขอหักยอดคงที่ ระบบยังคิดยอดที่ควรหักไว้เทียบ และเตือนถ้าต่างมาก</span>
+            <span><strong>ไม่หักภาษี</strong> — เช่น พนักงานยื่นเองและขอไม่ให้หัก · ต้องใส่เหตุผล</span>
+          </InfoTip>
+        </h2>
         <div role="radiogroup" aria-label="วิธีหักภาษี" className="flex flex-wrap gap-2">
           <button type="button" role="radio" aria-checked={v.taxMode === "auto"} className={chip(v.taxMode === "auto")} onClick={() => set({ taxMode: "auto" })}>ระบบคิดให้ (แนะนำ)</button>
           <button type="button" role="radio" aria-checked={v.taxMode === "fixed"} className={chip(v.taxMode === "fixed")} onClick={() => set({ taxMode: "fixed" })}>หักเท่ากันทุกเดือน</button>
@@ -168,7 +190,15 @@ export function ProfileSection({ employmentId, initial, year }: { employmentId: 
         )}
         {v.taxMode !== "none" && (
           <>
-            <div className="text-sm font-semibold text-(--ink)">ค่าลดหย่อนตาม ล.ย.01 ที่พนักงานยื่น (ต่อปี)</div>
+            <div className="flex items-center text-sm font-semibold text-(--ink)">
+              ค่าลดหย่อนตาม ล.ย.01 ที่พนักงานยื่น (ต่อปี)
+              <InfoTip label="ล.ย.01" title="ล.ย.01 คืออะไร">
+                <span>แบบที่พนักงานแจ้งบริษัทว่ามีค่าลดหย่อนอะไร (คู่สมรส ลูก พ่อแม่ ประกันชีวิต ฯลฯ) บริษัทจะได้หักภาษีรายเดือนให้ใกล้เคียงภาษีจริง</span>
+                <span>ให้พนักงานกรอกตอนเริ่มงานและต้นปี หรือเมื่อมีอะไรเปลี่ยน (แต่งงาน มีลูก ซื้อประกันเพิ่ม)</span>
+                <Example>ลูก 2 คน → พิมพ์ &quot;2&quot; ในช่องบุตร ระบบคูณเป็น 60,000 ให้เอง · ใส่เกินเพดาน ระบบใช้เพดานและบอกให้รู้</Example>
+                <span className="text-(--ink-soft)">ไม่กรอก = ได้แค่ลดหย่อนส่วนตัว 60,000 + ประกันสังคม (ภาษีอาจหักมากกว่าจริงเล็กน้อย พนักงานขอคืนตอนยื่นปลายปีได้)</span>
+              </InfoTip>
+            </div>
             <p className={hint}>ลดหย่อนส่วนตัวและประกันสังคมที่จ่ายจริง ระบบใส่ให้เอง ไม่ต้องกรอก</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               {ALLOWANCE_FIELDS.map((f) =>
@@ -209,7 +239,14 @@ export function ProfileSection({ employmentId, initial, year }: { employmentId: 
             <div className="text-sm">รวมลดหย่อนเพิ่ม <strong className="tabular-nums">{fmtBaht(total)}</strong> ต่อปี</div>
             <div className="grid grid-cols-1 gap-3 border-t border-(--line) pt-3 sm:grid-cols-3">
               <div className="sm:col-span-3">
-                <div className="text-sm font-semibold text-(--ink)">ยอดยกมาปี {year + 543} (ที่ไม่ได้จ่ายผ่านระบบนี้)</div>
+                <div className="flex items-center text-sm font-semibold text-(--ink)">
+                  ยอดยกมาปี {year + 543} (ที่ไม่ได้จ่ายผ่านระบบนี้)
+                  <InfoTip label="ยอดยกมา" title="ยอดยกมา คืออะไร ทำไมต้องใส่">
+                    <span>ภาษีเงินเดือนคิด &quot;ทั้งปี&quot; — ระบบต้องรู้ว่าตั้งแต่ ม.ค. ถึงก่อนเริ่มใช้ระบบ คนนี้ได้เงินเท่าไหร่ หักภาษีและประกันสังคมไปเท่าไหร่</span>
+                    <Example>เริ่มใช้ระบบเดือน ต.ค. → ใส่ยอดรวม ม.ค.–ก.ย. จาก Excel/ระบบเดิม · คนเข้ากลางปีใส่ตาม 50 ทวิ ของที่ทำงานเดิม (รวมกันช่องเดียวได้)</Example>
+                    <span className="text-(--ink-soft)">ใส่ครั้งเดียวต่อปี · ไม่ใส่ ระบบประมาณจากเงินเดือนปัจจุบันให้ (หักไม่ขาด แต่อาจคลาดเล็กน้อย)</span>
+                  </InfoTip>
+                </div>
                 <p className={hint}>
                   ใส่ยอดรวมตั้งแต่ ม.ค. ถึงก่อนเริ่มใช้ระบบนี้ — เงินเดือนที่บริษัทนี้จ่ายไปก่อนเริ่มใช้ระบบ และ/หรือจากที่ทำงานเดิม (ตาม 50 ทวิ) รวมกันช่องเดียว
                   · ไม่ใส่ = ระบบประมาณจากเงินเดือนปัจจุบันให้ (ภาษีไม่หักขาด แต่อาจคลาดเล็กน้อย)
@@ -265,7 +302,14 @@ export function RecurringSection({
   return (
     <section className={`${card} flex flex-col gap-3 p-4 sm:p-5`}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-base font-bold text-(--ink)">5. รายการประจำทุกเดือน</h2>
+        <h2 className="flex items-center text-base font-bold text-(--ink)">
+          5. รายการประจำทุกเดือน
+          <InfoTip label="รายการประจำ" title="รายการประจำ / ผ่อน">
+            <span>ตั้งครั้งเดียว เข้าทุกงวดเอง เช่น ค่าตำแหน่ง เบี้ยขยัน หัก กยศ.</span>
+            <span>ใส่ &quot;ถึงงวด&quot; = ผ่อนมีกำหนด สลิปขึ้น &quot;ผ่อนงวดที่ 2/3&quot; แล้วหยุดเอง</span>
+            <span className="text-(--ink-soft)">รายการที่เริ่มงวดนี้ CEO เห็นในกล่อง &quot;ควรดู&quot; ตอนอนุมัติ</span>
+          </InfoTip>
+        </h2>
         {!open && <button type="button" className="text-sm font-semibold text-(--app-strong) underline" onClick={() => setOpen(true)}>+ เพิ่ม</button>}
       </div>
       <p className={hint}>ตั้งครั้งเดียว เข้าทุกงวดเอง ไม่ต้องกรอกทุกเดือน · ชื่อรายการเพิ่มได้ที่ ตั้งค่า</p>
