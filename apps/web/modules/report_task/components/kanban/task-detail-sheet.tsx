@@ -53,6 +53,8 @@ import { StickerManagerPanel } from "@/modules/report_task/components/shared/sti
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
+import { isPersonalTask } from "@/modules/report_task/lib/personal-task";
+import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { getUser, displayName, getDepartment, users, isOwner, canManage, departmentIdsOf } from "@/modules/report_task/lib/directory";
 import { statusMeta, priorityMeta, taskStatusOrder, taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
 import { completedAssigneeIdsOf, isTaskFullyDone, remainingChecklistCount } from "@/modules/report_task/lib/task-completion";
@@ -130,6 +132,17 @@ const PLAIN_EMOJI_COLLAPSED_COUNT = 10;
 function toLightboxImage(a: Attachment): ReportPostImage {
   return { id: a.id, url: a.url, dataUrl: a.dataUrl, name: a.name, mime: a.mime ?? mimeFromLegacyTaskLabel(a.type) };
 }
+
+/** ตัวเลือกในเมนู @ ของความคิดเห็นงาน — คน หรือ @CEO */
+interface MentionPick {
+  id: string;
+  name: string;
+  avatar?: string;
+  avatarUrl?: string | null;
+  /** ข้อความเทาท้ายแถว (เช่น "ไม่ได้อยู่ในงานนี้") */
+  sub?: string;
+}
+const CEO_TAG_ID = "__ceo__";
 
 /** Highlight @mentions inside a comment so tagged people stand out. */
 function renderMentions(text: string) {
@@ -305,9 +318,11 @@ export function TaskDetailSheet({
     });
   }
   const mentionPicked = useRef(new Map<string, string>());
-  // คนที่ @แท็กได้ = คนในโปรเจคเดียวกัน (ผู้รับผิดชอบ/ผู้มอบหมาย/ผู้ติดตามของทุกงานในโปรเจค)
-  // + คนในงานนี้ (รวมคนที่เคยคอมเมนต์) — งานที่ไม่อยู่ในโปรเจคใช้แค่คนในงานนี้
-  const mentionPeople = useMemo(() => {
+  // คนที่เกี่ยวกับงานนี้ = คนในโปรเจคเดียวกัน (ผู้รับผิดชอบ/ผู้มอบหมาย/ผู้ติดตามของทุกงานในโปรเจค)
+  // + คนในงานนี้ (รวมคนที่เคยคอมเมนต์) — งานที่ไม่อยู่ในโปรเจคใช้แค่คนในงานนี้ · ขึ้นก่อนในเมนู @
+  // รายชื่อพนักงานโหลดทีหลังได้ (เปิดงานจากลิงก์แจ้งเตือนตอนหน้าเพิ่งโหลด) — ผูกกับ store ให้คำนวณใหม่เมื่อมาถึง
+  const employees = useEmployeeStore((s) => s.employees);
+  const relatedPeople = useMemo(() => {
     if (!task) return [];
     const ids = new Set<string>([task.assignedById, ...task.assigneeIds, ...(task.watcherIds ?? []), ...task.comments.map((c) => c.authorId)]);
     if (task.projectTopicId) {
@@ -323,13 +338,29 @@ export function TaskDetailSheet({
       .map((id) => getUser(id))
       .filter((u): u is NonNullable<typeof u> => Boolean(u))
       .sort((a, b) => a.name.localeCompare(b.name, "th"));
-  }, [task, allTasks, viewingAsUserId]);
-  const mentionCandidates = useMemo(() => {
-    if (!mentionQuery) return [];
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- employees: getUser อ่านจาก store นี้
+  }, [task, allTasks, viewingAsUserId, employees]);
+  // แท็กใครในบริษัทก็ได้ (ดึงคนนอกงานเข้ามาดู/ช่วยตอบ — "@พี่น้ำมันทำไม่ได้" 23/10/2569) คนในงานขึ้นก่อน
+  // งานส่วนตัวยังแท็กได้แค่คนในงาน (ชื่องานห้ามหลุด — personal-task.ts)
+  const mentionPeople = useMemo(() => {
+    if (!task || isPersonalTask(task)) return relatedPeople;
+    const related = new Set(relatedPeople.map((u) => u.id));
+    const others = employees.filter((u) => u.id !== viewingAsUserId && !related.has(u.id)).sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", "th"));
+    return [...relatedPeople, ...others];
+  }, [task, relatedPeople, viewingAsUserId, employees]);
+  const relatedIds = useMemo(() => new Set(relatedPeople.map((u) => u.id)), [relatedPeople]);
+  // @CEO — แจ้งทุกคนที่เป็น CEO ไม่ต้องจำชื่อ (แบบเดียวกับห้องรีพอต)
+  const ceoIds = useMemo(() => employees.filter((u) => u.isCeo && u.id !== viewingAsUserId).map((u) => u.id), [employees, viewingAsUserId]);
+  const mentionCandidates = useMemo<MentionPick[]>(() => {
+    if (!mentionQuery || !task) return [];
     const q = mentionQuery.query.toLowerCase();
+    const ceo: MentionPick[] = ceoIds.length > 0 && !isPersonalTask(task) && (!q || "ceo".startsWith(q)) ? [{ id: CEO_TAG_ID, name: "CEO", sub: "แจ้งเฉพาะ CEO" }] : [];
     // ไม่ตัดที่ 8 คนแล้ว — รายชื่อเลื่อนได้เอง เดิมคนที่ 9 ขึ้นไปเลื่อนหาไม่เจอ ต้องพิมพ์ชื่อเท่านั้น (20/10/2569)
-    return mentionPeople.filter((u) => !q || u.name.toLowerCase().includes(q));
-  }, [mentionQuery, mentionPeople]);
+    const people = mentionPeople
+      .filter((u) => !q || (u.name ?? "").toLowerCase().includes(q))
+      .map((u): MentionPick => ({ id: u.id, name: u.name, avatar: u.avatar, avatarUrl: u.avatarUrl, sub: relatedIds.has(u.id) ? undefined : "ไม่ได้อยู่ในงานนี้" }));
+    return [...ceo, ...people];
+  }, [mentionQuery, mentionPeople, relatedIds, ceoIds, task]);
 
   function detectMention(value: string, caret: number) {
     const m = /(^|\s)@([^\s@]{0,30})$/.exec(value.slice(0, caret));
@@ -738,6 +769,7 @@ export function TaskDetailSheet({
     const mentionIds = new Set<string>();
     for (const [name, id] of mentionPicked.current) if (text.includes(`@${name}`)) mentionIds.add(id);
     for (const u of mentionPeople) if (text.includes(`@${u.name}`)) mentionIds.add(u.id);
+    if (mentionIds.delete(CEO_TAG_ID) || /(^|\s)@CEO(?=\s|$)/i.test(text)) for (const id of ceoIds) mentionIds.add(id);
     addComment(task.id, text, viewingAsUserId, commentAttachments, [...mentionIds]);
     setComment("");
     setCommentAttachments([]);
@@ -2382,11 +2414,16 @@ export function TaskDetailSheet({
                           i === mentionIndex ? "bg-[var(--accent)]" : "hover:bg-[var(--bg-soft)]"
                         )}
                       >
-                        <Avatar className="h-6 w-6 shrink-0">
-                          <AvatarImage src={u.avatarUrl ?? undefined} alt={u.name} />
-                          <AvatarFallback className="text-[9px]">{u.avatar}</AvatarFallback>
-                        </Avatar>
+                        {u.id === CEO_TAG_ID ? (
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#1b2537] text-[9px] font-bold text-white">CEO</span>
+                        ) : (
+                          <Avatar className="h-6 w-6 shrink-0">
+                            <AvatarImage src={u.avatarUrl ?? undefined} alt={u.name} />
+                            <AvatarFallback className="text-[9px]">{u.avatar}</AvatarFallback>
+                          </Avatar>
+                        )}
                         <span className="truncate">{u.name}</span>
+                        {u.sub && <span className="ml-auto shrink-0 text-[11px] text-[var(--ink-faint)]">{u.sub}</span>}
                       </button>
                     ))}
                   </div>
