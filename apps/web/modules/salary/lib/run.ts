@@ -156,6 +156,7 @@ export async function computeRun(orgId: string, runId: string, actor: Actor): Pr
         ot: s.ot,
         advances,
         recurring: s.recurring,
+        commission: s.commission,
         adjustments,
         overrides,
         profile: s.profile,

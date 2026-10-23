@@ -56,6 +56,14 @@ export interface RecurringItem {
   detail?: string;
 }
 
+export interface CommissionInput {
+  amount: number;
+  detail: string;
+  taxable: boolean;
+  ssoBase: boolean;
+  pending?: string;
+}
+
 export interface Adjustment {
   id: string;
   label: string;
@@ -85,6 +93,8 @@ export interface ComputeInput {
   ot: (AutoItem & { minutes: number })[];
   advances: AutoItem[];
   recurring: RecurringItem[];
+  /** ค่าคอม Pool ตามเกรดของเดือนนี้ (ระบบบุคคล › พนักงาน › ค่าคอม) — pending = ยังไม่ใส่ เพราะเกรดยังไม่ปิด */
+  commission?: CommissionInput;
   adjustments: Adjustment[];
   overrides: { sso?: Override; tax?: Override };
   profile: {
@@ -115,7 +125,7 @@ export interface ComputeInput {
 }
 
 export type LineSource =
-  | "salary" | "ot" | "recurring" | "adjustment"
+  | "salary" | "ot" | "recurring" | "commission" | "adjustment"
   | "unpaid_leave" | "late" | "absent" | "sso" | "tax" | "advance" | "sso_employer";
 
 export interface PayLine {
@@ -328,6 +338,14 @@ export function computePay(input: ComputeInput): ComputeResult {
     } else {
       lines.push({ key: `rec:${r.refId}`, label: r.name, kind: "deduction", amount: toBaht(amt), how: r.detail ?? "รายการหักประจำทุกเดือน", source: "recurring", auto: true, refId: r.refId });
     }
+  }
+  if (input.commission?.pending) warnings.push(input.commission.pending);
+  else if (input.commission && input.commission.amount > 0) {
+    const amt = s(input.commission.amount);
+    // จ่ายไม่สม่ำเสมอ (แล้วแต่เกรด/ยอด Pool) — คิดภาษีแบบเงินได้ไม่ประจำ เหมือน OT/โบนัส
+    lines.push({ key: "commission", label: "ค่าคอม (ตามเกรด)", kind: "earning", amount: toBaht(amt), how: input.commission.detail, source: "commission", auto: true });
+    if (input.commission.taxable) irregularEarn += amt;
+    if (input.commission.ssoBase) ssoExtra += amt;
   }
   for (const a of input.adjustments) {
     const amt = s(a.amount);

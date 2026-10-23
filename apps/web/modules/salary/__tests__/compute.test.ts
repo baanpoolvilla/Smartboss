@@ -337,3 +337,27 @@ describe("เริ่มใช้ระบบกลางปี (ไม่ม�
     expect(periodsEmployedBefore("2026-11-01", "2026-10-31", 25)).toBe(0);
   });
 });
+
+describe("ค่าคอม Pool ตามเกรด (ระบบบุคคล › ค่าคอม)", () => {
+  const comm = { amount: 3000, detail: "เกรด A (ตัวคูณ 1) · Pool ต.ค. 2569", taxable: true, ssoBase: true };
+
+  it("เพิ่มเป็นเงินได้ บรรทัด 'ค่าคอม (ตามเกรด)' และนับเข้าเงินได้รวม", () => {
+    const without = computePay(base());
+    const r = computePay(base({ commission: comm }));
+    expect(line(r, "commission")?.amount).toBe(3000);
+    expect(r.gross).toBeCloseTo(without.gross + 3000, 2);
+  });
+
+  it("ติดประกันสังคม: เงินเดือน 18,000 ถึงเพดานแล้ว ประกันสังคมไม่เพิ่ม · เงินเดือน 10,000 + ค่าคอม 3,000 คิดจาก 13,000", () => {
+    expect(computePay(base({ commission: comm })).ssoEmployee).toBe(computePay(base()).ssoEmployee);
+    const low = { salary: [{ monthly: 10000, from: "2026-09-26", to: "2026-10-25" }] };
+    expect(computePay(base({ ...low, commission: comm })).ssoEmployee).toBe(650);
+    expect(computePay(base({ ...low, commission: { ...comm, ssoBase: false } })).ssoEmployee).toBe(500);
+  });
+
+  it("เกรดยังไม่ปิด = ไม่ใส่ยอด แต่ขึ้นเตือน", () => {
+    const r = computePay(base({ commission: { ...comm, amount: 0, pending: "ค่าคอม ต.ค. 2569 ยังไม่ใส่ — เกรดยังไม่ปิด" } }));
+    expect(line(r, "commission")).toBeUndefined();
+    expect(r.warnings.some((w) => w.includes("เกรดยังไม่ปิด"))).toBe(true);
+  });
+});
