@@ -6,7 +6,7 @@ import { useTaskStore } from "@/modules/report_task/store/task-store";
 import type { Task, User } from "@/modules/report_task/types";
 
 /**
- * คำขอเลื่อนกำหนดส่ง: ผู้รับผิดชอบขอ → CEO ได้แจ้งเตือน → อนุมัติ (วันเปลี่ยนจริง) / ไม่อนุมัติ (วันเดิม)
+ * คำขอเลื่อนกำหนดส่ง: ผู้รับผิดชอบขอ → ผู้มอบหมาย (CEO ถ้ามอบหมายเอง) ได้แจ้งเตือน → อนุมัติ (วันเปลี่ยนจริง) / ไม่อนุมัติ (วันเดิม)
  * แจ้งผลกลับผู้ขอทั้งสองกรณี — วันที่ผิดตรงนี้กระทบคะแนน (ตัวหักงานเลยกำหนดอ่าน dueDate)
  */
 const CEO = "ceo";
@@ -55,18 +55,26 @@ beforeEach(() => {
 });
 
 describe("คำขอเลื่อนกำหนดส่ง", () => {
-  it("ขอแล้วรออนุมัติ วันยังไม่เปลี่ยน และ CEO ได้แจ้งเตือน", () => {
+  it("ขอแล้วรออนุมัติ วันยังไม่เปลี่ยน · ผู้มอบหมายได้แจ้ง CEO ไม่ได้ (ไม่ได้มอบหมายเอง)", () => {
     useTaskStore.getState().requestDueDateChange("t1", STAFF, "2026-10-07", "รออะไหล่");
     const t = getTask();
     expect(t.dueDate).toBe("2026-09-30T00:00:00.000Z");
     expect(t.dueDateRequests).toHaveLength(1);
     expect(t.dueDateRequests![0]).toMatchObject({ requestedBy: STAFF, newDate: "2026-10-07", status: "pending", reason: "รออะไหล่" });
-    const toCeo = notificationsFor(CEO);
-    expect(toCeo).toHaveLength(1);
-    expect(toCeo[0]).toMatchObject({ kind: "task_due_request", taskId: "t1", link: "/report-task/tasks?task=t1" });
-    expect(toCeo[0]!.message).toContain("ขอเลื่อนกำหนดส่ง");
+    const toBoss = notificationsFor(BOSS);
+    expect(toBoss).toHaveLength(1);
+    expect(toBoss[0]).toMatchObject({ kind: "task_due_request", taskId: "t1", link: "/report-task/tasks?task=t1" });
+    expect(toBoss[0]!.message).toContain("ขอเลื่อนกำหนดส่ง");
+    // CEO ยังอนุมัติได้ (เทสต์ด้านล่าง) แต่ไม่ได้แจ้งงานที่คนอื่นมอบหมาย (23/10/2569)
+    expect(notificationsFor(CEO)).toHaveLength(0);
     // คนขอไม่ได้แจ้งเตือนตัวเอง
     expect(notificationsFor(STAFF)).toHaveLength(0);
+  });
+
+  it("งานที่ CEO มอบหมายเอง → CEO ได้แจ้งขอเลื่อน", () => {
+    useTaskStore.setState({ tasks: [task({ assignedById: CEO })] });
+    useTaskStore.getState().requestDueDateChange("t1", STAFF, "2026-10-07", "รออะไหล่");
+    expect(notificationsFor(CEO)).toHaveLength(1);
   });
 
   it("ขอซ้ำระหว่างรอ = แทนคำขอเดิม ไม่กองหลายใบ", () => {

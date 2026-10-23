@@ -652,13 +652,17 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
         const name = getUser(requesterId)?.name ?? "มีคน";
         logActivity(requesterId, "ขอเลื่อนกำหนดส่ง", t.title, t.id, `${formatShortDate(previousDate)} → ${formatShortDate(newDate)} · ${reason}`);
         // คนที่อนุมัติได้: CEO + ผู้มอบหมาย + หัวหน้าแผนกของงาน (ตรงกับ canEditRecord) — ไม่รวมคนขอเอง
-        const approverIds = [
+        // แจ้งแค่ผู้มอบหมาย + หัวหน้าแผนก — CEO อนุมัติได้เหมือนเดิม แต่ได้แจ้งเฉพาะงานที่ตัวเองมอบหมาย
+        // หรือเมื่อไม่มีใครอื่นจะได้แจ้ง (23/10/2569 · ข้อมูลจริง 14 วัน CEO ได้แจ้งขอเลื่อน 5–18 ครั้ง/คน ทั้งที่ไม่ได้มอบหมาย)
+        const direct = [
           ...new Set([
-            ...users.filter((u) => u.isOwner).map((u) => u.id),
             ...(t.assignedById ? [t.assignedById] : []),
             ...departments.filter((d) => d.headId && t.departmentIds.includes(d.id)).map((d) => d.headId as string),
           ]),
-        ].filter((id) => id !== requesterId && !isPersonalTask(t));
+        ].filter((id) => id !== requesterId);
+        const approverIds = (direct.length > 0 ? direct : users.filter((u) => u.isOwner).map((u) => u.id)).filter(
+          (id) => id !== requesterId && !isPersonalTask(t)
+        );
         useNotificationStore
           .getState()
           .notifyMany(
