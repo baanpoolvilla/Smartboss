@@ -219,7 +219,7 @@ export function DeadlineReminderSettingsPanel() {
       </div>
 
       <Badge variant="outline" className="w-fit text-[10px] font-normal bg-[var(--bg-soft)] text-[var(--ink-soft)] whitespace-normal">
-        เซิร์ฟเวอร์เช็กให้ทุก 5 นาที แม้ไม่มีใครเปิดแอป (และเช็กเพิ่มทุก 60 วินาทีระหว่างมีคนเปิดแอปอยู่)
+        เซิร์ฟเวอร์เช็กให้ทุกนาที แม้ไม่มีใครเปิดแอป
       </Badge>
 
       {/* งาน */}

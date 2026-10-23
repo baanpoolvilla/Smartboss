@@ -43,8 +43,8 @@ export const runtime = "nodejs";
  *   - เตือนเจ้าของโปรเจกต์อัปเดตสถานะทุกวันศุกร์ (?task=project-reminders — อยู่ใน all, &force=1 รันวันอื่นได้)
  *   - โน้ตของห้องรายงาน (?task=notes — อยู่ใน all และ score-hourly ที่รันทุกชั่วโมงอยู่แล้ว): บีบชุดแก้ที่ค้าง,
  *     พักประวัติหน้าที่แก้แล้วเงียบไป, ลบถาวรหน้าที่อยู่ในถังขยะเกิน 30 วัน
- *   - แจ้งเตือนใกล้ถึงกำหนด งาน/ประชุม/รีพอต ของทุกบริษัท (?task=reminders — crontab แยก ทุก 5 นาที · ไม่อยู่ใน all)
- *     ตัวเดียวกับที่แท็บที่เปิดอยู่เรียก ⇒ เตือนเช้าตรงเวลาแม้ไม่มีใครเปิดเว็บ
+ *   - แจ้งเตือนใกล้ถึงกำหนด งาน/ประชุม/รีพอต ของทุกบริษัท (?task=reminders · พ่วงไปกับ attendance-chat ที่ crontab
+ *     เรียกทุกนาทีอยู่แล้ว ไม่ต้องเพิ่มบรรทัด crontab) — ตัวเดียวกับที่แท็บที่เปิดอยู่เรียก ⇒ เตือนเช้าตรงเวลาแม้ไม่มีใครเปิดเว็บ
  *   - ?task=all รันทั้งหมด
  * เรียกด้วย header `Authorization: Bearer $CRON_SECRET` หรือ `?key=$CRON_SECRET`
  * route นี้อยู่นอก auth ของ proxy จึงกันด้วย CRON_SECRET เท่านั้น →
@@ -134,8 +134,14 @@ export async function GET(req: NextRequest) {
   if (task === "attendance-chat") {
     Object.assign(result, { attendanceChat: await postAttendanceToChat() });
   }
-  if (task === "reminders") {
-    Object.assign(result, { reminders: await runRemindersAllOrgs() });
+  if (task === "reminders" || task === "attendance-chat") {
+    // พ่วงกับรอบทุกนาทีของ attendance-chat — ล้มเองได้ ไม่ทำให้การเด้งเวลาเข้า/ออกงานล้มตาม
+    try {
+      Object.assign(result, { reminders: await runRemindersAllOrgs() });
+    } catch (error) {
+      console.error("[cron] reminders", error);
+      Object.assign(result, { reminders: { error: error instanceof Error ? error.message : String(error) } });
+    }
   }
   if (task === "notes" || task === "all" || task === "score-hourly") {
     Object.assign(result, { notes: await runNotesMaintenance().catch((e) => ({ error: String(e) })) });

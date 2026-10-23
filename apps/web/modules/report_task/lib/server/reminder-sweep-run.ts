@@ -25,7 +25,7 @@ const MAX_SENT_KEYS = 20_000;
 
 /**
  * รอบเตือน "ใกล้ถึงกำหนด" ของบริษัทเดียว — เรียกได้ทั้งจากแท็บที่เปิดอยู่ (route reminders/sweep)
- * และจาก cron ฝั่งเซิร์ฟเวอร์ทุก 5 นาที (task=reminders) ที่ไม่ต้องรอให้มีคนเปิดเว็บ
+ * และจาก cron ฝั่งเซิร์ฟเวอร์ทุกนาที (พ่วงกับ task=attendance-chat) ที่ไม่ต้องรอให้มีคนเปิดเว็บ
  * ผู้เรียกต้อง claimSweep("reminders", orgId) ก่อน — สองทางนี้ใช้คีย์เดียวกัน ไม่ทำซ้อนกัน
  */
 export async function runReminderSweep(orgId: string, actorId: string | null) {
