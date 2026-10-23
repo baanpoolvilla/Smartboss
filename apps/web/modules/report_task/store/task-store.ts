@@ -67,10 +67,11 @@ function notifyReviewReady(task: Task) {
   const heads = settings.headsCanReview
     ? departments.filter((d) => task.departmentIds.includes(d.id)).map((d) => d.headId)
     : [];
-  const owners = users.filter((u) => u.isOwner).map((u) => u.id);
-  const recipients = Array.from(
-    new Set([...heads, ...settings.extraReviewerIds, ...owners, task.assignedById].filter((id): id is string => Boolean(id)))
-  );
+  // CEO/เจ้าของบริษัทยังกดตรวจได้ทุกงาน แต่ไม่แจ้งงานที่ตัวเองไม่ได้มอบหมาย (23/10/2569 "งานที่พี่ไม่ได้มอบหมาย ทำไมยังเตือน ceo")
+  // — แจ้งเจ้าของบริษัทเฉพาะเมื่องานนี้ไม่มีใครอื่นจะได้รับแจ้งเลย (ไม่ให้งานค้างรอตรวจเงียบ ๆ)
+  const others = [...heads, ...settings.extraReviewerIds, task.assignedById].filter((id): id is string => Boolean(id));
+  const owners = others.length === 0 ? users.filter((u) => u.isOwner).map((u) => u.id) : [];
+  const recipients = Array.from(new Set([...others, ...owners]));
   const late =
     days < 0 ? ` — เลยกำหนดส่งไปแล้ว ${Math.abs(days)} วัน` : days === 0 ? " — ถึงกำหนดส่งวันนี้พอดี" : days <= 2 ? ` — ใกล้ถึงกำหนดส่ง (เหลือ ${days} วัน)` : "";
   useNotificationStore
