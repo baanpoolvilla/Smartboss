@@ -12,7 +12,7 @@ import { isOwnEmployment, salaryAccess, type SalaryAccess } from "./lib/access";
 import type { Adjustment } from "./lib/compute";
 import { insertEvent, readSettings, withSalaryTenant } from "./lib/db";
 import { actorOf } from "./lib/page";
-import { computeRun, createRun, decideRun, editLine, markPaid, setExcluded, setRunNote, submitRun, type Actor } from "./lib/run";
+import { computeRun, createRun, decideRun, deleteRun, editLine, markPaid, setExcluded, setRunNote, submitRun, type Actor } from "./lib/run";
 import {
   ALLOWANCE_FIELDS,
   DATE_RE,
@@ -666,6 +666,17 @@ export async function excludeAction(input: { runId: string; employmentId: string
     if (input.exclude && !reason) return { error: "ใส่เหตุผลที่ไม่จ่ายงวดนี้" };
     await setExcluded(orgId, actor, input.runId, input.employmentId, input.exclude, reason);
     refresh(input.runId);
+    return { ok: true };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function deleteRunAction(input: { runId: string }): Promise<Result> {
+  try {
+    const { orgId, actor } = await guard("canEdit");
+    await deleteRun(orgId, actor, input.runId);
+    refresh();
     return { ok: true };
   } catch (error) {
     return fail(error);

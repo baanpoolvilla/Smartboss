@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, RefreshCw } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Loader2, RefreshCw, Trash2 } from "lucide-react";
 
 import { Notice } from "@/modules/requests/components/ui";
-import { decideRunAction, markPaidAction, recomputeAction, runNoteAction, submitRunAction } from "../actions";
+import { decideRunAction, deleteRunAction, markPaidAction, recomputeAction, runNoteAction, submitRunAction } from "../actions";
 import { fmtBaht, thaiDate } from "../lib/types";
 import { dangerOutline, field, hint, label, labelText, navy, outline } from "./ui";
 import { useRun } from "./use-run";
@@ -16,6 +17,31 @@ export function RecomputeButton({ runId }: { runId: string }) {
       <button type="button" className={outline} disabled={busy} onClick={() => run(() => recomputeAction({ runId }))} title="ดึงเงินเดือน OT เบิกล่วงหน้า ลา ล่าสุดจากทุกระบบแล้วคิดใหม่ (รายการที่แก้เองไม่หาย)">
         {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />} ดึงข้อมูลใหม่
       </button>
+      {error && <span className="text-xs text-red-700">{error}</span>}
+    </div>
+  );
+}
+
+/** ลบร่าง (สร้างผิด) — ถามยืนยันก่อน แล้วกลับไปหน้ารายการ */
+export function DeleteRunButton({ runId, period }: { runId: string; period: string }) {
+  const router = useRouter();
+  const { busy, error, run } = useRun();
+  const [confirm, setConfirm] = useState(false);
+  return (
+    <div className="flex flex-col items-end gap-1">
+      {!confirm ? (
+        <button type="button" className={dangerOutline} disabled={busy} onClick={() => setConfirm(true)}>
+          <Trash2 className="h-4 w-4" aria-hidden="true" /> ลบร่างนี้
+        </button>
+      ) : (
+        <div className="flex flex-wrap items-center justify-end gap-2 rounded-(--radius) border border-(--line) bg-(--bg-soft) p-2">
+          <span className="text-sm text-(--ink)">ลบร่างงวด {period}? ลบแล้วสร้างใหม่ได้ทันที</span>
+          <button type="button" className={outline} onClick={() => setConfirm(false)} disabled={busy}>ยังก่อน</button>
+          <button type="button" className={dangerOutline} disabled={busy} onClick={() => run(() => deleteRunAction({ runId }), () => router.push("/salary"))}>
+            {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} ยืนยันลบ
+          </button>
+        </div>
+      )}
       {error && <span className="text-xs text-red-700">{error}</span>}
     </div>
   );

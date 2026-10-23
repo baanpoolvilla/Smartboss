@@ -7,7 +7,7 @@ import { Notice } from "@/modules/requests/components/ui";
 import { Example, InfoTip, PageTour, type TourStep } from "@/modules/salary/components/help";
 import { IncludeButton } from "@/modules/salary/components/include-button";
 import { LineEditor, type EditorData } from "@/modules/salary/components/line-editor";
-import { ApproveBar, PayDialog, RecomputeButton, RunNote, SubmitButton } from "@/modules/salary/components/run-actions";
+import { ApproveBar, DeleteRunButton, PayDialog, RecomputeButton, RunNote, SubmitButton } from "@/modules/salary/components/run-actions";
 import { STATUS_LABEL, card, hint, outline } from "@/modules/salary/components/ui";
 import { readRates, readSettings, withSalaryTenant } from "@/modules/salary/lib/db";
 import { salaryPage } from "@/modules/salary/lib/page";
@@ -203,6 +203,7 @@ export default async function RunPage({ params, searchParams }: { params: Promis
             <PageTour id={`run-${run.status}`} steps={tourSteps} />
             {run.status === "draft" && (
               <>
+                <DeleteRunButton runId={run.id} period={periodLabel(run.period)} />
                 <span data-tour="recompute" className="inline-flex"><RecomputeButton runId={run.id} /></span>
                 <span data-tour="submit" className="inline-flex"><SubmitButton runId={run.id} mode={settings.approvalMode} negatives={t.negatives} /></span>
               </>

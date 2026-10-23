@@ -398,6 +398,20 @@ export async function setExcluded(orgId: string, actor: Actor, runId: string, em
   await computeRun(orgId, runId, actor);
 }
 
+/**
+ * ลบรอบที่ยังเป็นร่าง (สร้างผิด/เปิดงวดผิด) — ส่งอนุมัติแล้วต้องให้ CEO ส่งกลับเป็นร่างก่อน · อนุมัติ/จ่ายแล้วลบไม่ได้
+ * ปลอดภัย: OT/เบิกล่วงหน้าจะถูกตัดยอดตอนบันทึกจ่ายเท่านั้น ร่างยังไม่ได้แตะอะไรในระบบอื่น · ประวัติ (events) เก็บไว้
+ */
+export async function deleteRun(orgId: string, actor: Actor, runId: string): Promise<void> {
+  await withSalaryTenant(orgId, async (tx) => {
+    const run = await lockRun(tx, orgId, runId);
+    if (run.status !== "draft") throw new Error(run.status === "submitted" ? "รอบนี้ส่งให้ CEO แล้ว — ให้ CEO ส่งกลับก่อนจึงลบได้" : "รอบที่อนุมัติ/จ่ายแล้วลบไม่ได้");
+    await tx.salaryRunLine.deleteMany({ where: { orgId, runId } });
+    await tx.salaryRun.delete({ where: { id: runId } });
+    await insertEvent(tx, orgId, { runId, byUserId: actor.userId, byName: actor.name, action: "delete", summary: `ลบร่างงวด ${periodLabel(run.period)}` });
+  });
+}
+
 export async function setRunNote(orgId: string, actor: Actor, runId: string, note: string): Promise<void> {
   await withSalaryTenant(orgId, async (tx) => {
     const run = await lockRun(tx, orgId, runId);
