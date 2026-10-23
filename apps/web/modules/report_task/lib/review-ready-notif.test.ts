@@ -16,9 +16,9 @@ const STAFF = "staff";
 const BOSS = "assigner";
 
 const people: User[] = [
-  { id: CEO, name: "Nam", email: "ceo@x", avatar: "N", role: "CEO", isOwner: true },
-  { id: STAFF, name: "Sujita", email: "s@x", avatar: "S", role: "พนักงาน" },
-  { id: BOSS, name: "Chayanun", email: "p@x", avatar: "C", role: "พนักงาน" },
+  { id: CEO, name: "Nam", email: "ceo@x", avatar: "N", role: "CEO", departmentId: "d1", isOwner: true },
+  { id: STAFF, name: "Sujita", email: "s@x", avatar: "S", role: "พนักงาน", departmentId: "d1" },
+  { id: BOSS, name: "Chayanun", email: "p@x", avatar: "C", role: "พนักงาน", departmentId: "d1" },
 ];
 
 function task(overrides: Partial<Task> = {}): Task {
