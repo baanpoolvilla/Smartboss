@@ -25,6 +25,7 @@ import {
   renderRichBulletText,
   mentionSymbolFor,
   EVERYONE_MENTION_ID,
+  CEO_MENTION_ID,
   type MentionType,
   mentionMenuHorizontal,
 } from "@/modules/report_task/lib/report-feed-rich-text";
@@ -40,7 +41,8 @@ import { EmojiStickerPicker, StickerImage } from "@/components/sticker-panel";
 import type { Sticker } from "@/lib/stickers-client";
 import { activeReactionList } from "@/lib/emoji";
 import { toast } from "sonner";
-import { Building2, Check, Hash, ImagePlus, MoreHorizontal, Pencil, Plus, Send, SmilePlus, Trash2, User, Users, X } from "lucide-react";
+import { MentionEditBox } from "@/modules/report_task/components/report-feed/mention-edit-box";
+import { Building2, Check, Crown, Hash, ImagePlus, MoreHorizontal, Pencil, Plus, Send, SmilePlus, Trash2, User, Users, X } from "lucide-react";
 import { uuid } from "@/modules/report_task/lib/uuid";
 import { isCoarsePointer } from "@/modules/report_task/lib/device";
 
@@ -162,6 +164,10 @@ export function OpenchatFeed({
       // Pinned first, same as the section composer's own copy of this —
       // "@ทุกคน" only ever reaches whoever can see *this* room.
       { type: "everyone", id: EVERYONE_MENTION_ID, label: "ทุกคนในห้องนี้", sublabel: "แจ้งทุกคนที่เห็นห้องนี้" },
+      // @CEO — แจ้งเฉพาะคนที่ถือ role CEO และเห็นห้องนี้ (ไม่ต้องจำว่า CEO ชื่ออะไร) · ขึ้นเฉพาะเมื่อมี CEO ที่เห็นห้องนี้
+      ...(directoryUsers.some((u) => u.isCeo && canSeeReportTopic(topic.visibility, u.id))
+        ? [{ type: "role", id: CEO_MENTION_ID, label: "CEO", sublabel: "แจ้งเฉพาะ CEO" } as MentionItem]
+        : []),
       ...directoryUsers
         .filter((u) => canSeeReportTopic(topic.visibility, u.id))
         .map((u): MentionItem => ({ type: "user", id: u.id, label: u.name, sublabel: u.role })),
@@ -425,9 +431,9 @@ export function OpenchatFeed({
     else toggleReplyReaction(m.postId, m.id, emoji, viewingAsUserId);
   }
 
-  function saveEdit() {
+  function saveEdit(body?: string) {
     if (!editing) return;
-    const trimmed = editing.body.trim();
+    const trimmed = (body ?? editing.body).trim();
     if (!trimmed) return;
     const target = messages.find((m) => m.id === editing.id);
     if (!target) return;
@@ -567,27 +573,8 @@ export function OpenchatFeed({
                         <span className="text-[10px] text-[var(--ink-faint)]">แก้ไขแล้ว</span>
                       )}
                       {isEditing ? (
-                        <div className="mt-1 space-y-1.5">
-                          <textarea
-                            autoFocus
-                            value={editing.body}
-                            onChange={(e) => setEditing({ id: m.id, body: e.target.value })}
-                            rows={2}
-                            className="w-full resize-none rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--brand-green)]/50"
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" && !e.shiftKey && !isCoarsePointer()) {
-                                e.preventDefault();
-                                saveEdit();
-                              } else if (e.key === "Escape") setEditing(null);
-                            }}
-                          />
-                          <div className="flex items-center gap-2 text-[11px] text-[var(--ink-soft)]">
-                            <button onClick={saveEdit} className="flex items-center gap-1 font-semibold text-[var(--brand-green-dark)]">
-                              <Check className="h-3 w-3" /> บันทึก
-                            </button>
-                            <button onClick={() => setEditing(null)} className="hover:underline">ยกเลิก</button>
-                          </div>
-                        </div>
+                        // แก้ข้อความแล้วพิมพ์ @ แท็กได้ (เดิม textarea ธรรมดา แท็กเดิมโชว์เป็นโค้ดดิบ)
+                        <MentionEditBox initial={editing.body} candidates={personMentionCandidates} onSave={(body) => saveEdit(body)} onCancel={() => setEditing(null)} />
                       ) : (
                         <>
                           {/* whitespace-pre-wrap — m.body has real "\n"s from
@@ -926,7 +913,7 @@ export function OpenchatFeed({
                     <p className="px-3 py-2 text-xs text-[var(--ink-soft)]">ไม่พบที่ตรงกับ &quot;{mentionMenu.query}&quot;</p>
                   ) : (
                     matches.map((item, i) => {
-                      const Icon = item.type === "user" ? User : item.type === "topic" ? Hash : item.type === "everyone" ? Users : Building2;
+                      const Icon = item.type === "user" ? User : item.type === "topic" ? Hash : item.type === "everyone" ? Users : item.type === "role" ? Crown : Building2;
                       return (
                         <button
                           key={`${item.type}-${item.id}`}

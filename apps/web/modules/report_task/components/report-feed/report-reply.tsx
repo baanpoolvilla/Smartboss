@@ -13,6 +13,8 @@ import { cn } from "@/modules/report_task/lib/utils";
 import { isCoarsePointer } from "@/modules/report_task/lib/device";
 import { formatDateTimeFull, formatDateTimeShort } from "@/modules/report_task/lib/format";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
+import { MentionEditBox } from "@/modules/report_task/components/report-feed/mention-edit-box";
+import type { MentionItem } from "@/modules/report_task/components/report-feed/mention-utils";
 import { sortByUsage, useStickerUsageStore } from "@/modules/report_task/store/sticker-usage-store";
 
 const reactionEmojis = ["👍", "❤️", "🎉", "😂", "😮", "😢"];
@@ -51,6 +53,7 @@ export function ReportReply({
   onToggleReaction,
   onEdit,
   onDelete,
+  mentionCandidates = [],
 }: {
   reply: ReportPostReply;
   /** Full reply list for this post — used to resolve/show the quoted reply when `reply.replyToId` is set. */
@@ -75,6 +78,8 @@ export function ReportReply({
   onToggleReaction: (emoji: string) => void;
   onEdit: (body: string) => void;
   onDelete: () => void;
+  /** รายชื่อในเมนู @ ตอนแก้ความคิดเห็น — ชุดเดียวกับช่องตอบของโพสต์นี้ */
+  mentionCandidates?: MentionItem[];
 }) {
   const author = getUser(reply.authorId);
   const quoted = reply.replyToId
@@ -318,32 +323,16 @@ export function ReportReply({
           </button>
         )}
         {editing ? (
-          <div className="mt-1 space-y-1.5">
-            <textarea
-              autoFocus
-              value={editBody}
-              onChange={(e) => setEditBody(e.target.value)}
-              rows={2}
-              className="w-full resize-none rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--brand-green)]/50"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey && !isCoarsePointer()) {
-                  e.preventDefault();
-                  saveEdit();
-                } else if (e.key === "Escape") {
-                  setEditing(false);
-                }
-              }}
-            />
-            <div className="flex items-center gap-1.5">
-              <Button size="sm" className="h-6 text-xs px-2" disabled={!editBody.trim()} onClick={saveEdit}>
-                <Check className="h-3 w-3" />
-                บันทึก
-              </Button>
-              <Button size="sm" variant="ghost" className="h-6 text-xs px-2" onClick={() => setEditing(false)}>
-                ยกเลิก
-              </Button>
-            </div>
-          </div>
+          <MentionEditBox
+            initial={editBody}
+            candidates={mentionCandidates}
+            onSave={(body) => {
+              setEditBody(body);
+              onEdit(body);
+              setEditing(false);
+            }}
+            onCancel={() => setEditing(false)}
+          />
         ) : (
           <>
             {/* whitespace-pre-wrap — reply.body is one flat string with real "\n"s

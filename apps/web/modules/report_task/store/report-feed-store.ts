@@ -1149,8 +1149,10 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         }));
         // แก้ความคิดเห็นแล้ว @แท็กคนเพิ่ม — แจ้งเฉพาะคนที่เพิ่งถูกแท็ก (เหมือนตอนตอบครั้งแรก)
         if (!post || !reply) return;
-        const oldIds = new Set(extractMentionedIds(reply.body ?? "", "user"));
-        const added = extractMentionedIds(data.body, "user").filter((id) => id !== reply.authorId && !oldIds.has(id));
+        // คนที่เพิ่งถูกแท็ก (ตัวบุคคล · แผนก · @CEO) — แก้แล้วแท็กเพิ่มได้จากช่องแก้ที่มีเมนู @ แล้ว
+        const editTopic = get().topics.find((t) => t.id === post.topicId);
+        const oldIds = new Set(taggedUserIds(reply.body ?? "", editTopic));
+        const added = taggedUserIds(data.body, editTopic).filter((id) => id !== reply.authorId && !oldIds.has(id));
         if (added.length === 0) return;
         const actorName = getUser(reply.authorId)?.name ?? "มีคน";
         useNotificationStore

@@ -1,5 +1,5 @@
 import { canSeeReportTopic } from "@/modules/report_task/lib/permissions";
-import { extractMentionedIds } from "@/modules/report_task/lib/report-feed-rich-text";
+import { CEO_MENTION_ID, extractMentionedIds } from "@/modules/report_task/lib/report-feed-rich-text";
 import { getUser, users } from "@/modules/report_task/lib/directory";
 import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
 
@@ -13,6 +13,8 @@ export function textMentionsUser(text: string, userId: string, topic?: Pick<Repo
   // แท็กแผนก (@ฝ่ายพัฒนาระบบ) = แท็กทุกคนในแผนกนั้น
   const dept = getUser(userId)?.departmentId;
   if (dept && extractMentionedIds(text, "dept").includes(dept) && (!topic || canSeeReportTopic(topic.visibility, userId))) return true;
+  // แท็ก @CEO = แท็กทุกคนที่ถือ role CEO (ที่เห็นห้องนี้)
+  if (getUser(userId)?.isCeo && extractMentionedIds(text, "role").includes(CEO_MENTION_ID) && (!topic || canSeeReportTopic(topic.visibility, userId))) return true;
   if (!topic) return false;
   return extractMentionedIds(text, "everyone").length > 0 && canSeeReportTopic(topic.visibility, userId);
 }
@@ -37,6 +39,12 @@ export function taggedUserIds(text: string, topic?: Pick<ReportTopic, "visibilit
   if (depts.size > 0) {
     for (const u of users) {
       if (u.departmentId && depts.has(u.departmentId) && (!topic || canSeeReportTopic(topic.visibility, u.id))) ids.add(u.id);
+    }
+  }
+  // แท็ก @CEO → ทุกคนที่ถือ role CEO (เห็นห้องนี้) ได้แจ้งเตือน "แท็กคุณ" เหมือนแท็กตัวบุคคล
+  if (extractMentionedIds(text, "role").includes(CEO_MENTION_ID)) {
+    for (const u of users) {
+      if (u.isCeo && (!topic || canSeeReportTopic(topic.visibility, u.id))) ids.add(u.id);
     }
   }
   return [...ids];

@@ -59,6 +59,7 @@ import {
   renderRichBulletText,
   renderSectionBullets,
   EVERYONE_MENTION_ID,
+  CEO_MENTION_ID,
   type MentionType,
   mentionMenuHorizontal,
 } from "@/modules/report_task/lib/report-feed-rich-text";
@@ -74,6 +75,7 @@ import { useReportTagStore } from "@/modules/report_task/store/report-tag-store"
 import { ReportTagChip } from "@/modules/report_task/components/report-feed/report-tag-chip";
 import { ReportImageLightbox } from "@/modules/report_task/components/report-feed/report-image-lightbox";
 import { ReportReply } from "@/modules/report_task/components/report-feed/report-reply";
+import { detectMentionTrigger, insertMentionChip, type MentionItem } from "@/modules/report_task/components/report-feed/mention-utils";
 import { LinkInsertPopover } from "@/modules/report_task/components/report-feed/link-insert-popover";
 import { cn } from "@/modules/report_task/lib/utils";
 import { REACTION_CHIP_CLASS, ReactionPicker } from "@/components/emoji-picker";
@@ -88,6 +90,7 @@ import {
   Bookmark,
   BookmarkCheck,
   Building2,
+  Crown,
   Check,
   ClipboardList,
   Copy,
@@ -143,19 +146,7 @@ const HEADER_BADGE_MIN_WIDTH = 340;
 const LONG_POST_BULLET_THRESHOLD = 8;
 const MAX_VISIBLE_IMAGES = 5;
 
-interface ReplyMentionItem {
-  type: MentionType;
-  id: string;
-  label: string;
-  sublabel?: string;
-}
 
-/** Walks up from `el` to find the nearest scrolling ancestor's viewport
- * bounds — the mention menu opens above or below the caret depending on
- * which direction actually has room within *that* box, not the window
- * (this editor sits inside a card inside a scrollable feed). Same helper
- * as openchat-feed.tsx's, duplicated rather than shared since each
- * composer's mention wiring is already its own local, self-contained block. */
 /**
  * ชื่อรอบมักถูกตั้งซ้ำกับชื่อห้องไว้ข้างหน้า ("Daily-report-Morning" ในห้อง
  * "daily-report") พอเอามาขึ้นป้ายทุกโพสต์ ส่วนที่ซ้ำกินที่ไปเปล่า ๆ จนแถวหัว
@@ -171,37 +162,6 @@ function shortRoundLabel(label: string, topicName: string): string {
   if (!room || !full.toLowerCase().startsWith(room.toLowerCase())) return full;
   const rest = full.slice(room.length).replace(/^[\s\-–—_:·.]+/, "").trim();
   return rest || full;
-}
-
-function nearestScrollableBounds(el: HTMLElement): { top: number; bottom: number } {
-  let node: HTMLElement | null = el.parentElement;
-  while (node) {
-    const overflowY = window.getComputedStyle(node).overflowY;
-    if (overflowY === "auto" || overflowY === "scroll") {
-      const r = node.getBoundingClientRect();
-      return { top: r.top, bottom: r.bottom };
-    }
-    node = node.parentElement;
-  }
-  return { top: 0, bottom: window.innerHeight };
-}
-
-/** Looks for `@query` immediately before the caret in the current text node
- * and returns its position — null when the caret isn't inside `el`, isn't in
- * a text node, or there's no unfinished `@word` right before it. */
-function detectMentionTrigger(el: HTMLElement): { query: string; rect: DOMRect; containerTop: number; containerBottom: number } | null {
-  const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0 || !sel.isCollapsed || !el.contains(sel.getRangeAt(0).startContainer)) return null;
-  const range = sel.getRangeAt(0);
-  const node = range.startContainer;
-  if (node.nodeType !== Node.TEXT_NODE) return null;
-  const before = (node.textContent ?? "").slice(0, range.startOffset);
-  const match = before.match(/(?:^|\s)@([^\s@]*)$/);
-  if (!match) return null;
-  const caretRange = range.cloneRange();
-  const rect = caretRange.getClientRects()[0] ?? caretRange.getBoundingClientRect();
-  const bounds = nearestScrollableBounds(el);
-  return { query: match[1]!, rect, containerTop: bounds.top, containerBottom: bounds.bottom };
 }
 
 // ปุ่มจัดรูปแบบในช่องตอบกลับ (ตัวหนา/เอียง/ขีดเส้นใต้/ลิงก์/อิโมจิ) — ซ่อนบนจอสัมผัส: บนมือถือมันกินที่
@@ -538,22 +498,26 @@ export function ReportCard({
   // could @tag someone with no access to the conversation at all ("ต้อง
   // แสดงเฉพาะคนที่อยู่ในห้องนั้นไหม"). Departments stay unfiltered — a dept
   // mention is a notify-this-group action, not scoped to room membership.
-  const replyMentionCandidates = useMemo<ReplyMentionItem[]>(
+  const replyMentionCandidates = useMemo<MentionItem[]>(
     () => [
       // Pinned first, same as the post composer's own copy of this — "@ทุกคน"
       // only ever reaches whoever can see *this* room (resolved at
       // notify-time, see textMentionsUser), never the whole company.
       { type: "everyone", id: EVERYONE_MENTION_ID, label: "ทุกคนในห้องนี้", sublabel: "แจ้งทุกคนที่เห็นห้องนี้" },
+      // @CEO — แจ้งเฉพาะคนที่ถือ role CEO และเห็นห้องนี้ (ไม่ต้องจำว่า CEO ชื่ออะไร) · ขึ้นเฉพาะเมื่อมี CEO ที่เห็นห้องนี้
+      ...(directoryUsers.some((u) => u.isCeo && canSeeReportTopic(topic.visibility, u.id))
+        ? [{ type: "role", id: CEO_MENTION_ID, label: "CEO", sublabel: "แจ้งเฉพาะ CEO" } as MentionItem]
+        : []),
       ...directoryUsers
         .filter((u) => canSeeReportTopic(topic.visibility, u.id))
-        .map((u): ReplyMentionItem => ({ type: "user", id: u.id, label: u.name, sublabel: u.role })),
-      ...departments.map((d): ReplyMentionItem => ({ type: "dept", id: d.id, label: d.name, sublabel: "แผนก" })),
+        .map((u): MentionItem => ({ type: "user", id: u.id, label: u.name, sublabel: u.role })),
+      ...departments.map((d): MentionItem => ({ type: "dept", id: d.id, label: d.name, sublabel: "แผนก" })),
     ],
     [topic.visibility]
   );
   const [replyMentionMenu, setReplyMentionMenu] = useState<{ query: string; rect: DOMRect; containerTop: number; containerBottom: number; index: number } | null>(null);
 
-  function replyMentionMatches(query: string): ReplyMentionItem[] {
+  function replyMentionMatches(query: string): MentionItem[] {
     const q = query.trim().toLowerCase();
     // No cap — the dropdown is its own scroll area, so a room with more than
     // 8 people used to just silently lose everyone past the 8th ("แท็กคนไม่ครบ").
@@ -565,41 +529,9 @@ export function ReportCard({
     setReplyMentionMenu(trigger ? { ...trigger, index: 0 } : null);
   }
 
-  function insertReplyMention(item: ReplyMentionItem) {
+  function insertReplyMention(item: MentionItem) {
     const el = replyEditorRef.current;
-    const sel = window.getSelection();
-    if (!el || !sel || sel.rangeCount === 0) return;
-    const range = sel.getRangeAt(0);
-    const node = range.startContainer;
-    if (node.nodeType !== Node.TEXT_NODE) return;
-    const nodeText = node.textContent ?? "";
-    const before = nodeText.slice(0, range.startOffset);
-    const atIndex = before.lastIndexOf("@");
-    if (atIndex === -1) return;
-    const afterCaret = nodeText.slice(range.startOffset);
-    const parent = node.parentNode;
-    if (!parent) return;
-
-    const chip = document.createElement("span");
-    chip.className = "mention-chip inline-flex items-center rounded bg-[#5865f2]/15 text-[#4752c4] px-1 font-medium transition-colors hover:bg-[#5865f2] hover:text-white";
-    chip.contentEditable = "false";
-    chip.setAttribute("data-mention-type", item.type);
-    chip.setAttribute("data-mention-id", item.id);
-    chip.textContent = `@${item.label}`;
-
-    const afterNode = document.createTextNode(afterCaret);
-    const spaceNode = document.createTextNode(" ");
-    parent.replaceChild(afterNode, node);
-    parent.insertBefore(document.createTextNode(nodeText.slice(0, atIndex)), afterNode);
-    parent.insertBefore(chip, afterNode);
-    parent.insertBefore(spaceNode, afterNode);
-
-    const newRange = document.createRange();
-    newRange.setStart(spaceNode, spaceNode.length);
-    newRange.collapse(true);
-    sel.removeAllRanges();
-    sel.addRange(newRange);
-
+    if (!el || !insertMentionChip(el, item)) return;
     setReplyMentionMenu(null);
     setReplyText(htmlEditorToBulletsText(el));
   }
@@ -1867,6 +1799,7 @@ export function ReportCard({
                     onToggleReaction={(emoji) =>
                       toggleReplyReaction(post.id, post.replies[post.replies.length - 1]!.id, emoji, viewingAsUserId)
                     }
+                    mentionCandidates={replyMentionCandidates}
                     onEdit={(body) =>
                       editReplyAction(post.id, post.replies[post.replies.length - 1]!.id, {
                         body,
@@ -1898,6 +1831,7 @@ export function ReportCard({
                           onJumpToQuote={jumpToQuote}
                           onCopyLink={() => copyLink(r.id)}
                           onToggleReaction={(emoji) => toggleReplyReaction(post.id, r.id, emoji, viewingAsUserId)}
+                          mentionCandidates={replyMentionCandidates}
                           onEdit={(body) => editReplyAction(post.id, r.id, { body, images: r.images })}
                           onDelete={() => setDeleteReplyTarget(r.id)}
                         />
@@ -2116,7 +2050,7 @@ export function ReportCard({
                         <p className="px-3 py-2 text-xs text-[var(--ink-soft)]">ไม่พบที่ตรงกับ &quot;{replyMentionMenu.query}&quot;</p>
                       ) : (
                         matches.map((item, i) => {
-                          const Icon = item.type === "user" ? User : item.type === "everyone" ? Users : Building2;
+                          const Icon = item.type === "user" ? User : item.type === "everyone" ? Users : item.type === "role" ? Crown : Building2;
                           return (
                             <button
                               key={`${item.type}-${item.id}`}

@@ -19,13 +19,14 @@ import {
   numberedMarker,
   mentionSymbolFor,
   EVERYONE_MENTION_ID,
+  CEO_MENTION_ID,
   type MentionType,
   mentionMenuHorizontal,
 } from "@/modules/report_task/lib/report-feed-rich-text";
 import { cn } from "@/modules/report_task/lib/utils";
 import { AlbumPickerButton } from "@/modules/report_task/components/report-feed/album-picker-button";
 import { TagPickerButton } from "@/modules/report_task/components/report-feed/tag-picker-button";
-import { Bold, Building2, Code, Hash, Italic, List, ListOrdered, Minus, Square, Table, TriangleAlert, Underline, User, Users, X } from "lucide-react";
+import { Bold, Building2, Code, Crown, Hash, Italic, List, ListOrdered, Minus, Square, Table, TriangleAlert, Underline, User, Users, X } from "lucide-react";
 import { LinkInsertPopover } from "@/modules/report_task/components/report-feed/link-insert-popover";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
 import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
@@ -157,6 +158,10 @@ export function ReportPostFields({
       // of ids captured here), never the whole company regardless of which
       // room the post is in ("แสดงให้คนที่เห็นในห้องนั้นๆเท่านั้น").
       { type: "everyone", id: EVERYONE_MENTION_ID, label: "ทุกคนในห้องนี้", sublabel: "แจ้งทุกคนที่เห็นห้องนี้" },
+      // @CEO — แจ้งเฉพาะคนที่ถือ role CEO และเห็นห้องนี้ (ไม่ต้องจำว่า CEO ชื่ออะไร) · ขึ้นเฉพาะเมื่อมี CEO ที่เห็นห้องนี้
+      ...(users.some((u) => u.isCeo && canSeeReportTopic(targetTopicVisibility, u.id))
+        ? [{ type: "role", id: CEO_MENTION_ID, label: "CEO", sublabel: "แจ้งเฉพาะ CEO" } as MentionItem]
+        : []),
       ...users
         .filter((u) => canSeeReportTopic(targetTopicVisibility, u.id))
         .map((u): MentionItem => ({ type: "user", id: u.id, label: u.name, sublabel: u.role })),
@@ -838,7 +843,7 @@ export function ReportPostFields({
                       <p className="px-3 py-2 text-xs text-[var(--ink-soft)]">ไม่พบที่ตรงกับ &quot;{mentionMenu.query}&quot;</p>
                     ) : (
                       matches.map((item, i) => {
-                        const Icon = item.type === "user" ? User : item.type === "topic" ? Hash : item.type === "everyone" ? Users : Building2;
+                        const Icon = item.type === "user" ? User : item.type === "topic" ? Hash : item.type === "everyone" ? Users : item.type === "role" ? Crown : Building2;
                         return (
                           <button
                             key={`${item.type}-${item.id}`}
