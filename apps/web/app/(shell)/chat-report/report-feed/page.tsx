@@ -12,6 +12,7 @@ import { ReportAllPostsFeed } from "@/modules/report_task/components/report-feed
 import { ReportViewSwitcher } from "@/modules/report_task/components/report-feed/report-view-switcher";
 import { ReportComplianceBar } from "@/modules/report_task/components/report-feed/report-header";
 import { RoomSettingsSheet } from "@/modules/report_task/components/report-feed/room-settings-sheet";
+import { NotesTab } from "@/modules/report_task/components/report-feed/notes/notes-tab";
 import { ReportTopicPanels, collectFiles, collectLinks, filesCutoffMs, fileFilterForLegacyTab } from "@/modules/report_task/components/report-feed/report-topic-panels";
 import { PostFilterBar, PostFilterButton, ActiveFilterChips, filterPosts, emptyPostFilters, postFiltersActiveCount, type PostFilters } from "@/modules/report_task/components/report-feed/post-filter-bar";
 import { useSetAppBarLeading } from "@/modules/report_task/components/shared/app-bar-leading";
@@ -39,7 +40,7 @@ import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions
 import { safeLocalStorage } from "@/modules/report_task/lib/safe-storage";
 import { lateToastDismissKey, isLateToastDismissed, dismissLateToast } from "@/modules/report_task/lib/late-toast-dismiss";
 import { toast } from "sonner";
-import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronDown, ChevronRight, Clock, FolderOpen, Hash, Lock, MessageSquareText, Pin, Search, Settings, TriangleAlert, Users, X } from "lucide-react";
+import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronDown, ChevronRight, Clock, FolderOpen, Hash, Lock, MessageSquareText, NotebookPen, Pin, Search, Settings, TriangleAlert, Users, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { overlayHistoryState, pushUrlAfterOverlays } from "@/lib/back-to-close";
 
@@ -86,11 +87,13 @@ function pinnedChip(p: ReportPost, onUnpin: (id: string) => void) {
  * accumulates now lives under one "ไฟล์" tab with an explicit filter row
  * (see FileFilter in report-topic-panels.tsx) that says what each pile is.
  */
-type TopicTab = "posts" | "files" | "stats";
+type TopicTab = "posts" | "files" | "stats" | "notes";
 const topicTabs: { id: TopicTab; label: string; icon: typeof MessageSquareText }[] = [
   { id: "posts", label: "โพสต์", icon: MessageSquareText },
   { id: "files", label: "ไฟล์", icon: FolderOpen },
   { id: "stats", label: "สรุป", icon: BarChart3 },
+  // สมุดโน้ตของห้อง (แบบแท็บ Notes ใน Teams) — notes-tab.tsx
+  { id: "notes", label: "โน้ต", icon: NotebookPen },
 ];
 
 /**
@@ -249,7 +252,7 @@ function ReportFeedPageInner() {
     // deep link naming one still lands on the right view (see
     // initialFileFilter below), it just opens the tab that now contains it.
     if (tab === "album" || tab === "links") return "files";
-    return tab === "files" || tab === "stats" ? tab : "posts";
+    return tab === "files" || tab === "stats" || tab === "notes" ? tab : "posts";
   });
   const [initialFileFilter] = useState(() => fileFilterForLegacyTab(searchParams.get("tab")) ?? undefined);
   const [highlightPostId, setHighlightPostId] = useState<string | null>(() => searchParams.get("post"));
@@ -1570,6 +1573,8 @@ function ReportFeedPageInner() {
                     </>
                   )}
                 </>
+              ) : activeTab === "notes" ? (
+                <NotesTab key={activeTopic.id} topic={activeTopic} />
               ) : (
                 <ReportTopicPanels
                   tab={activeTab}

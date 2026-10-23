@@ -94,3 +94,96 @@ model ReportTaskStore {
   @@map("stores")
   @@schema("report_task")
 }
+
+// ═════════════════════ โน้ตของห้องรายงาน (แบบ Notes ใน Teams) ═════════════════════
+//
+// แก้พร้อมกันได้หลายคน (ผู้ใช้เลือก 23/10/2569) — เนื้อหาเป็นเอกสาร Yjs (CRDT):
+//   pages.state   = สถานะเต็มที่บีบรวมแล้ว (snapshot)
+//   note_updates  = การแก้ที่ต่อท้ายหลัง snapshot (ทีละชุดจากเครื่อง) — บีบรวมเข้า state เป็นระยะ
+//                   (กันตารางโตไม่หยุด: แก้ 1 ครั้ง ≠ 1 แถวถาวร)
+//   note_versions = ประวัติการแก้ไข (จุดพักเมื่อเว้นช่วงแก้ / ทุก 30 นาทีที่แก้ต่อเนื่อง) — ตัดของเก่าตามรอบ
+// รูป/ไฟล์ไม่อยู่ในเอกสาร เก็บที่ระบบไฟล์แนบเดิม เอกสารมีแค่ลิงก์ (เอกสารไม่บวม)
+// ใครเห็นห้องก็อ่าน/แก้ได้ — ตรวจสิทธิ์จากการมองเห็นห้องทุกคำขอ (lib/notes/access.ts)
+// ลบ = ถังขยะ (deleted_at) 30 วันแล้วลบจริงโดย cron
+model ReportNoteSection {
+  id        String    @id @db.Uuid
+  orgId     String    @map("org_id")
+  topicId   String    @map("topic_id")
+  name      String
+  color     String    @default("violet")
+  sort      Int       @default(0)
+  createdBy String    @map("created_by")
+  createdAt DateTime  @default(now()) @map("created_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@index([orgId, topicId])
+  @@map("note_sections")
+  @@schema("report_task")
+}
+
+model ReportNotePage {
+  id             String    @id @db.Uuid
+  orgId          String    @map("org_id")
+  topicId        String    @map("topic_id")
+  sectionId      String?   @map("section_id") @db.Uuid
+  title          String
+  sort           Int       @default(0)
+  pinned         Boolean   @default(false)
+  /// เอกสาร Yjs ที่บีบรวมแล้ว (รวม note_updates ที่ id <= stateUpdateId)
+  state          Bytes
+  stateUpdateId  BigInt    @default(0) @map("state_update_id")
+  /// ขนาดเอกสารล่าสุดที่คำนวณได้ (ไบต์) — กันหน้าบวมเกินขีด
+  stateSize      Int       @default(0) @map("state_size")
+  /// ข้อความล้วน (ค้นหา/ตัวอย่าง) — อัปเดตตอนบีบรวม
+  searchText     String    @default("") @map("search_text")
+  /// คนที่แก้ตั้งแต่จุดพักประวัติล่าสุด
+  sessionEditors String[]  @default([]) @map("session_editors")
+  lastEditAt     DateTime? @map("last_edit_at")
+  lastVersionAt  DateTime? @map("last_version_at")
+  createdBy      String    @map("created_by")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedBy      String?   @map("updated_by")
+  updatedAt      DateTime  @default(now()) @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+  deletedBy      String?   @map("deleted_by")
+
+  updates  ReportNoteUpdate[]
+  versions ReportNoteVersion[]
+
+  @@index([orgId, topicId, deletedAt])
+  @@map("note_pages")
+  @@schema("report_task")
+}
+
+model ReportNoteUpdate {
+  id       BigInt   @id @default(autoincrement())
+  pageId   String   @map("page_id") @db.Uuid
+  orgId    String   @map("org_id")
+  data     Bytes
+  byUserId String   @map("by_user_id")
+  at       DateTime @default(now())
+
+  page ReportNotePage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@index([pageId, id])
+  @@map("note_updates")
+  @@schema("report_task")
+}
+
+model ReportNoteVersion {
+  id        String   @id @db.Uuid
+  pageId    String   @map("page_id") @db.Uuid
+  orgId     String   @map("org_id")
+  state     Bytes
+  text      String   @default("")
+  title     String   @default("")
+  editors   String[] @default([])
+  reason    String   @default("session") // session | interval | restore
+  createdAt DateTime @default(now()) @map("created_at")
+
+  page ReportNotePage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@index([pageId, createdAt])
+  @@map("note_versions")
+  @@schema("report_task")
+}

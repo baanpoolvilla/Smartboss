@@ -7,6 +7,7 @@ import {
 } from "@/modules/maintenance/data/cron";
 import { dockAttendance, dockFinishedShifts, refundAttendanceDocks } from "@/lib/attendance-performance";
 import { purgeExpiredChatMedia } from "@/modules/chat/data/media-retention";
+import { runNotesMaintenance } from "@/modules/report_task/lib/notes/server";
 import { notifyLateArrivals } from "@/lib/attendance-late-alerts";
 import { postAttendanceToChat } from "@/lib/attendance-chat";
 import { notifyPendingOvertime } from "@/modules/hr/lib/hr-notify";
@@ -39,6 +40,8 @@ export const runtime = "nodejs";
  *   - รอบเก็บตกของวัน (?task=score-final — crontab 5 0 * * * · ไม่อยู่ใน all): เหมือน score-hourly + คืนคะแนนลงเวลา
  *     ที่ไม่ควรหักแล้ว ⇒ ของวันตัดรอบครบก่อนเกรดพร้อมใช้ 00:30 (score-period.ts scorePeriodReadyAt)
  *   - เตือนเจ้าของโปรเจกต์อัปเดตสถานะทุกวันศุกร์ (?task=project-reminders — อยู่ใน all, &force=1 รันวันอื่นได้)
+ *   - โน้ตของห้องรายงาน (?task=notes — อยู่ใน all และ score-hourly ที่รันทุกชั่วโมงอยู่แล้ว): บีบชุดแก้ที่ค้าง,
+ *     พักประวัติหน้าที่แก้แล้วเงียบไป, ลบถาวรหน้าที่อยู่ในถังขยะเกิน 30 วัน
  *   - ?task=all รันทั้งหมด
  * เรียกด้วย header `Authorization: Bearer $CRON_SECRET` หรือ `?key=$CRON_SECRET`
  * route นี้อยู่นอก auth ของ proxy จึงกันด้วย CRON_SECRET เท่านั้น →
@@ -104,6 +107,9 @@ export async function GET(req: NextRequest) {
   }
   if (task === "attendance-chat") {
     Object.assign(result, { attendanceChat: await postAttendanceToChat() });
+  }
+  if (task === "notes" || task === "all" || task === "score-hourly") {
+    Object.assign(result, { notes: await runNotesMaintenance().catch((e) => ({ error: String(e) })) });
   }
   if (task === "chat-media" || task === "all") {
     Object.assign(result, { chatMedia: await purgeExpiredChatMedia({ dryRun: url.searchParams.get("dryRun") === "1" }) });
