@@ -89,6 +89,7 @@ import {
   Lock,
 } from "lucide-react";
 import { toast } from "sonner";
+import { filesFromDataTransfer, hasClipboardText } from "@/lib/annotate/annotate";
 import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
 import { uuid } from "@/modules/report_task/lib/uuid";
 import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
@@ -1062,7 +1063,20 @@ export function NewTaskDialog({
 
   return (
     <Dialog open={open} onOpenChange={requestClose}>
-      <DialogContent className="sm:max-w-lg max-h-[92vh] overflow-y-auto overflow-x-hidden p-0 gap-0">
+      <DialogContent
+        className="sm:max-w-lg max-h-[92vh] overflow-y-auto overflow-x-hidden p-0 gap-0"
+        // แคปหน้าจอแล้ว Ctrl+V วางเป็นไฟล์แนบได้เลย ไม่ต้องบันทึกไฟล์แล้วกดแนบ (ผู้ใช้ขอ 26/10/2569)
+        // มีข้อความในคลิปบอร์ด (พิมพ์ชื่องาน/รายละเอียด, ตารางจาก Excel) = วางเป็นข้อความตามปกติ
+        onPaste={(e) => {
+          if (itemType !== "task" || hasClipboardText(e.clipboardData)) return;
+          const files = filesFromDataTransfer(e.clipboardData);
+          if (files.length === 0) return;
+          e.preventDefault();
+          setTaskFiles((prev) => [...prev, ...files]);
+          setShowAdvanced(true);
+          toast.success(`แนบ ${files.length} ไฟล์แล้ว`);
+        }}
+      >
         <PasteDropFiles label="ปล่อยเพื่อแนบไฟล์/รูป">
         <DialogHeader className="px-5 pt-5 pb-3 space-y-3">
           {/* ติ๊ก "ส่วนตัว" ข้างหัวกล่อง — ไม่กินที่แถวชื่องาน ทั้งคอมและมือถือ (pr-10 เว้นที่ปุ่มปิด) */}
@@ -1414,6 +1428,7 @@ export function NewTaskDialog({
                         label="แนบไฟล์หรือรูปภาพ"
                         className="rounded-lg border border-dashed border-[var(--line)] px-3 py-1.5 hover:border-[var(--brand-green)] hover:text-[var(--brand-green-dark)] transition-colors"
                       />
+                      <p className="text-[11px] text-[var(--ink-soft)]">หรือแคปหน้าจอ/คัดลอกรูปแล้วกด Ctrl+V วางในหน้านี้ได้เลย</p>
 
                       {taskFiles.length > 0 && (
                         <div className="space-y-1.5">
