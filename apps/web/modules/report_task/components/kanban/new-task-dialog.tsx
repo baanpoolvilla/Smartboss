@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -774,6 +774,26 @@ export function NewTaskDialog({
     setChecklistItems((prev) => prev.filter((c) => c.id !== id));
   }
 
+  function setChecklistDraftOwner(id: string, ownerId: string) {
+    setChecklistItems((prev) => prev.map((c) => (c.id === id ? { ...c, ownerId } : c)));
+  }
+
+  // เจ้าของแต่ละข้อต้องเป็นคนที่เลือกอยู่ตอนนี้เสมอ — เดิมจำคนที่เลือกไว้ตอนพิมพ์ข้อนั้นตลอด (เลือก A แล้วเอาออก/
+  // สลับเป็นกลุ่ม รายการยังขึ้น A ทั้งที่ไม่ได้อยู่ในงาน และส่งไปเป็นเจ้าของจริงด้วย) · งานเดี่ยว = ทุกข้อเป็นของคนเดียว
+  useEffect(() => {
+    setChecklistItems((prev) => {
+      let changed = false;
+      const next = prev.map((c) => {
+        const ownerId = taskMode === "individual" || !assigneeIds.includes(c.ownerId) ? (assigneeIds[0] ?? "") : c.ownerId;
+        if (ownerId === c.ownerId) return c;
+        changed = true;
+        return { ...c, ownerId };
+      });
+      return changed ? next : prev;
+    });
+    setNewChecklistOwnerId((cur) => (cur && !assigneeIds.includes(cur) ? "" : cur));
+  }, [assigneeIds, taskMode]);
+
   // Any of these being filled in means closing the dialog would throw away
   // real work, so a plain click on "ยกเลิก"/overlay/Esc must be confirmed.
   const isDirty =
@@ -950,9 +970,21 @@ export function NewTaskDialog({
               {checklistItems.map((c) => (
                 <div key={c.id} className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-white px-2.5 py-1.5 text-xs">
                   <span className="flex-1 truncate">{c.text}</span>
-                  {taskMode === "group" && (
+                  {taskMode === "group" && assigneeIds.length > 1 ? (
+                    // เปลี่ยนคนของข้อนี้ได้ตรงนี้เลย — ตัวเล็กพอให้รู้ ไม่ต้องลบแล้วพิมพ์ใหม่
+                    <Select value={c.ownerId} onValueChange={(v) => v && setChecklistDraftOwner(c.id, v)}>
+                      <SelectTrigger className="h-6 w-auto shrink-0 gap-1 border-none bg-transparent px-1.5 text-[10px] text-[var(--ink-soft)] shadow-none hover:bg-[var(--bg-soft)]">
+                        <SelectValue>{getUser(c.ownerId)?.name ?? "เลือกคน"}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {assigneeIds.map((uid) => (
+                          <SelectItem key={uid} value={uid}>{getUser(uid)?.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : taskMode === "group" && c.ownerId ? (
                     <span className="text-[10px] text-[var(--ink-soft)] shrink-0">{getUser(c.ownerId)?.name}</span>
-                  )}
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => removeChecklistDraft(c.id)}
