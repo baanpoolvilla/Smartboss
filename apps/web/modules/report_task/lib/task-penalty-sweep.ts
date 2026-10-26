@@ -86,11 +86,14 @@ export function penaltyDueDate(task: Pick<Task, "originalDueDate" | "revisions">
   // ที่ใช้ได้ระหว่างไล่ chain ด้วย ไม่งั้นเลื่อนกำหนดต่อจากวันนั้น (ก่อนถึง) ถูกตัดทิ้งเพราะเทียบกับวันเก่า
   const floor = task.originalDueDate !== start ? dueDay(task.originalDueDate) : -Infinity;
   for (const r of revisions) {
+    // อนุมัติคำขอเลื่อน ⇒ ตัดสินจากเวลาที่พนักงานกดขอ (RevisionEntry.requestedAt) ไม่ใช่ตอนหัวหน้ากดอนุมัติ
+    // เดิมเก็บไว้แต่ไม่เคยใช้ ⇒ ขอทันแต่หัวหน้าอนุมัติหลังวันเดิม = โดนหัก −3
+    const madeAt = localDay(r.requestedAt ?? r.revisedAt);
     // ตั้งกำหนดส่งเป็นวันที่ผ่านไปแล้ว ณ ตอนแก้ = พิมพ์ผิด ไม่ใช่เส้นตายจริง — ข้ามไป
     // (เจอจริง: ขอเลื่อน 30/09 → 04/09 ตั้งใจ 04/10 แก้กลับเป็น 04/10 วันเดียวกัน
     // แต่ chain หยุดที่ 04/09 ⇒ โดนหัก −3 ทั้งที่ไม่เคยเลยกำหนดจริง)
-    if (dueDay(r.newDate) < localDay(r.revisedAt)) continue;
-    if (localDay(r.revisedAt) > Math.max(dueDay(due), floor)) break;
+    if (dueDay(r.newDate) < madeAt) continue;
+    if (madeAt > Math.max(dueDay(due), floor)) break;
     due = r.newDate;
   }
   // rejectReview moves originalDueDate forward itself when the assignee had
@@ -210,10 +213,15 @@ export function sweepAutoPenalties(
         const override = updated.assigneeDueDates?.[assigneeId];
         const effectiveDueDate = override ?? heldTo;
         const existing = updated.penalties?.[assigneeId];
+        // วันรายคนที่มาจากคำขอเลื่อนซึ่ง "ขอทันกำหนดเดิม" — หัวหน้าอนุมัติช้าไม่ใช่ความผิดคนขอ
+        const rev = updated.assigneeDueDateRevisions?.[assigneeId];
+        const requestedInTime =
+          !!rev?.requestedAt && !!rev.requestPreviousDate && localDay(rev.requestedAt) <= dueDay(rev.requestPreviousDate);
         // An automatic dock on the shared date that an in-time extension has
         // since made wrong — take it back (an override is left alone: it can
-        // be set after the fact, so it isn't proof the miss didn't happen).
-        if (existing && !override && existing.byUserId === SYSTEM_USER_ID && daysUntil(effectiveDueDate) >= 0) {
+        // be set after the fact, so it isn't proof the miss didn't happen —
+        // unless it came from a request made before the old date passed).
+        if (existing && (!override || requestedInTime) && existing.byUserId === SYSTEM_USER_ID && daysUntil(effectiveDueDate) >= 0) {
           const { [assigneeId]: _dropped, ...rest } = updated.penalties ?? {};
           updated = { ...updated, penalties: rest };
           revokedRefIds.push(`${t.id}:${assigneeId}`);
