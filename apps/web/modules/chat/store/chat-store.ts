@@ -261,8 +261,10 @@ export const useChatStore = create<ChatState>((set) => ({
               }
             : c.lastMessage,
           activityAt: isNewer ? message.createdAt : c.activityAt,
-          unreadCount: countAsUnread ? c.unreadCount + 1 : c.unreadCount,
-          mentionCount: countAsUnread && mentioned ? c.mentionCount + 1 : c.mentionCount,
+          // ข้อความของเราเอง (ส่งจากอีกเครื่อง/อีกแท็บ) = อ่านถึงตรงนั้นแล้ว — เซิร์ฟเวอร์เลื่อนจุดอ่านให้ตอนส่ง
+          // แต่ไม่กระจาย chat.read ⇒ เครื่องนี้ยังนับข้อความก่อนหน้าว่ายังไม่อ่าน แล้ววาง NEW ไว้เหนือของเก่า
+          unreadCount: message.authorId === s.meId ? 0 : countAsUnread ? c.unreadCount + 1 : c.unreadCount,
+          mentionCount: message.authorId === s.meId ? 0 : countAsUnread && mentioned ? c.mentionCount + 1 : c.mentionCount,
         };
       });
       // ผู้ส่งเป็นคนพิมพ์เสร็จแล้ว — เอา "กำลังพิมพ์" ของเขาออกทันที

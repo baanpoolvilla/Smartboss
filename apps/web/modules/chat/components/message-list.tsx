@@ -81,6 +81,13 @@ export function MessageList({
     // คำนวณครั้งเดียวตอนห้องโหลดเสร็จ — ข้อความที่เข้ามาทีหลังไม่ควรย้ายเส้นนี้
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channelId, initialUnread, roomLoaded]);
+  // เราตอบในห้องหลังเส้นแล้ว = อ่านถึงตรงนั้นแน่ ๆ — เดิมเส้นค้างที่เดิมตลอดตราบที่ห้องยังเปิดอยู่
+  // (เปิดห้องค้างไว้ ตอบไปแล้ว NEW ยังอยู่เหนือข้อความเก่าที่ตอบไปแล้ว)
+  const markerId = useMemo(() => {
+    if (!unreadMarkerId) return null;
+    const idx = items.findIndex((m) => m.id === unreadMarkerId);
+    return idx >= 0 && items.slice(idx + 1).some((m) => m.authorId === meId && !m.deleted) ? null : unreadMarkerId;
+  }, [items, meId, unreadMarkerId]);
 
   // "อ่านแล้ว N" — seq ที่คนอื่นอ่านถึง เรียงไว้ให้นับเร็ว
   const readSorted = useMemo(() => {
@@ -271,7 +278,7 @@ export function MessageList({
               prev.kind !== "text" ||
               prev.deleted ||
               new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() > GROUP_GAP_MS ||
-              m.id === unreadMarkerId;
+              m.id === markerId;
             return (
               <Fragment key={m.id}>
                 {newDay && (
@@ -279,7 +286,7 @@ export function MessageList({
                     <span className="rounded-full bg-black/10 px-3 py-0.5 text-[11px] font-medium text-(--ink-soft)">{formatDayLabel(m.createdAt)}</span>
                   </div>
                 )}
-                {m.id === unreadMarkerId && (
+                {m.id === markerId && (
                   <div data-unread-marker className="my-2 px-3">
                     <NewDivider />
                   </div>
