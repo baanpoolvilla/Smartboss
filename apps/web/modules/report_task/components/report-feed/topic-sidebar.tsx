@@ -377,12 +377,14 @@ export function TopicSidebar({
   // unless a previous visit (this browser) left some folded shut — see
   // loadCollapsedTopicIds' own comment.
   const [collapsedTopicIds, setCollapsedTopicIds] = useState<Set<string>>(loadCollapsedTopicIds);
+  // กดย่อ/ขยายก่อนเซิร์ฟเวอร์ตอบ — ของที่กดใหม่ชนะ ไม่เอาค่าเก่าจากเซิร์ฟเวอร์มาทับ
+  const collapseTouchedRef = useRef(false);
   useEffect(() => {
     let cancelled = false;
     fetch(COLLAPSED_TOPICS_API)
       .then((r) => (r.ok ? r.json() : null))
       .then((res: { ids: string[] | null } | null) => {
-        if (cancelled || !res) return;
+        if (cancelled || !res || collapseTouchedRef.current) return;
         if (res.ids === null) {
           // ยังไม่เคยเก็บที่เซิร์ฟเวอร์ — เอาของในเครื่อง (ถ้ามี) ขึ้นไปครั้งแรก
           const local = loadCollapsedTopicIds();
@@ -399,6 +401,7 @@ export function TopicSidebar({
     };
   }, []);
   function toggleCollapsed(id: string) {
+    collapseTouchedRef.current = true;
     setCollapsedTopicIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);

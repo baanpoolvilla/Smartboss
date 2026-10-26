@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -347,6 +347,9 @@ export function NewTaskDialog({
   const [completionRule, setCompletionRule] = useState<"all" | "any" | "shared">("all");
   // ช่วยกันทำ — เช็คลิสต์ไม่แยกคน ไม่ต้องเลือกเจ้าของแต่ละข้อ
   const sharedChecklist = taskMode === "group" && assigneeIds.length > 1 && completionRule === "shared";
+  // เจ้าของแต่ละข้อ = คนที่เลือกอยู่ตอนนี้เสมอ — เดิมใช้คนที่เลือกไว้ตอนพิมพ์ข้อนั้นตลอด (เลือก A แล้วเอาออก/สลับเป็นกลุ่ม
+  // รายการยังขึ้น A ทั้งที่ไม่ได้อยู่ในงาน และส่งไปเป็นเจ้าของจริงด้วย) · งานเดี่ยว = ทุกข้อเป็นของคนเดียว · คนที่ถูกเอาออก = คนแรก
+  const ownerOf = (ownerId: string) => (taskMode === "individual" || !assigneeIds.includes(ownerId) ? (assigneeIds[0] ?? "") : ownerId);
   // ตัวเลือกขั้นสูง (เช็คลิสต์ · เดี่ยว/กลุ่ม · หัวข้อโปรเจค · ไฟล์แนบ) — เริ่มพับไว้ทุกครั้ง ไม่จำโหมดล่าสุด
   const [showAdvanced, setShowAdvanced] = useState(false);
   // ติ๊ก "มีเช็คลิสต์" ถึงจะเห็นช่องเพิ่มรายการ — ไม่ติ๊ก = ไม่มีเช็คลิสต์ ไม่กินที่
@@ -592,7 +595,7 @@ export function NewTaskDialog({
       text: c.text,
       done: false,
       // ช่วยกันทำ — ข้อไม่เป็นของใคร (ใครในงานติ๊กก็ได้)
-      ...(sharedChecklist ? {} : { ownerId: c.ownerId || assigneeIds[0] }),
+      ...(sharedChecklist ? {} : { ownerId: ownerOf(c.ownerId) || assigneeIds[0] }),
     }));
     // Only keep overrides for assignees still picked and whose date actually
     // diverges from the shared due date — keeps the field sparse.
@@ -768,7 +771,7 @@ export function NewTaskDialog({
   function addChecklistDraft() {
     const text = newChecklistText.trim();
     if (!text) return;
-    const ownerId = taskMode === "individual" ? (assigneeIds[0] ?? "") : newChecklistOwnerId || assigneeIds[0] || "";
+    const ownerId = ownerOf(newChecklistOwnerId);
     setChecklistItems((prev) => [...prev, { id: `draft-${uuid()}`, text, ownerId }]);
     setNewChecklistText("");
   }
@@ -781,21 +784,7 @@ export function NewTaskDialog({
     setChecklistItems((prev) => prev.map((c) => (c.id === id ? { ...c, ownerId } : c)));
   }
 
-  // เจ้าของแต่ละข้อต้องเป็นคนที่เลือกอยู่ตอนนี้เสมอ — เดิมจำคนที่เลือกไว้ตอนพิมพ์ข้อนั้นตลอด (เลือก A แล้วเอาออก/
-  // สลับเป็นกลุ่ม รายการยังขึ้น A ทั้งที่ไม่ได้อยู่ในงาน และส่งไปเป็นเจ้าของจริงด้วย) · งานเดี่ยว = ทุกข้อเป็นของคนเดียว
-  useEffect(() => {
-    setChecklistItems((prev) => {
-      let changed = false;
-      const next = prev.map((c) => {
-        const ownerId = taskMode === "individual" || !assigneeIds.includes(c.ownerId) ? (assigneeIds[0] ?? "") : c.ownerId;
-        if (ownerId === c.ownerId) return c;
-        changed = true;
-        return { ...c, ownerId };
-      });
-      return changed ? next : prev;
-    });
-    setNewChecklistOwnerId((cur) => (cur && !assigneeIds.includes(cur) ? "" : cur));
-  }, [assigneeIds, taskMode]);
+
 
   // Any of these being filled in means closing the dialog would throw away
   // real work, so a plain click on "ยกเลิก"/overlay/Esc must be confirmed.
@@ -954,9 +943,9 @@ export function NewTaskDialog({
               className="flex-1"
             />
             {taskMode === "group" && assigneeIds.length > 1 && !sharedChecklist && (
-              <Select value={newChecklistOwnerId || assigneeIds[0]!} onValueChange={(v) => v && setNewChecklistOwnerId(v)}>
+              <Select value={ownerOf(newChecklistOwnerId)} onValueChange={(v) => v && setNewChecklistOwnerId(v)}>
                 <SelectTrigger className="w-32 shrink-0">
-                  <SelectValue>{getUser(newChecklistOwnerId || assigneeIds[0]!)?.name ?? "ผู้รับผิดชอบ"}</SelectValue>
+                  <SelectValue>{getUser(ownerOf(newChecklistOwnerId))?.name ?? "ผู้รับผิดชอบ"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {assigneeIds.map((uid) => (
@@ -977,9 +966,9 @@ export function NewTaskDialog({
                   <span className="flex-1 truncate">{c.text}</span>
                   {sharedChecklist ? null : taskMode === "group" && assigneeIds.length > 1 ? (
                     // เปลี่ยนคนของข้อนี้ได้ตรงนี้เลย — ตัวเล็กพอให้รู้ ไม่ต้องลบแล้วพิมพ์ใหม่
-                    <Select value={c.ownerId} onValueChange={(v) => v && setChecklistDraftOwner(c.id, v)}>
+                    <Select value={ownerOf(c.ownerId)} onValueChange={(v) => v && setChecklistDraftOwner(c.id, v)}>
                       <SelectTrigger className="h-6 w-auto shrink-0 gap-1 border-none bg-transparent px-1.5 text-[10px] text-[var(--ink-soft)] shadow-none hover:bg-[var(--bg-soft)]">
-                        <SelectValue>{getUser(c.ownerId)?.name ?? "เลือกคน"}</SelectValue>
+                        <SelectValue>{getUser(ownerOf(c.ownerId))?.name ?? "เลือกคน"}</SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         {assigneeIds.map((uid) => (
@@ -987,8 +976,8 @@ export function NewTaskDialog({
                         ))}
                       </SelectContent>
                     </Select>
-                  ) : taskMode === "group" && c.ownerId ? (
-                    <span className="text-[10px] text-[var(--ink-soft)] shrink-0">{getUser(c.ownerId)?.name}</span>
+                  ) : taskMode === "group" && ownerOf(c.ownerId) ? (
+                    <span className="text-[10px] text-[var(--ink-soft)] shrink-0">{getUser(ownerOf(c.ownerId))?.name}</span>
                   ) : null}
                   <button
                     type="button"

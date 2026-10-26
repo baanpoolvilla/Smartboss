@@ -670,6 +670,9 @@ export function TaskDetailSheet({
   }
 
   // Planner behaviour: Enter adds the item and keeps the field ready for the next.
+  // งานกลุ่มเลือกเจ้าของข้อ (ยังไม่เลือก = คนแรก เหมือนที่ช่องเลือกแสดง) · ช่วยกันทำ ไม่มีช่องเลือก — store ไม่ใส่เจ้าของให้เอง
+  // เดิมส่ง newChecklistOwnerId ตรง ๆ ซึ่งว่างจนกว่าจะกดเลือก ⇒ กดเพิ่มแล้วไม่มีอะไรเกิดขึ้น
+  const checklistAddOwner = task && isShared && task.completionRule !== "shared" ? newChecklistOwnerId || task.assigneeIds[0]! : task?.assigneeIds[0] ?? "";
   function commitChecklistItem(ownerId: string) {
     if (!task || !newChecklistItem.trim() || !ownerId) return;
     addChecklistItem(task.id, newChecklistItem.trim(), ownerId);
@@ -2047,7 +2050,7 @@ export function TaskDetailSheet({
                 <Input
                   value={newChecklistItem}
                   onChange={(e) => setNewChecklistItem(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && commitChecklistItem(isShared ? newChecklistOwnerId : task.assigneeIds[0]!)}
+                  onKeyDown={(e) => e.key === "Enter" && commitChecklistItem(checklistAddOwner)}
                   placeholder="เพิ่มรายการ..."
                   className="h-8 text-sm border-0 border-b border-[var(--line)] rounded-none px-0 shadow-none focus-visible:ring-0 focus-visible:border-[var(--brand-green)] flex-1"
                 />
@@ -2056,7 +2059,7 @@ export function TaskDetailSheet({
                   variant="outline"
                   className="h-8 shrink-0"
                   disabled={!newChecklistItem.trim()}
-                  onClick={() => commitChecklistItem(isShared ? newChecklistOwnerId : task.assigneeIds[0]!)}
+                  onClick={() => commitChecklistItem(checklistAddOwner)}
                 >
                   <Plus className="h-3.5 w-3.5" /> เพิ่ม
                 </Button>
