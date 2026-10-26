@@ -1286,7 +1286,7 @@ export function NewTaskDialog({
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                       <span className="shrink-0 text-xs text-[var(--ink-soft)]">ปิดงานเมื่อ</span>
                       <div
-                        className="inline-grid min-w-[200px] flex-1 grid-cols-3 gap-0.5 rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-0.5 sm:flex-none"
+                        className="inline-flex gap-0.5 rounded-md border border-[var(--line)] bg-[var(--bg-soft)] p-0.5"
                         title="ครบทุกคน: ทุกคนต้องทำส่วนของตัวเองครบ · คนใดคนหนึ่ง: ใครครบก่อน งานปิดทันที · ช่วยกันทำ: ใครติ๊กข้อไหนก็ได้ ครบทุกข้อปิดงาน"
                       >
                         {([
@@ -1299,7 +1299,7 @@ export function NewTaskDialog({
                             type="button"
                             onClick={() => setCompletionRule(o.v)}
                             className={cn(
-                              "rounded-md px-3 py-1 text-xs font-medium transition-colors",
+                              "rounded px-2 py-0.5 text-[11px] font-medium transition-colors",
                               completionRule === o.v ? "bg-white text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
                             )}
                           >
