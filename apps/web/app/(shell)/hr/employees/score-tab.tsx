@@ -162,10 +162,21 @@ export async function renderScoreTab(
                   {card.score}
                 </Td>
                 <Td>
-                  {card.byCategory.length === 0 ? (
+                  {card.byCategory.length === 0 && card.refunds.length === 0 ? (
                     <span className="text-(--ink-soft)">ไม่มีเลย</span>
                   ) : (
-                    <CategoryChipsRow userId={card.userId} rows={card.byCategory} />
+                    <div className="flex flex-wrap gap-1">
+                      {card.byCategory.length > 0 && <CategoryChipsRow userId={card.userId} rows={card.byCategory} />}
+                      {card.refunds.map((r) => (
+                        <span
+                          key={`refund-${r.category}`}
+                          className="rounded-full border border-dashed border-(--line) px-2 py-0.5 text-[11px] text-(--ink-soft)"
+                          title="โดนหักแล้วได้คืนคะแนน — ไม่มีผลกับคะแนนรวม"
+                        >
+                          {r.label} · คืนแล้ว{r.count > 1 ? ` ×${r.count}` : ""}
+                        </span>
+                      ))}
+                    </div>
                   )}
                 </Td>
               </tr>

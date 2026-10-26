@@ -359,6 +359,8 @@ export interface UserScorecard {
   byCategory: { category: string; label: string; points: number; count: number }[];
   /** จำนวนครั้งที่โดนจริง (ไม่รวมที่ยกเลิก/คืนคะแนนแล้ว และไม่นับตัวรายการยกเลิกเอง) */
   eventCount: number;
+  /** หมวดที่โดนหักแล้วได้คืนในรอบนี้ — byCategory ซ่อนหมวดที่คืนครบ (0 ครั้ง 0 คะแนน) จึงแยกไว้ให้ตารางบอกว่าคืนอะไร */
+  refunds: { category: string; label: string; count: number }[];
 }
 
 /**
@@ -471,10 +473,12 @@ export async function buildScorecards(
       bySource: { report_task: 0, maintenance: 0, workforce: 0 },
       byCategory: [],
       eventCount: 0,
+      refunds: [],
     });
   }
 
   const catTotals = new Map<string, Map<string, { points: number; count: number }>>();
+  const refundTotals = new Map<string, Map<string, number>>();
 
   for (const e of events) {
     const card = byUser.get(e.userId);
@@ -492,6 +496,22 @@ export async function buildScorecards(
     const cats = catTotals.get(e.userId)!;
     const prev = cats.get(e.category) ?? { points: 0, count: 0 };
     cats.set(e.category, { points: prev.points + points, count: prev.count + (counts ? 1 : 0) });
+
+    if (!isReversalEvent(e) && isReversed(e)) {
+      if (!refundTotals.has(e.userId)) refundTotals.set(e.userId, new Map());
+      const r = refundTotals.get(e.userId)!;
+      r.set(e.category, (r.get(e.category) ?? 0) + 1);
+    }
+  }
+
+  for (const [userId, cats] of refundTotals) {
+    const card = byUser.get(userId);
+    if (!card) continue;
+    card.refunds = [...cats.entries()].map(([category, count]) => ({
+      category,
+      label: PERFORMANCE_CATEGORIES[category as PerformanceCategory] ?? category,
+      count,
+    }));
   }
 
   for (const [userId, cats] of catTotals) {
