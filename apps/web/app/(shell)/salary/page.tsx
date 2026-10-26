@@ -11,6 +11,9 @@ import { ensureDefaultItems } from "@/modules/salary/lib/items";
 import { salaryPage } from "@/modules/salary/lib/page";
 import { listRuns, listStaff } from "@/modules/salary/lib/views";
 import { bangkokToday, fmtBaht, periodDates, periodLabel, shiftPeriod, thaiDate } from "@/modules/salary/lib/types";
+import { loadRequests } from "@/modules/requests/lib/db";
+import { loadScorePeriodConfig } from "@/lib/score-period-config";
+import { bangkokDay, scorePeriodRange } from "@/lib/score-period";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +44,24 @@ export default async function SalaryHome() {
     return periodDates(p, settings.cutoffDay, settings.payDay).endsOn >= today ? p : shiftPeriod(p, 1);
   })();
   const nextPeriod = runs[0] ? shiftPeriod(runs[0].period, 1) : thisPeriod;
+  const grade = await loadScorePeriodConfig(orgId);
   const d = periodDates(nextPeriod, settings.cutoffDay, settings.payDay);
+  // งวดแรก: ไม่เริ่มก่อนรอบเกรด — รอบเกรดแรกเริ่ม 1 ต.ค. (ก.ย. ตัดแบบเดือนเต็มไปแล้ว) ⇒ ไม่นับ 26–30 ก.ย. ซ้ำกับเงินเดือนแบบเดิม
+  if (runs.length === 0) {
+    const gradeStart = bangkokDay(scorePeriodRange(grade, nextPeriod).from);
+    if (gradeStart > d.startsOn && gradeStart <= d.endsOn) d.startsOn = gradeStart;
+  }
+  // งวดแรกดึง OT ที่อนุมัติแต่ยังไม่จ่าย/เบิกที่ยังไม่หัก "ทั้งหมด" — โชว์ให้ HR ปิดใบที่จ่ายนอกระบบไปแล้วก่อน
+  const carried =
+    runs.length === 0
+      ? await withSalaryTenant(orgId, async (tx) => {
+          const [ot, adv] = await Promise.all([
+            loadRequests(tx, orgId, { kind: "ot", status: "approved", beneficiaryKind: "staff" }, 2000),
+            loadRequests(tx, orgId, { beneficiaryKind: "staff", deductedAt: null, deductAmount: { gt: 0 } }, 2000),
+          ]);
+          return { otDates: ot.filter((r) => r.netAmount - r.paidTotal > 0).map((r) => r.workDate).filter(Boolean), advances: adv.length };
+        })
+      : null;
   const staff = runs.length === 0 ? await listStaff(orgId) : [];
   const noSalary = staff.filter((s) => s.salary === null).length;
   const noBank = staff.filter((s) => s.profile.payChannel === "transfer" && !s.profile.bankAccount && s.salary !== null).length;
@@ -60,6 +80,9 @@ export default async function SalaryHome() {
           <CreateRun
             defaults={{ period: nextPeriod, periodLabel: periodLabel(nextPeriod), ...d }}
             blocked={open ? `งวด ${periodLabel(open.period)} ยังไม่ได้บันทึกจ่าย — ทำให้เสร็จก่อน` : null}
+            grade={grade}
+            lastEndsOn={runs[0]?.endsOn ?? null}
+            carried={carried}
           />
         </div>
 

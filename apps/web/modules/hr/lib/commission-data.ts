@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
 import { buildPeriodScorecards } from "@/lib/performance";
-import { monthRange } from "@/lib/performance-month";
+import { bangkokDay, scorePeriodRange } from "@/lib/score-period";
 import { wfTry, type Employment, type Paged, type Person } from "@/modules/hr/lib/api";
 import {
   commissionGradeOrder,
@@ -64,18 +64,17 @@ async function fetchAll<T>(path: string): Promise<T[] | null> {
 }
 
 /**
- * อีเมลของพนักงานที่ทำงานอยู่ในเดือนนั้น (เริ่มงานก่อนสิ้นเดือน และไม่พ้นสภาพก่อนต้นเดือน)
+ * อีเมลของพนักงานที่ทำงานอยู่ในรอบเกรดนั้น (เริ่มงานก่อนวันตัดรอบ และไม่พ้นสภาพก่อนวันเริ่มรอบ)
+ * เดิมใช้เดือนปฏิทิน ⇒ คนเริ่มงาน 27 ต.ค. (หลังรอบเกรด ต.ค. ปิด) ได้เกรดเต็มและหาร Pool ต.ค. ด้วย ทั้งที่ไม่อยู่ในงวดเงินเดือนนั้น
  * คะแนนผูกกับ core.users ส่วนทะเบียนอยู่ฝั่ง workforce — จับคู่ด้วยอีเมลแบบเดียวกับหน้าทะเบียน
  */
-async function employedEmails(month: string): Promise<Set<string> | null> {
+async function employedEmails(first: string, last: string): Promise<Set<string> | null> {
   const [employments, people] = await Promise.all([
     fetchAll<Employment>("/employments"),
     fetchAll<Person>("/people"),
   ]);
   if (employments === null || people === null) return null;
 
-  const first = `${month}-01`;
-  const last = monthRange(month).to.toISOString().slice(0, 10);
   const personIds = new Set(
     employments
       .filter((e) => e.hired_on <= last && (e.terminated_on === null || e.terminated_on >= first))
@@ -97,11 +96,12 @@ function toObject(value: unknown): Record<string, unknown> {
 export async function loadCommissionMonth(orgId: string, month: string): Promise<CommissionMonth> {
   // เกรดของค่าคอม = รอบเกรดเดียวกับหน้าคะแนน (ตัดวันที่ 25 — score-period.ts)
   const period = await loadScorePeriodConfig(orgId);
+  const range = scorePeriodRange(period, month);
   const [scores, setting, pool, emails, departments] = await Promise.all([
     buildPeriodScorecards(orgId, period, month),
     prisma.commissionSetting.findUnique({ where: { orgId } }),
     prisma.commissionPool.findUnique({ where: { orgId_month: { orgId, month } } }),
-    employedEmails(month),
+    employedEmails(bangkokDay(range.from), bangkokDay(range.to)),
     prisma.department.findMany({ where: { orgId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
 

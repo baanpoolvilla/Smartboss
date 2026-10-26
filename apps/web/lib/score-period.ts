@@ -74,7 +74,7 @@ export function scorePeriodRange(config: ScorePeriodConfig, month: string): { fr
 }
 
 /** "YYYY-MM-DD" ตามเวลาไทยของเวลานั้น */
-function bangkokDay(at: Date): string {
+export function bangkokDay(at: Date): string {
   return new Date(at.getTime() + BANGKOK_OFFSET_MS).toISOString().slice(0, 10);
 }
 
