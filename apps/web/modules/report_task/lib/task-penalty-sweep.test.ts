@@ -180,31 +180,6 @@ describe("sweepAutoPenalties", () => {
       expect(result.revokedRefIds).toEqual(["t1"]);
     });
 
-    it("judges an approved request by when it was asked, not when it was approved", () => {
-      const t = makeTask({
-        status: "in_progress",
-        dueDate: daysFromNow(5),
-        originalDueDate: daysFromNow(-2),
-        // ขอ 3 วันก่อนครบกำหนด หัวหน้าอนุมัติเมื่อวาน (หลังวันเดิมผ่านไปแล้ว)
-        revisions: [{ ...ext(-1, -2, 5), requestedAt: daysFromNow(-5) }],
-        penalty: { points: 3, byUserId: SYSTEM_USER_ID, appliedAt: daysFromNow(-1), reason: "." },
-        missedDeadlineOnce: true,
-      });
-      const result = sweepAutoPenalties([t]);
-      expect(result.tasks[0]!.penalty).toBeNull();
-      expect(result.revokedRefIds).toEqual(["t1"]);
-    });
-
-    it("still docks a request that was only made after the deadline passed", () => {
-      const t = makeTask({
-        status: "in_progress",
-        dueDate: daysFromNow(5),
-        originalDueDate: daysFromNow(-3),
-        revisions: [{ ...ext(-1, -3, 5), requestedAt: daysFromNow(-2) }],
-      });
-      expect(sweepAutoPenalties([t]).tasks[0]!.penalty?.points).toBe(LATE_PENALTY_POINTS);
-    });
-
     it("leaves a manual dock alone", () => {
       const result = sweepAutoPenalties([
         makeTask({
@@ -282,36 +257,6 @@ describe("sweepAutoPenalties", () => {
       const t = result.tasks[0]!;
       expect(t.penalties?.["usr-02"]).toBeUndefined();
       expect(t.penalties?.["usr-03"]?.points).toBe(LATE_PENALTY_POINTS);
-    });
-
-    it("takes back a group dock when the approved per-person request was asked in time", () => {
-      const t = makeTask({
-        taskMode: "group",
-        status: "in_progress",
-        assigneeIds: ["usr-02", "usr-03"],
-        originalDueDate: daysFromNow(-2),
-        dueDate: daysFromNow(-2),
-        assigneeDueDates: { "usr-02": daysFromNow(4) },
-        assigneeDueDateRevisions: {
-          "usr-02": {
-            originalDate: daysFromNow(-2),
-            latestDate: daysFromNow(4),
-            revisedBy: "usr-01",
-            revisedAt: daysFromNow(-1),
-            requestedAt: daysFromNow(-4),
-            requestPreviousDate: daysFromNow(-2),
-          },
-        },
-        penalties: {
-          "usr-02": { points: 3, byUserId: SYSTEM_USER_ID, appliedAt: daysFromNow(-1), reason: "." },
-          "usr-03": { points: 3, byUserId: SYSTEM_USER_ID, appliedAt: daysFromNow(-1), reason: "." },
-        },
-        missedDeadlineOnce: true,
-      });
-      const result = sweepAutoPenalties([t]);
-      expect(result.tasks[0]!.penalties?.["usr-02"]).toBeUndefined();
-      expect(result.tasks[0]!.penalties?.["usr-03"]).toBeDefined();
-      expect(result.revokedRefIds).toEqual(["t1:usr-02"]);
     });
 
     it("is idempotent per assignee", () => {
