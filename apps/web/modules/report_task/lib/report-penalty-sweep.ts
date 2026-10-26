@@ -7,6 +7,9 @@ import {
   roundFrequencyOf,
   postsOfRound,
   attributionRounds,
+  earlyPostsForRound,
+  DEFAULT_EARLY_SUBMIT_DAYS,
+  type EarlySubmitDays,
 } from "@/modules/report_task/lib/submission-rounds";
 import { trackedTopicsOf, iterationBounds, eachDay, type ComplianceStatus } from "@/modules/report_task/lib/report-feed-compliance";
 import { isExemptDate, isLegacyHolidayOnly, type DateExemptions } from "@/modules/report_task/lib/report-feed-exemptions";
@@ -196,7 +199,9 @@ export function roundComplianceStatusServer(
   lock: ReportSubmissionLockSettings,
   weeklyMonthlyGraceDays: number,
   /** วันตัดรอบเกรด — ช่วงส่งย้อนหลังไม่เลยวันตัดรอบ (graceEndWithinPeriod) · null = ไม่ตัด */
-  scorePeriod: ScorePeriodConfig | null = null
+  scorePeriod: ScorePeriodConfig | null = null,
+  /** ส่งล่วงหน้าได้กี่วัน (report-early-submit-days) — ส่งล่วงหน้าแล้ว = ตรงเวลา */
+  earlySubmitDays: EarlySubmitDays = DEFAULT_EARLY_SUBMIT_DAYS
 ): ComplianceStatus {
   if (!roundRunsOnDay(round, day)) return "exempt";
   // วันหยุดเก่าก่อนเปลี่ยนกติกา (เช่น 13/10/2569): ส่งช้า = −1 ตามปกติ · ไม่ส่ง = ไม่หัก (isLegacyHolidayOnly)
@@ -215,6 +220,8 @@ export function roundComplianceStatusServer(
   if (roundInOutage(round, day)) return "on-time";
   // ส่งย้อนหลังหลัง CEO อนุมัติ (report-retro.ts — โพสต์ผ่านการตรวจใน acceptRetroPosts แล้ว) — นับว่าส่งแล้ว
   if (roundPosts.length === 0 && hasRetroSubmission(posts, topic.id, userId, round.id, day)) return "on-time";
+  // ส่งล่วงหน้าภายในช่วงที่ตั้งไว้ — ตรงกับแดชบอร์ด (report-feed-compliance.ts)
+  if (earlyPostsForRound(posts, topic.id, userId, round, day, earlySubmitDays).length > 0) return "on-time";
   if (legacyOnly && roundPosts.length === 0) return "exempt";
   if (roundPosts.length > 0) {
     const onTime = roundPosts.some((p) => minutesOfDay(p.createdAt) <= cutoff || p.lateBadgeHidden);
@@ -287,7 +294,8 @@ export function computeReportPenaltyCandidates(
   weeklyMonthlyGraceDays: number,
   lookbackDays: number,
   notBeforeDay: string,
-  scorePeriod: ScorePeriodConfig | null = null
+  scorePeriod: ScorePeriodConfig | null = null,
+  earlySubmitDays: EarlySubmitDays = DEFAULT_EARLY_SUBMIT_DAYS
 ): ReportPenaltyCandidate[] {
   const tracked = trackedTopicsOf(topics);
   const out: ReportPenaltyCandidate[] = [];
@@ -301,7 +309,7 @@ export function computeReportPenaltyCandidates(
     for (const day of eachDay(startStr, endStr)) {
       for (const round of rounds) {
         for (const u of users) {
-          const status = roundComplianceStatusServer(topic, u.id, round, day, posts, groups, users, exemptions, lock, weeklyMonthlyGraceDays, scorePeriod);
+          const status = roundComplianceStatusServer(topic, u.id, round, day, posts, groups, users, exemptions, lock, weeklyMonthlyGraceDays, scorePeriod, earlySubmitDays);
           if (status !== "missed" && status !== "late") continue;
           out.push({
             userId: u.id,

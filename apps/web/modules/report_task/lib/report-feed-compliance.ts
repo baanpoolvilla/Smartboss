@@ -9,6 +9,8 @@ import {
   postsOfRound,
   attributionRounds,
   roundFrequencyOf,
+  earlyPostsForRound,
+  type EarlySubmitDays,
 } from "@/modules/report_task/lib/submission-rounds";
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
 import { useReportPenaltySettingsStore } from "@/modules/report_task/store/report-penalty-settings-store";
@@ -204,6 +206,18 @@ function postsForRound(topic: ReportTopic, userId: string, round: SubmissionRoun
   return postsOfRound(postsForDay(topic, userId, day, posts), rounds, round.id);
 }
 
+/** โพสต์ที่ส่งล่วงหน้าให้รอบนี้ของวันครบกำหนด `day` (earlyPostsForRound) — ค่าตั้งจาก store เมื่อไม่ส่งมา */
+function earlyPostsFor(
+  topic: ReportTopic,
+  userId: string,
+  round: SubmissionRound,
+  day: string,
+  posts: ReportPost[],
+  cfg: EarlySubmitDays = useReportPenaltySettingsStore.getState().earlySubmitDays
+): ReportPost[] {
+  return earlyPostsForRound(posts, topic.id, userId, round, day, cfg);
+}
+
 /**
  * One person's status in one *round* of one room on one calendar day —
  * `dayComplianceStatus`'s per-round replacement (Phase 1.1): a room with 2
@@ -234,6 +248,8 @@ export function roundComplianceStatus(
   if (roundInOutage(round, day)) return "on-time";
   // ส่งย้อนหลังหลัง CEO อนุมัติ (report-retro.ts) — นับว่าส่งแล้ว
   if (roundPosts.length === 0 && hasRetroSubmission(posts, topic.id, userId, round.id, day)) return "on-time";
+  // ส่งล่วงหน้า (รายสัปดาห์/รายเดือน ภายในช่วงที่ตั้งไว้) = ตรงเวลา แม้วันครบกำหนดจะโพสต์ซ้ำสายก็ตาม
+  if (earlyPostsFor(topic, userId, round, day, posts).length > 0) return "on-time";
   if (legacyOnly && roundPosts.length === 0) return "exempt";
   if (roundPosts.length > 0) {
     // Same lateBadgeHidden allowance as dayComplianceStatus above — this is
@@ -288,7 +304,8 @@ function roundHasAttachmentIssue(
   exemptions?: DateExemptions
 ): boolean {
   if (exemptions && !roundIgnoresDateExemptions(round) && isExemptDate(exemptions, userId, day, { ignoreLegacyHolidays: true })) return false;
-  const roundPosts = postsForRound(topic, userId, round, day, posts);
+  const dayPosts = postsForRound(topic, userId, round, day, posts);
+  const roundPosts = dayPosts.length > 0 ? dayPosts : earlyPostsFor(topic, userId, round, day, posts);
   if (roundPosts.length === 0) return false;
   const required = round.minImages ?? 0;
   return !roundPosts.some((p) => photoCount(p.images) >= required);
@@ -801,8 +818,8 @@ export function todayComplianceSummary(
       for (const round of myRounds) {
         if (exemptions && !roundIgnoresDateExemptions(round) && isExemptDate(exemptions, u.id, today)) continue;
         const roundPosts = postsOfRound(postsForDay(topic, u.id, today, posts), pool, round.id);
-        // ระบบล่มช่วงกำหนดส่ง (report-outage.ts) — นับว่าส่งตรงเวลาให้ทุกคน
-        const outage = roundInOutage(round, today);
+        // ระบบล่มช่วงกำหนดส่ง (report-outage.ts) หรือส่งล่วงหน้าแล้ว — นับว่าส่งตรงเวลา
+        const outage = roundInOutage(round, today) || earlyPostsFor(topic, u.id, round, today, posts).length > 0;
         summary.totalTracked += 1;
         if (roundPosts.length === 0 && !outage) {
           summary.missingToday += 1;
@@ -870,8 +887,8 @@ export function todayStatusEntries(
           roundTime: round.time,
         };
         const roundPosts = postsOfRound(postsForDay(topic, u.id, today, posts), pool, round.id);
-        // ระบบล่มช่วงกำหนดส่ง (report-outage.ts) — นับว่าส่งตรงเวลาให้ทุกคน
-        const outage = roundInOutage(round, today);
+        // ระบบล่มช่วงกำหนดส่ง (report-outage.ts) หรือส่งล่วงหน้าแล้ว — นับว่าส่งตรงเวลา
+        const outage = roundInOutage(round, today) || earlyPostsFor(topic, u.id, round, today, posts).length > 0;
         if (roundPosts.length === 0 && !outage) {
           entries.push({ ...base, status: "missing" });
           continue;
@@ -890,7 +907,13 @@ export function todayStatusEntries(
  * once per round, so a caller that wants "which rooms still owe me
  * something" (not "how many separate things") should de-dupe by topicId
  * itself (see PendingTopicsPanel in page.tsx). */
-export function pendingToday(topics: ReportTopic[], posts: ReportPost[], exemptions?: DateExemptions): PendingTodayEntry[] {
+export function pendingToday(
+  topics: ReportTopic[],
+  posts: ReportPost[],
+  exemptions?: DateExemptions,
+  /** ฝั่งเซิร์ฟเวอร์ (reminder-sweep) ส่งค่าของบริษัทมาเอง — ฝั่ง client อ่านจาก store */
+  earlySubmitDays?: EarlySubmitDays
+): PendingTodayEntry[] {
   const tracked = trackedTopicsOf(topics);
   const today = todayIso();
   const groups = groupsNow();
@@ -907,6 +930,7 @@ export function pendingToday(topics: ReportTopic[], posts: ReportPost[], exempti
         if (roundInOutage(round, today)) continue;
         const roundPosts = postsOfRound(postsForDay(topic, u.id, today, posts), pool, round.id);
         if (roundPosts.length > 0) continue;
+        if (earlyPostsFor(topic, u.id, round, today, posts, earlySubmitDays).length > 0) continue;
         entries.push({
           userId: u.id,
           userName: u.name,

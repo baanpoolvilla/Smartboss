@@ -15,6 +15,7 @@ import { StaleActionNotifSweeper } from "./stale-action-notif-sweeper";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { usePenaltySettingsStore } from "@/modules/report_task/store/penalty-settings-store";
 import { useReportPenaltySettingsStore } from "@/modules/report_task/store/report-penalty-settings-store";
+import { normalizeEarlySubmitDays } from "@/modules/report_task/lib/submission-rounds";
 import { useMeetingStore } from "@/modules/report_task/store/meeting-store";
 import { useLeaveStore } from "@/modules/report_task/store/leave-store";
 import { useOvertimeStore } from "@/modules/report_task/store/overtime-store";
@@ -124,6 +125,13 @@ export function StoreHydrator() {
         store={useReportPenaltySettingsStore}
         select={(s) => s.weeklyMonthlyGraceDays}
         apply={(s, weeklyMonthlyGraceDays) => ({ ...s, weeklyMonthlyGraceDays })}
+      />
+      <ServerStoreSync
+        apiKey="report-early-submit-days"
+        pollMs={SLOW_POLL_MS}
+        store={useReportPenaltySettingsStore}
+        select={(s) => s.earlySubmitDays}
+        apply={(s, earlySubmitDays) => ({ ...s, earlySubmitDays: normalizeEarlySubmitDays(earlySubmitDays) })}
       />
       <ServerStoreSync
         apiKey="attachment-settings"

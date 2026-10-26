@@ -157,6 +157,98 @@ export function roundIgnoresDateExemptions(round: Pick<SubmissionRound, "weekday
   return roundFrequencyOf(round) !== "daily";
 }
 
+/**
+ * "ส่งล่วงหน้า" — รอบรายสัปดาห์/รายเดือนส่งก่อนวันครบกำหนดได้กี่วัน (ตั้งค่า → ห้อง Report)
+ * โพสต์ในช่วงนี้ต้องเลือกรอบไว้ตอนโพสต์ (roundId) เท่านั้น ไม่เดาจากเวลา และนับเป็น "ตรงเวลา" ของ
+ * วันครบกำหนดถัดไป — รอบรายวันไม่มีผล (0 เสมอ)
+ */
+export interface EarlySubmitDays {
+  weekly: number;
+  monthly: number;
+}
+
+export const DEFAULT_EARLY_SUBMIT_DAYS: EarlySubmitDays = { weekly: 1, monthly: 5 };
+
+/** ค่าที่อ่านมาจาก store (อาจยังไม่เคยตั้ง/รูปแบบเก่า) → ค่าที่ใช้ได้ · รายสัปดาห์สูงสุด 6 วัน (ไม่ทับรอบก่อน) */
+export function normalizeEarlySubmitDays(raw: unknown): EarlySubmitDays {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Partial<EarlySubmitDays>;
+  const pick = (v: unknown, max: number, fallback: number) =>
+    typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.min(max, Math.round(v)) : fallback;
+  return {
+    weekly: pick(r.weekly, 6, DEFAULT_EARLY_SUBMIT_DAYS.weekly),
+    monthly: pick(r.monthly, 20, DEFAULT_EARLY_SUBMIT_DAYS.monthly),
+  };
+}
+
+function addDaysStr(day: string, n: number): string {
+  const d = new Date(`${day}T00:00:00`);
+  d.setDate(d.getDate() + n);
+  return localDateStr(d);
+}
+
+/** ส่งล่วงหน้าได้กี่วันสำหรับรอบนี้ — รายวัน = 0 */
+export function earlyDaysOf(round: Pick<SubmissionRound, "weekdays" | "dayOfMonth">, cfg: EarlySubmitDays): number {
+  const f = roundFrequencyOf(round);
+  return f === "weekly" ? cfg.weekly : f === "monthly" ? cfg.monthly : 0;
+}
+
+/**
+ * วันครบกำหนดที่วัน `day` "ส่งล่วงหน้า" ให้ได้ — null เมื่อ `day` เป็นวันครบกำหนดของรอบนี้เอง
+ * (ส่งวันนั้นตามปกติ) หรือยังไกลเกินช่วงส่งล่วงหน้า
+ */
+export function earlyDueDayOf(
+  round: Pick<SubmissionRound, "weekdays" | "createdAt" | "dayOfMonth">,
+  day: string,
+  cfg: EarlySubmitDays
+): string | null {
+  const n = earlyDaysOf(round, cfg);
+  if (n <= 0 || roundRunsOnDay(round, day)) return null;
+  for (let i = 1; i <= n; i++) {
+    const d = addDaysStr(day, i);
+    if (roundRunsOnDay(round, d)) return d;
+  }
+  return null;
+}
+
+/** โพสต์ของ `userId` ที่ส่งล่วงหน้าให้รอบ `round` ของวันครบกำหนด `dueDay` (เลือกรอบไว้ตอนโพสต์เท่านั้น) */
+export function earlyPostsForRound<
+  P extends { topicId: string; authorId: string; createdAt: string; roundId?: string; excludeFromSubmission?: boolean },
+>(
+  posts: readonly P[],
+  topicId: string,
+  userId: string,
+  round: Pick<SubmissionRound, "id" | "weekdays" | "createdAt" | "dayOfMonth">,
+  dueDay: string,
+  cfg: EarlySubmitDays
+): P[] {
+  const n = earlyDaysOf(round, cfg);
+  if (n <= 0) return [];
+  const from = addDaysStr(dueDay, -n);
+  return posts.filter((p) => {
+    if (p.topicId !== topicId || p.authorId !== userId || p.excludeFromSubmission || p.roundId !== round.id) return false;
+    const d = localDateStr(new Date(p.createdAt));
+    return d >= from && d < dueDay && earlyDueDayOf(round, d, cfg) === dueDay;
+  });
+}
+
+/** รอบรายสัปดาห์/รายเดือนที่ user คนนี้ "ส่งล่วงหน้า" ได้ในวัน `day` (ยังไม่ถึงวันครบกำหนด) พร้อมวันครบกำหนด */
+export function earlyRoundsForUserOnDay(
+  topic: Pick<ReportTopic, "submissionRounds" | "cutoffs" | "requiredWeekdays" | "visibility">,
+  userId: string,
+  day: string,
+  groups: SubmitterGroup[],
+  cfg: EarlySubmitDays
+): { round: SubmissionRound; dueDay: string }[] {
+  const out: { round: SubmissionRound; dueDay: string }[] = [];
+  for (const round of effectiveRoundsOf(topic)) {
+    const dueDay = earlyDueDayOf(round, day, cfg);
+    if (!dueDay) continue;
+    if (!resolveRoundSubmitters(round, topic.visibility, groups).includes(userId)) continue;
+    out.push({ round, dueDay });
+  }
+  return out;
+}
+
 /** รอบที่ user "คนนี้" ต้องส่งในวันนั้น (คิดวันในสัปดาห์ + เป็นผู้ส่งของรอบ) */
 export function roundsForUserOnDay(
   topic: Pick<ReportTopic, "submissionRounds" | "cutoffs" | "requiredWeekdays" | "visibility">,

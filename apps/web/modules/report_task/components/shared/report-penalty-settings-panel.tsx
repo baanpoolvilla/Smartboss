@@ -19,6 +19,8 @@ export function ReportPenaltySettingsPanel() {
   const setEnabled = useReportPenaltySettingsStore((s) => s.setEnabled);
   const graceDays = useReportPenaltySettingsStore((s) => s.weeklyMonthlyGraceDays);
   const setGraceDays = useReportPenaltySettingsStore((s) => s.setWeeklyMonthlyGraceDays);
+  const earlyDays = useReportPenaltySettingsStore((s) => s.earlySubmitDays);
+  const setEarlyDays = useReportPenaltySettingsStore((s) => s.setEarlySubmitDays);
 
   return (
     <div className="space-y-4">
@@ -68,6 +70,40 @@ export function ReportPenaltySettingsPanel() {
           แต่ยังส่งทันภายในจำนวนวันนี้ → หัก -1 (สาย) เท่านั้น เลยช่วงนี้ไปแล้วไม่ส่งเลย
           → หัก -2 (พลาด) ถาวร — ไม่มีผลกับรอบรายวัน (รอบรายวันมี &quot;เวลาปิดรับอัตโนมัติ&quot;
           ของตัวเองอยู่แล้วที่ตั้งค่าห้องแต่ละห้อง)
+        </p>
+      </div>
+
+      <div className="pt-2 border-t border-[var(--line)] space-y-2">
+        <div className="text-sm text-[var(--ink)]">ส่งล่วงหน้าก่อนวันครบกำหนดได้</div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <label className="flex items-center gap-2 text-sm text-[var(--ink)]">
+            รายสัปดาห์
+            <input
+              type="number"
+              min={0}
+              max={6}
+              value={earlyDays.weekly}
+              onChange={(e) => setEarlyDays({ weekly: Number(e.target.value) })}
+              className="w-16 rounded-md border border-[var(--line)] px-2 py-1 text-sm"
+            />
+            วัน
+          </label>
+          <label className="flex items-center gap-2 text-sm text-[var(--ink)]">
+            รายเดือน
+            <input
+              type="number"
+              min={0}
+              max={20}
+              value={earlyDays.monthly}
+              onChange={(e) => setEarlyDays({ monthly: Number(e.target.value) })}
+              className="w-16 rounded-md border border-[var(--line)] px-2 py-1 text-sm"
+            />
+            วัน
+          </label>
+        </div>
+        <p className="text-xs text-[var(--ink-soft)]">
+          ในช่วงนี้กล่องโพสต์จะให้เลือกรอบรายสัปดาห์/รายเดือนที่กำลังจะถึง ส่งแล้วนับเป็น &quot;ตรงเวลา&quot;
+          ของวันครบกำหนดนั้นทันที ไม่ต้องส่งซ้ำ และไม่ถูกเตือนอีก — ตั้ง 0 = ส่งได้เฉพาะวันครบกำหนดเหมือนเดิม
         </p>
       </div>
     </div>

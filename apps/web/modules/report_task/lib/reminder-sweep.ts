@@ -1,7 +1,15 @@
 import { departments, users, isOwner } from "@/modules/report_task/lib/directory";
 import { calendarDateOf, localDateStr, now, todayIso } from "@/modules/report_task/lib/now";
 import { pendingToday } from "@/modules/report_task/lib/report-feed-compliance";
-import { effectiveRoundsOf, roundRunsOnDay, roundFrequencyOf, resolveRoundSubmitters } from "@/modules/report_task/lib/submission-rounds";
+import {
+  effectiveRoundsOf,
+  roundRunsOnDay,
+  roundFrequencyOf,
+  resolveRoundSubmitters,
+  earlyPostsForRound,
+  DEFAULT_EARLY_SUBMIT_DAYS,
+  type EarlySubmitDays,
+} from "@/modules/report_task/lib/submission-rounds";
 import { SYSTEM_USER_ID } from "@/modules/report_task/lib/task-penalty-sweep";
 import { DEFAULT_TASK_MORNING_TIME, type ReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
 import type { ReportPost, ReportTopic, SubmissionRound, SubmitterGroup } from "@/modules/report_task/store/report-feed-store";
@@ -168,8 +176,20 @@ export function computeReminders(input: {
    * reads groups for `mode: "groups"` rounds) — defaults to none for callers
    * that don't have it handy. */
   groups?: SubmitterGroup[];
+  /** รอบรายสัปดาห์/รายเดือนส่งล่วงหน้าได้กี่วัน — คนที่ส่งล่วงหน้าแล้วไม่ถูกเตือน */
+  earlySubmitDays?: EarlySubmitDays;
 }): ReminderSweepResult {
-  const { tasks, meetings, todos, topics, posts, settings, alreadySent, groups = [] } = input;
+  const {
+    tasks,
+    meetings,
+    todos,
+    topics,
+    posts,
+    settings,
+    alreadySent,
+    groups = [],
+    earlySubmitDays = DEFAULT_EARLY_SUBMIT_DAYS,
+  } = input;
   const notifications: ReminderNotification[] = [];
   const newSentKeys: string[] = [];
 
@@ -325,7 +345,7 @@ export function computeReminders(input: {
     const today = todayIso();
     const nowMinutes = now().getHours() * 60 + now().getMinutes();
     const topicById = new Map(topics.map((t) => [t.id, t]));
-    const pending = pendingToday(topics, posts);
+    const pending = pendingToday(topics, posts, undefined, earlySubmitDays);
     // Group by (room, round) so a manager summary counts each round once,
     // and the per-person countdown below uses that round's own cutoff time.
     const pendingByTopicRound = new Map<string, typeof pending>();
@@ -420,7 +440,10 @@ export function computeReminders(input: {
         for (const dayLead of dayLeads) {
           const targetDate = addDays(today, dayLead);
           if (!roundRunsOnDay(round, targetDate)) continue;
-          const recipients = resolveRoundSubmitters(round, topic.visibility, groups);
+          // ส่งล่วงหน้าไปแล้ว — ไม่ต้องเตือนคนนั้นอีก (หัวหน้าเห็นจำนวนเฉพาะคนที่ยังไม่ส่ง)
+          const recipients = resolveRoundSubmitters(round, topic.visibility, groups).filter(
+            (userId) => earlyPostsForRound(posts, topic.id, userId, round, targetDate, earlySubmitDays).length === 0
+          );
           if (recipients.length === 0) continue;
           if (settings.report.notifyPending) {
             for (const userId of recipients) {

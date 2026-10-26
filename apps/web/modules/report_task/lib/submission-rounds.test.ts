@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { attributePostToRound, attributionRounds, postsOfRound } from "@/modules/report_task/lib/submission-rounds";
+import {
+  attributePostToRound,
+  attributionRounds,
+  postsOfRound,
+  earlyDueDayOf,
+  earlyPostsForRound,
+  normalizeEarlySubmitDays,
+} from "@/modules/report_task/lib/submission-rounds";
 import type { SubmissionRound } from "@/modules/report_task/store/report-feed-store";
 
 const round = (id: string, time: string): SubmissionRound =>
@@ -43,5 +50,42 @@ describe("attributePostToRound with the day's posts", () => {
     // เฉพาะรอบของคนนี้: เข้ารอบเย็นของตัวเอง
     const pool = attributionRounds([myEvening], [otherDeptMorning, myEvening]);
     expect(attributePostToRound(day[0]!, pool, day)?.id).toBe("my-evening");
+  });
+});
+
+describe("ส่งล่วงหน้า (early submit) for weekly/monthly rounds", () => {
+  const cfg = { weekly: 1, monthly: 5 };
+  const weekly = { ...round("w", "17:00"), weekdays: [5] } as SubmissionRound; // ทุกวันศุกร์ (30/10/2026)
+  const monthly = { ...round("m", "17:00"), dayOfMonth: 30 } as SubmissionRound;
+  const daily = round("d", "17:00");
+  const p = (day: string, roundId?: string, extra: object = {}) => ({
+    topicId: "t",
+    authorId: "u",
+    createdAt: `${day}T20:00:00`,
+    ...(roundId ? { roundId } : {}),
+    ...extra,
+  });
+
+  it("weekly: only the day before the due date is inside the window", () => {
+    expect(earlyDueDayOf(weekly, "2026-10-29", cfg)).toBe("2026-10-30");
+    expect(earlyDueDayOf(weekly, "2026-10-28", cfg)).toBeNull();
+    expect(earlyDueDayOf(weekly, "2026-10-30", cfg)).toBeNull(); // วันครบกำหนดเอง = ส่งปกติ
+  });
+
+  it("monthly: up to 5 days before; daily never", () => {
+    expect(earlyDueDayOf(monthly, "2026-10-25", cfg)).toBe("2026-10-30");
+    expect(earlyDueDayOf(monthly, "2026-10-24", cfg)).toBeNull();
+    expect(earlyDueDayOf(daily, "2026-10-29", cfg)).toBeNull();
+  });
+
+  it("an early post counts only when it picked that round, inside the window", () => {
+    const posts = [p("2026-10-29", "w"), p("2026-10-29"), p("2026-10-28", "w"), p("2026-10-29", "w", { excludeFromSubmission: true })];
+    expect(earlyPostsForRound(posts, "t", "u", weekly, "2026-10-30", cfg)).toEqual([posts[0]]);
+    expect(earlyPostsForRound(posts, "t", "u", weekly, "2026-10-30", { weekly: 0, monthly: 0 })).toEqual([]);
+  });
+
+  it("settings are clamped and fall back to defaults", () => {
+    expect(normalizeEarlySubmitDays(null)).toEqual({ weekly: 1, monthly: 5 });
+    expect(normalizeEarlySubmitDays({ weekly: 10, monthly: -1 })).toEqual({ weekly: 6, monthly: 5 });
   });
 });

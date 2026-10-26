@@ -34,6 +34,8 @@ export const STORE_KEYS = {
   "report-penalty-settings": "stores/report-penalty-settings.json",
   "report-penalty-enabled-since": "stores/report-penalty-enabled-since.json",
   "report-penalty-grace-days": "stores/report-penalty-grace-days.json",
+  // ของ Smartboss เพิ่มเอง — รอบรายสัปดาห์/รายเดือนส่งล่วงหน้าได้กี่วัน ({ weekly, monthly })
+  "report-early-submit-days": "stores/report-early-submit-days.json",
   // "report-penalty-requests" ไม่อยู่ใน whitelist นี้โดยตั้งใจ — เก็บคำร้อง
   // ขอแก้ไขคะแนน (สถานะ pending/approved/rejected) ต้องเขียนผ่านโค้ดที่ตรวจ
   // สิทธิ์เองเท่านั้น (ดู lib/db/report-penalty-requests.ts) ถ้าอยู่ใน

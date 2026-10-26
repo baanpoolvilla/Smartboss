@@ -1,6 +1,11 @@
 import { create } from "zustand";
 import { todayIso } from "@/modules/report_task/lib/now";
 import type { ScorePeriodConfig } from "@/lib/score-period";
+import {
+  DEFAULT_EARLY_SUBMIT_DAYS,
+  normalizeEarlySubmitDays,
+  type EarlySubmitDays,
+} from "@/modules/report_task/lib/submission-rounds";
 
 interface ReportPenaltySettingsStore {
   /**
@@ -37,12 +42,18 @@ interface ReportPenaltySettingsStore {
    */
   weeklyMonthlyGraceDays: number;
   /**
+   * รอบรายสัปดาห์/รายเดือน "ส่งล่วงหน้า" ได้กี่วันก่อนวันครบกำหนด (นับเป็นตรงเวลา) — ดู
+   * EarlySubmitDays ใน lib/submission-rounds.ts · เก็บแยกคีย์ "report-early-submit-days"
+   */
+  earlySubmitDays: EarlySubmitDays;
+  /**
    * วันตัดรอบเกรดของบริษัท (อ่านอย่างเดียว — /api/report-task/score-period ใน store-hydrator.tsx)
    * ช่วงส่งย้อนหลังข้างบนไม่เลยวันตัดรอบ (graceEndWithinPeriod) ให้แดชบอร์ดตัดสินตรงกับตัวหักคะแนน · null = ยังไม่โหลด
    */
   scorePeriod: ScorePeriodConfig | null;
   setEnabled: (v: boolean) => void;
   setWeeklyMonthlyGraceDays: (n: number) => void;
+  setEarlySubmitDays: (patch: Partial<EarlySubmitDays>) => void;
 }
 
 // Server-synced via ServerStoreSync (apiKey "report-penalty-settings" +
@@ -52,9 +63,11 @@ export const useReportPenaltySettingsStore = create<ReportPenaltySettingsStore>(
   enabled: false,
   enabledSince: null,
   weeklyMonthlyGraceDays: 3,
+  earlySubmitDays: DEFAULT_EARLY_SUBMIT_DAYS,
   scorePeriod: null,
   // ทุกครั้งที่เปิด (แม้จะเคยเปิดมาก่อนแล้วปิดแล้วเปิดใหม่) ตั้ง enabledSince
   // เป็นวันนี้เสมอ — กันไม่ให้ช่วงที่เคยปิดไว้ถูกแบ็คฟิลย้อนหลังตอนเปิดใหม่ด้วย
   setEnabled: (v) => set(v ? { enabled: true, enabledSince: todayIso() } : { enabled: false }),
   setWeeklyMonthlyGraceDays: (n) => set({ weeklyMonthlyGraceDays: Math.max(0, Math.round(n) || 0) }),
+  setEarlySubmitDays: (patch) => set((s) => ({ earlySubmitDays: normalizeEarlySubmitDays({ ...s.earlySubmitDays, ...patch }) })),
 }));

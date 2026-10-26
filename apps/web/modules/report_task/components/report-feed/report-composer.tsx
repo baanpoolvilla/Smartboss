@@ -9,7 +9,15 @@ import { useReportFeedStore, type ReportPostImage, type ReportTopic } from "@/mo
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
 import { photoCount } from "@/modules/report_task/lib/report-attachment-kind";
-import { roundsForUserOnDay, attributePostToRound, effectiveRoundsOf, attributionRounds } from "@/modules/report_task/lib/submission-rounds";
+import {
+  roundsForUserOnDay,
+  attributePostToRound,
+  effectiveRoundsOf,
+  attributionRounds,
+  earlyRoundsForUserOnDay,
+  earlyPostsForRound,
+} from "@/modules/report_task/lib/submission-rounds";
+import { useReportPenaltySettingsStore } from "@/modules/report_task/store/report-penalty-settings-store";
 import { effectiveHardCutoffTime, isPastHardCutoff } from "@/modules/report_task/lib/report-cutoff";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { isExemptDate } from "@/modules/report_task/lib/report-feed-exemptions";
@@ -200,20 +208,37 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   // above), same exemption the room-sidebar hover status already honors.
   const complianceExemptions = useReportComplianceExemptions();
   const viewerExemptToday = isExemptDate(complianceExemptions, viewingAsUserId, today);
-  const todayCutoffs = viewerExemptToday
+  const earlySubmitDays = useReportPenaltySettingsStore((s) => s.earlySubmitDays);
+  const dueTodayCutoffs = viewerExemptToday
     ? []
     : [...roundsForUserOnDay(topic, viewingAsUserId, today, submitterGroups)]
         .filter((r) => !fulfilledRoundIds.has(r.id))
+        // ส่งล่วงหน้าไปแล้ว = รอบนี้ของวันนี้ครบแล้ว ไม่ต้องให้เลือกอีก
+        .filter((r) => earlyPostsForRound(allPosts, topic.id, viewingAsUserId, r, today, earlySubmitDays).length === 0)
         .sort((a, b) => roundMinutesOf(a.time) - roundMinutesOf(b.time));
+  // ส่งล่วงหน้า: รอบรายสัปดาห์/รายเดือนที่ใกล้ครบกำหนด (ภายในจำนวนวันที่ตั้งไว้) และยังไม่ได้ส่งล่วงหน้า —
+  // ต่อท้ายรอบของวันนี้ เลือกเองได้ ไม่ใช่ค่าเริ่มต้นถ้าวันนี้มีรอบที่ต้องส่งอยู่แล้ว
+  const earlyDueById = new Map(
+    earlyRoundsForUserOnDay(topic, viewingAsUserId, today, submitterGroups, earlySubmitDays)
+      .filter(({ round, dueDay }) => earlyPostsForRound(allPosts, topic.id, viewingAsUserId, round, dueDay, earlySubmitDays).length === 0)
+      .map(({ round, dueDay }) => [round.id, { round, dueDay }] as const)
+  );
+  const todayCutoffs = [...dueTodayCutoffs, ...[...earlyDueById.values()].map((e) => e.round)];
+  const earlyDueLabel = (roundId: string) => {
+    const due = earlyDueById.get(roundId)?.dueDay;
+    if (!due) return null;
+    const [, m, d] = due.split("-");
+    return `${d}/${m}`;
+  };
   const nowMinutes = now().getHours() * 60 + now().getMinutes();
   // Default pick: the nearest round not yet passed; once every round today
   // is overdue, default to the last one (someone opening the composer after
   // everything's closed is almost always filing the most recent miss, not
   // re-litigating the morning one).
   const defaultRoundId =
-    todayCutoffs.length === 0
-      ? null
-      : (todayCutoffs.find((r) => roundMinutesOf(r.time) >= nowMinutes) ?? todayCutoffs[todayCutoffs.length - 1])!.id;
+    dueTodayCutoffs.length === 0
+      ? (todayCutoffs[0]?.id ?? null)
+      : (dueTodayCutoffs.find((r) => roundMinutesOf(r.time) >= nowMinutes) ?? dueTodayCutoffs[dueTodayCutoffs.length - 1])!.id;
   const activeRoundId = selectedRoundId && todayCutoffs.some((r) => r.id === selectedRoundId) ? selectedRoundId : defaultRoundId;
   const activeRound = todayCutoffs.find((r) => r.id === activeRoundId) ?? null;
   // 1 round today → picked automatically, no picker shown (C4's own
@@ -226,10 +251,11 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   //  - มีรอบก่อนหน้าที่เลยเวลาแล้วแต่ยังไม่ได้ส่ง ⇒ อาจเป็นรายงานของรอบนั้น (เจอจริง:
   //    รายงานเช้าโพสต์ 9:37 ระบบเลือกรอบ Evening ให้ คนโพสต์ไม่ทันเห็น — รอบเช้าเลย
   //    กลายเป็นขาดส่ง ทั้งที่ส่งแล้ว) — มีปุ่มสลับไปรอบนั้นได้ทันที
-  const activeRoundLate = !!activeRound && !excludeFromSubmission && nowMinutes > roundMinutesOf(activeRound.time);
+  const activeRoundEarlyDue = activeRound ? earlyDueLabel(activeRound.id) : null;
+  const activeRoundLate = !!activeRound && !activeRoundEarlyDue && !excludeFromSubmission && nowMinutes > roundMinutesOf(activeRound.time);
   const missedEarlierRounds =
-    activeRound && !excludeFromSubmission
-      ? todayCutoffs.filter(
+    activeRound && !activeRoundEarlyDue && !excludeFromSubmission
+      ? dueTodayCutoffs.filter(
           (r) => r.id !== activeRound.id && roundMinutesOf(r.time) < roundMinutesOf(activeRound.time) && nowMinutes > roundMinutesOf(r.time)
         )
       : [];
@@ -251,7 +277,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   const retroExpired = !!retro && now().getTime() >= new Date(retro.retroDeadline).getTime();
   const submissionLocked = retro
     ? retroExpired
-    : !excludeFromSubmission && !viewerExemptToday && isPastHardCutoff(hardCutoff, nowMinutes);
+    : !excludeFromSubmission && !viewerExemptToday && !activeRoundEarlyDue && isPastHardCutoff(hardCutoff, nowMinutes);
   function doSubmit() {
     const cleanSections = sections
       .map((s) => ({
@@ -362,7 +388,9 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
           {!retro && !showRoundPicker && activeRound && (
             <span className="flex items-center gap-1 text-[11px] font-medium text-[var(--ink-soft)] bg-[var(--bg-soft)] rounded-full px-2 py-0.5">
               <Clock className="h-3 w-3" />
-              {wt("currentRound")} &quot;{activeRound.label}&quot; ({activeRound.time})
+              {activeRoundEarlyDue
+                ? `ส่งล่วงหน้า "${activeRound.label}" (ครบกำหนด ${activeRoundEarlyDue})`
+                : <>{wt("currentRound")} &quot;{activeRound.label}&quot; ({activeRound.time})</>}
               {minImagesRequired > 0 && ` · ${wt("minPhotos", { n: minImagesRequired })}`}
             </span>
           )}
@@ -398,7 +426,8 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
               {wt("whichRound")}
             </span>
             {todayCutoffs.map((r) => {
-              const late = nowMinutes > roundMinutesOf(r.time);
+              const earlyDue = earlyDueLabel(r.id);
+              const late = !earlyDue && nowMinutes > roundMinutesOf(r.time);
               const selected = r.id === activeRoundId;
               return (
                 <button
@@ -427,7 +456,8 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
                   )}
                 >
                   {selected ? <Check className="h-3 w-3 shrink-0" strokeWidth={3} /> : late && <TriangleAlert className="h-3 w-3 shrink-0" />}
-                  {r.label} ({r.time}){late && <b className="font-semibold">&nbsp;· {wt("late")}</b>}
+                  {earlyDue ? `${r.label} · ส่งล่วงหน้า (ครบ ${earlyDue})` : `${r.label} (${r.time})`}
+                  {late && <b className="font-semibold">&nbsp;· {wt("late")}</b>}
                 </button>
               );
             })}

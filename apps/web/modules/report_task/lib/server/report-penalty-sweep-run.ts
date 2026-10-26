@@ -5,6 +5,7 @@ import { prisma } from "@smartboss/database";
 
 import { loadPerformanceSettings, type PerformanceEventInput } from "@/lib/performance";
 import { createStoreIfAbsent, readStore } from "@/modules/report_task/lib/db/org-store";
+import { normalizeEarlySubmitDays } from "@/modules/report_task/lib/submission-rounds";
 import { listDirectory } from "@/modules/report_task/lib/db/employee-directory";
 import { buildDateExemptions } from "@/modules/report_task/lib/report-feed-exemptions";
 import { listHolidayEvents, listLeaveEvents, listOvertimeEvents, orgHolidaysAreLeaveCredit } from "@/modules/report_task/lib/db/workforce-calendar";
@@ -183,7 +184,8 @@ export async function runReportPenaltySweep(orgId: string, actorId: string | nul
     // ตัดสินทั้งช่วง lookback เพื่อใช้ "คืน" — การหักใหม่ยังกรองด้วย notBeforeDay ในลูปข้างล่าง
     reconcileFloorDay < notBeforeDay ? reconcileFloorDay : notBeforeDay,
     // ส่งย้อนหลังได้ไม่เลย 23:59 ของวันตัดรอบเกรด — ไม่ส่ง = −2 ทันนับในรอบนั้น
-    scorePeriod
+    scorePeriod,
+    normalizeEarlySubmitDays((await readStore<unknown>(orgId, "report-early-submit-days")).data)
   );
 
   // "สถานะที่ควร active อยู่ตอนนี้" ต่อ refId — มาจาก candidates (พลาด/สาย)

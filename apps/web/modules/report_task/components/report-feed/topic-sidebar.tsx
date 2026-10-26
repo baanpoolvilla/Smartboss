@@ -41,7 +41,15 @@ import { uploadCompressedImage } from "@/modules/report_task/lib/image-resize";
 import { useIsMobile } from "@/modules/report_task/hooks/use-is-mobile";
 import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions";
 import { aboutMeCountInPost } from "@/modules/report_task/lib/report-feed-activity";
-import { roundsForUserOnDay, attributePostToRound, effectiveRoundsOf, roundRunsOnDay, attributionRounds } from "@/modules/report_task/lib/submission-rounds";
+import {
+  roundsForUserOnDay,
+  attributePostToRound,
+  effectiveRoundsOf,
+  roundRunsOnDay,
+  attributionRounds,
+  earlyPostsForRound,
+} from "@/modules/report_task/lib/submission-rounds";
+import { useReportPenaltySettingsStore } from "@/modules/report_task/store/report-penalty-settings-store";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { isExemptDate } from "@/modules/report_task/lib/report-feed-exemptions";
 import { todayIso, localDateStr } from "@/modules/report_task/lib/now";
@@ -274,6 +282,7 @@ export function TopicSidebar({
   // the same exemption already honored by the report-feed's own compliance
   // pills (dayComplianceStatus etc.).
   const complianceExemptions = useReportComplianceExemptions();
+  const earlySubmitDays = useReportPenaltySettingsStore((s) => s.earlySubmitDays);
   const settingsGrants = useSettingsAccessStore((s) => s.grants);
   // Creating/deleting a topic (either level) is CEO-only by default — the
   // CEO can delegate it to specific employees via the "สร้าง/ลบหัวข้อ Report"
@@ -1107,7 +1116,10 @@ export function TopicSidebar({
                 localDateStr(new Date(p.createdAt)) === today
             );
             const pool = attributionRounds(roundsForUserOnDay(t, viewingAsUserId, today, submitterGroups), roundsToday);
-            const posted = myPostsToday.some((p) => attributePostToRound(p, pool, myPostsToday)?.id === r.id);
+            const posted =
+              myPostsToday.some((p) => attributePostToRound(p, pool, myPostsToday)?.id === r.id) ||
+              // ส่งล่วงหน้าไปแล้ว (รายสัปดาห์/รายเดือน)
+              earlyPostsForRound(posts, t.id, viewingAsUserId, r, today, earlySubmitDays).length > 0;
             const [h, m] = r.time.split(":").map(Number) as [number, number];
             const cutoffMinutes = h * 60 + m;
             const status: "posted" | "late" | "pending" | "na" = !owesIt

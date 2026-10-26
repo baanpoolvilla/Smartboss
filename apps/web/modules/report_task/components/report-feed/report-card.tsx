@@ -45,7 +45,14 @@ import {
 } from "@/modules/report_task/store/report-feed-store";
 import { cutoffsOnDay, lateCutoffFor, minImagesNow, onTimeCutoffFor } from "@/modules/report_task/lib/report-cutoff";
 import { roundInOutage } from "@/modules/report_task/lib/report-outage";
-import { roundIgnoresDateExemptions, roundsForUserOnDay, attributePostToRound, effectiveRoundsOf, roundFrequencyOf } from "@/modules/report_task/lib/submission-rounds";
+import {
+  roundIgnoresDateExemptions,
+  roundsForUserOnDay,
+  attributePostToRound,
+  effectiveRoundsOf,
+  roundFrequencyOf,
+  earlyDueDayOf,
+} from "@/modules/report_task/lib/submission-rounds";
 import { useReportPenaltySettingsStore } from "@/modules/report_task/store/report-penalty-settings-store";
 import { isExemptDate, isOtOnDayOff } from "@/modules/report_task/lib/report-feed-exemptions";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
@@ -325,6 +332,16 @@ export function ReportCard({
   const onTimeCutoff =
     outageCutoff ?? (!lateCutoff && !post.lateBadgeHidden ? onTimeCutoffFor(post.createdAt, roundCandidatesAtSubmission) : null);
   const weeklyMonthlyGraceDays = useReportPenaltySettingsStore((s) => s.weeklyMonthlyGraceDays);
+  const earlySubmitDays = useReportPenaltySettingsStore((s) => s.earlySubmitDays);
+  // โพสต์ที่เลือกรอบรายสัปดาห์/รายเดือนไว้ก่อนวันครบกำหนด (ช่วงส่งล่วงหน้า — earlyDueDayOf)
+  const earlyFor = (() => {
+    if (!post.roundId || post.excludeFromSubmission || post.retroFor) return null;
+    const round = effectiveRoundsOf(topic).find((r) => r.id === post.roundId);
+    const due = round ? earlyDueDayOf(round, postDay, earlySubmitDays) : null;
+    if (!round || !due) return null;
+    const [, m, dd] = due.split("-");
+    return { round, dueLabel: `${dd}/${m}` };
+  })();
   /*
    * รายงานรายสัปดาห์/รายเดือนที่ส่งตามหลังวันครบกำหนด (ภายใน "เผื่อเวลา") — วันที่โพสต์
    * ไม่มีรอบนั้นวิ่ง (Weekly ครบวันพฤหัส โพสต์วันเสาร์) ป้ายด้านบนเลยไม่เจอรอบให้เทียบ โพสต์
@@ -1069,6 +1086,12 @@ export function ReportCard({
       // out on purpose.
       <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0 text-[10px] leading-4 font-medium bg-[var(--bg-soft)] text-[var(--ink-soft)] border border-[var(--line)]">
         ไม่นับเป็นการส่งรีพอต
+      </span>
+    ) : earlyFor ? (
+      // ส่งล่วงหน้าก่อนวันครบกำหนดของรอบรายสัปดาห์/รายเดือน — นับเป็นตรงเวลาของวันนั้นแล้ว
+      <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0 text-[10px] leading-4 font-medium bg-[var(--accent)] text-[var(--brand-green-dark)] border border-[var(--brand-green)]/20">
+        <Check className="h-2.5 w-2.5" />
+        ส่งล่วงหน้า · รอบ{shortRoundLabel(earlyFor.round.label, topic.name)} · ครบกำหนด {earlyFor.dueLabel}
       </span>
     ) : postDayExempt && roundCandidates.length === 0 ? (
       // Same "why no badge" answer, for the other reason one can
