@@ -346,7 +346,10 @@ async function loadCommissionFor(orgId: string, month: string, items: { name: st
   const pending =
     Date.now() < readyAt.getTime()
       ? `ค่าคอม ${label} ยังไม่ใส่ — เกรดยังไม่ปิด (พร้อม ${readyAt.toLocaleString("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} น.) · กด "ดึงข้อมูลใหม่" หลังจากนั้น`
-      : null;
+      : // อ่านทะเบียนพนักงานไม่ได้ → รายชื่อถอยไปเป็นผู้ใช้ทุกคน (CEO/คนที่ลาออก) แบ่ง Pool ผิดคนเงียบ ๆ — ไม่ใส่ยอดจนอ่านได้
+        data.method === "pool" && data.registry === "all-users"
+        ? `ค่าคอม ${label} ยังไม่ใส่ — อ่านทะเบียนพนักงานไม่ได้ (ระบบบุคคลไม่ตอบ) ถ้าแบ่ง Pool ตอนนี้จะหารให้คนที่ไม่ได้อยู่ในทะเบียน · กด "ดึงข้อมูลใหม่" อีกครั้ง`
+        : null;
   return {
     forUser: (userId: string): CommissionInput | undefined => {
       const m = data.members.find((x) => x.userId === userId);
