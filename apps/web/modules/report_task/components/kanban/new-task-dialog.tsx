@@ -818,6 +818,8 @@ export function NewTaskDialog({
 
   function discardAndClose() {
     setConfirmDiscardOpen(false);
+    // หน้าต่างไม่ถูก unmount ตอนปิด — เดิมไม่ล้าง ⇒ กด "ทิ้งข้อมูล" แล้วเปิดใหม่ ของที่กรอกไว้ยังอยู่ครบ
+    reset();
     onOpenChange(false);
   }
 
