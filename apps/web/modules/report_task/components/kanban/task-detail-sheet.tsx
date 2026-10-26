@@ -279,13 +279,21 @@ export function TaskDetailSheet({
     let id: string | null = null;
     for (let i = task.comments.length - 1; i >= 0 && left > 0; i--) {
       const c = task.comments[i]!;
-      if (c.authorId === viewingAsUserId) continue;
+      // เจอคอมเมนต์ของเราเอง = อ่านถึงตรงนั้นแล้ว — เดิมข้ามไปนับต่อ ⇒ แจ้งเตือนเก่าที่ค้างไม่ได้อ่าน
+      // ดันเส้น NEW ขึ้นไปอยู่เหนือคอมเมนต์ที่เราตอบไปแล้ว
+      if (c.authorId === viewingAsUserId) break;
       id = c.id;
       left--;
     }
     setUnreadMark({ taskId: task.id, id });
   }
-  const unreadMarkerId = unreadMark.taskId === taskId ? unreadMark.id : null;
+  // ตอบหลังเส้นแล้ว (เปิดงานค้างไว้แล้วพิมพ์ตอบ) — เส้นหาย เหมือนแชท (message-list.tsx)
+  const unreadMarkerId = (() => {
+    const id = unreadMark.taskId === taskId ? unreadMark.id : null;
+    if (!id || !task) return id;
+    const idx = task.comments.findIndex((c) => c.id === id);
+    return idx >= 0 && task.comments.slice(idx + 1).some((c) => c.authorId === viewingAsUserId) ? null : id;
+  })();
 
   const [comment, setComment] = useState("");
   const allTasks = useTaskStore((s) => s.tasks);
