@@ -159,6 +159,27 @@ describe("sweepAutoPenalties", () => {
       expect(result.revokedRefIds).toEqual(["t1"]);
     });
 
+    // เจอจริง T-2569-0027: 25/09→02/10 (ทัน) · ส่งกลับ 05/10 เป็น 23/10 (originalDueDate รีเซ็ตเป็น 23/10)
+    // · 09/10 เลื่อนเป็น 15/11 ก่อนถึง 23/10 ⇒ เดิมยังตัดสินด้วย 23/10 แล้วหัก −3
+    it("follows an in-time extension made after a send-back reset", () => {
+      const t = makeTask({
+        status: "in_progress",
+        dueDate: daysFromNow(20),
+        originalDueDate: daysFromNow(-3),
+        revisions: [
+          { ...ext(-31, -31, -24), revisionNumber: 1 },
+          { ...ext(-21, -24, -3), revisionNumber: 2 },
+          { ...ext(-17, -3, 20), revisionNumber: 3 },
+        ],
+        penalty: { points: 3, byUserId: SYSTEM_USER_ID, appliedAt: daysFromNow(-2), reason: "." },
+        missedDeadlineOnce: true,
+      });
+      const result = sweepAutoPenalties([t]);
+      expect(result.tasks[0]!.penalty).toBeNull();
+      expect(result.tasks[0]!.missedDeadlineOnce).toBe(false);
+      expect(result.revokedRefIds).toEqual(["t1"]);
+    });
+
     it("leaves a manual dock alone", () => {
       const result = sweepAutoPenalties([
         makeTask({
