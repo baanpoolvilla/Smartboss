@@ -115,7 +115,13 @@ export function canSeePenaltyStatus(task: Task, viewingAsUserId: string): boolea
  * tick it themselves. Everyone else on a group task can still see a
  * teammate's items, just not check them on their behalf.
  */
-export function canToggleOwnChecklistItem(item: ChecklistItem, viewingAsUserId: string): boolean {
+export function canToggleOwnChecklistItem(
+  item: ChecklistItem,
+  viewingAsUserId: string,
+  task?: { completionRule?: string; assigneeIds: string[] },
+): boolean {
+  // ช่วยกันทำ — ทุกคนในงานติ๊กได้ทุกข้อ
+  if (task?.completionRule === "shared" && task.assigneeIds.includes(viewingAsUserId)) return true;
   return item.ownerId === viewingAsUserId || isOwner(viewingAsUserId);
 }
 

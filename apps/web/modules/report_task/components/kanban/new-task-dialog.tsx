@@ -344,7 +344,9 @@ export function NewTaskDialog({
   // เลือกตัวเองคนเดียวจากช่องเลือกคนเองก็เป็นงานส่วนตัวเหมือนกัน — ขึ้นข้อความบอกใต้ช่องนั้น
   const [personalMode, setPersonalMode] = useState(false);
   // งานกลุ่ม: ปิดงานเมื่อครบทุกคน (ค่าเดิม) หรือคนใดคนหนึ่งเสร็จก็พอ
-  const [completionRule, setCompletionRule] = useState<"all" | "any">("all");
+  const [completionRule, setCompletionRule] = useState<"all" | "any" | "shared">("all");
+  // ช่วยกันทำ — เช็คลิสต์ไม่แยกคน ไม่ต้องเลือกเจ้าของแต่ละข้อ
+  const sharedChecklist = taskMode === "group" && assigneeIds.length > 1 && completionRule === "shared";
   // ตัวเลือกขั้นสูง (เช็คลิสต์ · เดี่ยว/กลุ่ม · หัวข้อโปรเจค · ไฟล์แนบ) — เริ่มพับไว้ทุกครั้ง ไม่จำโหมดล่าสุด
   const [showAdvanced, setShowAdvanced] = useState(false);
   // ติ๊ก "มีเช็คลิสต์" ถึงจะเห็นช่องเพิ่มรายการ — ไม่ติ๊ก = ไม่มีเช็คลิสต์ ไม่กินที่
@@ -589,7 +591,8 @@ export function NewTaskDialog({
       id: `task-chk-${uuid()}`,
       text: c.text,
       done: false,
-      ownerId: c.ownerId || assigneeIds[0],
+      // ช่วยกันทำ — ข้อไม่เป็นของใคร (ใครในงานติ๊กก็ได้)
+      ...(sharedChecklist ? {} : { ownerId: c.ownerId || assigneeIds[0] }),
     }));
     // Only keep overrides for assignees still picked and whose date actually
     // diverges from the shared due date — keeps the field sparse.
@@ -616,7 +619,7 @@ export function NewTaskDialog({
       taskMode,
       assigneeIds,
       ...(taskMode === "group" && mainAssigneeId && assigneeIds.includes(mainAssigneeId) ? { mainAssigneeId } : {}),
-      ...(taskMode === "group" && assigneeIds.length > 1 && completionRule === "any" ? { completionRule: "any" as const } : {}),
+      ...(taskMode === "group" && assigneeIds.length > 1 && completionRule !== "all" ? { completionRule } : {}),
       assignedById: viewingAsUserId,
       departmentIds: derivedDepartmentIds,
       startDate: new Date(startDate).toISOString(),
@@ -929,7 +932,7 @@ export function NewTaskDialog({
             />
             <span className="font-medium">มีเช็คลิสต์</span>
             {checklistOn ? (
-              <span className="text-xs text-[var(--ink-soft)]">({checklistItems.length}{taskMode === "group" ? " · แยกตามคน" : ""})</span>
+              <span className="text-xs text-[var(--ink-soft)]">({checklistItems.length}{sharedChecklist ? " · ช่วยกันทำ" : taskMode === "group" ? " · แยกตามคน" : ""})</span>
             ) : (
               <span className="text-xs text-[var(--ink-soft)]">ไม่บังคับ — ไม่ติ๊ก = ไม่มีเช็คลิสต์</span>
             )}
@@ -948,7 +951,7 @@ export function NewTaskDialog({
               placeholder="เพิ่มรายการเช็คลิสต์..."
               className="flex-1"
             />
-            {taskMode === "group" && assigneeIds.length > 1 && (
+            {taskMode === "group" && assigneeIds.length > 1 && !sharedChecklist && (
               <Select value={newChecklistOwnerId || assigneeIds[0]!} onValueChange={(v) => v && setNewChecklistOwnerId(v)}>
                 <SelectTrigger className="w-32 shrink-0">
                   <SelectValue>{getUser(newChecklistOwnerId || assigneeIds[0]!)?.name ?? "ผู้รับผิดชอบ"}</SelectValue>
@@ -970,7 +973,7 @@ export function NewTaskDialog({
               {checklistItems.map((c) => (
                 <div key={c.id} className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-white px-2.5 py-1.5 text-xs">
                   <span className="flex-1 truncate">{c.text}</span>
-                  {taskMode === "group" && assigneeIds.length > 1 ? (
+                  {sharedChecklist ? null : taskMode === "group" && assigneeIds.length > 1 ? (
                     // เปลี่ยนคนของข้อนี้ได้ตรงนี้เลย — ตัวเล็กพอให้รู้ ไม่ต้องลบแล้วพิมพ์ใหม่
                     <Select value={c.ownerId} onValueChange={(v) => v && setChecklistDraftOwner(c.id, v)}>
                       <SelectTrigger className="h-6 w-auto shrink-0 gap-1 border-none bg-transparent px-1.5 text-[10px] text-[var(--ink-soft)] shadow-none hover:bg-[var(--bg-soft)]">
@@ -1292,12 +1295,13 @@ export function NewTaskDialog({
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                       <span className="shrink-0 text-xs text-[var(--ink-soft)]">ปิดงานเมื่อ</span>
                       <div
-                        className="inline-grid min-w-[200px] flex-1 grid-cols-2 gap-0.5 rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-0.5 sm:flex-none"
-                        title="ครบทุกคน: ทุกคนต้องทำส่วนของตัวเองครบ · คนใดคนหนึ่ง: ใครครบก่อน งานปิดทันที"
+                        className="inline-grid min-w-[200px] flex-1 grid-cols-3 gap-0.5 rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-0.5 sm:flex-none"
+                        title="ครบทุกคน: ทุกคนต้องทำส่วนของตัวเองครบ · คนใดคนหนึ่ง: ใครครบก่อน งานปิดทันที · ช่วยกันทำ: ใครติ๊กข้อไหนก็ได้ ครบทุกข้อปิดงาน"
                       >
                         {([
                           { v: "all", label: "ครบทุกคน" },
                           { v: "any", label: "คนใดคนหนึ่ง" },
+                          { v: "shared", label: "ช่วยกันทำ" },
                         ] as const).map((o) => (
                           <button
                             key={o.v}
@@ -1315,6 +1319,9 @@ export function NewTaskDialog({
                     </div>
                     {completionRule === "any" && (
                       <p className="text-[10px] leading-snug text-[var(--ink-soft)]">ใครทำส่วนของตัวเองครบก่อน งานปิดทันที (ที่เหลือไม่ถูกหักคะแนน)</p>
+                    )}
+                    {completionRule === "shared" && (
+                      <p className="text-[10px] leading-snug text-[var(--ink-soft)]">เช็คลิสต์ไม่แยกคน — ใครในงานติ๊กข้อไหนก็ได้ ครบทุกข้อแล้วงานปิด · เลยกำหนดหักทุกคน</p>
                     )}
 
                   </div>

@@ -130,7 +130,8 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
   const completedCount = completedAssigneeIdsOf(task).length;
   const iAmAssignee = task.assigneeIds.includes(viewingAsUserId);
   // งานกลุ่มที่ไม่มีเช็คลิสต์เลยไม่มี "ส่วนของฉัน" ให้ติ๊ก — ปุ่มวงกลมปิด/เปิดทั้งงานเหมือนงานเดี่ยว
-  const trackPerPerson = isShared && task.checklist.length > 0;
+  // ช่วยกันทำ — ไม่มีส่วนของใคร ปุ่มวงกลมปิดทั้งงานเหมือนงานเดี่ยว (ต้องติ๊กครบทุกข้อก่อน)
+  const trackPerPerson = isShared && task.checklist.length > 0 && task.completionRule !== "shared";
   const myPartDone = trackPerPerson ? (task.completedAssigneeIds ?? []).includes(viewingAsUserId) : isDone;
   // Only the owner (CEO) can hand out any sticker — the picker itself is
   // gated to isOwner below, so anyone who reaches this list is already the
@@ -355,7 +356,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
           {isShared && (
             <p className="text-[11px] text-[var(--ink)] mt-0.5">
               {completedCount}/{task.assigneeIds.length} คนเสร็จแล้ว
-              <span className="text-[var(--ink-soft)]"> · {task.completionRule === "any" ? "คนใดคนหนึ่งก็ปิดงาน" : "ต้องครบทุกคน"}</span>
+              <span className="text-[var(--ink-soft)]"> · {task.completionRule === "any" ? "คนใดคนหนึ่งก็ปิดงาน" : task.completionRule === "shared" ? "ช่วยกันทำ" : "ต้องครบทุกคน"}</span>
             </p>
           )}
         </div>

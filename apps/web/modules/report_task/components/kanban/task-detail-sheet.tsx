@@ -624,7 +624,7 @@ export function TaskDetailSheet({
     .reduce((a, b) => (b > a ? b : a), minReviseDate);
   const minPerPersonDate = perPersonTargetId ? toDateInput(task.assigneeDueDates?.[perPersonTargetId] ?? task.dueDate) : minReviseDate;
   // งานกลุ่ม: ขั้นต่ำรายคน = วันนี้ หรือกำหนดเดิมของคนนั้นถ้าช้ากว่า (วันรายคนอาจก่อน dueDate ของทั้งงาน)
-  const rejectAnyRule = task.completionRule === "any";
+  const rejectAnyRule = task.completionRule === "any" || task.completionRule === "shared";
   const rejectPersonMin = (uid: string) => {
     const eff = toDateInput(task.assigneeDueDates?.[uid] ?? task.dueDate);
     return todayIso() > eff ? todayIso() : eff;
@@ -956,7 +956,9 @@ export function TaskDetailSheet({
             return (
               <div className="rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-3">
                 <p className="text-xs font-medium text-[var(--ink-soft)]">
-                  {task.completionRule === "any"
+                  {task.completionRule === "shared"
+                    ? `ช่วยกันทำ — ใครในงานติ๊กข้อไหนก็ได้ ครบทุกข้อแล้วงานปิด (${task.checklist.filter((c) => c.done).length}/${task.checklist.length} ข้อ)`
+                    : task.completionRule === "any"
                     ? `ปิดงานเมื่อคนใดคนหนึ่งเสร็จ — ${how} งานปิดทันที ไม่ต้องรอคนอื่น`
                     : `${completedCount}/${task.assigneeIds.length} คนเสร็จแล้ว — ${how} เพื่อปิดส่วนของคุณ (งานปิดเมื่อครบทุกคน)`}
                 </p>
@@ -1173,12 +1175,14 @@ export function TaskDetailSheet({
                   <span
                     className="rounded-full border border-[var(--line)] bg-[var(--bg-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--ink-soft)]"
                     title={
-                      task.completionRule === "any"
+                      task.completionRule === "shared"
+                        ? "ใครในงานติ๊กข้อไหนก็ได้ ติ๊กครบทุกข้อแล้วงานปิด"
+                        : task.completionRule === "any"
                         ? "ใครทำส่วนของตัวเองครบก่อน งานปิดทันที"
                         : "ทุกคนต้องทำส่วนของตัวเองครบ งานถึงจะปิด"
                     }
                   >
-                    ปิดงานเมื่อ: {task.completionRule === "any" ? "คนใดคนหนึ่งเสร็จ" : "ครบทุกคน"}
+                    ปิดงานเมื่อ: {task.completionRule === "shared" ? "ช่วยกันทำ (ครบทุกข้อ)" : task.completionRule === "any" ? "คนใดคนหนึ่งเสร็จ" : "ครบทุกคน"}
                   </span>
                   <span className="text-[10px] text-[var(--ink-soft)]">
                     เสร็จแล้ว {completedCount}/{assignees.length} คน
@@ -1941,7 +1945,7 @@ export function TaskDetailSheet({
             {(() => {
               const checklistOwnerIds = isShared ? task.assigneeIds : [task.assigneeIds[0]!];
               const renderItem = (c: (typeof task.checklist)[number], showOwner = false) => {
-                const canToggle = canToggleOwnChecklistItem(c, viewingAsUserId);
+                const canToggle = canToggleOwnChecklistItem(c, viewingAsUserId, task);
                 // รายการเก่าที่ไม่มีเจ้าของ = ของผู้รับผิดชอบคนแรก (งานเดี่ยวมีคนเดียวอยู่แล้ว)
                 const ownerName = c.ownerId ? (getUser(c.ownerId)?.name ?? c.ownerId) : (getUser(task.assigneeIds[0] ?? "")?.name ?? "");
                 return (
@@ -1954,7 +1958,7 @@ export function TaskDetailSheet({
                         c.done ? "bg-[var(--chart-green)] border-[var(--chart-green)]" : "border-[var(--line)]",
                         canToggle ? "hover:border-[var(--brand-green)]" : "opacity-50 cursor-not-allowed"
                       )}
-                      title={!canToggle ? "ติ๊กได้เฉพาะเจ้าของรายการนี้" : undefined}
+                      title={!canToggle ? (task.completionRule === "shared" ? "ติ๊กได้เฉพาะคนในงานนี้" : "ติ๊กได้เฉพาะเจ้าของรายการนี้") : undefined}
                       aria-label={c.done ? `ทำเครื่องหมาย "${c.text}" ว่ายังไม่เสร็จ` : `ทำเครื่องหมาย "${c.text}" ว่าเสร็จแล้ว`}
                     >
                       {c.done && <Check className="h-3 w-3 text-white" />}
@@ -1981,6 +1985,8 @@ export function TaskDetailSheet({
                 );
               };
 
+              // ช่วยกันทำ — รายการเดียวรวม ไม่แยกคน ไม่มีชื่อเจ้าของ
+              if (task.completionRule === "shared") return task.checklist.map((c) => renderItem(c, false));
               if (!isShared) {
                 // งานเดี่ยวหน้าตาเดียวกับงานกลุ่ม (ชื่อเจ้าของนำหน้า ข้อความชิดขวา) จะได้ไม่สับสน
               return task.checklist.map((c) => renderItem(c, true));
@@ -2054,7 +2060,7 @@ export function TaskDetailSheet({
                 >
                   <Plus className="h-3.5 w-3.5" /> เพิ่ม
                 </Button>
-                {isShared && (
+                {isShared && task.completionRule !== "shared" && (
                   <Select value={newChecklistOwnerId || task.assigneeIds[0]!} onValueChange={(v) => v && setNewChecklistOwnerId(v)}>
                     <SelectTrigger className="w-32 h-8 text-xs shrink-0">
                       <SelectValue>{getUser(newChecklistOwnerId || task.assigneeIds[0]!)?.name ?? "ผู้รับผิดชอบ"}</SelectValue>

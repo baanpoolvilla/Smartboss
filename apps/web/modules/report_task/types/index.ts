@@ -228,7 +228,7 @@ export interface Task {
   completedAssigneeIds?: string[];
   /** งานกลุ่มปิดเมื่อไหร่ — "all" (ค่าเดิม/ไม่ตั้ง) = ทุกคนทำส่วนของตัวเองครบ, "any" = คนใดคนหนึ่งครบก็ปิดงานได้
    * (คนที่เหลือไม่ถูกหักคะแนนเพราะงานปิดแล้ว) ใช้เฉพาะงานกลุ่มที่มีผู้รับผิดชอบตั้งแต่ 2 คน */
-  completionRule?: "all" | "any";
+  completionRule?: "all" | "any" | "shared";
   /** Sign-off on a "เสร็จสิ้น" task — set once the assigner/dept head/CEO
    * clicks "ผ่าน" after checking the work. Purely informational (doesn't
    * gate status, scoring, or anything else) — a task sits "รอตรวจสอบ" until
@@ -322,7 +322,7 @@ export interface TaskRecurrenceTemplate {
   taskMode: "individual" | "group";
   assigneeIds: string[];
   mainAssigneeId?: string;
-  completionRule?: "all" | "any";
+  completionRule?: "all" | "any" | "shared";
   assignedById: string;
   departmentIds: string[];
   dueTime?: string;

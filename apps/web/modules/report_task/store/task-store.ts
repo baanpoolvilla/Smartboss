@@ -161,7 +161,7 @@ function sendBackPatch(t: Task, onlyAssigneeId?: string): Partial<Task> {
 function rejectGroupReview(t: Task, newDate: string, reason: string, actorId: string, assigneeDates?: Record<string, string>): Task {
   const fallbackDay = newDate.slice(0, 10);
   const sentBack =
-    (t.completionRule ?? "all") === "any" || !assigneeDates
+    (t.completionRule ?? "all") !== "all" || !assigneeDates
       ? t.assigneeIds
       : t.assigneeIds.filter((uid) => uid in assigneeDates);
   if (sentBack.length === 0) return t;
@@ -247,16 +247,16 @@ function applyChecklistDerivedCompletion(
   actorUserId: string,
   manuallyDone: string[] = t.completedAssigneeIds ?? [],
 ): Task {
-  const nextCompleted = deriveCompletedAssigneeIds(t.assigneeIds, nextChecklist, manuallyDone);
-  const prevCompleted = t.completedAssigneeIds ?? [];
   const rule = t.completionRule ?? "all";
+  const nextCompleted = deriveCompletedAssigneeIds(t.assigneeIds, nextChecklist, manuallyDone, rule);
+  const prevCompleted = t.completedAssigneeIds ?? [];
   const allDone = isDoneByRule(t.assigneeIds, nextCompleted, rule);
   const now = new Date().toISOString();
 
   if (allDone && t.status !== "done") {
     logActivity(
       actorUserId,
-      rule === "any" ? "เสร็จสิ้น (มีคนเสร็จแล้ว)" : "เสร็จสิ้น (ครบทุกคน)",
+      rule === "any" ? "เสร็จสิ้น (มีคนเสร็จแล้ว)" : rule === "shared" ? "เสร็จสิ้น (ช่วยกันติ๊กครบทุกข้อ)" : "เสร็จสิ้น (ครบทุกคน)",
       t.title,
       t.id,
       `${nextCompleted.length}/${t.assigneeIds.length} คน`
@@ -1370,7 +1370,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
           if (t.id !== taskId) return t;
           const nextChecklist = [
             ...t.checklist,
-            { id: `${taskId}-chk-${new Date().toISOString().replace(/\D/g, "")}`, text, done: false, ownerId },
+            // ช่วยกันทำ — ข้อไม่เป็นของใคร
+            { id: `${taskId}-chk-${new Date().toISOString().replace(/\D/g, "")}`, text, done: false, ...(t.completionRule === "shared" ? {} : { ownerId }) },
           ];
           return applyChecklistDerivedCompletion(t, nextChecklist, actorId);
         }),

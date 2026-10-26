@@ -9,8 +9,9 @@ import type { ChecklistItem } from "@/modules/report_task/types";
  * at all (checklists are optional at creation) is finished by hand instead;
  * see isTaskFullyDone.
  */
-/** งานกลุ่มปิดเมื่อ: "all" = ทุกคนทำส่วนของตัวเองครบ (ค่าเดิม), "any" = คนใดคนหนึ่งครบก็ปิดงานได้ */
-export type CompletionRule = "all" | "any";
+/** งานกลุ่มปิดเมื่อ: "all" = ทุกคนทำส่วนของตัวเองครบ (ค่าเดิม), "any" = คนใดคนหนึ่งครบก็ปิดงานได้,
+ * "shared" = ช่วยกันทำ — เช็คลิสต์ไม่แยกคน ใครในงานก็ติ๊กข้อไหนก็ได้ ครบทุกข้อ = ทุกคนเสร็จ */
+export type CompletionRule = "all" | "any" | "shared";
 
 /** ตามกติกา rule แล้วงานนี้ถือว่าครบหรือยัง เมื่อรู้แล้วว่าใครทำส่วนตัวเองครบบ้าง */
 export function isDoneByRule(assigneeIds: string[], completedIds: string[], rule: CompletionRule = "all"): boolean {
@@ -29,7 +30,10 @@ export function deriveCompletedAssigneeIds(
   assigneeIds: string[],
   checklist: ChecklistItem[],
   manuallyDone: string[] = [],
+  rule: CompletionRule = "all",
 ): string[] {
+  // ช่วยกันทำ: ไม่มีส่วนของใคร — ครบทุกข้อ = ทุกคนเสร็จพร้อมกัน (เลยกำหนด = หักทุกคน ตามที่ตกลง 26/10/2569)
+  if (rule === "shared" && checklist.length > 0) return checklist.every((c) => c.done) ? [...assigneeIds] : [];
   return assigneeIds.filter((id) => {
     const mine = checklist.filter((c) => c.ownerId === id);
     if (mine.length === 0) return manuallyDone.includes(id);
@@ -54,7 +58,7 @@ export function isTaskFullyDone(
   if (assigneeIds.length === 0) return false;
   // งานที่ไม่มีเช็คลิสต์เลย (เช็คลิสต์ไม่บังคับแล้ว) ไม่มีอะไรให้ติ๊กเป็นเงื่อนไข — เลื่อนเป็น "เสร็จสิ้น" เองได้
   if (checklist.length === 0) return true;
-  return isDoneByRule(assigneeIds, deriveCompletedAssigneeIds(assigneeIds, checklist, manuallyDone), rule);
+  return isDoneByRule(assigneeIds, deriveCompletedAssigneeIds(assigneeIds, checklist, manuallyDone, rule), rule);
 }
 
 /**
