@@ -82,17 +82,20 @@ export function penaltyDueDate(task: Pick<Task, "originalDueDate" | "revisions">
   const revisions = [...(task.revisions ?? [])].sort((a, b) => a.revisedAt.localeCompare(b.revisedAt));
   const start = revisions[0]?.previousDate ?? task.originalDueDate;
   let due = start;
+  // วันที่ rejectReview / เปิดงานกลับ ย้าย originalDueDate ไปให้ (ส่งทันกำหนดเดิมแล้ว) — นับเป็นเส้นตาย
+  // ที่ใช้ได้ระหว่างไล่ chain ด้วย ไม่งั้นเลื่อนกำหนดต่อจากวันนั้น (ก่อนถึง) ถูกตัดทิ้งเพราะเทียบกับวันเก่า
+  const floor = task.originalDueDate !== start ? dueDay(task.originalDueDate) : -Infinity;
   for (const r of revisions) {
     // ตั้งกำหนดส่งเป็นวันที่ผ่านไปแล้ว ณ ตอนแก้ = พิมพ์ผิด ไม่ใช่เส้นตายจริง — ข้ามไป
     // (เจอจริง: ขอเลื่อน 30/09 → 04/09 ตั้งใจ 04/10 แก้กลับเป็น 04/10 วันเดียวกัน
     // แต่ chain หยุดที่ 04/09 ⇒ โดนหัก −3 ทั้งที่ไม่เคยเลยกำหนดจริง)
     if (dueDay(r.newDate) < localDay(r.revisedAt)) continue;
-    if (localDay(r.revisedAt) > dueDay(due)) break;
+    if (localDay(r.revisedAt) > Math.max(dueDay(due), floor)) break;
     due = r.newDate;
   }
   // rejectReview moves originalDueDate forward itself when the assignee had
   // met their deadline (see task-store.ts) — honour that reset too.
-  if (task.originalDueDate !== start && dueDay(task.originalDueDate) > dueDay(due)) {
+  if (floor > dueDay(due)) {
     due = task.originalDueDate;
   }
   return due;

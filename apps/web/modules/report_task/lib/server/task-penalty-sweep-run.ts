@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { recordPerformanceEvents, revokePerformanceEvents, type PerformanceEventInput } from "@/lib/performance";
 import { readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
 import { readTasks, writeTasks } from "@/modules/report_task/lib/db/task-repo";
-import { LATE_PENALTY_POINTS, sweepAutoPenalties } from "@/modules/report_task/lib/task-penalty-sweep";
+import { LATE_PENALTY_POINTS, penaltyDueDate, sweepAutoPenalties } from "@/modules/report_task/lib/task-penalty-sweep";
 import type { ActivityItem, Task } from "@/modules/report_task/types";
 import { prisma } from "@smartboss/database";
 import { bangkokToday, formatThaiDate, spawnDueRounds, type SpawnedRound } from "@/modules/report_task/lib/task-recurrence";
@@ -138,6 +138,9 @@ export async function runTaskPenaltySweep(orgId: string, actorId: string | null)
   const dockEvents: PerformanceEventInput[] = [];
   for (const task of result.tasks) {
     if (!task.missedDeadlineOnce) continue;
+    // ลงวันที่ = กำหนดส่งที่พลาดจริง (penaltyDueDate) ไม่ใช่ dueDate ปัจจุบัน — เดิมเลื่อนกำหนด
+    // หลังเลยไปแล้ว (23/10 → 30/10) รายการหักไปลงวันที่ 30/10 / 15/11 ⇒ ตกไปอยู่รอบคะแนนเดือนหน้า
+    const missedDue = penaltyDueDate(task);
 
     if (task.penalty) {
       const owner = task.assigneeIds?.[0];
@@ -148,7 +151,7 @@ export async function runTaskPenaltySweep(orgId: string, actorId: string | null)
           source: "report_task",
           category: "task_late",
           points: -Math.abs(task.penalty.points),
-          occurredAt: task.dueDate ? new Date(task.dueDate) : new Date(),
+          occurredAt: missedDue ? new Date(missedDue) : new Date(),
           refType: "task",
           refId: task.id,
           note: task.title,
@@ -165,8 +168,8 @@ export async function runTaskPenaltySweep(orgId: string, actorId: string | null)
         points: -Math.abs(penalty.points),
         occurredAt: task.assigneeDueDates?.[assigneeId]
           ? new Date(task.assigneeDueDates[assigneeId]!)
-          : task.dueDate
-            ? new Date(task.dueDate)
+          : missedDue
+            ? new Date(missedDue)
             : new Date(),
         refType: "task",
         refId: `${task.id}:${assigneeId}`,
