@@ -175,7 +175,7 @@ export function ReportTopicPanels({
   initialFileFilter,
   onOpenPost,
 }: {
-  tab: "files" | "stats";
+  tab: "files" | "stats" | "albums";
   topic: ReportTopic;
   topicPosts: ReportPost[];
   /** Which filter the "ไฟล์" tab opens on — set by a legacy `?tab=album` /
@@ -223,7 +223,8 @@ export function ReportTopicPanels({
   // for (a filename, a link's name, an album).
   const [fileSearch, setFileSearch] = useState("");
   const [fileAuthorId, setFileAuthorId] = useState<string>("all");
-  const [fileFilter, setFileFilter] = useState<FileFilter>(initialFileFilter ?? "all");
+  // แท็บ "อัลบั้ม" ใช้หน้าเดียวกับไฟล์ ล็อกไว้ที่อัลบั้ม · แท็บ "ไฟล์" ไม่มีตัวกรองอัลบั้มแล้ว (ย้ายไปเป็นแท็บ)
+  const [fileFilter, setFileFilter] = useState<FileFilter>(tab === "albums" ? "albums" : initialFileFilter === "albums" ? "all" : (initialFileFilter ?? "all"));
 
   const pinnedLinksAll = useReportFeedStore((s) => s.pinnedLinks);
   const pinLink = useReportFeedStore((s) => s.pinLink);
@@ -568,7 +569,7 @@ export function ReportTopicPanels({
     );
   }
 
-  if (tab === "files") {
+  if (tab === "files" || tab === "albums") {
     // Inside one album the filter row steps aside entirely — you're in a
     // folder now, and the way out is its own back button, same as before
     // this was a filter rather than a tab of its own.
@@ -705,8 +706,9 @@ export function ReportTopicPanels({
 
         {/* Segmented control, scroll-x on a phone rather than wrapping into a
             second row that shifts everything below it. */}
+        {tab === "files" && (
         <div role="tablist" aria-label="ชนิดของไฟล์" className="no-scrollbar -mx-1 mb-3 flex items-center gap-1 overflow-x-auto px-1">
-          {fileFilterOptions.map((opt) => {
+          {fileFilterOptions.filter((opt) => opt.id !== "albums").map((opt) => {
             const Icon = opt.icon;
             const active = fileFilter === opt.id;
             const count = filterCounts[opt.id];
@@ -730,6 +732,7 @@ export function ReportTopicPanels({
             );
           })}
         </div>
+        )}
 
         {fileFilter === "images" && (
           <>

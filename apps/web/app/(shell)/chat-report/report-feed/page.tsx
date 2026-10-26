@@ -40,7 +40,7 @@ import { postMentionsUser } from "@/modules/report_task/lib/report-feed-mentions
 import { safeLocalStorage } from "@/modules/report_task/lib/safe-storage";
 import { lateToastDismissKey, isLateToastDismissed, dismissLateToast } from "@/modules/report_task/lib/late-toast-dismiss";
 import { toast } from "sonner";
-import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronDown, ChevronRight, Clock, FolderOpen, Hash, Lock, MessageSquareText, NotebookPen, Pin, Search, Settings, TriangleAlert, Users, X } from "lucide-react";
+import { ArrowLeft, AtSign, BarChart3, Check, CheckCircle2, ChevronDown, ChevronRight, Clock, FolderHeart, FolderOpen, Hash, Lock, MessageSquareText, NotebookPen, Pin, Search, Settings, TriangleAlert, Users, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avatar";
 import { overlayHistoryState, pushUrlAfterOverlays } from "@/lib/back-to-close";
 
@@ -87,13 +87,15 @@ function pinnedChip(p: ReportPost, onUnpin: (id: string) => void) {
  * accumulates now lives under one "ไฟล์" tab with an explicit filter row
  * (see FileFilter in report-topic-panels.tsx) that says what each pile is.
  */
-type TopicTab = "posts" | "files" | "stats" | "notes";
+type TopicTab = "posts" | "files" | "stats" | "notes" | "albums";
 const topicTabs: { id: TopicTab; label: string; icon: typeof MessageSquareText }[] = [
   { id: "posts", label: "โพสต์", icon: MessageSquareText },
   { id: "files", label: "ไฟล์", icon: FolderOpen },
   { id: "stats", label: "สรุป", icon: BarChart3 },
   // สมุดโน้ตของห้อง (แบบแท็บ Notes ใน Teams) — notes-tab.tsx
   { id: "notes", label: "โน้ต", icon: NotebookPen },
+  // อัลบั้มแยกเป็นแท็บติดกับโน้ต แบบข้อมูลห้องแชท (โน้ต · อัลบั้ม) — เดิมเป็นตัวกรองในแท็บไฟล์ ต้องกดสองชั้น (ผู้ใช้ขอ 26/10/2569)
+  { id: "albums", label: "อัลบั้ม", icon: FolderHeart },
 ];
 
 /**
@@ -251,7 +253,8 @@ function ReportFeedPageInner() {
     // "album"/"links" are filters inside "ไฟล์" now, not tabs — an existing
     // deep link naming one still lands on the right view (see
     // initialFileFilter below), it just opens the tab that now contains it.
-    if (tab === "album" || tab === "links") return "files";
+    if (tab === "album" || tab === "albums") return "albums";
+    if (tab === "links") return "files";
     return tab === "files" || tab === "stats" || tab === "notes" ? tab : "posts";
   });
   const [initialFileFilter] = useState(() => fileFilterForLegacyTab(searchParams.get("tab")) ?? undefined);
@@ -687,8 +690,8 @@ function ReportFeedPageInner() {
         files:
           collectFiles(topicPosts).filter((f) => new Date(f.createdAt).getTime() >= filesCutoffMs(activeTopic.filesRetentionDays)).length +
           collectLinks(topicPosts).length +
-          allPinnedLinks.filter((l) => l.topicId === activeTopic.id).length +
-          allAlbums.filter((a) => a.topicId === activeTopic.id).length,
+          allPinnedLinks.filter((l) => l.topicId === activeTopic.id).length,
+        albums: allAlbums.filter((a) => a.topicId === activeTopic.id).length,
       }
     : {};
 
@@ -1577,6 +1580,7 @@ function ReportFeedPageInner() {
                 <NotesTab key={activeTopic.id} topic={activeTopic} />
               ) : (
                 <ReportTopicPanels
+                  key={activeTab}
                   tab={activeTab}
                   topic={activeTopic}
                   topicPosts={topicPosts}
