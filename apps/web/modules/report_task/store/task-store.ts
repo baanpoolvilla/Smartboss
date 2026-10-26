@@ -114,6 +114,17 @@ function clearedChecklist(checklist: ChecklistItem[]): ChecklistItem[] {
  * เลื่อนกำหนดใหม่ภายในวันนี้ = เลื่อนทันเวลา · ไม่ตั้งวันใหม่ = เลยกำหนดพรุ่งนี้
  * ส่งช้าอยู่แล้ว / กำหนดยังไม่ถึง = ไม่แตะ
  */
+/**
+ * เปิดงาน "เสร็จสิ้น" กลับมาทำผ่าน moveTask (dropdown/ลากการ์ด/ติ๊กออก) หลังกำหนดส่งผ่านไปแล้ว — ต้องตั้ง
+ * กำหนดส่งใหม่ก่อน (ReopenDueDialog) ไม่งั้นงานเปิดอยู่แบบเลยกำหนด · ยังไม่เลยกำหนด = เปิดได้ตรง ๆ เหมือนเดิม
+ */
+export function needsNewDueOnReopen(t: Task): boolean {
+  if (t.status !== "done" || isPersonalTask(t)) return false;
+  const heldTo = penaltyDueDate(t);
+  const dates = t.taskMode === "group" ? t.assigneeIds.map((id) => t.assigneeDueDates?.[id] ?? heldTo) : [heldTo];
+  return dates.some((d) => daysUntil(d) < 0);
+}
+
 function reopenGrace(t: Task): Partial<Task> {
   if (t.status !== "done" || t.missedDeadlineOnce || !finishedTaskOnTime(t)) return {};
   if (daysUntil(penaltyDueDate(t)) >= 0) return {};
@@ -335,6 +346,9 @@ interface TaskStore {
   loaded: boolean;
   filters: TaskFilters;
   selectedTaskId: string | null;
+  /** moveTask ที่รอเลือกกำหนดส่งใหม่ก่อนเปิดงานเสร็จแล้วกลับมา (needsNewDueOnReopen) — ReopenDueDialog แสดง */
+  reopenRequest: { taskId: string; status: TaskStatus } | null;
+  clearReopenRequest: () => void;
   setFilters: (f: Partial<TaskFilters>) => void;
   resetFilters: () => void;
   moveTask: (taskId: string, status: TaskStatus) => void;
@@ -497,9 +511,17 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   loaded: false,
   filters: defaultFilters,
   selectedTaskId: null,
+  reopenRequest: null,
+  clearReopenRequest: () => set({ reopenRequest: null }),
   setFilters: (f) => set((s) => ({ filters: { ...s.filters, ...f } })),
   resetFilters: () => set({ filters: defaultFilters }),
-  moveTask: (taskId, status) =>
+  moveTask: (taskId, status) => {
+    const current = get().tasks.find((t) => t.id === taskId);
+    if (current && status !== "done" && needsNewDueOnReopen(current)) {
+      // ทีละงาน — ลากหลายงานพร้อมกัน งานที่เหลือไม่ขยับ ต้องเปิดทีละงาน
+      if (!get().reopenRequest) set({ reopenRequest: { taskId, status } });
+      return;
+    }
     set((s) => ({
       tasks: s.tasks.map((t) => {
         if (t.id !== taskId || t.status === status) return t;
@@ -540,7 +562,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
           updatedAt: new Date().toISOString(),
         };
       }),
-    })),
+    }));
+  },
   markReviewed: (taskId, actorId) =>
     set((s) => ({
       tasks: s.tasks.map((t) => {

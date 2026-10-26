@@ -16,6 +16,7 @@ import type { User } from "../../types";
 import { AppBarLeadingProvider, useAppBarLeading } from "./app-bar-leading";
 import { StoreHydrator } from "./store-hydrator";
 import { TaskSync } from "./task-sync";
+import { ReopenDueDialog } from "./reopen-due-dialog";
 import { TourOverlay } from "./tour-overlay";
 
 /**
@@ -113,6 +114,7 @@ export function ReportTaskScaffold({
           ไม่งั้นจะโหลดใหม่ทุกครั้งที่เปลี่ยนหน้า */}
       <StoreHydrator />
       <TaskSync />
+      <ReopenDueDialog />
       <TourOverlay />
       {/* <Toaster /> ย้ายไปอยู่ที่ Shell แล้ว (components/shell/shell.tsx) — ครอบทุกโมดูล
           ห้ามวางซ้ำที่นี่ ไม่งั้นทุก toast ในโมดูลนี้จะเด้งขึ้นสองอัน */}

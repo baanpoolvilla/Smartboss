@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { sweepAutoPenalties } from "@/modules/report_task/lib/task-penalty-sweep";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
+import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import type { Task, User } from "@/modules/report_task/types";
@@ -57,26 +58,38 @@ beforeEach(() => {
 });
 
 describe("เปิดงานที่ส่งทันแล้วกลับมาทำ", () => {
-  it("เปลี่ยนสถานะกลับ หลังกำหนดผ่านไป ⇒ ไม่โดนหักวันนี้", () => {
+  beforeEach(() => useTaskStore.setState({ reopenRequest: null }));
+
+  it("เปลี่ยนสถานะกลับ หลังกำหนดผ่านไป ⇒ ยังไม่เปิด รอเลือกวันใหม่ก่อน", () => {
     useTaskStore.setState({ tasks: [doneTask()] });
     useTaskStore.getState().moveTask("t1", "in_progress");
-    const swept = sweepAutoPenalties([getTask()]).tasks[0]!;
-    expect(swept.penalty).toBeFalsy();
-    expect(swept.missedDeadlineOnce).toBeFalsy();
+    expect(getTask().status).toBe("done");
+    expect(useTaskStore.getState().reopenRequest).toEqual({ taskId: "t1", status: "in_progress" });
   });
 
-  it("เปิดกลับแล้วเลื่อนกำหนดวันเดียวกัน ⇒ ยึดวันใหม่ ไม่โดนหัก", () => {
+  it("ยังไม่เลยกำหนด ⇒ เปิดได้ตรง ๆ เหมือนเดิม", () => {
+    useTaskStore.setState({ tasks: [doneTask({ dueDate: iso(day(3)), originalDueDate: iso(day(3)) })] });
+    useTaskStore.getState().moveTask("t1", "in_progress");
+    expect(getTask().status).toBe("in_progress");
+    expect(useTaskStore.getState().reopenRequest).toBeNull();
+  });
+
+  it("ตั้งวันใหม่ผ่านส่งกลับให้แก้ไข ⇒ เปิดงาน ไม่โดนหัก", () => {
     useTaskStore.setState({ tasks: [doneTask()] });
-    useTaskStore.getState().moveTask("t1", "in_progress");
-    useTaskStore.getState().reviseDueDate("t1", iso(day(5)), "ขาดอีกอัน", BOSS, false);
-    const swept = sweepAutoPenalties([getTask()]).tasks[0]!;
-    expect(swept.penalty).toBeFalsy();
+    useTaskStore.getState().reviseDueDate("t1", iso(day(5)), "ขาดอีกอัน", BOSS, true);
+    const t = getTask();
+    expect(t.status).toBe("in_progress");
+    expect(sweepAutoPenalties([t]).tasks[0]!.penalty).toBeFalsy();
   });
 
-  it("ส่งช้าอยู่แล้ว เปิดกลับ ⇒ ยังโดนหักเหมือนเดิม", () => {
-    useTaskStore.setState({ tasks: [doneTask({ completedAt: iso(day(-1)), missedDeadlineOnce: true })] });
-    useTaskStore.getState().moveTask("t1", "in_progress");
-    const swept = sweepAutoPenalties([getTask()]).tasks[0]!;
-    expect(swept.penalty?.points).toBeGreaterThan(0);
+  it("เอาติ๊กเช็คลิสต์ออก ⇒ ได้ถึงสิ้นวันนี้ ไม่โดนหักทันที", () => {
+    useTaskStore.setState({
+      tasks: [doneTask({ checklist: [{ id: "c1", text: "x", done: true, ownerId: A }] })],
+    });
+    useIdentityStore.setState({ viewingAsUserId: A });
+    useTaskStore.getState().toggleChecklistItem("t1", "c1");
+    const t = getTask();
+    expect(t.status).toBe("in_progress");
+    expect(sweepAutoPenalties([t]).tasks[0]!.penalty).toBeFalsy();
   });
 });
