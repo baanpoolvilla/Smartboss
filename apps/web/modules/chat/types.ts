@@ -264,7 +264,7 @@ export interface ChatChannelDetail {
 
 /** หยุดวันนี้แบบไหน (data/off-today.ts) — name = ชื่อประเภทจากโมดูลบุคคล ใช้เป็นคำอธิบายตอนชี้ */
 export interface ChatOffToday {
-  kind: "off" | "holiday" | "leave";
+  kind: "off" | "holiday" | "annual" | "leave";
   name: string;
 }
 

@@ -9,7 +9,8 @@ import type { ChatOffToday } from "../types";
  *
  * หยุดเหมือนกันแต่คนละแบบ (นิยามจากเจ้าของระบบ):
  *   - "off"     = วันหยุดประจำ (Day-Off): ประเภทที่ระบบอนุมัติให้อัตโนมัติ เกณฑ์เดียวกับปฏิทินของรายงาน
- *   - "leave"   = วันลา: ป่วย กิจ พักร้อน ไม่รับค่าจ้าง — ประเภทอื่นทั้งหมดที่ต้องมีคนอนุมัติ
+ *   - "annual"  = ลาพักร้อน (ป้าย ANL) — แยกจาก "ลา" ให้รู้ว่าใช้วันพักร้อน (ผู้ใช้ขอ 26/10/2569) · ดูจากชื่อประเภท
+ *   - "leave"   = วันลาอื่น: ป่วย กิจ ไม่รับค่าจ้าง — ประเภทอื่นทั้งหมดที่ต้องมีคนอนุมัติ
  *   - "holiday" = ใบประเภท Holiday ของคนนั้น (ในปฏิทินทีมขึ้นเป็น "ชื่อ - Holiday") — HR ตั้งโควตาเป็นรายเดือน
  *                 แต่ละคนเลือกวันใช้เอง จึงเป็นของรายคน ไม่ใช่หยุดทั้งบริษัท · ดูจากชื่อประเภท/ชื่อบนปฏิทิน
  * ไม่นับประเภทที่ยังต้องทำงาน (requires_reports เช่น WFH) — วันนั้นเขายังทำงานอยู่
@@ -17,7 +18,8 @@ import type { ChatOffToday } from "../types";
  * อ่านไม่ได้ (ยังไม่เปิดระบบบุคคล ฯลฯ) = ไม่มีใครขึ้นป้าย ไม่ทำให้แชทพัง
  */
 const HOLIDAY_NAME = /holiday|ฮอลิเดย์|นักขัตฤกษ์/i;
-const RANK: Record<ChatOffToday["kind"], number> = { off: 0, holiday: 1, leave: 2 };
+const ANNUAL_NAME = /พักร้อน|annual|vacation/i;
+const RANK: Record<ChatOffToday["kind"], number> = { off: 0, holiday: 1, annual: 2, leave: 2 };
 
 export async function offTodayByUser(orgId: string): Promise<Record<string, ChatOffToday>> {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
@@ -40,7 +42,14 @@ export async function offTodayByUser(orgId: string): Promise<Record<string, Chat
     for (const r of rows) {
       if (!r.user_id) continue;
       const name = (r.type_name ?? "").trim() || "หยุด";
-      const kind: ChatOffToday["kind"] = HOLIDAY_NAME.test(name) || HOLIDAY_NAME.test(r.display_label ?? "") ? "holiday" : r.auto_approve ? "off" : "leave";
+      const kind: ChatOffToday["kind"] =
+        HOLIDAY_NAME.test(name) || HOLIDAY_NAME.test(r.display_label ?? "")
+          ? "holiday"
+          : ANNUAL_NAME.test(name) || ANNUAL_NAME.test(r.display_label ?? "")
+            ? "annual"
+            : r.auto_approve
+              ? "off"
+              : "leave";
       const prev = out[r.user_id];
       // วันเดียวมีหลายใบ (ไม่ควรเกิด) → เอาแบบที่ "หยุดเต็มตัว" กว่า
       if (!prev || RANK[kind] < RANK[prev.kind]) out[r.user_id] = { kind, name };
