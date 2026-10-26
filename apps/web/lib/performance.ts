@@ -329,6 +329,25 @@ export function isReversalEvent(e: { refType?: string | null }): boolean {
   return Boolean(e.refType && (e.refType.endsWith("_undo") || e.refType.endsWith("_correction")));
 }
 
+/** แถวแสดงผลของสติกเกอร์ที่ "ให้" คะแนน (task_manual_dock ที่เป็นบวก) — ไม่ใช่หมวดที่บันทึกจริง */
+export const MANUAL_BONUS_ROW = "task_manual_bonus";
+
+/**
+ * หมวดสำหรับแสดงผล — สติกเกอร์ของหัวหน้าเก็บหมวดเดียว (task_manual_dock) ทั้ง + และ − เดิมรวมเป็นแถว
+ * "หักคะแนนโดยหัวหน้า" แถวเดียว ได้ +1 ก็ขึ้นว่า "หัก 1" / ได้ +1 โดน −1 ขึ้น "หัก 0 ×2" ⇒ แยกตามเครื่องหมาย
+ * รายการยกเลิกมีเครื่องหมายกลับกับของเดิม จึงดูเครื่องหมายของเดิม (−points) ให้ไปอยู่แถวเดียวกัน
+ */
+export function displayCategory(e: { category: string; points: unknown; refType?: string | null }): string {
+  if (e.category !== "task_manual_dock") return e.category;
+  const p = Number(e.points);
+  return (isReversalEvent(e) ? -p : p) > 0 ? MANUAL_BONUS_ROW : e.category;
+}
+
+export function categoryLabel(category: string): string {
+  if (category === MANUAL_BONUS_ROW) return "หัวหน้าให้คะแนนเพิ่ม";
+  return PERFORMANCE_CATEGORIES[category as PerformanceCategory] ?? category;
+}
+
 /** คืนตัวเช็คว่ารายการไหน "ถูกยกเลิกไปแล้ว" จากเหตุการณ์ชุดเดียวกัน */
 //
 // ⚠ จับคู่ต้องรวมหมวด (category) ด้วย — รอบรายงานเดียวกันมีได้ทั้ง "ไม่ส่ง" และ "ส่งสาย"
@@ -494,13 +513,14 @@ export async function buildScorecards(
 
     if (!catTotals.has(e.userId)) catTotals.set(e.userId, new Map());
     const cats = catTotals.get(e.userId)!;
-    const prev = cats.get(e.category) ?? { points: 0, count: 0 };
-    cats.set(e.category, { points: prev.points + points, count: prev.count + (counts ? 1 : 0) });
+    const row = displayCategory(e);
+    const prev = cats.get(row) ?? { points: 0, count: 0 };
+    cats.set(row, { points: prev.points + points, count: prev.count + (counts ? 1 : 0) });
 
     if (!isReversalEvent(e) && isReversed(e)) {
       if (!refundTotals.has(e.userId)) refundTotals.set(e.userId, new Map());
       const r = refundTotals.get(e.userId)!;
-      r.set(e.category, (r.get(e.category) ?? 0) + 1);
+      r.set(displayCategory(e), (r.get(displayCategory(e)) ?? 0) + 1);
     }
   }
 
@@ -509,7 +529,7 @@ export async function buildScorecards(
     if (!card) continue;
     card.refunds = [...cats.entries()].map(([category, count]) => ({
       category,
-      label: PERFORMANCE_CATEGORIES[category as PerformanceCategory] ?? category,
+      label: categoryLabel(category),
       count,
     }));
   }
@@ -520,8 +540,7 @@ export async function buildScorecards(
     card.byCategory = [...cats.entries()]
       .map(([category, v]) => ({
         category,
-        label:
-          PERFORMANCE_CATEGORIES[category as PerformanceCategory] ?? category,
+        label: categoryLabel(category),
         points: v.points,
         count: v.count,
       }))

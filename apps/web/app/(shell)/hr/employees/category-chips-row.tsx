@@ -20,6 +20,10 @@ export interface CategoryRow {
  * พนักงานเองก็โชว์ครบทุกหมวดแบบนี้อยู่แล้ว) แค่ต้องมีที่ให้กดดูจากตารางรวมนี้
  * ด้วยโดยไม่ต้องออกไปหน้าโปรไฟล์
  */
+/** ติดลบ = แดง · บวก (สติกเกอร์ +) = เขียว พร้อมเครื่องหมาย + · 0 = เทา — เหมือน score-breakdown.tsx */
+const pointsColor = (p: number) => (p < 0 ? "var(--danger)" : p > 0 ? "var(--tone-ok)" : "var(--ink-soft)");
+const signed = (p: number) => (p > 0 ? `+${p}` : String(p));
+
 export function CategoryChipsRow({ userId, rows }: { userId: string; rows: CategoryRow[] }) {
   const [open, setOpen] = useState(false);
   const visible = rows.slice(0, 3);
@@ -42,7 +46,7 @@ export function CategoryChipsRow({ userId, rows }: { userId: string; rows: Categ
             key={row.category}
             className="rounded-full border border-(--line) px-2 py-0.5 text-[11px] text-(--ink-soft)"
           >
-            {row.label} <span style={{ color: "var(--danger)" }}>{row.points}</span>
+            {row.label} <span style={{ color: pointsColor(row.points) }}>{signed(row.points)}</span>
             {row.count > 1 ? ` ×${row.count}` : ""}
           </span>
         )
@@ -74,8 +78,8 @@ export function CategoryChipsRow({ userId, rows }: { userId: string; rows: Categ
                 <span className="text-(--ink)">{row.label}</span>
                 <span className="flex shrink-0 items-center gap-2">
                   {row.count > 1 && <span className="text-(--ink-soft)">×{row.count}</span>}
-                  <span className="font-mono font-medium" style={{ color: "var(--danger)" }}>
-                    {row.points}
+                  <span className="font-mono font-medium" style={{ color: pointsColor(row.points) }}>
+                    {signed(row.points)}
                   </span>
                 </span>
               </div>

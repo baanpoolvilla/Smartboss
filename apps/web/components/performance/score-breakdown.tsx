@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 
-import { eventDay, isReversalEvent, PERFORMANCE_CATEGORIES, type PerformanceCategory } from "@/lib/performance";
+import { categoryLabel, displayCategory, eventDay, isReversalEvent, MANUAL_BONUS_ROW } from "@/lib/performance";
 import type { EventDetail } from "@/lib/performance-details";
 import { formatDate } from "@/modules/hr/lib/labels";
 
@@ -94,20 +94,20 @@ export function ScoreBreakdown({
   // ได้คืน หน้านี้กลับว่างเปล่าเหมือนไม่เคยเกิดอะไร ("คืนคะแนนแล้วหน้านี้ยังไม่ขึ้นว่ามีการแก้ไข")
   const restoredByCategory = new Map<string, number>();
   for (const e of events) {
-    if (reversalOf.has(e.id)) restoredByCategory.set(e.category, (restoredByCategory.get(e.category) ?? 0) + 1);
+    if (reversalOf.has(e.id)) restoredByCategory.set(displayCategory(e), (restoredByCategory.get(displayCategory(e)) ?? 0) + 1);
   }
   const allRows: BreakdownRow[] = [
     ...rows,
     ...[...restoredByCategory.keys()]
       .filter((c) => !rows.some((r) => r.category === c))
-      .map((c) => ({ category: c, label: PERFORMANCE_CATEGORIES[c as PerformanceCategory] ?? c, points: 0, count: 0 })),
+      .map((c) => ({ category: c, label: categoryLabel(c), points: 0, count: 0 })),
   ];
   const byCategory = new Map<string, BreakdownEvent[]>();
   // รายการยกเลิกที่จับคู่กับของเดิมได้ ไม่ต้องขึ้นแยกบรรทัด — ของเดิมจะขีดฆ่าแทน
   for (const ev of events.filter((e) => !matched.has(e.id))) {
-    const list = byCategory.get(ev.category) ?? [];
+    const list = byCategory.get(displayCategory(ev)) ?? [];
     list.push(ev);
-    byCategory.set(ev.category, list);
+    byCategory.set(displayCategory(ev), list);
   }
 
   return (
@@ -158,7 +158,7 @@ export function ScoreBreakdown({
                     <span className="w-24 shrink-0 text-(--ink-soft)">{formatDate(workDate)}</span>
                     <span className="min-w-0 flex-1 text-(--ink)">
                       <span className={reversal ? "text-(--ink-soft) line-through" : undefined}>
-                        {ev.note || (points > 0 ? "คืนคะแนน" : row.label)}
+                        {ev.note || (points > 0 && row.category !== MANUAL_BONUS_ROW ? "คืนคะแนน" : row.label)}
                       </span>
                       {reversal && (
                         <span className="mt-0.5 block text-xs font-medium text-(--tone-ok)">

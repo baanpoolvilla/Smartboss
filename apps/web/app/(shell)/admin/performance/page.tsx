@@ -255,8 +255,8 @@ export default async function PerformancePage({
                               title="ดูวันที่และรายละเอียดของแต่ละครั้ง"
                             >
                               {cat.label}{" "}
-                              <span className="font-semibold tabular-nums text-(--tone-danger)">
-                                {cat.points}
+                              <span className={`font-semibold tabular-nums ${cat.points < 0 ? "text-(--tone-danger)" : cat.points > 0 ? "text-(--tone-ok)" : "text-(--ink-soft)"}`}>
+                                {cat.points > 0 ? `+${cat.points}` : cat.points}
                               </span>
                               {cat.count > 1 && (
                                 <span className="text-(--ink-soft)"> ×{cat.count}</span>
