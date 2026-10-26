@@ -181,6 +181,16 @@ function loadCollapsedTopicIds(): Set<string> {
 function saveCollapsedTopicIds(ids: Set<string>) {
   safeLocalStorage.setItem(COLLAPSED_TOPIC_IDS_KEY, JSON.stringify([...ids]));
 }
+// ตัวจริงอยู่ที่เซิร์ฟเวอร์ต่อคน — localStorage อย่างเดียวหายเวลาปิดแอป/เปลี่ยนเครื่อง/เบราว์เซอร์ล้างข้อมูล
+// ("ก่อนปิดแอพออกย่อไว้แล้ว เปิดมาขึ้นลูกย่อยหมดเลย") · ในเครื่องยังเก็บไว้ให้เปิดมาเห็นทันทีก่อนเซิร์ฟเวอร์ตอบ
+const COLLAPSED_TOPICS_API = "/api/report-task/me/collapsed-topics";
+function pushCollapsedTopicIds(ids: Set<string>) {
+  void fetch(COLLAPSED_TOPICS_API, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids: [...ids] }),
+  }).catch(() => {});
+}
 
 function isTopLevel(t: ReportTopic) {
   return !t.parentId;
@@ -367,12 +377,34 @@ export function TopicSidebar({
   // unless a previous visit (this browser) left some folded shut — see
   // loadCollapsedTopicIds' own comment.
   const [collapsedTopicIds, setCollapsedTopicIds] = useState<Set<string>>(loadCollapsedTopicIds);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(COLLAPSED_TOPICS_API)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((res: { ids: string[] | null } | null) => {
+        if (cancelled || !res) return;
+        if (res.ids === null) {
+          // ยังไม่เคยเก็บที่เซิร์ฟเวอร์ — เอาของในเครื่อง (ถ้ามี) ขึ้นไปครั้งแรก
+          const local = loadCollapsedTopicIds();
+          if (local.size > 0) pushCollapsedTopicIds(local);
+          return;
+        }
+        const ids = new Set(res.ids);
+        saveCollapsedTopicIds(ids);
+        setCollapsedTopicIds(ids);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   function toggleCollapsed(id: string) {
     setCollapsedTopicIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       saveCollapsedTopicIds(next);
+      pushCollapsedTopicIds(next);
       return next;
     });
   }
