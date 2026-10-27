@@ -10,6 +10,9 @@ import { assignShiftAction, deleteOtAction, saveOtAction, setDaysOffAction } fro
 import { baht, hoursLabel, minutesToHm, otMinutes, shiftLabel, shiftMonth, shiftOnDate, WEEKDAY_SHORT, type DayCell, type MonthData, type WorkerMonth } from "../lib/types";
 import { TimeEditFix } from "./time-edit-fix";
 
+/** ช่องกะรายวันแบบพิมพ์เวลาเอง — ค่า "t:09:00-17:00" ฝั่ง server แปลงเป็นกะจริง (assignShiftAction) */
+const CUSTOM_PREFIX = "t:";
+const CUSTOM_OPTION = "__custom";
 const WD = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 const MONTHS = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
 
@@ -476,16 +479,22 @@ export function WorkerRoster({ data, canManage, canOverride }: { data: MonthData
 
       {shiftFor && (() => {
         const withEmployment = data.workers.filter((w) => w.employmentId);
-        const shiftSelect = (value: string, onChange: (v: string) => void, id: string, label?: string) => (
+        const shiftSelect = (value: string, onChange: (v: string) => void, id: string, label?: string, allowCustom = false) => (
           <select id={id} aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} className="rounded-lg border border-(--line) bg-(--bg) px-2 py-1">
-            {!data.shifts.some((s) => s.id === value) && <option value="">— เลือกกะ —</option>}
+            {!data.shifts.some((s) => s.id === value) && value !== CUSTOM_OPTION && <option value="">— เลือกกะ —</option>}
             {data.shifts.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name} · {minutesToHm(s.start)}–{minutesToHm(s.end)}
               </option>
             ))}
+            {allowCustom && <option value={CUSTOM_OPTION}>ตั้งเวลาเอง…</option>}
           </select>
         );
+        const customInvalid = shiftFor.week.some((v) => {
+          if (!v.startsWith(CUSTOM_PREFIX)) return false;
+          const [a = "", b = ""] = v.slice(CUSTOM_PREFIX.length).split("-");
+          return !a || !b || b <= a;
+        });
         return (
           <div className="rounded-2xl border border-(--line) bg-(--bg) p-4 text-sm">
             <b>ผูกกะ · {shiftFor.all ? `คนงานทุกคน (${withEmployment.length} คน)` : shiftFor.name}</b>
@@ -503,7 +512,7 @@ export function WorkerRoster({ data, canManage, canOverride }: { data: MonthData
                       type="button"
                       role="radio"
                       aria-checked={shiftFor.perDay === o.v}
-                      onClick={() => setShiftFor({ ...shiftFor, perDay: o.v, week: o.v ? shiftFor.week : Array<string>(7).fill(shiftFor.week[0] ?? "") })}
+                      onClick={() => setShiftFor({ ...shiftFor, perDay: o.v, week: o.v ? shiftFor.week : Array<string>(7).fill(shiftFor.week.find((v) => !v.startsWith(CUSTOM_PREFIX)) ?? "") })}
                       className={cn(
                         "rounded-full border px-3 py-1",
                         shiftFor.perDay === o.v ? "border-(--brand-navy) bg-(--brand-navy)/10 font-semibold text-(--brand-navy)" : "border-(--line) text-(--ink-soft)",
@@ -515,12 +524,35 @@ export function WorkerRoster({ data, canManage, canOverride }: { data: MonthData
                 </div>
                 {shiftFor.perDay ? (
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                    {WEEKDAY_SHORT.map((d, i) => (
-                      <label key={d} className="flex items-center gap-2">
-                        <span className="w-6 shrink-0 font-semibold">{d}</span>
-                        {shiftSelect(shiftFor.week[i] ?? "", (v) => setShiftFor({ ...shiftFor, week: shiftFor.week.map((x, j) => (j === i ? v : x)) }), `dw-shift-${i}`, `กะวัน${d}`)}
-                      </label>
-                    ))}
+                    {WEEKDAY_SHORT.map((d, i) => {
+                      const value = shiftFor.week[i] ?? "";
+                      const setDay = (v: string) => setShiftFor({ ...shiftFor, week: shiftFor.week.map((x, j) => (j === i ? v : x)) });
+                      const custom = value.startsWith(CUSTOM_PREFIX) ? value.slice(CUSTOM_PREFIX.length).split("-") : null;
+                      return (
+                        <div key={d} className="flex flex-wrap items-center gap-2">
+                          <span className="w-6 shrink-0 font-semibold">{d}</span>
+                          {shiftSelect(
+                            custom ? CUSTOM_OPTION : value,
+                            (v) => {
+                              if (v !== CUSTOM_OPTION) return setDay(v);
+                              // เริ่มจากเวลาของกะที่เลือกอยู่ แก้เฉพาะส่วนที่ต่าง
+                              const cur = data.shifts.find((s) => s.id === value) ?? data.shifts.find((s) => shiftFor.week.includes(s.id));
+                              setDay(`${CUSTOM_PREFIX}${minutesToHm(cur?.start ?? 480)}-${minutesToHm(cur?.end ?? 1020)}`);
+                            },
+                            `dw-shift-${i}`,
+                            `กะวัน${d}`,
+                            true,
+                          )}
+                          {custom && (
+                            <span className="flex items-center gap-1">
+                              <input type="time" aria-label={`เข้างานวัน${d}`} value={custom[0] ?? ""} onChange={(e) => setDay(`${CUSTOM_PREFIX}${e.target.value}-${custom[1] ?? ""}`)} className="rounded-lg border border-(--line) bg-(--bg) px-2 py-1" />
+                              –
+                              <input type="time" aria-label={`ออกงานวัน${d}`} value={custom[1] ?? ""} onChange={(e) => setDay(`${CUSTOM_PREFIX}${custom[0] ?? ""}-${e.target.value}`)} className="rounded-lg border border-(--line) bg-(--bg) px-2 py-1" />
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <label className="flex flex-col gap-1">
@@ -528,7 +560,12 @@ export function WorkerRoster({ data, canManage, canOverride }: { data: MonthData
                     {shiftSelect(shiftFor.week[0] ?? "", (v) => setShiftFor({ ...shiftFor, week: Array<string>(7).fill(v) }), "dw-shift")}
                   </label>
                 )}
-                <p className="text-xs text-(--ink-soft)">ไม่มีเวลาที่ต้องการ (เช่น 09:00–17:00) — สร้างกะเพิ่มที่ HR → ตั้งค่า → กะทำงาน แล้วกลับมาเลือก</p>
+                <p className="text-xs text-(--ink-soft)">
+                  {shiftFor.perDay
+                    ? "บางวันเวลาไม่เหมือนกะ (เช่น อาทิตย์เข้า 09:00) — เลือก \"ตั้งเวลาเอง…\" แล้วพิมพ์เวลาเข้า–ออกของวันนั้น"
+                    : "ไม่มีเวลาที่ต้องการ (เช่น 09:00–17:00) — สร้างกะเพิ่มที่ HR → ตั้งค่า → กะทำงาน หรือเลือก \"แยกเวลารายวัน\" แล้วตั้งเวลาเอง"}
+                </p>
+                {customInvalid && <p className="text-xs text-(--tone-warn)">เวลาออกต้องหลังเวลาเข้า (ยังไม่รองรับกะข้ามคืนแบบตั้งเวลาเอง)</p>}
                 <div className="flex flex-wrap items-end gap-3">
                   <label className="flex flex-col gap-1">
                     เริ่มใช้ตั้งแต่
@@ -545,7 +582,7 @@ export function WorkerRoster({ data, canManage, canOverride }: { data: MonthData
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    disabled={pending || shiftFor.week.some((id) => !id)}
+                    disabled={pending || shiftFor.week.some((id) => !id) || customInvalid}
                     onClick={() => {
                       const f = shiftFor;
                       const employmentIds = f.all ? withEmployment.map((w) => w.employmentId!) : [f.employmentId];

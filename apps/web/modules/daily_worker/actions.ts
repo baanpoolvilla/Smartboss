@@ -247,6 +247,86 @@ export async function removeOverrideAction(input: { employmentId: string; date: 
 
 const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
+/** ค่าในช่องกะรายวันที่ขึ้นต้นแบบนี้ = เวลาที่พิมพ์เอง เช่น "t:09:00-17:00" (ไม่ใช่ id ของกะ) */
+const CUSTOM_PREFIX = "t:";
+const CUSTOM_RE = /^t:([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-3]):([0-5]\d)$/;
+
+type WfShift = {
+  id: string;
+  company_id: string;
+  code: string;
+  name: string;
+  start_minutes: number;
+  end_minutes: number;
+  rest_day: boolean;
+  work_policy_id: string | null;
+  status: string;
+  breaks: { start_minutes: number; duration_minutes: number; paid: boolean; auto_deduct: boolean }[];
+};
+
+const hm = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+
+/**
+ * แปลงเวลาที่พิมพ์เองรายวันเป็นกะจริง — ใช้กะเดิมที่เวลาตรงกัน (บริษัท/นโยบายเดียวกับกะหลัก) ถ้ามี
+ * ไม่มีค่อยสร้างใหม่ชื่อเดียวกับกะหลัก คัดลอกนโยบายสาย + เวลาพักที่อยู่ในช่วงเวลาใหม่
+ * กะหลัก = กะแรกในสัปดาห์ที่เลือกจากรายการ (ไม่มีเลย = กะแรกที่ใช้อยู่ของบริษัท ไม่ผูกนโยบาย)
+ */
+async function resolveCustomTimes(
+  wfFetch: <T>(path: string, options?: Parameters<typeof wfFetchRaw>[1]) => Promise<T>,
+  week: string[],
+): Promise<{ week: string[] } | { error: string }> {
+  const { items } = await wfFetch<{ items: WfShift[] }>("/shifts");
+  const base = items.find((s) => week.includes(s.id));
+  const companyId = base?.company_id ?? items.find((s) => s.status === "ACTIVE")?.company_id;
+  if (!companyId) return { error: "ยังไม่มีกะในระบบบุคคล — ให้ HR สร้างกะก่อน" };
+  const created = new Map<string, string>();
+  const out: string[] = [];
+  for (const value of week) {
+    if (!value.startsWith(CUSTOM_PREFIX)) {
+      out.push(value);
+      continue;
+    }
+    const m = CUSTOM_RE.exec(value);
+    if (!m) return { error: "เวลาไม่ถูกต้อง" };
+    const start = Number(m[1]) * 60 + Number(m[2]);
+    const end = Number(m[3]) * 60 + Number(m[4]);
+    if (end <= start) return { error: `เวลาออกต้องหลังเวลาเข้า (${hm(start)}–${hm(end)})` };
+    const key = `${start}-${end}`;
+    const policy = base?.work_policy_id ?? null;
+    const existing =
+      created.get(key) ??
+      items.find((s) => s.company_id === companyId && s.status === "ACTIVE" && !s.rest_day && s.start_minutes === start && s.end_minutes === end && s.work_policy_id === policy)?.id;
+    if (existing) {
+      created.set(key, existing);
+      out.push(existing);
+      continue;
+    }
+    const used = new Set(items.map((s) => s.code.toUpperCase()));
+    let n = 1;
+    while (used.has(`SHIFT${String(n).padStart(2, "0")}`)) n += 1;
+    const code = `SHIFT${String(n).padStart(2, "0")}`;
+    const shift = await wfFetch<{ id: string }>("/shifts", {
+      method: "POST",
+      body: {
+        company_id: companyId,
+        code,
+        name: base?.name ?? `กะ ${hm(start)}–${hm(end)}`,
+        start: hm(start),
+        end: hm(end),
+        work_policy_id: policy,
+        breaks: (base?.breaks ?? [])
+          .filter((b) => b.start_minutes >= start && b.start_minutes + b.duration_minutes <= end)
+          .map((b) => ({ start: hm(b.start_minutes), duration_minutes: b.duration_minutes, paid: b.paid, auto_deduct: b.auto_deduct })),
+      },
+    });
+    // กันรหัสซ้ำถ้าสัปดาห์เดียวมีหลายเวลาใหม่
+    items.push({ id: shift.id, company_id: companyId, code, name: "", start_minutes: start, end_minutes: end, rest_day: false, work_policy_id: policy, status: "ACTIVE", breaks: [] });
+    created.set(key, shift.id);
+    out.push(shift.id);
+  }
+  return { week: out };
+}
+
 /**
  * ผูกกะให้คนงาน (วันหยุดมาจากใบ Day-Off) — ทุกวันกะเดียวกัน หรือแยกรายวัน (`week` จันทร์ → อาทิตย์
  * เช่น อาทิตย์เข้า 09:00) ตารางประจำของระบบบุคคลรองรับรายวันอยู่แล้ว · ใส่หลายคนพร้อมกันได้
@@ -258,6 +338,11 @@ export async function assignShiftAction(input: { employmentIds: string[]; week: 
     const session = await guard(DW_PERMS.manage);
     const ids = [...new Set(input.employmentIds.filter(Boolean))];
     if (ids.length === 0 || input.week.length !== 7 || input.week.some((id) => !id) || !DATE_RE.test(input.from)) return { error: "ข้อมูลไม่ครบ — เลือกกะให้ครบทุกวัน" };
+    if (input.week.some((v) => v.startsWith(CUSTOM_PREFIX))) {
+      const resolved = await resolveCustomTimes(wfFetch, input.week);
+      if ("error" in resolved) return { error: resolved.error };
+      input = { ...input, week: resolved.week };
+    }
     for (const employmentId of ids) {
       await wfFetch("/recurring-work-patterns", {
         method: "POST",
