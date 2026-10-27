@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
+import { useTaskReviewSettingsStore } from "@/modules/report_task/store/task-review-settings-store";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import type { Task, User } from "@/modules/report_task/types";
 
@@ -53,6 +54,7 @@ beforeEach(() => {
   useEmployeeStore.setState({ employees: people });
   useNotificationStore.setState({ notifications: [] });
   useIdentityStore.setState({ viewingAsUserId: STAFF });
+  useTaskReviewSettingsStore.setState({ settings: { headsCanReview: true, extraReviewerIds: [] } });
 });
 
 describe("งานส่งรอตรวจ — ใครได้แจ้งเตือน", () => {
@@ -73,5 +75,14 @@ describe("งานส่งรอตรวจ — ใครได้แจ้�
     useTaskStore.setState({ tasks: [task({ assignedById: "" })] });
     useTaskStore.getState().moveTask("t1", "done");
     expect(forUser(CEO)).toHaveLength(1);
+  });
+
+  it("CEO เป็นผู้ตรวจเพิ่มเติมด้วย แต่ไม่ได้มอบหมาย → CEO ไม่ได้แจ้ง (ผู้ตรวจคนอื่นยังได้)", () => {
+    useTaskReviewSettingsStore.setState({ settings: { headsCanReview: true, extraReviewerIds: [CEO, "reviewer"] } });
+    useTaskStore.setState({ tasks: [task()] });
+    useTaskStore.getState().moveTask("t1", "done");
+    expect(forUser(CEO)).toHaveLength(0);
+    expect(forUser("reviewer")).toHaveLength(1);
+    expect(forUser(BOSS)).toHaveLength(1);
   });
 });

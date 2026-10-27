@@ -70,7 +70,11 @@ function notifyReviewReady(task: Task) {
     : [];
   // CEO/เจ้าของบริษัทยังกดตรวจได้ทุกงาน แต่ไม่แจ้งงานที่ตัวเองไม่ได้มอบหมาย (23/10/2569 "งานที่พี่ไม่ได้มอบหมาย ทำไมยังเตือน ceo")
   // — แจ้งเจ้าของบริษัทเฉพาะเมื่องานนี้ไม่มีใครอื่นจะได้รับแจ้งเลย (ไม่ให้งานค้างรอตรวจเงียบ ๆ)
-  const others = [...heads, ...settings.extraReviewerIds, task.assignedById].filter((id): id is string => Boolean(id));
+  // CEO ที่เป็นหัวหน้าแผนก/ผู้ตรวจเพิ่มเติมด้วย ก็ได้แจ้งเฉพาะงานที่ตัวเองมอบหมายเหมือนกัน (27/10/2569 prod: ยังหลุดทางนี้)
+  const isOwnerId = (id: string) => users.some((u) => u.id === id && u.isOwner);
+  const others = [...heads, ...settings.extraReviewerIds, task.assignedById]
+    .filter((id): id is string => Boolean(id))
+    .filter((id) => id === task.assignedById || !isOwnerId(id));
   const owners = others.length === 0 ? users.filter((u) => u.isOwner).map((u) => u.id) : [];
   const recipients = Array.from(new Set([...others, ...owners]));
   const late =
