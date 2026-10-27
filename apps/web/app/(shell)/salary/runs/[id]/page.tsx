@@ -13,6 +13,7 @@ import { readRates, readSettings, withSalaryTenant } from "@/modules/salary/lib/
 import { salaryPage } from "@/modules/salary/lib/page";
 import { approvalSummary, loadRun, type ChangeItem } from "@/modules/salary/lib/views";
 import { DEFAULT_SSO, TH_MONTH, fmtBaht, periodLabel, rateOn, thaiDate } from "@/modules/salary/lib/types";
+import { WorkDaysLine } from "@/modules/salary/components/work-days";
 
 export const dynamic = "force-dynamic";
 
@@ -313,6 +314,7 @@ export default async function RunPage({ params, searchParams }: { params: Promis
                     <td className="px-3 py-3">
                       <Link data-tour={i === 0 ? "row-name" : undefined} href={`/salary/runs/${run.id}?edit=${l.employmentId}`} className="font-semibold text-(--ink) hover:underline">{l.name}</Link>
                       <div className="text-xs text-(--ink-soft)">{[l.employeeCode, l.department].filter(Boolean).join(" · ")}</div>
+                      <WorkDaysLine info={l.info} />
                       {/* มือถือ: เห็นยอดสุทธิเลยโดยไม่ต้องเลื่อนตารางไปขวา */}
                       <div className="mt-0.5 text-xs tabular-nums text-(--ink) sm:hidden">สุทธิ <strong>{fmtBaht(l.net)}</strong> · เลื่อนตารางดูรายละเอียด →</div>
                       {l.warnings.length > 0 && (

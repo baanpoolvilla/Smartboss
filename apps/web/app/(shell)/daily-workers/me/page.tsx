@@ -5,7 +5,7 @@ import { requireOrg } from "@smartboss/auth";
 
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { bangkokToday, loadMyMonth } from "@/modules/daily_worker/lib/data";
-import { type DayCell } from "@/modules/daily_worker/lib/types";
+import { monthCounts, type DayCell } from "@/modules/daily_worker/lib/types";
 import { MONTHS_SHORT, WEEKDAYS_MON, displayYear, tr, type WorkerLang, type WorkerTextKey } from "@/modules/daily_worker/i18n";
 import { workerLangFor } from "@/modules/daily_worker/lang-server";
 
@@ -63,6 +63,10 @@ export default async function MyWeekPage({ searchParams }: { searchParams: Promi
   const shown = dates.filter((d) => d <= today).map((d) => ({ date: d, c: cellOf(d) }));
   const count = (s: string) => shown.filter((x) => x.c?.s === s).length;
   const otMinutes = shown.reduce((sum, x) => sum + (x.c?.ot?.minutes ?? 0), 0);
+  // ทั้งเดือนของวันสุดท้ายที่ผ่านมาแล้วในสัปดาห์นี้ (สัปดาห์คร่อมเดือน = เดือนหลัง)
+  const lastShown = dates[6]! > today ? today : dates[6]!;
+  const monthMine = loaded[months.indexOf(lastShown.slice(0, 7))];
+  const mc = monthMine ? monthCounts(monthMine.worker.cells) : null;
 
   return (
     <AppScaffold title={t("menuMyWeek")} width="max-w-lg">
@@ -100,6 +104,27 @@ export default async function MyWeekPage({ searchParams }: { searchParams: Promi
             </div>
           ))}
         </div>
+
+        {mc && (
+          <div className="rounded-2xl border border-(--line) bg-(--bg) p-3">
+            <p className="pb-2 text-xs font-semibold text-(--ink-soft)">
+              {tr(lang, "monthSummary", { month: `${MONTHS_SHORT[lang][Number(lastShown.slice(5, 7)) - 1]} ${displayYear(lang, Number(lastShown.slice(0, 4)))}` })}
+            </p>
+            <div className="grid grid-cols-4 gap-2 text-center">
+              {[
+                { label: t("present"), value: tr(lang, "days", { n: mc.worked }) },
+                { label: t("dayOff"), value: tr(lang, "days", { n: mc.off + mc.leave }) },
+                { label: t("absent"), value: tr(lang, "days", { n: mc.absent }) },
+                { label: "OT", value: mc.otDays ? `${tr(lang, "days", { n: mc.otDays })} · ${hours(lang, mc.otMinutes)}` : tr(lang, "days", { n: 0 }) },
+              ].map((x) => (
+                <div key={x.label}>
+                  <p className="text-xs text-(--ink-soft)">{x.label}</p>
+                  <p className="text-sm font-bold tabular-nums">{x.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {!hasShift && <p className="rounded-xl bg-(--tone-warn)/10 p-3 text-sm text-(--tone-warn)">{t("noShiftYet")}</p>}
 

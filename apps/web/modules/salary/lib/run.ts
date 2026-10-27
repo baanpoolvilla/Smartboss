@@ -35,8 +35,14 @@ export interface Actor {
 
 export interface LineInfo {
   workedDays: number;
+  /** รวมวันหยุด (Day-Off) ด้วย — รอบเก่าที่ไม่มี offDays แสดงเป็น "ลา" ทั้งก้อน */
   leaveDays: number;
   lateCount: number;
+  /** สรุปวันทำงาน (สลิป/หน้ารอบ) — รอบที่คำนวณก่อน 27/10/2569 ไม่มี */
+  offDays?: number;
+  absentDays?: number;
+  otDays?: number;
+  otMinutes?: number;
   overrides: { sso?: Override; tax?: Override; commission?: Override };
   /** ใบเบิกล่วงหน้าที่เลื่อนไปหักงวดหน้า */
   deferAdvances: string[];

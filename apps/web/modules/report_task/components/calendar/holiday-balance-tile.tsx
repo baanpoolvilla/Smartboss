@@ -59,3 +59,38 @@ export function HolidayBalanceTile({ balance, onOpen }: { balance: HolidayBalanc
     </button>
   );
 }
+
+export interface MyWorkDays {
+  tracked: boolean;
+  workedDays?: number;
+  lateDays?: number;
+  absentDays?: number;
+  otDays?: number;
+  otMinutes?: number;
+}
+
+/**
+ * วันมาทำงาน / ขาด / OT ของตัวเองในช่วงที่ปฏิทินแสดง (api/report-task/hr/my-work-days) — ของใครของมัน
+ * null ระหว่างโหลด · tracked=false = ไม่ได้ผูกทะเบียนพนักงาน ⇒ ไม่แสดงช่อง
+ */
+export function useMyWorkDays(start: Date, end: Date): MyWorkDays | null {
+  const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const key = `${ymd(start)}_${ymd(end)}`;
+  const [loaded, setLoaded] = useState<{ key: string; data: MyWorkDays } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const [from, to] = key.split("_");
+    fetch(`/api/report-task/hr/my-work-days?from=${from}&to=${to}`)
+      .then((r) => (r.ok ? r.json() : { tracked: false }))
+      .then((data: MyWorkDays) => {
+        if (!cancelled) setLoaded({ key, data });
+      })
+      .catch(() => {
+        if (!cancelled) setLoaded({ key, data: { tracked: false } });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [key]);
+  return loaded?.key === key ? loaded.data : null;
+}

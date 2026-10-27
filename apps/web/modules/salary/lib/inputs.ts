@@ -57,7 +57,7 @@ export interface StaffInput {
   ytd: { taxable: number; tax: number; sso: number; periods: number; gapPeriods: number };
   /** ยอดยกมาที่กรอกไว้ (ใช้ตอนคำนวณงวดนี้) — เก็บลงบรรทัดไว้ให้สลิปแสดงยอดสะสมทั้งปีได้ถูก */
   opening: { income: number; tax: number; sso: number } | null;
-  info: { workedDays: number; leaveDays: number; lateCount: number };
+  info: { workedDays: number; leaveDays: number; lateCount: number; offDays: number; absentDays: number; otDays: number; otMinutes: number };
 }
 
 interface EmpRow {
@@ -115,9 +115,11 @@ export async function loadPeriodInputs(
       startsOn,
       endsOn,
     );
-    const leaves = await wtx.$queryRawUnsafe<{ employment_id: string; starts_on: string; ends_on: string; half_day_start: boolean; half_day_end: boolean; paid: boolean }[]>(
+    const leaves = await wtx.$queryRawUnsafe<{ employment_id: string; starts_on: string; ends_on: string; half_day_start: boolean; half_day_end: boolean; paid: boolean; day_off: boolean }[]>(
       `SELECT l.employment_id::text AS employment_id, to_char(l.starts_on, 'YYYY-MM-DD') AS starts_on, to_char(l.ends_on, 'YYYY-MM-DD') AS ends_on,
-              l.half_day_start, l.half_day_end, lt.paid
+              l.half_day_start, l.half_day_end, lt.paid,
+              -- วันหยุด (Day-Off/Holiday อนุมัติอัตโนมัติ) แยกจากการลา — เกณฑ์เดียวกับปฏิทินทีม (workforce-calendar.ts)
+              (lt.auto_approve AND NOT lt.requires_reports) AS day_off
          FROM workforce.leave_requests l
          JOIN workforce.leave_types lt ON lt.id = l.leave_type_id
         WHERE l.status = 'APPROVED' AND l.employment_id = ANY($1::uuid[]) AND l.starts_on <= $3::date AND l.ends_on >= $2::date`,
@@ -178,6 +180,13 @@ export async function loadPeriodInputs(
   const itemBy = new Map(items.map((i) => [i.id, i]));
   const ytdBy = new Map(ytdRows.map((r) => [r.employment_id, r]));
   const otReqs = await loadRequests(tx, orgId, { kind: "ot", status: "approved", beneficiaryKind: "staff", workDate: { lte: new Date(`${endsOn}T00:00:00Z`) } }, 2000);
+  // นับวัน OT ของงวด (สรุปวันทำงานบนสลิป) — รวมใบที่จ่ายไปแล้วทางอื่น ต่างจาก otReqs ที่เอาเฉพาะที่ยังค้างจ่าย
+  const otInPeriod = await loadRequests(
+    tx,
+    orgId,
+    { kind: "ot", status: { in: ["approved", "paid"] }, beneficiaryKind: "staff", workDate: { gte: new Date(`${startsOn}T00:00:00Z`), lte: new Date(`${endsOn}T00:00:00Z`) } },
+    2000,
+  );
   const advReqs = await loadRequests(tx, orgId, { beneficiaryKind: "staff", deductedAt: null, deductAmount: { gt: 0 } }, 2000);
 
   /* ── ค่าคอม Pool ตามเกรด (ระบบบุคคล › พนักงาน › ค่าคอม) — เดือนเดียวกับงวด ── */
@@ -208,6 +217,7 @@ export async function loadPeriodInputs(
     // ลาไม่รับค่าจ้าง เฉพาะวันที่ลง (และอยู่ในช่วงที่ทำงาน)
     let unpaid = 0;
     let leaveDays = 0;
+    let offDays = 0;
     for (const l of wf.leaves.filter((x) => x.employment_id === e.employment_id)) {
       const a = l.starts_on > from ? l.starts_on : from;
       const b = l.ends_on < to ? l.ends_on : to;
@@ -217,6 +227,7 @@ export async function loadPeriodInputs(
       if (l.half_day_end && b === l.ends_on && !(l.starts_on === l.ends_on && l.half_day_start)) d -= 0.5;
       d = Math.max(0, d);
       leaveDays += d;
+      if (l.day_off) offDays += d;
       if (!l.paid) unpaid += d;
     }
     const att = wf.att.find((x) => x.employment_id === e.employment_id);
@@ -318,7 +329,15 @@ export async function loadPeriodInputs(
         gapPeriods: prevApplies ? 0 : Math.max(0, periodsEmployedBefore(e.hired_on, payDate, Number(endsOn.slice(8, 10))) - (y?.periods ?? 0)),
       },
       opening: prevApplies ? { income: num(p?.prevIncome), tax: num(p?.prevTax), sso: num(p?.prevSso) } : null,
-      info: { workedDays: att?.worked_days ?? 0, leaveDays, lateCount: att?.late_days ?? 0 },
+      info: {
+        workedDays: att?.worked_days ?? 0,
+        leaveDays,
+        lateCount: att?.late_days ?? 0,
+        offDays,
+        absentDays: att?.absent_days ?? 0,
+        otDays: new Set(otInPeriod.filter(mine).map((r) => r.workDate)).size,
+        otMinutes: otInPeriod.filter(mine).reduce((sum, r) => sum + (r.otMinutes ?? 0), 0),
+      },
     });
   }
   staff.sort((a, b) => a.name.localeCompare(b.name, "th"));

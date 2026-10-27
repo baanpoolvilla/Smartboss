@@ -127,6 +127,8 @@ const DICT = {
   closedToday: { th: "ปิดรับรายงานของวันนี้แล้ว (หลัง {time} น.) — ส่งได้อีกทีพรุ่งนี้", en: "Reports closed for today (after {time}) — send again tomorrow", my: "ယနေ့ အစီရင်ခံစာ ပိတ်ပြီ ({time} နောက်ပိုင်း) · မနက်ဖြန် ပို့ပါ" },
   prevWeek: { th: "สัปดาห์ก่อน", en: "Previous week", my: "ယခင်အပတ်" },
   nextWeek: { th: "สัปดาห์ถัดไป", en: "Next week", my: "နောက်အပတ်" },
+  monthSummary: { th: "ทั้งเดือน {month}", en: "Whole month · {month}", my: "တစ်လလုံး · {month}" },
+  days: { th: "{n} วัน", en: "{n} d", my: "{n} ရက်" },
 } as const;
 
 export type WorkerTextKey = keyof typeof DICT;

@@ -239,6 +239,25 @@ export function shiftLabel(w: Pick<WorkerMonth, "shiftId" | "week" | "shiftStart
   return [main, ...[...others.entries()].map(([l, days]) => `${days.join(",")} ${l}`)].join(" · ");
 }
 
+/**
+ * สรุปวันทำงานของเดือน (ผู้ใช้ขอ 27/10/2569 "ทำไปกี่วัน หยุดกี่วัน มาทำ OT กี่วัน") — ใช้ได้ทั้งหน้าจอและเซิร์ฟเวอร์
+ * มา = ตรงเวลา + สาย · หยุด = Day-Off + วันหยุดตามกะ · ขาด = ไม่ลงออก + ไม่มา
+ */
+export function monthCounts(cells: Record<number, DayCell>) {
+  let worked = 0, off = 0, leave = 0, absent = 0, otDays = 0, otMinutes = 0;
+  for (const c of Object.values(cells)) {
+    if (c.s === "m" || c.s === "s") worked++;
+    else if (c.s === "o" || c.s === "r") off++;
+    else if (c.s === "l") leave++;
+    else if (c.s === "x" || c.s === "n") absent++;
+    if (c.ot) {
+      otDays++;
+      otMinutes += c.ot.minutes;
+    }
+  }
+  return { worked, off, leave, absent, otDays, otMinutes };
+}
+
 export function hoursLabel(minutes: number): string {
   if (minutes === 0) return "0";
   const h = minutes / 60;

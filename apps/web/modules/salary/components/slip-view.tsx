@@ -4,6 +4,7 @@ import { fmtBaht, periodLabel, thaiDate } from "../lib/types";
 import { AdvanceExplain, SalaryExplain, SsoExplain } from "./explain-content";
 import { Explain } from "./help";
 import { TaxSteps } from "./tax-steps";
+import { WorkDaysTiles } from "./work-days";
 
 /**
  * สลิปเงินเดือน — ผู้ใช้กำหนด 22/10/2569: "สลิปที่ user ได้รับต้องชัดเจน" · "แสดงเต็มก่อนโดนหัก" ·
@@ -55,6 +56,11 @@ export function SlipView({ s, company }: { s: SlipData; company: string }) {
       </section>
 
       <section className="rounded-(--radius-lg) border border-(--line) bg-(--bg) px-4 py-3">
+        <div className="pb-1.5 text-sm font-bold">สรุปวันทำงานงวดนี้</div>
+        <WorkDaysTiles info={l.info} />
+      </section>
+
+      <section className="rounded-(--radius-lg) border border-(--line) bg-(--bg) px-4 py-3">
         <div className="flex justify-between pb-1.5 text-sm font-bold text-emerald-800"><span>เงินได้</span><span className="tabular-nums">{fmtBaht(l.gross)}</span></div>
         {earn.map((x) => (
           <div key={x.key} className="border-t border-(--line) py-2">
@@ -78,8 +84,6 @@ export function SlipView({ s, company }: { s: SlipData; company: string }) {
 
       <section className="rounded-(--radius-lg) border border-(--line) bg-(--bg) px-4 py-3 text-sm">
         <div className="pb-1 text-xs font-semibold text-(--ink-soft)">ข้อมูลประกอบ</div>
-        {!!l.info?.workedDays && <div className="flex justify-between py-0.5"><span>วันที่มาทำงาน (มีสแกน)</span><span>{l.info.workedDays} วัน</span></div>}
-        {(l.info?.leaveDays ?? 0) > 0 && <div className="flex justify-between py-0.5"><span>วันลา</span><span>{l.info.leaveDays} วัน</span></div>}
         {employer && <div className="flex justify-between py-0.5"><span>บริษัทจ่ายประกันสังคมให้อีก</span><span className="tabular-nums">{fmtBaht(employer.amount)}</span></div>}
         <div className="mt-1 border-t border-(--line) pt-1.5 text-xs font-semibold text-(--ink-soft)">สะสมตั้งแต่ต้นปี {Number(s.payDate.slice(0, 4)) + 543}</div>
         <div className="flex justify-between py-0.5"><span>เงินได้</span><span className="tabular-nums">{fmtBaht(s.ytd.gross)}</span></div>

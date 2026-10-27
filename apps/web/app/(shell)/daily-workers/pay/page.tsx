@@ -6,7 +6,7 @@ import { requireOrg, hasPermission } from "@smartboss/auth";
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { DW_PERMS } from "@/modules/daily_worker/permissions";
 import { bangkokToday, loadMoney } from "@/modules/daily_worker/lib/data";
-import { baht, owedOn, shiftMonth } from "@/modules/daily_worker/lib/types";
+import { baht, hoursLabel, monthCounts, owedOn, shiftMonth, type WorkerMonth } from "@/modules/daily_worker/lib/types";
 import { MoneySource } from "@/modules/daily_worker/components/money-source";
 import { PayForm, VoidPayment } from "@/modules/daily_worker/components/pay-form";
 import { PayTabs } from "@/modules/daily_worker/components/pay-tabs";
@@ -169,7 +169,7 @@ function MonthTable({
   rows,
   month,
 }: {
-  rows: { worker: { employmentId: string | null; name: string; employeeCode: string | null }; opening: number; earned: number; paid: number; closing: number }[];
+  rows: { worker: { employmentId: string | null; name: string; employeeCode: string | null; cells: WorkerMonth["cells"] }; opening: number; earned: number; paid: number; closing: number }[];
   month: string;
 }) {
   const s = (f: (r: (typeof rows)[number]) => number) => Math.round(rows.reduce((t, r) => t + f(r), 0) * 100) / 100;
@@ -182,10 +182,11 @@ function MonthTable({
         <Stat label="คงเหลือสิ้นเดือน" value={baht(s((r) => r.closing))} tone="warn" />
       </div>
       <div className="overflow-x-auto rounded-2xl border border-(--line) bg-(--bg)">
-        <table className="w-full min-w-[560px] text-sm">
+        <table className="w-full min-w-[760px] text-sm">
           <thead className="bg-(--bg-soft) text-xs text-(--ink-soft)">
             <tr>
               <th className="px-3 py-2 text-left font-semibold">คนงาน</th>
+              <th className="px-3 py-2 text-left font-semibold">วันทำงาน</th>
               <th className="px-3 py-2 text-right font-semibold">ยกมา</th>
               <th className="px-3 py-2 text-right font-semibold">ได้ทั้งเดือน</th>
               <th className="px-3 py-2 text-right font-semibold">จ่ายทั้งเดือน</th>
@@ -199,6 +200,17 @@ function MonthTable({
                   <Link href={`/daily-workers/w/${r.worker.employmentId}?month=${month}`} className="font-medium hover:underline">
                     {r.worker.name}
                   </Link>
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 text-xs text-(--ink-soft)">
+                  {(() => {
+                    const m = monthCounts(r.worker.cells);
+                    return (
+                      <>
+                        มา <b className="text-(--ink)">{m.worked}</b> · หยุด {m.off + m.leave}
+                        {m.absent > 0 && <span className="text-(--tone-danger)"> · ขาด {m.absent}</span>} · OT {m.otDays} วัน{m.otMinutes ? ` (${hoursLabel(m.otMinutes)})` : ""}
+                      </>
+                    );
+                  })()}
                 </td>
                 <td className="px-3 py-2 text-right">{baht(r.opening)}</td>
                 <td className="px-3 py-2 text-right">+{baht(r.earned)}</td>

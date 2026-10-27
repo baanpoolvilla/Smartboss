@@ -11,7 +11,7 @@ import { getUser, getDepartment, departmentIdsOf } from "@/modules/report_task/l
 import { useLeaveStore } from "@/modules/report_task/store/leave-store";
 import { useLeaveTypeStore } from "@/modules/report_task/store/leave-type-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
-import { HolidayBalanceTile, useHolidayBalance } from "./holiday-balance-tile";
+import { HolidayBalanceTile, useHolidayBalance, useMyWorkDays } from "./holiday-balance-tile";
 import { HolidayDetailDialog } from "./holiday-detail-dialog";
 import { useCalendarVisibilityStore } from "@/modules/report_task/store/calendar-visibility-store";
 import { useRoutineDayOffStore, type DayOffOrigin } from "@/modules/report_task/store/routine-dayoff-store";
@@ -134,6 +134,7 @@ export function LeaveSidebar({
   const targetMonth = newRoutineDate.slice(0, 7);
   // โหลดใหม่เมื่อเปลี่ยนเดือน และหลังปิดฟอร์มยื่นวันลา (เพิ่งใช้สิทธิ์ไป)
   const holidayBalances = useHolidayBalance(rangeMonthKey, submitLeaveOpen);
+  const myWork = useMyWorkDays(range.start, range.end);
   // กดช่อง "Holiday เหลือ" = เปิดรายละเอียดของประเภทนั้น
   const [holidayDetailTypeId, setHolidayDetailTypeId] = useState<string | null>(null);
   const myQuota = quotaForDepartment(getUser(viewingAsUserId)?.departmentId, companyMonthlyQuota, departmentQuotas, useDepartmentOverrides);
@@ -579,6 +580,27 @@ export function LeaveSidebar({
               <HolidayBalanceTile key={b.leaveTypeId} balance={b} onOpen={() => setHolidayDetailTypeId(b.leaveTypeId)} />
             ))}
           </div>
+          {/* สรุปวันทำงาน (ผู้ใช้ขอ 27/10/2569) — จากลงเวลา + ใบ OT ของตัวเอง · ไม่ได้ผูกทะเบียนพนักงาน = ไม่แสดง */}
+          {myWork?.tracked && (
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-lg bg-[var(--bg-soft)] px-3 py-2 text-center">
+                <p className="text-lg font-semibold tabular-nums">{myWork.workedDays ?? 0}</p>
+                <p className="text-[11px] text-[var(--ink-soft)]">วันมาทำงาน</p>
+                {(myWork.lateDays ?? 0) > 0 && <p className="text-[10px] font-medium" style={{ color: "var(--tone-warn)" }}>สาย {myWork.lateDays} ครั้ง</p>}
+              </div>
+              <div className="rounded-lg bg-[var(--bg-soft)] px-3 py-2 text-center">
+                <p className="text-lg font-semibold tabular-nums" style={(myWork.absentDays ?? 0) > 0 ? { color: "var(--tone-danger)" } : undefined}>{myWork.absentDays ?? 0}</p>
+                <p className="text-[11px] text-[var(--ink-soft)]">ขาดงาน</p>
+              </div>
+              <div className="rounded-lg bg-[var(--bg-soft)] px-3 py-2 text-center">
+                <p className="text-lg font-semibold tabular-nums">{myWork.otDays ?? 0}</p>
+                <p className="text-[11px] text-[var(--ink-soft)]">วันทำ OT</p>
+                {(myWork.otMinutes ?? 0) > 0 && (
+                  <p className="text-[10px] text-[var(--ink-soft)]">{Number.isInteger((myWork.otMinutes ?? 0) / 60) ? (myWork.otMinutes ?? 0) / 60 : ((myWork.otMinutes ?? 0) / 60).toFixed(1)} ชม.</p>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <p className="text-[11px] font-medium text-[var(--ink-soft)]">{myHeading}</p>

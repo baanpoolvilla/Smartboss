@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 
 import { cn } from "@smartboss/ui/cn";
 import { assignShiftAction, deleteOtAction, saveOtAction, setDaysOffAction } from "../actions";
-import { baht, hoursLabel, minutesToHm, otMinutes, shiftLabel, shiftMonth, shiftOnDate, WEEKDAY_SHORT, type DayCell, type MonthData, type WorkerMonth } from "../lib/types";
+import { baht, hoursLabel, minutesToHm, monthCounts, otMinutes, shiftLabel, shiftMonth, shiftOnDate, WEEKDAY_SHORT, type DayCell, type MonthData, type WorkerMonth } from "../lib/types";
 import { TimeEditFix } from "./time-edit-fix";
 
 /** ช่องกะรายวันแบบพิมพ์เวลาเอง — ค่า "t:09:00-17:00" ฝั่ง server แปลงเป็นกะจริง (assignShiftAction) */
@@ -260,6 +260,7 @@ export function WorkerRoster({ data, canManage, canOverride }: { data: MonthData
                   </th>
                 ))}
                 {isCurrentMonth && <th className="border-b border-l border-(--line) bg-(--bg-soft) px-2 font-semibold text-(--ink-soft)">สัปดาห์นี้</th>}
+                <th className="border-b border-l border-(--line) bg-(--bg-soft) px-2 font-semibold text-(--ink-soft)">ทั้งเดือน</th>
               </tr>
             </thead>
             <tbody>
@@ -360,12 +361,24 @@ export function WorkerRoster({ data, canManage, canOverride }: { data: MonthData
                         {offWeek === 0 ? "ยังไม่มีหยุด" : `หยุด ${offWeek}`}
                       </td>
                     )}
+                    {(() => {
+                      const m = monthCounts(w.cells);
+                      return (
+                        <td className="whitespace-nowrap border-b border-l border-(--line) px-2 text-[11px] leading-tight tabular-nums text-(--ink-soft)">
+                          <span className="font-semibold text-(--ink)">มา {m.worked}</span> · หยุด {m.off}
+                          {m.leave > 0 && ` · ลา ${m.leave}`}
+                          {m.absent > 0 && <span className="text-(--tone-danger)"> · ขาด {m.absent}</span>}
+                          <br />
+                          <span className={m.otDays ? "text-violet-700 dark:text-violet-300" : undefined}>OT {m.otDays} วัน{m.otMinutes ? ` · ${hoursLabel(m.otMinutes)}` : ""}</span>
+                        </td>
+                      );
+                    })()}
                   </tr>
                 );
               })}
               {visible.length === 0 && (
                 <tr>
-                  <td colSpan={data.days + 2} className="px-4 py-8 text-center text-sm text-(--ink-soft)">
+                  <td colSpan={data.days + 3} className="px-4 py-8 text-center text-sm text-(--ink-soft)">
                     {data.workers.length === 0 ? "ยังไม่มีคนงาน — ผูกบทบาท \"คนงาน\" (WORKER) ให้ผู้ใช้ที่หลังบ้านก่อน" : "ไม่พบคนงานที่ค้นหา"}
                   </td>
                 </tr>
