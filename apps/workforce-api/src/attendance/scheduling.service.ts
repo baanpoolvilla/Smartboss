@@ -13,7 +13,7 @@ import {
   uuidv7,
   type Clock,
 } from '@workforce/domain';
-import { and, asc, desc, eq, gte, isNull, lte, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, isNotNull, isNull, lte, ne } from 'drizzle-orm';
 import { UnitOfWork } from '../infrastructure/unit-of-work';
 import { RequestContextService } from '../shared/request-context';
 import { CLOCK } from '../shared/tokens';
@@ -367,6 +367,48 @@ export class SchedulingService {
               },
               after: { replaced_by_effective_from: input.effective_from },
             });
+          }
+        }
+
+        /*
+         * ผูกกะย้อนหลัง (วันเริ่มก่อนใบที่ปิดไปแล้ว) — ใบเก่าที่ยังคาบช่วงใหม่ต้องถูกตัดด้วย
+         * ไม่งั้นวันในช่วงนั้นยังเลือกใบเก่า (ระบบเลือกใบที่เริ่มล่าสุด) ⇒ แก้กะย้อนหลังแล้วยังสายเหมือนเดิม
+         */
+        if (input.effective_to == null) {
+          const closed = await uow.tx
+            .select()
+            .from(schema.recurringWorkPatterns)
+            .where(
+              and(
+                eq(schema.recurringWorkPatterns.employmentId, input.employment_id),
+                isNotNull(schema.recurringWorkPatterns.effectiveTo),
+                gte(schema.recurringWorkPatterns.effectiveTo, input.effective_from),
+              ),
+            );
+          for (const row of closed) {
+            const rowPeriod = EffectivePeriod.parse(row.effectiveFrom, null);
+            if (rowPeriod.from.isBefore(period.from)) {
+              await uow.tx
+                .update(schema.recurringWorkPatterns)
+                .set({ effectiveTo: rowPeriod.closeBefore(period.from).to?.toString() })
+                .where(eq(schema.recurringWorkPatterns.id, row.id));
+            } else {
+              await uow.tx
+                .delete(schema.recurringWorkPatterns)
+                .where(eq(schema.recurringWorkPatterns.id, row.id));
+              await uow.audit({
+                action: 'scheduling.pattern.replace',
+                resourceType: 'recurring_work_pattern',
+                resourceId: row.id,
+                outcome: 'SUCCESS',
+                before: {
+                  employment_id: row.employmentId,
+                  effective_from: row.effectiveFrom,
+                  effective_to: row.effectiveTo,
+                },
+                after: { replaced_by_effective_from: input.effective_from },
+              });
+            }
           }
         }
       }

@@ -271,6 +271,46 @@ describe('shift configuration', () => {
     expect(items).toHaveLength(1);
     expect(items[0]?.['monday']?.['id']).toBe(nightShiftId);
   });
+
+  it('a backdated pattern trims or removes older closed patterns it overlaps', async () => {
+    // คนงานรายวัน: ผูกกะใหม่แล้วตั้ง "มีผลตั้งแต่" ย้อนหลัง — วันในช่วงนั้นต้องใช้กะใหม่
+    const employmentId = await createEmployment('ย้อนหลัง');
+    const setPattern = (shiftId: string, from: string) =>
+      call(harness, 'POST', '/recurring-work-patterns', {
+        token: adminToken,
+        idempotencyKey: uuidv4(),
+        payload: {
+          employment_id: employmentId,
+          monday_shift_id: shiftId,
+          tuesday_shift_id: shiftId,
+          wednesday_shift_id: shiftId,
+          thursday_shift_id: shiftId,
+          friday_shift_id: shiftId,
+          saturday_shift_id: restShiftId,
+          sunday_shift_id: restShiftId,
+          effective_from: from,
+          supersede_current: true,
+        },
+      });
+    expect((await setPattern(dayShiftId, '2026-01-01')).status).toBe(201);
+    expect((await setPattern(dayShiftId, '2026-03-01')).status).toBe(201);
+    expect((await setPattern(dayShiftId, '2026-04-01')).status).toBe(201);
+    expect((await setPattern(nightShiftId, '2026-02-15')).status).toBe(201);
+
+    const after = await call(
+      harness,
+      'GET',
+      `/recurring-work-patterns?employment_id=${employmentId}`,
+      { token: hrToken },
+    );
+    const items = (after.body['items'] as Record<string, unknown>[])
+      .map((i) => [i['effective_from'], i['effective_to']])
+      .sort();
+    expect(items).toEqual([
+      ['2026-01-01', '2026-02-14'],
+      ['2026-02-15', null],
+    ]);
+  });
 });
 
 describe('attendance calculation', () => {
