@@ -128,25 +128,9 @@ export interface ChatAlbumCard {
   items: { url: string; thumbUrl: string | null; kind: string }[];
 }
 
-/**
- * การ์ดงานในห้อง (ChatMessage kind "task") — "เปิดเป็นงาน" จากข้อความ / ปุ่ม + สร้างงาน (27/10/2569)
- * meta เก็บแค่ taskId (+ ข้อความต้นทาง) — ชื่อ/สถานะ/กำหนดส่งอ่านจาก report_task.tasks ตอนโหลด จึงตรงกับบอร์ดเสมอ
- * ในหน้าแชทการ์ดใช้ TaskCard ตัวจริงของบอร์ด (ข้อมูลสดจาก store) ค่าพวกนี้เป็นตัวสำรองตอนยังไม่มีใน store
- */
-export interface ChatTaskCard {
-  taskId: string;
-  code: string;
-  title: string;
-  status: string;
-  dueDate: string;
-  assigneeIds: string[];
-  /** ข้อความที่ "เปิดเป็นงาน" มา — ขึ้นป้าย "เปิดเป็นงานแล้ว" ที่ข้อความนั้น */
-  sourceMessageId: string | null;
-}
-
 /** ข้อความที่คนพิมพ์/โพสต์ (ไม่ใช่ข้อความระบบ) — นับยังไม่อ่าน เด้งแจ้งเตือน มีเสียง */
 export function isUserMessageKind(kind: string): boolean {
-  return kind === "text" || kind === "note" || kind === "album" || kind === "task";
+  return kind === "text" || kind === "note" || kind === "album";
 }
 
 /** ห้อง "🕐 ระบบลงเวลา" ส่วนตัวของแต่ละคน (lib/attendance-chat.ts) — id ขึ้นต้นด้วยนี้ */
@@ -204,8 +188,6 @@ export interface ChatMessageDTO {
   note?: ChatNotePreview | null;
   /** kind "album" เท่านั้น — null = อัลบั้มถูกลบไปแล้ว */
   album?: ChatAlbumCard | null;
-  /** kind "task" เท่านั้น — null = งานถูกลบไปแล้ว */
-  task?: ChatTaskCard | null;
   body: string | null;
   attachments: ChatAttachment[];
   replyTo: ChatReplyPreview | null;

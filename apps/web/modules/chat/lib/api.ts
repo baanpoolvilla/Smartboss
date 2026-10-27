@@ -266,18 +266,6 @@ export function fetchKeep(opts: { tab?: string; q?: string; collection?: string;
 }
 
 /** ปุ่ม "Keep" ที่ข้อความ — added = 0 แปลว่าเก็บไว้แล้วก่อนหน้านี้ */
-/** การ์ดงานลงห้องหลังสร้างงานจากแชท — status 404 = งานยังไม่ขึ้นเซิร์ฟเวอร์ (บอร์ดบันทึกแบบหน่วง) ลองใหม่ได้ */
-export async function postTaskCard(channelId: string, taskId: string, sourceMessageId: string | null): Promise<{ ok: boolean; status: number; error?: string }> {
-  const res = await fetch(`${ch(channelId)}/task-card`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ taskId, sourceMessageId }),
-  });
-  if (res.ok) return { ok: true, status: res.status };
-  const body = await res.json().catch(() => ({}));
-  return { ok: false, status: res.status, error: body?.error };
-}
-
 export function keepMessage(channelId: string, messageId: string): Promise<{ added: number }> {
   return send("/api/chat/keep", "POST", { channelId, messageId });
 }
