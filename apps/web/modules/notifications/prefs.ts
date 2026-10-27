@@ -245,6 +245,9 @@ export function topicForCoreType(type: string): string {
   return OTHER_TOPIC;
 }
 
+/** ท้ายข้อความ `"ชื่อ": สติกเกอร์/รูป/รับทราบ` — แม่แบบคอมเมนต์ใน task-store.ts / report-feed-store.ts */
+const ACK_TAIL = /":\s*(ส่งสติกเกอร์|ส่งรูป(\s*\d+\s*รูป)?|รับทราบ(ค่ะ|คะ|ครับ|นะคะ|นะครับ)?)\s*[.!🙏]*\s*$/u;
+
 /**
  * แจ้งเตือนของ Project Management / รีพอต / แจ้งปัญหา (เก็บใน store ของ report_task) — ส่วนใหญ่ไม่มี
  * ชนิดติดมา ต้องจัดจากข้อความ ข้อความมาจากแม่แบบตายตัวในโค้ด (ดู __tests__/prefs.test.ts ที่ไล่ครบทุกแบบ)
@@ -253,6 +256,9 @@ export function topicForCoreType(type: string): string {
 export function topicForReportNotification(n: { message: string; kind?: string | null }): string {
   const m = n.message ?? "";
   if (n.kind === "room_post" || /โพสต์ใหม่ใน\s*"/.test(m)) return "rp.room_post";
+  // คอมเมนต์/ตอบกลับที่เป็นแค่การรับรู้ (สติกเกอร์ · ส่งรูปเปล่า ๆ · "รับทราบ") — ไม่มีอะไรต้องทำ ⇒ หมวดความเคลื่อนไหว/รีแอ็กชัน
+  // ปิดแยกจากคอมเมนต์ที่มีคำถามได้ (27/10/2569 "หัวหน้าเอาเฉพาะที่มีแอ็คชั่น") · ถูกแท็กยังเป็นหมวดแท็กตามเดิม
+  if (ACK_TAIL.test(m) && !m.includes("แท็ก")) return m.includes("ในงาน") ? "pm.activity" : "rp.reaction";
   if (n.kind === "task_assigned") return "pm.assigned";
   if (n.kind === "task_due_request") return "pm.due_request";
   if (n.kind === "task_comment" || n.kind === "task_attachment") return "pm.comment";
