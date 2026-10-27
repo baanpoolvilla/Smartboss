@@ -224,7 +224,8 @@ export function computeReminders(input: {
         recipients.add(t.assignedById);
       } else if (settings.task.notifyDeptHead) {
         for (const d of departments) {
-          if (t.departmentIds.includes(d.id)) recipients.add(d.headId);
+          // CEO ที่เป็นหัวหน้าแผนกด้วย ไม่ได้เตือนงานคนอื่น (27/10/2569) — งานตัวเองได้จาก notifyAssignee อยู่แล้ว
+          if (t.departmentIds.includes(d.id) && !isOwner(d.headId)) recipients.add(d.headId);
         }
       }
       // ไม่เตือนคนมอบหมายงาน (19/10/2569 "ให้แจ้งเตือนกับคนที่มอบหมายงานไปให้พอ มันจะรกเกินไป")

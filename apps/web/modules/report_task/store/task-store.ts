@@ -231,7 +231,11 @@ function rejectGroupReview(t: Task, newDate: string, reason: string, actorId: st
 }
 
 function notifyPenaltyChange(task: Task, byUserId: string, message: string) {
-  const heads = departments.filter((d) => task.departmentIds.includes(d.id)).map((d) => d.headId);
+  // CEO ที่เป็นหัวหน้าแผนกด้วย ได้แจ้งเฉพาะงานที่ตัวเองสั่ง/รับผิดชอบ (27/10/2569 งานคนอื่นสั่งให้คนอื่น = ดูได้ ไม่แจ้ง)
+  const heads = departments
+    .filter((d) => task.departmentIds.includes(d.id))
+    .map((d) => d.headId)
+    .filter((id) => id === task.assignedById || !users.some((u) => u.id === id && u.isOwner));
   const recipients = Array.from(new Set([...task.assigneeIds, ...heads]));
   useNotificationStore.getState().notifyMany(recipients, byUserId, message, undefined, `/report-task/tasks?task=${task.id}`);
 }
