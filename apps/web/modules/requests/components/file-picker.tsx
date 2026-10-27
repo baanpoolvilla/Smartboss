@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { Camera, FileText, Loader2, Paperclip, X } from "lucide-react";
 
+import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 import { compressImage } from "@/modules/chat/lib/image-compress";
 import { uploadFilesAction, type UploadedFile } from "../actions";
 import { baht, receiptFlags, thaiDate, type AttachmentRole } from "../lib/types";
@@ -73,11 +74,12 @@ export function FilePicker({
   const isSlip = role === "slip";
 
   return (
-    <div className="flex flex-col gap-2">
+    <PasteDropFiles className="flex flex-col gap-2" disabled={busy}>
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <div className="text-sm font-semibold text-(--ink)">{label}</div>
           {hint && <div className="text-xs text-(--ink-soft)">{hint}</div>}
+          <div className="hidden text-[11px] text-(--ink-soft) sm:block">หรือแคปหน้าจอ/คัดลอกรูปแล้วกด Ctrl+V วางตรงนี้ได้เลย</div>
         </div>
         <div className="flex gap-2">
           <button
@@ -151,6 +153,6 @@ export function FilePicker({
           })}
         </ul>
       )}
-    </div>
+    </PasteDropFiles>
   );
 }
