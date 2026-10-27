@@ -5,6 +5,8 @@ import { useNotificationStore } from "@/modules/report_task/store/notification-s
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { isWithdrawnDueRequestNotification } from "@/modules/report_task/lib/withdrawn-due-request-notif";
 import { useReportFeedStore } from "@/modules/report_task/store/report-feed-store";
+import { useMeetingStore } from "@/modules/report_task/store/meeting-store";
+import { meetingLink } from "@/modules/report_task/lib/meeting-link";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { canManage } from "@/modules/report_task/lib/directory";
 import { useMaintenanceNotifStore } from "@/modules/notifications/use-maintenance-notifications";
@@ -111,6 +113,22 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
     [topics]
   );
 
+  // แจ้งเตือนประชุมรุ่นก่อน 27/10/2569 ไม่มีลิงก์ หรือชี้แค่หน้าปฏิทิน — พาไปวันประชุมนั้นแทน
+  // (หาจาก meetingId ก่อน แล้วจากชื่อประชุมในเครื่องหมายคำพูด · ชื่อซ้ำ/ยังไม่โหลด = ให้ปฏิทินหาเองจากชื่อ)
+  const meetings = useMeetingStore((s) => s.meetings);
+  const linkFromMeeting = useCallback(
+    (n: { message: string; meetingId?: string; link?: string }): string | null => {
+      if (n.link && n.link !== "/report-task/calendar") return null;
+      if (n.meetingId && meetings.some((m) => m.id === n.meetingId)) return meetingLink(n.meetingId);
+      const t = /ประชุม "([^"]+)"/.exec(n.message);
+      if (!t) return null;
+      const same = meetings.filter((m) => m.title === t[1]);
+      if (same.length === 1) return meetingLink(same[0]!.id);
+      return `/report-task/calendar?meetingTitle=${encodeURIComponent(t[1]!)}`;
+    },
+    [meetings]
+  );
+
   const items = useMemo<UnifiedNotification[]>(() => {
     const fromReport: UnifiedNotification[] = reportNotifications
       .filter((n) => n.userId === viewingAsUserId && (includeRoomPosts || !isRoomPost(n)))
@@ -138,7 +156,7 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
         read: n.read,
         // แจ้งเตือนงานรุ่นเก่าที่ไม่ได้ใส่ลิงก์ (เช่น "ส่งงาน/ทำเครื่องหมาย "ชื่องาน" ว่าเสร็จ")
         // — หางานจากชื่อในเครื่องหมายคำพูด ถ้าตรงงานเดียวก็กดเปิดงานนั้นได้
-        link: n.link ?? linkFromRoomAdd(n.message, n.topicName) ?? linkFromQuotedTaskTitle(n.message),
+        link: linkFromMeeting(n) ?? n.link ?? linkFromRoomAdd(n.message, n.topicName) ?? linkFromQuotedTaskTitle(n.message),
       }));
 
     const fromMaintenance: UnifiedNotification[] = maintenanceItems
@@ -189,7 +207,7 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
     return [...fromReport, ...fromMaintenance, ...fromOrgActivity].sort(
       (a, b) => Number(a.read) - Number(b.read) || b.createdAt.localeCompare(a.createdAt)
     );
-  }, [prefs, reportNotifications, maintenanceItems, orgItems, viewingAsUserId, includeRoomPosts, includeOrgActivity, taskIdSet, taskById, tasksLoaded, linkFromQuotedTaskTitle, linkFromRoomAdd]);
+  }, [prefs, reportNotifications, maintenanceItems, orgItems, viewingAsUserId, includeRoomPosts, includeOrgActivity, taskIdSet, taskById, tasksLoaded, linkFromQuotedTaskTitle, linkFromRoomAdd, linkFromMeeting]);
 
   const unreadCount = items.filter((n) => !n.read).length;
 

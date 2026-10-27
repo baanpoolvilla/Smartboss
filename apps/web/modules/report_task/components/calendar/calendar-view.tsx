@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { meetingLink } from "@/modules/report_task/lib/meeting-link";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useMeetingStore } from "@/modules/report_task/store/meeting-store";
 import { useLeaveStore } from "@/modules/report_task/store/leave-store";
@@ -375,21 +376,31 @@ export function CalendarView() {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [previewEvent, setPreviewEvent] = useState<{ event: CalendarEvent; rect: DOMRect } | null>(null);
   // ลิงก์จากแจ้งเตือน (?meeting=<id>, lib/meeting-link.ts) — ไปวันประชุมนั้นแล้วเปิดรายละเอียด
-  // รอจนข้อมูลประชุมโหลดมาก่อน (store ว่างตอนเปิดหน้า) ทำครั้งเดียวต่อการเปิดหน้า
-  const meetingDeepLinkDone = useRef(false);
+  // รอจนข้อมูลประชุมโหลดมาก่อน (store ว่างตอนเปิดหน้า) ทำครั้งเดียวต่อลิงก์
+  // อยู่หน้าปฏิทินอยู่แล้วกดแจ้งเตือนอีกอัน = URL เปลี่ยนแต่หน้าไม่โหลดใหม่ — ผูกกับ query ไม่ใช่แค่ตอนเปิดหน้า
+  const searchParams = useSearchParams();
+  const deepLinkKey = searchParams.toString();
+  const meetingDeepLinkDone = useRef<string | null>(null);
   useEffect(() => {
-    if (meetingDeepLinkDone.current) return;
-    const id = new URLSearchParams(window.location.search).get("meeting");
-    if (!id) {
-      meetingDeepLinkDone.current = true;
+    if (meetingDeepLinkDone.current === deepLinkKey) return;
+    const params = new URLSearchParams(deepLinkKey);
+    const id = params.get("meeting");
+    // แจ้งเตือนรุ่นเก่ารู้แค่ชื่อประชุม (?meetingTitle=) — ชื่อซ้ำเอานัดที่ใกล้ที่สุดที่ยังไม่ผ่าน ไม่มีก็อันล่าสุด
+    const byTitle = params.get("meetingTitle");
+    if (!id && !byTitle) {
+      meetingDeepLinkDone.current = deepLinkKey;
       return;
     }
-    const m = meetings.find((x) => x.id === id);
+    const nowMs = Date.now();
+    const titled = byTitle ? meetings.filter((x) => x.title === byTitle).sort((a, b) => a.start.localeCompare(b.start)) : [];
+    const m = id
+      ? meetings.find((x) => x.id === id)
+      : (titled.find((x) => new Date(x.start).getTime() >= nowMs) ?? titled[titled.length - 1]);
     if (!m) return;
-    meetingDeepLinkDone.current = true;
+    meetingDeepLinkDone.current = deepLinkKey;
     fullCalendarRef.current?.jumpToDate(new Date(m.allDay ? `${m.start.slice(0, 10)}T00:00:00` : m.start), "timeGridDay");
     setSelectedEvent(m);
-  }, [meetings]);
+  }, [meetings, deepLinkKey]);
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   // Real ลา submission (goes through workforce) — opened from a day's summary.
   const [submitLeaveDate, setSubmitLeaveDate] = useState<string | null>(null);
