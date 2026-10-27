@@ -1,4 +1,5 @@
 import { departments, users, isOwner } from "@/modules/report_task/lib/directory";
+import { meetingLink } from "@/modules/report_task/lib/meeting-link";
 import { calendarDateOf, localDateStr, now, todayIso } from "@/modules/report_task/lib/now";
 import { pendingToday } from "@/modules/report_task/lib/report-feed-compliance";
 import {
@@ -280,6 +281,13 @@ export function computeReminders(input: {
   }
 
   // ---- Meetings: N minutes before start ----
+  // 90 นาที → "1 ชม. 30 นาที", 1440 → "1 วัน" — ตั้งเตือนล่วงหน้าเป็นวันแล้วไม่ขึ้น "1440 นาที"
+  const leadLabel = (lead: number) => {
+    const min = Math.round(lead);
+    if (min >= 1440 && min % 1440 === 0) return `${min / 1440} วัน`;
+    if (min >= 60) return `${Math.floor(min / 60)} ชม.${min % 60 ? ` ${min % 60} นาที` : ""}`;
+    return `${min} นาที`;
+  };
   if (settings.meeting.enabled) {
     const nowMs = now().getTime();
     for (const m of meetings) {
@@ -304,8 +312,8 @@ export function computeReminders(input: {
         notifications.push({
           recipients,
           byUserId: SYSTEM_USER_ID,
-          message: `ประชุม "${m.title}" เริ่มในอีก ${Math.round(lead)} นาที`,
-          link: "/report-task/calendar",
+          message: `ประชุม "${m.title}" เริ่มในอีก ${leadLabel(lead)}`,
+          link: meetingLink(m.id),
         });
       }
     }

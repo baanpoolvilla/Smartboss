@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { meetingLink } from "@/modules/report_task/lib/meeting-link";
 import {
   Dialog,
   DialogContent,
@@ -676,7 +677,7 @@ export function NewTaskDialog({
     };
     addMeeting(meeting);
     if (meetAttendeeIds.length > 0) {
-      notifyMany(meetAttendeeIds, viewingAsUserId, `${assignedByUser.name} แท็กคุณในประชุม "${title.trim()}"`);
+      notifyMany(meetAttendeeIds, viewingAsUserId, `${assignedByUser.name} แท็กคุณในประชุม "${title.trim()}"`, meeting.id, meetingLink(meeting.id));
     }
     toast.success("สร้างประชุมเรียบร้อยแล้ว");
   }

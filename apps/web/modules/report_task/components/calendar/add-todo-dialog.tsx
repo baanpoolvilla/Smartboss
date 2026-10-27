@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { meetingLink } from "@/modules/report_task/lib/meeting-link";
 import {
   Dialog,
   DialogClose,
@@ -31,7 +32,7 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useReminderSettingsStore } from "@/modules/report_task/store/reminder-settings-store";
 import { todayIso } from "@/modules/report_task/lib/now";
 import { cn } from "@/modules/report_task/lib/utils";
-import { departmentIdsOf } from "@/modules/report_task/lib/directory";
+import { departmentIdsOf, getUser } from "@/modules/report_task/lib/directory";
 import { X, Trash2, Bell } from "lucide-react";
 import { toast } from "sonner";
 import type { CalendarEvent, TodoItem } from "@/modules/report_task/types";
@@ -130,7 +131,7 @@ export function AddTodoDialog({
       addMeeting(meeting);
       useActivityLogStore.getState().log({ userId: viewingAsUserId, action: "สร้างประชุม", target: trimmed });
       if (meetAttendeeIds.length > 0) {
-        notifyMany(meetAttendeeIds, viewingAsUserId, `แท็กคุณในประชุม "${trimmed}"`);
+        notifyMany(meetAttendeeIds, viewingAsUserId, `${getUser(viewingAsUserId)?.name ?? "มีคน"} แท็กคุณในประชุม "${trimmed}"`, meeting.id, meetingLink(meeting.id));
       }
       toast.success("สร้างประชุมเรียบร้อยแล้ว");
       onOpenChange(false);

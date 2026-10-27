@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { meetingLink } from "@/modules/report_task/lib/meeting-link";
 import Link from "next/link";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useMeetingStore } from "@/modules/report_task/store/meeting-store";
@@ -373,6 +374,22 @@ export function CalendarView() {
   const [activeRange, setActiveRange] = useState<{ start: Date; end: Date }>(viewRange);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [previewEvent, setPreviewEvent] = useState<{ event: CalendarEvent; rect: DOMRect } | null>(null);
+  // ลิงก์จากแจ้งเตือน (?meeting=<id>, lib/meeting-link.ts) — ไปวันประชุมนั้นแล้วเปิดรายละเอียด
+  // รอจนข้อมูลประชุมโหลดมาก่อน (store ว่างตอนเปิดหน้า) ทำครั้งเดียวต่อการเปิดหน้า
+  const meetingDeepLinkDone = useRef(false);
+  useEffect(() => {
+    if (meetingDeepLinkDone.current) return;
+    const id = new URLSearchParams(window.location.search).get("meeting");
+    if (!id) {
+      meetingDeepLinkDone.current = true;
+      return;
+    }
+    const m = meetings.find((x) => x.id === id);
+    if (!m) return;
+    meetingDeepLinkDone.current = true;
+    fullCalendarRef.current?.jumpToDate(new Date(m.allDay ? `${m.start.slice(0, 10)}T00:00:00` : m.start), "timeGridDay");
+    setSelectedEvent(m);
+  }, [meetings]);
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   // Real ลา submission (goes through workforce) — opened from a day's summary.
   const [submitLeaveDate, setSubmitLeaveDate] = useState<string | null>(null);
@@ -889,7 +906,7 @@ export function CalendarView() {
             viewingAsUserId,
             `${getUser(viewingAsUserId)?.name ?? "ผู้จัด"} เลื่อนประชุม "${target.title}" เป็น ${formatDateTimeShort(start)}`,
             target.id,
-            "/report-task/calendar"
+            meetingLink(target.id)
           );
       }
       toast.success("เลื่อนประชุมแล้ว");

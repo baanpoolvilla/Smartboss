@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { meetingLink } from "@/modules/report_task/lib/meeting-link";
 import {
   Dialog,
   DialogContent,
@@ -128,7 +129,7 @@ export function EventDetailDialog({
       const actorName = getUser(viewingAsUserId)?.name ?? "ผู้จัด";
       const title = patch.title ?? event.title;
       if (newlyAdded.length > 0) {
-        notifyMany(newlyAdded, viewingAsUserId, `${actorName} แท็กคุณในประชุม "${title}"`, event.id, "/report-task/calendar");
+        notifyMany(newlyAdded, viewingAsUserId, `${actorName} แท็กคุณในประชุม "${title}"`, event.id, meetingLink(event.id));
       }
       if (removed.length > 0) {
         notifyMany(removed, viewingAsUserId, `${actorName} นำคุณออกจากประชุม "${title}"`, undefined, "/report-task/calendar");
@@ -144,7 +145,7 @@ export function EventDetailDialog({
           viewingAsUserId,
           `${actorName} แก้ไขประชุม "${title}" — ${when}${where ? ` · ${where}` : ""}`,
           event.id,
-          "/report-task/calendar"
+          meetingLink(event.id)
         );
       }
     }
