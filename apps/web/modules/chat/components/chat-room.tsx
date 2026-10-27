@@ -16,6 +16,7 @@ import { ChatAvatar } from "./chat-avatar";
 import { Composer, type ComposerHandle } from "./composer";
 import { Lightbox, type LightboxItem } from "./lightbox";
 import { AlbumPicker } from "./album-picker";
+import { ChatTaskHost, requestCreateTask } from "./chat-task";
 import { MessageList } from "./message-list";
 import { ChatModal } from "./new-chat-dialog";
 import { RoomInfo } from "./room-info";
@@ -292,8 +293,10 @@ export function ChatRoom({
             replyTo={replyTo}
             onCancelReply={() => setReplyTo(null)}
             onCreateNote={() => setCreatingNote(true)}
+            onCreateTask={() => requestCreateTask({ channelId: channel.id })}
           />
         )}
+        <ChatTaskHost channel={channel} />
 
         {dragging && (
           <div className="pointer-events-none absolute inset-2 z-40 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-(--chat-accent) bg-(--chat-accent-soft)/90 text-(--chat-accent-strong)">

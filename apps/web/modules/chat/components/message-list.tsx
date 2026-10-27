@@ -5,7 +5,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { ArrowDown, Loader2 } from "lucide-react";
 
 import { useChatStore, type RoomMessage } from "../store/chat-store";
-import { isUserMessageKind, type ChatAttachment } from "../types";
+import { isUserMessageKind, type ChatAttachment, type ChatTaskCard } from "../types";
 import { backToLatest, discardFailed, jumpToMessage, loadOlder, reactToMessage, retrySend, unsendMessage } from "../lib/chat-actions";
 import { formatDayLabel, sameDay } from "../lib/format";
 import { updateChannel } from "../lib/api";
@@ -64,6 +64,12 @@ export function MessageList({
   const [showJump, setShowJump] = useState(false);
 
   const items = room?.items ?? EMPTY;
+  // ข้อความที่ "เปิดเป็นงาน" แล้ว → การ์ดงานในห้องที่ชี้กลับมา (ป้ายใต้ข้อความต้นทาง)
+  const linkedTasks = useMemo(() => {
+    const map = new Map<string, ChatTaskCard>();
+    for (const it of items) if (it.kind === "task" && it.task?.sourceMessageId) map.set(it.task.sourceMessageId, it.task);
+    return map;
+  }, [items]);
   const roomLoaded = room !== undefined;
 
   // เส้น "ยังไม่ได้อ่าน" — วางไว้ก่อนข้อความของคนอื่นที่ยังไม่อ่านอันแรก (คำนวณครั้งเดียวตอนเปิดห้อง)
@@ -311,6 +317,7 @@ export function MessageList({
                     onRetry={onRetry}
                     onDiscard={onDiscard}
                     onShowReaders={onShowReaders}
+                    linkedTask={linkedTasks.get(m.id)}
                   />
                 </div>
               </Fragment>

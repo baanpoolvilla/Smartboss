@@ -215,6 +215,9 @@ export function NewTaskDialog({
   allowedTypes: allowedTypesProp = ["task", "meeting"],
   defaultDate,
   defaultTitle,
+  defaultDescription,
+  defaultAssigneeIds,
+  defaultFiles,
   onCreated,
 }: {
   open: boolean;
@@ -225,6 +228,10 @@ export function NewTaskDialog({
   defaultDate?: string;
   /** Pre-fill the title field — e.g. "เปิดเป็นงาน" from a report post seeds it with the post's title. */
   defaultTitle?: string;
+  /** เติมรายละเอียด / ผู้รับผิดชอบ / ไฟล์แนบไว้ก่อน — "เปิดเป็นงาน" จากข้อความแชท (27/10/2569) */
+  defaultDescription?: string;
+  defaultAssigneeIds?: string[];
+  defaultFiles?: File[];
   /** Fires with the new task's id right after a task (not meeting/leave) is created — lets a caller that opened this dialog for a specific purpose (e.g. linking a report post to the task it spawned) follow up without guessing the id. */
   onCreated?: (taskId: string) => void;
 }) {
@@ -270,7 +277,7 @@ export function NewTaskDialog({
 
   // Shared
   const [title, setTitle] = useState(defaultTitle ?? "");
-  const [description, setDescription] = useState("");
+  const [description, setDescription] = useState(defaultDescription ?? "");
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
 
@@ -278,7 +285,7 @@ export function NewTaskDialog({
   // Starts empty rather than defaulting to someone (previously always
   // users[0], not even the person creating the task) — auto-assigning is
   // presumptuous, and picking a name is a deliberate call every time.
-  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
+  const [assigneeIds, setAssigneeIds] = useState<string[]>(defaultAssigneeIds ?? []);
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [startDate, setStartDate] = useState(initialDate);
   const [dueDate, setDueDate] = useState(initialDate);
@@ -359,7 +366,7 @@ export function NewTaskDialog({
   const [mainAssigneeId, setMainAssigneeId] = useState<string>("");
   // Staged files/images — uploaded for real (see buildAttachments) only once
   // the task is actually created, same as meetFiles below.
-  const [taskFiles, setTaskFiles] = useState<File[]>([]);
+  const [taskFiles, setTaskFiles] = useState<File[]>(defaultFiles ?? []);
   // Every task needs at least one checklist item — an assignee's part is
   // done once every item they own is checked (see task-completion.ts).
   const [checklistItems, setChecklistItems] = useState<{ id: string; text: string; ownerId: string }[]>([]);

@@ -2,14 +2,14 @@
 
 import { memo, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertCircle, Bookmark, Clock, Copy, CornerUpLeft, Download, FileText, Hourglass, ImageOff, Megaphone, MicOff, MoreHorizontal, Pause, Play, RotateCw, SmilePlus, Trash2, X } from "lucide-react";
+import { AlertCircle, Bookmark, ClipboardList, Clock, Copy, CornerUpLeft, Download, FileText, Hourglass, ImageOff, Megaphone, MicOff, MoreHorizontal, Pause, Play, RotateCw, SmilePlus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
 import { REACTION_CHIP_CLASS, ReactionPicker } from "@/components/emoji-picker";
 import { StickerImage } from "@/components/sticker-panel";
 
 import { sortReactionEmojis, useChatStore, type RoomMessage } from "../store/chat-store";
-import { CHAT_REACTION_EMOJIS, isKeepChannelId, type ChatAttachment, type ChatUser } from "../types";
+import { CHAT_REACTION_EMOJIS, isKeepChannelId, type ChatAttachment, type ChatTaskCard, type ChatUser } from "../types";
 import { keepMessage } from "../lib/api";
 import { attachmentLabel, firstName, formatClock, formatDuration, formatFileSize } from "../lib/format";
 import { ChatAvatar } from "./chat-avatar";
@@ -17,6 +17,7 @@ import { downloadUrl } from "./lightbox";
 import { daysUntilExpiry } from "../lib/retention";
 import { NoteCard } from "./notes";
 import { AlbumCard } from "./album-card";
+import { canOpenAsTask, ChatTaskCardView, LinkedTaskBadge, requestCreateTask } from "./chat-task";
 import { MessageText } from "./message-text";
 import { useBackToClose, useBackToCloseOnTouch } from "@/lib/back-to-close";
 
@@ -364,6 +365,18 @@ function ActionMenu({
             <Bookmark className="h-4 w-4 text-(--ink-soft)" /> Keep
           </button>
         )}
+        {canOpenAsTask(message) && (
+          <button
+            type="button"
+            className={item}
+            onClick={() => {
+              onClose();
+              requestCreateTask({ channelId: message.channelId, message });
+            }}
+          >
+            <ClipboardList className="h-4 w-4 text-(--ink-soft)" /> เปิดเป็นงาน
+          </button>
+        )}
         {canPin && (
           <button type="button" className={item} onClick={() => { onPin(); onClose(); }}>
             <Megaphone className="h-4 w-4 text-(--ink-soft)" /> ปักเป็นประกาศ
@@ -413,6 +426,8 @@ export interface MessageBubbleProps {
   onRetry: (clientId: string) => void;
   onDiscard: (clientId: string) => void;
   onShowReaders: (m: RoomMessage) => void;
+  /** ข้อความนี้ถูก "เปิดเป็นงาน" แล้ว — ป้ายใต้ข้อความ กดแล้วเปิดงาน */
+  linkedTask?: ChatTaskCard;
 }
 
 /**
@@ -608,6 +623,8 @@ export const MessageBubble = memo(function MessageBubble(props: MessageBubblePro
               <NoteCard key="note" message={m} mine={mine} />
             ) : m.kind === "album" ? (
               <AlbumCard key="album" message={m} mine={mine} />
+            ) : m.kind === "task" ? (
+              <ChatTaskCardView key="task" message={m} mine={mine} />
             ) : m.body && !m.replyTo && isJumboEmoji(m.body) ? (
               <p key="emoji" className="px-1 text-[44px] leading-tight">{m.body.trim()}</p>
             ) : (m.body || m.replyTo) && (
@@ -734,6 +751,12 @@ export const MessageBubble = memo(function MessageBubble(props: MessageBubblePro
             </div>
           )}
         </div>
+
+        {props.linkedTask && !m.deleted && (
+          <div className={cn("flex", mine ? "justify-end pr-2" : "pl-2")}>
+            <LinkedTaskBadge card={props.linkedTask} mine={mine} />
+          </div>
+        )}
 
         {m.reactions.length > 0 && (
           <div className={cn("relative z-10 -mt-2 flex flex-wrap gap-1.5", mine ? "justify-end pr-2" : "pl-2")}>

@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { Camera, ChevronRight, FileText, Image as ImageIcon, Loader2, Mic, NotebookPen, Paperclip, Pencil, Plus, RotateCw, SendHorizontal, Smile, Square, Trash2, X } from "lucide-react";
+import { Camera, ChevronRight, ClipboardList, FileText, Image as ImageIcon, Loader2, Mic, NotebookPen, Paperclip, Pencil, Plus, RotateCw, SendHorizontal, Smile, Square, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
 
@@ -91,8 +91,10 @@ export const Composer = forwardRef<
     onCancelReply: () => void;
     /** เมนู "+" → สร้างโน้ต (แบบ LINE) */
     onCreateNote?: () => void;
+    /** เมนู "+" → สร้างงาน (หน้าสร้างงานตัวเดียวกับบอร์ด) */
+    onCreateTask?: () => void;
   }
->(function Composer({ channelId, channelType, mentionable, meId, users, replyTo, onCancelReply, onCreateNote }, ref) {
+>(function Composer({ channelId, channelType, mentionable, meId, users, replyTo, onCancelReply, onCreateNote, onCreateTask }, ref) {
   const [text, setText] = useState(() => drafts.get(channelId) ?? "");
   const [pending, setPending] = useState<PendingFile[]>([]);
   const [mentionQuery, setMentionQuery] = useState<{ start: number; query: string } | null>(null);
@@ -654,6 +656,18 @@ export const Composer = forwardRef<
                       className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-(--bg-soft)"
                     >
                       <NotebookPen className="h-4 w-4 text-(--chat-accent)" /> โน้ต
+                    </button>
+                  )}
+                  {onCreateTask && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPlusOpen(false);
+                        onCreateTask();
+                      }}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-(--bg-soft)"
+                    >
+                      <ClipboardList className="h-4 w-4 text-(--chat-accent)" /> สร้างงาน
                     </button>
                   )}
                 </div>

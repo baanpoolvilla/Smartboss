@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
 
-import type { ChatAttachment, ChatAttachmentKind, ChatMessageDTO, ChatNotePreview, ChatReactionDTO, ChatReplyPreview, ChatAlbumCard } from "../types";
+import type { ChatAttachment, ChatAttachmentKind, ChatMessageDTO, ChatNotePreview, ChatReactionDTO, ChatReplyPreview, ChatAlbumCard, ChatTaskCard } from "../types";
 import { EXPIRING_KINDS, mediaExpiresAt } from "../lib/retention";
 import { isKeepChannelId } from "../types";
 
@@ -103,7 +103,10 @@ export async function hydrateMessages(orgId: string, rows: MessageRow[]): Promis
   const noteMessageIds = rows.filter((r) => r.kind === "note").map((r) => r.id);
   const albumMeta = (r: MessageRow) => (r.kind === "album" && r.meta && typeof r.meta === "object" ? (r.meta as Partial<ChatAlbumCard>) : null);
   const albumIds = Array.from(new Set(rows.map((r) => albumMeta(r)?.albumId).filter((id): id is string => typeof id === "string")));
-  const [reactionRows, replyRows, noteRows, albumRows] = await Promise.all([
+  const taskMeta = (r: MessageRow) =>
+    r.kind === "task" && r.meta && typeof r.meta === "object" ? (r.meta as { taskId?: unknown; sourceMessageId?: unknown }) : null;
+  const taskIds = Array.from(new Set(rows.map((r) => taskMeta(r)?.taskId).filter((id): id is string => typeof id === "string")));
+  const [reactionRows, replyRows, noteRows, albumRows, taskRows] = await Promise.all([
     prisma.chatReaction.findMany({
       where: { orgId, messageId: { in: ids } },
       orderBy: { createdAt: "asc" },
@@ -125,7 +128,29 @@ export async function hydrateMessages(orgId: string, rows: MessageRow[]): Promis
     albumIds.length > 0
       ? prisma.chatAlbum.findMany({ where: { orgId, id: { in: albumIds } }, select: { id: true, name: true } })
       : Promise.resolve([]),
+    // การ์ดงาน — ชื่อ/สถานะ/กำหนดส่งปัจจุบันจากบอร์ด · ไม่เจอ = งานถูกลบ
+    taskIds.length > 0
+      ? prisma.reportTask.findMany({
+          where: { orgId, id: { in: taskIds } },
+          select: { id: true, code: true, title: true, status: true, dueDate: true, assigneeIds: true },
+        })
+      : Promise.resolve([]),
   ]);
+  const taskById = new Map(taskRows.map((t) => [t.id, t]));
+  const taskCard = (row: MessageRow): ChatTaskCard | null => {
+    const m = taskMeta(row);
+    const t = typeof m?.taskId === "string" ? taskById.get(m.taskId) : undefined;
+    if (!t) return null;
+    return {
+      taskId: t.id,
+      code: t.code,
+      title: t.title,
+      status: t.status,
+      dueDate: t.dueDate,
+      assigneeIds: t.assigneeIds,
+      sourceMessageId: typeof m?.sourceMessageId === "string" ? m.sourceMessageId : null,
+    };
+  };
   const albumName = new Map(albumRows.map((a) => [a.id, a.name]));
   const albumCard = (row: MessageRow): ChatAlbumCard | null => {
     const m = albumMeta(row);
@@ -182,6 +207,7 @@ export async function hydrateMessages(orgId: string, rows: MessageRow[]): Promis
       kind: row.kind,
       ...(row.kind === "note" ? { note: deleted ? null : (noteByMessage.get(row.id) ?? null) } : {}),
       ...(row.kind === "album" ? { album: deleted ? null : albumCard(row) } : {}),
+      ...(row.kind === "task" ? { task: deleted ? null : taskCard(row) } : {}),
       body: deleted ? null : row.body,
       attachments: deleted ? [] : withExpiry(row),
       replyTo: deleted || !row.replyToId ? null : (replies.get(row.replyToId) ?? null),
