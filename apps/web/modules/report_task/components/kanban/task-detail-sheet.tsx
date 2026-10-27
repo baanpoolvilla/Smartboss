@@ -2114,6 +2114,7 @@ export function TaskDetailSheet({
               <AttachMenu
                 onFiles={(files) => void handleTaskFilesSelected(files, role)}
                 disabled={taskAttachUploading}
+                pasteItem
                 trigger={
                   <>
                     {taskAttachUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} {label}
@@ -2122,6 +2123,18 @@ export function TaskDetailSheet({
                 className="inline-flex items-center gap-1.5 h-8 shrink-0 rounded-md border border-input px-3 text-sm shadow-xs disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground"
               />
             );
+
+            // ยังไม่มีไฟล์ + แนบได้ → กล่องเส้นประบอกว่าลากมาวาง/Ctrl+V ได้ (27/10/2569 "ทำให้คนใช้งานรู้หน่อย")
+            const emptyBox = (text: string, can: boolean) =>
+              can ? (
+                <div className="rounded-lg border border-dashed border-[var(--line)] px-3 py-3 text-center text-xs text-[var(--ink-soft)]">
+                  {text}
+                  <span className="hidden sm:block">ลากไฟล์มาวางตรงนี้ หรือคลิกในกรอบนี้แล้วกด Ctrl+V วางรูปที่แคปไว้ได้เลย</span>
+                </div>
+              ) : (
+                <p className="text-xs text-[var(--ink-soft)]">{text}</p>
+              );
+            const pasteTip = <span className="hidden sm:inline"> · ลากไฟล์มาวาง หรือกด Ctrl+V ได้</span>;
 
             const renderFile = (a: Attachment) => {
               const attIndex = viewerList.indexOf(a);
@@ -2176,6 +2189,7 @@ export function TaskDetailSheet({
                   enabled={canAddBrief && !taskAttachUploading}
                   onFiles={(files) => void handleTaskFilesSelected(files, "brief")}
                   label="ปล่อยเพื่อแนบเป็นไฟล์ตอนสั่งงาน"
+                  paste
                   className="space-y-2"
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -2184,8 +2198,8 @@ export function TaskDetailSheet({
                     </h4>
                     {canAddBrief && addButton("brief", "แนบไฟล์")}
                   </div>
-                  <p className="text-[11px] text-[var(--ink-soft)]">ไฟล์ที่ผู้สั่งงานแนบมาให้ — ตอนเปิดงานหรือเพิ่มทีหลัง</p>
-                  {briefFiles.length === 0 && <p className="text-xs text-[var(--ink-soft)]">ไม่มีไฟล์แนบ</p>}
+                  <p className="text-[11px] text-[var(--ink-soft)]">ไฟล์ที่ผู้สั่งงานแนบมาให้ — ตอนเปิดงานหรือเพิ่มทีหลัง{canAddBrief && briefFiles.length > 0 && pasteTip}</p>
+                  {briefFiles.length === 0 && emptyBox("ไม่มีไฟล์แนบ", canAddBrief)}
                   {briefFiles.map(renderFile)}
                 </FileDropZone>
 
@@ -2193,6 +2207,7 @@ export function TaskDetailSheet({
                   enabled={canSubmit && !taskAttachUploading}
                   onFiles={(files) => void handleTaskFilesSelected(files, "submission")}
                   label="ปล่อยเพื่อส่งเป็นไฟล์งาน"
+                  paste
                   className="space-y-2 border-t border-[var(--line)] pt-4"
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -2203,8 +2218,9 @@ export function TaskDetailSheet({
                   </div>
                   <p className="text-[11px] text-[var(--ink-soft)]">
                     ไฟล์ที่ผู้รับผิดชอบส่งมาให้ตรวจ{task.taskMode === "group" ? " (รวมทุกคน — ดูชื่อคนส่งที่แต่ละไฟล์)" : ""}
+                    {canSubmit && submittedFiles.length > 0 && pasteTip}
                   </p>
-                  {submittedFiles.length === 0 && <p className="text-xs text-[var(--ink-soft)]">ยังไม่มีใครส่งไฟล์งาน</p>}
+                  {submittedFiles.length === 0 && emptyBox("ยังไม่มีใครส่งไฟล์งาน", canSubmit)}
                   {submittedFiles.map(renderFile)}
                 </FileDropZone>
               </div>

@@ -2,7 +2,8 @@
 
 import { useRef } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
-import { Paperclip, Image as ImageIcon, FileText } from "lucide-react";
+import { Paperclip, Image as ImageIcon, FileText, ClipboardPaste } from "lucide-react";
+import { toast } from "sonner";
 import { REPORT_ATTACHMENT_ACCEPT } from "@/modules/report_task/lib/report-attachment-kind";
 import { cn } from "@/modules/report_task/lib/utils";
 
@@ -27,6 +28,7 @@ export function AttachMenu({
   label = "แนบรูป/ไฟล์",
   className,
   trigger,
+  pasteItem = false,
   ...rest
 }: {
   onFiles: (files: File[]) => void;
@@ -37,6 +39,8 @@ export function AttachMenu({
    * trigger (e.g. a round "+" button in a chat composer) that still needs
    * the same menu underneath. */
   trigger?: React.ReactNode;
+  /** เพิ่มตัวเลือก "วางรูปที่คัดลอกไว้" — ให้คนรู้ว่าแคปหน้าจอแล้ววางได้ ไม่ต้องบันทึกไฟล์ก่อน */
+  pasteItem?: boolean;
   "aria-label"?: string;
 }) {
   const mediaRef = useRef<HTMLInputElement>(null);
@@ -44,6 +48,24 @@ export function AttachMenu({
 
   function pick(ref: React.RefObject<HTMLInputElement | null>) {
     ref.current?.click();
+  }
+
+  /** อ่านรูปจากคลิปบอร์ด (เบราว์เซอร์อาจถามสิทธิ์ครั้งแรก) — อ่านไม่ได้ก็บอกให้กด Ctrl+V แทน */
+  async function pasteFromClipboard() {
+    try {
+      const items = await navigator.clipboard.read();
+      const files: File[] = [];
+      for (const item of items) {
+        const type = item.types.find((t) => t.startsWith("image/"));
+        if (!type) continue;
+        const blob = await item.getType(type);
+        files.push(new File([blob], `วางจากคลิปบอร์ด-${Date.now()}.${type.split("/")[1] ?? "png"}`, { type }));
+      }
+      if (files.length > 0) onFiles(files);
+      else toast.error("ยังไม่มีรูปที่คัดลอกไว้ — แคปหน้าจอหรือคัดลอกรูปก่อน แล้วลองใหม่");
+    } catch {
+      toast.error("เบราว์เซอร์นี้ไม่ให้อ่านคลิปบอร์ด — คลิกในกรอบไฟล์แล้วกด Ctrl+V แทน");
+    }
   }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -92,6 +114,16 @@ export function AttachMenu({
           >
             <FileText className="h-4 w-4 text-[var(--ink-soft)]" /> ไฟล์
           </button>
+          {pasteItem && (
+            <button
+              type="button"
+              onClick={() => void pasteFromClipboard()}
+              className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm hover:bg-[var(--bg-soft)]"
+            >
+              <ClipboardPaste className="h-4 w-4 text-[var(--ink-soft)]" /> วางรูปที่คัดลอกไว้
+              <kbd className="ml-auto hidden rounded border border-[var(--line)] px-1 text-[10px] text-[var(--ink-soft)] sm:inline">Ctrl+V</kbd>
+            </button>
+          )}
         </PopoverContent>
       </Popover>
 

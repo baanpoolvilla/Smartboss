@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Upload } from "lucide-react";
-import { filesFromDataTransfer } from "@/lib/annotate/annotate";
+import { filesFromDataTransfer, hasClipboardText } from "@/lib/annotate/annotate";
 
 /**
  * กล่องรับไฟล์ที่ลากมาวาง — ระหว่างลากไฟล์ค้างไว้เหนือกล่องจะขึ้นกรอบเขียวพร้อมบอกว่า
@@ -16,6 +16,7 @@ export function FileDropZone({
   className = "",
   style,
   children,
+  paste = false,
 }: {
   enabled: boolean;
   onFiles: (files: File[]) => void;
@@ -24,6 +25,8 @@ export function FileDropZone({
   className?: string;
   style?: React.CSSProperties;
   children: React.ReactNode;
+  /** รับรูปที่วางด้วย Ctrl+V ด้วย (คลิกในกล่องก่อนให้โฟกัสอยู่ในกล่อง) — ข้อความยังวางตามปกติ */
+  paste?: boolean;
 }) {
   const [over, setOver] = useState(false);
   const depth = useRef(0);
@@ -33,8 +36,21 @@ export function FileDropZone({
 
   return (
     <div
-      className={`relative ${className}`}
+      className={`relative ${paste ? "outline-none" : ""} ${className}`}
       style={style}
+      tabIndex={paste ? -1 : undefined}
+      onPaste={
+        paste
+          ? (e) => {
+              if (e.defaultPrevented || hasClipboardText(e.clipboardData)) return;
+              if ((e.target as HTMLElement).closest("[data-own-paste]")) return;
+              const files = filesFromDataTransfer(e.clipboardData);
+              if (files.length === 0) return;
+              e.preventDefault();
+              onFiles(files);
+            }
+          : undefined
+      }
       onDragEnter={(e) => {
         if (!hasFiles(e)) return;
         e.preventDefault();
