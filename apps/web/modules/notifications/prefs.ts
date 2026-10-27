@@ -60,9 +60,9 @@ export const NOTIF_MODULES: NotifModuleDef[] = [
       { id: "pm.due_request", label: "ขอเลื่อน / เปลี่ยนกำหนดส่ง", hint: "คำขอเลื่อน ผลอนุมัติ และกำหนดส่งที่ถูกปรับ", rank: 1 },
       { id: "pm.mention", label: "แท็กฉันในงาน", hint: "มีคน @ ฉันในความคิดเห็นของงาน", rank: 1 },
       { id: "pm.meeting", label: "ประชุม", hint: "เชิญ แก้ เลื่อน ยกเลิก และเตือนก่อนเริ่ม", rank: 1 },
-      { id: "pm.comment", label: "ความคิดเห็น / ไฟล์แนบในงานของฉัน", hint: "มีคนคอมเมนต์หรือแนบไฟล์ในงานที่ฉันอยู่", rank: 2 },
+      { id: "pm.comment", label: "ความคิดเห็นในงานของฉัน", hint: "มีคนคอมเมนต์ในงานที่ฉันอยู่", rank: 2 },
       { id: "pm.todo", label: "สิ่งที่ต้องทำใกล้ถึงเวลา", hint: "รายการสิ่งที่ต้องทำของฉัน", rank: 2 },
-      { id: "pm.activity", label: "ความเคลื่อนไหวอื่นในงาน", hint: "เช็กลิสต์ สติกเกอร์ รีแอ็กชันในงาน", rank: 3 },
+      { id: "pm.activity", label: "ความเคลื่อนไหวอื่นในงาน", hint: "ไฟล์แนบ เช็กลิสต์ สติกเกอร์ และคอมเมนต์สั้น ๆ อย่าง รับทราบ / โอเค", rank: 3 },
     ],
   },
   {
@@ -246,7 +246,8 @@ export function topicForCoreType(type: string): string {
 }
 
 /** ท้ายข้อความ `"ชื่อ": สติกเกอร์/รูป/รับทราบ` — แม่แบบคอมเมนต์ใน task-store.ts / report-feed-store.ts */
-const ACK_TAIL = /":\s*(ส่งสติกเกอร์|ส่งรูป(\s*\d+\s*รูป)?|รับทราบ(ค่ะ|คะ|ครับ|นะคะ|นะครับ)?)\s*[.!🙏]*\s*$/u;
+const ACK_TAIL =
+  /":\s*(ส่งสติกเกอร์|ส่งรูป(\s*\d+\s*รูป)?|แนบไฟล์(\s*\d+\s*ไฟล์)?|รับทราบ(ค่ะ|คะ|ครับ|นะคะ|นะครับ)?|ok(ay)?|โอเค(ค่ะ|ครับ)?|เคร?(ค่ะ|ครับ)?|ใช่(ค่ะ|คะ|ครับ)|ค่ะ|ครับ|👍+)\s*[.!🙏👍🙂😊]*\s*$/iu;
 
 /**
  * แจ้งเตือนของ Project Management / รีพอต / แจ้งปัญหา (เก็บใน store ของ report_task) — ส่วนใหญ่ไม่มี
@@ -261,7 +262,9 @@ export function topicForReportNotification(n: { message: string; kind?: string |
   if (ACK_TAIL.test(m) && !m.includes("แท็ก")) return m.includes("ในงาน") ? "pm.activity" : "rp.reaction";
   if (n.kind === "task_assigned") return "pm.assigned";
   if (n.kind === "task_due_request") return "pm.due_request";
-  if (n.kind === "task_comment" || n.kind === "task_attachment") return "pm.comment";
+  // แนบไฟล์ = ความเคลื่อนไหว (ผลงานจะมาตรวจตอน "รอคุณตรวจ" อยู่แล้ว) — 27/10/2569 หัวหน้าได้ 19 ครั้ง/สัปดาห์
+  if (n.kind === "task_attachment") return "pm.activity";
+  if (n.kind === "task_comment") return "pm.comment";
   if (n.kind === "sticker_settings") return "pm.activity";
 
   // เตือนงานใกล้ครบกำหนด (reminder-sweep.ts taskDueRounds) — ก่อนกฎคำอื่น เพราะชื่องานอาจมีคำว่า "ประชุม"/"ตรวจงาน"
@@ -285,7 +288,8 @@ export function topicForReportNotification(n: { message: string; kind?: string |
   if (m.includes("เลื่อนกำหนดส่ง") || m.includes("ปรับกำหนดส่ง")) return "pm.due_request";
   if (m.includes("ใกล้ถึงกำหนดส่ง")) return "pm.due_soon";
   if (m.includes("มอบหมายงาน")) return "pm.assigned";
-  if (m.includes("แสดงความคิดเห็นในงาน") || m.includes("แนบไฟล์")) return "pm.comment";
+  if (m.includes("แนบไฟล์") && !m.includes("แสดงความคิดเห็นในงาน")) return "pm.activity";
+  if (m.includes("แสดงความคิดเห็นในงาน")) return "pm.comment";
   if (m.includes("งาน") || m.includes("เช็คลิสต์") || m.includes("คะแนน")) return "pm.activity";
   return OTHER_TOPIC;
 }
