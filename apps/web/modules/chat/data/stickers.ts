@@ -16,7 +16,8 @@ import type { ChatStickerDTO, ChatStickerPackDTO } from "../types";
  * ทุกไฟล์นับเข้าเพดานพื้นที่ของบริษัทเหมือนไฟล์แชทอื่น
  */
 export const STICKER_MAX_BYTES = 1024 * 1024;
-export const STICKER_MAX_COUNT = 300;
+// 300 → 1000 (27/10/2569 ครบ 300 แล้ว เพิ่มไม่ได้) — สติกเกอร์ละ 20–80KB ยังนับเข้าเพดานพื้นที่บริษัทเหมือนเดิม
+export const STICKER_MAX_COUNT = 1000;
 const PACK_MAX_COUNT = 50;
 
 const STICKER_TYPES: Record<string, string> = { "image/png": "png", "image/webp": "webp", "image/gif": "gif", "image/jpeg": "jpg" };
