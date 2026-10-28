@@ -12,6 +12,8 @@ export type TaxMode = "auto" | "fixed" | "none";
 export type RunStatus = "draft" | "submitted" | "approved" | "paid";
 export type ItemKind = "earning" | "deduction";
 export type OtMode = "hours" | "days";
+/** เบี้ยขยันของคนที่เข้างาน/ลาออกกลางรอบ */
+export type DiligencePartial = "none" | "prorate" | "full";
 
 /* ───────────── เงิน (สตางค์) ───────────── */
 
@@ -211,6 +213,8 @@ export interface SettingsView {
   diligenceEnabled: boolean;
   /** ขั้นเบี้ยขยัน (บาท) เรียงน้อยไปมาก */
   diligenceSteps: number[];
+  /** เข้างาน/ลาออกกลางรอบ: none = ไม่ได้ (ต้องครบรอบ) · prorate = เฉลี่ยตามวัน · full = ได้เต็มขั้น */
+  diligencePartial: DiligencePartial;
   editorUserIds: string[];
   superAdminAccess: boolean;
   companyTaxId: string;
@@ -236,6 +240,7 @@ export const DEFAULT_SETTINGS: SettingsView = {
   otMode: "hours",
   diligenceEnabled: false,
   diligenceSteps: [500, 800, 1000],
+  diligencePartial: "none",
   editorUserIds: [],
   superAdminAccess: true,
   companyTaxId: "",

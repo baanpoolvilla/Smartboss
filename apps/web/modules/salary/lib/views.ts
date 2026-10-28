@@ -171,6 +171,7 @@ export async function approvalSummary(orgId: string, run: RunDetail): Promise<{ 
     if (ov.sso) changes.push({ tag: "override", who: l.name, detail: `ปรับประกันสังคมเอง (ระบบคิดได้ ${l.info.ssoComputed}) · ${ov.sso.reason}`, amount: -ov.sso.amount });
     if (ov.tax) changes.push({ tag: "override", who: l.name, detail: `ปรับภาษีเอง (ระบบคิดได้ ${l.info.taxComputed}) · ${ov.tax.reason}`, amount: -ov.tax.amount });
     if (ov.commission) changes.push({ tag: "override", who: l.name, detail: `ปรับค่าคอมเอง (ระบบคิดได้ ${l.info.commissionComputed ?? 0}) · ${ov.commission.reason}`, amount: ov.commission.amount });
+    if (ov.diligence) changes.push({ tag: "override", who: l.name, detail: `ปรับเบี้ยขยันเอง (ระบบคิดได้ ${l.info.diligence?.computed ?? 0}) · ${ov.diligence.reason}`, amount: ov.diligence.amount });
     for (const d of l.info?.deferredAdvances ?? []) changes.push({ tag: "deferred", who: l.name, detail: `เลื่อนหักเบิกล่วงหน้า ${d.code} ไปงวดหน้า`, amount: d.amount });
     const p = prev.byEmployment.get(l.employmentId);
     const ot = l.lines.filter((x) => x.source === "ot").reduce((s, x) => s + x.amount, 0);

@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@smartboss/database";
 
 import { withWorkforceTenant } from "@/modules/report_task/lib/db/workforce-calendar";
-import { diligenceStep, periodsEmployedBefore, type DiligenceResult } from "./compute";
+import { applyDiligencePartial, diligenceStep, periodsEmployedBefore, type DiligenceResult } from "./compute";
 import { fillSubjectsByEmail } from "./people";
 import { loadRequests } from "@/modules/requests/lib/db";
 import { hoursText, otCalc } from "@/modules/requests/lib/types";
@@ -101,7 +101,7 @@ export async function loadPeriodInputs(
   tx: Tx,
   orgId: string,
   run: { id: string | null; period: string; startsOn: string; endsOn: string; payDate: string },
-  settings?: Pick<SettingsView, "otMode" | "diligenceEnabled" | "diligenceSteps">,
+  settings?: Pick<SettingsView, "otMode" | "diligenceEnabled" | "diligenceSteps" | "diligencePartial">,
 ): Promise<{ staff: StaffInput[]; skipped: { name: string; reason: string }[] }> {
   const { startsOn, endsOn, payDate } = run;
 
@@ -360,6 +360,8 @@ export async function loadPeriodInputs(
         lateCount: att?.late_days ?? 0,
         absentDays: att?.absent_days ?? 0,
       });
+      // เข้างาน/ลาออกกลางรอบ (from/to = ช่วงที่ทำงานอยู่ในงวด)
+      diligence = applyDiligencePartial(diligence, settings.diligencePartial ?? "none", daysBetweenInclusive(from, to), daysBetweenInclusive(startsOn, endsOn));
     }
 
     // ไม่มีเงินเดือนที่มีผลในงวด = ไม่อยู่ในรอบ (ขึ้นเตือนให้ใส่เงินเดือน) — ไม่จ่าย 0 บาทเงียบ ๆ

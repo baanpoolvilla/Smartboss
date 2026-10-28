@@ -62,6 +62,7 @@ export async function readSettings(tx: Tx, orgId: string): Promise<SettingsView>
     otMode: row.otMode === "days" ? "days" : "hours",
     diligenceEnabled: row.diligenceEnabled,
     diligenceSteps: normalizeDiligenceSteps(row.diligenceSteps) ?? DEFAULT_SETTINGS.diligenceSteps,
+    diligencePartial: row.diligencePartial === "prorate" || row.diligencePartial === "full" ? row.diligencePartial : "none",
     editorUserIds: row.editorUserIds,
     superAdminAccess: row.superAdminAccess,
     companyTaxId: row.companyTaxId,

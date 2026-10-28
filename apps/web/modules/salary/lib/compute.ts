@@ -86,6 +86,28 @@ export interface DiligenceResult {
   lateCount: number;
   absentDays: number;
   how: string;
+  /** ทำงานไม่ครบรอบ (เข้างาน/ลาออกกลางรอบ) — ยอดปรับตามตั้งค่าแล้ว · stepAmount = ยอดขั้นก่อนปรับ */
+  partial?: { mode: "none" | "prorate" | "full"; workedDays: number; periodDays: number; stepAmount: number };
+  /** ยอดที่ระบบคิด (ก่อน HR ปรับเอง) — มีเมื่อถูกปรับ */
+  computed?: number;
+}
+
+/**
+ * คนที่ทำงานไม่ครบรอบ (ผู้ใช้เลือก 28/10/2569 "ต้องทำงานครบรอบ"):
+ *   none    = รอบนี้ไม่ได้ (ยอด 0) — รอบหน้าเริ่มขั้นแรกเพราะขั้นรอบก่อนเป็น 0
+ *   prorate = ขั้นที่ได้ × วันที่ทำงาน ÷ วันในรอบ (ปัดสตางค์)
+ *   full    = ได้เต็มขั้น
+ */
+export function applyDiligencePartial(r: DiligenceResult, mode: "none" | "prorate" | "full", workedDays: number, periodDays: number): DiligenceResult {
+  if (workedDays >= periodDays) return r;
+  const b = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  const partial = { mode, workedDays, periodDays, stepAmount: r.amount };
+  if (mode === "full") return { ...r, partial, how: `${r.how} · ทำงาน ${workedDays}/${periodDays} วัน ได้เต็มขั้นตามตั้งค่า` };
+  if (mode === "prorate") {
+    const amount = Math.round((r.amount * workedDays * 100) / periodDays) / 100;
+    return { ...r, amount, partial, how: `${r.how} · ทำงาน ${workedDays}/${periodDays} วัน → ${b(r.amount)} × ${workedDays} ÷ ${periodDays} = ${b(amount)}` };
+  }
+  return { ...r, amount: 0, partial, how: `ทำงานไม่ครบรอบ (${workedDays}/${periodDays} วัน) — ไม่ได้เบี้ยขยันรอบนี้ · รอบแรกที่ทำงานครบเริ่มขั้นแรก` };
 }
 
 /**
@@ -155,7 +177,7 @@ export interface ComputeInput {
   /** เบี้ยขยัน (บริษัทเปิดใช้และคนนี้ได้) */
   diligence?: DiligenceResult;
   adjustments: Adjustment[];
-  overrides: { sso?: Override; tax?: Override; commission?: Override };
+  overrides: { sso?: Override; tax?: Override; commission?: Override; diligence?: Override };
   profile: {
     ssoExempt: boolean;
     ssoExemptReason: string;
@@ -432,9 +454,15 @@ export function computePay(input: ComputeInput): ComputeResult {
     }
   }
   // เบี้ยขยัน — เงินจูงใจ ไม่ใช่ค่าจ้าง (ไม่นับฐานประกันสังคม) · จ่ายไม่แน่นอน = เงินได้ไม่ประจำ (ภาษี)
-  if (input.diligence && input.diligence.amount > 0) {
-    const amt = s(input.diligence.amount);
-    lines.push({ key: "diligence", label: "เบี้ยขยัน", kind: "earning", amount: toBaht(amt), how: input.diligence.how, source: "diligence", auto: true });
+  // HR ปรับยอดเองได้ (ต้องมีเหตุผล) · ทำงานไม่ครบรอบแล้วได้ 0 ยังขึ้นบรรทัดพร้อมเหตุผล (ไม่หายเงียบ)
+  const dilOverride = input.overrides.diligence;
+  if (input.diligence || dilOverride) {
+    const computed = input.diligence ? s(input.diligence.amount) : 0;
+    const amt = dilOverride ? Math.max(0, s(dilOverride.amount)) : computed;
+    const how = dilOverride ? `ปรับโดย ${dilOverride.byName}: ${dilOverride.reason} (ระบบคิดได้ ${fmt(computed)})` : (input.diligence?.how ?? "");
+    if (amt > 0 || input.diligence?.partial || dilOverride) {
+      lines.push({ key: "diligence", label: "เบี้ยขยัน", kind: "earning", amount: toBaht(amt), how, source: "diligence", auto: !dilOverride });
+    }
     irregularEarn += amt;
   }
   for (const a of input.adjustments) {

@@ -28,6 +28,7 @@ import {
   type ApprovalMode,
   type ItemKind,
   type LateMode,
+  type DiligencePartial,
   type OtMode,
   type PayChannel,
   type SsoParams,
@@ -160,6 +161,7 @@ export interface SettingsInput {
   otMode: OtMode;
   diligenceEnabled: boolean;
   diligenceSteps: number[];
+  diligencePartial: DiligencePartial;
   companyTaxId: string;
   ssoEmployerNo: string;
   ssoBranch: string;
@@ -186,6 +188,7 @@ export async function saveSettingsAction(input: SettingsInput): Promise<Result> 
     if (input.otMode !== "hours" && input.otMode !== "days") return { error: "วิธีคิด OT ไม่ถูกต้อง" };
     const diligenceSteps = normalizeDiligenceSteps(input.diligenceSteps);
     if (!diligenceSteps) return { error: "ขั้นเบี้ยขยันต้องเป็นตัวเลขมากกว่า 0 เรียงจากน้อยไปมาก 1–6 ขั้น (เช่น 500, 800, 1000)" };
+    if (!["none", "prorate", "full"].includes(input.diligencePartial)) return { error: "ตัวเลือกเบี้ยขยันคนเข้า/ออกกลางรอบไม่ถูกต้อง" };
     const data = {
       cutoffDay,
       payDay,
@@ -201,6 +204,7 @@ export async function saveSettingsAction(input: SettingsInput): Promise<Result> 
       otMode: input.otMode,
       diligenceEnabled: !!input.diligenceEnabled,
       diligenceSteps,
+      diligencePartial: input.diligencePartial,
       companyTaxId: taxId,
       ssoEmployerNo: ssoNo,
       ssoBranch: branch,
@@ -596,12 +600,12 @@ export async function updateAdjustmentAction(input: {
 }
 
 /** ปรับยอดประกันสังคม/ภาษีงวดนี้เอง (ต้องมีเหตุผล) · amount null = กลับไปใช้ที่ระบบคิด */
-export async function overrideAction(input: { runId: string; employmentId: string; expectUpdatedAt: string | null; which: "sso" | "tax" | "commission"; amount: number | null; reason: string }): Promise<Result> {
+export async function overrideAction(input: { runId: string; employmentId: string; expectUpdatedAt: string | null; which: "sso" | "tax" | "commission" | "diligence"; amount: number | null; reason: string }): Promise<Result> {
   try {
     const { orgId, actor } = await guardFor(input.employmentId);
-    if (input.which !== "sso" && input.which !== "tax" && input.which !== "commission") return { error: "รายการไม่ถูกต้อง" };
+    if (!["sso", "tax", "commission", "diligence"].includes(input.which)) return { error: "รายการไม่ถูกต้อง" };
     const reason = text(input.reason, 300);
-    const name = input.which === "sso" ? "ประกันสังคม" : input.which === "tax" ? "ภาษี" : "ค่าคอม";
+    const name = input.which === "sso" ? "ประกันสังคม" : input.which === "tax" ? "ภาษี" : input.which === "commission" ? "ค่าคอม" : "เบี้ยขยัน";
     const amount = input.amount === null ? null : money(input.amount, name, input.which === "commission" ? 10_000_000 : 1_000_000);
     if (amount !== null && !reason) return { error: "ใส่เหตุผลที่ปรับ" };
     await editLine(orgId, actor, input, (line) => {

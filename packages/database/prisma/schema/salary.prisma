@@ -45,6 +45,8 @@ model SalarySettings {
   diligenceEnabled   Boolean  @default(false) @map("diligence_enabled")
   /// ขั้นเบี้ยขยัน (บาท) เรียงน้อยไปมาก เช่น [500, 800, 1000]
   diligenceSteps     Json     @default("[500, 800, 1000]") @map("diligence_steps")
+  /// เข้างาน/ลาออกกลางรอบ: none = ไม่ได้ (ต้องครบรอบ) · prorate = เฉลี่ยตามวัน · full = ได้เต็มขั้น
+  diligencePartial   String   @default("none") @map("diligence_partial")
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   updatedByName      String   @default("") @map("updated_by_name")
 

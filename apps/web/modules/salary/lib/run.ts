@@ -44,7 +44,7 @@ export interface LineInfo {
   absentDays?: number;
   otDays?: number;
   otMinutes?: number;
-  overrides: { sso?: Override; tax?: Override; commission?: Override };
+  overrides: { sso?: Override; tax?: Override; commission?: Override; diligence?: Override };
   /** ใบเบิกล่วงหน้าที่เลื่อนไปหักงวดหน้า */
   deferAdvances: string[];
   deferredAdvances: { refId: string; code: string; amount: number }[];
@@ -197,7 +197,14 @@ export async function computeRun(orgId: string, runId: string, actor: Actor): Pr
         deferAdvances: defer,
         deferredAdvances: s.advances.filter((a) => defer.includes(a.refId)).map((a) => ({ refId: a.refId, code: a.code, amount: a.amount })),
         refs: { ot: s.otRefs ?? s.ot.map((o) => ({ id: o.refId, amount: o.amount })), advances: advances.map((a) => ({ id: a.refId, amount: a.amount })) },
-        ...(s.diligence ? { diligence: s.diligence } : {}),
+        // ประวัติขั้นเบี้ยขยัน = ยอดที่จ่ายจริง (HR ปรับเอง = ใช้ยอดที่ปรับ รอบหน้านับต่อจากยอดนั้น)
+        ...(s.diligence || overrides.diligence
+          ? {
+              diligence: overrides.diligence
+                ? { ...(s.diligence ?? { step: 0, steps: 0, passed: false, prev: null, prevSource: "none" as const, leaveDays: 0, lateCount: 0, absentDays: 0, how: "" }), amount: overrides.diligence.amount, computed: s.diligence?.amount ?? 0 }
+                : s.diligence!,
+            }
+          : {}),
         ...(s.commissionParts && !overrides.commission ? { commissionParts: s.commissionParts } : {}),
         ...(s.otDaysPay ? { otDaysPay: s.otDaysPay } : {}),
         blocks: r.blocks,

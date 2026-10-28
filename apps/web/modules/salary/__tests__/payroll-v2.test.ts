@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { formatExact, splitGradeTier, toCommissionMethod } from "@/modules/hr/lib/commission";
-import { computePay, diligenceStep, type ComputeInput } from "../lib/compute";
+import { applyDiligencePartial, computePay, diligenceStep, type ComputeInput } from "../lib/compute";
 import { reportRow } from "../lib/report";
 import type { LineInfo } from "../lib/run";
 import { DEFAULT_SSO, DEFAULT_TAX, normalizeDiligenceSteps } from "../lib/types";
@@ -220,5 +220,44 @@ describe("คำนวณเงินเดือนตามสูตรให�
     const fixed = computePay(base({ commission: { amount: 0, detail: "", taxable: true, ssoBase: true, block }, overrides: { commission: { amount: 1200, reason: "ตกลงกันแล้ว", byName: "HR" } } }));
     expect(fixed.blocks).toEqual([]);
     expect(fixed.lines.find((l) => l.source === "commission")!.amount).toBe(1200);
+  });
+});
+
+describe("เบี้ยขยัน: เข้างาน/ลาออกกลางรอบ + HR ปรับยอดเอง", () => {
+  const S = [500, 800, 1000];
+  const ok = { leaveDays: 0, lateCount: 0, absentDays: 0 };
+
+  it("ทำงานครบรอบ = ไม่เปลี่ยนอะไร", () => {
+    const r = diligenceStep(S, 800, "run", ok);
+    expect(applyDiligencePartial(r, "none", 30, 30)).toBe(r);
+  });
+
+  it("ต้องครบรอบ (ค่าตั้งต้น): ทำงาน 21/31 วัน = 0 พร้อมเหตุผล · รอบถัดไปที่ครบเริ่ม 500", () => {
+    const r = applyDiligencePartial(diligenceStep(S, 800, "run", ok), "none", 21, 31);
+    expect(r.amount).toBe(0);
+    expect(r.how).toContain("ทำงานไม่ครบรอบ (21/31 วัน)");
+    expect(diligenceStep(S, r.amount, "run", ok).amount).toBe(500);
+  });
+
+  it("เฉลี่ยตามวัน: 1,000 × 21 ÷ 31 = 677.42 · ได้เต็มขั้น = 1,000", () => {
+    const base = diligenceStep(S, 800, "run", ok);
+    expect(applyDiligencePartial(base, "prorate", 21, 31).amount).toBe(677.42);
+    expect(applyDiligencePartial(base, "full", 21, 31).amount).toBe(1000);
+  });
+
+  it("ไม่ครบรอบแล้วได้ 0 ยังขึ้นบรรทัดในสลิป (ไม่หายเงียบ)", () => {
+    const d = applyDiligencePartial(diligenceStep(S, 800, "run", ok), "none", 10, 31);
+    const r = computePay(base({ diligence: d }));
+    const line = r.lines.find((l) => l.key === "diligence")!;
+    expect(line.amount).toBe(0);
+    expect(line.how).toContain("ไม่ครบรอบ");
+  });
+
+  it("HR ปรับยอดเอง: ใช้ยอดที่ปรับ + บอกยอดที่ระบบคิด", () => {
+    const r = computePay(base({ diligence: diligenceStep(S, null, "none", ok), overrides: { diligence: { amount: 800, reason: "ทำงานดีพิเศษ", byName: "HR" } } }));
+    const line = r.lines.find((l) => l.key === "diligence")!;
+    expect(line.amount).toBe(800);
+    expect(line.how).toContain("ระบบคิดได้ 500.00");
+    expect(r.net).toBe(20000 + 800 - 875);
   });
 });

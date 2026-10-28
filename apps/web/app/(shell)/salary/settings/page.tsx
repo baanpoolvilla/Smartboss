@@ -53,6 +53,7 @@ export default async function SalarySettingsPage() {
             otMode: settings.otMode,
             diligenceEnabled: settings.diligenceEnabled,
             diligenceSteps: settings.diligenceSteps,
+            diligencePartial: settings.diligencePartial,
             companyTaxId: settings.companyTaxId,
             ssoEmployerNo: settings.ssoEmployerNo,
             ssoBranch: settings.ssoBranch,

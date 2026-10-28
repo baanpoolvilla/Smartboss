@@ -99,7 +99,7 @@ export function reportRow(l: ReportLine): ReportRow {
     commission,
     commissionNote: comm[0]?.how ?? (l.info?.overrides?.commission ? `ปรับเป็น 0 · ${l.info.overrides.commission.reason}` : ""),
     diligence,
-    diligenceStep: d ? `ขั้น ${d.step}/${d.steps}${d.passed ? "" : " · ลา/สาย"}` : "",
+    diligenceStep: !d ? "" : l.info?.overrides?.diligence ? "ปรับเอง" : d.partial && d.partial.mode !== "full" ? `ไม่ครบรอบ ${d.partial.workedDays}/${d.partial.periodDays} วัน` : `ขั้น ${d.step}/${d.steps}${d.passed ? "" : " · ลา/สาย"}`,
     otDays: od ? od.days : null,
     otRate: od ? od.rate : null,
     ot: otAmt,

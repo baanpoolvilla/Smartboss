@@ -26,7 +26,9 @@ export interface EditorData {
   expectUpdatedAt: string;
   lines: PayLine[];
   adjustments: Adjustment[];
-  overrides: { sso?: { amount: number; reason: string }; tax?: { amount: number; reason: string }; commission?: { amount: number; reason: string } };
+  overrides: { sso?: { amount: number; reason: string }; tax?: { amount: number; reason: string }; commission?: { amount: number; reason: string }; diligence?: { amount: number; reason: string } };
+  /** เบี้ยขยันที่ระบบคิดได้ (ไม่มี = บริษัทไม่ได้เปิด/คนนี้ไม่ได้) */
+  diligenceComputed?: number | null;
   deferred: { refId: string; code: string; amount: number }[];
   items: { id: string; name: string; kind: "earning" | "deduction"; taxable: boolean; ssoBase: boolean }[];
   gross: number;
@@ -60,7 +62,9 @@ const BADGE: Record<string, { text: string; cls: string }> = {
  * ประกันสังคม/ภาษีปรับเองได้ ต้องมีเหตุผล และโชว์ยอดที่ระบบคิดได้คู่กันเสมอ
  */
 export function LineEditor({ d }: { d: EditorData }) {
-  const earn = d.lines.filter((l) => l.kind === "earning" && l.source !== "salary" && l.source !== "commission");
+  const earn = d.lines.filter((l) => l.kind === "earning" && l.source !== "salary" && l.source !== "commission" && l.source !== "diligence");
+  const diligence = d.lines.find((l) => l.source === "diligence");
+  const showDiligence = !!diligence || d.diligenceComputed !== undefined && d.diligenceComputed !== null || !!d.overrides.diligence;
   const commission = d.lines.find((l) => l.source === "commission");
   // รวมกรณีเกรดยังไม่ปิด (มีเตือนค่าคอม) — ใส่ยอดเองได้เลยไม่ต้องรอ
   const showCommission = !!commission || d.commissionComputed > 0 || !!d.overrides.commission || d.warnings.some((w) => w.startsWith("ค่าคอม"));
@@ -130,7 +134,19 @@ export function LineEditor({ d }: { d: EditorData }) {
                   fallbackHow={d.overrides.commission ? `ปรับเป็น 0 · ${d.overrides.commission.reason}` : undefined}
                 />
               )}
-              {earn.length === 0 && !showCommission && <p className={hint}>ไม่มี</p>}
+              {showDiligence && (
+                <OverrideRow
+                  which="diligence"
+                  title="เบี้ยขยัน"
+                  line={diligence}
+                  computed={d.diligenceComputed ?? 0}
+                  current={d.overrides.diligence}
+                  ctx={ctx}
+                  editable={d.editable}
+                  fallbackHow={d.overrides.diligence ? `ปรับเป็น 0 · ${d.overrides.diligence.reason}` : undefined}
+                />
+              )}
+              {earn.length === 0 && !showCommission && !showDiligence && <p className={hint}>ไม่มี</p>}
               {earn.map((l) => (
                 <Row
                   key={l.key}
@@ -270,7 +286,7 @@ function OverrideRow({
   help,
   fallbackHow,
 }: {
-  which: "sso" | "tax" | "commission";
+  which: "sso" | "tax" | "commission" | "diligence";
   title: string;
   line?: PayLine;
   computed: number;
@@ -281,7 +297,7 @@ function OverrideRow({
   /** คำอธิบายเมื่อไม่มีบรรทัด (เช่น ปรับค่าคอมเป็น 0) */
   fallbackHow?: string;
 }) {
-  const earning = which === "commission";
+  const earning = which === "commission" || which === "diligence";
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState(String(current?.amount ?? computed));
   const [reason, setReason] = useState(current?.reason ?? "");
@@ -318,7 +334,9 @@ function OverrideRow({
           <input aria-label={`${title} ยอดใหม่`} inputMode="decimal" className={field} value={amount} onChange={(e) => setAmount(e.target.value)} />
           <input aria-label="เหตุผล" className={field} placeholder="เหตุผล (จำเป็น)" value={reason} onChange={(e) => setReason(e.target.value)} />
           <p className={`${hint} sm:col-span-3 sm:order-last`}>
-            {earning
+            {which === "diligence"
+              ? "เช่น กรณีพิเศษที่ผู้จัดการอนุมัติ หรือใส่ 0 = ไม่ให้เบี้ยขยันงวดนี้ · รอบหน้านับขั้นต่อจากยอดนี้ · CEO เห็นยอดนี้คู่กับที่ระบบคิดตอนอนุมัติ"
+              : earning
               ? "เช่น เพิ่ม/ลดตามผลงานจริง หรือใส่ 0 = ไม่ให้ค่าคอมงวดนี้ · CEO เห็นยอดนี้คู่กับที่ระบบคิดตอนอนุมัติ"
               : "ใช้เมื่อยอดต้องต่างจากที่ระบบคิดจริง ๆ เช่น พนักงานขอให้หักภาษีเพิ่ม · CEO เห็นยอดนี้คู่กับที่ระบบคิดตอนอนุมัติ"}
           </p>

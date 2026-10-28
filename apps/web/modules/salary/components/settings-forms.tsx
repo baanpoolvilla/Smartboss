@@ -178,7 +178,13 @@ export function GeneralSettingsForm({ initial }: { initial: SettingsInput }) {
               รอบแรกได้ขั้นแรก · งวดไหนไม่ลา ไม่สาย ไม่ขาด = เลื่อนจากขั้นรอบก่อนหนึ่งขั้น (ถึงขั้นสูงสุดแล้วคงไว้) · มีลา/สาย/ขาด = กลับไปขั้นแรก ·
               วันหยุดปกติ/นักขัตฤกษ์ไม่นับ · ใช้ข้อมูลลงเวลาและการลาของงวด (เช่น 26 ก.ย. – 25 ต.ค.)
             </p>
-            <p className={hint}>คนที่เคยได้ขั้นสูงกว่าขั้นแรกในระบบเดิม ใส่ &quot;ขั้นรอบล่าสุดจากระบบเดิม&quot; ที่หน้าพนักงานแต่ละคนก่อนรอบแรก</p>
+            <div role="radiogroup" aria-label="เบี้ยขยันคนเข้า/ออกกลางรอบ" className="flex flex-col">
+              <span className="text-sm font-semibold text-(--ink)">คนที่เข้างาน/ลาออกกลางรอบ</span>
+              <label className={radio(v.diligencePartial === "none")}><input type="radio" className="h-4 w-4" checked={v.diligencePartial === "none"} onChange={() => set({ diligencePartial: "none" })} /> ไม่ได้รอบนั้น — ต้องทำงานครบรอบ (รอบแรกที่ครบเริ่มขั้นแรก)</label>
+              <label className={radio(v.diligencePartial === "prorate")}><input type="radio" className="h-4 w-4" checked={v.diligencePartial === "prorate"} onChange={() => set({ diligencePartial: "prorate" })} /> เฉลี่ยตามวันที่ทำงาน</label>
+              <label className={radio(v.diligencePartial === "full")}><input type="radio" className="h-4 w-4" checked={v.diligencePartial === "full"} onChange={() => set({ diligencePartial: "full" })} /> ได้เต็มขั้น</label>
+            </div>
+            <p className={hint}>คนที่เคยได้ขั้นสูงกว่าขั้นแรกในระบบเดิม ใส่ &quot;ขั้นรอบล่าสุดจากระบบเดิม&quot; ที่หน้าพนักงานแต่ละคนก่อนรอบแรก · ยอดรายคนปรับเองได้ในรอบเงินเดือน (กดชื่อ › เบี้ยขยัน › ปรับยอด)</p>
           </div>
         )}
       </section>
