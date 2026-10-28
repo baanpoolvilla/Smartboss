@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
+import { crossOrg } from "@smartboss/database/cross-org";
 import { DEFAULT_PREFS, isTopicOn, normalizePrefs, type NotifPrefs } from "@/modules/notifications/prefs";
 
 /**
@@ -44,10 +45,13 @@ export async function loadNotificationPrefs(_orgId: string | null, userIds: stri
   }
   if (missing.length === 0) return out;
   try {
-    const rows = await prisma.notificationPreference.findMany({
-      where: { userId: { in: missing } },
-      select: { userId: true, level: true, overrides: true, since: true, bannerDismissedAt: true },
-    });
+    // ค่าตั้งเป็นของคน ไม่ใช่ของบริษัท (ผู้รับข้ามบริษัทได้ — คอมเมนต์ด้านบน) จึงห่อ crossOrg แทนการกรอง orgId
+    const rows = await crossOrg("notification:recipient-scoped-not-org-scoped", () =>
+      prisma.notificationPreference.findMany({
+        where: { userId: { in: missing } },
+        select: { userId: true, level: true, overrides: true, since: true, bannerDismissedAt: true },
+      }),
+    );
     const byId = new Map(rows.map((r) => [r.userId, rowToPrefs(r)]));
     for (const id of missing) {
       const prefs = byId.get(id) ?? DEFAULT_PREFS;

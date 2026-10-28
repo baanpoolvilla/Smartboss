@@ -57,7 +57,13 @@ export const CROSS_ORG_REASONS = [
 
 export type CrossOrgReason = (typeof CROSS_ORG_REASONS)[number];
 
-const storage = new AsyncLocalStorage<{ reason: CrossOrgReason }>();
+// ตัวเก็บบริบทอยู่บน globalThis (คีย์เดียวทั้งโปรเซส) แบบเดียวกับ prisma client ใน client.ts —
+// dev แคช prisma (พร้อม tenant-guard ที่ผูกไว้) ข้าม hot reload แต่ไฟล์นี้ถูกโหลดใหม่ทุกครั้ง: ถ้า storage
+// อยู่ในโมดูล การ์ดตัวเก่าอ่าน storage ชุดเก่า ส่วน crossOrg() ตัวใหม่เขียนชุดใหม่ → เตือนผิดทั้งที่ห่อแล้ว
+// production โหลดครั้งเดียว ทำงานเหมือนเดิมทุกอย่าง
+const STORAGE_KEY = Symbol.for("smartboss.database.cross-org.storage");
+const shared = globalThis as unknown as Record<symbol, AsyncLocalStorage<{ reason: CrossOrgReason }> | undefined>;
+const storage = (shared[STORAGE_KEY] ??= new AsyncLocalStorage<{ reason: CrossOrgReason }>());
 
 /** อ่านจาก tenant-guard.ts เท่านั้น — ไม่ export ให้โค้ดแอปเรียกตรง ๆ */
 export function activeCrossOrgReason(): string | undefined {
