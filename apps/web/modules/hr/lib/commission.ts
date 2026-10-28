@@ -201,7 +201,7 @@ export interface GradeTierShare {
   /** ส่วนก้อน Grade แบบไม่ปัด (สตางค์ อาจมีทศนิยม) */
   gradeExact: number;
   tierExact: number;
-  /** ยอดจ่ายจริง = (ก้อน Grade + ก้อน Tier) ปัดเป็นสตางค์ครั้งเดียวตอนท้าย */
+  /** ยอดจ่ายจริง = (ก้อน Grade + ก้อน Tier) ปัดขึ้นเป็นสตางค์ครั้งเดียวตอนท้าย (100.012 → 100.02) */
   totalSatang: number;
 }
 
@@ -223,7 +223,8 @@ export interface GradeTierSplit {
  * ค่าคอม Grade + Tier ตามข้อกำหนดของ HR (28/10/2569):
  *   ก้อน Grade = ยอดรวม × gradeShare% · ก้อน Tier = ยอดรวม − ก้อน Grade
  *   ค่าคอม Grade รายคน = คะแนน Grade × ก้อน Grade ÷ คะแนน Grade รวม (แบบเดียวกันกับ Tier)
- *   ค่าคอมรายคน = Grade + Tier — คิดแบบไม่ปัดเศษ แล้วปัดเป็นสตางค์ครั้งเดียวตอนจ่าย (เงินโอนได้ละเอียดสุดแค่สตางค์)
+ *   ค่าคอมรายคน = Grade + Tier — คิดแบบไม่ปัดเศษ แล้ว "ปัดขึ้น" ที่ทศนิยม 2 ตำแหน่งครั้งเดียวตอนจ่าย
+ *   (ผู้ใช้กำหนด 28/10/2569: 100.012 → 100.02 · เงินโอนได้ละเอียดสุดแค่สตางค์)
  *   ไม่แจกเศษสตางค์ที่เหลือให้ใคร — ยอดรวมทุกคนอาจต่างจากยอดรวมประจำรอบได้ไม่กี่สตางค์
  * คะแนนรวมก้อนไหนเป็น 0 (หารไม่ได้) หรือยังใส่คะแนน Tier ไม่ครบ → problems (ห้ามสรุปรอบจนกว่าแก้)
  */
@@ -257,7 +258,8 @@ export function splitGradeTier(
   const shares: GradeTierShare[] = rows.map((r) => {
     const gradeExact = totalGrade > 0 ? (r.weight * gradePoolSatang) / totalGrade : 0;
     const tierExact = totalTier > 0 && r.tier !== null ? (r.tier * tierPoolSatang) / totalTier : 0;
-    return { ...r, gradeExact, tierExact, totalSatang: Math.round(gradeExact + tierExact) };
+    // ปัดขึ้น — ลบ 1e-6 สตางค์ก่อน กันเลขทศนิยมลอยตัว (เช่น 175000.0000000001) ถูกปัดขึ้นเกินจริงไป 1 สตางค์
+    return { ...r, gradeExact, tierExact, totalSatang: Math.ceil(gradeExact + tierExact - 1e-6) };
   });
   return { shares, poolSatang, gradeShare, gradePoolSatang, tierPoolSatang, totalGrade, totalTier, missingTier, problems };
 }

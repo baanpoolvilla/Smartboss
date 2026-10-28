@@ -29,7 +29,7 @@ export interface ReportRow {
   /** ส่วน Grade/Tier แบบไม่ปัด (บาท) — null = ไม่ใช่วิธี Grade + Tier */
   commGradeExact: number | null;
   commTierExact: number | null;
-  /** ค่าคอมที่จ่ายจริง (ปัดเป็นสตางค์ / หรือที่ HR ปรับ) */
+  /** ค่าคอมที่จ่ายจริง (ปัดขึ้นเป็นสตางค์ / หรือที่ HR ปรับ) */
   commission: number;
   commissionNote: string;
   diligence: number;

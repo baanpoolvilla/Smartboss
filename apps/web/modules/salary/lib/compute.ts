@@ -92,6 +92,23 @@ export interface DiligenceResult {
   computed?: number;
 }
 
+/** ชื่อประเภทวันหยุด/พักร้อน — เกณฑ์เดียวกับป้าย "หยุดวันนี้" ในแชท (modules/chat/data/off-today.ts) */
+const HOLIDAY_LEAVE = /holiday|ฮอลิเดย์|นักขัตฤกษ์/i;
+const ANNUAL_LEAVE = /พักร้อน|annual|vacation/i;
+
+/**
+ * ใบลาแบบนี้ตัดเบี้ยขยันไหม (ผู้ใช้กำหนด 28/10/2569):
+ *   ตัด    = ลากิจ ลาป่วย ลาไม่รับค่าจ้าง และวันลาอื่นที่ต้องมีคนอนุมัติ (ขาดงาน/มาสายนับแยกจากระบบลงเวลา)
+ *   ไม่ตัด = วันหยุดประจำ Day-Off (อนุมัติอัตโนมัติ) · Holiday/นักขัตฤกษ์ · ลาพักร้อน · Work from home (ยังทำงาน — ต้องส่งรายงาน)
+ */
+export function leaveCountsAgainstDiligence(t: { name: string | null; displayLabel?: string | null; autoApprove: boolean | null; requiresReports: boolean | null }): boolean {
+  if (t.requiresReports) return false;
+  if (t.autoApprove) return false;
+  const text = `${t.name ?? ""} ${t.displayLabel ?? ""}`;
+  if (HOLIDAY_LEAVE.test(text) || ANNUAL_LEAVE.test(text)) return false;
+  return true;
+}
+
 /**
  * คนที่ทำงานไม่ครบรอบ (ผู้ใช้เลือก 28/10/2569 "ต้องทำงานครบรอบ"):
  *   none    = รอบนี้ไม่ได้ (ยอด 0) — รอบหน้าเริ่มขั้นแรกเพราะขั้นรอบก่อนเป็น 0

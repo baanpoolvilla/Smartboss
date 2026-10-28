@@ -188,7 +188,7 @@ export default async function SalaryReportPage({ params }: { params: Promise<{ i
         </section>
         {anyGradeTier && (
           <p className={hint}>
-            ค่าคอม Grade / Tier แสดงแบบไม่ปัดเศษตามสูตร · &quot;ค่าคอมรวม&quot; คือยอดจ่ายจริง = Grade + Tier ปัดเป็นสตางค์ครั้งเดียว (โอนเงินได้ละเอียดสุดแค่สตางค์) · ไม่แจกเศษสตางค์ที่เหลือ
+            ค่าคอม Grade / Tier แสดงแบบไม่ปัดเศษตามสูตร · &quot;ค่าคอมรวม&quot; คือยอดจ่ายจริง = Grade + Tier ปัดขึ้นที่ทศนิยม 2 ตำแหน่ง (100.012 → 100.02) · ยอดรวมทุกคนจึงอาจเกินค่าคอมรวมได้ไม่กี่สตางค์
           </p>
         )}
       </div>

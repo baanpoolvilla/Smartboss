@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@smartboss/database";
 
 import { withWorkforceTenant } from "@/modules/report_task/lib/db/workforce-calendar";
-import { applyDiligencePartial, diligenceStep, periodsEmployedBefore, type DiligenceResult } from "./compute";
+import { applyDiligencePartial, diligenceStep, leaveCountsAgainstDiligence, periodsEmployedBefore, type DiligenceResult } from "./compute";
 import { fillSubjectsByEmail } from "./people";
 import { loadRequests } from "@/modules/requests/lib/db";
 import { hoursText, otCalc } from "@/modules/requests/lib/types";
@@ -130,9 +130,10 @@ export async function loadPeriodInputs(
       startsOn,
       endsOn,
     );
-    const leaves = await wtx.$queryRawUnsafe<{ employment_id: string; starts_on: string; ends_on: string; half_day_start: boolean; half_day_end: boolean; paid: boolean; day_off: boolean }[]>(
+    const leaves = await wtx.$queryRawUnsafe<{ employment_id: string; starts_on: string; ends_on: string; half_day_start: boolean; half_day_end: boolean; paid: boolean; day_off: boolean; type_name: string | null; display_label: string | null; auto_approve: boolean | null; requires_reports: boolean | null }[]>(
       `SELECT l.employment_id::text AS employment_id, to_char(l.starts_on, 'YYYY-MM-DD') AS starts_on, to_char(l.ends_on, 'YYYY-MM-DD') AS ends_on,
               l.half_day_start, l.half_day_end, lt.paid,
+              lt.name AS type_name, l.display_label, lt.auto_approve, lt.requires_reports,
               -- วันหยุด (Day-Off/Holiday อนุมัติอัตโนมัติ) แยกจากการลา — เกณฑ์เดียวกับปฏิทินทีม (workforce-calendar.ts)
               (lt.auto_approve AND NOT lt.requires_reports) AS day_off
          FROM workforce.leave_requests l
@@ -247,6 +248,8 @@ export async function loadPeriodInputs(
     let unpaid = 0;
     let leaveDays = 0;
     let offDays = 0;
+    // วันลาที่ตัดเบี้ยขยัน (ลากิจ/ป่วย/ไม่รับค่าจ้าง ฯลฯ) — ไม่นับ Day-Off · Holiday · พักร้อน · WFH
+    let diligenceLeaveDays = 0;
     for (const l of wf.leaves.filter((x) => x.employment_id === e.employment_id)) {
       const a = l.starts_on > from ? l.starts_on : from;
       const b = l.ends_on < to ? l.ends_on : to;
@@ -258,6 +261,7 @@ export async function loadPeriodInputs(
       leaveDays += d;
       if (l.day_off) offDays += d;
       if (!l.paid) unpaid += d;
+      if (leaveCountsAgainstDiligence({ name: l.type_name, displayLabel: l.display_label, autoApprove: l.auto_approve, requiresReports: l.requires_reports })) diligenceLeaveDays += d;
     }
     const att = wf.att.find((x) => x.employment_id === e.employment_id);
 
@@ -356,7 +360,7 @@ export async function loadPeriodInputs(
       const opening = p0?.diligenceOpening !== null && p0?.diligenceOpening !== undefined ? num(p0.diligenceOpening) : null;
       const prev = fromRun ?? opening;
       diligence = diligenceStep(settings.diligenceSteps, prev, fromRun !== undefined ? "run" : opening !== null ? "opening" : "none", {
-        leaveDays: Math.max(0, leaveDays - offDays),
+        leaveDays: diligenceLeaveDays,
         lateCount: att?.late_days ?? 0,
         absentDays: att?.absent_days ?? 0,
       });

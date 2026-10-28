@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { formatExact, splitGradeTier, toCommissionMethod } from "@/modules/hr/lib/commission";
-import { applyDiligencePartial, computePay, diligenceStep, type ComputeInput } from "../lib/compute";
+import { applyDiligencePartial, computePay, diligenceStep, leaveCountsAgainstDiligence, type ComputeInput } from "../lib/compute";
 import { reportRow } from "../lib/report";
 import type { LineInfo } from "../lib/run";
 import { DEFAULT_SSO, DEFAULT_TAX, normalizeDiligenceSteps } from "../lib/types";
@@ -34,7 +34,7 @@ describe("ค่าคอม Grade + Tier", () => {
     expect(g("D")).toBe(25_000);
   });
 
-  it("ก้อน Tier: 16 × 3,000 ÷ 124 และ 12 × 3,000 ÷ 124 แบบไม่ปัด · รวมปัดสตางค์ครั้งเดียว", () => {
+  it("ก้อน Tier: 16 × 3,000 ÷ 124 และ 12 × 3,000 ÷ 124 แบบไม่ปัด · รวมปัดขึ้นที่ทศนิยม 2 ตำแหน่ง", () => {
     const r = splitGradeTier(1_000_000, 70, members, W, tiers);
     const first = r.shares[0]!;
     const other = r.shares[1]!;
@@ -44,11 +44,12 @@ describe("ค่าคอม Grade + Tier", () => {
     expect(formatExact(other.tierExact)).toBe("290.3225806452");
     // A + Tier 16 = 1,000 + 387.0967… → 1,387.10
     expect(first.totalSatang).toBe(138_710);
-    // A + Tier 12 = 1,000 + 290.3225… → 1,290.32
-    expect(other.totalSatang).toBe(129_032);
-    // ไม่แจกเศษสตางค์ — ยอดรวมทุกคนต่างจาก 10,000 ได้ไม่กี่สตางค์ (ไม่ถูกบังคับให้ตรง)
+    // A + Tier 12 = 1,000 + 290.3225… → ปัดขึ้น 1,290.33
+    expect(other.totalSatang).toBe(129_033);
+    // ปัดขึ้นรายคน — ยอดรวมทุกคนไม่ต่ำกว่า 10,000 และเกินได้ไม่เกินคนละ 1 สตางค์
     const sum = r.shares.reduce((n, s) => n + s.totalSatang, 0);
-    expect(Math.abs(sum - 1_000_000)).toBeLessThanOrEqual(r.shares.length);
+    expect(sum - 1_000_000).toBeGreaterThanOrEqual(0);
+    expect(sum - 1_000_000).toBeLessThanOrEqual(r.shares.length);
   });
 
   it("ยังไม่ใส่คะแนน Tier บางคน = ห้ามสรุป (บอกชื่อ)", () => {
@@ -67,6 +68,15 @@ describe("ค่าคอม Grade + Tier", () => {
     expect(splitGradeTier(1_000_000, 70, allF, W, t2).problems.join()).toContain("คะแนน Grade รวมเป็น 0");
   });
 
+  it("ปัดขึ้นที่ทศนิยม 2 ตำแหน่ง: 100.012 → 100.02 · ลงตัวพอดีไม่ปัดเพิ่ม", () => {
+    // 100.012 บาท = 10,001.2 สตางค์ (ก้อน Grade คนเดียว 100% ของ 10,001.2 ไม่ได้ เพราะยอดรวมใส่ได้แค่สตางค์ — ใช้ 2 คนแบ่ง 200.024 แทน)
+    expect(splitGradeTier(20_002, 100, mk(["A", "A"]), W, { u00: 1, u01: 1 }).shares[0]!.totalSatang).toBe(10_001); // 100.01 พอดี
+    expect(splitGradeTier(20_003, 100, mk(["A", "A"]), W, { u00: 1, u01: 1 }).shares[0]!.totalSatang).toBe(10_002); // 100.015 → 100.02
+    expect(splitGradeTier(10_001, 100, mk(["A", "A"]), W, { u00: 1, u01: 1 }).shares[0]!.totalSatang).toBe(5_001); // 50.005 → 50.01
+    expect(splitGradeTier(10_000, 100, mk(["A", "A"]), W, { u00: 1, u01: 1 }).shares[0]!.totalSatang).toBe(5_000); // 50.00 พอดี
+    expect(splitGradeTier(700_000, 100, mk(["A", "B", "C", "D", "A", "A", "A", "C", "C", "C"]), W, {}).shares[0]!.totalSatang).toBe(100_000); // 1,000 พอดี ไม่กลายเป็น 1,000.01
+  });
+
   it("คะแนน Tier 0 รายคน = ไม่ได้ส่วน Tier แต่ยังได้ส่วน Grade", () => {
     const t = { ...tiers, u09: 0 };
     const r = splitGradeTier(1_000_000, 70, members, W, t);
@@ -79,7 +89,7 @@ describe("ค่าคอม Grade + Tier", () => {
   it("สัดส่วน 100% Grade = Tier ไม่จำเป็นต้องใส่ก็ยังคิดได้เมื่อใส่ครบ", () => {
     const r = splitGradeTier(1_000_000, 100, members, W, tiers);
     expect(r.tierPoolSatang).toBe(0);
-    expect(r.shares[0]!.totalSatang).toBe(Math.round(1_000_000 / 7));
+    expect(r.shares[0]!.totalSatang).toBe(Math.ceil(1_000_000 / 7)); // 1,428.5714… → ปัดขึ้น 1,428.58
   });
 
   it("วิธีใหม่อ่านจากฐานข้อมูลได้ · ค่าแปลก ๆ ยังเป็น pool (เดิม)", () => {
@@ -259,5 +269,23 @@ describe("เบี้ยขยัน: เข้างาน/ลาออกก�
     expect(line.amount).toBe(800);
     expect(line.how).toContain("ระบบคิดได้ 500.00");
     expect(r.net).toBe(20000 + 800 - 875);
+  });
+});
+
+describe("ลาแบบไหนตัดเบี้ยขยัน", () => {
+  const t = (name: string, autoApprove = false, requiresReports = false, displayLabel: string | null = null) => leaveCountsAgainstDiligence({ name, displayLabel, autoApprove, requiresReports });
+  it("ตัด: ลากิจ ลาป่วย ลาไม่รับค่าจ้าง", () => {
+    expect(t("ลากิจ")).toBe(true);
+    expect(t("ลาป่วย")).toBe(true);
+    expect(t("ลาไม่รับค่าจ้าง")).toBe(true);
+  });
+  it("ไม่ตัด: Day-Off (อนุมัติอัตโนมัติ) · Holiday · นักขัตฤกษ์ · ลาพักร้อน · Work from home", () => {
+    expect(t("Day-Off", true)).toBe(false);
+    expect(t("Holiday")).toBe(false);
+    expect(t("วันหยุดนักขัตฤกษ์")).toBe(false);
+    expect(t("ลาพักร้อน")).toBe(false);
+    expect(t("Annual leave")).toBe(false);
+    expect(t("Work From Home", false, true)).toBe(false);
+    expect(t("หยุด", false, false, "สมชาย - Holiday")).toBe(false);
   });
 });

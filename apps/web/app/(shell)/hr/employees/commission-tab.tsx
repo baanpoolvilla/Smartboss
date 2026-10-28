@@ -200,7 +200,7 @@ export async function renderCommissionTab(
           {method === "grade_tier" && (
             <SectionCard
               title="ค่าคอมรวมประจำรอบ + คะแนน Tier รายคน"
-              description={`ก้อน Grade ${gt.gradeShare}% แบ่งตามคะแนน Grade · ก้อน Tier แบ่งตามคะแนน Tier · คิดแบบไม่ปัดเศษ ปัดเป็นสตางค์ครั้งเดียวตอนจ่าย ไม่แจกเศษสตางค์ที่เหลือ`}
+              description={`ก้อน Grade ${gt.gradeShare}% แบ่งตามคะแนน Grade · ก้อน Tier แบ่งตามคะแนน Tier · คิดแบบไม่ปัดเศษ แล้วปัดขึ้นที่ทศนิยม 2 ตำแหน่งตอนจ่าย (100.012 → 100.02)`}
             >
               <form action={saveCommissionRoundAction} className="flex flex-col gap-3">
                 <input type="hidden" name="month" value={month} />
@@ -278,7 +278,7 @@ export async function renderCommissionTab(
                 )}
                 {canManage && (
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-xs text-(--ink-soft)">ช่องเหลือง = ยังไม่ได้บันทึก · คะแนน 0 = ไม่ได้ส่วน Tier · ยอดรวมทุกคนอาจต่างจากค่าคอมรวมได้ไม่กี่สตางค์ (ไม่แจกเศษ)</p>
+                    <p className="text-xs text-(--ink-soft)">ช่องเหลือง = ยังไม่ได้บันทึก · คะแนน 0 = ไม่ได้ส่วน Tier · ยอดรวมทุกคนอาจเกินค่าคอมรวมได้ไม่กี่สตางค์ (ปัดขึ้นรายคน)</p>
                     <Button type="submit">บันทึกยอดรวม + คะแนน Tier</Button>
                   </div>
                 )}
