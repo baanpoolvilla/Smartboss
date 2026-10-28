@@ -389,3 +389,17 @@ export async function lastPaidDiligence(orgId: string, employmentId: string): Pr
     return rows[0] ? { amount: Number(rows[0].amount), period: rows[0].period } : null;
   });
 }
+
+/** ตำแหน่งปัจจุบันจากระบบบุคคล (employment_assignments → positions) — ไม่มี = null (สลิปใช้แผนกแทน) */
+export async function positionOf(orgId: string, employmentId: string, onDate: string): Promise<string | null> {
+  const rows = await withWorkforceTenant(orgId, (wtx) =>
+    wtx.$queryRawUnsafe<{ title: string }[]>(
+      `SELECT p.title FROM workforce.employment_assignments a JOIN workforce.positions p ON p.id = a.position_id
+        WHERE a.employment_id = $1::uuid AND a.effective_from <= $2::date AND (a.effective_to IS NULL OR a.effective_to >= $2::date)
+        ORDER BY a.effective_from DESC LIMIT 1`,
+      employmentId,
+      onDate,
+    ),
+  ).catch(() => []);
+  return rows[0]?.title ?? null;
+}
