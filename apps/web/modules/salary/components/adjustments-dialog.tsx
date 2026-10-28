@@ -137,7 +137,9 @@ export function AdjustmentsDialog({
 
 function PersonBlock({ runId, p, items, editable }: { runId: string; p: ReviewPerson; items: ReviewItem[]; editable: boolean }) {
   const [adding, setAdding] = useState(false);
-  const ctx = { runId, employmentId: p.employmentId, expectUpdatedAt: p.updatedAt };
+  // ไม่ส่งเวลาที่เห็นล่าสุด: ทุกการแก้คำนวณทั้งรอบใหม่ (ทุกคนได้เวลาใหม่) — เพิ่ม/แก้/ลบหลายคนติด ๆ กันจะโดนปฏิเสธว่า "มีคนแก้ไปก่อน"
+  // ปลอดภัยเพราะทุกคำสั่งอ้างรายการด้วย id และ server ใช้ข้อมูลล่าสุดภายใต้ล็อกรอบ (editLine) — ไม่ทับของใคร
+  const ctx = { runId, employmentId: p.employmentId, expectUpdatedAt: null };
   const plus = p.adjustments.filter((a) => a.kind === "earning").reduce((n, a) => n + a.amount, 0);
   const minus = p.adjustments.filter((a) => a.kind === "deduction").reduce((n, a) => n + a.amount, 0);
   return (
@@ -171,7 +173,7 @@ function PersonBlock({ runId, p, items, editable }: { runId: string; p: ReviewPe
   );
 }
 
-function AdjustmentRow({ a, ctx, editable, items }: { a: Adjustment; ctx: { runId: string; employmentId: string; expectUpdatedAt: string }; editable: boolean; items: ReviewItem[] }) {
+function AdjustmentRow({ a, ctx, editable, items }: { a: Adjustment; ctx: { runId: string; employmentId: string; expectUpdatedAt: string | null }; editable: boolean; items: ReviewItem[] }) {
   const [edit, setEdit] = useState(false);
   const [v, setV] = useState({ label: a.label, reason: a.reason, amount: String(a.amount) });
   const { busy, error, run } = useRun();
@@ -225,7 +227,7 @@ function AdjustmentRow({ a, ctx, editable, items }: { a: Adjustment; ctx: { runI
   );
 }
 
-function AddRow({ ctx, items, onDone }: { ctx: { runId: string; employmentId: string; expectUpdatedAt: string }; items: ReviewItem[]; onDone: () => void }) {
+function AddRow({ ctx, items, onDone }: { ctx: { runId: string; employmentId: string; expectUpdatedAt: string | null }; items: ReviewItem[]; onDone: () => void }) {
   const [kind, setKind] = useState<"earning" | "deduction">("earning");
   const [itemId, setItemId] = useState("");
   const [labelText, setLabelText] = useState("");
