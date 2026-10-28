@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { useReminderSettingsStore } from "@/modules/report_task/store/reminder-settings-store";
+import { MeetingReminderPicker, defaultMeetingReminder } from "@/modules/report_task/components/calendar/meeting-reminder-picker";
 import { meetingLink } from "@/modules/report_task/lib/meeting-link";
 import {
   Dialog,
@@ -69,6 +71,7 @@ import {
   CalendarDays,
   AlignLeft,
   Users,
+  Bell,
   MapPin,
   Video,
   ListChecks,
@@ -387,6 +390,8 @@ export function NewTaskDialog({
   const [meetEnd, setMeetEnd] = useState("11:00");
   const [meetLocation, setMeetLocation] = useState("");
   const [meetOnline, setMeetOnline] = useState(false);
+  const meetingLeads = useReminderSettingsStore((s) => s.settings.meeting.leadMinutes);
+  const [meetReminder, setMeetReminder] = useState(() => defaultMeetingReminder(meetingLeads));
   const [meetAllDay, setMeetAllDay] = useState(false);
   // Staged files/images — uploaded for real (see buildAttachments) only once
   // the meeting is actually created, so a cancelled dialog never uploads
@@ -556,6 +561,7 @@ export function NewTaskDialog({
 
   function reset() {
     setTitle("");
+    setMeetReminder(defaultMeetingReminder(meetingLeads));
     setDescription("");
     setAssigneeIds([]);
     setPersonalMode(false);
@@ -674,6 +680,8 @@ export function NewTaskDialog({
       location: meetOnline ? "ออนไลน์ (Teams/Zoom)" : meetLocation.trim() || "ไม่ระบุสถานที่",
       description: description.trim(),
       attachments,
+      reminderMinutes: meetReminder.minutes,
+      remindDayBefore: meetReminder.dayBefore,
     };
     addMeeting(meeting);
     if (meetAttendeeIds.length > 0) {
@@ -1555,6 +1563,10 @@ export function NewTaskDialog({
                   <span className="text-sm">การประชุมออนไลน์ (Teams / Zoom)</span>
                   <Switch checked={meetOnline} onCheckedChange={setMeetOnline} />
                 </div>
+              </Row>
+
+              <Row icon={Bell}>
+                <MeetingReminderPicker minutes={meetReminder.minutes} dayBefore={meetReminder.dayBefore} onChange={setMeetReminder} />
               </Row>
 
               <Row icon={Paperclip}>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { MeetingReminderPicker, defaultMeetingReminder } from "@/modules/report_task/components/calendar/meeting-reminder-picker";
 import { meetingLink } from "@/modules/report_task/lib/meeting-link";
 import {
   Dialog,
@@ -82,6 +83,8 @@ export function AddTodoDialog({
   const [meetLocation, setMeetLocation] = useState("");
   const [meetOnline, setMeetOnline] = useState(false);
   const [reminderMinutes, setReminderMinutes] = useState(0);
+  const meetingLeads = useReminderSettingsStore((s) => s.settings.meeting.leadMinutes);
+  const [meetReminder, setMeetReminder] = useState(() => defaultMeetingReminder(meetingLeads));
 
   const [wasOpen, setWasOpen] = useState(open);
   if (open !== wasOpen) {
@@ -126,7 +129,8 @@ export function AddTodoDialog({
         createdById: viewingAsUserId,
         location: meetOnline ? "ออนไลน์ (Teams/Zoom)" : meetLocation.trim() || "ไม่ระบุสถานที่",
         description: trimmedNote || undefined,
-        reminderMinutes: reminderMinutes || undefined,
+        reminderMinutes: meetReminder.minutes,
+        remindDayBefore: meetReminder.dayBefore,
       };
       addMeeting(meeting);
       useActivityLogStore.getState().log({ userId: viewingAsUserId, action: "สร้างประชุม", target: trimmed });
@@ -262,6 +266,9 @@ export function AddTodoDialog({
             </div>
           )}
 
+          {isMeeting ? (
+            <MeetingReminderPicker minutes={meetReminder.minutes} dayBefore={meetReminder.dayBefore} onChange={setMeetReminder} />
+          ) : (
           <div className="flex items-center gap-2">
             <Bell className="h-4 w-4 shrink-0 text-[var(--ink-soft)]" />
             <Select
@@ -282,6 +289,7 @@ export function AddTodoDialog({
               </SelectContent>
             </Select>
           </div>
+          )}
         </div>
         <div className="flex gap-2">
           {editingTodo && (

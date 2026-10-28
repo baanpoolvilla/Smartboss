@@ -518,8 +518,11 @@ export interface CalendarEvent {
   /** Minutes before `start` (meeting) to remind — set at creation, overrides
    *  the company-wide `MeetingReminderSettings.leadMinutes` for this one
    *  event, same "room override, company default" relationship as
-   *  `ReportTopic.remindBeforeCutoffMinutes`. Unset = no per-item reminder. */
+   *  `ReportTopic.remindBeforeCutoffMinutes`. Unset = no per-item reminder.
+   *  ประชุมที่สร้างหลัง 27/10/2569 มี remindDayBefore ด้วย: reminderMinutes 0 = ไม่เตือนก่อนเริ่ม */
   reminderMinutes?: number;
+  /** เตือนล่วงหน้า 1 วัน (เพิ่มจาก reminderMinutes ไม่ใช่แทน) — ไม่มีค่า = ประชุมรุ่นเก่า ใช้กติกาเดิม */
+  remindDayBefore?: boolean;
 }
 
 export interface TodoItem {

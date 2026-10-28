@@ -87,7 +87,8 @@ export const DEFAULT_TASK_MORNING_TIME = "08:30";
 
 export const defaultReminderSettings: ReminderSettings = {
   task: { enabled: true, leadMinutes: [4320, 1440], morningTime: "08:30", remindOnDueDay: true, notifyAssignee: true, notifyAssigner: false, notifyDeptHead: false },
-  meeting: { enabled: true, leadMinutes: [15], notifyAttendees: true },
+  // ล่วงหน้า 1 วัน + 15 นาที (27/10/2569) — บริษัทที่บันทึกตั้งค่าไว้แล้วใช้ค่าที่บันทึก
+  meeting: { enabled: true, leadMinutes: [1440, 15], notifyAttendees: true },
   report: { enabled: true, leadMinutes: [30], weeklyLeadMinutes: [30], monthlyLeadMinutes: [30], notifyPending: true, notifyManagerSummary: false },
   todo: { enabled: true, defaultLeadMinutes: 0 },
   submissionLock: { useGlobalCutoff: false, time: "23:59" },

@@ -174,6 +174,34 @@ describe("ประชุม", () => {
     expect(result.notifications[0]!.message).toContain("15 นาที");
     expect(result.newSentKeys).toEqual(expect.arrayContaining(["meeting:m1:15", "meeting:m1:30"]));
   });
+
+  // 27/10/2569 — ประชุมตั้งเอง: เวลาที่เลือก + ล่วงหน้า 1 วัน (เพิ่ม ไม่แทน)
+  const at = (minutes: number, over: Partial<CalendarEvent> = {}) =>
+    ({ id: "m2", title: "GL Monthly", start: new Date(NOW.getTime() + minutes * 60_000).toISOString(), attendeeIds: ["u1"], ...over }) as CalendarEvent;
+
+  it("ติ๊กล่วงหน้า 1 วัน → เหลือ 23 ชม. ได้ \"อีก 1 วัน\" และลิงก์ไปประชุมนั้น", () => {
+    const r = run({ tasks: [], meetings: [at(23 * 60, { reminderMinutes: 15, remindDayBefore: true })] });
+    expect(r.notifications).toHaveLength(1);
+    expect(r.notifications[0]!.message).toContain("อีก 1 วัน");
+    expect(r.notifications[0]!.link).toContain("meeting=m2");
+  });
+
+  it("เหลือ 10 นาที → เตือนตามเวลาที่เลือก (15 นาที) ไม่ใช่ค่าบริษัท", () => {
+    const r = run({ tasks: [], meetings: [at(10, { reminderMinutes: 15, remindDayBefore: true })], alreadySent: new Set(["meeting:m2:1440"]) });
+    expect(r.notifications).toHaveLength(1);
+    expect(r.notifications[0]!.message).toContain("15 นาที");
+  });
+
+  it("สร้างประชุมแค่ 3 ชม.ก่อนเริ่ม → ไม่เด้ง \"อีก 1 วัน\" ผิดเวลา", () => {
+    const r = run({ tasks: [], meetings: [at(3 * 60, { reminderMinutes: 15, remindDayBefore: true })] });
+    expect(r.notifications).toHaveLength(0);
+    expect(r.newSentKeys).toContain("meeting:m2:1440");
+  });
+
+  it("เลือก \"ไม่เตือน\" + ไม่ติ๊ก 1 วัน → ไม่เตือนเลย แม้ค่าบริษัทมี", () => {
+    const r = run({ tasks: [], meetings: [at(10, { reminderMinutes: 0, remindDayBefore: false })] });
+    expect(r.notifications).toHaveLength(0);
+  });
 });
 
 // ผู้ใช้ขอ 20/10/2569 — งานเสร็จแล้วค้าง "รอตรวจสอบ" ครบ 2 เดือน → เตือนคนที่เปิดงานให้

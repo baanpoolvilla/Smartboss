@@ -296,11 +296,20 @@ export function computeReminders(input: {
       // A meeting's own `reminderMinutes` (set at creation) wins over the
       // company-wide default — same "room override, company default"
       // relationship as `ReportTopic.remindBeforeCutoffMinutes` below.
-      const leadOptions = m.reminderMinutes != null ? [m.reminderMinutes] : settings.meeting.leadMinutes;
+      // ประชุมรุ่นใหม่ (มี remindDayBefore): เวลาที่เลือก (0 = ไม่เตือนก่อนเริ่ม) + ล่วงหน้า 1 วันถ้าติ๊ก
+      // ประชุมรุ่นเก่า: กติกาเดิมทุกอย่าง
+      const leadOptions =
+        m.remindDayBefore !== undefined
+          ? [...(m.reminderMinutes && m.reminderMinutes > 0 ? [m.reminderMinutes] : []), ...(m.remindDayBefore ? [1440] : [])]
+          : m.reminderMinutes != null
+            ? [m.reminderMinutes]
+            : settings.meeting.leadMinutes;
       {
         const crossed = crossedLeads(leadOptions, minutesUntil);
         if (!claimLeads(crossed, (lead) => `meeting:${m.id}:${lead}`, alreadySent, newSentKeys)) continue;
         const lead = crossed[0]!;
+        // สร้างประชุมไม่ถึง 1 วันก่อนเริ่ม (หรือเซิร์ฟเวอร์ไม่ได้รันช่วงนั้น) — "อีก 1 วัน" ที่เลยมานานแล้วไม่ส่ง กันเด้งผิดเวลา
+        if (lead >= 1440 && lead - minutesUntil > 180) continue;
         const recipients = settings.meeting.notifyAttendees
           ? m.attendeeIds?.length
             ? m.attendeeIds
