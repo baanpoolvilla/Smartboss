@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@smartboss/database";
 
 import { withWorkforceTenant } from "@/modules/report_task/lib/db/workforce-calendar";
-import { periodsEmployedBefore } from "./compute";
+import { diligenceStep, periodsEmployedBefore, type DiligenceResult } from "./compute";
 import { fillSubjectsByEmail } from "./people";
 import { loadRequests } from "@/modules/requests/lib/db";
 import { hoursText, otCalc } from "@/modules/requests/lib/types";
@@ -10,7 +10,7 @@ import { commissionForUser, loadCommissionMonth } from "@/modules/hr/lib/commiss
 import { loadScorePeriodConfig, loadScorePeriodReadyAt } from "@/lib/score-period-config";
 import type { AutoItem, CommissionInput, RecurringItem, SalarySegment } from "./compute";
 import { num, ymd, type Tx } from "./db";
-import { daysBetweenInclusive, periodLabel, thaiDate, type AllowanceEntry, type ItemKind, type PayChannel, type TaxMode } from "./types";
+import { daysBetweenInclusive, fmtBaht, periodLabel, thaiDate, type AllowanceEntry, type ItemKind, type PayChannel, type SettingsView, type TaxMode } from "./types";
 
 /**
  * ข้อมูลที่ใช้คิดเงินเดือนของหนึ่งงวด — ดึงจากระบบอื่นทั้งหมด ไม่มีใครต้องพิมพ์ซ้ำ:
@@ -34,9 +34,19 @@ export interface StaffInput {
   late: { minutes: number; count: number };
   absentDays: number;
   ot: (AutoItem & { minutes: number })[];
+  /**
+   * OT แบบนับวัน: ใบ OT ที่อยู่ในรอบ + ยอดค้าง ณ ตอนคำนวณ (amount — ตรวจซ้ำตอนบันทึกจ่าย) + ยอดที่จ่ายจริงต่อใบ (pay)
+   * ไม่มี = OT แบบชั่วโมง (refs มาจาก ot เหมือนเดิม)
+   */
+  otRefs?: { id: string; amount: number; pay: number }[];
+  /** OT แบบนับวัน: จำนวนวัน อัตราต่อวัน (ใช้ในรายงาน) */
+  otDaysPay?: { days: number; rate: number; dates: string[] };
   advances: AutoItem[];
   recurring: RecurringItem[];
   commission?: CommissionInput;
+  /** ที่มาของค่าคอม Grade + Tier (สตางค์ไม่ปัด) — รายงาน */
+  commissionParts?: import("@/modules/hr/lib/commission").CommissionParts;
+  diligence?: DiligenceResult;
   profile: {
     ssoExempt: boolean;
     ssoExemptReason: string;
@@ -58,6 +68,10 @@ export interface StaffInput {
   /** ยอดยกมาที่กรอกไว้ (ใช้ตอนคำนวณงวดนี้) — เก็บลงบรรทัดไว้ให้สลิปแสดงยอดสะสมทั้งปีได้ถูก */
   opening: { income: number; tax: number; sso: number } | null;
   info: { workedDays: number; leaveDays: number; lateCount: number; offDays: number; absentDays: number; otDays: number; otMinutes: number };
+  /** มีข้อมูลลงเวลาในงวดไหม (0 = ไม่มีเลย — เบี้ยขยันเช็กสายไม่ได้) */
+  attendanceRows: number;
+  /** ข้อเตือนจากการดึงข้อมูล (ไม่ใช่จากการคำนวณ) */
+  extraWarnings: string[];
 }
 
 interface EmpRow {
@@ -87,6 +101,7 @@ export async function loadPeriodInputs(
   tx: Tx,
   orgId: string,
   run: { id: string | null; period: string; startsOn: string; endsOn: string; payDate: string },
+  settings?: Pick<SettingsView, "otMode" | "diligenceEnabled" | "diligenceSteps">,
 ): Promise<{ staff: StaffInput[]; skipped: { name: string; reason: string }[] }> {
   const { startsOn, endsOn, payDate } = run;
 
@@ -188,6 +203,20 @@ export async function loadPeriodInputs(
     2000,
   );
   const advReqs = await loadRequests(tx, orgId, { beneficiaryKind: "staff", deductedAt: null, deductAmount: { gt: 0 } }, 2000);
+  // เบี้ยขยัน: ขั้นของรอบล่าสุดที่จ่ายแล้ว (ก่อนงวดนี้) ต่อคน — มีรอบที่ยังไม่จ่ายได้ทีละรอบ จึงไม่มีรอบค้างคั่นกลาง
+  const prevDiligence = new Map<string, number>();
+  if (settings?.diligenceEnabled) {
+    const rows = await tx.$queryRawUnsafe<{ employment_id: string; amount: string | null; has: boolean }[]>(
+      `SELECT DISTINCT ON (l.employment_id) l.employment_id,
+              (l.info->'diligence'->>'amount') AS amount, (l.info ? 'diligence') AS has
+         FROM salary.run_lines l JOIN salary.runs r ON r.id = l.run_id
+        WHERE r.org_id = $1 AND r.status = 'paid' AND r.period < $2 AND l.info ? 'diligence'
+        ORDER BY l.employment_id, r.period DESC`,
+      orgId,
+      run.period,
+    );
+    for (const r of rows) if (r.amount !== null && Number.isFinite(Number(r.amount))) prevDiligence.set(r.employment_id, Number(r.amount));
+  }
 
   /* ── ค่าคอม Pool ตามเกรด (ระบบบุคคล › พนักงาน › ค่าคอม) — เดือนเดียวกับงวด ── */
   const commission = await loadCommissionFor(orgId, run.period, items);
@@ -281,6 +310,58 @@ export async function loadPeriodInputs(
         };
       });
 
+    // OT แบบนับวัน (ข้อกำหนด HR 28/10/2569): ปัดขึ้น(ฐานเงินเดือน ÷ 30) × จำนวนวันที่มีใบ OT อนุมัติแล้วยังไม่จ่าย
+    // หลายใบวันเดียวกัน = 1 วัน · ยอดต่อใบที่ปิดตอนบันทึกจ่าย: ใบแรกของวันได้ค่าวัน (หักที่เคยจ่ายวันนั้นไปแล้ว) ใบอื่นของวันเดียวกัน 0
+    let otItems = ot;
+    let otRefs: StaffInput["otRefs"];
+    let otDaysPay: StaffInput["otDaysPay"];
+    if (settings?.otMode === "days" && ot.length > 0 && segments.length > 0) {
+      const base = segments[segments.length - 1]!.monthly;
+      const rate = Math.ceil(Math.round((base / 30) * 1e6) / 1e6);
+      const mineOt = otReqs.filter(mine).filter((r) => Math.round((r.netAmount - r.paidTotal) * 100) / 100 > 0);
+      const byDate = new Map<string, typeof mineOt>();
+      for (const r of mineOt) byDate.set(r.workDate, [...(byDate.get(r.workDate) ?? []), r]);
+      const dates = [...byDate.keys()].sort();
+      otRefs = [];
+      let total = 0;
+      for (const d of dates) {
+        const list = byDate.get(d)!.sort((a, b) => a.code.localeCompare(b.code));
+        // วันนั้นเคยจ่ายไปแล้วบางส่วน (ใบที่จ่ายบางส่วนนอกเงินเดือน) — จ่ายส่วนที่เหลือของค่าวัน
+        const paidBefore = list.reduce((n, r) => n + r.paidTotal, 0);
+        const dayPay = Math.max(0, Math.round((rate - paidBefore) * 100) / 100);
+        list.forEach((r, i) => otRefs!.push({ id: r.id, amount: Math.round((r.netAmount - r.paidTotal) * 100) / 100, pay: i === 0 ? dayPay : 0 }));
+        total += dayPay;
+      }
+      total = Math.round(total * 100) / 100;
+      otDaysPay = { days: dates.length, rate, dates };
+      const exact = Math.round((base / 30) * 100) / 100;
+      otItems = [
+        {
+          refId: "ot-days",
+          code: mineOt.map((r) => r.code).join(", "),
+          label: "ค่าล่วงเวลา (OT)",
+          amount: total,
+          minutes: mineOt.reduce((n, r) => n + (r.otMinutes ?? 0), 0),
+          detail: `${dates.length} วัน × ${fmtBaht(rate)} (ปัดขึ้น เงินเดือน ${fmtBaht(base)} ÷ 30 = ${fmtBaht(exact)}) · ${dates.map((d) => thaiDate(d, false)).join(", ")}`,
+          formula: `ปัดขึ้น(${fmtBaht(base)} ÷ 30) = ${fmtBaht(rate)} บาท/วัน × ${dates.length} วัน = ${fmtBaht(total)} · ใบ OT: ${mineOt.map((r) => r.code).join(", ")}`,
+        },
+      ].filter((o) => o.amount > 0);
+    }
+
+    // เบี้ยขยัน: ลาจริง (ไม่นับวันหยุด) · สาย (วันที่มีนาทีสาย) · ขาด จากระบบลงเวลา
+    let diligence: DiligenceResult | undefined;
+    const p0 = profileBy.get(e.employment_id);
+    if (settings?.diligenceEnabled && (p0?.diligenceEligible ?? true) && segments.length > 0) {
+      const fromRun = prevDiligence.get(e.employment_id);
+      const opening = p0?.diligenceOpening !== null && p0?.diligenceOpening !== undefined ? num(p0.diligenceOpening) : null;
+      const prev = fromRun ?? opening;
+      diligence = diligenceStep(settings.diligenceSteps, prev, fromRun !== undefined ? "run" : opening !== null ? "opening" : "none", {
+        leaveDays: Math.max(0, leaveDays - offDays),
+        lateCount: att?.late_days ?? 0,
+        absentDays: att?.absent_days ?? 0,
+      });
+    }
+
     // ไม่มีเงินเดือนที่มีผลในงวด = ไม่อยู่ในรอบ (ขึ้นเตือนให้ใส่เงินเดือน) — ไม่จ่าย 0 บาทเงียบ ๆ
     if (segments.length === 0) {
       skipped.push({ name, reason: monthly.length === 0 ? "ยังไม่มีเงินเดือนในระบบ" : "เงินเดือนยังไม่มีผลในงวดนี้" });
@@ -299,10 +380,13 @@ export async function loadPeriodInputs(
       unpaidLeaveDays: unpaid,
       late: { minutes: (att?.late ?? 0) + (att?.early ?? 0), count: att?.late_days ?? 0 },
       absentDays: att?.absent_days ?? 0,
-      ot,
+      ot: otItems,
+      ...(otRefs ? { otRefs, otDaysPay } : {}),
+      ...(diligence ? { diligence } : {}),
       advances,
       recurring,
       commission: commission && e.subject ? commission.forUser(e.subject) : undefined,
+      commissionParts: commission && e.subject ? commission.partsFor(e.subject) : undefined,
       profile: {
         ssoExempt: p?.ssoExempt ?? false,
         ssoExemptReason: p?.ssoExemptReason ?? "",
@@ -329,6 +413,11 @@ export async function loadPeriodInputs(
         gapPeriods: prevApplies ? 0 : Math.max(0, periodsEmployedBefore(e.hired_on, payDate, Number(endsOn.slice(8, 10))) - (y?.periods ?? 0)),
       },
       opening: prevApplies ? { income: num(p?.prevIncome), tax: num(p?.prevTax), sso: num(p?.prevSso) } : null,
+      attendanceRows: att ? 1 : 0,
+      extraWarnings: [
+        ...(commission?.gradeTier && (!e.subject || !commission.anyMember(e.subject)) ? ["ไม่มีผล Grade ในรอบนี้ — ไม่ได้ค่าคอม (ตรวจว่าผูกบัญชีผู้ใช้และอยู่ในคะแนนผลงาน)"] : []),
+        ...(diligence && !att ? ["ไม่มีข้อมูลลงเวลาในงวดนี้ — เบี้ยขยันเช็กมาสาย/ขาดไม่ได้ ตรวจก่อนส่ง"] : []),
+      ],
       info: {
         workedDays: att?.worked_days ?? 0,
         leaveDays,
@@ -356,6 +445,7 @@ export { ymd };
 async function loadCommissionFor(orgId: string, month: string, items: { name: string; kind: string; taxable: boolean; ssoBase: boolean }[]) {
   const data = await loadCommissionMonth(orgId, month);
   if (data.method === "off" || (data.method === "pool" && (!data.pool || data.pool.satang <= 0))) return null;
+  const gradeTier = data.method === "grade_tier";
   const config = await loadScorePeriodConfig(orgId);
   const readyAt = await loadScorePeriodReadyAt(orgId, config, month);
   const label = periodLabel(month);
@@ -366,17 +456,28 @@ async function loadCommissionFor(orgId: string, month: string, items: { name: st
     Date.now() < readyAt.getTime()
       ? `ค่าคอม ${label} ยังไม่ใส่ — เกรดยังไม่ปิด (พร้อม ${readyAt.toLocaleString("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} น.) · กด "ดึงข้อมูลใหม่" หลังจากนั้น`
       : // อ่านทะเบียนพนักงานไม่ได้ → รายชื่อถอยไปเป็นผู้ใช้ทุกคน (CEO/คนที่ลาออก) แบ่ง Pool ผิดคนเงียบ ๆ — ไม่ใส่ยอดจนอ่านได้
-        data.method === "pool" && data.registry === "all-users"
+        (data.method === "pool" || data.method === "grade_tier") && data.registry === "all-users"
         ? `ค่าคอม ${label} ยังไม่ใส่ — อ่านทะเบียนพนักงานไม่ได้ (ระบบบุคคลไม่ตอบ) ถ้าแบ่ง Pool ตอนนี้จะหารให้คนที่ไม่ได้อยู่ในทะเบียน · กด "ดึงข้อมูลใหม่" อีกครั้ง`
         : null;
+  const lineLabel = gradeTier ? "ค่าคอม (Grade + Tier)" : undefined;
   return {
     forUser: (userId: string): CommissionInput | undefined => {
       const m = data.members.find((x) => x.userId === userId);
       if (!m || !m.eligible) return undefined;
-      if (pending) return { amount: 0, detail: "", taxable, ssoBase, pending };
+      // Grade + Tier: เกรดยังไม่ปิด = ตัวเลขยังเปลี่ยนได้ → ห้ามสรุปรอบ (ไม่ใช่แค่เตือนแบบวิธีอื่น)
+      if (pending) return gradeTier ? { amount: 0, detail: "", taxable, ssoBase, block: pending, label: lineLabel } : { amount: 0, detail: "", taxable, ssoBase, pending };
       const c = commissionForUser(data, userId, label);
       if (!c) return undefined;
-      return c.kind === "percent" ? { amount: 0, percent: c.percent, detail: c.detail, taxable, ssoBase } : { amount: c.satang / 100, detail: c.detail, taxable, ssoBase };
+      if (c.kind === "blocked") return { amount: 0, detail: "", taxable, ssoBase, block: c.reason, label: lineLabel };
+      return c.kind === "percent" ? { amount: 0, percent: c.percent, detail: c.detail, taxable, ssoBase } : { amount: c.satang / 100, detail: c.detail, taxable, ssoBase, label: lineLabel };
     },
+    partsFor: (userId: string) => {
+      if (!gradeTier || pending) return undefined;
+      const c = commissionForUser(data, userId, label);
+      return c?.kind === "amount" ? c.parts : undefined;
+    },
+    gradeTier,
+    hasMember: (userId: string) => data.members.some((x) => x.userId === userId && x.eligible),
+    anyMember: (userId: string) => data.members.some((x) => x.userId === userId),
   };
 }

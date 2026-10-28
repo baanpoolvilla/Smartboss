@@ -49,6 +49,10 @@ export default async function SalarySettingsPage() {
             deductAbsent: settings.deductAbsent,
             deductUnpaidLeave: settings.deductUnpaidLeave,
             otSsoBase: settings.otSsoBase,
+            taxEnabled: settings.taxEnabled,
+            otMode: settings.otMode,
+            diligenceEnabled: settings.diligenceEnabled,
+            diligenceSteps: settings.diligenceSteps,
             companyTaxId: settings.companyTaxId,
             ssoEmployerNo: settings.ssoEmployerNo,
             ssoBranch: settings.ssoBranch,
@@ -57,7 +61,7 @@ export default async function SalarySettingsPage() {
           }}
         />
         <SsoRates current={rateOn(rates.sso, today, DEFAULT_SSO)} isDefault={rates.sso.length === 0} history={rates.sso.map((r) => ({ from: r.effectiveFrom, p: r.params }))} />
-        <TaxRates current={rateOn(rates.tax, today, DEFAULT_TAX)} isDefault={rates.tax.length === 0} />
+        {settings.taxEnabled && <TaxRates current={rateOn(rates.tax, today, DEFAULT_TAX)} isDefault={rates.tax.length === 0} />}
         <ItemsList items={items.map((i) => ({ id: i.id, name: i.name, kind: i.kind as "earning" | "deduction", taxable: i.taxable, ssoBase: i.ssoBase, active: i.active }))} />
       </div>
     </AppScaffold>

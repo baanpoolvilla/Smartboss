@@ -12,12 +12,17 @@ import {
   parseGradeWeight,
   resolveGradeValues,
   resolveGradeWeights,
+  formatExact,
+  parseGradeShare,
+  parseTierScore,
   splitCommissionPool,
+  splitGradeTier,
   toCommissionMethod,
   type CommissionEligibility,
   type CommissionFor,
   type CommissionMethod,
   type CommissionSplit,
+  type GradeTierSplit,
 } from "./commission";
 import { loadScorePeriodConfig } from "@/lib/score-period-config";
 
@@ -45,6 +50,21 @@ export interface CommissionMonth {
    * all-users = อ่านทะเบียนไม่ได้ (ไม่มีสิทธิ์/ระบบบุคคลล่ม) จึงนับผู้ใช้ที่เปิดใช้งานทุกคน
    */
   registry: "registry" | "all-users";
+  /** วิธี grade_tier: % ก้อน Grade */
+  gradeShare: number;
+  /** คะแนน Tier ที่บันทึกของเดือนนี้ (ไม่มีคีย์ = ยังไม่ใส่) */
+  tierScores: Record<string, number>;
+  /** วิธี grade_tier: ผลแบ่งของเดือนนี้ (เฉพาะคนที่ได้ค่าคอม) */
+  gradeTier: GradeTierSplit;
+}
+
+/** { userId: number } จาก JSON — ทิ้งค่าที่ไม่ใช่ตัวเลข ≥ 0 */
+function toTierScores(value: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(toObject(value))) {
+    if (typeof v === "number" && Number.isFinite(v) && v >= 0) out[k] = v;
+  }
+  return out;
 }
 
 /** อ่านทุกหน้าของรายการ — ทะเบียนเกิน 200 คนต้องไม่ถูกตัดทิ้งเงียบ ๆ */
@@ -126,8 +146,13 @@ export async function loadCommissionMonth(orgId: string, month: string): Promise
   const members = all.filter((m) => m.eligible).map(({ userId, name, email, grade, score }) => ({ userId, name, email, grade, score }));
 
   const poolSatang = pool === null ? 0 : Math.round(Number(pool.amount.toString()) * 100);
+  const gradeShare = setting ? Number(setting.gradeShare.toString()) : 70;
+  const tierScores = toTierScores(pool?.tierScores);
 
   return {
+    gradeShare,
+    tierScores,
+    gradeTier: splitGradeTier(poolSatang, gradeShare, members, weights, tierScores),
     month,
     pool: pool === null ? null : { satang: poolSatang, note: pool.note, updatedAt: pool.updatedAt },
     gradeOrder: order,
@@ -150,6 +175,32 @@ export async function loadCommissionMonth(orgId: string, month: string): Promise
 export function commissionForUser(data: CommissionMonth, userId: string, label: string): CommissionFor {
   const m = data.members.find((x) => x.userId === userId);
   if (!m || !m.eligible || data.method === "off") return null;
+  if (data.method === "grade_tier") {
+    const g = data.gradeTier;
+    if (!data.pool) return { kind: "blocked", reason: `ยังไม่ได้ใส่ค่าคอมรวมของรอบ ${label} (ระบบบุคคล › พนักงาน › ค่าคอม) — รอบนี้ไม่มีค่าคอมให้ใส่ 0` };
+    if (g.poolSatang <= 0) return null;
+    if (g.problems.length > 0) return { kind: "blocked", reason: `ค่าคอม ${label}: ${g.problems.join(" · ")}` };
+    const s = g.shares.find((x) => x.userId === userId);
+    if (!s || s.totalSatang <= 0) return null;
+    const gradeTxt = `Grade ${s.grade} (${s.weight}) × ${formatSatang(g.gradePoolSatang)} ÷ ${g.totalGrade} = ${formatExact(s.gradeExact)}`;
+    const tierTxt = `Tier ${s.tier} × ${formatSatang(g.tierPoolSatang)} ÷ ${g.totalTier} = ${formatExact(s.tierExact)}`;
+    return {
+      kind: "amount",
+      satang: s.totalSatang,
+      detail: `${gradeTxt} + ${tierTxt} · ยอดรวม ${label} ${formatSatang(g.poolSatang)} (Grade ${g.gradeShare}% / Tier ${Math.round((100 - g.gradeShare) * 100) / 100}%)`,
+      parts: {
+        grade: s.grade,
+        gradeScore: s.weight,
+        gradeExact: s.gradeExact,
+        tier: s.tier ?? 0,
+        tierExact: s.tierExact,
+        gradePool: g.gradePoolSatang,
+        tierPool: g.tierPoolSatang,
+        totalGrade: g.totalGrade,
+        totalTier: g.totalTier,
+      },
+    };
+  }
   if (data.method === "pool") {
     const share = data.split.shares.find((x) => x.userId === userId);
     if (!data.pool || !share || share.amountSatang <= 0) return null;
@@ -190,6 +241,57 @@ export async function saveCommissionPool(input: {
     where: { orgId_month: { orgId: input.orgId, month: input.month } },
     update: data,
     create: { orgId: input.orgId, month: input.month, ...data },
+  });
+}
+
+/**
+ * วิธี grade_tier: บันทึกยอดรวมประจำรอบ + คะแนน Tier รายคนพร้อมกัน (ฟอร์มเดียว)
+ * ยอดรวมต้องใส่เสมอ (ไม่มีค่าคอม = 0) · คะแนนว่าง = ยังไม่ใส่ (ระบบไม่ให้สรุปรอบจนกว่าจะครบ)
+ * รับเฉพาะ id ผู้ใช้ของบริษัทนี้
+ */
+export async function saveCommissionRound(input: {
+  orgId: string;
+  userId: string;
+  month: string;
+  amount: string;
+  note: string;
+  tierUserIds: string[];
+  tierValues: string[];
+}): Promise<void> {
+  if (!MONTH.test(input.month)) throw new Error("เดือนไม่ถูกต้อง");
+  const satang = parseBahtToSatang(input.amount.trim());
+  if (satang === null) throw new Error("ยอดค่าคอมรวมไม่ถูกต้อง — ใส่ตัวเลข ทศนิยมไม่เกิน 2 ตำแหน่ง (รอบนี้ไม่มีค่าคอม ใส่ 0)");
+  const known = new Set(
+    (await prisma.user.findMany({ where: { orgId: input.orgId, id: { in: input.tierUserIds } }, select: { id: true } })).map((u) => u.id),
+  );
+  const tierScores: Record<string, number> = {};
+  input.tierUserIds.forEach((id, i) => {
+    if (!known.has(id)) return;
+    const v = parseTierScore(input.tierValues[i] ?? "");
+    if (v === null) throw new Error(`คะแนน Tier ช่องที่ ${i + 1} ไม่ถูกต้อง — ใส่ตัวเลขไม่ติดลบ ทศนิยมไม่เกิน 2 ตำแหน่ง`);
+    if (v !== undefined) tierScores[id] = v;
+  });
+  const data = {
+    amount: (satang / 100).toFixed(2),
+    note: input.note.trim().slice(0, 500) || null,
+    tierScores,
+    updatedBy: input.userId,
+  };
+  await prisma.commissionPool.upsert({
+    where: { orgId_month: { orgId: input.orgId, month: input.month } },
+    update: data,
+    create: { orgId: input.orgId, month: input.month, ...data },
+  });
+}
+
+/** วิธี grade_tier: % ก้อน Grade (ที่เหลือเป็นก้อน Tier) */
+export async function saveCommissionGradeShare(input: { orgId: string; userId: string; gradeShare: string }): Promise<void> {
+  const v = parseGradeShare(input.gradeShare);
+  if (v === null) throw new Error("% ก้อน Grade ต้องเป็น 0–100");
+  await prisma.commissionSetting.upsert({
+    where: { orgId: input.orgId },
+    update: { gradeShare: v, updatedBy: input.userId },
+    create: { orgId: input.orgId, gradeShare: v, updatedBy: input.userId },
   });
 }
 

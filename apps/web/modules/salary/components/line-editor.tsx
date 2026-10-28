@@ -41,6 +41,8 @@ export interface EditorData {
   /** วิธีคิดภาษีทีละขั้น (รอบที่คำนวณก่อนมีระบบนี้ไม่มี) */
   taxBreak?: TaxBreak;
   sso: SsoParams;
+  /** บริษัทปิดการคิดภาษี = ไม่มีแถวภาษี */
+  taxEnabled?: boolean;
   closeHref: string;
   employeeHref: string;
   slipHref: string;
@@ -100,16 +102,18 @@ export function LineEditor({ d }: { d: EditorData }) {
                 help={<Explain q="คิดยังไง?"><SalaryExplain /></Explain>}
               />
               <OverrideRow which="sso" title="ประกันสังคม" line={sso} computed={d.ssoComputed} current={d.overrides.sso} ctx={ctx} editable={d.editable} help={<Explain q="คิดยังไง?"><SsoExplain p={d.sso} /></Explain>} />
-              <OverrideRow
-                which="tax"
-                title="ภาษีหัก ณ ที่จ่าย"
-                line={tax}
-                computed={d.taxComputed}
-                current={d.overrides.tax}
-                ctx={ctx}
-                editable={d.editable}
-                help={d.taxBreak ? <Explain q="ดูวิธีคิดทีละขั้น"><TaxSteps b={d.taxBreak} /></Explain> : undefined}
-              />
+              {d.taxEnabled !== false && (
+                <OverrideRow
+                  which="tax"
+                  title="ภาษีหัก ณ ที่จ่าย"
+                  line={tax}
+                  computed={d.taxComputed}
+                  current={d.overrides.tax}
+                  ctx={ctx}
+                  editable={d.editable}
+                  help={d.taxBreak ? <Explain q="ดูวิธีคิดทีละขั้น"><TaxSteps b={d.taxBreak} /></Explain> : undefined}
+                />
+              )}
             </section>
 
             <section className="flex flex-col gap-2">
@@ -117,7 +121,7 @@ export function LineEditor({ d }: { d: EditorData }) {
               {showCommission && (
                 <OverrideRow
                   which="commission"
-                  title="ค่าคอม (ตามเกรด)"
+                  title={commission?.label ?? "ค่าคอม (ตามเกรด)"}
                   line={commission}
                   computed={d.commissionComputed}
                   current={d.overrides.commission}
@@ -133,7 +137,7 @@ export function LineEditor({ d }: { d: EditorData }) {
                   label={l.label}
                   how={l.how}
                   amount={l.amount}
-                  badge={l.source === "ot" ? "auto" : l.source}
+                  badge={l.source === "ot" || l.source === "diligence" ? "auto" : l.source}
                   remove={l.source === "adjustment" && d.editable ? { ...ctx, adjustmentId: l.refId! } : undefined}
                   help={l.formula ? <Explain q="คิดยังไง?"><div>{l.formula}</div><div className="text-(--ink-soft)">ใบ OT ที่อนุมัติแล้วในเบิกจ่าย &amp; OT เข้ารอบเอง · อนุมัติหลังจ่ายงวดนี้ไปแล้วจะเข้างวดถัดไป</div></Explain> : undefined}
                 />

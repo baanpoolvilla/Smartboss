@@ -1,7 +1,8 @@
 import "server-only";
 
 import { insertEvent as insertReqEvent, loadRequests } from "@/modules/requests/lib/db";
-import { computePay, type Adjustment, type Override, type PayLine, type TaxBreak } from "./compute";
+import { computePay, type Adjustment, type DiligenceResult, type Override, type PayLine, type TaxBreak } from "./compute";
+import type { CommissionParts } from "@/modules/hr/lib/commission";
 import { dateOnly, insertEvent, num, readRates, readSettings, withSalaryTenant, ymd, type Tx } from "./db";
 import { loadPeriodInputs } from "./inputs";
 import {
@@ -47,8 +48,19 @@ export interface LineInfo {
   /** ใบเบิกล่วงหน้าที่เลื่อนไปหักงวดหน้า */
   deferAdvances: string[];
   deferredAdvances: { refId: string; code: string; amount: number }[];
-  /** ใบ OT/เบิกที่อยู่ในรอบนี้ + ยอด ณ ตอนคำนวณ (ตรวจซ้ำตอนบันทึกจ่าย) */
-  refs: { ot: { id: string; amount: number }[]; advances: { id: string; amount: number }[] };
+  /**
+   * ใบ OT/เบิกที่อยู่ในรอบนี้ + ยอด ณ ตอนคำนวณ (ตรวจซ้ำตอนบันทึกจ่าย)
+   * ot.pay = ยอดที่จ่ายจริงต่อใบ (OT แบบนับวัน) · ไม่มี = จ่ายเท่ายอดค้าง (OT แบบชั่วโมง เดิม)
+   */
+  refs: { ot: { id: string; amount: number; pay?: number }[]; advances: { id: string; amount: number }[] };
+  /** เบี้ยขยันงวดนี้ — เก็บไว้เป็นประวัติขั้น (รอบถัดไปอ่านจากรอบที่จ่ายแล้ว) */
+  diligence?: DiligenceResult;
+  /** ที่มาของค่าคอม Grade + Tier (สตางค์ไม่ปัด) */
+  commissionParts?: CommissionParts;
+  /** OT แบบนับวัน: จำนวนวัน · อัตราต่อวัน */
+  otDaysPay?: { days: number; rate: number; dates: string[] };
+  /** ต้องแก้ก่อนส่งอนุมัติ */
+  blocks?: string[];
   hiredOn: string;
   terminatedOn: string | null;
   ssoComputed: number;
@@ -84,9 +96,11 @@ export interface RunTotals {
   skipped: { name: string; reason: string }[];
   warnings: number;
   negatives: number;
+  /** จำนวนคนที่มีข้อห้ามส่ง (ข้อมูลค่าคอมไม่ครบ ฯลฯ) — รอบเก่าไม่มี */
+  blocked?: number;
 }
 
-const EMPTY_TOTALS: RunTotals = { people: 0, gross: 0, deductions: 0, net: 0, ssoEmployee: 0, ssoEmployer: 0, tax: 0, transferNet: 0, cashNet: 0, skipped: [], warnings: 0, negatives: 0 };
+const EMPTY_TOTALS: RunTotals = { people: 0, gross: 0, deductions: 0, net: 0, ssoEmployee: 0, ssoEmployer: 0, tax: 0, transferNet: 0, cashNet: 0, skipped: [], warnings: 0, negatives: 0, blocked: 0 };
 
 async function lockRun(tx: Tx, orgId: string, runId: string) {
   await tx.$queryRawUnsafe(`SELECT id FROM salary.runs WHERE id = $1 AND org_id = $2 FOR UPDATE`, runId, orgId);
@@ -132,7 +146,7 @@ export async function computeRun(orgId: string, runId: string, actor: Actor): Pr
     const settings = await readSettings(tx, orgId);
     const rates = await readRates(tx, orgId);
     const period = { startsOn: ymd(run.startsOn), endsOn: ymd(run.endsOn), payDate: ymd(run.payDate) };
-    const { staff, skipped } = await loadPeriodInputs(tx, orgId, { id: run.id, period: run.period, ...period });
+    const { staff, skipped } = await loadPeriodInputs(tx, orgId, { id: run.id, period: run.period, ...period }, settings);
     const sso = rateOn(rates.sso, period.payDate, DEFAULT_SSO);
     const tax = rateOn(rates.tax, period.payDate, DEFAULT_TAX);
 
@@ -165,6 +179,7 @@ export async function computeRun(orgId: string, runId: string, actor: Actor): Pr
         advances,
         recurring: s.recurring,
         commission: s.commission,
+        diligence: s.diligence,
         adjustments,
         overrides,
         profile: s.profile,
@@ -173,7 +188,7 @@ export async function computeRun(orgId: string, runId: string, actor: Actor): Pr
         sso,
         tax,
       });
-      const warnings = [...r.warnings];
+      const warnings = [...r.warnings, ...s.extraWarnings];
       if (s.profile.payChannel === "transfer" && !s.profile.bankAccount.trim()) warnings.push("ยังไม่มีเลขบัญชี — จะไม่อยู่ในไฟล์โอน (ใส่บัญชี หรือเปลี่ยนเป็นเงินสด)");
       if (s.terminatedOn && s.terminatedOn <= period.endsOn) warnings.push(`ออกจากงานวันที่ ${s.terminatedOn} — งวดสุดท้าย ตรวจยอดค้าง (เบิกล่วงหน้า/OT) ให้ครบ`);
       const info: LineInfo = {
@@ -181,7 +196,11 @@ export async function computeRun(orgId: string, runId: string, actor: Actor): Pr
         overrides,
         deferAdvances: defer,
         deferredAdvances: s.advances.filter((a) => defer.includes(a.refId)).map((a) => ({ refId: a.refId, code: a.code, amount: a.amount })),
-        refs: { ot: s.ot.map((o) => ({ id: o.refId, amount: o.amount })), advances: advances.map((a) => ({ id: a.refId, amount: a.amount })) },
+        refs: { ot: s.otRefs ?? s.ot.map((o) => ({ id: o.refId, amount: o.amount })), advances: advances.map((a) => ({ id: a.refId, amount: a.amount })) },
+        ...(s.diligence ? { diligence: s.diligence } : {}),
+        ...(s.commissionParts && !overrides.commission ? { commissionParts: s.commissionParts } : {}),
+        ...(s.otDaysPay ? { otDaysPay: s.otDaysPay } : {}),
+        blocks: r.blocks,
         hiredOn: s.hiredOn,
         terminatedOn: s.terminatedOn,
         opening: s.opening,
@@ -225,6 +244,7 @@ export async function computeRun(orgId: string, runId: string, actor: Actor): Pr
       add(s.profile.payChannel === "cash" ? "cashNet" : "transferNet", r.net);
       if (warnings.length) totals.warnings += 1;
       if (r.net < 0) totals.negatives += 1;
+      if (r.blocks.length) totals.blocked = (totals.blocked ?? 0) + 1;
     }
     const gone = existing.filter((l) => !keep.has(l.employmentId));
     if (gone.length) {
@@ -300,6 +320,9 @@ export async function submitRun(orgId: string, actor: Actor, runId: string): Pro
     if (lines.length === 0) throw new Error("ยังไม่มีพนักงานในรอบ");
     const neg = lines.filter((l) => num(l.net) < 0);
     if (neg.length) throw new Error(`ยอดสุทธิติดลบ: ${neg.map((l) => l.name).join(", ")} — แก้ก่อนส่ง (เช่น เลื่อนหักเบิกล่วงหน้าไปงวดหน้า)`);
+    // ข้อมูลไม่ครบ (เช่น คะแนน Tier ไม่ครบ / คะแนนรวม 0 / เกรดยังไม่ปิด) — ห้ามสรุปรอบ
+    const blocked = [...new Set(lines.flatMap((l) => (l.info as unknown as LineInfo)?.blocks ?? []))];
+    if (blocked.length) throw new Error(`ยังส่งไม่ได้ — ${blocked.slice(0, 3).join(" · ")} (แก้แล้วกด "ดึงข้อมูลใหม่")`);
     const settings = await readSettings(tx, orgId);
     const totals = run.totals as unknown as RunTotals;
     let auto = false;
@@ -372,9 +395,25 @@ export async function markPaid(orgId: string, actor: Actor, runId: string, paidO
 
     const label = `รวมเงินเดือนงวด ${periodLabel(run.period)}`;
     for (const ref of otIds) {
-      await tx.moneyRequestPayment.create({ data: { orgId, requestId: ref.id, amount: ref.amount, method: "payroll", paidOn: dateOnly(paidOn), payrollPeriod: run.period, note: label, byUserId: actor.userId, byName: actor.name } });
-      await tx.moneyRequest.update({ where: { id: ref.id }, data: { status: "paid" } });
-      await insertReqEvent(tx, orgId, { requestId: ref.id, byUserId: actor.userId, byName: actor.name, action: "pay", summary: `${label} (โมดูลเงินเดือน)` });
+      // OT แบบนับวัน: จ่ายตามค่าวัน (ไม่ใช่ยอดรายชั่วโมงในใบ) — ปรับยอดใบเป็นยอดที่จ่ายจริง แบบ "จ่ายน้อยกว่ายอดแล้วปิดใบ" ของเบิกจ่าย
+      const pay = ref.pay ?? ref.amount;
+      const r = ots.find((x) => x.id === ref.id)!;
+      if (pay > 0) {
+        await tx.moneyRequestPayment.create({ data: { orgId, requestId: ref.id, amount: pay, method: "payroll", paidOn: dateOnly(paidOn), payrollPeriod: run.period, note: label, byUserId: actor.userId, byName: actor.name } });
+      }
+      const byDays = ref.pay !== undefined && Math.abs(ref.pay - ref.amount) > 0.004;
+      await tx.moneyRequest.update({ where: { id: ref.id }, data: { status: "paid", ...(byDays ? { netAmount: Math.round((r.paidTotal + pay) * 100) / 100 } : {}) } });
+      await insertReqEvent(tx, orgId, {
+        requestId: ref.id,
+        byUserId: actor.userId,
+        byName: actor.name,
+        action: "pay",
+        summary: byDays
+          ? pay > 0
+            ? `${label} (โมดูลเงินเดือน) · OT คิดเป็นวัน ${fmt(toSatang(pay))} แทนยอดรายชั่วโมง ${fmt(toSatang(ref.amount))}`
+            : `${label} (โมดูลเงินเดือน) · OT วันเดียวกับใบอื่นที่จ่ายค่าวันแล้ว — ไม่จ่ายซ้ำ`
+          : `${label} (โมดูลเงินเดือน)`,
+      });
     }
     for (const ref of advIds) {
       await tx.moneyRequest.update({ where: { id: ref.id }, data: { deductedAt: new Date(), deductedByName: actor.name, deductedPeriod: run.period } });

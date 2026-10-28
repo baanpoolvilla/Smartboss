@@ -19,6 +19,7 @@ import {
   PERIOD_RE,
   allowanceTotal,
   normalizeAllowances,
+  normalizeDiligenceSteps,
   fmtBaht,
   periodLabel,
   validateSso,
@@ -27,6 +28,7 @@ import {
   type ApprovalMode,
   type ItemKind,
   type LateMode,
+  type OtMode,
   type PayChannel,
   type SsoParams,
   type TaxMode,
@@ -154,6 +156,10 @@ export interface SettingsInput {
   deductAbsent: boolean;
   deductUnpaidLeave: boolean;
   otSsoBase: boolean;
+  taxEnabled: boolean;
+  otMode: OtMode;
+  diligenceEnabled: boolean;
+  diligenceSteps: number[];
   companyTaxId: string;
   ssoEmployerNo: string;
   ssoBranch: string;
@@ -177,6 +183,9 @@ export async function saveSettingsAction(input: SettingsInput): Promise<Result> 
     const ssoNo = text(input.ssoEmployerNo, 20).replace(/\D/g, "");
     if (ssoNo && ssoNo.length !== 10) return { error: "เลขบัญชีนายจ้างประกันสังคมต้องมี 10 หลัก" };
     const branch = text(input.ssoBranch, 6).replace(/\D/g, "").padStart(6, "0");
+    if (input.otMode !== "hours" && input.otMode !== "days") return { error: "วิธีคิด OT ไม่ถูกต้อง" };
+    const diligenceSteps = normalizeDiligenceSteps(input.diligenceSteps);
+    if (!diligenceSteps) return { error: "ขั้นเบี้ยขยันต้องเป็นตัวเลขมากกว่า 0 เรียงจากน้อยไปมาก 1–6 ขั้น (เช่น 500, 800, 1000)" };
     const data = {
       cutoffDay,
       payDay,
@@ -188,6 +197,10 @@ export async function saveSettingsAction(input: SettingsInput): Promise<Result> 
       deductAbsent: !!input.deductAbsent,
       deductUnpaidLeave: !!input.deductUnpaidLeave,
       otSsoBase: !!input.otSsoBase,
+      taxEnabled: !!input.taxEnabled,
+      otMode: input.otMode,
+      diligenceEnabled: !!input.diligenceEnabled,
+      diligenceSteps,
       companyTaxId: taxId,
       ssoEmployerNo: ssoNo,
       ssoBranch: branch,
@@ -289,6 +302,10 @@ export interface ProfileInput {
   prevTax: number;
   prevSso: number;
   prevYear: number | null;
+  /** ไม่ส่งมา = ไม่แก้ (หน้าจอเก่า) */
+  diligenceEligible?: boolean;
+  /** ขั้นรอบล่าสุดจากระบบเดิม (บาท) · null = ไม่มี */
+  diligenceOpening?: number | null;
 }
 
 export async function saveProfileAction(input: ProfileInput): Promise<Result<{ notes: string[] }>> {
@@ -329,6 +346,8 @@ export async function saveProfileAction(input: ProfileInput): Promise<Result<{ n
       prevTax: money(input.prevTax, "ภาษีสะสมที่หักไปแล้ว"),
       prevSso: money(input.prevSso ?? 0, "ประกันสังคมสะสม", 100_000),
       prevYear: input.prevYear && Number.isInteger(input.prevYear) ? input.prevYear : null,
+      ...(input.diligenceEligible !== undefined ? { diligenceEligible: !!input.diligenceEligible } : {}),
+      ...(input.diligenceOpening !== undefined ? { diligenceOpening: input.diligenceOpening === null ? null : money(input.diligenceOpening, "ขั้นเบี้ยขยันยกมา", 1_000_000) } : {}),
       updatedByName: actor.name,
     };
     await withSalaryTenant(orgId, async (tx) => {
@@ -529,6 +548,45 @@ export async function removeAdjustmentAction(input: { runId: string; employmentI
       const gone = line.adjustments.find((a) => a.id === input.adjustmentId);
       if (!gone) throw new Error("ไม่พบรายการ (อาจถูกลบไปแล้ว)");
       return { adjustments: line.adjustments.filter((a) => a.id !== input.adjustmentId), info: line.info, summary: `ลบรายการ "${gone.label}" ${fmtBaht(gone.amount)}` };
+    });
+    refresh(input.runId);
+    return { ok: true };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/** แก้รายเพิ่ม/รายหักงวดนี้ (ประเภท · รายละเอียด · จำนวนเงิน) — ก่อนส่งอนุมัติเท่านั้น */
+export async function updateAdjustmentAction(input: {
+  runId: string;
+  employmentId: string;
+  expectUpdatedAt: string | null;
+  adjustmentId: string;
+  label: string;
+  reason: string;
+  amount: number;
+}): Promise<Result> {
+  try {
+    const { orgId, actor } = await guardFor(input.employmentId);
+    const amount = money(input.amount, "จำนวนเงิน", 10_000_000);
+    if (amount <= 0) return { error: "ใส่จำนวนเงิน (ไม่ใช้แล้วให้กดลบ)" };
+    const label = text(input.label, 50);
+    if (!label) return { error: "ใส่ประเภทรายการ" };
+    const reason = text(input.reason, 300);
+    if (!reason) return { error: "ใส่รายละเอียด (CEO เห็นตอนอนุมัติ)" };
+    await editLine(orgId, actor, input, (line) => {
+      const old = line.adjustments.find((a) => a.id === input.adjustmentId);
+      if (!old) throw new Error("ไม่พบรายการ (อาจถูกลบไปแล้ว)");
+      const changes = [
+        old.label !== label ? `ประเภท "${old.label}" → "${label}"` : null,
+        old.amount !== amount ? `${fmtBaht(old.amount)} → ${fmtBaht(amount)}` : null,
+        old.reason !== reason ? `รายละเอียด "${old.reason}" → "${reason}"` : null,
+      ].filter(Boolean);
+      return {
+        adjustments: line.adjustments.map((a) => (a.id === old.id ? { ...a, label, reason, amount, byName: actor.name } : a)),
+        info: line.info,
+        summary: `แก้${old.kind === "earning" ? "รายเพิ่ม" : "รายหัก"} "${old.label}": ${changes.join(" · ") || "ไม่เปลี่ยน"}`,
+      };
     });
     refresh(input.runId);
     return { ok: true };

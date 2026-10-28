@@ -4,6 +4,7 @@ import { requireOrg } from "@smartboss/auth";
 import { salaryAccess } from "@/modules/salary/lib/access";
 import { insertEvent, readSettings, withSalaryTenant } from "@/modules/salary/lib/db";
 import { actorOf } from "@/modules/salary/lib/page";
+import { exactText, reportRow } from "@/modules/salary/lib/report";
 import { loadRun } from "@/modules/salary/lib/views";
 
 /**
@@ -12,6 +13,7 @@ import { loadRun } from "@/modules/salary/lib/views";
  *   sso     สรุปประกันสังคม (ค่าจ้างที่ใช้คิด · ลูกจ้าง · บริษัท) — ยังไม่ใช่ไฟล์ยื่นออนไลน์ สปส.1-10
  *   pnd1    สรุปภาษีหัก ณ ที่จ่าย (เงินได้ · ภาษี) — ยังไม่ใช่ไฟล์ RD Prep
  *   summary ทุกคน ทุกรายการ ให้ฝ่ายบัญชี
+ *   report  รายงานเงินเดือนตามสูตร HR (ฐาน · ค่าคอม Grade/Tier · เบี้ยขยัน · OT วัน · รายเพิ่ม/หัก · ประกันสังคม · สุทธิ) — โหลดได้ตั้งแต่ร่าง (ใช้ตรวจ)
  * ดาวน์โหลดได้เฉพาะ CEO + คนที่ CEO เลือก · บันทึกว่าใครดาวน์โหลดเมื่อไหร่ · ห้ามแคช
  */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -19,12 +21,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (!(await salaryAccess(session)).canEdit) return new NextResponse("Forbidden", { status: 403 });
   const { id } = await params;
   const type = new URL(req.url).searchParams.get("type") ?? "summary";
-  if (!["bank", "sso", "pnd1", "summary"].includes(type)) return new NextResponse("Bad request", { status: 400 });
+  if (!["bank", "sso", "pnd1", "summary", "report"].includes(type)) return new NextResponse("Bad request", { status: 400 });
   const orgId = session.orgId;
   const run = await loadRun(orgId, id);
   if (!run) return new NextResponse("Not found", { status: 404 });
   // ไฟล์โอน/ยื่นใช้ตัวเลขที่ CEO อนุมัติแล้วเท่านั้น — ร่างยังเปลี่ยนได้ ห้ามเอาไปโอน
-  if (run.status !== "approved" && run.status !== "paid") {
+  if (type !== "report" && run.status !== "approved" && run.status !== "paid") {
     return new NextResponse("รอบนี้ยังไม่ได้อนุมัติ — ดาวน์โหลดไฟล์ได้หลัง CEO อนุมัติ", { status: 409, headers: { "content-type": "text/plain; charset=utf-8" } });
   }
   const settings = await withSalaryTenant(orgId, (tx) => readSettings(tx, orgId));
@@ -66,6 +68,24 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     rows = taxed.map((l, i) => [i + 1, l.employeeCode, l.name, n(l.taxable), n(l.tax)]);
     rows.push([], ["", "", "รวม", n(taxed.reduce((s, l) => s + l.taxable, 0)), n(taxed.reduce((s, l) => s + l.tax, 0))]);
     rows.push([], [`เลขผู้เสียภาษีบริษัท ${settings.companyTaxId || "(ยังไม่ได้ตั้ง)"}`], ["หมายเหตุ: ไฟล์สรุป ไม่ใช่ไฟล์ยื่น RD Prep — ใช้กรอก ภ.ง.ด.1 ของเดือนที่จ่าย"]);
+  } else if (type === "report") {
+    const rs = lines.map((l) => reportRow(l));
+    head = [
+      "ลำดับ", "รหัสพนักงาน", "ชื่อ", "แผนก", "ฐานเงินเดือน", "Grade", "คะแนน Grade", "คะแนน Tier", "ค่าคอม Grade (ไม่ปัด)", "ค่าคอม Tier (ไม่ปัด)", "ค่าคอมรวม (จ่ายจริง)",
+      "เบี้ยขยัน", "ขั้นเบี้ยขยัน", "OT (วัน)", "อัตรา OT/วัน", "ยอด OT", "รายเพิ่ม", "รายละเอียดรายเพิ่ม", "รายหัก", "รายละเอียดรายหัก", "ประกันสังคม",
+      ...(settings.taxEnabled ? ["ภาษี"] : []), "เงินสุทธิ",
+    ];
+    rows = rs.map((r, i) => [
+      i + 1, r.employeeCode, r.name, r.department, n(r.base), r.grade ?? "", r.gradeScore ?? "", r.tier ?? "",
+      r.commGradeExact !== null ? exactText(r.commGradeExact).replace(/,/g, "") : "", r.commTierExact !== null ? exactText(r.commTierExact).replace(/,/g, "") : "", n(r.commission),
+      n(r.diligence), r.diligenceStep, r.otDays ?? "", r.otRate !== null ? n(r.otRate) : "", n(r.ot),
+      n(r.addTotal), r.adds.map((x) => `${x.label} ${n(x.amount)} (${x.detail})`).join(" | "),
+      n(r.deductTotal), r.deducts.map((x) => `${x.label} ${n(x.amount)} (${x.detail})`).join(" | "),
+      n(r.sso), ...(settings.taxEnabled ? [n(r.tax)] : []), n(r.net),
+    ]);
+    const tot = (k: "base" | "commission" | "diligence" | "ot" | "addTotal" | "deductTotal" | "sso" | "tax" | "net") => n(rs.reduce((m, r) => m + Math.round(r[k] * 100), 0) / 100);
+    rows.push([], ["", "", "รวม", "", tot("base"), "", "", "", "", "", tot("commission"), tot("diligence"), "", "", "", tot("ot"), tot("addTotal"), "", tot("deductTotal"), "", tot("sso"), ...(settings.taxEnabled ? [tot("tax")] : []), tot("net")]);
+    rows.push([], [`สถานะรอบ: ${run.status === "draft" ? "ร่าง (ตัวเลขยังเปลี่ยนได้)" : run.status}`]);
   } else {
     head = ["ลำดับ", "รหัสพนักงาน", "ชื่อ", "แผนก", "ช่องทาง", "เงินเดือน", "OT", "เงินได้อื่น", "รวมเงินได้", "ประกันสังคม", "ภาษี", "หักอื่น", "รวมหัก", "สุทธิ", "บริษัทสมทบ ปกส.", "รายละเอียดเงินได้", "รายละเอียดหัก"];
     rows = lines.map((l, i) => {

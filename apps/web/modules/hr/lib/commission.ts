@@ -154,16 +154,121 @@ export function formatSatang(satang: number): string {
  * percent = เกรดไหนได้กี่ % ของเงินเดือนคนนั้น (ยอดเงินคิดในงวดเงินเดือน — ที่นี่ไม่รู้เงินเดือน)
  * fixed   = เกรดไหนได้กี่บาท เท่ากันทุกคน
  * off     = ไม่คิดค่าคอมจากเกรด (บริษัทที่ไม่ผูกเกรดกับเงิน — ใส่ค่าคอมเองรายคนในงวดเงินเดือนได้)
+ * grade_tier = ยอดรวมประจำรอบ แบ่งเป็นก้อน Grade (เช่น 70%) ตามตัวคูณเกรด + ก้อน Tier (30%) ตามคะแนน Tier รายคน
  */
-export type CommissionMethod = "pool" | "percent" | "fixed" | "off";
+export type CommissionMethod = "pool" | "percent" | "fixed" | "off" | "grade_tier";
 export const COMMISSION_METHODS: { id: CommissionMethod; label: string; hint: string }[] = [
   { id: "pool", label: "แบ่งจากยอดรวม (Pool) ตามตัวคูณเกรด", hint: "ใส่ยอดรวมทุกเดือน ระบบแบ่งให้ตามเกรด เช่น A ได้ 1 ส่วน B ได้ 0.75 ส่วน" },
   { id: "percent", label: "% ของเงินเดือน ตามเกรด", hint: "เช่น A ได้ 10% B ได้ 5% ของเงินเดือนคนนั้น — ไม่ต้องใส่ยอดทุกเดือน" },
   { id: "fixed", label: "จำนวนเงินตายตัว ตามเกรด", hint: "เช่น A ได้ 3,000 B ได้ 1,500 บาท เท่ากันทุกคนในเกรดเดียวกัน" },
   { id: "off", label: "ไม่คิดค่าคอมจากเกรด", hint: "เกรดไม่เกี่ยวกับเงิน — ถ้ามีค่าคอม ใส่เองรายคนในงวดเงินเดือน" },
+  { id: "grade_tier", label: "ยอดรวมประจำรอบ แบ่งก้อน Grade + ก้อน Tier", hint: "เช่น 10,000 → Grade 70% แบ่งตามตัวคูณเกรด + Tier 30% แบ่งตามคะแนน Tier ที่ HR ใส่รายคน" },
 ];
 export function toCommissionMethod(v: unknown): CommissionMethod {
-  return v === "percent" || v === "fixed" || v === "off" ? v : "pool";
+  return v === "percent" || v === "fixed" || v === "off" || v === "grade_tier" ? v : "pool";
+}
+
+/* ═════════════════ Grade + Tier (ยอดรวมประจำรอบ) ═════════════════ */
+
+/** คะแนน Tier สูงสุดที่รับ — กันพิมพ์ผิดเกินจริง */
+export const MAX_TIER_SCORE = 100_000;
+
+/** ช่องคะแนน Tier — ว่าง = ยังไม่ใส่ (undefined) · ทศนิยมไม่เกิน 2 ตำแหน่ง ไม่ติดลบ · ผิด = null */
+export function parseTierScore(input: string): number | undefined | null {
+  const raw = input.replace(/[,\s]/g, "");
+  if (raw === "") return undefined;
+  if (!/^\d+(\.\d{1,2})?$/.test(raw)) return null;
+  const value = Number(raw);
+  return value <= MAX_TIER_SCORE ? value : null;
+}
+
+/** % ก้อน Grade — 0..100 ทศนิยมไม่เกิน 2 ตำแหน่ง · ผิด = null */
+export function parseGradeShare(input: string): number | null {
+  const raw = input.replace(/[\s%]/g, "");
+  if (!/^\d+(\.\d{1,2})?$/.test(raw)) return null;
+  const value = Number(raw);
+  return value <= 100 ? value : null;
+}
+
+export interface GradeTierShare {
+  userId: string;
+  name: string;
+  grade: string;
+  /** ตัวคูณของเกรด (คะแนน Grade) */
+  weight: number;
+  /** คะแนน Tier — null = ยังไม่ได้ใส่ */
+  tier: number | null;
+  /** ส่วนก้อน Grade แบบไม่ปัด (สตางค์ อาจมีทศนิยม) */
+  gradeExact: number;
+  tierExact: number;
+  /** ยอดจ่ายจริง = (ก้อน Grade + ก้อน Tier) ปัดเป็นสตางค์ครั้งเดียวตอนท้าย */
+  totalSatang: number;
+}
+
+export interface GradeTierSplit {
+  shares: GradeTierShare[];
+  poolSatang: number;
+  gradeShare: number;
+  gradePoolSatang: number;
+  tierPoolSatang: number;
+  totalGrade: number;
+  totalTier: number;
+  /** ยังไม่ได้ใส่คะแนน Tier */
+  missingTier: string[];
+  /** ข้อที่ต้องแก้ก่อนสรุปรอบ (ว่าง = คิดได้) */
+  problems: string[];
+}
+
+/**
+ * ค่าคอม Grade + Tier ตามข้อกำหนดของ HR (28/10/2569):
+ *   ก้อน Grade = ยอดรวม × gradeShare% · ก้อน Tier = ยอดรวม − ก้อน Grade
+ *   ค่าคอม Grade รายคน = คะแนน Grade × ก้อน Grade ÷ คะแนน Grade รวม (แบบเดียวกันกับ Tier)
+ *   ค่าคอมรายคน = Grade + Tier — คิดแบบไม่ปัดเศษ แล้วปัดเป็นสตางค์ครั้งเดียวตอนจ่าย (เงินโอนได้ละเอียดสุดแค่สตางค์)
+ *   ไม่แจกเศษสตางค์ที่เหลือให้ใคร — ยอดรวมทุกคนอาจต่างจากยอดรวมประจำรอบได้ไม่กี่สตางค์
+ * คะแนนรวมก้อนไหนเป็น 0 (หารไม่ได้) หรือยังใส่คะแนน Tier ไม่ครบ → problems (ห้ามสรุปรอบจนกว่าแก้)
+ */
+export function splitGradeTier(
+  poolSatang: number,
+  gradeShare: number,
+  members: readonly { userId: string; name: string; grade: string }[],
+  weights: Record<string, number>,
+  tiers: Record<string, number>,
+): GradeTierSplit {
+  const gradePoolSatang = Math.round((poolSatang * gradeShare) / 100);
+  const tierPoolSatang = poolSatang - gradePoolSatang;
+  const rows = members.map((m) => ({
+    userId: m.userId,
+    name: m.name,
+    grade: m.grade,
+    weight: weights[m.grade] ?? 0,
+    tier: typeof tiers[m.userId] === "number" && Number.isFinite(tiers[m.userId]) ? tiers[m.userId]! : null,
+  }));
+  // ตัวคูณ/คะแนนทศนิยม 2 ตำแหน่ง — รวมเป็นจำนวนเต็ม ×100 กันทศนิยมลอยตัวเพี้ยน
+  const totalGrade = rows.reduce((s, r) => s + Math.round(r.weight * 100), 0) / 100;
+  const totalTier = rows.reduce((s, r) => s + Math.round((r.tier ?? 0) * 100), 0) / 100;
+  const missingTier = rows.filter((r) => r.tier === null).map((r) => r.name);
+  const problems: string[] = [];
+  if (members.length === 0) problems.push("ไม่มีพนักงานที่ได้ค่าคอมในรอบนี้");
+  else {
+    if (gradePoolSatang > 0 && totalGrade <= 0) problems.push("คะแนน Grade รวมเป็น 0 — หารไม่ได้ ตรวจตัวคูณเกรด/ผลเกรดของรอบนี้");
+    if (missingTier.length > 0) problems.push(`ยังไม่ได้ใส่คะแนน Tier: ${missingTier.join(", ")}`);
+    else if (tierPoolSatang > 0 && totalTier <= 0) problems.push("คะแนน Tier รวมเป็น 0 — หารไม่ได้ ใส่คะแนน Tier ก่อน");
+  }
+  const shares: GradeTierShare[] = rows.map((r) => {
+    const gradeExact = totalGrade > 0 ? (r.weight * gradePoolSatang) / totalGrade : 0;
+    const tierExact = totalTier > 0 && r.tier !== null ? (r.tier * tierPoolSatang) / totalTier : 0;
+    return { ...r, gradeExact, tierExact, totalSatang: Math.round(gradeExact + tierExact) };
+  });
+  return { shares, poolSatang, gradeShare, gradePoolSatang, tierPoolSatang, totalGrade, totalTier, missingTier, problems };
+}
+
+/** สตางค์แบบไม่ปัด → "387.0967741935" (ตัดศูนย์ท้าย · แสดงสูงสุด 10 ตำแหน่ง) ใช้อธิบายที่มาของยอด */
+export function formatExact(satang: number): string {
+  const baht = satang / 100;
+  const fixed = baht.toFixed(10).replace(/0+$/, "").replace(/\.$/, "");
+  const [int, frac] = fixed.split(".");
+  const intStr = Number(int).toLocaleString("en-US");
+  return frac ? `${intStr}.${frac.length < 2 ? frac.padEnd(2, "0") : frac}` : `${intStr}.00`;
 }
 
 /** % ไม่เกิน 100 · บาทไม่เกินขีดของ Pool */
@@ -207,6 +312,21 @@ export function isCommissionEligible(m: { userId: string; departmentId?: string 
  * percent คืน % ไว้ให้งวดเงินเดือนคูณเงินเดือนเอง · pool ใช้ส่วนแบ่งจาก splitCommissionPool
  */
 export type CommissionFor =
-  | { kind: "amount"; satang: number; detail: string }
+  | { kind: "amount"; satang: number; detail: string; parts?: CommissionParts }
   | { kind: "percent"; percent: number; detail: string }
+  /** วิธี grade_tier ที่ข้อมูลยังไม่ครบ (คะแนน Tier ไม่ครบ / คะแนนรวม 0 / ยังไม่ใส่ยอดรวม) — ห้ามสรุปรอบ */
+  | { kind: "blocked"; reason: string }
   | null;
+
+/** ที่มาของค่าคอม Grade + Tier รายคน (สตางค์แบบไม่ปัด) — ใช้ในรายงานเงินเดือน */
+export interface CommissionParts {
+  grade: string;
+  gradeScore: number;
+  gradeExact: number;
+  tier: number;
+  tierExact: number;
+  gradePool: number;
+  tierPool: number;
+  totalGrade: number;
+  totalTier: number;
+}

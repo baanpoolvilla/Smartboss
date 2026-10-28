@@ -513,6 +513,8 @@ model CommissionSetting {
   /// ว่าง = ทุกแผนก
   eligibleDepartmentIds String[] @default([]) @map("eligible_department_ids")
   excludedUserIds       String[] @default([]) @map("excluded_user_ids")
+  /// วิธี grade_tier: % ของยอดรวมที่เป็นก้อน Grade (ที่เหลือ = ก้อน Tier)
+  gradeShare            Decimal  @default(70) @map("grade_share") @db.Decimal(5, 2)
 
   updatedAt DateTime @updatedAt @map("updated_at")
   updatedBy String?  @map("updated_by")
@@ -531,6 +533,8 @@ model CommissionPool {
 
   amount Decimal @db.Decimal(14, 2)
   note   String?
+  /// วิธี grade_tier: { "<core.users.id>": คะแนน Tier } — ไม่มีคีย์ = ยังไม่ได้ใส่
+  tierScores Json @default("{}") @map("tier_scores")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

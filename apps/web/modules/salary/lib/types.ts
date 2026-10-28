@@ -11,6 +11,7 @@ export type PayChannel = "transfer" | "cash";
 export type TaxMode = "auto" | "fixed" | "none";
 export type RunStatus = "draft" | "submitted" | "approved" | "paid";
 export type ItemKind = "earning" | "deduction";
+export type OtMode = "hours" | "days";
 
 /* ───────────── เงิน (สตางค์) ───────────── */
 
@@ -202,6 +203,14 @@ export interface SettingsView {
   deductAbsent: boolean;
   deductUnpaidLeave: boolean;
   otSsoBase: boolean;
+  /** false = ไม่คิด/ไม่หักภาษีหัก ณ ที่จ่าย (ไม่มีบรรทัดภาษี) */
+  taxEnabled: boolean;
+  /** hours = ตามใบ OT รายชั่วโมง · days = ปัดขึ้น(เงินเดือน ÷ 30) × จำนวนวันที่มี OT */
+  otMode: OtMode;
+  /** เบี้ยขยันขั้นบันได */
+  diligenceEnabled: boolean;
+  /** ขั้นเบี้ยขยัน (บาท) เรียงน้อยไปมาก */
+  diligenceSteps: number[];
   editorUserIds: string[];
   superAdminAccess: boolean;
   companyTaxId: string;
@@ -223,6 +232,10 @@ export const DEFAULT_SETTINGS: SettingsView = {
   deductAbsent: false,
   deductUnpaidLeave: true,
   otSsoBase: true,
+  taxEnabled: true,
+  otMode: "hours",
+  diligenceEnabled: false,
+  diligenceSteps: [500, 800, 1000],
   editorUserIds: [],
   superAdminAccess: true,
   companyTaxId: "",
@@ -328,4 +341,14 @@ export function normalizeAllowances(list: AllowanceEntry[]): { list: AllowanceEn
 
 export function allowanceTotal(list: AllowanceEntry[]): number {
   return toBaht(list.reduce((s, a) => s + Math.max(0, toSatang(a.amount)), 0));
+}
+
+/** ขั้นเบี้ยขยันจากตั้งค่า — ตัวเลขบวก ไม่ซ้ำ เรียงน้อยไปมาก 1–6 ขั้น · ผิด = null */
+export function normalizeDiligenceSteps(raw: unknown): number[] | null {
+  if (!Array.isArray(raw)) return null;
+  const list = raw.map((x) => Number(x));
+  if (list.length < 1 || list.length > 6) return null;
+  if (!list.every((n) => Number.isFinite(n) && n > 0 && n <= 1_000_000 && Math.round(n * 100) === n * 100)) return null;
+  for (let i = 1; i < list.length; i++) if (list[i]! <= list[i - 1]!) return null;
+  return list;
 }

@@ -219,6 +219,8 @@ export interface StaffRow {
     prevTax: number;
     prevSso: number;
     prevYear: number | null;
+    diligenceEligible: boolean;
+    diligenceOpening: number | null;
   };
   recurring: { id: string; itemId: string; name: string; kind: string; amount: number; fromPeriod: string; toPeriod: string | null; note: string }[];
   problems: string[];
@@ -285,6 +287,8 @@ export async function listStaff(orgId: string, onlyEmploymentId?: string): Promi
       prevTax: num(p?.prevTax),
       prevSso: num(p?.prevSso),
       prevYear: p?.prevYear ?? null,
+      diligenceEligible: p?.diligenceEligible ?? true,
+      diligenceOpening: p?.diligenceOpening !== null && p?.diligenceOpening !== undefined ? num(p.diligenceOpening) : null,
     };
     const problems: string[] = [];
     if (!current) problems.push("ไม่มีเงินเดือน");
@@ -368,5 +372,20 @@ export async function mySlips(orgId: string, userId: string) {
     if (lines.length === 0) return [];
     const runs = await tx.salaryRun.findMany({ where: { orgId, id: { in: lines.map((l) => l.runId) }, status: "paid" }, orderBy: { period: "desc" } });
     return runs.map((r) => ({ runId: r.id, period: r.period, payDate: ymd(r.payDate), paidOn: r.paidOn ? ymd(r.paidOn) : null, net: num(lines.find((l) => l.runId === r.id)?.net) }));
+  });
+}
+
+/** เบี้ยขยันของรอบล่าสุดที่จ่ายแล้ว (ประวัติขั้น) — หน้าพนักงาน */
+export async function lastPaidDiligence(orgId: string, employmentId: string): Promise<{ amount: number; period: string } | null> {
+  return withSalaryTenant(orgId, async (tx) => {
+    const rows = await tx.$queryRawUnsafe<{ amount: string; period: string }[]>(
+      `SELECT (l.info->'diligence'->>'amount') AS amount, r.period
+         FROM salary.run_lines l JOIN salary.runs r ON r.id = l.run_id
+        WHERE r.org_id = $1 AND r.status = 'paid' AND l.employment_id = $2 AND l.info ? 'diligence'
+        ORDER BY r.period DESC LIMIT 1`,
+      orgId,
+      employmentId,
+    );
+    return rows[0] ? { amount: Number(rows[0].amount), period: rows[0].period } : null;
   });
 }

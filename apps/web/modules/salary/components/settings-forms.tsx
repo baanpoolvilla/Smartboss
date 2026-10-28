@@ -76,6 +76,7 @@ export function AccessForm({
 /** ตั้งค่าทั่วไป: ข้อมูลบริษัท · งวด/วันจ่าย · การอนุมัติ · สาย/ขาด/ลา · OT */
 export function GeneralSettingsForm({ initial }: { initial: SettingsInput }) {
   const [v, setV] = useState(initial);
+  const [stepsText, setStepsText] = useState(initial.diligenceSteps.join(", "));
   const [saved, setSaved] = useState(false);
   const { busy, error, run } = useRun();
   const set = (p: Partial<SettingsInput>) => { setSaved(false); setV({ ...v, ...p }); };
@@ -142,6 +143,44 @@ export function GeneralSettingsForm({ initial }: { initial: SettingsInput }) {
         <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" className="h-5 w-5" checked={v.deductUnpaidLeave} onChange={(e) => set({ deductUnpaidLeave: e.target.checked })} /> หักลาไม่รับค่าจ้าง เฉพาะวันที่ลง (เงินเดือน ÷ 30 ต่อวัน)</label>
         <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" className="h-5 w-5" checked={v.otSsoBase} onChange={(e) => set({ otSsoBase: e.target.checked })} /> นับค่า OT เป็นค่าจ้างคิดประกันสังคม (ตามนิยามค่าจ้างใน พ.ร.บ.ประกันสังคม — ให้นักบัญชียืนยัน)</label>
         <p className={hint}>ปิดสาย/ขาด = มีผลแค่คะแนนและเกรดเหมือนเดิม · OT ดึงจากใบที่อนุมัติในเบิกจ่าย &amp; OT เอง</p>
+      </section>
+
+      <section className={`${card} flex flex-col gap-3 p-4 sm:p-5`}>
+        <h2 className="text-base font-bold text-(--ink)">สูตรเงินเดือนของบริษัท</h2>
+        <div role="radiogroup" aria-label="วิธีคิด OT" className="flex flex-col">
+          <span className="text-sm font-semibold text-(--ink)">ค่า OT</span>
+          <label className={radio(v.otMode === "hours")}><input type="radio" className="h-4 w-4" checked={v.otMode === "hours"} onChange={() => set({ otMode: "hours" })} /> ตามใบ OT รายชั่วโมง (เงินเดือน ÷ 30 ÷ 8 × % × ชั่วโมง)</label>
+          <label className={radio(v.otMode === "days")}><input type="radio" className="h-4 w-4" checked={v.otMode === "days"} onChange={() => set({ otMode: "days" })} /> นับเป็นวัน: ปัดขึ้น(เงินเดือน ÷ 30) × จำนวนวันที่มี OT</label>
+          {v.otMode === "days" && <p className={hint}>ตัวอย่าง เงินเดือน 10,000 ÷ 30 = 333.33 → ปัดขึ้นเป็น 334 บาท/วัน · OT 2 วัน = 668 บาท · ใบ OT หลายใบในวันเดียวกันนับ 1 วัน</p>}
+        </div>
+        <label className="flex min-h-11 items-center gap-3 text-sm">
+          <input type="checkbox" className="h-5 w-5" checked={v.taxEnabled} onChange={(e) => set({ taxEnabled: e.target.checked })} /> คิดและหักภาษีหัก ณ ที่จ่าย
+        </label>
+        {!v.taxEnabled && <p className={hint}>ปิดอยู่ — ไม่มีบรรทัดภาษีในเงินเดือนและสลิป ไม่หักภาษีใคร</p>}
+        <label className="flex min-h-11 items-center gap-3 text-sm">
+          <input type="checkbox" className="h-5 w-5" checked={v.diligenceEnabled} onChange={(e) => set({ diligenceEnabled: e.target.checked })} /> เบี้ยขยันขั้นบันได (ไม่ลา ไม่สาย ไม่ขาด = เลื่อนขั้น)
+        </label>
+        {v.diligenceEnabled && (
+          <div className="flex flex-col gap-1.5 rounded-(--radius) border border-dashed border-(--line) bg-(--bg-soft) p-3">
+            <label className={label}>
+              <span className={labelText}>ขั้นเบี้ยขยัน (บาท คั่นด้วยจุลภาค เรียงน้อยไปมาก)</span>
+              <input
+                className={`${field} max-w-xs`}
+                value={stepsText}
+                onChange={(e) => {
+                  setStepsText(e.target.value);
+                  set({ diligenceSteps: e.target.value.split(/[,\s]+/).filter(Boolean).map((x) => Number(x.replace(/[^\d.]/g, ""))) });
+                }}
+                placeholder="500, 800, 1000"
+              />
+            </label>
+            <p className={hint}>
+              รอบแรกได้ขั้นแรก · งวดไหนไม่ลา ไม่สาย ไม่ขาด = เลื่อนจากขั้นรอบก่อนหนึ่งขั้น (ถึงขั้นสูงสุดแล้วคงไว้) · มีลา/สาย/ขาด = กลับไปขั้นแรก ·
+              วันหยุดปกติ/นักขัตฤกษ์ไม่นับ · ใช้ข้อมูลลงเวลาและการลาของงวด (เช่น 26 ก.ย. – 25 ต.ค.)
+            </p>
+            <p className={hint}>คนที่เคยได้ขั้นสูงกว่าขั้นแรกในระบบเดิม ใส่ &quot;ขั้นรอบล่าสุดจากระบบเดิม&quot; ที่หน้าพนักงานแต่ละคนก่อนรอบแรก</p>
+          </div>
+        )}
       </section>
 
       {error && <Notice tone="danger">{error}</Notice>}

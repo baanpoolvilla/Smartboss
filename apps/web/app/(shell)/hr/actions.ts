@@ -23,7 +23,7 @@ import {
   overrideDaysFor,
   saveDayOffQuota,
 } from "@/lib/day-off-quota";
-import { saveCommissionEligibility, saveCommissionMethod, saveCommissionPool, saveCommissionValues, saveCommissionWeights } from "@/modules/hr/lib/commission-data";
+import { saveCommissionEligibility, saveCommissionGradeShare, saveCommissionMethod, saveCommissionPool, saveCommissionRound, saveCommissionValues, saveCommissionWeights } from "@/modules/hr/lib/commission-data";
 import { syncAllUserNames, syncUserName } from "@/modules/hr/lib/name-sync";
 import { clearApprovalNotifications, notifyApprovers, notifyRequester } from "@/modules/hr/lib/hr-notify";
 import { dockAttendance } from "@/lib/attendance-performance";
@@ -495,6 +495,28 @@ export async function saveCommissionWeightsAction(formData: FormData) {
     grades: formData.getAll("gradeName").map(String),
     weights: formData.getAll("weight").map(String),
   });
+  revalidatePath("/hr/employees");
+}
+
+/** วิธี grade_tier: ยอดรวมประจำรอบ + คะแนน Tier รายคน */
+export async function saveCommissionRoundAction(formData: FormData) {
+  const session = await guardSalary();
+  await saveCommissionRound({
+    orgId: session.orgId,
+    userId: session.userId,
+    month: String(formData.get("month") ?? ""),
+    amount: String(formData.get("amount") ?? ""),
+    note: String(formData.get("note") ?? ""),
+    tierUserIds: formData.getAll("tierUserId").map(String),
+    tierValues: formData.getAll("tier").map(String),
+  });
+  revalidatePath("/hr/employees");
+}
+
+/** วิธี grade_tier: % ก้อน Grade */
+export async function saveCommissionGradeShareAction(formData: FormData) {
+  const session = await guardSalary();
+  await saveCommissionGradeShare({ orgId: session.orgId, userId: session.userId, gradeShare: String(formData.get("gradeShare") ?? "") });
   revalidatePath("/hr/employees");
 }
 

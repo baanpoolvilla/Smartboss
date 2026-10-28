@@ -4,7 +4,7 @@ import { AppScaffold } from "@/components/module/app-scaffold";
 import { ProfileSection, RecurringSection, SalarySection } from "@/modules/salary/components/employee-forms";
 import { readSettings, withSalaryTenant } from "@/modules/salary/lib/db";
 import { salaryPage } from "@/modules/salary/lib/page";
-import { listStaff } from "@/modules/salary/lib/views";
+import { lastPaidDiligence, listStaff } from "@/modules/salary/lib/views";
 import { bangkokToday, periodDates, shiftPeriod, thaiDate } from "@/modules/salary/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +22,7 @@ export default async function SalaryEmployeePage({ params }: { params: Promise<{
   }));
   const today = bangkokToday();
   const p = today.slice(0, 7);
+  const lastDiligence = settings.diligenceEnabled ? await lastPaidDiligence(orgId, row.employmentId) : null;
   // คนทำเงินเดือน (ไม่ใช่ CEO) ดูของตัวเองได้แต่แก้ไม่ได้ — server ก็กันซ้ำใน actions
   const ownLocked = !access.isCeo && row.userId === session.userId;
   const thisPeriod = periodDates(p, settings.cutoffDay, settings.payDay).endsOn >= today ? p : shiftPeriod(p, 1);
@@ -46,6 +47,8 @@ export default async function SalaryEmployeePage({ params }: { params: Promise<{
         <ProfileSection
           employmentId={row.employmentId}
           year={Number(today.slice(0, 4))}
+          taxEnabled={settings.taxEnabled}
+          diligence={settings.diligenceEnabled ? { steps: settings.diligenceSteps, lastPaid: lastDiligence } : undefined}
           initial={{
             payChannel: row.profile.payChannel,
             bankName: row.profile.bankName,
@@ -61,6 +64,8 @@ export default async function SalaryEmployeePage({ params }: { params: Promise<{
             prevTax: row.profile.prevTax,
             prevSso: row.profile.prevSso,
             prevYear: row.profile.prevYear,
+            diligenceEligible: row.profile.diligenceEligible,
+            diligenceOpening: row.profile.diligenceOpening,
           }}
         />
         <RecurringSection employmentId={row.employmentId} rows={row.recurring} items={items.map((i) => ({ id: i.id, name: i.name, kind: i.kind }))} thisPeriod={thisPeriod} />

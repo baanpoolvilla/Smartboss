@@ -37,6 +37,14 @@ model SalarySettings {
   payBankAccount     String   @default("") @map("pay_bank_account")
   /// ค่า OT นับเป็นค่าจ้างคิดประกันสังคม
   otSsoBase          Boolean  @default(true) @map("ot_sso_base")
+  /// false = ไม่คิด/ไม่หักภาษีหัก ณ ที่จ่ายเลย (ไม่มีบรรทัดภาษี)
+  taxEnabled         Boolean  @default(true) @map("tax_enabled")
+  /// hours = ตามใบ OT รายชั่วโมง (เดิม) · days = ปัดขึ้น(เงินเดือน ÷ 30) × จำนวนวันที่มี OT
+  otMode             String   @default("hours") @map("ot_mode")
+  /// เบี้ยขยันขั้นบันได (ไม่ลา ไม่สาย ไม่ขาด = เลื่อนขั้น)
+  diligenceEnabled   Boolean  @default(false) @map("diligence_enabled")
+  /// ขั้นเบี้ยขยัน (บาท) เรียงน้อยไปมาก เช่น [500, 800, 1000]
+  diligenceSteps     Json     @default("[500, 800, 1000]") @map("diligence_steps")
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   updatedByName      String   @default("") @map("updated_by_name")
 
@@ -129,6 +137,10 @@ model SalaryProfile {
   prevTax         Decimal  @default(0) @map("prev_tax") @db.Decimal(12, 2)
   prevSso         Decimal  @default(0) @map("prev_sso") @db.Decimal(12, 2)
   prevYear        Int?     @map("prev_year")
+  /// ได้เบี้ยขยัน (เมื่อบริษัทเปิดใช้)
+  diligenceEligible Boolean @default(true) @map("diligence_eligible")
+  /// ขั้นเบี้ยขยันรอบล่าสุดจากระบบเดิม (บาท) — ใช้เมื่อยังไม่มีรอบที่จ่ายผ่านระบบนี้ · null = เริ่มขั้นแรก
+  diligenceOpening  Decimal? @map("diligence_opening") @db.Decimal(12, 2)
   updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   updatedByName   String   @default("") @map("updated_by_name")
 

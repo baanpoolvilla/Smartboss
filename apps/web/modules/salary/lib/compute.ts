@@ -65,6 +65,60 @@ export interface CommissionInput {
   taxable: boolean;
   ssoBase: boolean;
   pending?: string;
+  /** ข้อมูลค่าคอมไม่ครบ (วิธี Grade + Tier) — ไม่ใส่ยอด และห้ามส่งอนุมัติจนกว่าแก้ (HR ปรับยอดเองแทนได้) */
+  block?: string;
+  /** ชื่อบรรทัด (ไม่ใส่ = "ค่าคอม (ตามเกรด)") */
+  label?: string;
+}
+
+/** เบี้ยขยันของงวด — คิดจากขั้นรอบก่อน + ลา/สาย/ขาดของงวดนี้ (diligenceStep) */
+export interface DiligenceResult {
+  /** บาท */
+  amount: number;
+  /** ขั้นที่ได้ (1 = ขั้นแรก) */
+  step: number;
+  steps: number;
+  passed: boolean;
+  /** ขั้นรอบก่อน (บาท) — null = ไม่มี (รอบแรก) */
+  prev: number | null;
+  prevSource: "run" | "opening" | "none";
+  leaveDays: number;
+  lateCount: number;
+  absentDays: number;
+  how: string;
+}
+
+/**
+ * เบี้ยขยันขั้นบันได (ข้อกำหนด HR 28/10/2569) เช่น 500 → 800 → 1,000:
+ *   - รอบแรก (ไม่มีขั้นรอบก่อน) = ขั้นแรก
+ *   - ไม่ลา ไม่สาย ไม่ขาด = เลื่อนจากขั้นรอบก่อนหนึ่งขั้น ถึงขั้นสูงสุดแล้วคงไว้
+ *   - มีลา/สาย/ขาด = ขั้นแรก และรอบหน้านับต่อจากขั้นแรก
+ * วันหยุดปกติ/นักขัตฤกษ์ไม่นับเป็นลา (ผู้เรียกส่งเฉพาะวันลาจริงมา)
+ */
+export function diligenceStep(
+  steps: number[],
+  prev: number | null,
+  prevSource: DiligenceResult["prevSource"],
+  check: { leaveDays: number; lateCount: number; absentDays: number },
+): DiligenceResult {
+  const passed = check.leaveDays <= 0 && check.lateCount <= 0 && check.absentDays <= 0;
+  const last = steps.length - 1;
+  // ขั้นรอบก่อน = ขั้นสูงสุดที่ไม่เกินยอดรอบก่อน (กันตั้งค่าขั้นเปลี่ยนแล้วยอดเก่าไม่ตรงขั้นไหน)
+  let prevIdx = -1;
+  if (prev !== null) steps.forEach((v, i) => { if (v <= prev + 0.004) prevIdx = i; });
+  const idx = prev === null || !passed ? 0 : Math.min(prevIdx + 1, last);
+  const amount = steps[idx]!;
+  const b = (n: number) => n.toLocaleString("en-US");
+  const prevTxt = prev === null ? "ยังไม่มีขั้นรอบก่อน" : `รอบก่อน ${b(prev)}${prevSource === "opening" ? " (ยกมาจากระบบเดิม)" : ""}`;
+  const why = [check.leaveDays > 0 ? `ลา ${check.leaveDays} วัน` : "", check.lateCount > 0 ? `สาย ${check.lateCount} ครั้ง` : "", check.absentDays > 0 ? `ขาด ${check.absentDays} วัน` : ""].filter(Boolean).join(" · ");
+  const how = !passed
+    ? `${prevTxt} · งวดนี้${why} → ขั้นแรก ${b(amount)} (รอบหน้านับต่อจาก ${b(amount)})`
+    : prev === null
+      ? `${prevTxt} → เริ่มขั้นแรก ${b(amount)} (งวดนี้ไม่ลา ไม่สาย ไม่ขาด — รอบหน้าเลื่อนขั้น)`
+      : prevIdx >= last
+        ? `${prevTxt} · งวดนี้ไม่ลา ไม่สาย ไม่ขาด → คงขั้นสูงสุด ${b(amount)}`
+        : `${prevTxt} · งวดนี้ไม่ลา ไม่สาย ไม่ขาด → เลื่อนเป็นขั้น ${idx + 1} ${b(amount)}`;
+  return { amount, step: idx + 1, steps: steps.length, passed, prev, prevSource, ...check, how };
 }
 
 export interface Adjustment {
@@ -98,6 +152,8 @@ export interface ComputeInput {
   recurring: RecurringItem[];
   /** ค่าคอม Pool ตามเกรดของเดือนนี้ (ระบบบุคคล › พนักงาน › ค่าคอม) — pending = ยังไม่ใส่ เพราะเกรดยังไม่ปิด */
   commission?: CommissionInput;
+  /** เบี้ยขยัน (บริษัทเปิดใช้และคนนี้ได้) */
+  diligence?: DiligenceResult;
   adjustments: Adjustment[];
   overrides: { sso?: Override; tax?: Override; commission?: Override };
   profile: {
@@ -122,6 +178,8 @@ export interface ComputeInput {
     deductAbsent: boolean;
     deductUnpaidLeave: boolean;
     otSsoBase: boolean;
+    /** false = ไม่คิด/ไม่หักภาษีเลย (ไม่มีบรรทัดภาษี) · ไม่ส่งมา = คิดภาษี (เดิม) */
+    taxEnabled?: boolean;
   };
   sso: SsoParams;
   tax: TaxParams;
@@ -129,7 +187,7 @@ export interface ComputeInput {
 
 export type LineSource =
   | "salary" | "ot" | "recurring" | "commission" | "adjustment"
-  | "unpaid_leave" | "late" | "absent" | "sso" | "tax" | "advance" | "sso_employer";
+  | "unpaid_leave" | "late" | "absent" | "sso" | "tax" | "advance" | "sso_employer" | "diligence";
 
 export interface PayLine {
   key: string;
@@ -167,6 +225,8 @@ export interface ComputeResult {
   /** ค่าคอมที่ระบบคิดได้ (ก่อน HR ปรับ) — 0 = ไม่มี */
   commissionComputed: number;
   warnings: string[];
+  /** ต้องแก้ก่อนส่งอนุมัติ (เช่น ข้อมูลค่าคอม Grade + Tier ไม่ครบ) */
+  blocks: string[];
 }
 
 /** ตัวเลขทุกขั้นของการคิดภาษีงวดนี้ (บาท) — ขั้นเดียวกับ annualTax ไม่มีสูตรแยก */
@@ -258,6 +318,7 @@ export function periodsEmployedBefore(hiredOn: string, payDate: string, cutoffDa
 export function computePay(input: ComputeInput): ComputeResult {
   const lines: PayLine[] = [];
   const warnings: string[] = [];
+  const blocks: string[] = [];
   const s = (b: number) => toSatang(b);
 
   /* ── เงินเดือน ── */
@@ -348,9 +409,14 @@ export function computePay(input: ComputeInput): ComputeResult {
   // ค่าคอมตามเกรด — วิธี percent คูณเงินเดือนงวดนี้ (หลังแบ่งวันเข้า/ออก ก่อนหักลา) · HR ปรับ/ตัดรายคนได้ (ต้องมีเหตุผล)
   const comm = input.commission;
   if (comm?.percent !== undefined && comm.percent > 0) commissionComputed = Math.round((salary * comm.percent) / 100);
-  else if (comm && !comm.pending) commissionComputed = s(comm.amount);
+  else if (comm && !comm.pending && !comm.block) commissionComputed = s(comm.amount);
   const commOverride = input.overrides.commission;
   if (comm?.pending && !commOverride) warnings.push(comm.pending);
+  // ข้อมูลไม่ครบ = ห้ามส่ง (เว้นแต่ HR ใส่ยอดเองพร้อมเหตุผล)
+  if (comm?.block && !commOverride) {
+    warnings.push(comm.block);
+    blocks.push(comm.block);
+  }
   const commAmt = commOverride ? Math.max(0, s(commOverride.amount)) : commissionComputed;
   if (commAmt > 0 || commOverride) {
     const how = commOverride
@@ -360,10 +426,16 @@ export function computePay(input: ComputeInput): ComputeResult {
         : (comm?.detail ?? "");
     if (commAmt > 0) {
       // จ่ายไม่สม่ำเสมอ (แล้วแต่เกรด) — คิดภาษีแบบเงินได้ไม่ประจำ เหมือน OT/โบนัส
-      lines.push({ key: "commission", label: "ค่าคอม (ตามเกรด)", kind: "earning", amount: toBaht(commAmt), how, source: "commission", auto: !commOverride });
+      lines.push({ key: "commission", label: comm?.label ?? "ค่าคอม (ตามเกรด)", kind: "earning", amount: toBaht(commAmt), how, source: "commission", auto: !commOverride });
       if (comm?.taxable ?? true) irregularEarn += commAmt;
       if (comm?.ssoBase ?? true) ssoExtra += commAmt;
     }
+  }
+  // เบี้ยขยัน — เงินจูงใจ ไม่ใช่ค่าจ้าง (ไม่นับฐานประกันสังคม) · จ่ายไม่แน่นอน = เงินได้ไม่ประจำ (ภาษี)
+  if (input.diligence && input.diligence.amount > 0) {
+    const amt = s(input.diligence.amount);
+    lines.push({ key: "diligence", label: "เบี้ยขยัน", kind: "earning", amount: toBaht(amt), how: input.diligence.how, source: "diligence", auto: true });
+    irregularEarn += amt;
   }
   for (const a of input.adjustments) {
     const amt = s(a.amount);
@@ -486,7 +558,15 @@ export function computePay(input: ComputeInput): ComputeResult {
     tax = Math.max(0, s(input.overrides.tax.amount));
     taxHow = `ปรับโดย ${input.overrides.tax.byName}: ${input.overrides.tax.reason} (ระบบคิดได้ ${fmt(taxComputed)})`;
   }
-  lines.push({ key: "tax", label: "ภาษีหัก ณ ที่จ่าย", kind: "deduction", amount: toBaht(tax), how: taxHow, source: "tax", auto: !input.overrides.tax && input.profile.taxMode === "auto" });
+  // บริษัทปิดการคิดภาษี: ไม่มีบรรทัดภาษี ไม่หัก (ข้อกำหนด HR 28/10/2569)
+  const taxOn = input.settings.taxEnabled !== false;
+  if (taxOn) {
+    lines.push({ key: "tax", label: "ภาษีหัก ณ ที่จ่าย", kind: "deduction", amount: toBaht(tax), how: taxHow, source: "tax", auto: !input.overrides.tax && input.profile.taxMode === "auto" });
+  } else {
+    tax = 0;
+    // ข้อเตือนจากโหมดภาษีคงที่ไม่เกี่ยวแล้ว
+    for (let i = warnings.length - 1; i >= 0; i--) if (warnings[i]!.startsWith("ภาษีหักคงที่") || warnings[i]!.startsWith("ยังไม่มียอดยกมา")) warnings.splice(i, 1);
+  }
 
   /* ── หักคืนเงินเบิกล่วงหน้า ── */
   for (const a of input.advances) {
@@ -521,10 +601,11 @@ export function computePay(input: ComputeInput): ComputeResult {
     tax: toBaht(tax),
     taxable: toBaht(taxable),
     ssoWage: toBaht(ssoWage),
-    taxComputed: toBaht(taxComputed),
+    taxComputed: taxOn ? toBaht(taxComputed) : 0,
     ssoComputed: toBaht(ssoComputed),
     taxBreak,
     commissionComputed: toBaht(commissionComputed),
     warnings,
+    blocks,
   };
 }

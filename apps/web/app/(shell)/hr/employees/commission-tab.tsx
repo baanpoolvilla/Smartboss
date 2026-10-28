@@ -16,12 +16,15 @@ import { monthDisplay, shiftMonth } from "@/lib/performance-month";
 import { scorePeriodOf } from "@/lib/score-period";
 import { loadScorePeriodConfig, loadScorePeriodReadyAt } from "@/lib/score-period-config";
 import { ScorePeriodStatus } from "@/components/score-period-status";
-import { COMMISSION_METHODS, formatSatang } from "@/modules/hr/lib/commission";
+import { prisma } from "@smartboss/database";
+import { COMMISSION_METHODS, formatExact, formatSatang } from "@/modules/hr/lib/commission";
 import { commissionForUser, loadCommissionMonth } from "@/modules/hr/lib/commission-data";
 import {
   saveCommissionEligibilityAction,
+  saveCommissionGradeShareAction,
   saveCommissionMethodAction,
   saveCommissionPoolAction,
+  saveCommissionRoundAction,
   saveCommissionValuesAction,
   saveCommissionWeightsAction,
 } from "../actions";
@@ -66,6 +69,13 @@ export async function renderCommissionTab(
   const totalSatang = rows.reduce((sum, r) => sum + (r.comm?.kind === "amount" ? r.comm.satang : 0), 0);
 
   const monthLink = (m: string) => `/hr/employees?tab=commission&month=${m}`;
+  // grade_tier: คะแนน Tier ของรอบก่อน — ใช้เติมช่องที่ยังไม่ได้ใส่ให้ (ยังไม่บันทึกจนกว่าจะกดบันทึก)
+  const gt = data.gradeTier;
+  const prevTiers =
+    method === "grade_tier"
+      ? (((await prisma.commissionPool.findUnique({ where: { orgId_month: { orgId: session.orgId, month: shiftMonth(month, -1) } }, select: { tierScores: true } }))?.tierScores ?? {}) as Record<string, unknown>)
+      : {};
+  const gtReady = pool !== null && gt.problems.length === 0;
   const methodInfo = COMMISSION_METHODS.find((x) => x.id === method)!;
 
   return (
@@ -134,6 +144,14 @@ export async function renderCommissionTab(
         </p>
       ) : (
         <>
+          {method === "grade_tier" ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <StatCard label="ค่าคอมรวมประจำรอบ" value={pool === null ? "—" : formatSatang(pool.satang)} hint={pool === null ? "ยังไม่ได้ใส่ยอด" : "บาท"} tone={pool === null ? "var(--ink-soft)" : "var(--app-strong)"} />
+              <StatCard label={`ก้อน Grade ${gt.gradeShare}%`} value={pool === null ? "—" : formatSatang(gt.gradePoolSatang)} hint={`คะแนน Grade รวม ${gt.totalGrade.toLocaleString("th-TH")}`} />
+              <StatCard label={`ก้อน Tier ${Math.round((100 - gt.gradeShare) * 100) / 100}%`} value={pool === null ? "—" : formatSatang(gt.tierPoolSatang)} hint={`คะแนน Tier รวม ${gt.totalTier.toLocaleString("th-TH")}`} />
+              <StatCard label="ได้รับค่าคอม" value={`${gtReady ? gt.shares.filter((x) => x.totalSatang > 0).length : 0}/${members.length}`} hint="คน" />
+            </div>
+          ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {method === "pool" ? (
               <StatCard
@@ -163,6 +181,124 @@ export async function renderCommissionTab(
               />
             )}
           </div>
+          )}
+
+          {method === "grade_tier" && pool !== null && gt.problems.length > 0 && (
+            <div role="alert" className="rounded-(--radius) border border-(--danger)/35 bg-(--danger)/10 px-3 py-2 text-sm text-(--ink)">
+              <strong>ยังสรุปเงินเดือนไม่ได้ — แก้ก่อน:</strong>
+              <ul className="mt-1 list-disc pl-5">
+                {gt.problems.map((p) => <li key={p}>{p}</li>)}
+              </ul>
+            </div>
+          )}
+          {method === "grade_tier" && pool === null && (
+            <p role="alert" className="rounded-(--radius) border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+              ยังไม่ได้ใส่ค่าคอมรวมของรอบ {label} — งวดเงินเดือนจะส่งอนุมัติไม่ได้จนกว่าจะใส่ (รอบนี้ไม่มีค่าคอม ใส่ 0)
+            </p>
+          )}
+
+          {method === "grade_tier" && (
+            <SectionCard
+              title="ค่าคอมรวมประจำรอบ + คะแนน Tier รายคน"
+              description={`ก้อน Grade ${gt.gradeShare}% แบ่งตามคะแนน Grade · ก้อน Tier แบ่งตามคะแนน Tier · คิดแบบไม่ปัดเศษ ปัดเป็นสตางค์ครั้งเดียวตอนจ่าย ไม่แจกเศษสตางค์ที่เหลือ`}
+            >
+              <form action={saveCommissionRoundAction} className="flex flex-col gap-3">
+                <input type="hidden" name="month" value={month} />
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_2fr]">
+                  <Field label="ค่าคอมรวมประจำรอบ (บาท)">
+                    <input id="commission-round-amount" name="amount" inputMode="decimal" placeholder="เช่น 10000 (ไม่มีค่าคอม ใส่ 0)" defaultValue={pool === null ? "" : (pool.satang / 100).toFixed(2)} disabled={!canManage} className={inputClass} />
+                  </Field>
+                  <Field label="หมายเหตุ">
+                    <input id="commission-round-note" name="note" maxLength={500} placeholder="เช่น ยอดขายรวม ต.ค. × 3%" defaultValue={pool?.note ?? ""} disabled={!canManage} className={inputClass} />
+                  </Field>
+                </div>
+                {eligibleMembers.length === 0 ? (
+                  <EmptyState>ยังไม่มีพนักงานที่ได้ค่าคอมในรอบนี้</EmptyState>
+                ) : (
+                  <DataTable head={["พนักงาน", "Grade", "คะแนน Grade", "คะแนน Tier", "ค่าคอม Grade", "ค่าคอม Tier", "รวม (จ่ายจริง)"]}>
+                    {eligibleMembers.map((m) => {
+                      const s = gt.shares.find((x) => x.userId === m.userId);
+                      const saved = s?.tier ?? null;
+                      const prev = typeof prevTiers[m.userId] === "number" ? (prevTiers[m.userId] as number) : null;
+                      return (
+                        <tr key={m.userId} className="hover:bg-(--bg-soft)">
+                          <Td>
+                            <span className="font-medium">{m.name}</span>
+                            <input type="hidden" name="tierUserId" value={m.userId} />
+                          </Td>
+                          <Td>
+                            <Pill tone={gradeColor(m.grade, rankOrder)}>{m.grade}</Pill>
+                          </Td>
+                          <Td align="right" className="font-mono">
+                            {weights[m.grade] ?? 0}
+                          </Td>
+                          <Td>
+                            <input
+                              name="tier"
+                              inputMode="decimal"
+                              aria-label={`คะแนน Tier ${m.name}`}
+                              defaultValue={saved !== null ? String(saved) : prev !== null ? String(prev) : ""}
+                              disabled={!canManage}
+                              className={`${inputClass} h-9 w-24 ${saved === null ? "border-amber-400 bg-amber-50" : ""}`}
+                            />
+                            {saved === null && <span className="mt-0.5 block text-[11px] text-amber-800">{prev !== null ? "ยังไม่บันทึก (เติมจากรอบก่อน)" : "ยังไม่ใส่"}</span>}
+                          </Td>
+                          <Td align="right" className="font-mono text-xs">
+                            {s && gtReady ? formatExact(s.gradeExact) : "—"}
+                          </Td>
+                          <Td align="right" className="font-mono text-xs">
+                            {s && gtReady ? formatExact(s.tierExact) : "—"}
+                          </Td>
+                          <Td align="right" className="font-mono font-semibold">
+                            {s && gtReady ? formatSatang(s.totalSatang) : "—"}
+                          </Td>
+                        </tr>
+                      );
+                    })}
+                    {gtReady && (
+                      <tr className="border-t border-(--line)">
+                        <Td className="font-semibold">รวม</Td>
+                        <Td>{""}</Td>
+                        <Td align="right" className="font-mono">
+                          {gt.totalGrade}
+                        </Td>
+                        <Td className="font-mono">{gt.totalTier}</Td>
+                        <Td align="right" className="font-mono text-xs">
+                          {formatSatang(gt.gradePoolSatang)}
+                        </Td>
+                        <Td align="right" className="font-mono text-xs">
+                          {formatSatang(gt.tierPoolSatang)}
+                        </Td>
+                        <Td align="right" className="font-mono font-semibold">
+                          {formatSatang(gt.shares.reduce((n, x) => n + x.totalSatang, 0))}
+                        </Td>
+                      </tr>
+                    )}
+                  </DataTable>
+                )}
+                {canManage && (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs text-(--ink-soft)">ช่องเหลือง = ยังไม่ได้บันทึก · คะแนน 0 = ไม่ได้ส่วน Tier · ยอดรวมทุกคนอาจต่างจากค่าคอมรวมได้ไม่กี่สตางค์ (ไม่แจกเศษ)</p>
+                    <Button type="submit">บันทึกยอดรวม + คะแนน Tier</Button>
+                  </div>
+                )}
+              </form>
+            </SectionCard>
+          )}
+
+          {method === "grade_tier" && canManage && (
+            <SectionCard title="สัดส่วนก้อน Grade / Tier" description="ค่าตั้งต้น Grade 70% · Tier 30% — ใช้กับทุกรอบ">
+              <form action={saveCommissionGradeShareAction} className="flex flex-wrap items-end gap-3">
+                <Field label="ก้อน Grade (%)">
+                  <input id="commission-grade-share" name="gradeShare" inputMode="decimal" defaultValue={String(gt.gradeShare)} className={`${inputClass} w-28`} />
+                </Field>
+                <span className="pb-2 text-sm text-(--ink-soft)">ก้อน Tier = ส่วนที่เหลือ</span>
+                <Button type="submit" size="sm" variant="outline">
+                  บันทึกสัดส่วน
+                </Button>
+              </form>
+            </SectionCard>
+          )}
 
           {method === "pool" && split.undistributedSatang > 0 && (
             <p className="rounded-(--radius) border border-(--danger)/35 bg-(--danger)/10 px-3 py-2 text-xs text-(--ink)">
@@ -204,9 +340,9 @@ export async function renderCommissionTab(
             </SectionCard>
           )}
 
-          {method === "pool" ? (
+          {method === "pool" || method === "grade_tier" ? (
             <SectionCard
-              title="ตัวคูณตามเกรด"
+              title={method === "grade_tier" ? "คะแนน Grade (ตัวคูณตามเกรด)" : "ตัวคูณตามเกรด"}
               description={
                 data.weightsCustomized
                   ? "ใช้ตัวคูณที่บริษัทตั้งไว้ — มีผลกับทุกเดือนที่เปิดดู"
@@ -214,7 +350,7 @@ export async function renderCommissionTab(
               }
             >
               <form action={saveCommissionWeightsAction} className="flex flex-col gap-3">
-                <DataTable head={["เกรด", "ตัวคูณ", "จำนวนคน", "ได้คนละ (บาท)"]}>
+                <DataTable head={method === "grade_tier" ? ["เกรด", "คะแนน", "จำนวนคน", "ก้อน Grade ได้คนละ (บาท)"] : ["เกรด", "ตัวคูณ", "จำนวนคน", "ได้คนละ (บาท)"]}>
                   {gradeOrder.map((grade) => {
                     const perPerson = perPersonOf(grade);
                     return (
@@ -239,7 +375,13 @@ export async function renderCommissionTab(
                         </Td>
                         <Td align="right">{countByGrade.get(grade) ?? 0}</Td>
                         <Td align="right" className="font-mono">
-                          {pool === null || perPerson === null ? "—" : formatSatang(perPerson)}
+                          {method === "grade_tier"
+                            ? pool === null || gt.totalGrade <= 0
+                              ? "—"
+                              : formatExact(((weights[grade] ?? 0) * gt.gradePoolSatang) / gt.totalGrade)
+                            : pool === null || perPerson === null
+                              ? "—"
+                              : formatSatang(perPerson)}
                         </Td>
                       </tr>
                     );
@@ -347,7 +489,9 @@ export async function renderCommissionTab(
                             ? "—"
                             : row.comm.kind === "amount"
                               ? formatSatang(row.comm.satang)
-                              : `${row.comm.percent}% ของเงินเดือน`}
+                              : row.comm.kind === "blocked"
+                                ? "รอข้อมูลครบ"
+                                : `${row.comm.percent}% ของเงินเดือน`}
                       </Td>
                       {canManage && (
                         <Td align="center">

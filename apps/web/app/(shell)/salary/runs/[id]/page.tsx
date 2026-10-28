@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Download, FileText, Printer } from "lucide-react";
+import { ClipboardList, Download, FileText, Printer } from "lucide-react";
 
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { Notice } from "@/modules/requests/components/ui";
 import { Example, InfoTip, PageTour, type TourStep } from "@/modules/salary/components/help";
 import { IncludeButton } from "@/modules/salary/components/include-button";
 import { LineEditor, type EditorData } from "@/modules/salary/components/line-editor";
-import { ApproveBar, DeleteRunButton, PayDialog, RecomputeButton, RunNote, SubmitButton } from "@/modules/salary/components/run-actions";
+import { ApproveBar, DeleteRunButton, PayDialog, RecomputeButton, RunNote } from "@/modules/salary/components/run-actions";
+import { AdjustmentsDialog, type ReviewPerson } from "@/modules/salary/components/adjustments-dialog";
 import { STATUS_LABEL, card, hint, outline } from "@/modules/salary/components/ui";
 import { readRates, readSettings, withSalaryTenant } from "@/modules/salary/lib/db";
 import { salaryPage } from "@/modules/salary/lib/page";
@@ -80,6 +81,7 @@ export default async function RunPage({ params, searchParams }: { params: Promis
         warnings: editLine.warnings,
         taxBreak: editLine.info?.taxBreak,
         sso: ssoP,
+        taxEnabled: settings.taxEnabled,
         closeHref: `/salary/runs/${run.id}`,
         employeeHref: `/salary/employees/${editLine.employmentId}`,
         slipHref: `/salary/runs/${run.id}/slip/${editLine.employmentId}`,
@@ -93,6 +95,18 @@ export default async function RunPage({ params, searchParams }: { params: Promis
   ];
   const stepIdx = steps.findIndex((s) => s.id === run.status);
   const firstWarn = run.lines.findIndex((l) => l.warnings.length > 0);
+  // ข้อที่ต้องแก้ก่อนสรุป (ข้อมูลค่าคอมไม่ครบ ฯลฯ) — ข้อความเดียวกันหลายคน แสดงครั้งเดียว
+  const blocks = [...new Set(run.lines.flatMap((l) => l.info?.blocks ?? []))];
+  const reviewPeople: ReviewPerson[] = run.lines.map((l) => ({
+    employmentId: l.employmentId,
+    name: l.name,
+    department: l.department,
+    updatedAt: l.updatedAt,
+    locked: l.userId === session.userId && !access.isCeo,
+    adjustments: l.adjustments,
+    net: l.net,
+  }));
+  const reviewItems = items.map((i) => ({ id: i.id, name: i.name, kind: i.kind as "earning" | "deduction", taxable: i.taxable, ssoBase: i.ssoBase }));
   const plusTotal = Math.round((t.gross - salaryTotal) * 100) / 100;
   const stepHelp: Record<string, React.ReactNode> = {
     draft: (
@@ -200,6 +214,15 @@ export default async function RunPage({ params, searchParams }: { params: Promis
             ))}
           </ol>
           {run.returnedReason && run.status === "draft" && <Notice tone="warn">ถูกส่งกลับให้แก้: {run.returnedReason}</Notice>}
+          {editable && blocks.length > 0 && (
+            <Notice tone="danger">
+              <strong>ยังสรุป/ส่งรอบนี้ไม่ได้ — แก้ก่อน:</strong>
+              <ul className="mt-1 list-disc pl-5">
+                {blocks.map((b) => <li key={b}>{b}</li>)}
+              </ul>
+              <span className="mt-1 block text-xs">แก้ที่ต้นทาง (ระบบบุคคล › พนักงาน › ค่าคอม) แล้วกด &quot;ดึงข้อมูลใหม่&quot; · หรือกดชื่อคนแล้ว &quot;ปรับยอด&quot; ค่าคอมเองพร้อมเหตุผล</span>
+            </Notice>
+          )}
           {/* ปุ่มตามขั้น */}
           <div className="flex flex-wrap items-start justify-end gap-2">
             <PageTour id={`run-${run.status}`} steps={tourSteps} />
@@ -207,9 +230,20 @@ export default async function RunPage({ params, searchParams }: { params: Promis
               <>
                 <DeleteRunButton runId={run.id} period={periodLabel(run.period)} />
                 <span data-tour="recompute" className="inline-flex"><RecomputeButton runId={run.id} /></span>
-                <span data-tour="submit" className="inline-flex"><SubmitButton runId={run.id} mode={settings.approvalMode} negatives={t.negatives} /></span>
+                <AdjustmentsDialog runId={run.id} people={reviewPeople} items={reviewItems} editable trigger="รายเพิ่ม–รายหัก" />
+                <span data-tour="submit" className="inline-flex">
+                  <AdjustmentsDialog
+                    runId={run.id}
+                    people={reviewPeople}
+                    items={reviewItems}
+                    editable
+                    trigger={settings.approvalMode === "hr" ? "ตรวจแล้วยืนยันยอด" : "ตรวจแล้วส่งให้ CEO"}
+                    submit={{ mode: settings.approvalMode, blocks, negatives: run.lines.filter((l) => l.net < 0).map((l) => l.name), warnings: t.warnings }}
+                  />
+                </span>
               </>
             )}
+            <Link href={`/salary/runs/${run.id}/report`} className={outline}><ClipboardList className="h-4 w-4" aria-hidden="true" /> รายงานเงินเดือน</Link>
             {run.status === "submitted" && !access.canApprove && <Notice tone="info">ส่งให้ CEO แล้ว{run.submittedByName ? ` โดย ${run.submittedByName}` : ""} — รออนุมัติ</Notice>}
             {run.status === "approved" && (
               <>
@@ -232,7 +266,7 @@ export default async function RunPage({ params, searchParams }: { params: Promis
                 <Link href={`/salary/slips/${run.id}`} className={outline} target="_blank"><Printer className="h-4 w-4" aria-hidden="true" /> พิมพ์/ดาวน์โหลดสลิปทั้งหมด</Link>
                 <a href={`/salary/runs/${run.id}/export?type=bank`} className={outline}><Download className="h-4 w-4" aria-hidden="true" /> ไฟล์โอนธนาคาร</a>
                 <a href={`/salary/runs/${run.id}/export?type=sso`} className={outline}><Download className="h-4 w-4" aria-hidden="true" /> สรุปประกันสังคม</a>
-                <a href={`/salary/runs/${run.id}/export?type=pnd1`} className={outline}><Download className="h-4 w-4" aria-hidden="true" /> สรุป ภ.ง.ด.1</a>
+                {settings.taxEnabled && <a href={`/salary/runs/${run.id}/export?type=pnd1`} className={outline}><Download className="h-4 w-4" aria-hidden="true" /> สรุป ภ.ง.ด.1</a>}
                 <a href={`/salary/runs/${run.id}/export?type=summary`} className={outline}><FileText className="h-4 w-4" aria-hidden="true" /> Excel สรุปทั้งงวด</a>
               </div>
             )}
@@ -250,7 +284,7 @@ export default async function RunPage({ params, searchParams }: { params: Promis
                   {summary.prevNet !== null && (
                     <> · งวดก่อน ({periodLabel(summary.prevPeriod!)}) {fmtBaht(summary.prevNet)} ({t.net - summary.prevNet >= 0 ? "+" : ""}{fmtBaht(t.net - summary.prevNet)})</>
                   )}
-                  {" "}· ส่งประกันสังคม {fmtBaht(t.ssoEmployee + t.ssoEmployer)} · ภาษีที่หักไว้ {fmtBaht(t.tax)}
+                  {" "}· ส่งประกันสังคม {fmtBaht(t.ssoEmployee + t.ssoEmployer)}{settings.taxEnabled ? ` · ภาษีที่หักไว้ ${fmtBaht(t.tax)}` : ""}
                 </p>
               </div>
             </div>
@@ -415,6 +449,7 @@ export default async function RunPage({ params, searchParams }: { params: Promis
               </span>
               <span className="tabular-nums">{fmtBaht(t.ssoEmployee)} + {fmtBaht(t.ssoEmployer)}</span>
             </div>
+            {settings.taxEnabled && (
             <div className="flex items-center justify-between text-xs text-(--ink-soft)">
               <span className="flex items-center">
                 ภาษีหัก ณ ที่จ่าย (นำส่ง)
@@ -428,6 +463,7 @@ export default async function RunPage({ params, searchParams }: { params: Promis
               </span>
               <span className="tabular-nums">{fmtBaht(t.tax)}</span>
             </div>
+            )}
             {run.status === "paid" && <div className="flex justify-between text-xs text-(--ink-soft)"><span>ค่าธรรมเนียมโอน</span><span className="tabular-nums">{fmtBaht(run.bankFee)}</span></div>}
           </section>
         </div>

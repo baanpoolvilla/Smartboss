@@ -75,7 +75,21 @@ export function SalarySection({ employmentId, salary, history, hiredOn, today }:
 }
 
 /** 2–4. การรับเงิน · ประกันสังคม · ภาษี (ติ๊กแบบอื่นแล้วมีช่องให้กรอก) */
-export function ProfileSection({ employmentId, initial, year }: { employmentId: string; initial: Omit<ProfileInput, "employmentId">; year: number }) {
+export function ProfileSection({
+  employmentId,
+  initial,
+  year,
+  taxEnabled = true,
+  diligence,
+}: {
+  employmentId: string;
+  initial: Omit<ProfileInput, "employmentId">;
+  year: number;
+  /** บริษัทปิดการคิดภาษี = ซ่อนหมวดภาษี */
+  taxEnabled?: boolean;
+  /** บริษัทเปิดเบี้ยขยัน — ขั้นที่ตั้งไว้ + ขั้นรอบล่าสุดที่จ่ายผ่านระบบแล้ว (มี = ช่องยกมาไม่มีผล) */
+  diligence?: { steps: number[]; lastPaid: { amount: number; period: string } | null };
+}) {
   const [v, setV] = useState(initial);
   const [saved, setSaved] = useState(false);
   const { busy, error, run } = useRun();
@@ -161,6 +175,39 @@ export function ProfileSection({ employmentId, initial, year }: { employmentId: 
         )}
       </section>
 
+      {diligence && (
+        <section className={`${card} flex flex-col gap-3 p-4 sm:p-5`}>
+          <h2 className="text-base font-bold text-(--ink)">เบี้ยขยัน</h2>
+          <label className="flex min-h-11 items-center gap-3 text-sm">
+            <input type="checkbox" className="h-5 w-5" checked={v.diligenceEligible ?? true} onChange={(e) => set({ diligenceEligible: e.target.checked })} />
+            ได้เบี้ยขยัน (ขั้น {diligence.steps.map((x) => x.toLocaleString("en-US")).join(" → ")})
+          </label>
+          {(v.diligenceEligible ?? true) && (
+            diligence.lastPaid ? (
+              <p className={hint}>
+                รอบล่าสุดที่จ่ายผ่านระบบ ({diligence.lastPaid.period}) ได้ {fmtBaht(diligence.lastPaid.amount)} — รอบถัดไปนับต่อจากขั้นนี้เอง
+              </p>
+            ) : (
+              <label className={`${label} max-w-sm`}>
+                <span className={labelText}>ขั้นรอบล่าสุดจากระบบเดิม (ก่อนเริ่มใช้ระบบนี้)</span>
+                <select
+                  className={field}
+                  value={v.diligenceOpening === null || v.diligenceOpening === undefined ? "" : String(v.diligenceOpening)}
+                  onChange={(e) => set({ diligenceOpening: e.target.value === "" ? null : Number(e.target.value) })}
+                >
+                  <option value="">ไม่มี / เริ่มขั้นแรก</option>
+                  {diligence.steps.map((x) => (
+                    <option key={x} value={x}>{x.toLocaleString("en-US")} บาท</option>
+                  ))}
+                </select>
+                <span className={hint}>เช่น เดือนที่แล้วได้ 800 → เลือก 800 · งวดแรกในระบบไม่ลา ไม่สาย ได้ 1,000 · ใช้จนกว่าจะมีรอบที่จ่ายผ่านระบบ</span>
+              </label>
+            )
+          )}
+        </section>
+      )}
+
+      {taxEnabled && (
       <section className={`${card} flex flex-col gap-3 p-4 sm:p-5`}>
         <h2 className="flex items-center text-base font-bold text-(--ink)">
           4. ภาษีหัก ณ ที่จ่าย
@@ -268,6 +315,7 @@ export function ProfileSection({ employmentId, initial, year }: { employmentId: 
           </>
         )}
       </section>
+      )}
 
       {error && <Notice tone="danger">{error}</Notice>}
       {saved && <Notice tone="ok">บันทึกแล้ว — มีผลกับรอบเงินเดือนที่ยังเป็นร่าง เมื่อกด &quot;ดึงข้อมูลใหม่&quot;</Notice>}
