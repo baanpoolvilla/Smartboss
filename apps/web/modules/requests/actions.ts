@@ -103,6 +103,10 @@ const brief = (r: Pick<RequestView, "id" | "code" | "kind" | "title" | "netAmoun
   beneficiaryName: r.beneficiaryName,
 });
 
+/** ใครอนุมัติใบนี้ ตามจริง — ใบสองขั้นบอกทั้ง HR และ CEO */
+const approvedByText = (r: Pick<RequestView, "firstDecidedByName" | "decidedByName">) =>
+  r.firstDecidedByName ? `อนุมัติโดย ${r.firstDecidedByName} (HR) → ${r.decidedByName ?? "—"} (CEO)` : `อนุมัติโดย ${r.decidedByName ?? "—"}`;
+
 function refresh(id?: string) {
   revalidatePath("/requests");
   if (id) revalidatePath(`/requests/${id}`);
@@ -478,7 +482,11 @@ interface Prepared {
   workDate: string;
 }
 
-async function prepareRequest(session: OrgSession, input: CreateInput, exceptRequestId?: string): Promise<{ error: string } | Prepared> {
+/**
+ * advanceDate: วันที่เดิมของใบเบิกล่วงหน้าที่กำลังแก้ — เบิกล่วงหน้าไม่รับวันที่จากหน้าเว็บ
+ * (ใบใหม่ = วันนี้เสมอ · แก้ไข = วันที่เดิม) กันย้อนวันไปเดือนก่อนเพื่อหลบเพดานของเดือนนี้
+ */
+async function prepareRequest(session: OrgSession, input: CreateInput, exceptRequestId?: string, advanceDate?: string): Promise<{ error: string } | Prepared> {
   const orgId = session.orgId;
   const kind = input.kind;
   if (!KIND_META[kind]) return { error: "ประเภทคำขอไม่ถูกต้อง" };
@@ -491,7 +499,7 @@ async function prepareRequest(session: OrgSession, input: CreateInput, exceptReq
   if (!title) return { error: kind === "ot" ? "ใส่ว่าทำอะไร" : "ใส่รายการที่ขอเบิก" };
   const detail = input.detail.trim().slice(0, 2000);
   const today = bangkokToday();
-  const workDate = kind === "advance" ? (normalizeDate(input.workDate) || today) : normalizeDate(input.workDate);
+  const workDate = kind === "advance" ? (advanceDate ?? today) : normalizeDate(input.workDate);
   if (!workDate) return { error: "วันที่ไม่ถูกต้อง" };
   if (workDate > today) return { error: "เลือกวันที่ในอนาคตไม่ได้" };
 
@@ -665,7 +673,7 @@ export async function updateRequestAction(id: string, input: CreateInput): Promi
     if (old.createdBy !== session.userId) return { error: "แก้ได้เฉพาะคนที่ยื่นใบนี้" };
     if (old.status !== "pending" || old.firstDecidedAt) return { error: "ใบนี้มีคนตัดสินแล้ว แก้ไม่ได้ — ยกเลิกแล้วยื่นใหม่" };
     if (input.kind !== old.kind) return { error: "เปลี่ยนประเภทของใบไม่ได้ — ยกเลิกแล้วยื่นใหม่" };
-    const prep = await prepareRequest(session, input, id);
+    const prep = await prepareRequest(session, input, id, old.kind === "advance" ? old.workDate : undefined);
     if ("error" in prep) return prep;
     const f = prep.fields;
 
@@ -782,44 +790,63 @@ export async function decideRequestAction(input: { id: string; outcome: "approve
         return [...list, entry];
       });
       if (clash) return { error: "มีคนเพิ่งลง OT วันนี้ให้คนงานคนนี้ในหน้าคนงาน — รีเฟรชแล้วตรวจอีกครั้ง" };
+    }
+
+    // ชั่วโมง OT ลงบัญชีคนงานไปก่อนแล้ว — ใบเปลี่ยนสถานะไม่สำเร็จ (มีคนกดไม่อนุมัติ/ยกเลิกพร้อมกัน หรือ error) ต้องถอนออก
+    // ไม่งั้นคนงานได้ค่า OT ของใบที่ไม่ได้อนุมัติ
+    const undoWorkerOt = async () => {
+      if (!dwOtEntryId) return;
+      await updateStoreList<OtEntry>(orgId, OT_KEY, session.userId, (list) => list.filter((o) => o.id !== dwOtEntryId)).catch((error: unknown) =>
+        console.error("[requests] undo worker OT failed", dwOtEntryId, error),
+      );
+    };
+    let changed: boolean;
+    try {
+      changed = await withRequestsTenant(orgId, async (tx) => {
+        const res = await tx.moneyRequest.updateMany({
+          where: { orgId, id: r.id, status: "pending" },
+          data: {
+            status: input.outcome === "reject" ? "rejected" : workerOt ? "paid" : "approved",
+            decidedBy: session.userId,
+            decidedByName: byName,
+            decidedAt: new Date(),
+            decisionNote: note || null,
+            ...(dwOtEntryId ? { dwOtEntryId } : {}),
+          },
+        });
+        if (res.count === 0) return false;
+        if (workerOt && r.netAmount > 0) {
+          await tx.moneyRequestPayment.create({
+            data: { orgId, requestId: r.id, amount: r.netAmount, method: "worker_ledger", paidOn: dateOnly(r.workDate), note: "เข้าบัญชีค่าแรงคนงาน", byUserId: session.userId, byName },
+          });
+        }
+        await insertEvent(tx, orgId, {
+          requestId: r.id,
+          byUserId: session.userId,
+          byName,
+          action: input.outcome === "reject" ? "reject" : "approve",
+          summary: input.outcome === "reject" ? `ไม่อนุมัติ · ${note}` : `อนุมัติ${workerOt ? " · ลง OT ในบัญชีคนงานแล้ว" : ""}${note ? ` · ${note}` : ""}`,
+        });
+        return true;
+      });
+    } catch (error) {
+      await undoWorkerOt();
+      throw error;
+    }
+    if (!changed) {
+      await undoWorkerOt();
+      return { error: "มีคนตัดสินใบนี้ไปก่อนแล้ว — รีเฟรช" };
+    }
+    if (workerOt && r.employmentId) {
       await logDw(orgId, {
         byUserId: session.userId,
         byName,
         action: "ot",
         employmentIds: [r.employmentId],
         workDate: r.workDate,
-        summary: `OT จากคำขอ ${r.code} ${r.otStart}–${r.otEnd} (${hoursText(r.otMinutes)}) · อนุมัติโดย ${byName}`,
+        summary: `OT จากคำขอ ${r.code} ${r.otStart}–${r.otEnd} (${hoursText(r.otMinutes ?? 0)}) · อนุมัติโดย ${byName}`,
       });
     }
-
-    const changed = await withRequestsTenant(orgId, async (tx) => {
-      const res = await tx.moneyRequest.updateMany({
-        where: { orgId, id: r.id, status: "pending" },
-        data: {
-          status: input.outcome === "reject" ? "rejected" : workerOt ? "paid" : "approved",
-          decidedBy: session.userId,
-          decidedByName: byName,
-          decidedAt: new Date(),
-          decisionNote: note || null,
-          ...(dwOtEntryId ? { dwOtEntryId } : {}),
-        },
-      });
-      if (res.count === 0) return false;
-      if (workerOt && r.netAmount > 0) {
-        await tx.moneyRequestPayment.create({
-          data: { orgId, requestId: r.id, amount: r.netAmount, method: "worker_ledger", paidOn: dateOnly(r.workDate), note: "เข้าบัญชีค่าแรงคนงาน", byUserId: session.userId, byName },
-        });
-      }
-      await insertEvent(tx, orgId, {
-        requestId: r.id,
-        byUserId: session.userId,
-        byName,
-        action: input.outcome === "reject" ? "reject" : "approve",
-        summary: input.outcome === "reject" ? `ไม่อนุมัติ · ${note}` : `อนุมัติ${workerOt ? " · ลง OT ในบัญชีคนงานแล้ว" : ""}${note ? ` · ${note}` : ""}`,
-      });
-      return true;
-    });
-    if (!changed) return { error: "มีคนตัดสินใบนี้ไปก่อนแล้ว — รีเฟรช" };
 
     await clearActionNotifications(orgId, r.id, ["req_pending"]);
     const b = brief(r);
@@ -976,7 +1003,7 @@ export async function recordPaymentAction(input: PayInput): Promise<Result> {
           data: { orgId, employmentId: r.employmentId, payDate: dateOnly(paidOn), amount, kind: "advance", note: `${r.code} เบิกล่วงหน้า: ${r.title}`.slice(0, 200), byUserId: session.userId, byName },
         });
         dwPaymentId = dw.id;
-        await insertDwAudit(tx, orgId, { byUserId: session.userId, byName, action: "payment", employmentIds: [r.employmentId], workDate: paidOn, summary: `เบิกล่วงหน้า ${baht(amount, false)} บาท จากคำขอ ${r.code} (CEO อนุมัติ)` });
+        await insertDwAudit(tx, orgId, { byUserId: session.userId, byName, action: "payment", employmentIds: [r.employmentId], workDate: paidOn, summary: `เบิกล่วงหน้า ${baht(amount, false)} บาท จากคำขอ ${r.code} (${approvedByText(r)})` });
       }
       const paidTotal = round2(r.paidTotal + amount);
       const full = paidTotal >= r.netAmount - 0.005 || (short && input.closeShort === true);
