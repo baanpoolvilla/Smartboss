@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { annualTax, computePay, periodsEmployedBefore, periodsRemaining, progressiveTax, type ComputeInput } from "../lib/compute";
-import { DEFAULT_SSO, DEFAULT_TAX, fmt, normalizeAllowances, periodDates, roundSatangToBaht, toSatang, validateTax } from "../lib/types";
+import { DEFAULT_SSO, DEFAULT_TAX, fmt, normalizeAllowances, periodDates, periodOfDate, roundSatangToBaht, toSatang, validateTax } from "../lib/types";
 
 /** พนักงานเต็มงวด ต.ค. 2569 (26 ก.ย.–25 ต.ค. จ่าย 31 ต.ค.) ไม่มีอะไรพิเศษ — แต่ละเทสแก้เฉพาะที่ต้องการ */
 function base(over: Partial<ComputeInput> = {}): ComputeInput {
@@ -35,6 +35,12 @@ describe("periods", () => {
   it("cut-off 31 = calendar month, Feb clamps", () => {
     expect(periodDates("2026-02", 31, 0)).toEqual({ startsOn: "2026-02-01", endsOn: "2026-02-28", payDate: "2026-02-28" });
     expect(periodDates("2026-03", 31, 5)).toEqual({ startsOn: "2026-03-01", endsOn: "2026-03-31", payDate: "2026-03-05" });
+  });
+  it("a date after the cut-off belongs to next month's round", () => {
+    expect(periodOfDate("2026-10-25", 25)).toBe("2026-10");
+    expect(periodOfDate("2026-10-27", 25)).toBe("2026-11");
+    expect(periodOfDate("2026-12-26", 25)).toBe("2027-01");
+    expect(periodOfDate("2026-02-28", 31)).toBe("2026-02");
   });
   it("periods remaining counts this pay month", () => {
     expect(periodsRemaining("2026-10-31")).toBe(3);

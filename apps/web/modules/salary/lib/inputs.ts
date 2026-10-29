@@ -214,7 +214,8 @@ export async function loadPeriodInputs(
           2000,
         )
       : [];
-  const advReqs = await loadRequests(tx, orgId, { beneficiaryKind: "staff", deductedAt: null, deductAmount: { gt: 0 } }, 2000);
+  // หักตามรอบของวันที่เบิก: เบิกหลังวันตัดรอบ → รอหักรอบถัดไป (ใบเก่าที่ยังค้างหักรอบนี้)
+  const advReqs = await loadRequests(tx, orgId, { beneficiaryKind: "staff", deductedAt: null, deductAmount: { gt: 0 }, workDate: { lte: new Date(`${endsOn}T00:00:00Z`) } }, 2000);
   // เบี้ยขยัน: ขั้นของรอบล่าสุดที่จ่ายแล้ว (ก่อนงวดนี้) ต่อคน — มีรอบที่ยังไม่จ่ายได้ทีละรอบ จึงไม่มีรอบค้างคั่นกลาง
   const prevDiligence = new Map<string, number>();
   if (settings?.diligenceEnabled) {

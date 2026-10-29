@@ -28,6 +28,8 @@ import {
   type Attachment,
   type PaymentMethod,
 } from "@/modules/requests/lib/types";
+import { readSettings as readSalarySettings, withSalaryTenant } from "@/modules/salary/lib/db";
+import { PERIOD_RE, periodDates, periodLabel as salaryPeriodLabel, periodOfDate, thaiDate as salaryThaiDate } from "@/modules/salary/lib/types";
 import { KindChip, MoneyRow, Notice, StatusChip, Steps } from "@/modules/requests/components/ui";
 import {
   CancelButton,
@@ -168,6 +170,16 @@ export default async function RequestDetailPage({ params, searchParams }: { para
   const flagsFor = (a: Attachment) => receiptFlags(a, { claimDate: r.workDate, today, maxAgeDays: settings.receiptMaxAgeDays, duplicateOf: dups.get(a.sha256) ?? null });
   const mismatch = r.kind === "expense" ? amountMismatch(receipts, r.amount) : null;
 
+  // เงินเบิกหักตามรอบของวันที่เบิก (วันหลังวันตัดรอบ = รอบถัดไป) — บอกให้รู้ล่วงหน้าว่าจะหักรอบไหน
+  const deductRound =
+    r.deductAmount > 0 && !r.deductedAt && r.beneficiaryKind === "staff" && (await usesSalaryModule(orgId))
+      ? await withSalaryTenant(orgId, async (tx) => {
+          const { cutoffDay, payDay } = await readSalarySettings(tx, orgId);
+          const p = periodOfDate(r.workDate, cutoffDay);
+          const d = periodDates(p, cutoffDay, payDay);
+          return `จะหักรอบ ${salaryPeriodLabel(p)} (${salaryThaiDate(d.startsOn, false)}–${salaryThaiDate(d.endsOn, false)}) ตามวันที่เบิก`;
+        })
+      : null;
   const steps: { title: string; sub?: string; state: "done" | "now" | "todo" | "stop" }[] = [
     { title: `${r.createdByName} ยื่น`, sub: thaiDateTime(r.createdAt), state: "done" },
     r.status === "rejected"
@@ -190,7 +202,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
       if (r.kind === "cash_advance") steps.push({ title: "คนเบิกส่งใบเสร็จ + เงินทอน → HR ตรวจ", sub: r.clearedAt ? `ตรวจแล้ว · ${r.clearedByName}` : r.clearStatus === "submitted" ? "ส่งแล้ว รอ HR ตรวจ" : r.clearDueDate ? `ภายใน ${thaiDate(r.clearDueDate)}` : undefined, state: r.clearedAt ? "done" : r.status === "paid" ? "now" : "todo" });
       if (r.beneficiaryKind !== "vendor") steps.push({ title: "ผู้รับยืนยันได้รับเงิน", sub: r.receivedAt ? thaiDateTime(r.receivedAt) : undefined, state: r.receivedAt ? "done" : r.paidTotal > 0 && !r.payments.every((p) => p.method === "payroll") ? "now" : "todo" });
       if (r.kind === "advance" && r.beneficiaryKind === "worker") steps.push({ title: "หักคืนจากค่าแรงอัตโนมัติ", sub: "ลงเป็น \"เบิกล่วงหน้า\" ในบัญชีค่าแรงแล้ว", state: r.status === "paid" ? "done" : "todo" });
-      else if (r.deductAmount > 0) steps.push({ title: r.beneficiaryKind === "worker" ? "หักคืนจากค่าแรงอัตโนมัติ" : "หักคืนในงวดเงินเดือน", sub: r.deductedAt ? `หักแล้ว งวด ${r.deductedPeriod}` : baht(r.deductAmount), state: r.deductedAt || r.beneficiaryKind === "worker" ? "done" : "now" });
+      else if (r.deductAmount > 0) steps.push({ title: r.beneficiaryKind === "worker" ? "หักคืนจากค่าแรงอัตโนมัติ" : "หักคืนในงวดเงินเดือน", sub: r.deductedAt ? `หักแล้ว งวด ${r.deductedPeriod && PERIOD_RE.test(r.deductedPeriod) ? salaryPeriodLabel(r.deductedPeriod) : r.deductedPeriod}` : `${baht(r.deductAmount)}${deductRound ? ` · ${deductRound}` : ""}`, state: r.deductedAt || r.beneficiaryKind === "worker" ? "done" : "now" });
     }
   }
   if (r.status === "cancelled" && r.decidedAt) steps.push({ title: "ยกเลิก", sub: `${r.cancelledByName} · ${r.cancelReason}`, state: "stop" });

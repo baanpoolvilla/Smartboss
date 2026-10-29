@@ -164,6 +164,13 @@ export function periodDates(period: string, cutoffDay: number, payDay: number): 
   return { startsOn, endsOn, payDate: `${y}-${pad(m)}-${pad(pd)}` };
 }
 
+/** งวดที่วันนี้ตกอยู่ (วันหลังวันตัด = งวดเดือนถัดไป) — ใช้บอกว่าเงินเบิกล่วงหน้าจะหักรอบไหน */
+export function periodOfDate(date: string, cutoffDay: number): string {
+  const [y, m, d] = date.split("-").map(Number) as [number, number, number];
+  const p = `${y}-${pad(m)}`;
+  return d > Math.min(cutoffDay, daysInMonth(y, m)) ? shiftPeriod(p, 1) : p;
+}
+
 export function shiftPeriod(period: string, delta: number): string {
   const [y, m] = period.split("-").map(Number) as [number, number];
   const idx = y * 12 + (m - 1) + delta;

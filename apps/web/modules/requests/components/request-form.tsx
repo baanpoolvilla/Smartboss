@@ -77,6 +77,7 @@ export function RequestForm({
   vendors,
   settings,
   today,
+  advanceRound,
 }: {
   kinds: RequestKind[];
   initialKind: RequestKind | null;
@@ -88,6 +89,8 @@ export function RequestForm({
   vendors: FormVendor[];
   settings: RequestSettings;
   today: string;
+  /** เบิกล่วงหน้าวันนี้จะหักคืนเงินเดือนรอบไหน (เฉพาะบริษัทที่ใช้โมดูลเงินเดือน) */
+  advanceRound?: string | null;
   /** มี = แก้ใบเดิม (เปลี่ยนประเภทไม่ได้) */
   editId?: string;
   initial?: EditInitial;
@@ -614,6 +617,9 @@ export function RequestForm({
               </>
             )}
             {(kind === "cash_advance" || kind === "advance") && <MoneyRow strong label={kind === "advance" ? "เบิกล่วงหน้า" : "ขอเงินไปซื้อของ"} value={Number.isFinite(parseMoney(amount)) ? parseMoney(amount) : 0} />}
+            {kind === "advance" && advanceRound && !person?.isWorker && (
+              <div className="rounded-(--radius) bg-(--bg-soft) px-2.5 py-2 text-xs font-medium text-(--ink)">{advanceRound}</div>
+            )}
             {kind === "advance" && preview && (
               <div className="rounded-(--radius) bg-(--bg-soft) px-2.5 py-2 text-xs text-(--ink-soft)">
                 {preview.cap === null ? "ไม่จำกัดเพดาน" : `เพดานเดือนนี้ ${baht(preview.cap)} · ใช้ไปแล้ว ${baht(preview.capUsed)} · เหลือ ${baht(Math.max(0, preview.cap - preview.capUsed))}`}

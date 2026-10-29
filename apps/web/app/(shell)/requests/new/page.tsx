@@ -5,7 +5,10 @@ import { listLinkableWorkOrders, listPeople, listProperties, loadSettings } from
 import { requestsPage } from "@/modules/requests/lib/page";
 import { withRequestsTenant, toVendor } from "@/modules/requests/lib/db";
 import { RequestForm } from "@/modules/requests/components/request-form";
+import { usesSalaryModule } from "@/modules/requests/lib/pay-privacy";
 import { KINDS, bangkokToday, type RequestKind } from "@/modules/requests/lib/types";
+import { readSettings as readSalarySettings, withSalaryTenant } from "@/modules/salary/lib/db";
+import { periodDates, periodLabel, periodOfDate, thaiDate } from "@/modules/salary/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +34,17 @@ export default async function NewRequestPage({ searchParams }: { searchParams: P
     loadSettings(session.orgId),
     prisma.user.findUnique({ where: { id: session.userId }, select: { name: true } }),
   ]);
+  // เบิกล่วงหน้าหักตามรอบของวันที่เบิก — บอกตั้งแต่ตอนยื่นว่าจะหักรอบไหน
+  const today = bangkokToday();
+  const advanceRound =
+    kinds.includes("advance") && (await usesSalaryModule(session.orgId))
+      ? await withSalaryTenant(session.orgId, async (tx) => {
+          const { cutoffDay, payDay } = await readSalarySettings(tx, session.orgId);
+          const p = periodOfDate(today, cutoffDay);
+          const d = periodDates(p, cutoffDay, payDay);
+          return `เบิกวันนี้ → หักคืนในเงินเดือนรอบ ${periodLabel(p)} (${thaiDate(d.startsOn, false)}–${thaiDate(d.endsOn, false)} จ่าย ${thaiDate(d.payDate, false)})`;
+        })
+      : null;
   const initialKind = KINDS.includes(sp.kind as RequestKind) ? (sp.kind as RequestKind) : null;
 
   return (
@@ -45,7 +59,8 @@ export default async function NewRequestPage({ searchParams }: { searchParams: P
         workOrders={workOrders}
         vendors={vendors.map((v) => ({ id: v.id, name: v.name, whtPercent: v.whtPercent, vatRegistered: v.vatRegistered }))}
         settings={settings}
-        today={bangkokToday()}
+        today={today}
+        advanceRound={advanceRound}
       />
     </AppScaffold>
   );

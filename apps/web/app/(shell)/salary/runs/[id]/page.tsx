@@ -13,8 +13,9 @@ import { STATUS_LABEL, card, hint, outline } from "@/modules/salary/components/u
 import { readRates, readSettings, withSalaryTenant } from "@/modules/salary/lib/db";
 import { salaryPage } from "@/modules/salary/lib/page";
 import { approvalSummary, loadRun, type ChangeItem } from "@/modules/salary/lib/views";
-import { DEFAULT_SSO, TH_MONTH, fmtBaht, periodLabel, rateOn, thaiDate } from "@/modules/salary/lib/types";
+import { DEFAULT_SSO, TH_MONTH, fmtBaht, periodLabel, rateOn, shiftPeriod, thaiDate } from "@/modules/salary/lib/types";
 import { WorkDaysLine } from "@/modules/salary/components/work-days";
+import { loadRequests, withRequestsTenant } from "@/modules/requests/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,12 @@ export default async function RunPage({ params, searchParams }: { params: Promis
   // เดือนที่ต้องยื่นภาษี/ส่งประกันสังคม = เดือนถัดจากวันจ่าย
   const fileMonth = `${TH_MONTH[Number(run.payDate.slice(5, 7)) % 12]} ${Number(run.payDate.slice(0, 4)) + (run.payDate.slice(5, 7) === "12" ? 1 : 0) + 543}`;
   const items = await withSalaryTenant(orgId, (tx) => tx.salaryItem.findMany({ where: { orgId, active: true }, orderBy: [{ sort: "asc" }, { name: "asc" }] }));
+  // เงินเบิกที่เบิกหลังวันตัดรอบ — ไม่หักรอบนี้ รอหักรอบถัดไป (บอกให้ชัดว่าไม่ได้หายไป)
+  const laterAdvances = run.status === "draft"
+    ? await withRequestsTenant(orgId, (tx) =>
+        loadRequests(tx, orgId, { beneficiaryKind: "staff", deductedAt: null, deductAmount: { gt: 0 }, workDate: { gt: new Date(`${run.endsOn}T00:00:00Z`) } }, 200),
+      )
+    : [];
   const st = STATUS_LABEL[run.status]!;
   const editable = run.status === "draft";
   const t = run.totals ?? { people: 0, gross: 0, deductions: 0, net: 0, ssoEmployee: 0, ssoEmployer: 0, tax: 0, transferNet: 0, cashNet: 0, skipped: [], warnings: 0, negatives: 0 };
@@ -215,6 +222,12 @@ export default async function RunPage({ params, searchParams }: { params: Promis
             ))}
           </ol>
           {run.returnedReason && run.status === "draft" && <Notice tone="warn">ถูกส่งกลับให้แก้: {run.returnedReason}</Notice>}
+          {laterAdvances.length > 0 && (
+            <Notice tone="info">
+              เงินเบิกล่วงหน้า {laterAdvances.length} ใบเบิกหลังวันตัดรอบ ({thaiDate(run.endsOn)}) — <strong>ไม่หักรอบนี้ จะหักรอบ {periodLabel(shiftPeriod(run.period, 1))}</strong>:{" "}
+              {laterAdvances.map((r) => `${r.beneficiaryName} ${fmtBaht(r.deductAmount)} (${r.code} เบิก ${thaiDate(r.workDate, false)})`).join(" · ")}
+            </Notice>
+          )}
           {editable && blocks.length > 0 && (
             <Notice tone="danger">
               <strong>ยังสรุป/ส่งรอบนี้ไม่ได้ — แก้ก่อน:</strong>
