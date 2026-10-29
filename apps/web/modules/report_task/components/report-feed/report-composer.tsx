@@ -29,6 +29,7 @@ import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
 import { Check, Clock, Lock, Maximize2, Minimize2, Send, SquarePen, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { uuid } from "@/modules/report_task/lib/uuid";
+import { bulletsFromText } from "@/modules/report_task/lib/report-feed-rich-text";
 import { useRetroSubmitStore } from "@/modules/report_task/store/retro-submit-store";
 import { useWorkerUi } from "@/modules/daily_worker/components/use-worker-ui";
 
@@ -283,7 +284,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
       .map((s) => ({
         id: s.id,
         heading: s.heading.trim(),
-        bullets: s.bulletsText.split("\n").map((b) => b.trim()).filter(Boolean),
+        bullets: bulletsFromText(s.bulletsText),
       }))
       .filter((s) => s.heading || s.bullets.length > 0);
     if (retro) {

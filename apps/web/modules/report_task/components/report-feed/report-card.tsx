@@ -59,6 +59,7 @@ import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-r
 import { localDateStr } from "@/modules/report_task/lib/now";
 import {
   bulletsTextToHtml,
+  bulletsFromText,
   CHECKLIST_CHECKED,
   CHECKLIST_UNCHECKED,
   htmlEditorToBulletsText,
@@ -2759,7 +2760,7 @@ function buildSections(sections: DraftSection[]) {
     .map((s) => ({
       id: s.id,
       heading: s.heading.trim(),
-      bullets: s.bulletsText.split("\n").map((b) => b.trim()).filter(Boolean),
+      bullets: bulletsFromText(s.bulletsText),
     }))
     .filter((s) => s.heading || s.bullets.length > 0);
 }

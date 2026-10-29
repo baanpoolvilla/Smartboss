@@ -230,6 +230,20 @@ function collectLines(el: HTMLElement): string[] {
   return lines;
 }
 
+/**
+ * ข้อความในกล่องเขียน → บรรทัดที่เก็บในโพสต์ ตามที่พิมพ์/วางไว้: เก็บบรรทัดว่างระหว่างย่อหน้า และช่องว่างหน้าบรรทัด
+ * ตัดแค่ช่องว่างท้ายบรรทัด กับบรรทัดว่างหัว-ท้ายของหัวข้อ (มองไม่เห็นอยู่แล้ว) — เดิม trim + ทิ้งบรรทัดว่างทุกบรรทัด
+ * เว้นไว้ในกล่องเขียน โพสต์แล้วชิดกันหมด (ผู้ใช้เจอ 29/10/2569)
+ */
+export function bulletsFromText(text: string): string[] {
+  const lines = text.replace(/\r/g, "").split("\n").map((l) => l.replace(/[\s\u00a0]+$/, ""));
+  let start = 0;
+  let end = lines.length;
+  while (start < end && !lines[start]!.trim()) start++;
+  while (end > start && !lines[end - 1]!.trim()) end--;
+  return lines.slice(start, end);
+}
+
 /** Reads the WYSIWYG editor's live DOM back into marker text, splitting lines at each `<br>`. */
 export function htmlEditorToBulletsText(el: HTMLElement): string {
   // Mirror of the lone-<br> placeholder bulletsTextToHtml("") produces.
@@ -484,11 +498,14 @@ export function renderSectionBullets(bullets: string[], onToggleChecklist?: (bul
     blocks.push(
       <div key={key++} className="space-y-0.5">
         {run.map((b, bi) => {
+          // บรรทัดว่างที่เว้นไว้ = เว้นจริงเท่าหนึ่งบรรทัด (เดิมสูง 0)
+          if (!b.trim()) return <p key={bi} aria-hidden className="h-[1.5em]" />;
           const bulleted = BULLET_LINE_PREFIX.test(b.trim());
           return (
             <p key={bi} className="text-[15px] sm:text-base text-[var(--ink)] flex items-start gap-1.5">
               {bulleted && <span className="text-[var(--ink)] mt-0.5 shrink-0">•</span>}
-              <span>{renderRichBulletText(bulleted ? stripBulletPrefix(b) : b)}</span>
+              {/* pre-wrap: ช่องว่างหน้าบรรทัด/หลายช่องติดกันขึ้นตามที่พิมพ์ */}
+              <span className="min-w-0 whitespace-pre-wrap break-words">{renderRichBulletText(bulleted ? stripBulletPrefix(b) : b)}</span>
             </p>
           );
         })}
