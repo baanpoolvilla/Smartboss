@@ -56,6 +56,20 @@ export function maskRequest(p: PayPrivacy, r: RequestView): MaskedRequest {
 /** ข้อความแสดงแทนยอดที่ซ่อน */
 export const HIDDEN_PAY_LABEL = "เห็นเฉพาะเจ้าตัว / CEO / ผู้ดูแลเงินเดือน";
 
+/** บริษัทเริ่มใช้โมดูลเงินเดือนแล้ว (มีรอบเงินเดือนสักรอบ) */
+export async function usesSalaryModule(orgId: string): Promise<boolean> {
+  const runs = await withSalaryTenant(orgId, (tx) => tx.salaryRun.count({ where: { orgId } })).catch(() => 0);
+  return runs > 0;
+}
+
+/**
+ * วิธีจ่าย "รวมกับเงินเดือน" ของใบเดียว — ใช้ไม่ได้เมื่อใช้โมดูลเงินเดือนแล้ว
+ * ใบถูกนับว่าจ่ายแล้ว แต่รอบเงินเดือนดึงแค่ OT ที่ยังค้าง + เงินเบิกล่วงหน้า ⇒ เงินไม่ถึงพนักงานจริง
+ * (เจอในเทส 29/10/2569: ค่าแท็กซี่ 450 กด "รวมกับเงินเดือน" แล้วไม่อยู่ในรอบเงินเดือนเลย)
+ */
+export const PAYROLL_METHOD_BLOCKED =
+  "บริษัทใช้โมดูลเงินเดือนแล้ว — OT และเบิกล่วงหน้าเข้ารอบเงินเดือนเอง ค่าใช้จ่ายอื่นให้จ่ายโอน/เงินสด หรือใส่เป็นรายเพิ่มในรอบเงินเดือน";
+
 /**
  * หน้า "ส่งเข้าเงินเดือน" ของเบิกจ่าย & OT ใช้ได้ไหม — คืนเหตุผลที่ใช้ไม่ได้ หรือ null
  *   - บริษัทเริ่มใช้โมดูลเงินเดือนแล้ว (มีรอบเงินเดือนสักรอบ) → รอบเงินเดือนดึง OT/เบิกล่วงหน้าเอง
@@ -64,8 +78,7 @@ export const HIDDEN_PAY_LABEL = "เห็นเฉพาะเจ้าตั�
  */
 export async function payrollHandoffBlock(session: Pick<Session, "userId" | "roles" | "orgId">): Promise<string | null> {
   if (!session.orgId) return "ไม่มีบริษัท";
-  const runs = await withSalaryTenant(session.orgId, (tx) => tx.salaryRun.count({ where: { orgId: session.orgId! } })).catch(() => 0);
-  if (runs > 0) return "ตั้งแต่ใช้โมดูลเงินเดือน OT และเบิกล่วงหน้าของพนักงานประจำเข้ารอบเงินเดือนให้เองแล้ว ไม่ต้องส่งที่หน้านี้";
+  if (await usesSalaryModule(session.orgId)) return "ตั้งแต่ใช้โมดูลเงินเดือน OT และเบิกล่วงหน้าของพนักงานประจำเข้ารอบเงินเดือนให้เองแล้ว ไม่ต้องส่งที่หน้านี้";
   if (!(await payPrivacy(session)).canSeeAll) return "หน้านี้มียอด OT รายคน (บอกเงินเดือนได้) — ทำได้เฉพาะ CEO และคนที่ CEO เลือกให้ดูแลเงินเดือน";
   return null;
 }

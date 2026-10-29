@@ -25,7 +25,7 @@ import {
 import { dateOnly, insertEvent, loadRequests, pettyBalances, readSettings, withRequestsTenant, withRequestsTenantAfter, ymd, type RequestView, type Tx } from "./lib/db";
 import { clearActionNotifications, notifyApprovers, notifyClear, notifyPayers, notifyResult } from "./lib/notify";
 import { readReceipt } from "./lib/receipt-ai";
-import { payPrivacy, payrollHandoffBlock } from "./lib/pay-privacy";
+import { PAYROLL_METHOD_BLOCKED, payPrivacy, payrollHandoffBlock, usesSalaryModule } from "./lib/pay-privacy";
 import {
   KIND_META,
   METHOD_LABEL,
@@ -936,6 +936,7 @@ export async function recordPaymentAction(input: PayInput): Promise<Result> {
     if (!allowed) return { error: "ไม่มีสิทธิ์บันทึกจ่ายเงิน (คนถือเงินสดย่อยจ่ายได้จากเงินสดย่อยของตัวเอง)" };
     if (method === "payroll" && r.beneficiaryKind !== "staff") return { error: "รวมกับเงินเดือนได้เฉพาะพนักงานประจำ" };
     if (method === "payroll" && r.kind === "advance") return { error: "เบิกล่วงหน้าต้องจ่ายเป็นเงินจริง (หักคืนทีหลังในเงินเดือน)" };
+    if (method === "payroll" && (await usesSalaryModule(orgId))) return { error: PAYROLL_METHOD_BLOCKED };
     const paidOn = normalizeDate(input.paidOn);
     if (!paidOn || paidOn > bangkokToday()) return { error: "วันที่จ่ายไม่ถูกต้อง" };
     const amount = round2(Number(input.amount));

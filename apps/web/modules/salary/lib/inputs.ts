@@ -203,6 +203,17 @@ export async function loadPeriodInputs(
     { kind: "ot", status: { in: ["approved", "paid"] }, beneficiaryKind: "staff", workDate: { gte: new Date(`${startsOn}T00:00:00Z`), lte: new Date(`${endsOn}T00:00:00Z`) } },
     2000,
   );
+  // OT แบบนับวัน: ใบที่จ่ายครบไปแล้วทางอื่น (เงินสด/โอน) ในวันเดียวกับใบที่ค้าง — ค่าวันนั้นจ่ายไปแล้วเท่านั้น
+  // (เจอในเทส: ใบเช้าจ่ายเงินสด 250 แล้ว ใบค่ำวันเดียวกันยังได้ค่าวันเต็มอีก = จ่ายวันเดียวสองรอบ)
+  const otPaidSameDay =
+    settings?.otMode === "days" && otReqs.length > 0
+      ? await loadRequests(
+          tx,
+          orgId,
+          { kind: "ot", status: "paid", beneficiaryKind: "staff", workDate: { in: [...new Set(otReqs.map((r) => r.workDate))].map((d) => new Date(`${d}T00:00:00Z`)) } },
+          2000,
+        )
+      : [];
   const advReqs = await loadRequests(tx, orgId, { beneficiaryKind: "staff", deductedAt: null, deductAmount: { gt: 0 } }, 2000);
   // เบี้ยขยัน: ขั้นของรอบล่าสุดที่จ่ายแล้ว (ก่อนงวดนี้) ต่อคน — มีรอบที่ยังไม่จ่ายได้ทีละรอบ จึงไม่มีรอบค้างคั่นกลาง
   const prevDiligence = new Map<string, number>();
@@ -328,15 +339,21 @@ export async function loadPeriodInputs(
       const dates = [...byDate.keys()].sort();
       otRefs = [];
       let total = 0;
+      let paidOutside = 0;
       for (const d of dates) {
         const list = byDate.get(d)!.sort((a, b) => a.code.localeCompare(b.code));
         // วันนั้นเคยจ่ายไปแล้วบางส่วน (ใบที่จ่ายบางส่วนนอกเงินเดือน) — จ่ายส่วนที่เหลือของค่าวัน
-        const paidBefore = list.reduce((n, r) => n + r.paidTotal, 0);
+        const paidBefore =
+          list.reduce((n, r) => n + r.paidTotal, 0) +
+          otPaidSameDay.filter(mine).filter((r) => r.workDate === d).reduce((n, r) => n + r.paidTotal, 0);
         const dayPay = Math.max(0, Math.round((rate - paidBefore) * 100) / 100);
         list.forEach((r, i) => otRefs!.push({ id: r.id, amount: Math.round((r.netAmount - r.paidTotal) * 100) / 100, pay: i === 0 ? dayPay : 0 }));
         total += dayPay;
+        paidOutside += Math.min(rate, paidBefore);
       }
       total = Math.round(total * 100) / 100;
+      paidOutside = Math.round(paidOutside * 100) / 100;
+      const lessPaid = paidOutside > 0 ? ` − จ่ายไปแล้วนอกเงินเดือน ${fmtBaht(paidOutside)}` : "";
       otDaysPay = { days: dates.length, rate, dates };
       const exact = Math.round((base / 30) * 100) / 100;
       otItems = [
@@ -346,8 +363,8 @@ export async function loadPeriodInputs(
           label: "ค่าล่วงเวลา (OT)",
           amount: total,
           minutes: mineOt.reduce((n, r) => n + (r.otMinutes ?? 0), 0),
-          detail: `${dates.length} วัน × ${fmtBaht(rate)} (ปัดขึ้น เงินเดือน ${fmtBaht(base)} ÷ 30 = ${fmtBaht(exact)}) · ${dates.map((d) => thaiDate(d, false)).join(", ")}`,
-          formula: `ปัดขึ้น(${fmtBaht(base)} ÷ 30) = ${fmtBaht(rate)} บาท/วัน × ${dates.length} วัน = ${fmtBaht(total)} · ใบ OT: ${mineOt.map((r) => r.code).join(", ")}`,
+          detail: `${dates.length} วัน × ${fmtBaht(rate)} (ปัดขึ้น เงินเดือน ${fmtBaht(base)} ÷ 30 = ${fmtBaht(exact)})${lessPaid} · ${dates.map((d) => thaiDate(d, false)).join(", ")}`,
+          formula: `ปัดขึ้น(${fmtBaht(base)} ÷ 30) = ${fmtBaht(rate)} บาท/วัน × ${dates.length} วัน${lessPaid ? ` = ${fmtBaht(rate * dates.length)}${lessPaid}` : ""} = ${fmtBaht(total)} · ใบ OT: ${mineOt.map((r) => r.code).join(", ")}`,
         },
       ].filter((o) => o.amount > 0);
     }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { canSeePay, hideBaht, maskRequest, payPrivacy, HIDDEN_PAY_LABEL } from "@/modules/requests/lib/pay-privacy";
+import { canSeePay, hideBaht, maskRequest, payPrivacy, usesSalaryModule, HIDDEN_PAY_LABEL } from "@/modules/requests/lib/pay-privacy";
 import { notFound } from "next/navigation";
 import { FileText, Pencil } from "lucide-react";
 import { prisma } from "@smartboss/database";
@@ -156,7 +156,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
   // ยอดซ่อน = จ่ายผ่านรอบเงินเดือน (ผู้ดูแลเงินเดือนทำ) ไม่ใช่ที่หน้านี้ — จ่ายเงินโดยไม่รู้ยอดไม่ได้
   const canPayHere = r.status === "approved" && !workerOt && !isBeneficiary && !payHidden && (viewer.canPay || viewer.isPettyHolder) && outstanding > 0.005;
   const methods: PaymentMethod[] = viewer.canPay
-    ? (["transfer", "cash", ...(holders.length ? (["petty_cash"] as PaymentMethod[]) : []), ...(r.beneficiaryKind === "staff" && r.kind !== "advance" ? (["payroll"] as PaymentMethod[]) : [])] as PaymentMethod[])
+    ? (["transfer", "cash", ...(holders.length ? (["petty_cash"] as PaymentMethod[]) : []), ...(r.beneficiaryKind === "staff" && r.kind !== "advance" && !(await usesSalaryModule(orgId)) ? (["payroll"] as PaymentMethod[]) : [])] as PaymentMethod[])
     : ["petty_cash"];
   const payHolders = viewer.canPay ? holders : holders.filter((h) => h.userId === session.userId);
   const manager = viewer.canApprove || viewer.canApproveCeo || viewer.canPay;

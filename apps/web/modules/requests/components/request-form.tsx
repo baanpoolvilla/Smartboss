@@ -104,6 +104,8 @@ export function RequestForm({
   const [title, setTitle] = useState(initial?.title ?? "");
   const [detail, setDetail] = useState(initial?.detail ?? "");
   const [lines, setLines] = useState<{ item: string; amount: string }[]>(initial?.lines.length ? initial.lines : [{ item: "", amount: "" }]);
+  // ใบเสร็จที่อ่านยอดได้แล้ว นับต่อยอดเงิน — แยกแถวที่พิมพ์เองไว้ก่อนแนบ ออกจากแถวที่ใบเสร็จใบใหม่ต้องเพิ่ม
+  const receiptAmountsRead = useRef(new Map<number, number>());
   const [propertyId, setPropertyId] = useState(initial?.propertyId ?? "");
   const [workOrderId, setWorkOrderId] = useState(initial?.workOrderId ?? "");
   const [vendorId, setVendorId] = useState(initial?.vendorId ?? "");
@@ -446,7 +448,17 @@ export function RequestForm({
                   if (f.ai?.date && f.ai.date <= today) setWorkDate(f.ai.date);
                   // แต่ละใบเสร็จ = หนึ่งรายการ (เติมช่องว่างก่อน ไม่มีค่อยเพิ่มแถว) — แก้เองได้ทุกช่อง
                   const line = { item: f.ai?.vendor ?? "", amount: f.ai?.amount ? String(f.ai.amount) : "" };
+                  // พิมพ์รายการยอดเดียวกันไว้ก่อนแนบใบเสร็จ = รายการเดียวกัน ไม่เพิ่มแถวซ้ำ
+                  // (เจอในเทส: พิมพ์ "แท็กซี่ 450" แล้วแนบใบเสร็จ Grab 450 → ขอเบิก 900)
+                  const aiAmount = f.ai?.amount ?? 0;
+                  const already = aiAmount > 0 ? (receiptAmountsRead.current.get(aiAmount) ?? 0) : 0;
+                  if (aiAmount > 0) receiptAmountsRead.current.set(aiAmount, already + 1);
                   setLines((ls) => {
+                    if (aiAmount > 0) {
+                      const same = ls.map((l, i) => (Math.abs(parseMoney(l.amount) - aiAmount) < 0.005 ? i : -1)).filter((i) => i >= 0);
+                      const typed = same[already];
+                      if (typed !== undefined) return ls.map((l, i) => (i === typed && !l.item ? { ...l, item: line.item } : l));
+                    }
                     const empty = ls.findIndex((l) => !l.item && !l.amount);
                     return empty >= 0 ? ls.map((l, i) => (i === empty ? line : l)) : [...ls, line];
                   });

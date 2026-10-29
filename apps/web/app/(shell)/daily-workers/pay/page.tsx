@@ -169,7 +169,7 @@ function MonthTable({
   rows,
   month,
 }: {
-  rows: { worker: { employmentId: string | null; name: string; employeeCode: string | null; cells: WorkerMonth["cells"] }; opening: number; earned: number; paid: number; closing: number }[];
+  rows: { worker: { employmentId: string | null; name: string; employeeCode: string | null; shiftId: string | null; cells: WorkerMonth["cells"] }; opening: number; earned: number; paid: number; closing: number }[];
   month: string;
 }) {
   const s = (f: (r: (typeof rows)[number]) => number) => Math.round(rows.reduce((t, r) => t + f(r), 0) * 100) / 100;
@@ -204,10 +204,17 @@ function MonthTable({
                 <td className="whitespace-nowrap px-3 py-2 text-xs text-(--ink-soft)">
                   {(() => {
                     const m = monthCounts(r.worker.cells);
+                    // วันที่มาแต่ไม่ได้ค่าแรง (ยังไม่ผูกกะ / ยังไม่ตั้งค่าแรง) — เดิม "ได้ทั้งเดือน 0" เฉย ๆ ไม่บอกเหตุผล
+                    const unpaid = Object.values(r.worker.cells).filter((c) => c.s === "m" && !c.pay).length;
                     return (
                       <>
                         มา <b className="text-(--ink)">{m.worked}</b> · หยุด {m.off + m.leave}
                         {m.absent > 0 && <span className="text-(--tone-danger)"> · ขาด {m.absent}</span>} · OT {m.otDays} วัน{m.otMinutes ? ` (${hoursLabel(m.otMinutes)})` : ""}
+                        {unpaid > 0 && (
+                          <span className="block font-medium text-(--tone-danger)">
+                            {unpaid} วันยังไม่คิดค่าแรง — {r.worker.shiftId === null ? "ยังไม่ผูกกะ (ผูกที่ ตารางคนงาน)" : "ยังไม่ตั้งค่าแรง (ตั้งที่ ตั้งค่าแรง)"}
+                          </span>
+                        )}
                       </>
                     );
                   })()}
