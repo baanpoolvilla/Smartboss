@@ -259,7 +259,11 @@ export function topicForReportNotification(n: { message: string; kind?: string |
   if (n.kind === "room_post" || /โพสต์ใหม่ใน\s*"/.test(m)) return "rp.room_post";
   // คอมเมนต์/ตอบกลับที่เป็นแค่การรับรู้ (สติกเกอร์ · ส่งรูปเปล่า ๆ · "รับทราบ") — ไม่มีอะไรต้องทำ ⇒ หมวดความเคลื่อนไหว/รีแอ็กชัน
   // ปิดแยกจากคอมเมนต์ที่มีคำถามได้ (27/10/2569 "หัวหน้าเอาเฉพาะที่มีแอ็คชั่น") · ถูกแท็กยังเป็นหมวดแท็กตามเดิม
-  if (ACK_TAIL.test(m) && !m.includes("แท็ก")) return m.includes("ในงาน") ? "pm.activity" : "rp.reaction";
+  // คอมเมนต์ในงานไม่ใช้กฎนี้ (29/10/2569 "ถ้าเป็นของ ceo หรือเกี่ยวข้องต้องเห็นนะ") — ผู้รับคอมเมนต์งานคือคนในงานนั้นอยู่แล้ว
+  // (ผู้รับผิดชอบ/คนมอบหมาย/คนที่เคยคอมเมนต์) และคอมเมนต์ที่ยังไม่อ่านของงานเดียวกันรวมเป็นแถวเดียว (comment-notif-group.ts) ไม่เด้งรัว
+  if (ACK_TAIL.test(m) && !m.includes("แท็ก") && n.kind !== "task_comment" && !m.includes("แสดงความคิดเห็นในงาน")) {
+    return m.includes("ในงาน") ? "pm.activity" : "rp.reaction";
+  }
   if (n.kind === "task_assigned") return "pm.assigned";
   if (n.kind === "task_due_request") return "pm.due_request";
   // แท็กในงานมาเป็น kind task_comment เหมือนคอมเมนต์ธรรมดา — ต้องจับก่อน ไม่งั้นปิด "ความคิดเห็น" แล้วไม่เห็นตอนถูกแท็กด้วย
