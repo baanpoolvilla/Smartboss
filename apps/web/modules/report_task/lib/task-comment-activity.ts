@@ -11,7 +11,8 @@ function unreadTaskCountsByKind(
   const map = new Map<string, number>();
   for (const n of notifications) {
     if (n.userId !== userId || n.read || n.kind !== kind || !n.taskId) continue;
-    map.set(n.taskId, (map.get(n.taskId) ?? 0) + 1);
+    // แถวคอมเมนต์ที่รวมไว้แล้วนับตามจำนวนคอมเมนต์จริง ไม่ใช่ 1 แถว
+    map.set(n.taskId, (map.get(n.taskId) ?? 0) + (typeof n.commentCount === "number" && n.commentCount > 0 ? n.commentCount : 1));
   }
   return map;
 }

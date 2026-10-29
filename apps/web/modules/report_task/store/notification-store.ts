@@ -38,6 +38,8 @@ export interface AppNotification {
    * "task_assigned" ไว้นับ unread ต่อการ์ดบน Kanban (ดู task-comment-activity.ts)
    * ตัวข้อความ/ลิงก์เองไม่พอให้ parse เพราะรูปแบบข้อความเปลี่ยนได้ */
   taskId?: string;
+  /** แถวคอมเมนต์ที่เซิร์ฟเวอร์รวมไว้ (lib/db/comment-notif-group.ts) — นับเป็นกี่ความคิดเห็น */
+  commentCount?: number;
 }
 
 interface NotificationStore {

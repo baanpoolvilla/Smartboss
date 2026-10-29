@@ -8,6 +8,7 @@ import { publishToOrg, publishToUsers } from "@/lib/realtime/server";
 
 import { fileForStoreKey, type StoreKey } from "./store-registry";
 import { absorbedIdSet, groupAttachmentNotifications } from "./attachment-notif-group";
+import { groupTaskCommentNotifications } from "./comment-notif-group";
 
 /**
  * ที่เก็บข้อมูลของโมดูลรายงานและงาน — Postgres แยกตามบริษัท
@@ -220,7 +221,9 @@ export async function writeOwnNotifications(
       sent.filter((n) => n.userId !== userId && !storedIds.has(n.id) && !absorbed.has(n.id as string)),
       stored as Parameters<typeof dropDuplicateNotifications>[1]
     );
-    const grouped = groupAttachmentNotifications(freshOthers, stored.filter((n) => n?.userId !== userId));
+    const byFile = groupAttachmentNotifications(freshOthers, stored.filter((n) => n?.userId !== userId));
+    // คอมเมนต์ข้อความในงานเดิมที่ยังไม่อ่าน = รวมเป็นแถวเดียวแบบเฟซบุ๊ก (comment-notif-group.ts) ไม่เด้งซ้ำ
+    const grouped = groupTaskCommentNotifications(byFile.incoming, byFile.stored);
     const merged = [
       ...(absorbed.size > 0 ? myItems.filter((n) => !absorbed.has(n.id as string)) : myItems),
       ...grouped.incoming,
