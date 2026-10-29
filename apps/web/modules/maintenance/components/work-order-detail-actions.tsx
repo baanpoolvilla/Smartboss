@@ -422,7 +422,7 @@ const MAX_COMMENT_IMAGES = 10;
  * (เดิมเป็น <input> สองช่องชื่อ "image" เลือกใหม่ = แทนรูปเดิม และเซิร์ฟเวอร์อ่านแค่ช่องแรก
  * ถ่ายจากกล้องเลยหายเงียบ) · กด ✕ บนรูปเพื่อเอาออกก่อนส่ง · วาง/ลากรูปมาก็ต่อท้ายเหมือนกัน
  */
-export function CommentComposer({ action }: { action: Action }) {
+export function CommentComposer({ action, mentionPeople }: { action: Action; mentionPeople?: { id: string; name: string }[] }) {
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
 
@@ -523,8 +523,9 @@ export function CommentComposer({ action }: { action: Action }) {
         </label>
         <div className="flex-1">
           <CommentTextarea
-            placeholder="เพิ่มความคิดเห็น... (Shift+Enter ขึ้นบรรทัดใหม่)"
+            placeholder={mentionPeople?.length ? "เพิ่มความคิดเห็น... พิมพ์ @ เพื่อแท็กคน (Shift+Enter ขึ้นบรรทัดใหม่)" : "เพิ่มความคิดเห็น... (Shift+Enter ขึ้นบรรทัดใหม่)"}
             ariaLabel="เพิ่มความคิดเห็น"
+            mentionPeople={mentionPeople}
           />
         </div>
         <SubmitButton size="icon" aria-label="ส่งความคิดเห็น" pendingText={<Send className="h-4 w-4 opacity-50" />}>

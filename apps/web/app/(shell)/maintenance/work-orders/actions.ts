@@ -19,6 +19,7 @@ import {
 import {
   notifyUser,
   notifyUsers,
+  notifyActorName,
   propertyCaretaker,
   deleteNotificationsByReference,
   resolveActionNotifications,
@@ -26,6 +27,8 @@ import {
 import { getProperty } from "@/modules/maintenance/data/properties";
 import { getAsset } from "@/modules/maintenance/data/assets";
 import { userNameMap } from "@/modules/maintenance/data/users";
+import { mentionedIn, workOrderMentionPeople } from "@/modules/maintenance/data/wo-mentions";
+import { WO_MENTION_MARK } from "@/modules/notifications/prefs";
 import { logActivity, type ActivityKind } from "@/modules/maintenance/data/activity";
 
 /** บันทึกการใช้งาน (เมนู Log การใช้งาน) ของใบงานนี้ — ไม่ throw */
@@ -504,6 +507,21 @@ export async function addCommentAction(workOrderId: string, formData: FormData) 
       ...wo.ccUserIds,
     ]);
     targets.delete(s.userId);
+    // คนที่ถูก @ (คนในใบงาน + CEO) ได้แจ้งเตือน "แท็กคุณในใบงาน" แยก แม้ไม่ได้อยู่ในใบงาน — ไม่ได้แถวคอมเมนต์ธรรมดาซ้ำ
+    const mentioned = content
+      ? mentionedIn(content, await workOrderMentionPeople(s.orgId, wo)).filter((id) => id !== s.userId)
+      : [];
+    if (mentioned.length > 0) {
+      const actor = (await notifyActorName(s.userId)) ?? "มีคน";
+      await notifyUsers(s.orgId, mentioned, {
+        title: `📣 ${actor} ${WO_MENTION_MARK}: ${wo.title}`,
+        body: content,
+        type: "work_order",
+        referenceId: workOrderId,
+        line: `📣 ${actor} ${WO_MENTION_MARK}\n📝 ${wo.title}\n${content}`,
+      });
+      for (const id of mentioned) targets.delete(id);
+    }
     await notifyUsers(s.orgId, [...targets], {
       title: `💬 ความคิดเห็นใหม่: ${wo.title}`,
       body: content || photoText,

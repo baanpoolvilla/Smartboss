@@ -218,8 +218,13 @@ export function normalizePrefs(raw: unknown): NotifPrefs {
 
 /* ─────────────────────────── จัดหมวด ─────────────────────────── */
 
+/** หัวแจ้งเตือนตอนถูก @ ในคอมเมนต์ใบงานซ่อม — ใช้จัดหมวด (type ยังเป็น "work_order" ให้ลบ/ลิงก์ตามใบงานได้เหมือนเดิม) */
+export const WO_MENTION_MARK = "แท็กคุณในใบงาน";
+
 /** แจ้งเตือนใน core.notifications (ระบบบุคคล / ซ่อมบำรุง / แจ้งบัค / แชท / บัญชี …) — จัดจาก `type` */
-export function topicForCoreType(type: string): string {
+export function topicForCoreType(type: string, title?: string | null): string {
+  // ถูก @ ในคอมเมนต์ใบงานซ่อม = "แท็กฉัน" (ปิดแจ้งเตือนใบงานซ่อมไว้ก็ยังเห็น) — work-orders/actions.ts addCommentAction
+  if (type === "work_order" && title?.includes(WO_MENTION_MARK)) return "pm.mention";
   switch (type) {
     case "work_order": return "mt.work_order";
     case "purchase_order": return "mt.po";

@@ -160,7 +160,7 @@ export function useUnifiedNotifications(options: UseUnifiedNotificationsOptions 
       }));
 
     const fromMaintenance: UnifiedNotification[] = maintenanceItems
-      .filter((n) => isNotificationVisible(prefs, topicForCoreType(n.type), n.createdAt))
+      .filter((n) => isNotificationVisible(prefs, topicForCoreType(n.type, n.title), n.createdAt))
       .map((n) => {
       const category = maintenanceCategoryFor(n.type);
       return {

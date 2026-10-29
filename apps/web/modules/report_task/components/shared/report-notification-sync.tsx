@@ -8,6 +8,7 @@ import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { ServerStoreSync } from "@/modules/report_task/components/shared/server-store-sync";
 import type { User } from "@/modules/report_task/types";
 import { usesReportTaskScaffold } from "@/modules/report_task/constants";
+import { useShellOptional } from "@/components/shell/shell-context";
 
 /**
  * Keeps report_task's own notifications (@mentions, replies, task reviews,
@@ -24,6 +25,7 @@ import { usesReportTaskScaffold } from "@/modules/report_task/constants";
 export function ReportNotificationSync() {
   const pathname = usePathname();
   const isReportTaskPage = usesReportTaskScaffold(pathname);
+  const sessionUserId = useShellOptional()?.user.id ?? null;
 
   // viewingAsUserId/employees are what useReportTaskUnreadCount needs to know
   // *whose* notifications to count — same bootstrap IssueReportBarButton
@@ -33,6 +35,9 @@ export function ReportNotificationSync() {
     if (isReportTaskPage) return;
     let cancelled = false;
     useIdentityStore.persist.rehydrate();
+    // ตัวตนในเครื่องถูกตั้งแค่ตอนเปิดหน้าโมดูลงาน/รีพอต (report-task-scaffold.tsx) — เปิดหน้าแจ้งเตือนเป็นหน้าแรก
+    // (เครื่องใหม่ / กดจากแจ้งเตือนมือถือ) เคยไม่เห็นแจ้งเตือนงาน แท็ก รีพอตของตัวเองเลย (เจอ 29/10/2569) ⇒ ตั้งจาก session
+    if (sessionUserId) useIdentityStore.getState().setViewingAs(sessionUserId);
     fetch("/api/report-task/store/employees")
       .then((res) => res.json())
       .then((employees: User[]) => {
@@ -45,7 +50,7 @@ export function ReportNotificationSync() {
     return () => {
       cancelled = true;
     };
-  }, [isReportTaskPage]);
+  }, [isReportTaskPage, sessionUserId]);
 
   if (isReportTaskPage) return null;
   return (

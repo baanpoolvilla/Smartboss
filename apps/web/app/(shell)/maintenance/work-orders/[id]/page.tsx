@@ -35,6 +35,7 @@ import {
 } from "@/modules/maintenance/data/work-order-access";
 import { getAsset } from "@/modules/maintenance/data/assets";
 import { userNameMap } from "@/modules/maintenance/data/users";
+import { workOrderMentionPeople } from "@/modules/maintenance/data/wo-mentions";
 import { listExpenses } from "@/modules/maintenance/data/expenses";
 import { listPurchaseOrdersForWorkOrder } from "@/modules/maintenance/data/purchase-orders";
 import { poItemsFromJson, poStatusMeta } from "@/modules/maintenance/lib/po";
@@ -596,7 +597,7 @@ export default async function WorkOrderDetailPage({
           )}
         </div>
         <div className="border-t border-(--line) pt-3">
-          <CommentComposer action={addCommentAction.bind(null, id)} />
+          <CommentComposer action={addCommentAction.bind(null, id)} mentionPeople={(await workOrderMentionPeople(orgId, wo)).filter((p) => p.id !== session.userId)} />
         </div>
       </SectionCard>
 

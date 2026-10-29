@@ -125,6 +125,11 @@ test("จัดหมวดแจ้งเตือนฝั่ง core ตา�
   for (const [type, expected] of cases) assert.equal(topicForCoreType(type), expected, type);
 });
 
+test("ถูก @ ในคอมเมนต์ใบงานซ่อม = แท็กฉัน (ปิดใบงานซ่อมไว้ก็ยังเห็น)", () => {
+  assert.equal(topicForCoreType("work_order", "📣 กาย แท็กคุณในใบงาน: แอร์ไม่เย็น"), "pm.mention");
+  assert.equal(topicForCoreType("work_order", "💬 ความคิดเห็นใหม่: แอร์ไม่เย็น"), "mt.work_order");
+});
+
 test("ทุกหัวข้อที่ตัวจัดหมวดคืนมีอยู่ในรายการจริง", () => {
   for (const [message, , kind] of REPORT_CASES) assert.ok(topicInfo(topicForReportNotification({ message, kind })), message);
 });

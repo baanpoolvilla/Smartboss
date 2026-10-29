@@ -84,7 +84,7 @@ export async function notifyUser(
   const type = input.type ?? "general";
   // ผู้รับปิดหัวข้อนี้ไว้ (หน้าตั้งค่าแจ้งเตือน) — แถวยังเก็บตามปกติ (กระดิ่งซ่อนให้เอง, ตัวเลขงานค้าง
   // บนไอคอนโมดูลยังนับ) แต่ไม่เด้ง ไม่ส่งมือถือ ไม่ส่ง LINE
-  if (!(await wantsTopic(orgId, userId, topicForCoreType(type)))) return;
+  if (!(await wantsTopic(orgId, userId, topicForCoreType(type, input.title)))) return;
   if (!type.startsWith("chat_")) {
     void announceNotification(orgId, [userId], {
       title: input.title,
