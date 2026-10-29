@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, ImagePlus, Images, Pencil, Play, Plus, Trash2, X } from "lucide-react";
+import { ArrowLeft, Check, ImagePlus, Images, Pencil, Play, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
 
@@ -173,6 +173,10 @@ function AlbumView({
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // เลือกลบ: ติ๊กเลือกรูปก่อน แล้วกด "ลบ N รูป" + ยืนยันอีกรอบ — เดิมกด X แล้วหายทันที (ผู้ใช้ขอ 29/10/2569)
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(() => {
@@ -243,13 +247,32 @@ function AlbumView({
     load();
   }
 
-  async function remove(item: ChatAlbumItemDTO) {
-    try {
-      await api.removeAlbumItem(albumId, item.id);
-      setData((d) => (d ? { ...d, items: d.items.filter((i) => i.id !== item.id) } : d));
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "เอาออกไม่สำเร็จ");
+  async function removeSelected() {
+    setRemoving(true);
+    const done = new Set<string>();
+    for (const id of selected) {
+      try {
+        await api.removeAlbumItem(albumId, id);
+        done.add(id);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "เอาออกไม่สำเร็จ");
+      }
     }
+    setData((d) => (d ? { ...d, items: d.items.filter((i) => !done.has(i.id)) } : d));
+    if (done.size > 0) toast.success(`ลบ ${done.size} รูปออกจากอัลบั้มแล้ว`);
+    setSelected(new Set());
+    setConfirmRemove(false);
+    setRemoving(false);
+    setEditing(false);
+  }
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   if (!data) return <p className="py-10 text-center text-sm text-(--ink-soft)">กำลังโหลด…</p>;
@@ -353,10 +376,14 @@ function AlbumView({
         {anyRemovable && (
           <button
             type="button"
-            onClick={() => setEditing((v) => !v)}
+            onClick={() => {
+              setEditing((v) => !v);
+              setSelected(new Set());
+              setConfirmRemove(false);
+            }}
             className={cn("rounded-xl border px-3 text-sm", editing ? "border-(--chat-accent) text-(--chat-accent-strong)" : "border-(--line) text-(--ink-soft)")}
           >
-            {editing ? "เสร็จ" : "เลือกลบ"}
+            {editing ? "ยกเลิก" : "เลือกลบ"}
           </button>
         )}
         <input
@@ -374,13 +401,49 @@ function AlbumView({
         />
       </div>
 
+      {editing && (
+        <div className="mx-3 mb-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm">
+          {confirmRemove ? (
+            <>
+              <p className="text-(--ink)">ลบ {selected.size} รูปออกจากอัลบั้ม?</p>
+              <p className="mt-1 text-[12px] text-(--ink-soft)">รูปที่มาจากแชทจะกลับไปหมดอายุตามปกติ รูปที่อัปโหลดเข้าอัลบั้มโดยตรงจะถูกลบ</p>
+              <div className="mt-2 flex justify-end gap-2">
+                <button type="button" disabled={removing} onClick={() => setConfirmRemove(false)} className="rounded-lg px-3 py-1.5 text-(--ink-soft)">
+                  ยกเลิก
+                </button>
+                <button type="button" disabled={removing} onClick={() => void removeSelected()} className="rounded-lg bg-red-600 px-3 py-1.5 font-semibold text-white disabled:opacity-60">
+                  {removing ? "กำลังลบ…" : `ลบ ${selected.size} รูป`}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="flex-1 text-(--ink)">{selected.size > 0 ? `เลือกแล้ว ${selected.size} รูป` : "แตะรูปที่ต้องการลบ"}</span>
+              <button
+                type="button"
+                disabled={selected.size === 0}
+                onClick={() => setConfirmRemove(true)}
+                className="rounded-lg bg-red-600 px-3 py-1.5 font-semibold text-white disabled:opacity-40"
+              >
+                ลบ{selected.size > 0 ? ` ${selected.size} รูป` : ""}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {items.length === 0 ? (
         <p className="py-8 text-center text-sm text-(--ink-soft)">ยังไม่มีรูปในอัลบั้มนี้</p>
       ) : (
         <div className="grid grid-cols-3 gap-0.5 p-0.5">
           {items.map((it, i) => (
             <div key={it.id} className="relative aspect-square bg-(--bg-soft)">
-              <button type="button" onClick={() => !editing && onOpenMedia(attachments, i)} className="h-full w-full" aria-label="ดูรูปเต็ม">
+              <button
+                type="button"
+                onClick={() => (editing ? it.canRemove && !confirmRemove && toggleSelect(it.id) : onOpenMedia(attachments, i))}
+                className={cn("h-full w-full", editing && !it.canRemove && "opacity-40")}
+                aria-label={editing ? "เลือกรูปนี้" : "ดูรูปเต็ม"}
+              >
                 {it.kind === "video" ? (
                   <>
                     <video src={`${it.url}#t=0.1`} preload="metadata" muted className="h-full w-full object-cover" />
@@ -392,15 +455,17 @@ function AlbumView({
                 )}
               </button>
               {editing && it.canRemove && (
-                <button
-                  type="button"
-                  onClick={() => void remove(it)}
-                  className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white"
-                  aria-label="เอาออกจากอัลบั้ม"
+                <span
+                  aria-hidden
+                  className={cn(
+                    "pointer-events-none absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white text-white shadow",
+                    selected.has(it.id) ? "bg-red-600" : "bg-black/40"
+                  )}
                 >
-                  <X className="h-4 w-4" />
-                </button>
+                  {selected.has(it.id) && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+                </span>
               )}
+              {editing && selected.has(it.id) && <span aria-hidden className="pointer-events-none absolute inset-0 ring-4 ring-inset ring-red-600" />}
             </div>
           ))}
         </div>
