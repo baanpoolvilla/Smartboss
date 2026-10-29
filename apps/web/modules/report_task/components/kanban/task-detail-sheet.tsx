@@ -494,6 +494,10 @@ export function TaskDetailSheet({
   const [requestDate, setRequestDate] = useState("");
   const [requestReason, setRequestReason] = useState("");
   const [decisionNotes, setDecisionNotes] = useState<Record<string, string>>({});
+  // งานกลุ่ม: ขอเลื่อนให้ใคร — null = ทั้งกลุ่ม (ค่าเริ่มต้น) · รายชื่อ = เฉพาะคนที่ติ๊ก
+  const [requestFor, setRequestFor] = useState<string[] | null>(null);
+  // คนอนุมัติปรับ "อนุมัติให้ใคร" ต่อคำขอ — ไม่มีคีย์ = ตามที่ขอ · null = ทั้งกลุ่ม
+  const [approveFor, setApproveFor] = useState<Record<string, string[] | null>>({});
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   // Once set, a group task's "หัวหน้าหลัก" (lead) is meant to stick —
   // changing it reassigns accountability, not just a label — so re-picking
@@ -1630,6 +1634,7 @@ export function TaskDetailSheet({
                     setRequesting(true);
                     setRequestDate("");
                     setRequestReason("");
+                    setRequestFor(null);
                   }}
                 >
                   ขอเลื่อนกำหนดส่ง
@@ -1662,7 +1667,18 @@ export function TaskDetailSheet({
 
             {requesting && canRequestDueDate && (
               <div className="rounded-lg border border-[var(--line)] p-3 space-y-2.5">
-                <p className="text-xs text-[var(--ink-soft)]">ส่งคำขอให้ CEO / ผู้มอบหมาย / หัวหน้าแผนก อนุมัติ — กำหนดส่งจะเปลี่ยนเมื่ออนุมัติแล้ว</p>
+                <p className="text-xs text-[var(--ink-soft)]">ส่งคำขอให้ผู้มอบหมายงาน / CEO อนุมัติ — กำหนดส่งจะเปลี่ยนเมื่ออนุมัติแล้ว</p>
+                {task.taskMode === "group" && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">เลื่อนให้ใคร</Label>
+                    <DueTargetPicker
+                      assigneeIds={task.assigneeIds}
+                      value={requestFor}
+                      onChange={setRequestFor}
+                      nameOf={(id) => (id === viewingAsUserId ? "ฉัน" : displayName(id))}
+                    />
+                  </div>
+                )}
                 <div className="space-y-1.5">
                   <Label className="text-xs">ขอเลื่อนเป็นวันที่</Label>
                   <DatePickerField value={requestDate} minDate={minRequestDate} onChange={setRequestDate} />
@@ -1682,10 +1698,10 @@ export function TaskDetailSheet({
                   <Button size="sm" variant="outline" onClick={() => setRequesting(false)}>ยกเลิก</Button>
                   <Button
                     size="sm"
-                    disabled={!requestDate || requestDate < minRequestDate || !requestReason.trim()}
+                    disabled={!requestDate || requestDate < minRequestDate || !requestReason.trim() || (task.taskMode === "group" && requestFor?.length === 0)}
                     onClick={() => {
                       if (!requestDate || requestDate < minRequestDate || !requestReason.trim() || !canRequestDueDate) return;
-                      requestDueDateChange(task.id, viewingAsUserId, requestDate, requestReason.trim());
+                      requestDueDateChange(task.id, viewingAsUserId, requestDate, requestReason.trim(), task.taskMode === "group" ? (requestFor ?? task.assigneeIds) : undefined);
                       setRequesting(false);
                       toast.success("ส่งคำขอเลื่อนกำหนดส่งแล้ว รออนุมัติ");
                     }}
@@ -1706,9 +1722,31 @@ export function TaskDetailSheet({
                   <span className="font-medium">{r.requestedBy === viewingAsUserId ? "คุณ" : displayName(r.requestedBy)}</span> ขอเลื่อนกำหนดส่ง{" "}
                   {formatDate(r.previousDate)} → <span className="font-semibold">{formatDate(r.newDate)}</span>
                 </p>
+                {task.taskMode === "group" && (
+                  <p className="text-xs">
+                    เลื่อนให้:{" "}
+                    <span className="font-medium">
+                      {(() => {
+                        const ids = r.forUserIds?.length ? r.forUserIds : [r.requestedBy];
+                        return ids.length === task.assigneeIds.length && ids.length > 1 ? `ทั้งกลุ่ม (${ids.length} คน)` : ids.map((id) => displayName(id)).join(", ");
+                      })()}
+                    </span>
+                  </p>
+                )}
                 <p className="text-xs text-[var(--ink-soft)] italic">&quot;{r.reason}&quot;</p>
                 {canDecideTaskDueRequest(task, viewingAsUserId) && r.requestedBy !== viewingAsUserId && (
                   <div className="space-y-2 pt-1">
+                    {task.taskMode === "group" && (
+                      <div className="space-y-1 rounded-md bg-white p-2">
+                        <p className="text-[11px] text-[var(--ink-soft)]">อนุมัติให้ใคร (ปรับได้ก่อนกด)</p>
+                        <DueTargetPicker
+                          assigneeIds={task.assigneeIds}
+                          value={approveFor[r.id] !== undefined ? approveFor[r.id]! : r.forUserIds?.length ? (r.forUserIds.length === task.assigneeIds.length ? null : r.forUserIds) : [r.requestedBy]}
+                          onChange={(v) => setApproveFor((m) => ({ ...m, [r.id]: v }))}
+                          nameOf={displayName}
+                        />
+                      </div>
+                    )}
                     <Textarea
                       rows={2}
                       value={decisionNotes[r.id] ?? ""}
@@ -1729,10 +1767,11 @@ export function TaskDetailSheet({
                       </Button>
                       <Button
                         size="sm"
-                        disabled={r.newDate.slice(0, 10) <= r.previousDate.slice(0, 10)}
+                        disabled={r.newDate.slice(0, 10) <= r.previousDate.slice(0, 10) || approveFor[r.id]?.length === 0}
                         title={r.newDate.slice(0, 10) <= r.previousDate.slice(0, 10) ? "วันที่ขอไม่ได้อยู่หลังกำหนดเดิม — อนุมัติไม่ได้" : undefined}
                         onClick={() => {
-                          decideDueDateRequest(task.id, r.id, viewingAsUserId, true, decisionNotes[r.id]);
+                          const chosen = approveFor[r.id];
+                          decideDueDateRequest(task.id, r.id, viewingAsUserId, true, decisionNotes[r.id], chosen === undefined ? undefined : chosen ?? task.assigneeIds);
                           toast.success(`อนุมัติแล้ว กำหนดส่งใหม่ ${formatDate(r.newDate)}`);
                         }}
                       >
@@ -1887,6 +1926,14 @@ export function TaskDetailSheet({
                 <p className="text-xs text-[var(--ink-soft)]">
                   ขอ {formatDate(r.previousDate)} → <span className="font-medium text-[var(--ink)]">{formatDate(r.newDate)}</span> · &quot;{r.reason}&quot;
                 </p>
+                {task.taskMode === "group" && r.status === "approved" && r.appliedTo?.length ? (
+                  <p className="text-xs text-[var(--ink)]">
+                    เลื่อนให้:{" "}
+                    {r.appliedTo.length === task.assigneeIds.length && r.appliedTo.length > 1
+                      ? `ทั้งกลุ่ม (${r.appliedTo.length} คน)`
+                      : r.appliedTo.map((id) => displayName(id)).join(", ")}
+                  </p>
+                ) : null}
                 <p className="text-xs text-[var(--ink-soft)] italic">
                   {r.status === "approved" ? "อนุมัติ" : "ไม่อนุมัติ"}โดย {r.decidedBy ? displayName(r.decidedBy) : "-"}
                   {r.decidedAt ? ` · ${formatDate(r.decidedAt)}` : ""}
@@ -2610,6 +2657,56 @@ export function TaskDetailSheet({
  * เหมือนตรวจไม่ผ่าน · แค่เปลี่ยนวัน = คงสถานะไว้ ลูกน้องไม่ต้องทำอะไรเพิ่ม
  * ทั้งสองทาง: ส่งครั้งแรกทันกำหนด ไม่นับว่าช้า (ดู reviseDueDate ใน task-store.ts)
  */
+/**
+ * งานกลุ่ม: เลือกว่าเลื่อนกำหนดส่งให้ใคร — "ทั้งกลุ่ม" (กดทีเดียวเลื่อนทุกคน) หรือ "เลือกคน" (ติ๊กทีละคน)
+ * ผู้ใช้ 29/10/2569: งานทำด้วยกันอยากกดทีเดียว แต่บางกรณีอยากเลื่อนแยกคน · value null = ทั้งกลุ่ม
+ */
+function DueTargetPicker({
+  assigneeIds,
+  value,
+  onChange,
+  nameOf,
+}: {
+  assigneeIds: string[];
+  value: string[] | null;
+  onChange: (v: string[] | null) => void;
+  nameOf: (id: string) => string;
+}) {
+  const chip = (active: boolean) =>
+    cn(
+      "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+      active ? "border-[var(--brand-navy)] bg-[var(--brand-navy)] text-white" : "border-[var(--line)] bg-white text-[var(--ink)] hover:bg-[var(--bg-soft)]"
+    );
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1.5">
+        <button type="button" className={chip(value === null)} onClick={() => onChange(null)}>
+          ทั้งกลุ่ม ({assigneeIds.length} คน)
+        </button>
+        <button type="button" className={chip(value !== null)} onClick={() => onChange(value ?? [...assigneeIds])}>
+          เลือกคน
+        </button>
+      </div>
+      {value !== null && (
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+          {assigneeIds.map((id) => (
+            <label key={id} className="flex items-center gap-1.5 text-sm">
+              <input
+                type="checkbox"
+                className="h-4 w-4"
+                checked={value.includes(id)}
+                onChange={(e) => onChange(e.target.checked ? [...value, id] : value.filter((x) => x !== id))}
+              />
+              {nameOf(id)}
+            </label>
+          ))}
+        </div>
+      )}
+      {value !== null && value.length === 0 && <p className="text-[11px] text-red-600">เลือกอย่างน้อย 1 คน</p>}
+    </div>
+  );
+}
+
 function DueDateSaveButtons({
   submitted,
   disabled,

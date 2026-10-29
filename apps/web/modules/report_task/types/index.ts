@@ -65,6 +65,10 @@ export interface DueDateRequest {
   decidedAt?: string;
   /** เหตุผลของ CEO (ไม่บังคับ) */
   decisionNote?: string;
+  /** งานกลุ่ม: ขอเลื่อนให้ใครบ้าง (ค่าเริ่มต้นตอนขอ = ทั้งกลุ่ม) · ไม่มี = เฉพาะคนขอ (คำขอรุ่นเก่า) */
+  forUserIds?: string[];
+  /** งานกลุ่ม: คนที่ถูกเลื่อนจริงตอนอนุมัติ (คนอนุมัติปรับจาก forUserIds ได้) */
+  appliedTo?: string[];
 }
 
 export interface RevisionEntry {

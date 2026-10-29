@@ -26,6 +26,9 @@ const dueDateRequestSchema = z.object({
   decidedBy: z.string().optional(),
   decidedAt: z.string().optional(),
   decisionNote: z.string().optional(),
+  // งานกลุ่ม: ขอเลื่อนให้ใคร / อนุมัติให้ใครจริง (types/index.ts DueDateRequest)
+  forUserIds: z.array(z.string()).optional(),
+  appliedTo: z.array(z.string()).optional(),
 });
 
 const attachmentSchema = z.object({
