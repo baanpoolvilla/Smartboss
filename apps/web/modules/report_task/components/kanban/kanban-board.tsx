@@ -14,6 +14,7 @@ import { chartColors } from "@/modules/report_task/lib/chart-colors";
 import { taskDepartmentIdsForBoard, OTHER_DEPARTMENT_ID } from "@/modules/report_task/lib/task-department";
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
 import { cn } from "@/modules/report_task/lib/utils";
+import { pendingDueRequestsOf } from "@/modules/report_task/lib/pending-due-request";
 import { KanbanColumn, sumUnread, type BoardColumn, useUnreadCommentMap } from "./kanban-column";
 import { buildStatusColumns } from "./status-columns";
 import { TaskDetailSheet } from "./task-detail-sheet";
@@ -551,6 +552,12 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
                   {column.entries?.length ?? column.tasks.length}
                 </span>
                 <span className="max-w-[140px] truncate">{column.label}</span>
+                {/* งานที่ขอเลื่อนกำหนดส่งรออนุมัติ — เหมือนป้าย ⏰ ที่หัวคอลัมน์บนจอคอม */}
+                {column.tasks.some((t) => pendingDueRequestsOf(t).length > 0) && (
+                  <span className="flex h-5 items-center gap-0.5 rounded-full bg-[var(--chart-red)] px-1.5 text-[11px] font-bold text-white" title="งานที่ขอเลื่อนกำหนดส่ง รออนุมัติ">
+                    ⏰{column.tasks.filter((t) => pendingDueRequestsOf(t).length > 0).length}
+                  </span>
+                )}
                 {/* คอมเมนต์ที่ยังไม่อ่านในคอลัมน์ (มือถือไม่มีหัวคอลัมน์ บอกตรงแท็บแทน) */}
                 {sumUnread(column.tasks, unreadMap) > 0 && (
                   <span className="flex h-5 items-center gap-0.5 rounded-full bg-[var(--chart-red)] px-1.5 text-[11px] font-bold text-white" title="คอมเมนต์ที่ยังไม่ได้อ่าน">
