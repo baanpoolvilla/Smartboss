@@ -55,12 +55,13 @@ describe("groupTaskCommentNotifications", () => {
     expect(r.stored).toHaveLength(3);
   });
 
-  it("tags and acknowledgement-only comments stay separate rows", () => {
+  it("a tag stays its own row; 'รับทราบ' folds into the task's comment row (shown to people on the task, 1c53205)", () => {
     const stored = [row("a", 'A แสดงความคิดเห็นในงาน "T": ราคากรอบบน')];
     const tag = row("tag", 'B แท็กคุณในงาน "T": @CEO ดูหน่อยครับ');
     const ack = row("ack", 'B แสดงความคิดเห็นในงาน "T": รับทราบค่ะ');
     const r = groupTaskCommentNotifications([tag, ack], stored);
     expect(r.incoming.map((n) => n.id)).toEqual(["tag", "ack"]);
-    expect(r.stored.map((n) => n.id)).toEqual(["a"]);
+    expect(r.incoming[1]).toMatchObject({ grouped: true, commentCount: 2, absorbedIds: ["a"] });
+    expect(r.stored).toHaveLength(0);
   });
 });
