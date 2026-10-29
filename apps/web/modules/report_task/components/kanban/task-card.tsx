@@ -22,6 +22,7 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { unreadTaskAssignmentCounts, unreadTaskAttachmentCounts, unreadTaskCommentCounts } from "@/modules/report_task/lib/task-comment-activity";
 import { canReviewTaskRecord } from "@/modules/report_task/lib/permissions";
+import { dueRequestWaitsFor, pendingDueRequestsOf } from "@/modules/report_task/lib/pending-due-request";
 import { useTaskReviewSettingsStore } from "@/modules/report_task/store/task-review-settings-store";
 import { MessageSquare, Paperclip, SmilePlus, SearchCheck, Check, Circle, Star, Clock, Eye, Lock, Repeat } from "lucide-react";
 import { describeRule, freqLabel, totalOccurrences } from "@/modules/report_task/lib/task-recurrence";
@@ -118,9 +119,26 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
     unreadAttachments > 0 ? `📎 ไฟล์ ${unreadAttachments}` : null,
     unreadAssigned > 0 ? "👤 งานที่มอบให้คุณ" : null,
   ].filter(Boolean);
-  const pendingBand = unreadParts.length > 0 ? `ยังไม่ได้อ่าน · ${unreadParts.join(" · ")}` : reviewWaiting ? "✅ รอคุณตรวจ · กด ผ่าน / ไม่ผ่าน" : null;
-  const pendingHint = unreadParts.length > 0 ? "มีเรื่องใหม่ที่คุณยังไม่ได้อ่าน · เปิดดูแล้วการ์ดจะกลับเป็นสีปกติ" : "งานเสร็จแล้ว รอคุณกด ผ่าน / ไม่ผ่าน";
-  const pendingForMe = reviewWaiting || unreadAssigned > 0 || unreadAttachments > 0;
+  // ขอเลื่อนกำหนดส่งที่รออนุมัติ — คนที่ต้องกดอนุมัติเห็นแถบแดง "รอคุณอนุมัติ" · คนอื่นเห็นป้ายแดงข้างคอมเมนต์ (ผู้ใช้ขอ 29/10/2569)
+  const pendingDue = pendingDueRequestsOf(task);
+  const dueWaitingMe = dueRequestWaitsFor(task, viewingAsUserId);
+  const dueTo = (d: string) => `${Number(d.slice(8, 10))}/${Number(d.slice(5, 7))}`;
+  const dueLabel = pendingDue.length > 1 ? `ขอเลื่อนกำหนดส่ง ${pendingDue.length} คำขอ` : pendingDue[0] ? `ขอเลื่อนกำหนดส่ง → ${dueTo(pendingDue[0].newDate)}` : "";
+  const pendingBand =
+    unreadParts.length > 0
+      ? `ยังไม่ได้อ่าน · ${unreadParts.join(" · ")}`
+      : dueWaitingMe
+        ? `⏰ ${dueLabel} · รอคุณอนุมัติ`
+        : reviewWaiting
+          ? "✅ รอคุณตรวจ · กด ผ่าน / ไม่ผ่าน"
+          : null;
+  const pendingHint =
+    unreadParts.length > 0
+      ? "มีเรื่องใหม่ที่คุณยังไม่ได้อ่าน · เปิดดูแล้วการ์ดจะกลับเป็นสีปกติ"
+      : dueWaitingMe
+        ? "มีคนขอเลื่อนกำหนดส่ง · เปิดงานแล้วกด อนุมัติ / ไม่อนุมัติ"
+        : "งานเสร็จแล้ว รอคุณกด ผ่าน / ไม่ผ่าน";
+  const pendingForMe = reviewWaiting || dueWaitingMe || unreadAssigned > 0 || unreadAttachments > 0;
   // A group task tracks each assignee's own completion, derived from their
   // own checklist items — the card's status only follows once everyone's
   // marked done (see task-completion.ts). The quick-toggle circle below
@@ -454,7 +472,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
 
       {/* ขวาล่างเหนือรูปคน: แก้กำหนดส่ง + คอมเมนต์ ตัวเล็กสีเทา · คอมเมนต์ใหม่ = ป้ายแดง "N ใหม่" (ผู้ใช้ขอ 20/10/2569) */}
       {/* ป้ายความสำคัญ (งานไม่มี checklist) ซ้ายสุดแถวนี้ ชิดเส้นคั่น — ผู้ใช้ขอ 21/10/2569 ให้ลงมาอยู่ตรงนี้ ไม่กินแถวแยก */}
-      {(pillInFooterRow || suspicious || task.comments.length > 0) && (
+      {(pillInFooterRow || suspicious || task.comments.length > 0 || (pendingDue.length > 0 && !dueWaitingMe)) && (
         <div className="-mb-1 mt-1.5 flex items-center justify-end gap-2 sm:-mb-1.5">
           {pillInFooterRow && <div className="mr-auto flex">{priorityPill}</div>}
           {suspicious && (
@@ -464,6 +482,15 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
             >
               <SearchCheck className="h-2.5 w-2.5" />
               {task.revisions.length}
+            </span>
+          )}
+          {/* คนที่ต้องอนุมัติเห็นแถบแดงด้านบนแล้ว ไม่ขึ้นซ้ำ */}
+          {pendingDue.length > 0 && !dueWaitingMe && (
+            <span
+              className="flex h-4 items-center gap-1 rounded-full bg-(--danger) px-1.5 text-[10px] font-bold text-white"
+              title={pendingDue.map((r) => `${getUser(r.requestedBy)?.name ?? "ผู้รับผิดชอบ"} ขอเลื่อนเป็น ${dueTo(r.newDate)} — ${r.reason}`).join("\n")}
+            >
+              <Clock className="h-2.5 w-2.5" /> {pendingDue.length > 1 ? `ขอเลื่อน ${pendingDue.length}` : `ขอเลื่อน ${dueTo(pendingDue[0]!.newDate)}`} · รออนุมัติ
             </span>
           )}
           {task.comments.length > 0 && (

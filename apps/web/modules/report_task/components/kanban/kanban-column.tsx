@@ -12,7 +12,8 @@ import { chartColors } from "@/modules/report_task/lib/chart-colors";
 import { cn } from "@/modules/report_task/lib/utils";
 import type { Task, TaskStatus } from "@/modules/report_task/types";
 import { useMemo } from "react";
-import { MessageCircle } from "lucide-react";
+import { Clock, MessageCircle } from "lucide-react";
+import { pendingDueRequestsOf } from "@/modules/report_task/lib/pending-due-request";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { unreadTaskCommentCounts } from "@/modules/report_task/lib/task-comment-activity";
@@ -151,6 +152,8 @@ export function KanbanColumn({
   // คอมเมนต์ที่ยังไม่อ่านในคอลัมน์นี้ — ขึ้นแทนป้ายจำนวนงานทางขวา (จำนวนงานย้ายไปไว้หน้าชื่อแทนไอคอน)
   const unreadMap = useUnreadCommentMap();
   const unreadComments = sumUnread(column.tasks, unreadMap);
+  // งานที่มีคนขอเลื่อนกำหนดส่งรออนุมัติ — ป้ายแดงแบบเดียวกับคอมเมนต์ใหม่ (ผู้ใช้ขอ 29/10/2569)
+  const dueRequestTasks = column.tasks.filter((t) => pendingDueRequestsOf(t).length > 0).length;
   const percent = boardTotal > 0 ? Math.round((column.tasks.length / boardTotal) * 100) : 0;
   // The header's icon chip/count/% text used to just be `accent` itself —
   // fine for a saturated color like the amber/red/gray accents, but the
@@ -306,10 +309,19 @@ export function KanbanColumn({
               <h3 className="min-w-0 truncate text-sm font-bold tracking-tight text-[var(--ink)]">{column.label}</h3>
               {/* % ของบอร์ด ต่อท้ายชื่อ (ไม่ไปทับรอยต่อสีทางขวา) */}
               <span className="-ml-0.5 shrink-0 text-xs font-semibold tabular-nums text-[var(--ink-soft)]">{percent}%</span>
+              {dueRequestTasks > 0 && (
+                <span
+                  className="ml-auto inline-flex h-6 shrink-0 items-center gap-1 rounded-full bg-[var(--chart-red)] px-2 text-xs font-bold tabular-nums text-white shadow-[0_1px_3px_rgba(229,72,77,0.35)]"
+                  title={`มี ${dueRequestTasks} งานในคอลัมน์นี้ที่ขอเลื่อนกำหนดส่ง รออนุมัติ`}
+                >
+                  <Clock className="h-3.5 w-3.5" />
+                  {dueRequestTasks}
+                </span>
+              )}
               {/* คอมเมนต์ที่ยังไม่อ่าน — ขวาสุด ไม่มี = ไม่แสดง */}
               {unreadComments > 0 && (
                 <span
-                  className="ml-auto inline-flex h-6 shrink-0 items-center gap-1 rounded-full bg-[var(--chart-red)] px-2 text-xs font-bold tabular-nums text-white shadow-[0_1px_3px_rgba(229,72,77,0.35)]"
+                  className={cn("inline-flex h-6 shrink-0 items-center gap-1 rounded-full bg-[var(--chart-red)] px-2 text-xs font-bold tabular-nums text-white shadow-[0_1px_3px_rgba(229,72,77,0.35)]", dueRequestTasks === 0 && "ml-auto")}
                   title={`มีคอมเมนต์ที่ยังไม่ได้อ่าน ${unreadComments} รายการ ในคอลัมน์นี้`}
                 >
                   <MessageCircle className="h-3.5 w-3.5" />
