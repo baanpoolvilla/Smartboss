@@ -262,6 +262,9 @@ export function topicForReportNotification(n: { message: string; kind?: string |
   if (ACK_TAIL.test(m) && !m.includes("แท็ก")) return m.includes("ในงาน") ? "pm.activity" : "rp.reaction";
   if (n.kind === "task_assigned") return "pm.assigned";
   if (n.kind === "task_due_request") return "pm.due_request";
+  // แท็กในงานมาเป็น kind task_comment เหมือนคอมเมนต์ธรรมดา — ต้องจับก่อน ไม่งั้นปิด "ความคิดเห็น" แล้วไม่เห็นตอนถูกแท็กด้วย
+  // (เจอใน prod 29/10/2569: "…แท็กคุณในงาน…" ของ CEO เข้าหมวด pm.comment)
+  if (m.includes("แท็กคุณในงาน")) return "pm.mention";
   // แนบไฟล์ = ความเคลื่อนไหว (ผลงานจะมาตรวจตอน "รอคุณตรวจ" อยู่แล้ว) — 27/10/2569 หัวหน้าได้ 19 ครั้ง/สัปดาห์
   if (n.kind === "task_attachment") return "pm.activity";
   if (n.kind === "task_comment") return "pm.comment";
