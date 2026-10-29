@@ -48,7 +48,8 @@ function authorLabel(authors: string[]): string {
 }
 
 export function groupedCommentMessage(i: Info): string {
-  return `${authorLabel(i.authors)} แสดงความคิดเห็นในงาน "${i.title}" ${i.count} ความคิดเห็น — ล่าสุด: ${i.preview}`;
+  // จำนวนไว้หน้าสุด — กระดิ่งบนจอคอมตัดข้อความที่ 2 บรรทัด (เดิมอยู่ท้าย ถูกตัดหายพอดี)
+  return `${i.count} ความคิดเห็นใหม่ · ${authorLabel(i.authors)} แสดงความคิดเห็นในงาน "${i.title}" — ล่าสุด: ${i.preview}`;
 }
 
 /**

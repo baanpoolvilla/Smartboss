@@ -27,7 +27,7 @@ describe("groupTaskCommentNotifications", () => {
       grouped: true,
       absorbedIds: ["a"],
       commentCount: 2,
-      message: 'Bee และ Aui แสดงความคิดเห็นในงาน "MG-BT ราคา" 2 ความคิดเห็น — ล่าสุด: สรุปตัวเลขแล้วนะคะ',
+      message: '2 ความคิดเห็นใหม่ · Bee และ Aui แสดงความคิดเห็นในงาน "MG-BT ราคา" — ล่าสุด: สรุปตัวเลขแล้วนะคะ',
     });
     // ยังจัดเป็น "ความคิดเห็นในงาน" — ค่าตั้งแจ้งเตือนเดิมใช้ได้
     expect(topicForReportNotification({ message: r.incoming[0]!.message, kind: "task_comment" })).toBe("pm.comment");
@@ -40,7 +40,7 @@ describe("groupTaskCommentNotifications", () => {
       stored = [...r.incoming, ...r.stored];
     }
     expect(stored).toHaveLength(1);
-    expect(stored[0]!.message).toBe('A, C และอีก 1 คน แสดงความคิดเห็นในงาน "T" 4 ความคิดเห็น — ล่าสุด: ข้อความ d');
+    expect(stored[0]!.message).toBe('4 ความคิดเห็นใหม่ · A, C และอีก 1 คน แสดงความคิดเห็นในงาน "T" — ล่าสุด: ข้อความ d');
   });
 
   it("does not fold into a read row, another task, or another recipient", () => {
