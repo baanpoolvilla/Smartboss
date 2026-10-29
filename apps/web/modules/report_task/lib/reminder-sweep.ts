@@ -544,7 +544,7 @@ export function computeReminders(input: {
                   message:
                     d === 0
                       ? `วันนี้ครบกำหนดส่งรีพอต${roundPhrase} ห้อง "${topic.name}" ภายใน ${round.time} น.`
-                      : `ส่งรีพอต${roundPhrase} ห้อง "${topic.name}" ล่วงหน้าได้แล้ว · ครบกำหนด ${thaiShortDay(targetDate)} (อีก ${d} วัน)`,
+                      : `อีก ${d} วันครบกำหนดส่งรีพอต${roundPhrase} ห้อง "${topic.name}" (${thaiShortDay(targetDate)}) · ส่งล่วงหน้าได้แล้ว`,
                   link: `/chat-report/report-feed?topic=${topic.id}`,
                 });
               }
