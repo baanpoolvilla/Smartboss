@@ -275,7 +275,7 @@ export function topicForReportNotification(n: { message: string; kind?: string |
 
   // รีพอต: สรุปของหัวหน้า (ขึ้นต้น ห้อง "…" แล้วบอกจำนวนคน) ก่อนเตือนรายคน
   if (/^ห้อง\s*"/.test(m) && (m.includes("ไม่ได้ส่งรีพอต") || m.includes("คนต้องส่ง"))) return "rp.summary";
-  if (m.includes("ยังไม่ได้ส่งรีพอต") || m.includes("ยังไม่ส่งรายงาน") || /^รีพอต.*ใกล้ถึงกำหนดส่ง/.test(m)) return "rp.remind_me";
+  if (m.includes("ยังไม่ได้ส่งรีพอต") || m.includes("ยังไม่ส่งรายงาน") || m.includes("ครบกำหนดส่งรีพอต") || /^รีพอต.*ใกล้ถึงกำหนดส่ง/.test(m)) return "rp.remind_me";
   if (m.includes("รอบส่ง") || m.includes("ผู้ต้องส่งรอบ") || m.includes("เพิ่มคุณเข้าห้อง")) return "rp.membership";
 
   if (m.includes("แท็กคุณในงาน")) return "pm.mention";
