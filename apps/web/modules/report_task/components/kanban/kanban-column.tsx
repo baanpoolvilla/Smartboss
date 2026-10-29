@@ -240,7 +240,14 @@ export function KanbanColumn({
   const unreadLatest = useUnreadCommentLatest();
   const unreadWoLatest = useUnreadWoCommentLatest();
   const entries = useMemo(() => {
-    const lastOf = (e: BoardEntry) => (e.type === "task" ? unreadLatest.get(e.task.id) ?? "" : unreadWoLatest.get(e.item.id) ?? "");
+    // งานที่มีคนขอเลื่อนกำหนดส่งรออนุมัติก็เด้งขึ้นบนเหมือนคอมเมนต์ใหม่ (เรียงตามเวลาที่ขอ) — อนุมัติ/ไม่อนุมัติแล้วกลับที่เดิมเอง (ผู้ใช้ขอ 29/10/2569)
+    const dueAskedAt = (t: Task) => pendingDueRequestsOf(t).reduce((m, r) => (r.requestedAt > m ? r.requestedAt : m), "");
+    const lastOf = (e: BoardEntry) => {
+      if (e.type !== "task") return unreadWoLatest.get(e.item.id) ?? "";
+      const c = unreadLatest.get(e.task.id) ?? "";
+      const d = dueAskedAt(e.task);
+      return d > c ? d : c;
+    };
     if (!baseEntries.some((e) => lastOf(e))) return baseEntries;
     const fresh = baseEntries.filter((e) => lastOf(e)).sort((a, b) => lastOf(b).localeCompare(lastOf(a)));
     return [...fresh, ...baseEntries.filter((e) => !lastOf(e))];
