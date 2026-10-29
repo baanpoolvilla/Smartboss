@@ -1634,7 +1634,9 @@ export function TaskDetailSheet({
                     setRequesting(true);
                     setRequestDate("");
                     setRequestReason("");
-                    setRequestFor(null);
+                    // ค่าเริ่มต้นตามแบบงานกลุ่ม (เปลี่ยนได้เสมอ — ผู้ใช้ 29/10/2569): ช่วยกันทำ (ใครเสร็จก็ปิด) = ทั้งกลุ่ม ·
+                    // แยกกันทำ (ทุกคนต้องเสร็จส่วนตัวเอง — ค่าเดิม "all") = เฉพาะฉัน
+                    setRequestFor(task.completionRule === "any" || task.completionRule === "shared" ? null : [viewingAsUserId]);
                   }}
                 >
                   ขอเลื่อนกำหนดส่ง
@@ -1677,6 +1679,11 @@ export function TaskDetailSheet({
                       onChange={setRequestFor}
                       nameOf={(id) => (id === viewingAsUserId ? "ฉัน" : displayName(id))}
                     />
+                    <p className="text-[11px] text-[var(--ink-soft)]">
+                      {task.completionRule === "any" || task.completionRule === "shared"
+                        ? "งานนี้ช่วยกันทำ — เลือกทั้งกลุ่มไว้ให้ เปลี่ยนได้"
+                        : "งานนี้แยกกันทำส่วนของตัวเอง — เลือกเฉพาะคุณไว้ให้ เปลี่ยนได้"}
+                    </p>
                   </div>
                 )}
                 <div className="space-y-1.5">
