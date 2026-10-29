@@ -54,8 +54,15 @@ const MAX_AUDIO = 10 * MB;
 export async function POST(request: Request) {
   try {
     const actor = await chatActor();
-    const limited = await rateLimit(`chat:upload:${actor.userId}`, 60, 60);
-    if (!limited.allowed) return Response.json({ error: "อัปโหลดถี่เกินไป รอสักครู่แล้วลองใหม่" }, { status: 429 });
+    // รูปหนึ่งรูป = 2 ครั้ง (ตัวรูป + รูปย่อ) — เดิม 60/นาที ลงอัลบั้มได้แค่ ~30 รูปก็ติด (ผู้ใช้เจอ 29/10/2569)
+    // เพดานพื้นที่บริษัทยังกันการอัปเกินอยู่ · บอกเวลาที่ต้องรอ ให้หน้าอัลบั้มรอแล้วอัปต่อเอง
+    const limited = await rateLimit(`chat:upload:${actor.userId}`, 300, 60);
+    if (!limited.allowed) {
+      return Response.json(
+        { error: "อัปโหลดถี่เกินไป รอสักครู่แล้วลองใหม่", retryAfter: limited.resetSeconds },
+        { status: 429, headers: { "Retry-After": String(limited.resetSeconds) } }
+      );
+    }
 
     const form = await request.formData().catch(() => null);
     const file = form?.get("file");

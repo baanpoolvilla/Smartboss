@@ -161,7 +161,13 @@ export function uploadAttachment(
     xhr.onload = () => {
       const body = xhr.response ?? {};
       if (xhr.status >= 200 && xhr.status < 300) resolve(body as ChatAttachment);
-      else reject(new Error(body?.error ?? (xhr.status === 413 ? fileTooLargeMessage(file, 25 * MB) : "อัปโหลดไม่สำเร็จ")));
+      else
+        reject(
+          Object.assign(new Error(body?.error ?? (xhr.status === 413 ? fileTooLargeMessage(file, 25 * MB) : "อัปโหลดไม่สำเร็จ")), {
+            status: xhr.status,
+            retryAfter: typeof body?.retryAfter === "number" ? body.retryAfter : undefined,
+          })
+        );
     };
     xhr.onerror = () => reject(new Error("อัปโหลดไม่สำเร็จ — ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่"));
     xhr.onabort = () => reject(new DOMException("ยกเลิกแล้ว", "AbortError"));

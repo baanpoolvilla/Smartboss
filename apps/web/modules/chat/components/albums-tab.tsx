@@ -10,10 +10,14 @@ import type { ChatAlbumDTO, ChatAlbumItemDTO, ChatAttachment } from "../types";
 import { uploadChatMedia } from "./composer";
 import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 
+/** เซิร์ฟเวอร์รับเพิ่มเข้าอัลบั้มครั้งละไม่เกิน 50 รูป (MAX_ITEMS_PER_ADD ใน data/albums.ts) */
+const ALBUM_BATCH = 50;
+
 /**
  * แท็บ "อัลบั้ม" ในข้อมูลห้อง — ที่เก็บรูป/วิดีโอถาวรของห้อง (ในแชทหมดอายุ ดู lib/retention.ts)
  * รายการอัลบั้ม → กดเข้าไปดูรูป, เพิ่มรูปจากเครื่อง, เอารูปออก (คนเพิ่ม/แอดมินห้อง)
  */
+
 export function AlbumsTab({
   channelId,
   onOpenMedia,
@@ -165,7 +169,7 @@ function AlbumView({
 }) {
   const [data, setData] = useState<Awaited<ReturnType<typeof api.fetchAlbum>> | null>(null);
   const [editing, setEditing] = useState(false);
-  const [uploading, setUploading] = useState<{ done: number; total: number } | null>(null);
+  const [uploading, setUploading] = useState<{ done: number; total: number; waitUntil?: number } | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -192,25 +196,49 @@ function AlbumView({
     };
   }, [albumId, onBack]);
 
+  // เพิ่มรูปได้ไม่จำกัด (ผู้ใช้ขอ 29/10/2569): เซิร์ฟเวอร์รับครั้งละ 50 รูป จึงทยอยบันทึกทุก 50 รูป
+  // (ปิดหน้าไปกลางทาง รูปที่บันทึกแล้วไม่หาย) · อัปถี่จนโดนจำกัด → รอตามเวลาที่เซิร์ฟเวอร์บอกแล้วอัปต่อเอง ไม่ข้ามรูป
   async function addFiles(files: File[]) {
     const media = files.filter((f) => f.type.startsWith("image/") || f.type.startsWith("video/"));
     if (media.length === 0) return toast.error("เลือกรูปหรือวิดีโอ");
     setUploading({ done: 0, total: media.length });
-    const uploaded: api.AlbumItemInput[] = [];
-    for (const f of media) {
+    let pending: api.AlbumItemInput[] = [];
+    let failedSave = false;
+    const flush = async () => {
+      if (pending.length === 0) return;
+      const batch = pending;
+      pending = [];
       try {
-        const a = await uploadChatMedia(f, f.type.startsWith("video/") ? "video" : "image", () => {});
-        uploaded.push({ url: a.url, thumbUrl: a.thumbUrl, name: a.name, width: a.width, height: a.height });
+        await api.addAlbumItems(albumId, batch);
       } catch (err) {
-        toast.error(`${f.name}: ${err instanceof Error ? err.message : "อัปโหลดไม่สำเร็จ"}`);
+        failedSave = true;
+        toast.error(err instanceof Error ? err.message : "เพิ่มรูปไม่สำเร็จ");
       }
+    };
+    for (const f of media) {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          const a = await uploadChatMedia(f, f.type.startsWith("video/") ? "video" : "image", () => {});
+          pending.push({ url: a.url, thumbUrl: a.thumbUrl, name: a.name, width: a.width, height: a.height });
+          break;
+        } catch (err) {
+          const e = err as { status?: number; retryAfter?: number };
+          if (e?.status === 429 && attempt < 10) {
+            const wait = Math.min(60, Math.max(3, e.retryAfter ?? 10));
+            setUploading((u) => (u ? { ...u, waitUntil: Date.now() + wait * 1000 } : u));
+            await new Promise((r) => setTimeout(r, wait * 1000));
+            setUploading((u) => (u ? { ...u, waitUntil: undefined } : u));
+            continue;
+          }
+          toast.error(`${f.name}: ${err instanceof Error ? err.message : "อัปโหลดไม่สำเร็จ"}`);
+          break;
+        }
+      }
+      if (pending.length >= ALBUM_BATCH) await flush();
       setUploading((u) => (u ? { ...u, done: u.done + 1 } : u));
     }
-    try {
-      if (uploaded.length > 0) await api.addAlbumItems(albumId, uploaded);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "เพิ่มรูปไม่สำเร็จ");
-    }
+    await flush();
+    if (!failedSave && media.length > 1) toast.success(`เพิ่ม ${media.length} รูป/วิดีโอแล้ว`);
     setUploading(null);
     load();
   }
@@ -320,7 +348,7 @@ function AlbumView({
           className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-(--chat-accent) py-2 text-sm font-semibold text-white disabled:opacity-60"
         >
           <ImagePlus className="h-4 w-4" />
-          {uploading ? `กำลังอัปโหลด ${uploading.done}/${uploading.total}` : "เพิ่มรูป/วิดีโอ"}
+          {uploading ? `${uploading.waitUntil ? "รอคิวอัปโหลด · " : "กำลังอัปโหลด "}${uploading.done}/${uploading.total}` : "เพิ่มรูป/วิดีโอ"}
         </button>
         {anyRemovable && (
           <button
