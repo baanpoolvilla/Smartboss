@@ -697,18 +697,10 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
         const others = (t.dueDateRequests ?? []).filter((r) => !(r.requestedBy === requesterId && r.status === "pending"));
         const name = getUser(requesterId)?.name ?? "มีคน";
         logActivity(requesterId, "ขอเลื่อนกำหนดส่ง", t.title, t.id, `${formatShortDate(previousDate)} → ${formatShortDate(newDate)} · ${reason}`);
-        // คนที่อนุมัติได้: CEO + ผู้มอบหมาย + หัวหน้าแผนกของงาน (ตรงกับ canEditRecord) — ไม่รวมคนขอเอง
-        // แจ้งแค่ผู้มอบหมาย + หัวหน้าแผนก — CEO อนุมัติได้เหมือนเดิม แต่ได้แจ้งเฉพาะงานที่ตัวเองมอบหมาย
-        // หรือเมื่อไม่มีใครอื่นจะได้แจ้ง (23/10/2569 · ข้อมูลจริง 14 วัน CEO ได้แจ้งขอเลื่อน 5–18 ครั้ง/คน ทั้งที่ไม่ได้มอบหมาย)
-        const direct = [
-          ...new Set([
-            ...(t.assignedById ? [t.assignedById] : []),
-            ...departments.filter((d) => d.headId && t.departmentIds.includes(d.id)).map((d) => d.headId as string),
-          ]),
-        ].filter((id) => id !== requesterId);
-        const approverIds = (direct.length > 0 ? direct : users.filter((u) => u.isOwner).map((u) => u.id)).filter(
-          (id) => id !== requesterId && !isPersonalTask(t)
-        );
+        // คนอนุมัติได้: คนสร้าง/มอบหมายงาน หรือ CEO (canDecideTaskDueRequest) — ไม่ใช้หัวหน้าแผนก
+        // แจ้งเฉพาะคนมอบหมายงาน (ผู้ใช้ 29/10/2569 "แจ้งเตือนก็เอาเป็นแค่เกี่ยวกับตัวเองพอ") — CEO ได้แจ้งเฉพาะงานที่ตัวเองมอบหมาย
+        // ไม่มีส่งหาเจ้าของบริษัทแทนแล้ว (prod 30 วัน: งานที่คนขอสร้างให้ตัวเอง = 0) · CEO ยังเห็น ⏰ บนบอร์ดและกดอนุมัติได้ทุกงาน
+        const approverIds = t.assignedById && t.assignedById !== requesterId && !isPersonalTask(t) ? [t.assignedById] : [];
         useNotificationStore
           .getState()
           .notifyMany(

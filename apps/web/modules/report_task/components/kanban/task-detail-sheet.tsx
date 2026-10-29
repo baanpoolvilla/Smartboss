@@ -43,6 +43,7 @@ import { TaskRecurrenceSection } from "@/modules/report_task/components/kanban/t
 import { TaskProjectInfo } from "@/modules/report_task/components/projects/task-project-info";
 import { SubtasksSection } from "@/modules/report_task/components/kanban/subtasks-section";
 import { canManageSeries } from "@/modules/report_task/lib/task-recurrence";
+import { canDecideTaskDueRequest } from "@/modules/report_task/lib/pending-due-request";
 import { canEditRecord, canRemoveReaction, canReviewTaskRecord, canSeePenaltyStatus, canToggleOwnChecklistItem } from "@/modules/report_task/lib/permissions";
 import { useTaskReviewSettingsStore } from "@/modules/report_task/store/task-review-settings-store";
 import { todayIso } from "@/modules/report_task/lib/now";
@@ -1706,7 +1707,7 @@ export function TaskDetailSheet({
                   {formatDate(r.previousDate)} → <span className="font-semibold">{formatDate(r.newDate)}</span>
                 </p>
                 <p className="text-xs text-[var(--ink-soft)] italic">&quot;{r.reason}&quot;</p>
-                {canEditMain && r.requestedBy !== viewingAsUserId && (
+                {canDecideTaskDueRequest(task, viewingAsUserId) && r.requestedBy !== viewingAsUserId && (
                   <div className="space-y-2 pt-1">
                     <Textarea
                       rows={2}
