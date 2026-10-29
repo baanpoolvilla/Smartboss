@@ -315,7 +315,8 @@ export function ReportTopicPanels({
     if (hasSchedule) {
       const complianceRows = buildUserComplianceReports([topic], topicPosts, range, exemptions, { countPending: true })
         .filter((r) => r.roomsCount > 0)
-        .sort((a, b) => b.complianceRate - a.complianceRate || a.name.localeCompare(b.name));
+        // % = ส่งตรงเวลาจริง (onTimeRate) — เดิมนับ "สาย" เป็นส่งแล้ว สาย 1 ครั้งยังขึ้น 100% (ผู้ใช้ขอ 29/10/2569 "แก้ให้ตรงและจริง")
+        .sort((a, b) => b.onTimeRate - a.onTimeRate || a.name.localeCompare(b.name));
       return { totalPosts: topicPosts.length, totalReplies, totalReactions, complianceRows, contributors: [] as { user: (typeof users)[number]; count: number }[] };
     }
 
@@ -977,12 +978,13 @@ export function ReportTopicPanels({
                     </div>
                     <div className="flex items-center gap-2.5 shrink-0">
                       <span
+                        title={`ส่งตรงเวลา ${r.onTime} จาก ${r.trackedDays} รอบ (สาย/ไม่ส่งไม่นับ)`}
                         className={cn(
                           "text-xs font-semibold tabular-nums whitespace-nowrap",
-                          r.complianceRate >= 80 ? "text-[var(--brand-green-dark)]" : r.complianceRate >= 50 ? "text-[var(--chart-amber)]" : "text-[var(--chart-red)]"
+                          r.onTimeRate >= 80 ? "text-[var(--brand-green-dark)]" : r.onTimeRate >= 50 ? "text-[var(--chart-amber)]" : "text-[var(--chart-red)]"
                         )}
                       >
-                        {r.complianceRate}%
+                        {r.onTimeRate}%
                       </span>
                       <div className="flex items-center gap-1 flex-wrap justify-end">
                         <StatChip label="ตรงเวลา" value={r.onTime} tone="green" />

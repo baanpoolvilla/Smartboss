@@ -35,7 +35,7 @@ export const PERFORMANCE_CATEGORIES = {
   // ── งานในบอร์ด (report_task) ──
   task_late: "ส่งงานเลยกำหนด",
   task_manual_dock: "หักคะแนนโดยหัวหน้า",
-  report_missed: "ไม่ส่งรายงานประจำวัน",
+  report_missed: "ไม่ส่งรายงาน",
   report_late: "ส่งรายงานสาย",
 
   // ── งานซ่อมบำรุง (maintenance) ──

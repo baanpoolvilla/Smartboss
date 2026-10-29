@@ -8,6 +8,7 @@ import {
   roundFrequencyOf,
   resolveRoundSubmitters,
   earlyPostsForRound,
+  earlyDaysOf,
   DEFAULT_EARLY_SUBMIT_DAYS,
   type EarlySubmitDays,
 } from "@/modules/report_task/lib/submission-rounds";
@@ -492,6 +493,58 @@ export function computeReminders(input: {
                   recipients: [...headIds],
                   byUserId: SYSTEM_USER_ID,
                   message: `ห้อง "${topic.name}" มีรีพอต${roundPhrase} ถึงกำหนดส่งในอีก ${dayLead} วัน (${targetDate}) — ${recipients.length} คนต้องส่ง`,
+                  link: `/chat-report/report-feed?topic=${topic.id}`,
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // ---- รีพอตรายสัปดาห์/รายเดือนที่ส่งล่วงหน้าได้: เตือนทุกเช้า ตั้งแต่วันแรกที่ส่งได้จนถึงวันครบกำหนด
+    // (รายเดือน 5 วัน → เตือน 5,4,3,2,1 วันก่อน + เช้าวันครบกำหนด · ผู้ใช้ขอ 29/10/2569 "เพื่อเตือนกันลืม")
+    // ใช้เวลาเช้าเดียวกับเตือนงาน (ไม่เด้งกลางดึก) · ส่งแล้วไม่เตือน · จุด "N วัน" ที่ตั้งไว้เองข้างบนแล้วไม่เตือนซ้ำ
+    if (settings.report.notifyPending) {
+      const mt = /^\d{2}:\d{2}$/.test(settings.task.morningTime ?? "") ? settings.task.morningTime! : DEFAULT_TASK_MORNING_TIME;
+      const [mh, mm] = mt.split(":").map(Number) as [number, number];
+      if (nowMinutes >= mh * 60 + mm) {
+        for (const topic of topics) {
+          const namesRound = effectiveRoundsOf(topic).length > 1;
+          for (const round of effectiveRoundsOf(topic)) {
+            const n = earlyDaysOf(round, earlySubmitDays);
+            if (n <= 0) continue;
+            const ownDayLeads = new Set(
+              leadMinutesForRound(topic, round, settings).filter((m) => m >= DAY_MINUTES && m % DAY_MINUTES === 0).map((m) => m / DAY_MINUTES)
+            );
+            const roundPhrase = namesRound ? ` "${round.label}"` : "";
+            for (let d = 0; d <= n; d++) {
+              if (d > 0 && ownDayLeads.has(d)) continue;
+              const targetDate = addDays(today, d);
+              if (!roundRunsOnDay(round, targetDate)) continue;
+              const sentToday = (userId: string) =>
+                posts.some(
+                  (p) =>
+                    p.topicId === topic.id &&
+                    p.authorId === userId &&
+                    !p.excludeFromSubmission &&
+                    (!p.roundId || p.roundId === round.id) &&
+                    localDateStr(new Date(p.createdAt)) === today
+                );
+              const recipients = resolveRoundSubmitters(round, topic.visibility, groups).filter(
+                (userId) => earlyPostsForRound(posts, topic.id, userId, round, targetDate, earlySubmitDays).length === 0 && !(d === 0 && sentToday(userId))
+              );
+              for (const userId of recipients) {
+                const key = `report-early:${topic.id}:${round.id}:${targetDate}:${userId}:${d}`;
+                if (alreadySent.has(key)) continue;
+                newSentKeys.push(key);
+                notifications.push({
+                  recipients: [userId],
+                  byUserId: SYSTEM_USER_ID,
+                  message:
+                    d === 0
+                      ? `วันนี้ครบกำหนดส่งรีพอต${roundPhrase} ห้อง "${topic.name}" ภายใน ${round.time} น.`
+                      : `ส่งรีพอต${roundPhrase} ห้อง "${topic.name}" ล่วงหน้าได้แล้ว · ครบกำหนด ${thaiShortDay(targetDate)} (อีก ${d} วัน)`,
                   link: `/chat-report/report-feed?topic=${topic.id}`,
                 });
               }

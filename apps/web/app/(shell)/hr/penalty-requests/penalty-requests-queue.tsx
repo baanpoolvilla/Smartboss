@@ -46,7 +46,7 @@ const TYPE_LABEL: Record<PenaltyRequestItem["type"], string> = {
 };
 
 const CATEGORY_LABEL: Record<PenaltyRequestItem["category"], string> = {
-  report_missed: "ไม่ส่งรายงานประจำวัน",
+  report_missed: "ไม่ส่งรายงาน",
   report_late: "ส่งรายงานสาย",
 };
 

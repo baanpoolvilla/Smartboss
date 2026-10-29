@@ -111,7 +111,7 @@ export function SubmissionSummaryPanel() {
       {/* report rate over time */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold text-[var(--ink-soft)]">อัตราการส่งรายคน</p>
+          <p className="text-xs font-semibold text-[var(--ink-soft)]">อัตราส่งตรงเวลารายคน</p>
           <div className="flex gap-1">
             {([7, 30] as const).map((d) => (
               <button
@@ -131,11 +131,11 @@ export function SubmissionSummaryPanel() {
             <span className="w-24 shrink-0 truncate text-sm">{r.name}</span>
             <div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--bg-soft)]">
               <div
-                className={cn("h-full rounded-full", r.complianceRate >= 90 ? "bg-[var(--tone-ok)]" : r.complianceRate >= 70 ? "bg-[var(--tone-warn)]" : "bg-[var(--danger)]")}
-                style={{ width: `${r.complianceRate}%` }}
+                className={cn("h-full rounded-full", r.onTimeRate >= 90 ? "bg-[var(--tone-ok)]" : r.onTimeRate >= 70 ? "bg-[var(--tone-warn)]" : "bg-[var(--danger)]")}
+                style={{ width: `${r.onTimeRate}%` }}
               />
             </div>
-            <span className="w-10 shrink-0 text-right text-xs tabular-nums text-[var(--ink-soft)]">{r.complianceRate}%</span>
+            <span className="w-10 shrink-0 text-right text-xs tabular-nums text-[var(--ink-soft)]">{r.onTimeRate}%</span>
           </div>
         ))}
       </div>

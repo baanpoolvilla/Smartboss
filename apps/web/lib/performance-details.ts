@@ -4,7 +4,7 @@ import { prisma } from "@smartboss/database";
 import { wfFetch } from "@/modules/hr/lib/api";
 import { eventSourceLabel, formatTime } from "@/modules/hr/lib/labels";
 import { readStore } from "@/modules/report_task/lib/db/org-store";
-import { effectiveRoundsOf } from "@/modules/report_task/lib/submission-rounds";
+import { effectiveRoundsOf, roundFrequencyOf } from "@/modules/report_task/lib/submission-rounds";
 import type { ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { eventDay } from "@/lib/performance";
 
@@ -21,6 +21,8 @@ import { eventDay } from "@/lib/performance";
  */
 
 export interface EventDetail {
+  /** ชื่อรายการที่ตรงกับสิ่งที่ต้องส่ง เช่น "ไม่ส่งรายงานรายสัปดาห์ · ห้อง สรุปงาน" (ใช้แทนชื่อหมวด) */
+  title?: string;
   lines: string[];
   href?: string;
   hrefLabel?: string;
@@ -99,6 +101,7 @@ export async function buildMyEventDetails(
     const lines: string[] = [];
     let href: string | undefined;
     let hrefLabel: string | undefined;
+    let title: string | undefined;
 
     if (e.refType === "attendance_day") {
       const list = scans.get(eventDay(e.occurredAt));
@@ -121,6 +124,10 @@ export async function buildMyEventDetails(
       lines.push(
         `ห้อง ${topic?.name ?? "(ห้องถูกลบแล้ว)"} · รอบ ${round?.label ?? "-"}${round?.time ? ` (ปิดรอบ ${round.time} น.)` : ""}${day ? ` · วันที่ ${day}` : ""}`,
       );
+      if (round) {
+        const freq = { daily: "ประจำวัน", weekly: "รายสัปดาห์", monthly: "รายเดือน" }[roundFrequencyOf(round)];
+        title = `${e.category === "report_late" ? `ส่งรายงาน${freq}สาย` : `ไม่ส่งรายงาน${freq}`} · ห้อง ${topic!.name}`;
+      }
       if (topic) {
         href = `/chat-report/report-feed?topic=${topic.id}`;
         hrefLabel = "เปิดห้อง →";
@@ -133,7 +140,7 @@ export async function buildMyEventDetails(
     }
 
     lines.push(e.createdBy ? `หักโดย ${actorName.get(e.createdBy) ?? "ผู้ดูแล"}` : "ระบบหักอัตโนมัติ");
-    details.set(e.id, { lines, href, hrefLabel });
+    details.set(e.id, { title, lines, href, hrefLabel });
   }
   return details;
 }

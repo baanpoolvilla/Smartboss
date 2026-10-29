@@ -158,7 +158,7 @@ export function ScoreBreakdown({
                     <span className="w-24 shrink-0 text-(--ink-soft)">{formatDate(workDate)}</span>
                     <span className="min-w-0 flex-1 text-(--ink)">
                       <span className={reversal ? "text-(--ink-soft) line-through" : undefined}>
-                        {ev.note || (points > 0 && row.category !== MANUAL_BONUS_ROW ? "คืนคะแนน" : row.label)}
+                        {ev.note || (points > 0 && row.category !== MANUAL_BONUS_ROW ? "คืนคะแนน" : (detail?.title ?? row.label))}
                       </span>
                       {reversal && (
                         <span className="mt-0.5 block text-xs font-medium text-(--tone-ok)">
