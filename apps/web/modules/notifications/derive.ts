@@ -249,6 +249,8 @@ export function maintenanceHrefFor(type: string, referenceId: string | null): st
   if (type === "purchase_order" && referenceId) return `/maintenance/purchase-orders/${referenceId}`;
   if (type === "pm") return "/maintenance/pm";
   if (type === "expense") return "/maintenance/expenses";
+  // เงินสดย่อย — คำขอเติมเงิน/ผลอนุมัติ (modules/requests/lib/notify.ts notifyPettyTopup*)
+  if (type === "petty_topup") return "/requests/petty-cash";
   // เบิกจ่าย & OT — referenceId = id ของคำขอ (modules/requests/lib/notify.ts)
   if (type.startsWith("req_") && referenceId) return `/requests/${referenceId}`;
   // เงินเดือน — รอบ (CEO อนุมัติ/ส่งกลับ) · สลิปพร้อม (พนักงาน) · รายชื่อคนเห็นเงินเดือนเปลี่ยน (CEO)

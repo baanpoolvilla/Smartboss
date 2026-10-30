@@ -326,6 +326,8 @@ export interface PettyEntryView {
   delta: number;
   requestId: string | null;
   note: string;
+  /** หมวด — เฉพาะ "จ่ายค่าของ" ที่จดเองบนหน้าเงินสดย่อย */
+  category: string | null;
   attachments: Attachment[];
   byName: string;
   at: string;
@@ -341,10 +343,37 @@ export function toPetty(e: Awaited<ReturnType<Tx["moneyPettyCashEntry"]["findFir
     delta: num0(e.delta),
     requestId: e.requestId,
     note: e.note,
+    category: e.category,
     attachments: (e.attachments as unknown as Attachment[]) ?? [],
     byName: e.byName,
     at: e.createdAt.toISOString(),
     voided: e.voidedAt ? { byName: e.voidedByName ?? "", at: e.voidedAt.toISOString(), reason: e.voidReason ?? "" } : null,
+  };
+}
+
+export interface PettyTopupView {
+  id: string;
+  holderUserId: string;
+  holderName: string;
+  amount: number;
+  note: string;
+  requestedByUserId: string;
+  requestedByName: string;
+  needsCeo: boolean;
+  at: string;
+}
+
+export function toPettyTopup(t: Awaited<ReturnType<Tx["moneyPettyTopup"]["findFirstOrThrow"]>>): PettyTopupView {
+  return {
+    id: t.id,
+    holderUserId: t.holderUserId,
+    holderName: t.holderName,
+    amount: num0(t.amount),
+    note: t.note,
+    requestedByUserId: t.requestedByUserId,
+    requestedByName: t.requestedByName,
+    needsCeo: t.needsCeo,
+    at: t.createdAt.toISOString(),
   };
 }
 

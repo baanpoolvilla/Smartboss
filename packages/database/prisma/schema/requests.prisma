@@ -200,6 +200,8 @@ model MoneyPettyCashEntry {
   requestId    String?   @map("request_id")
   paymentId    String?   @map("payment_id")
   note         String    @default("")
+  /// หมวดค่าใช้จ่าย — เฉพาะ "จ่ายค่าของ" ที่ผู้ถือจดเองบนหน้าเงินสดย่อย (PETTY_CATEGORIES) · รายการอื่น NULL
+  category     String?
   attachments  Json      @default("[]")
   byUserId     String    @map("by_user_id")
   byName       String    @map("by_name")
@@ -210,6 +212,32 @@ model MoneyPettyCashEntry {
 
   @@index([orgId, holderUserId])
   @@map("petty_cash_entries")
+  @@schema("requests")
+}
+
+/// คำขอเติมเงินสดย่อย — ผู้ถือขอ → HR/CEO อนุมัติพร้อมแนบสลิป/รูปเงินสด แล้วสร้างรายการ top_up (entryId)
+/// ไม่มีใครอนุมัติของตัวเอง · needsCeo = ผู้ถือเป็น HR ⇒ ต้อง CEO อนุมัติ
+model MoneyPettyTopup {
+  id                String    @id @default(uuid())
+  orgId             String    @map("org_id")
+  holderUserId      String    @map("holder_user_id")
+  holderName        String    @map("holder_name")
+  amount            Decimal   @db.Decimal(12, 2)
+  note              String    @default("")
+  requestedByUserId String    @map("requested_by_user_id")
+  requestedByName   String    @map("requested_by_name")
+  needsCeo          Boolean   @default(false) @map("needs_ceo")
+  /// pending | approved | rejected | cancelled
+  status            String    @default("pending")
+  decidedByUserId   String?   @map("decided_by_user_id")
+  decidedByName     String?   @map("decided_by_name")
+  decidedAt         DateTime? @map("decided_at") @db.Timestamptz(6)
+  decisionNote      String?   @map("decision_note")
+  entryId           String?   @map("entry_id")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([orgId, status])
+  @@map("petty_topups")
   @@schema("requests")
 }
 

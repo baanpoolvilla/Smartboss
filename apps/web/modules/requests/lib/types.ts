@@ -10,6 +10,9 @@ export type BeneficiaryKind = "staff" | "worker" | "vendor";
 export type PaymentMethod = "transfer" | "cash" | "petty_cash" | "payroll" | "worker_ledger";
 export type AttachmentRole = "evidence" | "receipt" | "slip" | "clearing";
 
+/** หมวดของ "จ่ายค่าของ" จากเงินสดย่อย (ผู้ใช้ 30/10/2569: จ่ายต้องเป็นกิจจะลักษณะ — มีหมวด + ใบเสร็จทุกครั้ง) */
+export const PETTY_CATEGORIES = ["วัสดุ / อุปกรณ์", "น้ำมัน / ค่าเดินทาง", "ค่าส่งของ / ไปรษณีย์", "อาหาร / เครื่องดื่ม", "ซ่อมแซมเล็กน้อย", "อื่น ๆ"] as const;
+
 export const KINDS: RequestKind[] = ["ot", "expense", "cash_advance", "advance", "contractor"];
 
 export const KIND_META: Record<
