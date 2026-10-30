@@ -103,13 +103,14 @@ describe("เบี้ยขยันขั้นบันได 500 → 800 →
   const ok = { leaveDays: 0, lateCount: 0, absentDays: 0 };
   const late = { leaveDays: 0, lateCount: 1, absentDays: 0 };
 
-  it("ตัวอย่างเอกสาร: 500 → 800 → 1,000 → ลา/สาย 500 → ผ่าน 800", () => {
+  it("500 → 800 → 1,000 → ลา/สาย 0 → ผ่าน เริ่มใหม่ 500 → 800 (ผู้ใช้ 30/10/2569)", () => {
     const r1 = diligenceStep(S, null, "none", ok);
     const r2 = diligenceStep(S, r1.amount, "run", ok);
     const r3 = diligenceStep(S, r2.amount, "run", ok);
     const r4 = diligenceStep(S, r3.amount, "run", { leaveDays: 1, lateCount: 0, absentDays: 0 });
     const r5 = diligenceStep(S, r4.amount, "run", ok);
-    expect([r1, r2, r3, r4, r5].map((r) => r.amount)).toEqual([500, 800, 1000, 500, 800]);
+    const r6 = diligenceStep(S, r5.amount, "run", ok);
+    expect([r1, r2, r3, r4, r5, r6].map((r) => r.amount)).toEqual([500, 800, 1000, 0, 500, 800]);
   });
 
   it("ถึง 1,000 แล้วผ่านต่อ = คง 1,000", () => {
@@ -118,10 +119,10 @@ describe("เบี้ยขยันขั้นบันได 500 → 800 →
     expect(r.how).toContain("คงขั้นสูงสุด");
   });
 
-  it("รอบแรกมีสาย = 500 · ลาครึ่งวันก็นับเป็นลา · ขาดงานก็ไม่ได้เลื่อน", () => {
-    expect(diligenceStep(S, null, "none", late).amount).toBe(500);
-    expect(diligenceStep(S, 800, "run", { leaveDays: 0.5, lateCount: 0, absentDays: 0 }).amount).toBe(500);
-    expect(diligenceStep(S, 800, "run", { leaveDays: 0, lateCount: 0, absentDays: 1 }).amount).toBe(500);
+  it("รอบแรกมีสาย = 0 · ลาครึ่งวันก็นับเป็นลา · ขาดงานก็ได้ 0", () => {
+    expect(diligenceStep(S, null, "none", late).amount).toBe(0);
+    expect(diligenceStep(S, 800, "run", { leaveDays: 0.5, lateCount: 0, absentDays: 0 }).amount).toBe(0);
+    expect(diligenceStep(S, 800, "run", { leaveDays: 0, lateCount: 0, absentDays: 1 }).amount).toBe(0);
   });
 
   it("ยกมาจากระบบเดิม 800 แล้วผ่าน = 1,000", () => {

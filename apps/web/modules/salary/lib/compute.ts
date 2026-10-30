@@ -131,7 +131,8 @@ export function applyDiligencePartial(r: DiligenceResult, mode: "none" | "prorat
  * เบี้ยขยันขั้นบันได (ข้อกำหนด HR 28/10/2569) เช่น 500 → 800 → 1,000:
  *   - รอบแรก (ไม่มีขั้นรอบก่อน) = ขั้นแรก
  *   - ไม่ลา ไม่สาย ไม่ขาด = เลื่อนจากขั้นรอบก่อนหนึ่งขั้น ถึงขั้นสูงสุดแล้วคงไว้
- *   - มีลา/สาย/ขาด = ขั้นแรก และรอบหน้านับต่อจากขั้นแรก
+ *   - มีลา/สาย/ขาด = ไม่ได้เลยรอบนั้น (0) · รอบถัดไปที่ไม่ลา ไม่สาย ไม่ขาด เริ่มใหม่ขั้นแรก
+ *     (ผู้ใช้ 30/10/2569 — เดิมถอยกลับขั้นแรกแต่ยังได้ขั้นแรก)
  * วันหยุดปกติ/นักขัตฤกษ์ไม่นับเป็นลา (ผู้เรียกส่งเฉพาะวันลาจริงมา)
  */
 export function diligenceStep(
@@ -145,19 +146,20 @@ export function diligenceStep(
   // ขั้นรอบก่อน = ขั้นสูงสุดที่ไม่เกินยอดรอบก่อน (กันตั้งค่าขั้นเปลี่ยนแล้วยอดเก่าไม่ตรงขั้นไหน)
   let prevIdx = -1;
   if (prev !== null) steps.forEach((v, i) => { if (v <= prev + 0.004) prevIdx = i; });
-  const idx = prev === null || !passed ? 0 : Math.min(prevIdx + 1, last);
-  const amount = steps[idx]!;
+  const idx = prev === null ? 0 : Math.min(prevIdx + 1, last);
+  // ไม่ผ่าน = 0 · ยอดรอบนี้ (0) เป็นขั้นรอบก่อนของรอบหน้า → prevIdx -1 → เริ่มขั้นแรก
+  const amount = passed ? steps[idx]! : 0;
   const b = (n: number) => n.toLocaleString("en-US");
   const prevTxt = prev === null ? "ยังไม่มีขั้นรอบก่อน" : `รอบก่อน ${b(prev)}${prevSource === "opening" ? " (ยกมาจากระบบเดิม)" : ""}`;
   const why = [check.leaveDays > 0 ? `ลา ${check.leaveDays} วัน` : "", check.lateCount > 0 ? `สาย ${check.lateCount} ครั้ง` : "", check.absentDays > 0 ? `ขาด ${check.absentDays} วัน` : ""].filter(Boolean).join(" · ");
   const how = !passed
-    ? `${prevTxt} · งวดนี้${why} → ขั้นแรก ${b(amount)} (รอบหน้านับต่อจาก ${b(amount)})`
+    ? `${prevTxt} · งวดนี้${why} → ไม่ได้เบี้ยขยันรอบนี้ (รอบหน้าที่ไม่ลา ไม่สาย ไม่ขาด เริ่มใหม่ ${b(steps[0]!)})`
     : prev === null
       ? `${prevTxt} → เริ่มขั้นแรก ${b(amount)} (งวดนี้ไม่ลา ไม่สาย ไม่ขาด — รอบหน้าเลื่อนขั้น)`
       : prevIdx >= last
         ? `${prevTxt} · งวดนี้ไม่ลา ไม่สาย ไม่ขาด → คงขั้นสูงสุด ${b(amount)}`
         : `${prevTxt} · งวดนี้ไม่ลา ไม่สาย ไม่ขาด → เลื่อนเป็นขั้น ${idx + 1} ${b(amount)}`;
-  return { amount, step: idx + 1, steps: steps.length, passed, prev, prevSource, ...check, how };
+  return { amount, step: passed ? idx + 1 : 0, steps: steps.length, passed, prev, prevSource, ...check, how };
 }
 
 export interface Adjustment {
@@ -477,7 +479,7 @@ export function computePay(input: ComputeInput): ComputeResult {
     const computed = input.diligence ? s(input.diligence.amount) : 0;
     const amt = dilOverride ? Math.max(0, s(dilOverride.amount)) : computed;
     const how = dilOverride ? `ปรับโดย ${dilOverride.byName}: ${dilOverride.reason} (ระบบคิดได้ ${fmt(computed)})` : (input.diligence?.how ?? "");
-    if (amt > 0 || input.diligence?.partial || dilOverride) {
+    if (amt > 0 || input.diligence?.partial || (input.diligence && !input.diligence.passed) || dilOverride) {
       lines.push({ key: "diligence", label: "เบี้ยขยัน", kind: "earning", amount: toBaht(amt), how, source: "diligence", auto: !dilOverride });
     }
     irregularEarn += amt;

@@ -189,7 +189,7 @@ export function ProfileSection({
           {(v.diligenceEligible ?? true) && (
             diligence.lastPaid ? (
               <p className={hint}>
-                รอบล่าสุดที่จ่ายผ่านระบบ ({diligence.lastPaid.period}) ได้ {fmtBaht(diligence.lastPaid.amount)} — รอบถัดไปนับต่อจากขั้นนี้เอง
+                รอบล่าสุดที่จ่ายผ่านระบบ ({diligence.lastPaid.period}) ได้ {fmtBaht(diligence.lastPaid.amount)} — {diligence.lastPaid.amount > 0 ? "รอบถัดไปนับต่อจากขั้นนี้เอง" : "ไม่ได้เพราะลา/สาย/ขาด · รอบถัดไปที่ไม่ลา ไม่สาย ไม่ขาด เริ่มขั้นแรก"}
               </p>
             ) : (
               <label className={`${label} max-w-sm`}>
