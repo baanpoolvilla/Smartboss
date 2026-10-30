@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@smartboss/database";
 
 import { withWorkforceTenant } from "@/modules/report_task/lib/db/workforce-calendar";
-import { readDwSettings, readOt, readPayRates } from "@/modules/daily_worker/lib/data";
+import { readDwSettings, readOt, readOverrides, readPayRates, readTimeEdits } from "@/modules/daily_worker/lib/data";
 import { WORKER_ROLE_CODE } from "@/modules/daily_worker/permissions";
 import { usersWithPermission } from "@/modules/maintenance/data/notify";
 import { REQ_PERMS } from "../permissions";
@@ -97,6 +97,36 @@ export async function workerRateOn(orgId: string, employmentId: string, date: st
 export async function workerOtOn(orgId: string, employmentId: string, date: string) {
   const { list } = await readOt(orgId);
   return list.find((o) => o.employmentId === employmentId && o.date === date) ?? null;
+}
+
+/**
+ * คนงานมาทำงานวันนั้นไหม — ลงเวลาเข้าจริง (raw_time_events / ผลลงเวลา) · ผู้ดูแลกด "แก้เวลา" ใส่เวลาเข้าให้ · หรือ "แก้เป็นมา" แบบเดิม
+ * OT คนงานจ่ายเฉพาะวันที่มา (modules/daily_worker judgeDay) — ไม่มีหลักฐานว่ามา = รู้ไม่ได้ว่าทำ OT จริง (ผู้ใช้ 30/10/2569)
+ * อ่านระบบลงเวลาไม่ได้ = ถือว่ามา (ไม่กันการลง OT เพราะระบบล่ม)
+ */
+export async function workerCameOn(orgId: string, employmentId: string, date: string): Promise<boolean> {
+  const [{ list }, edits] = await Promise.all([readOverrides(orgId), readTimeEdits(orgId).catch(() => [])]);
+  if (list.some((o) => o.employmentId === employmentId && o.date === date)) return true;
+  if (edits.some((t) => t.employmentId === employmentId && t.date === date && !!t.inAt)) return true;
+  try {
+    const rows = await withWorkforceTenant(orgId, (tx) =>
+      tx.$queryRawUnsafe<{ came: boolean }[]>(
+        `SELECT EXISTS (
+                  SELECT 1 FROM workforce.raw_time_events
+                   WHERE employment_id = $1::uuid AND status = 'ACCEPTED'
+                     AND (captured_at AT TIME ZONE 'Asia/Bangkok')::date = $2::date
+                ) OR EXISTS (
+                  SELECT 1 FROM workforce.attendance_results
+                   WHERE employment_id = $1::uuid AND is_current AND actual_in_at IS NOT NULL AND work_date = $2::date
+                ) AS came`,
+        employmentId,
+        date,
+      ),
+    );
+    return rows[0]?.came ?? true;
+  } catch {
+    return true;
+  }
 }
 
 /* ───────────── ผู้อนุมัติ / ผู้จ่าย ───────────── */

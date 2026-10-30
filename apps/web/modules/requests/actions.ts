@@ -18,6 +18,7 @@ import {
   eligibleApprovers,
   employmentOf,
   monthlySalaryOn,
+  workerCameOn,
   workerOtOn,
   workerRateOn,
   type Viewer,
@@ -333,6 +334,10 @@ async function computePreview(session: OrgSession, input: PreviewInput, settings
         else {
           const existing = await workerOtOn(orgId, p.employmentId, date);
           if (existing) p.blocks.push(`มี OT วันนี้ในหน้าคนงานแล้ว (${existing.start}–${existing.end} โดย ${existing.byName}) — ไม่ต้องลงซ้ำ`);
+          // ไม่ได้ลงเวลาเข้างาน = ไม่มีหลักฐานว่ามาทำ (บัญชีค่าแรงก็จ่าย OT เฉพาะวันที่มา) — ผู้ใช้ 30/10/2569
+          else if (!(await workerCameOn(orgId, p.employmentId, date))) {
+            p.blocks.push(`${who.name} ไม่ได้ลงเวลาเข้างานวันที่ ${thaiDate(date)} — ไม่มีหลักฐานว่ามาทำงาน ให้ผู้ดูแลกด "แก้เวลา" ใส่เวลาเข้า-ออกของวันนั้นที่หน้าคนงานรายวันก่อน แล้วค่อยลง OT`);
+          }
           const rate = await workerRateOn(orgId, p.employmentId, date);
           p.percent = rate.otPercent;
           p.rateLabel = `% OT ของคนงาน (${rate.otPercent}%)`;
@@ -582,7 +587,9 @@ async function prepareRequest(session: OrgSession, input: CreateInput, exceptReq
   }
 
   // เส้นทางคิดจากยอดจริงที่จะบันทึก (ไม่ใช้ของ preview ที่คิดจากยอดตอนพิมพ์)
-  const { level, needCeo } = await approverLevelFor(orgId, kind, session.userId, beneficiaryUserId, net, settings.approvalRoutes);
+  // ช่างภายนอก: เทียบเกณฑ์ CEO กับยอดตามบิลร้าน (ค่าจ้าง + VAT ก่อนหัก ณ ที่จ่าย) — ผู้ใช้ 30/10/2569 "ตามยอดจริงก่อนหักลบ"
+  const routeAmount = kind === "contractor" ? round2(amount + vat.vat) : net;
+  const { level, needCeo } = await approverLevelFor(orgId, kind, session.userId, beneficiaryUserId, routeAmount, settings.approvalRoutes);
   const isOt = kind === "ot";
   return {
     workDate,
@@ -771,6 +778,10 @@ export async function decideRequestAction(input: { id: string; outcome: "approve
       if (!r.employmentId || !r.otStart || !r.otEnd || !r.otMinutes) return { error: "ข้อมูล OT ของคนงานไม่ครบ" };
       const existing = await workerOtOn(orgId, r.employmentId, r.workDate);
       if (existing) return { error: `มี OT วันนี้ในหน้าคนงานแล้ว (${existing.start}–${existing.end} โดย ${existing.byName}) — ไม่อนุมัติใบนี้เพื่อกันจ่ายซ้ำ` };
+      // ตรวจซ้ำตอนอนุมัติ (ใบที่ยื่นไว้ก่อนมีกติกานี้ / ลงเวลาถูกยกเลิกทีหลัง) — อนุมัติไปแล้วบัญชีค่าแรงจะได้ 0 แต่ใบขึ้นว่าจ่ายแล้ว
+      if (!(await workerCameOn(orgId, r.employmentId, r.workDate))) {
+        return { error: `${r.beneficiaryName} ไม่ได้ลงเวลาเข้างานวันที่ ${thaiDate(r.workDate)} — ให้ผู้ดูแลกด "แก้เวลา" ใส่เวลาเข้า-ออกของวันนั้นที่หน้าคนงานรายวันก่อน แล้วค่อยอนุมัติ (หรือไม่อนุมัติพร้อมเหตุผล)` };
+      }
       dwOtEntryId = randomUUID();
       const entry: OtEntry = {
         id: dwOtEntryId,
