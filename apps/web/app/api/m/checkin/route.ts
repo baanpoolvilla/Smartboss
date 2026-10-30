@@ -4,6 +4,7 @@ import { getSession } from "@smartboss/auth";
 import { wfFetch, WorkforceError, WorkforceUnavailableError } from "@/modules/hr/lib/api";
 import { CHECKIN_PHOTO_ENABLED } from "@/modules/hr/lib/app-clock";
 import { signCheckinAttempt } from "@/modules/hr/lib/checkin-attempt-proof";
+import { todayIso } from "@/modules/hr/lib/date";
 
 export const runtime = "nodejs";
 
@@ -89,6 +90,42 @@ async function gpsGate(
 }
 
 /**
+ * กดออกงานไม่ได้ภายในกี่นาทีหลังกดเข้างาน — กันกดซ้ำ
+ *
+ * เจอจริง 29–30 ต.ค. 69: พนักงานกดเข้างานแล้วคิดว่าไม่ติด กดรัว ๆ ต่อ พอหน้าจอโหลดใหม่ปุ่มกลายเป็น "ออกงาน"
+ * แตะอีกสองทีเลยได้ "ออกงาน" นาทีเดียวกับเข้างาน (ไม่มีใครออกงานจริงภายในครึ่งชั่วโมงหลังเข้า)
+ */
+const MIN_MINUTES_BEFORE_OUT = 30;
+
+interface TimeEventLite {
+  employment_id: string;
+  captured_at: string;
+  event_intent: string;
+}
+
+/**
+ * เข้างานล่าสุดของตัวเองวันนี้ ถ้ายังไม่ถึง MIN_MINUTES_BEFORE_OUT และหลังจากนั้นยังไม่มีเข้า/ออกอื่น — ไม่ใช่ = null
+ * อ่านไม่ได้ = null (ปล่อยลงเวลาตามปกติ ด่านนี้ห้ามทำให้คนลงเวลาไม่ได้)
+ */
+async function justClockedIn(): Promise<Date | null> {
+  try {
+    const me = await wfFetch<{ employment_id: string | null }>("/me");
+    if (me.employment_id === null) return null;
+    const { items } = await wfFetch<{ items: TimeEventLite[] }>(`/time-events?date=${todayIso()}`);
+    const last = items
+      .filter((e) => e.employment_id === me.employment_id && ["AUTO", "CLOCK_IN", "CLOCK_OUT"].includes(e.event_intent))
+      .sort((a, b) => a.captured_at.localeCompare(b.captured_at))
+      .at(-1);
+    if (last?.event_intent !== "CLOCK_IN") return null;
+    const at = new Date(last.captured_at);
+    return Date.now() - at.getTime() < MIN_MINUTES_BEFORE_OUT * 60_000 ? at : null;
+  } catch (error) {
+    console.error("[m/checkin] justClockedIn lookup failed", error);
+    return null;
+  }
+}
+
+/**
  * ลงเวลาให้จบในคำขอเดียว
  *
  * ฝั่ง workforce แยกเป็น 3 จังหวะ (สร้าง session → แนบหลักฐาน → commit) เพื่อให้
@@ -154,6 +191,26 @@ export async function POST(req: NextRequest) {
       return reject({ error: error.displayMessage }, error.status);
     }
     throw error;
+  }
+
+  // เพิ่งเข้างาน = กดซ้ำ ไม่ใช่ออกงานจริง — ไม่บันทึก บอกว่าเข้างานติดแล้ว (ไม่ออกใบยืนยัน เพราะไม่ใช่ลงเวลาไม่ได้)
+  if (input.intent === "CLOCK_OUT") {
+    const inAt = await justClockedIn();
+    if (inAt !== null) {
+      const time = inAt.toLocaleTimeString("th-TH", { timeZone: "Asia/Bangkok", hour: "2-digit", minute: "2-digit" });
+      const until = new Date(inAt.getTime() + MIN_MINUTES_BEFORE_OUT * 60_000).toLocaleTimeString("th-TH", {
+        timeZone: "Asia/Bangkok",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      return NextResponse.json(
+        {
+          code: "JUST_CLOCKED_IN",
+          error: `บันทึกเข้างานแล้วตั้งแต่ ${time} น. ไม่ต้องกดซ้ำ — ออกงานได้หลัง ${until} น.`,
+        },
+        { status: 409 },
+      );
+    }
   }
 
   // เวลาที่เครื่องผู้ใช้อ้าง — ฝั่ง workforce เทียบกับเวลาเซิร์ฟเวอร์เองอยู่แล้ว

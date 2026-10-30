@@ -60,6 +60,7 @@ const DICT = {
   saved: { th: "บันทึก{what}เรียบร้อย", en: "{what} saved", my: "{what} မှတ်ပြီးပါပြီ" },
   pendingReview: { th: "บันทึกแล้ว รอฝ่ายบุคคลตรวจสอบ", en: "Saved · waiting for HR review", my: "မှတ်ပြီးပါပြီ · HR စစ်ဆေးရန် စောင့်ပါ" },
   rejected: { th: "ลงเวลาไม่ผ่าน", en: "Not accepted", my: "အချိန်မှတ်ခြင်း မအောင်မြင်ပါ" },
+  justClockedIn: { th: "บันทึกเข้างานแล้ว ไม่ต้องกดซ้ำ", en: "Clock-in already saved — no need to tap again", my: "အလုပ်ဝင်ချိန် မှတ်ပြီးပါပြီ · ထပ်နှိပ်ရန် မလိုပါ" },
   clockFailed: { th: "ลงเวลาไม่สำเร็จ", en: "Could not clock in", my: "အချိန်မှတ်ခြင်း မအောင်မြင်ပါ" },
   sendFailed: { th: "ส่งข้อมูลไม่สำเร็จ ลองใหม่อีกครั้ง", en: "Could not send, try again", my: "ပို့၍ မရပါ · ထပ်ကြိုးစားပါ" },
   noInternet: { th: "เชื่อมต่อไม่ได้ ตรวจสัญญาณอินเทอร์เน็ตแล้วลองใหม่", en: "No connection, check internet and try again", my: "အင်တာနက် ချိတ်ဆက်မရပါ · ထပ်ကြိုးစားပါ" },

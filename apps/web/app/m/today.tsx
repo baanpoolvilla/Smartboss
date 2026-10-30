@@ -413,6 +413,13 @@ export function Today({
         }
         setNeedsPhoto(false);
 
+        // เพิ่งเข้างานแล้วกดออก = กดซ้ำ — เซิร์ฟเวอร์ไม่บันทึก (api/m/checkin justClockedIn) บอกว่าเข้างานติดแล้ว
+        if (payload.code === "JUST_CLOCKED_IN") {
+          setMessage({ tone: "ok", text: lang === "th" ? (payload.error ?? t("justClockedIn")) : t("justClockedIn") });
+          await reload();
+          return;
+        }
+
         if (!response.ok) {
           // ข้อความจากระบบเป็นภาษาไทย — ภาษาอื่นขึ้นข้อความของภาษานั้นก่อน แล้ววงเล็บเหตุผลจากระบบต่อท้าย
           setMessage({
