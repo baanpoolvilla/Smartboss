@@ -143,6 +143,9 @@ export function RequestForm({
   const linesTotal = useMemo(() => round2(lines.reduce((s, l) => s + (Number.isFinite(parseMoney(l.amount)) ? parseMoney(l.amount) : 0), 0)), [lines]);
   const usesLines = kind === "expense";
   const numericAmount = usesLines ? linesTotal : parseMoney(amount);
+  // ช่างภายนอก: เกณฑ์ "ยอดเกิน … ต้องผ่าน CEO" เทียบยอดจ่ายร้านจริง (หลัง VAT / หัก ณ ที่จ่าย) เหมือนตอนบันทึกใบ
+  // (เจอในเทส 30/10/2569: ค่าจ้าง 5,000 + VAT − หัก 3% = 5,200 — หน้าฟอร์มบอก "HR" แต่พอ HR อนุมัติกลับส่งต่อ CEO)
+  const routeAmount = kind === "contractor" && Number.isFinite(numericAmount) ? contractorBreakdown(numericAmount, vatOn ? settings.vatPercent : 0, whtPercent).net : numericAmount;
 
   // ตัวเลข/ข้อเตือนจากเซิร์ฟเวอร์ (เงินเดือน ค่าแรง เพดาน ผู้อนุมัติ ลงซ้ำ) — หน่วงสั้น ๆ ไม่ยิงทุกตัวอักษร
   const seq = useRef(0);
@@ -162,7 +165,7 @@ export function RequestForm({
         otStart,
         otEnd,
         otRateId: rateId,
-        amount: Number.isFinite(numericAmount) ? numericAmount : 0,
+        amount: Number.isFinite(routeAmount) ? routeAmount : 0,
         exceptRequestId: editId,
       });
       if (n !== seq.current) return;
@@ -170,7 +173,7 @@ export function RequestForm({
       if (res.ok) setPreview(res.preview);
     }, 350);
     return () => clearTimeout(t);
-  }, [kind, effectiveBeneficiary, workDate, otStart, otEnd, rateId, numericAmount, editId]);
+  }, [kind, effectiveBeneficiary, workDate, otStart, otEnd, rateId, routeAmount, editId]);
 
   const vendorInit = useRef(Boolean(editId));
   useEffect(() => {
