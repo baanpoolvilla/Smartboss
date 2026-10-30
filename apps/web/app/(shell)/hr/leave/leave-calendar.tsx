@@ -877,7 +877,8 @@ export function LeaveCalendar({
           entries={pickedEntries}
           mine={pickedMine}
           employmentId={employmentId}
-          leaveTypes={leaveTypes}
+          // "ใช้ 4/6 วัน" นับของเดือนที่เปิดอยู่ — วันของเดือนข้างเคียงในตารางไม่บอก (ตัวเลขจะเป็นของอีกเดือน)
+          leaveTypes={picked.startsWith(month) ? leaveTypes : leaveTypes.map((t) => ({ ...t, usedDays: null }))}
           canRequest={canRequest}
           busy={busy}
           submitting={pending}

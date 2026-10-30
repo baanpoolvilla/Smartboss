@@ -106,6 +106,17 @@ export async function renderCalendarTab(
     const mine = myOverrides !== null && isDayOffType ? overrideDaysFor(myOverrides, t.id) : null;
     return mine ?? t.monthly_quota_days;
   };
+  // วันที่ตัวเองลงไปแล้วในเดือนนี้ต่อประเภท — ช่องเลือกประเภทขึ้น "ใช้ 4/6 วัน" (คำขอสลับที่รออนุมัติยังไม่นับ เหมือนฝั่ง workforce)
+  const usedDaysByType = new Map<string, number>();
+  for (const r of mine?.items ?? []) {
+    if (r.status !== "SUBMITTED" && r.status !== "APPROVED") continue;
+    if (r.swap_from_date && r.status === "SUBMITTED") continue;
+    const days =
+      r.starts_on === r.ends_on
+        ? r.total_minutes / 480
+        : datesBetween(r.starts_on, r.ends_on).filter((d) => d >= from && d <= to).length;
+    usedDaysByType.set(r.leave_type_id, (usedDaysByType.get(r.leave_type_id) ?? 0) + days);
+  }
   // ยอด Holiday ของตัวเองในเดือนที่ดูอยู่ — ขึ้นข้างชื่อเดือน (ส่วนที่ต้องใช้ภายในเดือนนี้บอกแยก)
   const holidayBalances = (allowances?.items ?? []).map((a) => ({
     id: a.leave_type_id,
@@ -218,6 +229,7 @@ export async function renderCalendarTab(
             autoApprove: t.auto_approve,
             monthlyQuotaDays: quotaDaysOf(t),
             availableDays: t.accrues_from_holidays ? (availableByType.get(t.id) ?? 0) : null,
+            usedDays: me.employment_id ? (usedDaysByType.get(t.id) ?? 0) : null,
           }))}
           entriesByDate={entriesByDate}
           otByDate={otByDate}

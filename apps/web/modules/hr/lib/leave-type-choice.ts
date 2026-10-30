@@ -9,6 +9,8 @@ export interface LeaveTypeChoice {
    * null/ไม่มี = ประเภทนี้ไม่ได้คุมด้วยยอดสะสม
    */
   availableDays?: number | null;
+  /** วันที่ตัวเองลงไปแล้วในเดือนนั้น (รออนุมัติ + อนุมัติแล้ว) — มีค่า = ขึ้น "ใช้ 4/6 วัน" แทน "6 วัน/เดือน" */
+  usedDays?: number | null;
 }
 
 /** ประเภทที่ยังลงได้ — ตัด Holiday ที่สิทธิ์หมดแล้วออก (เซิร์ฟเวอร์ปฏิเสธอยู่แล้ว แต่ไม่ควรให้เลือกแล้วค่อยเด้ง) */
@@ -17,12 +19,14 @@ export function usableLeaveTypes<T extends { availableDays?: number | null }>(ty
 }
 
 /** คำต่อท้ายชื่อประเภทในช่องเลือก — ต้องอนุมัติไหม และเหลือสิทธิ์เท่าไร */
-export function leaveTypeHint(t: Pick<LeaveTypeChoice, "autoApprove" | "monthlyQuotaDays" | "availableDays">): string {
+export function leaveTypeHint(t: Pick<LeaveTypeChoice, "autoApprove" | "monthlyQuotaDays" | "availableDays" | "usedDays">): string {
   const left =
     t.availableDays != null
       ? `เหลือ ${t.availableDays} วัน`
       : t.autoApprove && t.monthlyQuotaDays > 0
-        ? `${t.monthlyQuotaDays} วัน/เดือน`
+        ? t.usedDays != null
+          ? `ใช้ ${t.usedDays}/${t.monthlyQuotaDays} วัน`
+          : `${t.monthlyQuotaDays} วัน/เดือน`
         : "";
   return `${t.autoApprove ? " — ไม่ต้องอนุมัติ" : " — ต้องรออนุมัติ"}${left ? ` (${left})` : ""}`;
 }
