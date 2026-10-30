@@ -90,7 +90,9 @@ export function PenaltyRequestDialog({
   const [loading, setLoading] = useState(!fixedItem);
   const [items, setItems] = useState<PenaltyEventItem[]>(fixedItem ? [fixedItem] : []);
   const [selectedRefId, setSelectedRefId] = useState<string | null>(fixedItem?.refId ?? null);
-  const [type, setType] = useState<"retroactive" | "waive">("retroactive");
+  // ส่งสาย = ส่งไปแล้ว ไม่มีอะไรให้ส่งย้อนหลัง — ขอยกเลิกการหักอย่างเดียว อนุมัติแล้วคืนคะแนนทันที
+  const isLate = category === "report_late";
+  const [type, setType] = useState<"retroactive" | "waive">(isLate ? "waive" : "retroactive");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -212,6 +214,7 @@ export function PenaltyRequestDialog({
         <div>
           <div className="mb-1.5 text-sm font-medium text-(--ink)">ประเภทคำร้อง</div>
           <div className="flex flex-col gap-1.5">
+            {!isLate && (
             <label className="flex items-start gap-2.5 rounded-(--radius) border border-(--line) px-3 py-2 text-sm has-checked:border-(--app)">
               <input
                 type="radio"
@@ -222,6 +225,7 @@ export function PenaltyRequestDialog({
               />
               ขอส่งย้อนหลัง (มีเหตุสุดวิสัย เช่น ป่วยกะทันหัน ระบบขัดข้อง)
             </label>
+            )}
             <label className="flex items-start gap-2.5 rounded-(--radius) border border-(--line) px-3 py-2 text-sm has-checked:border-(--app)">
               <input
                 type="radio"
@@ -230,7 +234,7 @@ export function PenaltyRequestDialog({
                 checked={type === "waive"}
                 onChange={() => setType("waive")}
               />
-              ขอให้พิจารณายกเลิกการหักคะแนน (คิดว่าไม่เป็นธรรม)
+              {isLate ? "ส่งแล้วแต่ช้า — ขอยกเลิกการหักคะแนน (อนุมัติแล้วคืนคะแนนทันที)" : "ขอให้พิจารณายกเลิกการหักคะแนน (คิดว่าไม่เป็นธรรม)"}
             </label>
           </div>
         </div>

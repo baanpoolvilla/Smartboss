@@ -141,7 +141,7 @@ export function PenaltyRequestsQueue() {
                     onClick={() => decide(item.id, "approved")}
                     className="rounded-lg bg-[#16A34A] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#15803D] disabled:opacity-50"
                   >
-                    {item.type === "retroactive" ? "อนุมัติ — ให้ส่งย้อนหลัง" : "อนุมัติ — คืนคะแนน"}
+                    {item.type === "retroactive" && item.category !== "report_late" ? "อนุมัติ — ให้ส่งย้อนหลัง" : "อนุมัติ — คืนคะแนน"}
                   </button>
                 </div>
               </div>

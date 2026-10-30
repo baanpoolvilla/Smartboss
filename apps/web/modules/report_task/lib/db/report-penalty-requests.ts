@@ -172,7 +172,8 @@ export async function decidePenaltyRequest(
     }
 
     // ขอส่งย้อนหลัง: อนุมัติ = ให้ไปส่งรีพอต ยังไม่คืนคะแนน ("อนุมัติแล้วให้คนนั้นไปส่งรีพอต")
-    const awaitsPost = decision === "approved" && found.type === "retroactive";
+    // ยกเว้น "ส่งสาย" — ส่งไปแล้วแค่ช้า ไม่มีอะไรให้ส่งซ้ำ อนุมัติ = คืนคะแนนทันที (ผู้ใช้ 30/10/2569)
+    const awaitsPost = decision === "approved" && found.type === "retroactive" && found.category !== "report_late";
     const updated: PenaltyRequest = {
       ...found,
       status: decision,
@@ -186,38 +187,70 @@ export async function decidePenaltyRequest(
     const result = await writeStore(orgId, KEY, next, version, decidedBy);
     if (!result.ok) continue; // ชนกับคนอื่น — อ่านใหม่แล้วลองอีกรอบ
 
-    if (decision === "approved" && !awaitsPost) {
-      // คืนคะแนนลงวันเดียวกับที่หักไป (ดู reports/sweep) — ไม่งั้นอนุมัติเดือนถัดไปแล้ว
-      // เดือนที่โดนหักยังติดลบ ส่วนเดือนนี้ได้ +คะแนนลอย ๆ
-      const original = await prisma.performanceEvent.findFirst({
-        where: { orgId, source: "report_task", category: updated.category, refType: "report_round", refId: updated.refId },
-        select: { occurredAt: true },
-      });
-      // ไม่ใช้ recordPerformanceEvents (ซึ่งเช็ค performance_settings.enabled
-      // และแทนที่ points ด้วยค่า rulePoints ปัจจุบันถ้าไม่ระบุ) — ตรงนี้ต้อง
-      // คืนคะแนน "เท่าที่หักไปจริง" เสมอ ไม่ว่าตอนนี้บริษัทจะปิดระบบคะแนนไว้
-      // หรือเกณฑ์จะเปลี่ยนไปแล้วก็ตาม (เหมือน reconcile script อื่นทุกตัว)
-      await prisma.performanceEvent.createMany({
-        data: [
-          {
-            orgId,
-            userId: updated.userId,
-            source: "report_task",
-            category: updated.category,
-            points: -updated.points,
-            occurredAt: original?.occurredAt ?? new Date(),
-            refType: "report_round_undo",
-            refId: updated.refId,
-            note: `อนุมัติคำร้อง: ${updated.reason}`,
-            createdBy: decidedBy,
-          },
-        ],
-        skipDuplicates: true,
-      });
-    }
+    if (decision === "approved" && !awaitsPost) await refundRequest(orgId, updated, decidedBy);
     return { error: null, request: updated };
   }
   return { error: "บันทึกผลไม่สำเร็จ ลองใหม่อีกครั้ง" };
+}
+
+/** คืนคะแนนของคำร้องที่อนุมัติแล้ว — event ตรงข้าม "report_round_undo" · มีอยู่แล้วไม่ออกซ้ำ */
+async function refundRequest(orgId: string, request: PenaltyRequest, decidedBy: string | undefined) {
+  const undone = await prisma.performanceEvent.findFirst({
+    where: { orgId, source: "report_task", refType: "report_round_undo", refId: request.refId },
+    select: { refId: true },
+  });
+  if (undone) return;
+  // คืนคะแนนลงวันเดียวกับที่หักไป (ดู reports/sweep) — ไม่งั้นอนุมัติเดือนถัดไปแล้ว
+  // เดือนที่โดนหักยังติดลบ ส่วนเดือนนี้ได้ +คะแนนลอย ๆ
+  const original = await prisma.performanceEvent.findFirst({
+    where: { orgId, source: "report_task", category: request.category, refType: "report_round", refId: request.refId },
+    select: { occurredAt: true },
+  });
+  // ไม่ใช้ recordPerformanceEvents (ซึ่งเช็ค performance_settings.enabled
+  // และแทนที่ points ด้วยค่า rulePoints ปัจจุบันถ้าไม่ระบุ) — ตรงนี้ต้อง
+  // คืนคะแนน "เท่าที่หักไปจริง" เสมอ ไม่ว่าตอนนี้บริษัทจะปิดระบบคะแนนไว้
+  // หรือเกณฑ์จะเปลี่ยนไปแล้วก็ตาม (เหมือน reconcile script อื่นทุกตัว)
+  await prisma.performanceEvent.createMany({
+    data: [
+      {
+        orgId,
+        userId: request.userId,
+        source: "report_task",
+        category: request.category,
+        points: -request.points,
+        occurredAt: original?.occurredAt ?? new Date(),
+        refType: "report_round_undo",
+        refId: request.refId,
+        note: `อนุมัติคำร้อง: ${request.reason}`,
+        createdBy: decidedBy ?? null,
+      },
+    ],
+    skipDuplicates: true,
+  });
+}
+
+/**
+ * "ส่งสาย" ที่อนุมัติแบบขอส่งย้อนหลังไปก่อนแก้ (ค้าง "รอส่งรีพอต" ทั้งที่ส่งไปแล้ว) — คืนคะแนนให้เลย
+ * และเลิกรอ เหมือนอนุมัติด้วยกติกาใหม่ · ทำได้เฉพาะรอบเกรดที่ยังไม่ปิด (เกินแล้วคะแนนไม่มีผลอยู่ดี)
+ */
+export async function settleApprovedLateRequests(orgId: string): Promise<void> {
+  const stuck = (list: PenaltyRequest[]) =>
+    list.filter((r) => r.category === "report_late" && r.status === "approved" && r.awaitingPost === true && !r.fulfilledAt);
+  const { data } = await readStore<PenaltyRequest[]>(orgId, KEY);
+  if (stuck(data ?? []).length === 0) return;
+  const period = await loadScorePeriodConfig(orgId);
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const { data: existing, version } = await readStore<PenaltyRequest[]>(orgId, KEY);
+    const list = existing ?? [];
+    const settle = stuck(list).filter((r) => penaltyRequestOpen(r.day, period));
+    if (settle.length === 0) return;
+    const ids = new Set(settle.map((r) => r.id));
+    const next = list.map((r) => (ids.has(r.id) ? { ...r, awaitingPost: false } : r));
+    const result = await writeStore(orgId, KEY, next, version);
+    if (!result.ok) continue;
+    for (const r of settle) await refundRequest(orgId, r, r.decidedBy);
+    return;
+  }
 }
 
 /** userId ของทุกคนที่ถือ role "CEO" ในบริษัทนี้ — ใช้ส่งแจ้งเตือนตอนมีคำร้องใหม่ */
