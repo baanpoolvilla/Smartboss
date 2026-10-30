@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Loader2, X } from "lucide-react";
 
 import { Notice } from "@/modules/requests/components/ui";
-import { addRateAction, saveAccessAction, saveItemAction, saveSettingsAction, type SettingsInput } from "../actions";
+import { addRateAction, saveAccessAction, saveItemAction, saveSettingsAction, setTaxAndItemsAction, type SettingsInput } from "../actions";
 import { fmtBaht, thaiDate, type SsoParams, type TaxParams } from "../lib/types";
 import { card, field, hint, label, labelText, navy, outline } from "./ui";
 import { useRun } from "./use-run";
@@ -276,6 +276,34 @@ export function TaxRates({ current, isDefault }: { current: TaxParams; isDefault
             <button type="button" className={navy} disabled={busy || !from} onClick={() => run(() => addRateAction({ kind: "tax", effectiveFrom: from, params: v }), () => setOpen(false))}>บันทึกอัตราใหม่</button>
           </div>
         </div>
+      )}
+      {error && <Notice tone="danger">{error}</Notice>}
+    </section>
+  );
+}
+
+/**
+ * สวิตช์รวม ภาษีหัก ณ ที่จ่าย + ชื่อรายการปรับเพิ่ม/ปรับลด (ผู้ใช้ 30/10/2569: "ติ๊กปิดทั้งหมด เปิดก็ติ๊กเปิดทั้งหมด แล้วค่อยไปย่อยอีกที")
+ * ตอนปิด HR พิมพ์รายเพิ่ม/รายหักเองในใบรายคน (รายเพิ่ม–รายหัก → อื่นๆ พิมพ์เอง)
+ */
+export function TaxAndItemsSwitch({ taxEnabled, activeItems, totalItems }: { taxEnabled: boolean; activeItems: number; totalItems: number }) {
+  const on = taxEnabled || activeItems > 0;
+  const { busy, error, run } = useRun();
+  return (
+    <section className={`${card} flex flex-col gap-2 border-2 border-(--brand-navy,#1b2537) p-4 sm:p-5`}>
+      <label className="flex min-h-11 items-center gap-3 text-base font-bold text-(--ink)">
+        <input type="checkbox" className="h-6 w-6" checked={on} disabled={busy} onChange={(e) => run(() => setTaxAndItemsAction({ on: e.target.checked }))} />
+        ใช้ภาษีหัก ณ ที่จ่าย และชื่อรายการปรับเพิ่ม / ปรับลด
+        {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+      </label>
+      {on ? (
+        <p className={hint}>
+          เปิดอยู่ — ภาษี{taxEnabled ? "เปิด" : "ปิด"} · ชื่อรายการเปิด {activeItems}/{totalItems} · ปิดทีละอย่างได้ที่ &quot;สูตรเงินเดือนของบริษัท&quot; (ภาษี) และรายการด้านล่าง · เอาติ๊กออก = ปิดทั้งหมดในครั้งเดียว
+        </p>
+      ) : (
+        <p className={hint}>
+          ปิดอยู่ทั้งหมด — ไม่คิด/ไม่หักภาษีใคร และไม่มีชื่อรายการให้เลือก · HR เพิ่มยอดเองได้ที่รอบเงินเดือน › &quot;รายเพิ่ม–รายหัก&quot; › เลือก &quot;อื่นๆ (พิมพ์เอง)&quot; แล้วใส่ชื่อกับจำนวนเงิน · ติ๊ก = เปิดภาษีและทุกชื่อรายการกลับมา แล้วค่อยปิดทีละอัน
+        </p>
       )}
       {error && <Notice tone="danger">{error}</Notice>}
     </section>

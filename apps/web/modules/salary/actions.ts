@@ -223,6 +223,27 @@ export async function saveSettingsAction(input: SettingsInput): Promise<Result> 
   }
 }
 
+/**
+ * สวิตช์รวม "ภาษีหัก ณ ที่จ่าย + ชื่อรายการปรับเพิ่ม/ปรับลด" (ผู้ใช้ 30/10/2569)
+ * ปิด = ไม่คิดภาษี และปิดทุกชื่อรายการ — HR พิมพ์รายเพิ่ม/รายหักเองในรายเพิ่ม–รายหักรายคน
+ * เปิด = เปิดภาษี + ทุกชื่อรายการ แล้วค่อยปิดทีละอันที่ไม่ใช้ · รายการประจำรายคนที่ตั้งไว้แล้วยังอยู่ ไม่ถูกลบ
+ */
+export async function setTaxAndItemsAction(input: { on: boolean }): Promise<Result> {
+  try {
+    const { orgId, actor } = await guard("canEdit");
+    const on = !!input.on;
+    await withSalaryTenant(orgId, async (tx) => {
+      await tx.salarySettings.upsert({ where: { orgId }, create: { orgId, taxEnabled: on, updatedByName: actor.name }, update: { taxEnabled: on, updatedByName: actor.name } });
+      await tx.salaryItem.updateMany({ where: { orgId }, data: { active: on } });
+      await insertEvent(tx, orgId, { byUserId: actor.userId, byName: actor.name, action: "settings", summary: on ? "เปิดภาษีหัก ณ ที่จ่าย + ชื่อรายการปรับเพิ่ม/ลดทั้งหมด" : "ปิดภาษีหัก ณ ที่จ่าย + ชื่อรายการปรับเพิ่ม/ลดทั้งหมด" });
+    });
+    refresh();
+    return { ok: true };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
 /** อัตราประกันสังคม/ภาษีใหม่ — เพิ่มแถวที่มีวันเริ่มมีผล (งวดเก่าคิดด้วยอัตราเดิม ไม่แก้ย้อนหลัง) */
 export async function addRateAction(input: { kind: "sso" | "tax"; effectiveFrom: string; params: SsoParams | TaxParams }): Promise<Result> {
   try {
