@@ -62,5 +62,21 @@ describe('holidayAvailability', () => {
       { month: '2027-01', granted_days: 1, remaining_days: 1, expires_month: '2027-03' },
     ]);
   });
+  it('วันแม่ ส.ค. (ก่อนเปิดระบบ ต.ค.) ถูกใช้ก่อน — ดู ธ.ค. สิทธิ์ ต.ค. ต้องยังครบ', () => {
+    // เปิดระบบ ต.ค. · HR เพิ่มวันแม่ ส.ค. 1 วัน · ต.ค. ได้ 2 · ลา 23 ต.ค. 1 วัน ⇒ หักวันแม่ (หมดสิ้น ต.ค.) ไม่ใช่ของ ต.ค.
+    const ledger = {
+      from: '2026-08',
+      to: '2026-12',
+      grants: new Map([
+        ['2026-08', 1],
+        ['2026-10', 2],
+      ]),
+      usage: new Map([['2026-10', 1]]),
+    };
+    expect(holidayAvailability(ledger, '2026-10').buckets).toEqual([
+      { month: '2026-10', remaining_days: 2, expires_month: '2026-12' },
+    ]);
+    expect(holidayAvailability(ledger, '2026-12').available_days).toBe(2);
+  });
 });
 

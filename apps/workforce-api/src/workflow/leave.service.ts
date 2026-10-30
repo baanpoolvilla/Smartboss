@@ -556,7 +556,7 @@ export class LeaveService {
     // + วันที่ HR เพิ่มให้คนนี้ (leave_person_grants) — ไม่มี = เหมือนเดิม
     const person = (await this.personGrants(tx, leaveTypeId)).get(employment.id);
     const grants = withPersonGrants(onlyFrom(companyGrants, start), person);
-    return { from: earliestWithPersonGrants(start, toMonth, person), to: end, grants, usage };
+    return { from: earliestWithPersonGrants(start, person), to: end, grants, usage };
   }
 
   /**
@@ -697,7 +697,7 @@ export class LeaveService {
         const person = personGrants.get(employment.id);
         const mine = withPersonGrants(onlyFrom(grants, from), person);
         const { available_days, buckets } = holidayAvailability(
-          { from: earliestWithPersonGrants(from, month, person), to: lastMonth, grants: mine, usage },
+          { from: earliestWithPersonGrants(from, person), to: lastMonth, grants: mine, usage },
           month,
         );
         items.push({
@@ -1676,15 +1676,16 @@ function onlyFrom(grants: Map<string, number>, from: string): Map<string, number
 
 /**
  * เดือนแรกที่ต้องเริ่มคิด — ปกติ = `start` · ถ้า HR เพิ่มวันให้คนนี้เป็นสิทธิ์ของเดือนก่อนเริ่มนับ (เช่นวันแม่ ส.ค.
- * ก่อนเปิดระบบ ต.ค.) และยังไม่หมดอายุ ณ เดือนที่ดู ให้เริ่มคิดจากเดือนนั้น ⇒ วันนั้นหมดอายุตามเดือนของมันเอง
+ * ก่อนเปิดระบบ ต.ค.) และยังใช้ได้ในเดือน `start` ให้เริ่มคิดจากเดือนนั้น ⇒ วันนั้นหมดอายุตามเดือนของมันเอง
  * (ส.ค. → ใช้ได้ถึงสิ้น ต.ค.) · สิทธิ์บริษัท/ใบลาก่อน `start` ยังไม่ถูกนับเหมือนเดิม (onlyFrom + เงื่อนไขของใบ)
+ * ไม่ขึ้นกับเดือนที่ดู — ไม่งั้นพอดู ธ.ค. วันแม่หายจากการคิด ใบ ต.ค. ที่ใช้วันแม่ไปแล้วจะถูกหักจากสิทธิ์ ต.ค. ซ้ำ
  */
-function earliestWithPersonGrants(start: string, viewMonth: string, person: Map<string, number> | undefined): string {
+function earliestWithPersonGrants(start: string, person: Map<string, number> | undefined): string {
   if (!person) return start;
   let earliest = monthIndex(start);
   for (const month of person.keys()) {
     const i = monthIndex(month);
-    if (i < earliest && monthIndex(viewMonth) - i < HOLIDAY_VALID_MONTHS) earliest = i;
+    if (i < earliest && monthIndex(start) - i < HOLIDAY_VALID_MONTHS) earliest = i;
   }
   return monthOfIndex(earliest);
 }
