@@ -465,7 +465,7 @@ export async function renderCommissionTab(
               {rows.length === 0 ? (
                 <EmptyState>ยังไม่มีพนักงานที่มีคะแนนในเดือนนี้</EmptyState>
               ) : (
-                <DataTable head={["พนักงาน", "เกรด", "คะแนน", "ค่าคอมเดือนนี้", ...(canManage ? ["ไม่ให้ค่าคอม"] : [])]}>
+                <DataTable head={["พนักงาน", "เกรด", "คะแนน", "ค่าคอมเดือนนี้", ...(canManage ? ["ไม่ให้ค่าคอม (ยังไม่ผ่านโปร)"] : [])]}>
                   {rows.map((row) => (
                     <tr key={row.userId} className={row.eligible ? "hover:bg-(--bg-soft)" : "bg-(--bg-soft) text-(--ink-soft)"}>
                       <Td>
@@ -483,7 +483,7 @@ export async function renderCommissionTab(
                       <Td align="right" className="font-mono font-medium">
                         {!row.eligible
                           ? eligibility.excludedUserIds.includes(row.userId)
-                            ? "ไม่ให้ (ยกเว้น)"
+                            ? "ไม่ได้ (ยังไม่ผ่านโปร / ยกเว้น)"
                             : "ไม่ได้ (นอกแผนกที่เลือก)"
                           : row.comm === null
                             ? "—"
@@ -522,7 +522,15 @@ export async function renderCommissionTab(
               )}
               {canManage && (
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs text-(--ink-soft)">เช่น คนทดลองงานไม่ได้ค่าคอม → ติ๊ก &quot;ไม่ให้ค่าคอม&quot; · มีผลทุกเดือนจนกว่าจะเอาออก</p>
+                  {/* ผู้ใช้ 30/10/2569: ผ่านโปรไม่มีวันแน่นอน — HR ติ๊ก/เอาออกเอง ให้ขั้นตอนอ่านจบในที่เดียว */}
+                  <div className="flex max-w-xl flex-col gap-1 rounded-(--radius) bg-(--bg-soft) px-3 py-2 text-xs text-(--ink)">
+                    <span><b>รับคนใหม่ (ยังไม่ผ่านโปร):</b> ติ๊กช่องของคนนั้น → กด &quot;บันทึกคนที่ได้ค่าคอม&quot; · ไม่ได้ค่าคอมทุกเดือนจนกว่าจะเอาติ๊กออก</span>
+                    <span>
+                      <b>ผ่านโปรแล้ว:</b> เอาติ๊กออก → กดบันทึก · ได้ค่าคอมตั้งแต่เดือนนี้ · ถ้าขึ้นเงินเดือนด้วย ไปที่{" "}
+                      <a href="/salary/employees" className="font-semibold text-(--app-strong) underline">เงินเดือน › รายชื่อพนักงาน</a> › คนนั้น › แก้เงินเดือน/ขึ้นเงินเดือน
+                    </span>
+                    <span className="text-(--ink-soft)">ไม่ผ่านโปร / ยังไม่ตัดสิน = ไม่ต้องทำอะไร</span>
+                  </div>
                   <Button type="submit" size="sm" variant="outline">
                     บันทึกคนที่ได้ค่าคอม
                   </Button>
