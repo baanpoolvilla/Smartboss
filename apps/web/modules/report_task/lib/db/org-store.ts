@@ -2,6 +2,7 @@ import "server-only";
 import { dropDuplicateNotifications } from "@/modules/report_task/lib/notification-dedupe";
 import { prisma } from "@smartboss/database";
 import { announceNotification } from "@/lib/notify-push";
+import { postTaskCard } from "@/modules/chat/data/task-cards";
 import { loadNotificationPrefs } from "@/lib/notification-prefs";
 import { isTopicOn, topicForReportNotification } from "@/modules/notifications/prefs";
 import { publishToOrg, publishToUsers } from "@/lib/realtime/server";
@@ -250,6 +251,7 @@ interface StoredNotification {
   kind?: unknown;
   topicName?: unknown;
   grouped?: unknown;
+  taskId?: unknown;
 }
 
 /** แถวที่เพิ่งเพิ่มในรอบนี้ → เด้งถึงผู้รับ */
@@ -276,6 +278,21 @@ function announceNewNotifications(orgId: string, beforeData: unknown, afterData:
     // กันก้อนแปลก ๆ (เช่น เครื่องเก่าบันทึกทับ) ยิงเป็นร้อย — ของจริงต่อครั้งมีไม่กี่แถว
     .slice(0, 100);
   if (fresh.length === 0) return;
+  // มอบหมายงานโดยคน (ไม่ใช่รอบอัตโนมัติ "system" / ข้ามรอบงานทำซ้ำ) → การ์ดงานในแชทส่วนตัวคนมอบหมาย ↔ ผู้รับ
+  // (ผู้ใช้ 30/10/2569 — เปิดงานจากที่ไหนก็ได้ ให้เจ้าตัวรู้ในแชท · ไม่ขึ้นกับการตั้งค่าแจ้งเตือน เพราะเป็นข้อความแชทไม่ใช่การเด้ง)
+  for (const n of fresh) {
+    if (n.kind !== "task_assigned" || typeof n.taskId !== "string" || typeof n.byUserId !== "string" || n.byUserId === "system") continue;
+    const message = typeof n.message === "string" ? n.message : "";
+    const title = /มอบหมายงาน "(.*)" ให้คุณ/.exec(message)?.[1];
+    if (!title) continue;
+    void postTaskCard(orgId, {
+      assignerId: n.byUserId,
+      assigneeId: n.userId as string,
+      taskId: n.taskId,
+      title,
+      link: typeof n.link === "string" && n.link.startsWith("/") ? n.link : `/report-task/tasks?task=${encodeURIComponent(n.taskId)}`,
+    });
+  }
   void (async () => {
     // ผู้รับปิดหัวข้อนั้นไว้ (หน้าตั้งค่าแจ้งเตือน) = ไม่เด้ง ไม่ส่งมือถือ — แถวยังอยู่ในกระดิ่ง (ซ่อนฝั่งจอ)
     const prefs = await loadNotificationPrefs(orgId, fresh.map((n) => n.userId as string));

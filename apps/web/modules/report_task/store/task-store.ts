@@ -732,7 +732,16 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
             "task_due_request",
             t.id
           );
-        return { ...t, dueDateRequests: [...others, request], updatedAt: now };
+        // ขึ้นในคอมเมนต์ของงานด้วย แท็กคนอนุมัติ (ผู้ใช้ 30/10/2569 "ขอเลื่อนต้องการแจ้งเหมือน mention") — ทุกคนในงานเห็นว่าขอเลื่อนเพราะอะไร
+        // ไม่ยิงแจ้งเตือนเพิ่ม: คนอนุมัติได้แจ้ง "ขอเลื่อน" ข้างบนแถวเดียวพอ (งานเยอะ คำขอเยอะ ไม่ให้เด้งซ้ำ)
+        const tag = approverIds.map((id) => `@${getUser(id)?.name ?? ""}`).filter((x) => x.length > 1).join(" ");
+        const dueComment = {
+          id: `${taskId}-cmt-${uuid()}`,
+          authorId: requesterId,
+          message: `📅 ${tag ? `${tag} ` : ""}ขอเลื่อนกำหนดส่ง${whoText} จาก ${formatShortDate(previousDate)} เป็น ${formatShortDate(newDate)} — ${reason}`,
+          createdAt: now,
+        };
+        return { ...t, dueDateRequests: [...others, request], comments: [...t.comments, dueComment], updatedAt: now };
       }),
     })),
 
@@ -782,6 +791,18 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
                     }
                   : r
               ),
+              // ผลการตัดสินขึ้นต่อท้ายคำขอในคอมเมนต์ (คู่กับ requestDueDateChange) — คนขอได้แจ้งเตือนแถวเดียวด้านล่างตามเดิม
+              comments: [
+                ...t.comments,
+                {
+                  id: `${taskId}-cmt-${uuid()}`,
+                  authorId: deciderId,
+                  message: approve
+                    ? `✅ อนุมัติให้เลื่อนกำหนดส่งเป็น ${formatShortDate(request.newDate)}${cleanNote ? ` — ${cleanNote}` : ""}`
+                    : `❌ ไม่อนุมัติการเลื่อนกำหนดส่ง (คงกำหนดเดิม ${formatShortDate(request.previousDate)})${cleanNote ? ` — ${cleanNote}` : ""}`,
+                  createdAt: now,
+                },
+              ],
               updatedAt: now,
             }
       ),

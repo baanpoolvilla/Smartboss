@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
 
-import type { ChatAttachment, ChatAttachmentKind, ChatMessageDTO, ChatNotePreview, ChatReactionDTO, ChatReplyPreview, ChatAlbumCard } from "../types";
+import type { ChatAttachment, ChatAttachmentKind, ChatMessageDTO, ChatNotePreview, ChatReactionDTO, ChatReplyPreview, ChatAlbumCard, ChatTaskCard } from "../types";
 import { EXPIRING_KINDS, mediaExpiresAt } from "../lib/retention";
 import { isKeepChannelId } from "../types";
 
@@ -95,6 +95,14 @@ export async function reactionsFor(orgId: string, messageId: string): Promise<Ch
  * แปลงแถวเป็น DTO พร้อม "ตอบกลับข้อความไหน" และอีโมจิ — query รวมครั้งเดียวต่อชุด
  * ไม่ยิงทีละข้อความ ข้อความที่ยกเลิกแล้วเหลือแค่ร่องรอย (ไม่ส่งเนื้อหาออกไป)
  */
+/** การ์ดงาน (kind "task") — meta ที่ data/task-cards.ts เขียนไว้ · ข้อมูลไม่ครบ = null (การ์ดขึ้นเป็นข้อความธรรมดา) */
+function taskCard(row: MessageRow): ChatTaskCard | null {
+  const m = row.meta && typeof row.meta === "object" ? (row.meta as Partial<ChatTaskCard>) : null;
+  if (!m || typeof m.taskId !== "string" || typeof m.title !== "string") return null;
+  const link = typeof m.link === "string" && m.link.startsWith("/") ? m.link : `/report-task/tasks?task=${encodeURIComponent(m.taskId)}`;
+  return { taskId: m.taskId, title: m.title, dueDate: typeof m.dueDate === "string" ? m.dueDate : null, link };
+}
+
 export async function hydrateMessages(orgId: string, rows: MessageRow[]): Promise<ChatMessageDTO[]> {
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
@@ -182,6 +190,7 @@ export async function hydrateMessages(orgId: string, rows: MessageRow[]): Promis
       kind: row.kind,
       ...(row.kind === "note" ? { note: deleted ? null : (noteByMessage.get(row.id) ?? null) } : {}),
       ...(row.kind === "album" ? { album: deleted ? null : albumCard(row) } : {}),
+      ...(row.kind === "task" ? { task: deleted ? null : taskCard(row) } : {}),
       body: deleted ? null : row.body,
       attachments: deleted ? [] : withExpiry(row),
       replyTo: deleted || !row.replyToId ? null : (replies.get(row.replyToId) ?? null),

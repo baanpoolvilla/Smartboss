@@ -128,9 +128,21 @@ export interface ChatAlbumCard {
   items: { url: string; thumbUrl: string | null; kind: string }[];
 }
 
+/**
+ * การ์ด "งานใหม่" ในแชทส่วนตัว คนมอบหมาย ↔ ผู้รับผิดชอบ (ChatMessage kind "task") — ผู้ใช้ 30/10/2569:
+ * สร้าง/มอบหมายงานจากที่ไหนก็ได้ ให้เจ้าตัวรู้ในแชทด้วย กดการ์ดแล้วไปหน้ารายละเอียดงาน (data/task-cards.ts)
+ */
+export interface ChatTaskCard {
+  taskId: string;
+  title: string;
+  /** YYYY-MM-DD หรือ ISO — null = ไม่รู้ (อ่านงานไม่ได้ตอนโพสต์) */
+  dueDate: string | null;
+  link: string;
+}
+
 /** ข้อความที่คนพิมพ์/โพสต์ (ไม่ใช่ข้อความระบบ) — นับยังไม่อ่าน เด้งแจ้งเตือน มีเสียง */
 export function isUserMessageKind(kind: string): boolean {
-  return kind === "text" || kind === "note" || kind === "album";
+  return kind === "text" || kind === "note" || kind === "album" || kind === "task";
 }
 
 /** ห้อง "🕐 ระบบลงเวลา" ส่วนตัวของแต่ละคน (lib/attendance-chat.ts) — id ขึ้นต้นด้วยนี้ */
@@ -188,6 +200,8 @@ export interface ChatMessageDTO {
   note?: ChatNotePreview | null;
   /** kind "album" เท่านั้น — null = อัลบั้มถูกลบไปแล้ว */
   album?: ChatAlbumCard | null;
+  /** kind "task" เท่านั้น — การ์ดงานใหม่ */
+  task?: ChatTaskCard | null;
   body: string | null;
   attachments: ChatAttachment[];
   replyTo: ChatReplyPreview | null;

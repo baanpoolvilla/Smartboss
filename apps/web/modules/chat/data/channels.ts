@@ -369,7 +369,7 @@ export async function listChannelsForUser(orgId: string, userId: string): Promis
             AND m.channel_id = ANY(${channelIds})
             AND m.deleted_at IS NULL
             -- ห้องระบบลงเวลา (clock-…) นับข้อความระบบด้วย — ดู countsAsUnread ใน ../types
-            AND (m.kind IN ('text', 'note') OR (m.kind = 'system' AND m.channel_id LIKE 'clock-%'))
+            AND (m.kind IN ('text', 'note', 'task') OR (m.kind = 'system' AND m.channel_id LIKE 'clock-%'))
             AND m.author_id <> ${userId}
             AND (r.last_read_seq IS NULL OR m.seq > r.last_read_seq)
           GROUP BY m.channel_id`

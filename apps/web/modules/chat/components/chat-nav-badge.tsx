@@ -97,7 +97,8 @@ function onEvent(raw: RealtimeEventMessage) {
   if (!viewingRoom && (!state.muted.has(event.channelId) || mentionedHere)) setUnread(state.unread + 1);
 
   // ─── เด้งแจ้งเตือน ───
-  if (viewingRoom || notified.has(message.id)) return;
+  // การ์ดงานใหม่: แจ้งเตือน "มอบหมายงาน" เด้งไปแล้วทางกระดิ่ง — นับยังไม่อ่านอย่างเดียว ไม่เด้งซ้ำ
+  if (viewingRoom || notified.has(message.id) || message.kind === "task") return;
   notified.add(message.id);
   if (notified.size > 200) notified.clear();
   const mentioned = mentionedHere;
