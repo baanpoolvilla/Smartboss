@@ -4,7 +4,9 @@ import { prisma } from "@smartboss/database";
 import { readStore, writeStore } from "./org-store";
 import { penaltyRequestOpen, retroSubmitDeadline } from "../penalty-request-window";
 import type { ScorePeriodConfig } from "@/lib/score-period";
-import type { ReportPost } from "@/modules/report_task/store/report-feed-store";
+import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
+import { effectiveRoundsOf, postsOfRound, roundRunsOnDay } from "@/modules/report_task/lib/submission-rounds";
+import { localDateStr } from "@/modules/report_task/lib/now";
 import { loadScorePeriodConfig } from "@/lib/score-period-config";
 
 /**
@@ -188,9 +190,44 @@ export async function decidePenaltyRequest(
     if (!result.ok) continue; // ชนกับคนอื่น — อ่านใหม่แล้วลองอีกรอบ
 
     if (decision === "approved" && !awaitsPost) await refundRequest(orgId, updated, decidedBy);
+    if (decision === "approved" && updated.category === "report_late") await markLatePostOnTime(orgId, updated);
     return { error: null, request: updated };
   }
   return { error: "บันทึกผลไม่สำเร็จ ลองใหม่อีกครั้ง" };
+}
+
+/**
+ * "ส่งสาย" ที่อนุมัติแล้ว = นับว่าส่งตรงเวลา — ติด lateBadgeHidden ให้โพสต์ของคนนั้นในรอบนั้น
+ * (ธงเดียวกับเมนู "ซ่อนป้ายส่งช้า" ของเจ้าของระบบ: ป้ายสายหาย · สถิติห้อง/แดชบอร์ด/ตัวหักคะแนนนับเป็นตรงเวลา)
+ * ผู้ใช้ 30/10/2569 "ส่งแล้วแต่ช้า หัวหน้าอนุมัติ ให้แก้ว่าส่งตรงเลย" · หาโพสต์ไม่เจอ = ไม่ทำอะไร (คืนคะแนนไปแล้วอยู่ดี)
+ */
+async function markLatePostOnTime(orgId: string, request: PenaltyRequest): Promise<void> {
+  try {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const { data, version } = await readStore<{ topics?: ReportTopic[]; posts?: ReportPost[] } & Record<string, unknown>>(orgId, "report-feed");
+      const topic = data?.topics?.find((t) => t.id === request.topicId);
+      const posts = data?.posts ?? [];
+      if (!data || !topic) return;
+      const mine = posts.filter((p) => p.topicId === topic.id && p.authorId === request.userId && !p.excludeFromSubmission);
+      const dayPosts = mine.filter((p) => localDateStr(new Date(p.createdAt)) === request.day);
+      const rounds = effectiveRoundsOf(topic).filter((r) => roundRunsOnDay(r, request.day));
+      let targets = rounds.length > 1 ? postsOfRound(dayPosts, rounds, request.roundId) : dayPosts;
+      // รายสัปดาห์/รายเดือนที่ส่งในช่วงเผื่อเวลา (หลังวันครบกำหนด) — โพสต์แรกของคนนั้นหลังวันนั้น
+      if (targets.length === 0) {
+        const after = mine
+          .filter((p) => localDateStr(new Date(p.createdAt)) > request.day)
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+        targets = after.slice(0, 1);
+      }
+      const ids = new Set(targets.filter((p) => !p.lateBadgeHidden).map((p) => p.id));
+      if (ids.size === 0) return;
+      const next = { ...data, posts: posts.map((p) => (ids.has(p.id) ? { ...p, lateBadgeHidden: true } : p)) };
+      const result = await writeStore(orgId, "report-feed", next, version);
+      if (result.ok) return;
+    }
+  } catch (err) {
+    console.error("[penalty-requests] markLatePostOnTime failed", err);
+  }
 }
 
 /** คืนคะแนนของคำร้องที่อนุมัติแล้ว — event ตรงข้าม "report_round_undo" · มีอยู่แล้วไม่ออกซ้ำ */
@@ -248,7 +285,10 @@ export async function settleApprovedLateRequests(orgId: string): Promise<void> {
     const next = list.map((r) => (ids.has(r.id) ? { ...r, awaitingPost: false } : r));
     const result = await writeStore(orgId, KEY, next, version);
     if (!result.ok) continue;
-    for (const r of settle) await refundRequest(orgId, r, r.decidedBy);
+    for (const r of settle) {
+      await refundRequest(orgId, r, r.decidedBy);
+      await markLatePostOnTime(orgId, r);
+    }
     return;
   }
 }
