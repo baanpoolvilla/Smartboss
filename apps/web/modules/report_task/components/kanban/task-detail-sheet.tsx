@@ -38,7 +38,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/c
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/modules/report_task/components/ui/tooltip";
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { TimePickerField } from "@/modules/report_task/components/shared/time-picker-field";
-import { PenaltyChip } from "@/modules/report_task/components/shared/penalty-chip";
+import { MemberPenaltyWaiveButton, PenaltyChip } from "@/modules/report_task/components/shared/penalty-chip";
 import { TaskRecurrenceSection } from "@/modules/report_task/components/kanban/task-recurrence-section";
 import { TaskProjectInfo } from "@/modules/report_task/components/projects/task-project-info";
 import { SubtasksSection } from "@/modules/report_task/components/kanban/subtasks-section";
@@ -1469,7 +1469,10 @@ export function TaskDetailSheet({
                           คืนคะแนนแล้ว +{Math.abs(p.points)}
                         </span>
                       ) : (
-                        <span className="text-[var(--chart-red)] font-semibold">−{Math.abs(p.points)} คะแนน</span>
+                        <span className="flex items-center gap-1">
+                          <span className="text-[var(--chart-red)] font-semibold">−{Math.abs(p.points)} คะแนน</span>
+                          <MemberPenaltyWaiveButton task={task} userId={uid} name={displayName(uid)} />
+                        </span>
                       )}
                     </div>
                   ))}

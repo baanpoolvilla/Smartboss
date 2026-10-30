@@ -500,6 +500,8 @@ interface TaskStore {
    * quietly disappearing the way a normal undock would.
    */
   overrideAutoPenalty: (taskId: string, byUserId: string, reason: string) => void;
+  /** เหมือน overrideAutoPenalty แต่ของงานกลุ่ม — คืนคะแนนเฉพาะคนเดียว (`penalties[userId]`) */
+  overrideMemberPenalty: (taskId: string, userId: string, byUserId: string, reason: string) => void;
 }
 
 const defaultFilters: TaskFilters = {
@@ -1645,6 +1647,37 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
                 updatedAt: new Date().toISOString(),
               }
         ),
+      };
+    }),
+  overrideMemberPenalty: (taskId, userId, byUserId, reason) =>
+    set((s) => {
+      const t = s.tasks.find((x) => x.id === taskId);
+      const memberName = getUser(userId)?.name ?? "ผู้รับผิดชอบ";
+      if (t) {
+        logActivity(byUserId, "ยกเลิกการหักคะแนนอัตโนมัติ", t.title, t.id, `${memberName} · ${reason}`);
+        const actorName = getUser(byUserId)?.name ?? "มีคน";
+        notifyPenaltyChange(t, byUserId, `${actorName} ยกเลิกการหักคะแนนอัตโนมัติของ ${memberName} ใน "${t.title}" — เหตุผล: ${reason}`);
+      }
+      return {
+        tasks: s.tasks.map((x) => {
+          const p = x.id === taskId ? x.penalties?.[userId] : undefined;
+          if (!p || p.waived) return x;
+          // เซิร์ฟเวอร์เห็น waived ใหม่ของคนนี้แล้วออก event คืนคะแนน refId `${taskId}:${userId}` (task-repo.ts newlyWaived)
+          return {
+            ...x,
+            penalties: { ...x.penalties, [userId]: { ...p, waived: { byUserId, at: new Date().toISOString(), reason } } },
+            comments: [
+              ...x.comments,
+              {
+                id: `${taskId}-cmt-${uuid()}`,
+                authorId: byUserId,
+                message: `[ยกเลิกการหักคะแนนอัตโนมัติ · ${memberName}] ${reason}`,
+                createdAt: new Date().toISOString(),
+              },
+            ],
+            updatedAt: new Date().toISOString(),
+          };
+        }),
       };
     }),
 }));

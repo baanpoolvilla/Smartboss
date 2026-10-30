@@ -260,3 +260,67 @@ export function PenaltyChip({
     </>
   );
 }
+
+/**
+ * งานกลุ่ม: ปุ่มคืนคะแนนของคนหนึ่ง (แถว "สถานะการหักคะแนน (รายคน)") — เจ้าของระบบเท่านั้น ต้องใส่เหตุผล
+ * เหมือน PenaltyChip ของงานเดี่ยว แต่ยกเว้นเฉพาะ `penalties[userId]` คนอื่นในงานยังถูกหักตามเดิม
+ */
+export function MemberPenaltyWaiveButton({ task, userId, name }: { task: Task; userId: string; name: string }) {
+  const overrideMemberPenalty = useTaskStore((s) => s.overrideMemberPenalty);
+  const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const penalty = task.penalties?.[userId];
+  if (!penalty || penalty.waived || !canOverrideAutoPenalty(viewingAsUserId)) return null;
+
+  function submit() {
+    const text = reason.trim();
+    if (!text) return;
+    overrideMemberPenalty(task.id, userId, viewingAsUserId, text);
+    toast.success(`คืนคะแนน ${name} +${Math.abs(penalty!.points)} แล้ว — บันทึกเหตุผลไว้ในคอมเมนต์`);
+    setOpen(false);
+    setReason("");
+  }
+
+  return (
+    <>
+      <Button
+        variant="ghost"
+        className="h-6 px-2 text-[11px]"
+        onClick={() => {
+          setReason("");
+          setOpen(true);
+        }}
+      >
+        คืนคะแนน
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md" onClick={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>คืนคะแนนให้ {name}</DialogTitle>
+            <DialogDescription>
+              ยกเลิกการหัก −{Math.abs(penalty.points)} ของ {name} คนเดียว คนอื่นในงานนี้ไม่เปลี่ยน — พิมพ์เหตุผลด้านล่าง
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            autoFocus
+            rows={3}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="เช่น ตั้งกำหนดส่งผิดพลาด, ระบบขัดข้อง..."
+          />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpen(false)}>ยกเลิก</Button>
+            <Button
+              className="bg-[var(--chart-red)] hover:bg-red-700 text-white"
+              onClick={submit}
+              disabled={!reason.trim()}
+            >
+              ยืนยันคืนคะแนน
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
