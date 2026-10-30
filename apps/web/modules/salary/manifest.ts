@@ -19,6 +19,9 @@ export const SALARY_CODE = "salary";
  * เมนูการเงินพนักงาน — แสดงเป็นกลุ่มในระบบบุคคล (modules/hr/manifest.ts) ตั้งแต่ 30/10/2569
  * salaryManifest ไม่อยู่ใน moduleRegistry แล้ว (ไม่มีไอคอนแยกบนหน้าแรก) — เก็บไว้เป็นที่รวมเมนูชุดนี้
  */
+/** หัวข้อตั้งค่ารวมของระบบบุคคล — ตั้งค่าบุคคล (hr manifest) + ตั้งค่าเงินเดือน/เบิกจ่าย อยู่หมวดเดียวกัน (ผู้ใช้ 30/10/2569) */
+export const SETTINGS_GROUP = "ตั้งค่า & อื่น ๆ";
+
 export const MONEY_MENUS: ModuleMenuItem[] = [
     { group: "การเงิน · ทำทุกเดือน", label: "ทำเงินเดือน", path: "/salary", permission: SALARY_EDIT_MENU, icon: "Banknote", activeFor: ["/salary/runs"], hideForRoles: [WORKER_ROLE_CODE] },
     { group: "การเงิน · ทำทุกเดือน", label: "ค่าคอม", path: "/salary/commission", permission: SALARY_EDIT_MENU, icon: "HandCoins", hideForRoles: [WORKER_ROLE_CODE] },
@@ -32,10 +35,10 @@ export const MONEY_MENUS: ModuleMenuItem[] = [
     { group: "การเงิน · ข้อมูล", label: "เงินเดือนรายคน", path: "/salary/employees", permission: SALARY_EDIT_MENU, icon: "Users", hideForRoles: [WORKER_ROLE_CODE] },
     { group: "การเงิน · ข้อมูล", label: "รายงานเบิกจ่าย", path: "/requests/report", permission: REQ_PERMS.viewAll, icon: "ChartColumn", hideForRoles: [WORKER_ROLE_CODE] },
 
-    { group: "การเงิน · ตั้งค่า & อื่น ๆ", label: "ตั้งค่าเงินเดือน", path: "/salary/settings", permission: SALARY_EDIT_MENU, icon: "Settings", hideForRoles: [WORKER_ROLE_CODE] },
-    { group: "การเงิน · ตั้งค่า & อื่น ๆ", label: "ตั้งค่าเบิกจ่าย", path: "/requests/settings", permission: REQ_PERMS.settings, icon: "Settings", hideForRoles: [WORKER_ROLE_CODE] },
-    { group: "การเงิน · ตั้งค่า & อื่น ๆ", label: "คู่มือ", path: "/salary/guide", permission: SALARY_EDIT_MENU, icon: "BookOpen", hideForRoles: [WORKER_ROLE_CODE] },
-    { group: "การเงิน · ตั้งค่า & อื่น ๆ", label: "สลิปของฉัน", path: "/salary/my", permission: SALARY_PERMS.access, icon: "ReceiptText", hideForRoles: [WORKER_ROLE_CODE] },
+    { group: SETTINGS_GROUP, label: "ตั้งค่าเงินเดือน", path: "/salary/settings", permission: SALARY_EDIT_MENU, icon: "Settings", hideForRoles: [WORKER_ROLE_CODE] },
+    { group: SETTINGS_GROUP, label: "ตั้งค่าเบิกจ่าย", path: "/requests/settings", permission: REQ_PERMS.settings, icon: "Settings", hideForRoles: [WORKER_ROLE_CODE] },
+    { group: SETTINGS_GROUP, label: "คู่มือ", path: "/salary/guide", permission: SALARY_EDIT_MENU, icon: "BookOpen", hideForRoles: [WORKER_ROLE_CODE] },
+    { group: SETTINGS_GROUP, label: "สลิปของฉัน", path: "/salary/my", permission: SALARY_PERMS.access, icon: "ReceiptText", hideForRoles: [WORKER_ROLE_CODE] },
 ];
 
 export const salaryManifest: ModuleManifest = {

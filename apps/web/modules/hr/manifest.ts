@@ -3,7 +3,7 @@ import type { ModuleManifest } from "@/module-registry";
 import { HR_PERMS } from "./permissions";
 import { WORKER_ROLE_CODE } from "@/modules/daily_worker/permissions";
 import { NotifCountBadge } from "@/modules/notifications/notif-count-badge";
-import { MONEY_MENUS } from "@/modules/salary/manifest";
+import { MONEY_MENUS, SETTINGS_GROUP } from "@/modules/salary/manifest";
 
 /** Module.code ใน DB ต้องตรงกับค่านี้ */
 export const HR_CODE = "hr";
@@ -55,7 +55,6 @@ export const hrManifest: ModuleManifest = {
     { group: "บุคคล & เวลา", label: "พนักงาน", path: "/hr/employees", permission: HR_PERMS.employeeView, icon: "Users" },
     // "รอบจ่าย" (เงินเดือนตัวเก่าของระบบบุคคล) และ "ของฉัน" (สลิปเก่า) เอาออกจากเมนู 30/10/2569 — ใช้ "การเงินพนักงาน" ด้านล่างแทน
     // หน้าเดิมยังอยู่ที่ /hr/payroll, /hr/my-payslips (เปิดจากลิงก์ตรงได้ ไม่ลบข้อมูล)
-    { group: "บุคคล & เวลา", label: "ตั้งค่า", path: "/hr/settings", permission: HR_PERMS.settingManage, icon: "Settings" },
     // ทุกคนเข้าได้ (HR_PERMS.access เดียวกับเมนู "ของฉัน") — คนละสิทธิ์กับหน้า
     // "คะแนน & เกรด" ของทั้งบริษัท (core.performance.view, ADMIN/CEO/MANAGER
     // เท่านั้น) หน้านี้เห็น "คะแนนของฉัน" คนเดียว ยื่นคำร้องขอแก้ไขได้เอง
@@ -78,7 +77,10 @@ export const hrManifest: ModuleManifest = {
           "ml-auto flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-(--danger) px-1 text-[10px] font-bold text-white",
       }),
     },
-    ...MONEY_MENUS,
+    // ตั้งค่าบุคคลย้ายลงไปอยู่หมวดตั้งค่าเดียวกับตั้งค่าเงินเดือน/เบิกจ่าย (ผู้ใช้ 30/10/2569 "จะได้หมวดเดียวกัน")
+    ...MONEY_MENUS.filter((m) => m.group !== SETTINGS_GROUP),
+    { group: SETTINGS_GROUP, label: "ตั้งค่าบุคคล", path: "/hr/settings", permission: HR_PERMS.settingManage, icon: "Settings" },
+    ...MONEY_MENUS.filter((m) => m.group === SETTINGS_GROUP),
   ],
   permissions: Object.values(HR_PERMS),
 };

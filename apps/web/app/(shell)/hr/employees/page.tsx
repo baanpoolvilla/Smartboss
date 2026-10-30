@@ -64,9 +64,11 @@ export default async function EmployeesPage({
         tab === "registry" && canManage ? (
           <Link prefetch={false}
             href="/hr/employees/import"
-            className="text-sm text-(--app-strong) hover:underline"
+            className="whitespace-nowrap text-sm text-(--app-strong) hover:underline"
           >
-            นำเข้าจากผู้ใช้
+            {/* มือถือหัวแคบ — ข้อความยาวเดิมขึ้น 4 บรรทัดเบียดชื่อหน้า */}
+            <span className="sm:hidden">นำเข้า</span>
+            <span className="hidden sm:inline">นำเข้าจากผู้ใช้</span>
           </Link>
         ) : null
       }

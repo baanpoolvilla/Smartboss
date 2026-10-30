@@ -284,7 +284,9 @@ function ModuleRail({
   pathname: string;
 }) {
   return (
-    <aside className="hidden w-[200px] shrink-0 flex-col border-r border-(--line) bg-(--bg) lg:flex">
+    // lg:sticky + h-dvh: เมนูยาวกว่าจอ (ระบบบุคคล + การเงิน ~20 เมนู บนโน้ตบุ๊ก 768px) ให้เลื่อนในแถบซ้ายเอง
+    // (nav overflow-y-auto) — เดิมแถบยืดตามเมนู เมนูล่าง ๆ ตกจอ · โมดูลที่เมนูสั้นหน้าตาเหมือนเดิม
+    <aside className="hidden w-[200px] shrink-0 flex-col border-r border-(--line) bg-(--bg) lg:sticky lg:top-0 lg:flex lg:h-dvh">
       {/* โลโก้ SmartBoss ตรึงบนสุดทุกหน้าในโมดูล ("อยากให้โลโก้สมาบอสแสดงมุม
           ซ้ายขนทุกหน้าเลย") — เดิมแถวนี้เป็นของหัวข้อโมดูลไปเลย ทำให้โลโก้
           หายไปทันทีที่กดเข้าโมดูล เห็นแค่ตอนอยู่หน้ารวมแอป (LauncherFrame) */}
@@ -333,7 +335,7 @@ function ModuleRail({
           <Fragment key={menu.path}>
             {/* หัวข้อกลุ่ม (ModuleMenuItem.group) — ขึ้นเมื่อกลุ่มเปลี่ยน · โมดูลที่ไม่ใส่ group หน้าตาเหมือนเดิม */}
             {menu.group && menu.group !== module.menus[i - 1]?.group && (
-              <div className={cn("px-3 pb-1 text-xs font-semibold tracking-wide text-(--ink-soft)", i > 0 && "mt-3")}>{menu.group}</div>
+              <div className={cn("shrink-0 px-3 pb-1 text-xs font-semibold tracking-wide text-(--ink-soft)", i > 0 && "mt-3")}>{menu.group}</div>
             )}
             <RailItem menu={menu} active={isMenuActive(pathname, menu, module)} />
           </Fragment>
@@ -352,7 +354,7 @@ function RailItem({ menu, active }: { menu: ModuleMenuItem; active: boolean }) {
       // ชน Prisma pool บน VM 2 core (เจอเป็นอาการ "กดเมนูข้างซ้ายหน่วง")
       prefetch={false}
       className={cn(
-        "flex h-12 items-center gap-3 rounded-xl px-3 text-sm transition-colors",
+        "flex h-12 shrink-0 items-center gap-3 rounded-xl px-3 text-sm transition-colors",
         active
           ? "bg-(--app-soft,#CCFBF1) font-bold text-(--app-strong,var(--ink))"
           : "text-(--ink-soft) hover:bg-(--bg-soft)"
@@ -431,11 +433,15 @@ function ModuleBottomNav({
               <X className="h-4 w-4" />
             </button>
             <div className="mt-2 flex flex-col">
-              {overflow.map((menu) => {
+              {overflow.map((menu, i) => {
                 const active = isMenuActive(pathname, menu, module);
                 return (
+                  <Fragment key={menu.path}>
+                  {/* หัวข้อกลุ่มเหมือนแถบซ้ายบนคอม (ModuleMenuItem.group) — โมดูลที่ไม่ใส่ group หน้าตาเหมือนเดิม */}
+                  {menu.group && menu.group !== overflow[i - 1]?.group && (
+                    <div className={cn("px-5 pb-1 text-xs font-semibold tracking-wide text-(--ink-soft)", i > 0 ? "pt-4" : "pt-1")}>{menu.group}</div>
+                  )}
                   <Link
-                    key={menu.path}
                     href={menu.path}
                     onClick={() => setSheetOpen(false)}
                     className={cn(
@@ -448,6 +454,7 @@ function ModuleBottomNav({
                     <Icon name={menu.icon} className="h-5 w-5 shrink-0" />
                     {menu.label}
                   </Link>
+                  </Fragment>
                 );
               })}
             </div>
