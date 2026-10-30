@@ -9,7 +9,6 @@ import { companyFilesManifest } from "@/modules/company-files/manifest";
 import { exampleManifest } from "@/modules/example/manifest";
 import { hrManifest } from "@/modules/hr/manifest";
 import { dailyWorkerManifest } from "@/modules/daily_worker/manifest";
-import { salaryManifest } from "@/modules/salary/manifest";
 import { maintenanceManifest } from "@/modules/maintenance/manifest";
 import { reportTaskManifest } from "@/modules/report_task/manifest";
 import { chatReportManifest } from "@/modules/report_task/chat-report-manifest";
@@ -92,9 +91,8 @@ export const moduleRegistry: ModuleManifest[] = [
   hrManifest,
   // คนงานรายวัน — เปิดตามโมดูลบุคคล เห็นเฉพาะคนที่มีสิทธิ์ (modules/daily_worker)
   dailyWorkerManifest,
-  // การเงินพนักงาน = เงินเดือน + ค่าคอม + เบิกจ่าย & OT + เงินสดย่อย (ผู้ใช้เลือกแบบ B 30/10/2569)
-  // เมนูของเบิกจ่ายย้ายไปอยู่ใน salaryManifest (extraPaths /requests) — requestsManifest ไม่ขึ้นแยกแล้ว
-  salaryManifest,
+  // การเงินพนักงาน (เงินเดือน + ค่าคอม + เบิกจ่าย & OT + เงินสดย่อย) อยู่ในระบบบุคคลเป็นกลุ่มเมนู
+  // (hrManifest extraPaths /salary /requests · เมนูจาก modules/salary/manifest.ts MONEY_MENUS) — ไม่มีไอคอนแยก
   // พอร์ตมาจากแอป easyboss-workspace ที่เคยรันเดี่ยว ๆ
   reportTaskManifest,
   // แชท + รายงาน — แยกออกจากรายงานและงานเป็นโมดูลหลักของตัวเอง (เปิดตาม report_task)

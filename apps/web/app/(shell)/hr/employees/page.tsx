@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { Fab } from "@/components/module/app-scaffold";
 import { HrPage } from "@/modules/hr/components/hr-page";
@@ -43,10 +44,12 @@ export default async function EmployeesPage({
   const canSeeCommission = canManageCommission;
 
   const sp = await searchParams;
+  // ค่าคอมย้ายไปที่เดียว: ระบบบุคคล › การเงิน › ค่าคอม (/salary/commission) — ลิงก์/บุ๊กมาร์กเดิมพาไปที่ใหม่ (ผู้ใช้ 30/10/2569)
+  if (sp.tab === "commission" && canSeeCommission) redirect(`/salary/commission${sp.month ? `?month=${encodeURIComponent(sp.month)}` : ""}`);
   const allowed: Record<TabId, boolean> = {
     registry: true,
     score: canSeeScore,
-    commission: canSeeCommission,
+    commission: false,
   };
   const requested: TabId = sp.tab === "score" || sp.tab === "commission" ? sp.tab : "registry";
   const tab: TabId = allowed[requested] ? requested : "registry";

@@ -549,7 +549,7 @@ export default async function EmployeeDetailPage({
                             ? "ไม่อยู่ในรายชื่อรับค่าคอม"
                             : `บาท · ตัวคูณ ${commissionShare.weight}`
                       }
-                      href="/hr/employees?tab=commission"
+                      href="/salary/commission"
                     />
                   )}
                 </div>

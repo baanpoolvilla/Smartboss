@@ -177,7 +177,7 @@ export function commissionForUser(data: CommissionMonth, userId: string, label: 
   if (!m || !m.eligible || data.method === "off") return null;
   if (data.method === "grade_tier") {
     const g = data.gradeTier;
-    if (!data.pool) return { kind: "blocked", reason: `ยังไม่ได้ใส่ค่าคอมรวมของรอบ ${label} (ระบบบุคคล › พนักงาน › ค่าคอม) — รอบนี้ไม่มีค่าคอมให้ใส่ 0` };
+    if (!data.pool) return { kind: "blocked", reason: `ยังไม่ได้ใส่ค่าคอมรวมของรอบ ${label} (ระบบบุคคล › การเงิน › ค่าคอม) — รอบนี้ไม่มีค่าคอมให้ใส่ 0` };
     if (g.poolSatang <= 0) return null;
     if (g.problems.length > 0) return { kind: "blocked", reason: `ค่าคอม ${label}: ${g.problems.join(" · ")}` };
     const s = g.shares.find((x) => x.userId === userId);

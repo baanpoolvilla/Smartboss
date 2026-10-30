@@ -3,6 +3,7 @@ import type { ModuleManifest } from "@/module-registry";
 import { HR_PERMS } from "./permissions";
 import { WORKER_ROLE_CODE } from "@/modules/daily_worker/permissions";
 import { NotifCountBadge } from "@/modules/notifications/notif-count-badge";
+import { MONEY_MENUS } from "@/modules/salary/manifest";
 
 /** Module.code ใน DB ต้องตรงกับค่านี้ */
 export const HR_CODE = "hr";
@@ -23,14 +24,17 @@ export const hrManifest: ModuleManifest = {
   color: "#3B82F6",
   colorBg: "#EFF5FF",
   basePath: "/hr",
+  // การเงินพนักงาน (เงินเดือน + เบิกจ่าย & OT) เป็นหัวข้อหนึ่งในระบบบุคคล (ผู้ใช้ 30/10/2569 "มันคือเรื่อง HR") — หน้าเดิม URL เดิม
+  extraPaths: ["/salary", "/requests"],
   icon: "Users",
   menus: [
     // เมนูแรก = หน้าที่เปิดมาเจอเมื่อกดเข้าระบบบุคคล (app/(shell)/page.tsx's REDIRECT_ONLY_BASES)
     // ลงเวลาของตัวเองอยู่ที่นี่ที่เดียว — เอาออกจากหน้าแรกของแอปแล้ว ("ให้ไปอยู่ใน HR เป็นหัวข้อนึง")
     // คนงาน (WORKER) ลงเวลาที่ "คนงานรายวัน → ลงเวลา" แทน — ระบบบุคคลจึงไม่ขึ้นให้คนงานเลย
-    { label: "ลงเวลา", path: "/hr/clock", permission: HR_PERMS.access, icon: "Clock", hideForRoles: [WORKER_ROLE_CODE] },
+    { group: "บุคคล & เวลา", label: "ลงเวลา", path: "/hr/clock", permission: HR_PERMS.access, icon: "Clock", hideForRoles: [WORKER_ROLE_CODE] },
     {
       // เดิมชื่อ "หน้าหลัก" — ซ้ำกับปุ่ม "หน้าหลัก" (กลับหน้าแรกของแอป) ที่อยู่ข้างกันบนแถบล่าง
+      group: "บุคคล & เวลา",
       label: "ภาพรวม",
       // คนงานรายวันใช้ระบบบุคคลแค่ลงเวลา — เมนูอื่นซ่อน (ดูคนงานที่โมดูลคนงานรายวัน)
       hideForRoles: [WORKER_ROLE_CODE],
@@ -47,20 +51,21 @@ export const hrManifest: ModuleManifest = {
       }),
     },
     // ลงเวลาจากมือถือที่ GPS ผ่านแต่มีข้อสังเกต — นับเวลาแล้ว มีไว้ให้ HR เห็นแล้วไปถามเอง
-    { label: "ลงเวลาผิดปกติ", path: "/hr/checkin-review", permission: HR_PERMS.employeeManage, icon: "ShieldCheck" },
-    { label: "พนักงาน", path: "/hr/employees", permission: HR_PERMS.employeeView, icon: "Users" },
-    { label: "รอบจ่าย", path: "/hr/payroll", permission: HR_PERMS.payrollView, icon: "Wallet" },
-    { label: "ตั้งค่า", path: "/hr/settings", permission: HR_PERMS.settingManage, icon: "Settings" },
-    { label: "ของฉัน", path: "/hr/my-payslips", permission: HR_PERMS.access, icon: "ReceiptText", hideForRoles: [WORKER_ROLE_CODE] },
+    { group: "บุคคล & เวลา", label: "ลงเวลาผิดปกติ", path: "/hr/checkin-review", permission: HR_PERMS.employeeManage, icon: "ShieldCheck" },
+    { group: "บุคคล & เวลา", label: "พนักงาน", path: "/hr/employees", permission: HR_PERMS.employeeView, icon: "Users" },
+    // "รอบจ่าย" (เงินเดือนตัวเก่าของระบบบุคคล) และ "ของฉัน" (สลิปเก่า) เอาออกจากเมนู 30/10/2569 — ใช้ "การเงินพนักงาน" ด้านล่างแทน
+    // หน้าเดิมยังอยู่ที่ /hr/payroll, /hr/my-payslips (เปิดจากลิงก์ตรงได้ ไม่ลบข้อมูล)
+    { group: "บุคคล & เวลา", label: "ตั้งค่า", path: "/hr/settings", permission: HR_PERMS.settingManage, icon: "Settings" },
     // ทุกคนเข้าได้ (HR_PERMS.access เดียวกับเมนู "ของฉัน") — คนละสิทธิ์กับหน้า
     // "คะแนน & เกรด" ของทั้งบริษัท (core.performance.view, ADMIN/CEO/MANAGER
     // เท่านั้น) หน้านี้เห็น "คะแนนของฉัน" คนเดียว ยื่นคำร้องขอแก้ไขได้เอง
     // (เดิมยื่นได้แค่จากหน้าคะแนนรวมที่พนักงานทั่วไปเข้าไม่ถึงด้วยซ้ำ)
-    { label: "คะแนนของฉัน", path: "/hr/my-score", permission: HR_PERMS.access, icon: "Award", hideForRoles: [WORKER_ROLE_CODE] },
+    { group: "บุคคล & เวลา", label: "คะแนนของฉัน", path: "/hr/my-score", permission: HR_PERMS.access, icon: "Award", hideForRoles: [WORKER_ROLE_CODE] },
     // เห็นได้ทุกคน (เข้าดูสถานะคำร้องของตัวเองได้) — หน้าเองเช็คซ้ำว่าอนุมัติได้
     // เฉพาะ CEO เท่านั้น (ดู penalty-requests/page.tsx) ก่อนหน้านี้อยู่ในเมนูของ
     // โมดูล "รายงานและงาน" ทั้งที่เนื้อหาเป็นเรื่องคะแนนผลงาน/HR — ย้ายมาที่นี่
     {
+      group: "บุคคล & เวลา",
       label: "คำร้องขอแก้ไขคะแนน",
       path: "/hr/penalty-requests",
       permission: HR_PERMS.access,
@@ -73,6 +78,7 @@ export const hrManifest: ModuleManifest = {
           "ml-auto flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-(--danger) px-1 text-[10px] font-bold text-white",
       }),
     },
+    ...MONEY_MENUS,
   ],
   permissions: Object.values(HR_PERMS),
 };

@@ -92,7 +92,7 @@ export function AdjustmentsDialog({
                           {submit.blocks.map((b) => <li key={b}>{b}</li>)}
                           {submit.negatives.length > 0 && <li>ยอดสุทธิติดลบ: {submit.negatives.join(", ")}</li>}
                         </ul>
-                        <span className="mt-1 block text-xs">แก้ข้อมูลต้นทาง (เช่น ใส่คะแนน Tier ที่ระบบบุคคล › พนักงาน › ค่าคอม) แล้วกด &quot;ดึงข้อมูลใหม่&quot;</span>
+                        <span className="mt-1 block text-xs">แก้ข้อมูลต้นทาง (เช่น ใส่คะแนน Tier ที่ระบบบุคคล › การเงิน › ค่าคอม) แล้วกด &quot;ดึงข้อมูลใหม่&quot;</span>
                       </Notice>
                     ) : (
                       <Notice tone="ok">ข้อมูล Grade / Tier / ค่าคอม ครบ · ไม่มีคนยอดติดลบ{submit.warnings > 0 ? ` · มี ${submit.warnings} คนที่มีข้อเตือน (⚠ ในตาราง) ดูแล้วส่งได้` : ""}</Notice>

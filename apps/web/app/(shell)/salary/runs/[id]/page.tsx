@@ -234,7 +234,7 @@ export default async function RunPage({ params, searchParams }: { params: Promis
               <ul className="mt-1 list-disc pl-5">
                 {blocks.map((b) => <li key={b}>{b}</li>)}
               </ul>
-              <span className="mt-1 block text-xs">แก้ที่ต้นทาง (ระบบบุคคล › พนักงาน › ค่าคอม) แล้วกด &quot;ดึงข้อมูลใหม่&quot; · หรือกดชื่อคนแล้ว &quot;ปรับยอด&quot; ค่าคอมเองพร้อมเหตุผล</span>
+              <span className="mt-1 block text-xs">แก้ที่ต้นทาง (ระบบบุคคล › การเงิน › ค่าคอม) แล้วกด &quot;ดึงข้อมูลใหม่&quot; · หรือกดชื่อคนแล้ว &quot;ปรับยอด&quot; ค่าคอมเองพร้อมเหตุผล</span>
             </Notice>
           )}
           {/* ปุ่มตามขั้น */}
