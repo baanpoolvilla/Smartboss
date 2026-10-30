@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Fragment, Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { MoreHorizontal, X } from "lucide-react";
@@ -59,13 +59,18 @@ function findActiveModule(
   // to หลังบ้าน instead (its shorter basePath matches the same
   // pathname.startsWith() check first), making แจ้งบัค's own sidebar
   // unreachable no matter where it sits in moduleRegistry's array.
-  const matches = modules.filter((m) => pathname === m.basePath || pathname.startsWith(m.basePath + "/"));
-  return matches.sort((a, b) => b.basePath.length - a.basePath.length)[0] ?? null;
+  // extraPaths: โมดูลที่ครอบหลาย path (การเงินพนักงาน = /salary + /requests) — วัดความยาวจาก path ที่ตรง
+  const matchLen = (m: ModuleManifest) =>
+    Math.max(-1, ...[m.basePath, ...(m.extraPaths ?? [])].filter((p) => pathname === p || pathname.startsWith(p + "/")).map((p) => p.length));
+  const matches = modules.filter((m) => matchLen(m) >= 0);
+  return matches.sort((a, b) => matchLen(b) - matchLen(a))[0] ?? null;
 }
 
-function isMenuActive(pathname: string, menuPath: string, basePath: string) {
-  // เมนู "แดชบอร์ด" (path = basePath) active เฉพาะตอนอยู่หน้าแรกของโมดูลพอดี
-  if (menuPath === basePath) return pathname === basePath;
+function isMenuActive(pathname: string, menu: ModuleMenuItem, module: ModuleManifest) {
+  const menuPath = menu.path;
+  if (menu.activeFor?.some((p) => pathname === p || pathname.startsWith(p + "/"))) return true;
+  // เมนู "แดชบอร์ด" (path = basePath หรือ extraPaths) active เฉพาะตอนอยู่หน้าแรกของส่วนนั้นพอดี
+  if (menuPath === module.basePath || module.extraPaths?.includes(menuPath)) return pathname === menuPath;
   return pathname === menuPath || pathname.startsWith(menuPath + "/");
 }
 
@@ -324,12 +329,14 @@ function ModuleRail({
       </Link>
 
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
-        {module.menus.map((menu) => (
-          <RailItem
-            key={menu.path}
-            menu={menu}
-            active={isMenuActive(pathname, menu.path, module.basePath)}
-          />
+        {module.menus.map((menu, i) => (
+          <Fragment key={menu.path}>
+            {/* หัวข้อกลุ่ม (ModuleMenuItem.group) — ขึ้นเมื่อกลุ่มเปลี่ยน · โมดูลที่ไม่ใส่ group หน้าตาเหมือนเดิม */}
+            {menu.group && menu.group !== module.menus[i - 1]?.group && (
+              <div className={cn("px-3 pb-1 text-xs font-semibold tracking-wide text-(--ink-soft)", i > 0 && "mt-3")}>{menu.group}</div>
+            )}
+            <RailItem menu={menu} active={isMenuActive(pathname, menu, module)} />
+          </Fragment>
         ))}
       </nav>
     </aside>
@@ -372,7 +379,7 @@ function ModuleBottomNav({
   const [sheetOpen, setSheetOpen] = useState(false);
   useBackToClose(sheetOpen, () => setSheetOpen(false));
   const overflowActive = overflow.some((m) =>
-    isMenuActive(pathname, m.path, module.basePath)
+    isMenuActive(pathname, m, module)
   );
 
   return (
@@ -388,7 +395,7 @@ function ModuleBottomNav({
             icon={menu.icon}
             href={menu.path}
             badge={menu.badge}
-            active={isMenuActive(pathname, menu.path, module.basePath)}
+            active={isMenuActive(pathname, menu, module)}
           />
         ))}
 
@@ -425,11 +432,7 @@ function ModuleBottomNav({
             </button>
             <div className="mt-2 flex flex-col">
               {overflow.map((menu) => {
-                const active = isMenuActive(
-                  pathname,
-                  menu.path,
-                  module.basePath
-                );
+                const active = isMenuActive(pathname, menu, module);
                 return (
                   <Link
                     key={menu.path}

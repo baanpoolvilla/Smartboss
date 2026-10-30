@@ -485,6 +485,7 @@ export async function saveCommissionPoolAction(formData: FormData) {
     note: String(formData.get("note") ?? ""),
   });
   revalidatePath("/hr/employees");
+  revalidatePath("/salary/commission");
 }
 
 export async function saveCommissionWeightsAction(formData: FormData) {
@@ -496,6 +497,7 @@ export async function saveCommissionWeightsAction(formData: FormData) {
     weights: formData.getAll("weight").map(String),
   });
   revalidatePath("/hr/employees");
+  revalidatePath("/salary/commission");
 }
 
 /** วิธี grade_tier: ยอดรวมประจำรอบ + คะแนน Tier รายคน */
@@ -511,6 +513,7 @@ export async function saveCommissionRoundAction(formData: FormData) {
     tierValues: formData.getAll("tier").map(String),
   });
   revalidatePath("/hr/employees");
+  revalidatePath("/salary/commission");
 }
 
 /** วิธี grade_tier: % ก้อน Grade */
@@ -518,6 +521,7 @@ export async function saveCommissionGradeShareAction(formData: FormData) {
   const session = await guardSalary();
   await saveCommissionGradeShare({ orgId: session.orgId, userId: session.userId, gradeShare: String(formData.get("gradeShare") ?? "") });
   revalidatePath("/hr/employees");
+  revalidatePath("/salary/commission");
 }
 
 /** เลือกวิธีคิดค่าคอม (pool · percent · fixed · off) */
@@ -525,6 +529,7 @@ export async function saveCommissionMethodAction(formData: FormData) {
   const session = await guardSalary();
   await saveCommissionMethod({ orgId: session.orgId, userId: session.userId, method: String(formData.get("method") ?? "") });
   revalidatePath("/hr/employees");
+  revalidatePath("/salary/commission");
 }
 
 /** % หรือบาทต่อเกรด */
@@ -537,6 +542,7 @@ export async function saveCommissionValuesAction(formData: FormData) {
     values: formData.getAll("value").map(String),
   });
   revalidatePath("/hr/employees");
+  revalidatePath("/salary/commission");
 }
 
 /** ใครได้ค่าคอม — แผนกที่ติ๊ก (ไม่ติ๊กเลย = ทุกแผนก) · คนที่ติ๊ก "ไม่ได้" */
@@ -549,6 +555,7 @@ export async function saveCommissionEligibilityAction(formData: FormData) {
     excludedUserIds: formData.getAll("excludedUserId").map(String),
   });
   revalidatePath("/hr/employees");
+  revalidatePath("/salary/commission");
 }
 
 /** แก้ประเภทการจ้าง (รายเดือน/รายวัน/รายชั่วโมง) — ไม่แตะอัตราค่าจ้างที่ตั้งไว้ (แท็บค่าจ้างแยกกัน) */

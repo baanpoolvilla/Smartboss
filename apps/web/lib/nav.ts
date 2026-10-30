@@ -9,6 +9,8 @@ import { ADMIN_ISSUE_REPORT_CODE } from "@/modules/admin/issue-report-manifest";
 import { WORKER_ROLE_CODE } from "@/modules/daily_worker/permissions";
 import { WORKER_MENU_KEYS, WORKER_MODULE_KEYS, tr, type WorkerLang } from "@/modules/daily_worker/i18n";
 import { workerLangFor } from "@/modules/daily_worker/lang-server";
+import { salaryAccess } from "@/modules/salary/lib/access";
+import { SALARY_EDIT_MENU } from "@/modules/salary/permissions";
 
 export interface ShellNavUser {
   /** ใช้ฝั่งเบราว์เซอร์แยกของที่จำในเครื่องรายคน (เช่น อีโมจิที่ใช้ล่าสุด) — ไม่ใช่เส้นแบ่งสิทธิ์ */
@@ -57,12 +59,18 @@ export const loadShellNav = cache(async (): Promise<ShellNav | null> => {
 
   // คนงาน (WORKER): ชื่อโมดูล/เมนูตามภาษาที่เลือก (เริ่มต้นพม่า) · ผู้ใช้อื่นเหมือนเดิมทุกอย่าง
   const workerLang = user.roles.includes(WORKER_ROLE_CODE) ? await workerLangFor(user.roles) : null;
+  // เมนูของคนทำเงินเดือน (การเงินพนักงาน) ตัดสินจากรายชื่อที่ CEO เลือก ไม่ใช่บทบาท — SUPER_ADMIN ผ่านทุกสิทธิ์
+  // ตาม resolvePermission จึงต้องตัดออกเองตรงนี้ถ้าไม่ได้รับเลือก
+  const salaryEditor = user.orgId ? (await salaryAccess({ userId: user.id, roles: user.roles, orgId: user.orgId })).canEdit : false;
   const visible = getVisibleModules({
-    permissions: user.permissions,
+    permissions: salaryEditor ? [...user.permissions, SALARY_EDIT_MENU] : user.permissions,
     roles: user.roles,
     enabledCodes,
     isSupportStaff: supportStaff,
-  }).filter((m) => m.id !== ADMIN_ISSUE_REPORT_CODE || consoleAccess !== null);
+  })
+    .map((m) => (salaryEditor ? m : { ...m, menus: m.menus.filter((menu) => menu.permission !== SALARY_EDIT_MENU) }))
+    .filter((m) => m.menus.length > 0)
+    .filter((m) => m.id !== ADMIN_ISSUE_REPORT_CODE || consoleAccess !== null);
   const modules =
     workerLang === null
       ? visible

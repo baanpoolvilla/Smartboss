@@ -2,6 +2,8 @@ import type { LucideIcon } from "lucide-react";
 import {
   Award,
   Banknote,
+  BookOpen,
+  HandCoins,
   Bell,
   Boxes,
   Bug,
@@ -60,6 +62,8 @@ import {
  */
 const ICONS: Record<string, LucideIcon> = {
   Award,
+  BookOpen,
+  HandCoins,
   Bell,
   Boxes,
   Bug,

@@ -10,6 +10,12 @@ export const SALARY_PERMS = {
   access: "salary.access",
 } as const;
 
+/**
+ * ไม่ใช่สิทธิ์ในฐานข้อมูล — ใช้ติดเมนูที่เฉพาะ "คนทำเงินเดือน" (CEO + คนที่ CEO เลือก, lib/access.ts) เห็น
+ * lib/nav.ts ใส่ให้คนที่แก้เงินเดือนได้ และตัดเมนูนี้ออกจากคนอื่น (รวม SUPER_ADMIN ที่ไม่ได้รับเลือก)
+ */
+export const SALARY_EDIT_MENU = "salary.__edit_menu";
+
 export const SALARY_PERM_LABELS: Record<string, string> = {
   [SALARY_PERMS.access]: "เงินเดือน: ดูสลิปของตัวเอง (คนที่เห็น/แก้เงินเดือนทุกคน CEO เลือกที่ เงินเดือน › ตั้งค่า)",
 };

@@ -1,10 +1,15 @@
 import Link from "next/link";
 
+const SIDEBAR_REPLACES_TABS = true;
+
 /** แท็บของหน้าจัดการเงินเดือน (CEO + คนที่ CEO เลือก) */
-export function SalaryTabs({ active }: { active: "runs" | "employees" | "settings" | "guide" | "my" }) {
+export function SalaryTabs({ active }: { active: "runs" | "employees" | "commission" | "settings" | "guide" | "my" }) {
+  // การเงินพนักงาน (30/10/2569): เมนูซ้ายแบ่งกลุ่มแทนแท็บด้านบนแล้ว — แท็บซ้ำกับเมนู ไม่แสดง
+  if (SIDEBAR_REPLACES_TABS) return null;
   const tabs = [
     { id: "runs", label: "รายการเงินเดือน", href: "/salary" },
     { id: "employees", label: "รายชื่อพนักงาน", href: "/salary/employees" },
+    { id: "commission", label: "ค่าคอม", href: "/salary/commission" },
     { id: "settings", label: "ตั้งค่า", href: "/salary/settings" },
     { id: "guide", label: "คู่มือ", href: "/salary/guide" },
     { id: "my", label: "สลิปของฉัน", href: "/salary/my" },

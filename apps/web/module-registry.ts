@@ -9,7 +9,6 @@ import { companyFilesManifest } from "@/modules/company-files/manifest";
 import { exampleManifest } from "@/modules/example/manifest";
 import { hrManifest } from "@/modules/hr/manifest";
 import { dailyWorkerManifest } from "@/modules/daily_worker/manifest";
-import { requestsManifest } from "@/modules/requests/manifest";
 import { salaryManifest } from "@/modules/salary/manifest";
 import { maintenanceManifest } from "@/modules/maintenance/manifest";
 import { reportTaskManifest } from "@/modules/report_task/manifest";
@@ -43,6 +42,10 @@ export interface ModuleMenuItem {
   hideForRoles?: string[];
   /** แสดงเมนูนี้เฉพาะผู้ใช้ที่ถือบทบาทเหล่านี้ (เช่น "ลงเวลา" ในโมดูลคนงานรายวัน ให้คนงานเท่านั้น) */
   onlyForRoles?: string[];
+  /** หัวข้อกลุ่มในเมนูซ้าย — เมนูติดกันที่ group เดียวกันอยู่ใต้หัวข้อเดียว (ไม่ใส่ = ไม่มีหัวข้อ เหมือนเดิม) */
+  group?: string;
+  /** เมนูที่ path = หน้าแรกของส่วนนั้น (ปกติ active เฉพาะหน้านั้นพอดี) ให้ active ด้วยเมื่ออยู่ใต้ path เหล่านี้ */
+  activeFor?: string[];
 }
 
 export interface ModuleManifest {
@@ -66,6 +69,11 @@ export interface ModuleManifest {
   requiresModule?: string;
   /** ซ่อนทั้งโมดูลจากผู้ใช้ที่ถือบทบาทเหล่านี้ (เช่นคนงาน WORKER ไม่เห็น Project Management) */
   hideForRoles?: string[];
+  /**
+   * path อื่นที่ใช้เมนูซ้ายของโมดูลนี้ด้วย (นอกจาก basePath) — เช่น "การเงินพนักงาน" (/salary) ครอบ /requests
+   * แต่ละอันนับเป็น "หน้าแรก" ของส่วนนั้น (เมนูที่ path ตรงนี้ active เฉพาะหน้านั้นพอดี)
+   */
+  extraPaths?: string[];
 }
 
 /**
@@ -84,8 +92,8 @@ export const moduleRegistry: ModuleManifest[] = [
   hrManifest,
   // คนงานรายวัน — เปิดตามโมดูลบุคคล เห็นเฉพาะคนที่มีสิทธิ์ (modules/daily_worker)
   dailyWorkerManifest,
-  // เบิกจ่าย & OT — เปิดตามโมดูลบุคคล (modules/requests)
-  requestsManifest,
+  // การเงินพนักงาน = เงินเดือน + ค่าคอม + เบิกจ่าย & OT + เงินสดย่อย (ผู้ใช้เลือกแบบ B 30/10/2569)
+  // เมนูของเบิกจ่ายย้ายไปอยู่ใน salaryManifest (extraPaths /requests) — requestsManifest ไม่ขึ้นแยกแล้ว
   salaryManifest,
   // พอร์ตมาจากแอป easyboss-workspace ที่เคยรันเดี่ยว ๆ
   reportTaskManifest,

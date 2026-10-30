@@ -82,7 +82,9 @@
 /**
  * ธีมของโมดูลเบิกจ่าย & OT — ขาว-ม่วง ใช้สีประจำโมดูลการเงิน (--mod-financial) เป็นแกน
  */
-[data-app="requests"] {
+/* การเงินพนักงาน (salary) รวมเบิกจ่าย & OT ไว้ด้วย 30/10/2569 — ใช้ชุดสีเดียวกันทั้งโมดูล */
+[data-app="requests"],
+[data-app="salary"] {
   --app: #7c3aed; /* violet 600 */
   --app-strong: #6d28d9; /* violet 700 — ตัวอักษร/ไอคอนบนพื้นอ่อน */
   --app-accent: #7c3aed;

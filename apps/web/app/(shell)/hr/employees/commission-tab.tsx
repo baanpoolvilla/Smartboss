@@ -37,6 +37,8 @@ export async function renderCommissionTab(
   session: OrgSession,
   month: string,
   canManage: boolean,
+  /** หน้าที่แสดงแท็บนี้ — ระบบบุคคล (เดิม) หรือ เงินเดือน › ค่าคอม (รวมเรื่องเงินไว้ที่เดียว 30/10/2569) */
+  base: string = "/hr/employees?tab=commission",
 ): Promise<React.ReactNode> {
   const data = await loadCommissionMonth(session.orgId, month);
   const { split, gradeOrder, weights, pool, method, values, members, departments, eligibility } = data;
@@ -68,7 +70,7 @@ export async function renderCommissionTab(
   const receiving = rows.filter((r) => r.comm !== null).length;
   const totalSatang = rows.reduce((sum, r) => sum + (r.comm?.kind === "amount" ? r.comm.satang : 0), 0);
 
-  const monthLink = (m: string) => `/hr/employees?tab=commission&month=${m}`;
+  const monthLink = (m: string) => `${base}${base.includes("?") ? "&" : "?"}month=${m}`;
   // grade_tier: คะแนน Tier ของรอบก่อน — ใช้เติมช่องที่ยังไม่ได้ใส่ให้ (ยังไม่บันทึกจนกว่าจะกดบันทึก)
   const gt = data.gradeTier;
   const prevTiers =
