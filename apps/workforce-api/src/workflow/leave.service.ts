@@ -626,7 +626,7 @@ export class LeaveService {
       available_days: number;
       expiring_days: number;
       used_days: number;
-      buckets: HolidayBucket[];
+      buckets: (HolidayBucket & { days: HolidayDayLabel[] })[];
     }[];
   }> {
     return this.uow.run(async (uow) => {
@@ -684,6 +684,22 @@ export class LeaveService {
       }
       const grants = await this.holidayGrants(uow.tx, type.companyId, leaveTypeId, firstMonth, lastMonth);
       const personGrants = await this.personGrants(uow.tx, leaveTypeId);
+      // ชื่อวันของสิทธิ์ที่ยังเหลือ — ถังที่ยังใช้ได้ ณ เดือนนี้มาจากไม่เกิน HOLIDAY_VALID_MONTHS เดือนก่อน
+      const holidayNames = await this.companyHolidaysByMonth(
+        uow.tx,
+        type.companyId,
+        monthOfIndex(monthIndex(month) - HOLIDAY_VALID_MONTHS + 1),
+        month,
+      );
+      const personReasons = await uow.tx
+        .select({
+          employmentId: schema.leavePersonGrants.employmentId,
+          month: schema.leavePersonGrants.month,
+          days: schema.leavePersonGrants.days,
+          reason: schema.leavePersonGrants.reason,
+        })
+        .from(schema.leavePersonGrants)
+        .where(eq(schema.leavePersonGrants.leaveTypeId, leaveTypeId));
 
       const items = [];
       for (const employment of employments) {
@@ -707,7 +723,15 @@ export class LeaveService {
             .filter((bucket) => bucket.expires_month === month)
             .reduce((sum, bucket) => sum + bucket.remaining_days, 0),
           used_days: usage.get(month) ?? 0,
-          buckets,
+          buckets: buckets.map((bucket) => ({
+            ...bucket,
+            days: remainingDayLabels(
+              bucket,
+              bucket.month >= from ? (grants.get(bucket.month) ?? 0) : 0,
+              holidayNames.get(bucket.month) ?? [],
+              personReasons.filter((row) => row.employmentId === employment.id && row.month.slice(0, 7) === bucket.month),
+            ),
+          })),
         });
       }
       return { items };
@@ -1667,6 +1691,33 @@ function withPersonGrants(company: Map<string, number>, person: Map<string, numb
   const merged = new Map(company);
   for (const [month, days] of person) merged.set(month, (merged.get(month) ?? 0) + days);
   return merged;
+}
+
+/** วันหยุดที่เป็นที่มาของสิทธิ์ — date = null คือวันที่ HR เพิ่มให้ หรือจำนวนที่ HR กำหนดทับ (ไม่ได้ผูกกับวันไหน) */
+interface HolidayDayLabel {
+  date: string | null;
+  name: string;
+}
+
+/**
+ * สิทธิ์ที่ยังเหลือในถังหนึ่งคือวันไหน — ในเดือนเดียวกันถือว่าใช้วันหยุดที่มาก่อนไปก่อน
+ * (วันหยุดบริษัทเรียงตามวันที่ แล้วตามด้วยวันที่ HR เพิ่มให้) ⇒ ที่เหลือคือวันท้าย ๆ
+ * เดือนที่ HR กำหนดจำนวนทับไม่ตรงกับจำนวนวันหยุด บอกชื่อวันไม่ได้ → ใส่เป็นวันไม่มีชื่อ
+ */
+function remainingDayLabels(
+  bucket: HolidayBucket,
+  companyDays: number,
+  holidays: { date: string; name: string }[],
+  personRows: { days: number; reason: string }[],
+): HolidayDayLabel[] {
+  const all: HolidayDayLabel[] =
+    companyDays === holidays.length
+      ? holidays.map((holiday) => ({ date: holiday.date, name: holiday.name }))
+      : Array.from({ length: Math.ceil(companyDays) }, () => ({ date: null, name: '' }));
+  for (const row of personRows) {
+    for (let i = 0; i < Math.ceil(row.days); i += 1) all.push({ date: null, name: row.reason });
+  }
+  return all.slice(Math.max(0, all.length - Math.ceil(bucket.remaining_days - 1e-9)));
 }
 
 /** สิทธิ์ของบริษัทเฉพาะตั้งแต่เดือนเริ่มนับ — ค่าที่ HR กำหนดทับของเดือนก่อนหน้านั้นไม่นับ (เหมือนเดิม) */

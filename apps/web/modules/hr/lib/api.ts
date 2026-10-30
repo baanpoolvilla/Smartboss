@@ -157,7 +157,13 @@ export interface HolidayBalanceRow {
   /** ส่วนที่ต้องใช้ภายในเดือนนั้น ไม่งั้นถูกตัดทิ้ง */
   expiring_days: number;
   used_days: number;
-  buckets: { month: string; remaining_days: number; expires_month: string }[];
+  buckets: {
+    month: string;
+    remaining_days: number;
+    expires_month: string;
+    /** สิทธิ์ที่เหลือคือวันไหน — date null = HR เพิ่มให้ (name = เหตุผล) หรือไม่รู้ชื่อวัน (name ว่าง) · ระบบรุ่นเก่าไม่มี */
+    days?: { date: string | null; name: string }[];
+  }[];
 }
 
 /** สิทธิ์ Holiday ของเดือนหนึ่ง (GET /leave-types/:id/month-allowances) */

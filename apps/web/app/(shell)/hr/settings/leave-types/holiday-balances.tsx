@@ -17,6 +17,15 @@ function shiftMonth(month: string, delta: number): string {
 
 const shortOf = (month: string) => MONTH_SHORT[Number(month.slice(5, 7)) - 1];
 
+/** "13 ต.ค. วันนวมินทรมหาราช · วันแม่" — วันที่ไม่รู้ชื่อรวมเป็น "อีก N วัน" */
+function dayNames(days: { date: string | null; name: string }[]): string {
+  const named = days
+    .filter((d) => d.date !== null || d.name !== "")
+    .map((d) => (d.date ? `${Number(d.date.slice(8, 10))} ${shortOf(d.date)} ${d.name}` : d.name));
+  const unnamed = days.length - named.length;
+  return [...named, ...(unnamed > 0 ? [`อีก ${unnamed} วัน`] : [])].join(" · ");
+}
+
 /**
  * ยอด Holiday คงเหลือของพนักงานทุกคน ณ เดือนหนึ่ง — ให้ HR เห็นว่าใครเหลือกี่วัน
  * และใครมีวันที่ต้องใช้ภายในเดือนนั้น (สิทธิ์ของแต่ละเดือนใช้ได้ภายใน 3 เดือน เกินนั้นตัดทิ้ง)
@@ -81,11 +90,14 @@ export function HolidayBalances({
                   {r.buckets.length === 0 ? (
                     <span className="text-(--ink-soft)">—</span>
                   ) : (
-                    <span className="text-xs">
-                      {r.buckets
-                        .map((b) => `${shortOf(b.month)} ${b.remaining_days} วัน (ถึงสิ้น ${shortOf(b.expires_month)})`)
-                        .join(" · ")}
-                    </span>
+                    <div className="space-y-1 text-xs">
+                      {r.buckets.map((b) => (
+                        <div key={b.month}>
+                          <div>{`${shortOf(b.month)} ${b.remaining_days} วัน (ถึงสิ้น ${shortOf(b.expires_month)})`}</div>
+                          {b.days && b.days.length > 0 && <div className="text-(--ink-soft)">{dayNames(b.days)}</div>}
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </Td>
                 <Td>
