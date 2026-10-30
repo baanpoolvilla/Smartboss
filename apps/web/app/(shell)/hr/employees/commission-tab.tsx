@@ -41,7 +41,7 @@ export async function renderCommissionTab(
   base: string = "/hr/employees?tab=commission",
 ): Promise<React.ReactNode> {
   const data = await loadCommissionMonth(session.orgId, month);
-  const { split, gradeOrder, weights, pool, method, values, members, departments, eligibility } = data;
+  const { split, gradeOrder, weights, pool, method, values, members, departments, eligibility, newHireUserIds } = data;
 
   // รอบเกรด (ตัดวันที่ 25 — score-period.ts) ไม่ใช่เดือนปฏิทิน
   const period = await loadScorePeriodConfig(session.orgId);
@@ -485,7 +485,9 @@ export async function renderCommissionTab(
                       <Td align="right" className="font-mono font-medium">
                         {!row.eligible
                           ? eligibility.excludedUserIds.includes(row.userId)
-                            ? "ไม่ได้ (ยังไม่ผ่านโปร / ยกเว้น)"
+                            ? newHireUserIds.includes(row.userId)
+                              ? "ไม่ได้ (พนักงานใหม่ ยังไม่ผ่านโปร)"
+                              : "ไม่ได้ (ยังไม่ผ่านโปร / ยกเว้น)"
                             : "ไม่ได้ (นอกแผนกที่เลือก)"
                           : row.comm === null
                             ? "—"
@@ -497,6 +499,8 @@ export async function renderCommissionTab(
                       </Td>
                       {canManage && (
                         <Td align="center">
+                          {/* พนักงานใหม่ตั้งต้นติ๊กไว้ — ส่งรายชื่อไปให้รู้ว่าเอาติ๊กออก = ผ่านโปรแล้ว */}
+                          {newHireUserIds.includes(row.userId) && <input type="hidden" name="newHireUserId" value={row.userId} />}
                           <input
                             type="checkbox"
                             name="excludedUserId"
@@ -526,7 +530,7 @@ export async function renderCommissionTab(
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   {/* ผู้ใช้ 30/10/2569: ผ่านโปรไม่มีวันแน่นอน — HR ติ๊ก/เอาออกเอง ให้ขั้นตอนอ่านจบในที่เดียว */}
                   <div className="flex max-w-xl flex-col gap-1 rounded-(--radius) bg-(--bg-soft) px-3 py-2 text-xs text-(--ink)">
-                    <span><b>รับคนใหม่ (ยังไม่ผ่านโปร):</b> ติ๊กช่องของคนนั้น → กด &quot;บันทึกคนที่ได้ค่าคอม&quot; · ไม่ได้ค่าคอมทุกเดือนจนกว่าจะเอาติ๊กออก</span>
+                    <span><b>รับคนใหม่ (ยังไม่ผ่านโปร):</b> ระบบติ๊กให้เอง (พนักงานที่เริ่มงานหลังเปิดใช้กติกานี้) · ไม่ได้ค่าคอมทุกเดือนจนกว่าจะเอาติ๊กออก</span>
                     <span>
                       <b>ผ่านโปรแล้ว:</b> เอาติ๊กออก → กดบันทึก · ได้ค่าคอมตั้งแต่เดือนนี้ · ถ้าขึ้นเงินเดือนด้วย ไปที่{" "}
                       <a href="/salary/employees" className="font-semibold text-(--app-strong) underline">เงินเดือน › รายชื่อพนักงาน</a> › คนนั้น › แก้เงินเดือน/ขึ้นเงินเดือน

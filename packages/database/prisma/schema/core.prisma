@@ -513,6 +513,10 @@ model CommissionSetting {
   /// ว่าง = ทุกแผนก
   eligibleDepartmentIds String[] @default([]) @map("eligible_department_ids")
   excludedUserIds       String[] @default([]) @map("excluded_user_ids")
+  /// พนักงานที่เริ่มงานตั้งแต่วันนี้ = พนักงานใหม่ ตั้งต้นไม่ได้ค่าคอม/เบี้ยขยันจนกว่า HR ติ๊ก (null = ปิดกติกา)
+  probationFrom          DateTime? @default(dbgenerated("CURRENT_DATE")) @map("probation_from") @db.Date
+  /// พนักงานใหม่ที่ HR เอาติ๊ก "ยังไม่ผ่านโปร" ออกแล้ว — ได้ค่าคอม
+  probationPassedUserIds String[]  @default([]) @map("probation_passed_user_ids")
   /// วิธี grade_tier: % ของยอดรวมที่เป็นก้อน Grade (ที่เหลือ = ก้อน Tier)
   gradeShare            Decimal  @default(70) @map("grade_share") @db.Decimal(5, 2)
 

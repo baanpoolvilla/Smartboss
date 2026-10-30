@@ -553,6 +553,7 @@ export async function saveCommissionEligibilityAction(formData: FormData) {
     userId: session.userId,
     departmentIds: formData.getAll("departmentId").map(String),
     excludedUserIds: formData.getAll("excludedUserId").map(String),
+    newHireUserIds: formData.getAll("newHireUserId").map(String),
   });
   revalidatePath("/hr/employees");
   revalidatePath("/salary/commission");

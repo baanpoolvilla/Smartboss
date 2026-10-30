@@ -4,6 +4,7 @@ import { prisma } from "@smartboss/database";
 import { withWorkforceTenant } from "@/modules/report_task/lib/db/workforce-calendar";
 import { applyDiligencePartial, diligenceStep, leaveCountsAgainstDiligence, periodsEmployedBefore, type DiligenceResult } from "./compute";
 import { fillSubjectsByEmail } from "./people";
+import { isNewHire, loadProbationFrom } from "./probation";
 import { loadRequests } from "@/modules/requests/lib/db";
 import { hoursText, otCalc } from "@/modules/requests/lib/types";
 import { commissionForUser, loadCommissionMonth } from "@/modules/hr/lib/commission-data";
@@ -233,6 +234,8 @@ export async function loadPeriodInputs(
 
   /* ── ค่าคอม Pool ตามเกรด (ระบบบุคคล › พนักงาน › ค่าคอม) — เดือนเดียวกับงวด ── */
   const commission = await loadCommissionFor(orgId, run.period, items);
+  // พนักงานใหม่ตั้งต้นไม่ได้เบี้ยขยันจนกว่า HR ติ๊ก "ได้เบี้ยขยัน" ตอนผ่านโปร (probation.ts)
+  const probationFrom = await loadProbationFrom(orgId);
 
   const staff: StaffInput[] = [];
   const skipped: { name: string; reason: string }[] = [];
@@ -373,7 +376,8 @@ export async function loadPeriodInputs(
     // เบี้ยขยัน: ลาจริง (ไม่นับวันหยุด) · สาย (วันที่มีนาทีสาย) · ขาด จากระบบลงเวลา
     let diligence: DiligenceResult | undefined;
     const p0 = profileBy.get(e.employment_id);
-    if (settings?.diligenceEnabled && (p0?.diligenceEligible ?? true) && segments.length > 0) {
+    const probationWait = settings?.diligenceEnabled && (p0?.diligenceEligible ?? null) === null && isNewHire(e.hired_on, probationFrom);
+    if (settings?.diligenceEnabled && (p0?.diligenceEligible ?? !probationWait) && segments.length > 0) {
       const fromRun = prevDiligence.get(e.employment_id);
       const opening = p0?.diligenceOpening !== null && p0?.diligenceOpening !== undefined ? num(p0.diligenceOpening) : null;
       const prev = fromRun ?? opening;
@@ -441,6 +445,7 @@ export async function loadPeriodInputs(
       extraWarnings: [
         ...(commission?.gradeTier && (!e.subject || !commission.anyMember(e.subject)) ? ["ไม่มีผล Grade ในรอบนี้ — ไม่ได้ค่าคอม (ตรวจว่าผูกบัญชีผู้ใช้และอยู่ในคะแนนผลงาน)"] : []),
         ...(diligence && !att ? ["ไม่มีข้อมูลลงเวลาในงวดนี้ — เบี้ยขยันเช็กมาสาย/ขาดไม่ได้ ตรวจก่อนส่ง"] : []),
+        ...(probationWait ? ["พนักงานใหม่ (ยังไม่ผ่านโปร) — ยังไม่ได้เบี้ยขยัน · ผ่านโปรแล้วติ๊ก \"ได้เบี้ยขยัน\" ที่ เงินเดือนรายคน"] : []),
       ],
       info: {
         workedDays: att?.worked_days ?? 0,

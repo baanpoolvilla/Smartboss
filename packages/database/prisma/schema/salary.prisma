@@ -140,7 +140,8 @@ model SalaryProfile {
   prevSso         Decimal  @default(0) @map("prev_sso") @db.Decimal(12, 2)
   prevYear        Int?     @map("prev_year")
   /// ได้เบี้ยขยัน (เมื่อบริษัทเปิดใช้)
-  diligenceEligible Boolean @default(true) @map("diligence_eligible")
+  /// null = ยังไม่ได้เลือก → เริ่มงานก่อน core.commission_settings.probation_from ได้ (เดิม) · พนักงานใหม่ไม่ได้จนกว่า HR ติ๊ก
+  diligenceEligible Boolean? @map("diligence_eligible")
   /// ขั้นเบี้ยขยันรอบล่าสุดจากระบบเดิม (บาท) — ใช้เมื่อยังไม่มีรอบที่จ่ายผ่านระบบนี้ · null = เริ่มขั้นแรก
   diligenceOpening  Decimal? @map("diligence_opening") @db.Decimal(12, 2)
   updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)

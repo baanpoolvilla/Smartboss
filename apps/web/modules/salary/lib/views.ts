@@ -3,6 +3,7 @@ import { prisma } from "@smartboss/database";
 
 import { withWorkforceTenant } from "@/modules/report_task/lib/db/workforce-calendar";
 import { fillSubjectsByEmail } from "./people";
+import { isNewHire, loadProbationFrom } from "./probation";
 import type { Adjustment, PayLine } from "./compute";
 import { num, readRates, ymd, withSalaryTenant, type Tx } from "./db";
 import { previousPaid, type ExcludedEntry, type LineInfo, type RunTotals } from "./run";
@@ -221,6 +222,8 @@ export interface StaffRow {
     prevSso: number;
     prevYear: number | null;
     diligenceEligible: boolean;
+    /** พนักงานใหม่ที่ยังไม่ได้เลือก — ตั้งต้นไม่ได้เบี้ยขยัน (probation.ts) */
+    diligenceProbationDefault: boolean;
     diligenceOpening: number | null;
   };
   recurring: { id: string; itemId: string; name: string; kind: string; amount: number; fromPeriod: string; toPeriod: string | null; note: string }[];
@@ -262,6 +265,7 @@ export async function listStaff(orgId: string, onlyEmploymentId?: string): Promi
     empItems: await tx.salaryEmployeeItem.findMany({ where: { orgId, endedAt: null }, orderBy: { createdAt: "asc" } }),
   }));
   const itemBy = new Map(items.map((i) => [i.id, i]));
+  const probationFrom = await loadProbationFrom(orgId);
   const rows: StaffRow[] = [];
   for (const e of wf.emps) {
     const u = e.subject ? userBy.get(e.subject) : undefined;
@@ -288,7 +292,8 @@ export async function listStaff(orgId: string, onlyEmploymentId?: string): Promi
       prevTax: num(p?.prevTax),
       prevSso: num(p?.prevSso),
       prevYear: p?.prevYear ?? null,
-      diligenceEligible: p?.diligenceEligible ?? true,
+      diligenceEligible: p?.diligenceEligible ?? !isNewHire(e.hired_on, probationFrom),
+      diligenceProbationDefault: (p?.diligenceEligible ?? null) === null && isNewHire(e.hired_on, probationFrom),
       diligenceOpening: p?.diligenceOpening !== null && p?.diligenceOpening !== undefined ? num(p.diligenceOpening) : null,
     };
     const problems: string[] = [];

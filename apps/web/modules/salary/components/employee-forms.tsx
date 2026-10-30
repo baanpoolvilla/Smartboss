@@ -182,6 +182,10 @@ export function ProfileSection({
             <input type="checkbox" className="h-5 w-5" checked={v.diligenceEligible ?? true} onChange={(e) => set({ diligenceEligible: e.target.checked })} />
             ได้เบี้ยขยัน (ขั้น {diligence.steps.map((x) => x.toLocaleString("en-US")).join(" → ")})
           </label>
+          {/* พนักงานใหม่ตั้งต้นไม่ติ๊ก (ผู้ใช้ 30/10/2569 — ได้เบี้ยขยัน/ค่าคอมเฉพาะผ่านโปร) */}
+          {!(v.diligenceEligible ?? true) && (
+            <p className={hint}>ไม่ได้เบี้ยขยัน — พนักงานใหม่ตั้งต้นไม่ได้จนกว่าจะผ่านโปร · ผ่านโปรแล้วติ๊กช่องนี้ → กดบันทึก (รอบแรกได้ขั้นแรก)</p>
+          )}
           {(v.diligenceEligible ?? true) && (
             diligence.lastPaid ? (
               <p className={hint}>

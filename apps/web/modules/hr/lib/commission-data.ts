@@ -25,6 +25,7 @@ import {
   type GradeTierSplit,
 } from "./commission";
 import { loadScorePeriodConfig } from "@/lib/score-period-config";
+import { isNewHire } from "@/modules/salary/lib/probation";
 
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 
@@ -42,6 +43,8 @@ export interface CommissionMonth {
   /** % หรือบาทต่อเกรด (วิธี percent/fixed) */
   values: Record<string, number>;
   eligibility: CommissionEligibility;
+  /** พนักงานใหม่ในรายชื่อเดือนนี้ (เริ่มงานตั้งแต่ probation_from) — ตั้งต้นไม่ได้ค่าคอมจนกว่า HR เอาติ๊กออก */
+  newHireUserIds: string[];
   /** ทุกคนที่มีเกรดเดือนนั้น พร้อมว่าได้ค่าคอมไหม */
   members: { userId: string; name: string; email: string; grade: string; score: number; departmentId: string | null; eligible: boolean }[];
   departments: { id: string; name: string }[];
@@ -88,7 +91,7 @@ async function fetchAll<T>(path: string): Promise<T[] | null> {
  * เดิมใช้เดือนปฏิทิน ⇒ คนเริ่มงาน 27 ต.ค. (หลังรอบเกรด ต.ค. ปิด) ได้เกรดเต็มและหาร Pool ต.ค. ด้วย ทั้งที่ไม่อยู่ในงวดเงินเดือนนั้น
  * คะแนนผูกกับ core.users ส่วนทะเบียนอยู่ฝั่ง workforce — จับคู่ด้วยอีเมลแบบเดียวกับหน้าทะเบียน
  */
-async function employedEmails(first: string, last: string): Promise<Set<string> | null> {
+async function employedEmails(first: string, last: string): Promise<Map<string, string> | null> {
   const [employments, people] = await Promise.all([
     fetchAll<Employment>("/employments"),
     fetchAll<Person>("/people"),
@@ -100,10 +103,17 @@ async function employedEmails(first: string, last: string): Promise<Set<string> 
       .filter((e) => e.hired_on <= last && (e.terminated_on === null || e.terminated_on >= first))
       .map((e) => e.person_id),
   );
-  return new Set(
+  // อีเมล → วันเริ่มงาน (ของการจ้างที่อยู่ในรอบ — เช็กพนักงานใหม่ยังไม่ผ่านโปร)
+  const hiredBy = new Map<string, string>();
+  for (const e of employments) {
+    if (!(e.hired_on <= last && (e.terminated_on === null || e.terminated_on >= first))) continue;
+    const prev = hiredBy.get(e.person_id);
+    if (!prev || e.hired_on > prev) hiredBy.set(e.person_id, e.hired_on);
+  }
+  return new Map(
     people
       .filter((p) => p.email !== null && personIds.has(p.id))
-      .map((p) => p.email!.toLowerCase()),
+      .map((p) => [p.email!.toLowerCase(), hiredBy.get(p.id) ?? ""] as const),
   );
 }
 
@@ -133,9 +143,17 @@ export async function loadCommissionMonth(orgId: string, month: string): Promise
   const order = commissionGradeOrder(gradeNames);
   // ค่าแยกตามวิธี ({ percent: {...}, fixed: {...} }) — สลับวิธีไปมาแล้วตัวเลขไม่ปนกัน (3,000 บาท ไม่กลายเป็น 3,000%)
   const values = resolveGradeValues(order, toObject(toObject(setting?.gradeValues)[method]), method);
-  const eligibility: CommissionEligibility = { departmentIds: setting?.eligibleDepartmentIds ?? [], excludedUserIds: setting?.excludedUserIds ?? [] };
-
   const cards = scores.cards.filter((c) => emails === null || emails.has(c.email.toLowerCase()));
+  // พนักงานใหม่ (ผู้ใช้ 30/10/2569): ตั้งต้น "ไม่ให้ค่าคอม (ยังไม่ผ่านโปร)" จนกว่า HR เอาติ๊กออก (= probation_passed_user_ids)
+  const probationFrom = setting?.probationFrom ? setting.probationFrom.toISOString().slice(0, 10) : null;
+  const passed = new Set(setting?.probationPassedUserIds ?? []);
+  const newHireUserIds = emails === null ? [] : cards.filter((c) => isNewHire(emails.get(c.email.toLowerCase()), probationFrom)).map((c) => c.userId);
+  const waiting = newHireUserIds.filter((id) => !passed.has(id));
+  const eligibility: CommissionEligibility = {
+    departmentIds: setting?.eligibleDepartmentIds ?? [],
+    excludedUserIds: [...new Set([...(setting?.excludedUserIds ?? []), ...waiting])],
+  };
+
   const deptOf = new Map(
     (await prisma.user.findMany({ where: { orgId, id: { in: cards.map((c) => c.userId) } }, select: { id: true, departmentId: true } })).map((u) => [u.id, u.departmentId]),
   );
@@ -162,6 +180,7 @@ export async function loadCommissionMonth(orgId: string, month: string): Promise
     method,
     values,
     eligibility,
+    newHireUserIds,
     members: all,
     departments,
     registry: emails === null ? "all-users" : "registry",
@@ -351,11 +370,19 @@ export async function saveCommissionValues(input: { orgId: string; userId: strin
 }
 
 /** ใครได้ค่าคอม: แผนกที่ได้ (ว่าง = ทุกแผนก) + ยกเว้นรายคน — รับเฉพาะ id ของบริษัทนี้ */
-export async function saveCommissionEligibility(input: { orgId: string; userId: string; departmentIds: string[]; excludedUserIds: string[] }): Promise<void> {
+export async function saveCommissionEligibility(input: { orgId: string; userId: string; departmentIds: string[]; excludedUserIds: string[]; newHireUserIds?: string[] }): Promise<void> {
   const [depts, users] = await Promise.all([
     prisma.department.findMany({ where: { orgId: input.orgId, id: { in: input.departmentIds } }, select: { id: true } }),
     prisma.user.findMany({ where: { orgId: input.orgId, id: { in: input.excludedUserIds } }, select: { id: true } }),
   ]);
-  const data = { eligibleDepartmentIds: depts.map((d) => d.id), excludedUserIds: users.map((u) => u.id), updatedBy: input.userId };
+  // พนักงานใหม่ที่แสดงในหน้า: ไม่ติ๊ก = ผ่านโปรแล้ว (ได้ค่าคอม) · ติ๊ก = ยังไม่ผ่าน · คนที่ไม่อยู่ในหน้านี้คงค่าเดิม
+  const shownNew = new Set(input.newHireUserIds ?? []);
+  const excluded = new Set(users.map((u) => u.id));
+  const before = await prisma.commissionSetting.findUnique({ where: { orgId: input.orgId }, select: { probationPassedUserIds: true } });
+  const probationPassedUserIds = [
+    ...(before?.probationPassedUserIds ?? []).filter((id) => !shownNew.has(id)),
+    ...[...shownNew].filter((id) => !excluded.has(id)),
+  ];
+  const data = { eligibleDepartmentIds: depts.map((d) => d.id), excludedUserIds: users.map((u) => u.id), probationPassedUserIds, updatedBy: input.userId };
   await prisma.commissionSetting.upsert({ where: { orgId: input.orgId }, update: data, create: { orgId: input.orgId, ...data } });
 }
