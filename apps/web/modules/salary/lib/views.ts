@@ -326,7 +326,8 @@ export interface SlipData {
   paidOn: string | null;
   status: RunStatus;
   line: LineView;
-  ytd: { gross: number; tax: number; sso: number };
+  /** net = เงินได้สุทธิสะสม (หลังหักทุกอย่าง — ยอดที่ได้รับจริง) */
+  ytd: { gross: number; tax: number; sso: number; net: number };
   /** อัตราประกันสังคม ณ วันจ่าย — ใช้อธิบายบนสลิป */
   sso: SsoParams;
 }
@@ -339,8 +340,8 @@ export async function loadSlip(orgId: string, runId: string, by: { employmentId?
     const line = await tx.salaryRunLine.findFirst({ where: { orgId, runId, ...(by.employmentId ? { employmentId: by.employmentId } : { userId: by.userId ?? "__none__" }) } });
     if (!line) return null;
     const year = run.payDate.getUTCFullYear();
-    const ytd = await tx.$queryRawUnsafe<{ gross: string | null; tax: string | null; sso: string | null }[]>(
-      `SELECT sum(l.gross)::text AS gross, sum(l.tax)::text AS tax, sum(l.sso_employee)::text AS sso
+    const ytd = await tx.$queryRawUnsafe<{ gross: string | null; tax: string | null; sso: string | null; net: string | null }[]>(
+      `SELECT sum(l.gross)::text AS gross, sum(l.tax)::text AS tax, sum(l.sso_employee)::text AS sso, sum(l.net)::text AS net
          FROM salary.run_lines l JOIN salary.runs r ON r.id = l.run_id
         WHERE r.org_id = $1 AND r.status = 'paid' AND l.employment_id = $2 AND date_part('year', r.pay_date) = $3 AND r.pay_date <= $4::date`,
       orgId,
@@ -361,7 +362,9 @@ export async function loadSlip(orgId: string, runId: string, by: { employmentId?
       // สะสมทั้งปี = รอบที่จ่ายผ่านระบบ + ยอดยกมาที่ใช้ตอนคำนวณงวดนี้
       ytd: (() => {
         const o = (line.info as { opening?: { income: number; tax: number; sso: number } | null } | null)?.opening ?? null;
-        return { gross: num(ytd[0]?.gross) + (o?.income ?? 0), tax: num(ytd[0]?.tax) + (o?.tax ?? 0), sso: num(ytd[0]?.sso) + (o?.sso ?? 0) };
+        // ยอดยกมาไม่มีรายหักอื่นของระบบเดิม — สุทธิยกมาคิดเท่าที่รู้ (เงินได้ − ภาษี − ประกันสังคม)
+        const openingNet = o ? o.income - o.tax - o.sso : 0;
+        return { gross: num(ytd[0]?.gross) + (o?.income ?? 0), tax: num(ytd[0]?.tax) + (o?.tax ?? 0), sso: num(ytd[0]?.sso) + (o?.sso ?? 0), net: num(ytd[0]?.net) + openingNet };
       })(),
     };
   });

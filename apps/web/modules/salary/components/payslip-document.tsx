@@ -132,8 +132,8 @@ export function PayslipDocument({
   const ded = deductionRows(l.lines);
   const hasTax = l.lines.some((x) => x.key === "tax");
   // ยอดสะสมทั้งปี: รอบที่จ่ายแล้วรวมงวดนี้อยู่แล้ว · ตัวอย่าง (ยังไม่จ่าย) บวกงวดนี้เข้าไปให้เห็นยอดหลังจ่าย
-  const add = s.status === "paid" ? { gross: 0, tax: 0, sso: 0 } : { gross: l.gross, tax: l.tax, sso: l.ssoEmployee };
-  const ytd = { gross: s.ytd.gross + add.gross, tax: s.ytd.tax + add.tax, sso: s.ytd.sso + add.sso };
+  const add = s.status === "paid" ? { gross: 0, tax: 0, sso: 0, net: 0 } : { gross: l.gross, tax: l.tax, sso: l.ssoEmployee, net: l.net };
+  const ytd = { gross: s.ytd.gross + add.gross, tax: s.ytd.tax + add.tax, sso: s.ytd.sso + add.sso, net: s.ytd.net + add.net };
   const i = l.info;
   const remarks = [
     // OT แบบนับวัน: ใช้จำนวนวันที่จ่ายจริงในสลิปนี้ (ไม่ใช่วันที่มีใบ OT ทั้งหมดในงวด)
@@ -193,7 +193,9 @@ export function PayslipDocument({
             ปี<span className="text-[10.5px] font-normal text-(--ink-soft)">{year + 543} ({year})</span>
           </h2>
           <div className="flex flex-col px-3 py-1.5">
-            <Pair th="เงินได้สะสม" en="YTD earnings" value={fmtBaht(ytd.gross)} />
+            {/* ผู้ใช้ 30/10/2569: เงินได้สะสมทั้งแบบก่อนหักและหลังหัก (ยอดที่ได้รับจริงทั้งปี) */}
+            <Pair th="เงินได้สะสม (ก่อนหัก)" en="YTD Gross earnings" value={fmtBaht(ytd.gross)} />
+            <Pair th="เงินได้สุทธิสะสม (หลังหัก)" en="YTD Net pay" value={fmtBaht(ytd.net)} />
             {(hasTax || ytd.tax > 0) && <Pair th="ภาษีหัก ณ ที่จ่ายสะสม" en="YTD Withholding tax" value={fmtBaht(ytd.tax)} />}
             <Pair th="เงินประกันสังคมสะสม" en="Accumulated SSF" value={fmtBaht(ytd.sso)} />
           </div>

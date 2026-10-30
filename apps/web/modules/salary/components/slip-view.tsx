@@ -86,7 +86,8 @@ export function SlipView({ s, company }: { s: SlipData; company: string }) {
         <div className="pb-1 text-xs font-semibold text-(--ink-soft)">ข้อมูลประกอบ</div>
         {employer && <div className="flex justify-between py-0.5"><span>บริษัทจ่ายประกันสังคมให้อีก</span><span className="tabular-nums">{fmtBaht(employer.amount)}</span></div>}
         <div className="mt-1 border-t border-(--line) pt-1.5 text-xs font-semibold text-(--ink-soft)">สะสมตั้งแต่ต้นปี {Number(s.payDate.slice(0, 4)) + 543}</div>
-        <div className="flex justify-between py-0.5"><span>เงินได้</span><span className="tabular-nums">{fmtBaht(s.ytd.gross)}</span></div>
+        <div className="flex justify-between py-0.5"><span>เงินได้ (ก่อนหัก)</span><span className="tabular-nums">{fmtBaht(s.ytd.gross)}</span></div>
+        <div className="flex justify-between py-0.5"><span>เงินได้สุทธิ (หลังหัก)</span><span className="tabular-nums">{fmtBaht(s.ytd.net)}</span></div>
         <div className="flex justify-between py-0.5"><span>ภาษีหัก ณ ที่จ่าย</span><span className="tabular-nums">{fmtBaht(s.ytd.tax)}</span></div>
         <div className="flex justify-between py-0.5"><span>ประกันสังคม</span><span className="tabular-nums">{fmtBaht(s.ytd.sso)}</span></div>
         <Explain q="ใช้ทำอะไร?">
