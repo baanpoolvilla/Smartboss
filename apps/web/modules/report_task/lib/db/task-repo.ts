@@ -4,7 +4,7 @@ import { prisma } from "@smartboss/database";
 import { nextTaskCode } from "@/lib/document-code";
 import { recordPerformanceEvents, type PerformanceEventInput } from "@/lib/performance";
 import { defaultStickers } from "../../data/stickers";
-import { readStore } from "./org-store";
+import { readStore, removeNotificationsFor } from "./org-store";
 import { publishToOrg } from "@/lib/realtime/server";
 import { listDirectory } from "./employee-directory";
 import type { Sticker, Task, TaskReaction } from "../../types";
@@ -343,6 +343,7 @@ export async function writeTasks(
       created,
       updated,
       deleted: removed.length,
+      removedIds: removed,
       codes,
     };
   });
@@ -356,6 +357,10 @@ export async function writeTasks(
     await recordStickerEvents(orgId, stickerChanges);
     await recordStickerUndoEvents(orgId, removedReactions, userId);
     await recordWaiverUndoEvents(orgId, waivers, userId);
+    // งานที่ถูกลบ — แจ้งเตือนของงานนั้นในกระดิ่งของทุกคนหายไปด้วย (เครื่องคนลบล้างได้แค่ของตัวเอง)
+    await removeNotificationsFor(orgId, { taskIds: result.removedIds });
+    const { removedIds: _removedIds, ...response } = result;
+    return response;
   }
 
   return result;

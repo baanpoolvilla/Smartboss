@@ -12,6 +12,7 @@ import {
   isValidStoreKey,
   readStore,
   readStoreVersion,
+  removeNotificationsFor,
   writeOwnNotifications,
   writeStore,
 } from "@/modules/report_task/lib/db/org-store";
@@ -55,6 +56,7 @@ function notFound() {
  * writeTasks ของ Kanban ทำกับ task.reactions อยู่แล้ว
  */
 const REPORT_FEED_KEY = "report-feed";
+const MEETINGS_KEY = "meetings";
 
 /**
  * ตอบ poll ที่ไม่มีอะไรใหม่ — ไม่มี body มีแต่เลข version
@@ -176,6 +178,8 @@ async function put(request: NextRequest, key: string) {
   // ต้องอ่านก้อนเก่าไว้ก่อนเขียนทับ — หลังเขียนแล้วก้อนเก่าหายไปเลย ไม่มีทาง
   // ย้อนกลับมา diff ว่า reaction ไหนเพิ่งติดใหม่ หรือรอบส่งไหนถูกลบไป (เฉพาะคีย์ report-feed)
   const before = key === REPORT_FEED_KEY ? await readStore<{ posts?: unknown[]; topics?: unknown[] }>(session.orgId, key) : null;
+  // ประชุมที่ถูกลบในรอบนี้ — ต้องรู้ก้อนเก่าเพื่อลบแจ้งเตือนของประชุมนั้นจากกระดิ่งทุกคน
+  const meetingsBefore = key === MEETINGS_KEY ? await readStore<{ id?: unknown }[]>(session.orgId, key) : null;
 
   const result = await writeStore(
     session.orgId,
@@ -190,6 +194,12 @@ async function put(request: NextRequest, key: string) {
       { error: "ข้อมูลถูกแก้ไขโดยผู้ใช้อื่นแล้ว กรุณาโหลดใหม่", currentVersion: result.currentVersion },
       { status: 409 }
     );
+  }
+
+  if (meetingsBefore && Array.isArray(meetingsBefore.data) && Array.isArray(body.data)) {
+    const kept = new Set((body.data as { id?: unknown }[]).map((m) => m?.id));
+    const removed = meetingsBefore.data.map((m) => m?.id).filter((id): id is string => typeof id === "string" && !kept.has(id));
+    await removeNotificationsFor(session.orgId, { meetingIds: removed });
   }
 
   if (key === REPORT_FEED_KEY) {

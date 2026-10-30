@@ -236,6 +236,41 @@ export async function writeOwnNotifications(
   return last;
 }
 
+/**
+ * ลบแจ้งเตือนของ "ทุกคน" ที่พูดถึงงาน/ประชุมที่ถูกลบไปแล้ว — เครื่องของคนลบล้างได้แค่กระดิ่งของตัวเอง
+ * (writeOwnNotifications ไม่ให้แตะของคนอื่น) เดิมผู้รับคนอื่นยังเห็น "ประชุม … เริ่มในอีก 1 วัน" ของประชุมที่ลบแล้ว
+ * (ผู้ใช้ 30/10/2569 "เวลาลบหรือยกเลิกอะไรแล้วแจ้งเตือนนั้นต้องหายไปด้วย") · ไม่ throw — การลบสำเร็จไปแล้ว
+ */
+export async function removeNotificationsFor(orgId: string, ref: { taskIds?: string[]; meetingIds?: string[] }): Promise<void> {
+  const taskIds = new Set(ref.taskIds ?? []);
+  const meetingIds = new Set(ref.meetingIds ?? []);
+  if (taskIds.size === 0 && meetingIds.size === 0) return;
+  const linkIds = (link: string, param: string) =>
+    [...link.matchAll(new RegExp(`[?&]${param}=([^&#]+)`, "g"))].map((m) => decodeURIComponent(m[1]!));
+  const matches = (n: StoredNotification) => {
+    if (typeof n?.taskId === "string" && taskIds.has(n.taskId)) return true;
+    if (typeof n?.meetingId === "string" && meetingIds.has(n.meetingId)) return true;
+    if (typeof n?.link !== "string") return false;
+    // ลิงก์งานมีทั้ง task= (ตัวเตือนใกล้ถึงกำหนด) และ highlight= (แจ้งเตือนงานรุ่นเก่า) — เหมือน removeTaskNotifications ฝั่งเครื่อง
+    return (
+      [...linkIds(n.link, "task"), ...linkIds(n.link, "highlight")].some((id) => taskIds.has(id)) ||
+      linkIds(n.link, "meeting").some((id) => meetingIds.has(id))
+    );
+  };
+  try {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const current = await readStore<StoredNotification[]>(orgId, NOTIFICATIONS_KEY);
+      if (!Array.isArray(current.data)) return;
+      const kept = current.data.filter((n) => !matches(n));
+      if (kept.length === current.data.length) return;
+      const res = await writeStore(orgId, NOTIFICATIONS_KEY, kept, current.version || null);
+      if (res.ok) return;
+    }
+  } catch (err) {
+    console.error("[org-store] removeNotificationsFor failed", err);
+  }
+}
+
 /** แจ้งเตือนเฉพาะของผู้ใช้คนนี้ — ให้ GET ส่งไปที่เครื่อง (ของคนอื่นไม่ออกจากเซิร์ฟเวอร์) */
 export function ownNotifications(data: unknown, userId: string): unknown {
   return Array.isArray(data) ? (data as OwnedNotification[]).filter((n) => n?.userId === userId) : data;
@@ -252,6 +287,7 @@ interface StoredNotification {
   topicName?: unknown;
   grouped?: unknown;
   taskId?: unknown;
+  meetingId?: unknown;
 }
 
 /** แถวที่เพิ่งเพิ่มในรอบนี้ → เด้งถึงผู้รับ */
