@@ -27,6 +27,7 @@ import {
 } from "@/modules/hr/components/ui";
 import { decideLeaveAction } from "./actions";
 import { loadOtMarks } from "./calendar-ot";
+import { ScrollToElement } from "./scroll-to-element";
 import {
   LeaveCalendar,
   type DayEntry,
@@ -56,8 +57,18 @@ function datesBetween(startsOn: string, endsOn: string): string[] {
 }
 
 /** เนื้อหาแท็บ "ปฏิทินทีม" ของหน้าหลัก — เดิมคือหน้า /hr/leave */
-export async function renderCalendarTab(monthParam: string | undefined): Promise<React.ReactNode> {
-  const month = /^\d{4}-\d{2}$/.test(monthParam ?? "") ? monthParam! : currentMonth();
+export async function renderCalendarTab(
+  monthParam: string | undefined,
+  /** id ใบลาจากแจ้งเตือน "มีคำขอลาใหม่รออนุมัติ" — เปิดเดือนของใบนั้นและเลื่อนไปที่แถวอนุมัติ */
+  focusLeaveId?: string,
+): Promise<React.ReactNode> {
+  // ไม่ได้เลือกเดือนเอง → ไปเดือนของใบที่กดมาจากแจ้งเตือน (ใบอนุมัติไปแล้ว/หาไม่เจอ = เดือนนี้เหมือนเดิม)
+  let focusMonth: string | undefined;
+  if (focusLeaveId && !monthParam) {
+    const allPending = await wfTry<Paged<LeaveRequest>>("/leave-requests?status=SUBMITTED");
+    focusMonth = allPending?.items.find((r) => r.id === focusLeaveId)?.starts_on.slice(0, 7);
+  }
+  const month = /^\d{4}-\d{2}$/.test(monthParam ?? "") ? monthParam! : (focusMonth ?? currentMonth());
 
   const daysInMonth = new Date(
     Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0),
@@ -259,7 +270,11 @@ export async function renderCalendarTab(monthParam: string | undefined): Promise
           ) : (
             <DataTable head={["พนักงาน", "วันที่", "เหตุผล", "ดำเนินการ"]}>
               {pending.map((r) => (
-                <tr key={r.id} className="hover:bg-(--bg-soft)">
+                <tr
+                  key={r.id}
+                  id={`leave-request-${r.id}`}
+                  className={r.id === focusLeaveId ? "scroll-mt-24 bg-(--bg-soft) outline-2 outline-(--brand-navy)" : "hover:bg-(--bg-soft)"}
+                >
                   <Td className="font-medium">
                     {nameOf.get(r.employment_id) ?? "—"}
                   </Td>
@@ -300,6 +315,9 @@ export async function renderCalendarTab(monthParam: string | undefined): Promise
             </DataTable>
           )}
         </SectionCard>
+      )}
+      {canApprove && focusLeaveId && pending.some((r) => r.id === focusLeaveId) && (
+        <ScrollToElement id={`leave-request-${focusLeaveId}`} />
       )}
 
       {/*

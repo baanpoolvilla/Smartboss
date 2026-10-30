@@ -45,7 +45,7 @@ const TAB_TITLE: Record<TabId, string> = {
 export default async function HrOverviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; date?: string; month?: string }>;
+  searchParams: Promise<{ tab?: string; date?: string; month?: string; leave?: string }>;
 }) {
   const session = await requireOrg();
   // ปุ่ม export เรียก /attendance-results ซึ่งต้องมีสิทธิ์อ่านผลลงเวลาของทุกคน
@@ -96,7 +96,7 @@ export default async function HrOverviewPage({
         } else if (tab === "overtime") {
           body = await renderOvertimeTab();
         } else if (tab === "calendar") {
-          body = await renderCalendarTab(sp.month);
+          body = await renderCalendarTab(sp.month, sp.leave);
         } else {
           body = await renderTodayTab(sp.date, canManage);
         }

@@ -265,7 +265,11 @@ export function maintenanceHrefFor(type: string, referenceId: string | null): st
   // รายการที่อนุมัติได้เลยแทน
   // ชี้แท็บตรง ๆ (พาธเดิม /hr/leave, /hr/attendance/corrections แค่ redirect มาแท็บ) —
   // เปิดแท็บแล้วแจ้งเตือนหาย (MarkReadOnRoute เทียบ ?tab=) และตัวเลขบนแท็บตรงกัน
-  if (type === "hr_leave_submitted") return "/hr?tab=calendar";
+  // ?leave= ใบแรกของคำขอ — ปฏิทินเปิดเดือนของใบนั้นแล้วเลื่อนลงไปที่ปุ่มอนุมัติ (home-calendar.tsx)
+  if (type === "hr_leave_submitted") {
+    const firstId = referenceId?.split(",")[0];
+    return firstId ? `/hr?tab=calendar&leave=${encodeURIComponent(firstId)}` : "/hr?tab=calendar";
+  }
   if (type === "hr_attendance_correction_submitted") return "/hr?tab=corrections";
   if (type === "hr_overtime_pending") return "/hr?tab=overtime";
   // ผลคำขอของพนักงานเอง → หน้าแรกของบุคคล (มีรายการลา/แก้เวลา/OT ของตัวเอง)
