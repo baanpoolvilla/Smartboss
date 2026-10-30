@@ -144,6 +144,11 @@ type Submitting = "idle" | "locating" | "sending";
 
 /** แตะแรกของปุ่มลงเวลาค้างรอแตะยืนยันได้นานเท่านี้ — ดู `armed` ใน Today */
 const ARM_MS = 4000;
+/**
+ * บันทึกสำเร็จแล้ว ปุ่มใหญ่ค้างเป็น "✓ เข้างานแล้ว 06:48" กี่มิลลิวินาที (แตะไม่มีผล) ก่อนกลับเป็นปุ่มถัดไป
+ * เดิมบันทึกเสร็จปุ่มเปลี่ยนเป็น "ออกงาน" ทันที คนคิดว่ายังไม่ติด กดต่อเลยได้ออกงาน 3 วินาทีหลังเข้า (30 ต.ค. 69)
+ */
+const SAVED_MS = 5000;
 
 /** วงกลม 2 วงบนปุ่มลงเวลา — บอกว่าต้องกด 2 ครั้ง และกดไปแล้วกี่ครั้ง */
 function TapSteps({ done }: { done: 0 | 1 }) {
@@ -334,6 +339,13 @@ export function Today({
     const timer = setTimeout(() => setArmed(null), ARM_MS);
     return () => clearTimeout(timer);
   }, [armed]);
+  /** เพิ่งบันทึกสำเร็จ — ปุ่มโชว์ยืนยันค้างไว้ SAVED_MS (ดูด้านบน) */
+  const [justSaved, setJustSaved] = useState<{ intent: "CLOCK_IN" | "CLOCK_OUT"; at: string } | null>(null);
+  useEffect(() => {
+    if (!justSaved) return;
+    const timer = setTimeout(() => setJustSaved(null), SAVED_MS);
+    return () => clearTimeout(timer);
+  }, [justSaved]);
 
   const reload = useCallback(async () => {
     try {
@@ -399,6 +411,7 @@ export function Today({
           decision?: string;
           riskFlags?: string[];
           distanceM?: number | null;
+          capturedAt?: string;
           attemptProof?: string;
         };
         // เก็บ 5 ใบล่าสุด
@@ -437,6 +450,10 @@ export function Today({
 
         // แถบล่าง (ปุ่มลงเวลาตรงกลาง) อยู่บนจอเดียวกัน — บอกให้อ่านสถานะใหม่
         window.dispatchEvent(new Event(CLOCK_CHANGED_EVENT));
+
+        if (payload.decision === "ACCEPTED" || payload.decision === "ACCEPTED_WITH_WARNING" || payload.decision === "PENDING_REVIEW") {
+          setJustSaved({ intent, at: payload.capturedAt ?? new Date().toISOString() });
+        }
 
         // มีข้อสังเกตก็นับเวลาแล้ว (HR ไปถามเองถ้าแปลก ดูหน้า "ลงเวลาผิดปกติ") — พนักงานเห็นว่าบันทึกสำเร็จ
         if (payload.decision === "ACCEPTED" || payload.decision === "ACCEPTED_WITH_WARNING") {
@@ -549,6 +566,8 @@ export function Today({
           type="button"
           disabled={busy}
           onClick={() => {
+            // เพิ่งบันทึกสำเร็จ — แตะรัว ๆ ช่วงนี้ไม่นับ (SAVED_MS)
+            if (justSaved) return;
             // แตะแรก = เตรียม · แตะที่สอง (ภายใน ARM_MS) = ลงเวลาจริง
             if (armed !== nextIntent) {
               setArmed(nextIntent);
@@ -568,6 +587,11 @@ export function Today({
             <span className="text-2xl">{t("locating")}</span>
           ) : state === "sending" ? (
             <span className="text-2xl">{t("saving")}</span>
+          ) : justSaved ? (
+            <>
+              <span className="text-4xl">✓ {t("doneAt", { what: intentLabel(t, justSaved.intent), time: timeOf(justSaved.at) })}</span>
+              <span className="rounded-full bg-white/20 px-3 py-0.5 text-base font-medium">{t("noNeedAgain")}</span>
+            </>
           ) : (
             <>
               <TapSteps done={armed === nextIntent ? 1 : 0} />
