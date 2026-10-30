@@ -136,6 +136,17 @@ function allDocksWaived(task: Task): boolean {
   return docks.length > 0 && docks.every((p) => !!p.waived);
 }
 
+/**
+ * งานกลุ่ม: กำหนดส่งจริงของแต่ละคน (assigneeDueDates ทับ dueDate ของทั้งงาน) — เดิมหัวข้อโชว์ dueDate ของทั้งงานเสมอ
+ * เลื่อนรายคนครบทุกคนแล้วยังขึ้นวันเดิม (ผู้ใช้ 30/10/2569 T-2569-0149) · null = ใช้ dueDate ตามเดิม
+ */
+function groupDueLabel(task: Task): string | null {
+  if (task.taskMode !== "group" || !task.assigneeDueDates || task.assigneeIds.length === 0) return null;
+  const days = [...new Set(task.assigneeIds.map((uid) => toDateInput(task.assigneeDueDates?.[uid] ?? task.dueDate)))].sort();
+  if (days.length === 1) return formatDate(days[0]!);
+  return `${formatDate(days[0]!)} – ${formatDate(days[days.length - 1]!)} (ต่างกันรายคน)`;
+}
+
 function toLightboxImage(a: Attachment): ReportPostImage {
   return { id: a.id, url: a.url, dataUrl: a.dataUrl, name: a.name, mime: a.mime ?? mimeFromLegacyTaskLabel(a.type) };
 }
@@ -1390,7 +1401,7 @@ export function TaskDetailSheet({
                   just reminder-sweep timing (see reminder-sweep.ts) with no
                   such stakes, so it's editable inline instead. */}
               <div className="flex items-center gap-1.5 h-9 px-1 text-sm">
-                {formatDate(task.dueDate)}
+                {groupDueLabel(task) ?? formatDate(task.dueDate)}
                 {/* ช่อง "เวลา" เอาออกแล้ว (ผู้ใช้ขอ 18/10/2569 — ตอนสร้างงานก็ไม่มีแล้ว) · งานเก่าที่เคยตั้งเวลาไว้
                     ยังโชว์ให้ลบออกได้ ไม่งั้นเวลาค้างอยู่แบบมองไม่เห็น (มีผลกับการนับส่งทันเวลา) */}
                 {canEditMain && !!task.dueTime && (
