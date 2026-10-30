@@ -27,7 +27,7 @@ import { Notice } from "./ui";
  */
 
 const field = "h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm text-(--ink)";
-const primary = "inline-flex h-11 items-center justify-center gap-2 rounded-(--radius) bg-(--app) px-4 text-sm font-semibold text-white hover:brightness-95 disabled:opacity-50";
+const primary = "inline-flex h-11 items-center justify-center gap-2 rounded-(--radius) bg-(--brand-navy,#1b2537) px-4 text-sm font-semibold text-white hover:brightness-95 disabled:opacity-50";
 const ghost = "inline-flex h-11 items-center justify-center rounded-(--radius) border border-(--line) px-4 text-sm text-(--ink) hover:bg-(--bg-soft)";
 
 export interface PettyHolderView {
@@ -419,7 +419,10 @@ function ApproveTopupModal({ item, today, onClose }: { item: PettyTopupItem; tod
         <div className="text-sm">
           <span className="text-(--ink-soft)">เหตุผลที่ขอ:</span> {item.note}
         </div>
-        <Field label="ให้เงินแบบ" required>
+        <div role="group" aria-labelledby="topup-method" className="flex flex-col gap-1.5 text-sm">
+          <span id="topup-method" className="font-semibold text-(--ink)">
+            ให้เงินแบบ <span className="font-normal text-red-700">*</span>
+          </span>
           <div className="flex gap-2">
             {(["transfer", "cash"] as const).map((m) => (
               <button
@@ -433,7 +436,7 @@ function ApproveTopupModal({ item, today, onClose }: { item: PettyTopupItem; tod
               </button>
             ))}
           </div>
-        </Field>
+        </div>
         <FilePicker role="slip" files={files} onChange={setFiles} label={method === "transfer" ? "สลิปโอน *" : "รูปเงินสดที่ให้ *"} hint="ต้องเห็นจำนวนเงินชัด" today={today} />
         <Field label="หมายเหตุ">
           <input className={field} value={note} onChange={(e) => setNote(e.target.value)} />

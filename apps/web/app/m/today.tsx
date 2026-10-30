@@ -589,7 +589,7 @@ export function Today({
             <span className="text-2xl">{t("saving")}</span>
           ) : justSaved ? (
             <>
-              <span className="text-4xl">✓ {t("doneAt", { what: intentLabel(t, justSaved.intent), time: timeOf(justSaved.at) })}</span>
+              <span className="px-3 text-center text-3xl leading-tight">✓ {t("doneAt", { what: intentLabel(t, justSaved.intent), time: timeOf(justSaved.at) })}</span>
               <span className="rounded-full bg-white/20 px-3 py-0.5 text-base font-medium">{t("noNeedAgain")}</span>
             </>
           ) : (

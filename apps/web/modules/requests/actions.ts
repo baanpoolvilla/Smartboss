@@ -44,6 +44,7 @@ import {
   round2,
   routeText,
   similarSlip,
+  thaiDate,
   SIMILAR_SLIP_PREFIX,
   timesOverlap,
   type Attachment,
@@ -1562,7 +1563,7 @@ export async function addPettySpendAction(input: { title: string; category: stri
       const balance = (await pettyBalances(tx, orgId)).get(holder.id) ?? 0;
       if (amount > balance + 0.005) return { error: `เงินในมือไม่พอ (เหลือ ${baht(balance)}) — กด “ขอเติมเงิน” ก่อน` } as const;
       await tx.moneyPettyCashEntry.create({
-        data: { orgId, holderUserId: holder.id, holderName: holder.name, kind: "spend", delta: -amount, category: input.category, note: `${title} · จ่ายวันที่ ${spentOn}`, attachments: attachments as unknown as object, byUserId: session.userId, byName: holder.name },
+        data: { orgId, holderUserId: holder.id, holderName: holder.name, kind: "spend", delta: -amount, category: input.category, note: `${title} · จ่ายวันที่ ${thaiDate(spentOn)}`, attachments: attachments as unknown as object, byUserId: session.userId, byName: holder.name },
       });
       await insertEvent(tx, orgId, { byUserId: session.userId, byName: holder.name, action: "petty", summary: `จ่ายจากเงินสดย่อย ${holder.name} ${baht(amount)} · ${input.category} · ${title}` });
       return { ok: true } as const;
