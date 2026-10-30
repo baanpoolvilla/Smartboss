@@ -86,7 +86,7 @@ import {
   ImagePlus,
   SendHorizontal,
 } from "lucide-react";
-import type { Attachment, Sticker, TaskPriority, TaskStatus } from "@/modules/report_task/types";
+import type { Attachment, Sticker, Task, TaskPriority, TaskStatus } from "@/modules/report_task/types";
 import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
 import { StickerConfirmDialog } from "@/modules/report_task/components/shared/sticker-confirm-dialog";
 import { reactionTargetLabel } from "@/modules/report_task/lib/sticker-target";
@@ -130,6 +130,12 @@ const PLAIN_EMOJI_COLLAPSED_COUNT = 10;
  * เป็น ReportPostImage ก่อนเพราะ ReportImageLightbox อ่านชนิดไฟล์จาก `mime`
  * ไม่ใช่ป้ายไทยแบบที่ Attachment เก็บ (ของเก่าก่อนมี field mime เดาจากป้ายแทน
  * ดู report-attachment-kind.ts's mimeFromLegacyTaskLabel) */
+/** มีการหักคะแนนเลยกำหนด และทุกการหักถูกคืนแล้ว (งานเดี่ยว: penalty · งานกลุ่ม: penalties รายคน) */
+function allDocksWaived(task: Task): boolean {
+  const docks = [...(task.penalty ? [task.penalty] : []), ...Object.values(task.penalties ?? {})];
+  return docks.length > 0 && docks.every((p) => !!p.waived);
+}
+
 function toLightboxImage(a: Attachment): ReportPostImage {
   return { id: a.id, url: a.url, dataUrl: a.dataUrl, name: a.name, mime: a.mime ?? mimeFromLegacyTaskLabel(a.type) };
 }
@@ -1405,7 +1411,9 @@ export function TaskDetailSheet({
               changed used to sit in two different places on the sheet, which
               made the log easy to miss right after making an edit. */}
 
-          {task.missedDeadlineOnce && (
+          {/* เจ้าของระบบคืนคะแนนทุกการหักของงานนี้แล้ว (= ตัดสินว่าเป็นความผิดพลาด ไม่ใช่คนส่งช้า) ⇒ ไม่ขึ้นป้าย
+              ข้อมูล missedDeadlineOnce ยังเก็บไว้เหมือนเดิม (ตัวหักคะแนนใช้) — ซ่อนแค่ป้าย (ผู้ใช้ 30/10/2569) */}
+          {task.missedDeadlineOnce && !allDocksWaived(task) && (
             <Badge variant="secondary" className="w-fit text-[10px] font-normal bg-red-50 text-[var(--chart-red)] gap-1">
               <History className="h-3 w-3" /> เลยกำหนด
             </Badge>
