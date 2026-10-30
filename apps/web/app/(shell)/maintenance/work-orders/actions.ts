@@ -23,6 +23,7 @@ import {
   propertyCaretaker,
   deleteNotificationsByReference,
   resolveActionNotifications,
+  withoutUninvolvedCeos,
 } from "@/modules/maintenance/data/notify";
 import { getProperty } from "@/modules/maintenance/data/properties";
 import { getAsset } from "@/modules/maintenance/data/assets";
@@ -274,7 +275,7 @@ async function notifyStatusChanged(
     ...(await propertyCaretaker(orgId, wo.propertyId)),
   ]);
   targets.delete(actorId);
-  await notifyUsers(orgId, [...targets], {
+  await notifyUsers(orgId, await withoutUninvolvedCeos(orgId, targets, wo), {
     title: `${st.emoji} ใบงานอัปเดตสถานะ: ${wo.title}`,
     body: `บ้าน: ${propertyName} • สถานะ: ${st.label}`,
     type: "work_order",
@@ -522,7 +523,7 @@ export async function addCommentAction(workOrderId: string, formData: FormData) 
       });
       for (const id of mentioned) targets.delete(id);
     }
-    await notifyUsers(s.orgId, [...targets], {
+    await notifyUsers(s.orgId, await withoutUninvolvedCeos(s.orgId, targets, wo), {
       title: `💬 ความคิดเห็นใหม่: ${wo.title}`,
       body: content || photoText,
       type: "work_order",

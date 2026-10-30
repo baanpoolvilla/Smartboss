@@ -127,6 +127,31 @@ export async function propertyCaretaker(
 }
 
 /**
+ * CEO ได้แจ้งเตือนความเคลื่อนไหวของใบงาน (คอมเมนต์/สถานะ) เฉพาะใบที่ตัวเองเปิด/มอบหมาย หรือได้รับมอบหมาย
+ * — เป็นผู้ดูแลบ้าน/ถูก cc ไว้ไม่พอ (ผู้ใช้ 30/10/2569 "ให้แสดงเฉพาะที่เกี่ยวกับเรา ที่เรามอบหมาย")
+ * ถูก @ ในคอมเมนต์ยังได้ "แท็กคุณในใบงาน" แยกต่างหากเหมือนเดิม · คนที่ไม่ใช่ CEO ไม่เปลี่ยน
+ */
+export async function withoutUninvolvedCeos(
+  orgId: string,
+  targets: Iterable<string>,
+  wo: { createdBy: string | null; assignedTo: string | null }
+): Promise<string[]> {
+  const list = [...targets];
+  if (list.length === 0) return list;
+  try {
+    const ceos = await prisma.user.findMany({
+      where: { orgId, id: { in: list }, roles: { some: { role: { code: "CEO" } } } },
+      select: { id: true },
+    });
+    const drop = new Set(ceos.map((u) => u.id).filter((id) => id !== wo.createdBy && id !== wo.assignedTo));
+    return list.filter((id) => !drop.has(id));
+  } catch (err) {
+    console.error("[notify] withoutUninvolvedCeos failed", err);
+    return list;
+  }
+}
+
+/**
  * คนในบริษัทที่ถือสิทธิ์นี้ผ่าน role จริง ๆ (เช่น maintenance.po.approve = คนอนุมัติ PR)
  *
  * ไม่นับ SUPER_ADMIN ที่ข้ามการเช็คสิทธิ์ได้ทุกอย่าง — นั่นคือทีมหลังบ้าน ไม่ใช่
