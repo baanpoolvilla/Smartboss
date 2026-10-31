@@ -129,6 +129,7 @@ import {
   Trash2,
   TriangleAlert,
   Underline,
+  Strikethrough,
   User,
   Users,
   X,
@@ -2137,6 +2138,16 @@ export function ReportCard({
                     className={REPLY_FORMAT_BTN}
                   >
                     <Underline className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => execReplyFormat("strikeThrough")}
+                    aria-label="ขีดฆ่า"
+                    title="ขีดฆ่า"
+                    className={REPLY_FORMAT_BTN}
+                  >
+                    <Strikethrough className="h-3.5 w-3.5" />
                   </button>
                   <TextColorButtons
                     buttonClassName={REPLY_FORMAT_BTN}

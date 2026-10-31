@@ -45,7 +45,7 @@ export function mentionMarkersToPlainText(text: string): string {
 /** `{{c:red}}ข้อความ{{/c}}` → `ข้อความ` — ที่ที่แสดงสีไม่ได้ (แจ้งเตือน ฯลฯ) ไม่ให้เห็นรหัสสี */
 export function stripColorMarkers(text: string): string {
   let t = text;
-  for (let i = 0; i < 3 && /\{\{(c|h):/.test(t); i++) t = t.replace(COLOR_SEGMENT, "$3");
+  for (let i = 0; i < 4 && /\{\{(c|h|s):/.test(t); i++) t = t.replace(COLOR_SEGMENT, "$3");
   return t;
 }
 
@@ -73,6 +73,7 @@ export const richTextMarkers = {
   italic: "*",
   underline: "__",
   code: "`",
+  strike: "~~",
 } as const;
 
 export const HORIZONTAL_RULE_LINE = "---";
@@ -96,11 +97,27 @@ export const HIGHLIGHT_COLORS = {
   blue: { hex: "#bfdbfe", label: "ฟ้า" },
   pink: { hex: "#fbcfe8", label: "ชมพู" },
 } as const;
-type ColorKind = "c" | "h";
-const COLOR_SEGMENT = /\{\{(c|h):([a-z]+)\}\}(.+?)\{\{\/\1\}\}/g;
+/** ขนาดตัวอักษร แบบ Teams (เล็ก/ใหญ่/ใหญ่มาก — ปกติ = ไม่มี marker) · `{{s:lg}}ข้อความ{{/s}}` · หัวข้อ = ขนาด + ตัวหนา */
+export const TEXT_SIZES = {
+  sm: { hex: "0.85em", label: "เล็ก", font: "2" },
+  lg: { hex: "1.25em", label: "ใหญ่", font: "5" },
+  xl: { hex: "1.5em", label: "ใหญ่มาก", font: "6" },
+} as const;
+type ColorKind = "c" | "h" | "s";
+const COLOR_SEGMENT = /\{\{(c|h|s):([a-z]+)\}\}(.+?)\{\{\/\1\}\}/g;
 
 function paletteOf(kind: ColorKind): Record<string, { hex: string; label: string }> {
-  return kind === "c" ? TEXT_COLORS : HIGHLIGHT_COLORS;
+  return kind === "c" ? TEXT_COLORS : kind === "h" ? HIGHLIGHT_COLORS : TEXT_SIZES;
+}
+
+/** <font size="5"> ที่ execCommand("fontSize") สร้าง → ชื่อขนาด · 3/4 = ปกติ */
+function sizeNameOfFont(size: string | null): string | undefined {
+  if (!size) return undefined;
+  const n = Number(size);
+  if (n <= 2) return "sm";
+  if (n === 5) return "lg";
+  if (n >= 6) return "xl";
+  return undefined;
 }
 
 /** "#DC2626" / "rgb(220, 38, 38)" → ชื่อในชุดสี · ไม่อยู่ในชุด = undefined */
@@ -132,7 +149,7 @@ function splitColorSegments(text: string): ColorSegment[] {
 // The mention branch comes first — its label can itself contain characters
 // like "(" that would otherwise confuse the later branches.
 const RICH_TEXT_PATTERN =
-  /@\[([^\]]+)\]\((user|topic|dept|everyone|role):([^)]+)\)|\*\*(.+?)\*\*|\*(.+?)\*|__(.+?)__|`(.+?)`|(https?:\/\/[^\s<>"']+)/g;
+  /@\[([^\]]+)\]\((user|topic|dept|everyone|role):([^)]+)\)|\*\*(.+?)\*\*|\*(.+?)\*|__(.+?)__|`(.+?)`|~~(.+?)~~|(https?:\/\/[^\s<>"']+)/g;
 
 function escapeHtml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -141,12 +158,20 @@ function escapeHtml(text: string): string {
 /** A line starting with a "• "/"N. "/"☐ "/"☑ " marker, matched against the same prefixes the toolbar and read-only renderer use. */
 const ANY_LIST_LINE_PREFIX = /^(•|\d+\.|☐|☑)\s+/;
 
+/** บรรทัดข้อความอ้างอิง (Quote แบบ Teams) — ขึ้นต้นด้วย "> " · ช่องว่างหลังเป็น nbsp ได้ (กล่องพิมพ์ใส่ให้) */
+export const QUOTE_MARKER = "> ";
+export const QUOTE_LINE_PREFIX = /^>[\s\u00a0]/;
+
 /** Converts stored `**bold**`/`*italic*`/`__underline__`/`` `code` ``/`@[label](type:id)` marker text into the WYSIWYG editor's live HTML. */
 function inlineToEditorHtml(escaped: string): string {
   return splitColorSegments(escaped)
     .map((seg) => {
       if ("text" in seg) return plainInlineToEditorHtml(seg.text);
       const inner = inlineToEditorHtml(seg.inner);
+      if (seg.kind === "s") {
+        const size = TEXT_SIZES[seg.name as keyof typeof TEXT_SIZES];
+        return size ? `<font size="${size.font}">${inner}</font>` : inner;
+      }
       const hex = paletteOf(seg.kind)[seg.name]?.hex;
       if (!hex) return inner;
       return seg.kind === "c" ? `<font color="${hex}">${inner}</font>` : `<span style="background-color:${hex}">${inner}</span>`;
@@ -155,7 +180,7 @@ function inlineToEditorHtml(escaped: string): string {
 }
 
 function plainInlineToEditorHtml(escaped: string): string {
-  return escaped.replace(RICH_TEXT_PATTERN, (whole, mLabel, mType, mId, b, i, u, c) => {
+  return escaped.replace(RICH_TEXT_PATTERN, (whole, mLabel, mType, mId, b, i, u, c, st) => {
         // A bare URL match falls through to here too — left as plain text in
         // the editor (not a live <a>), since linkifying it would make the
         // URL uneditable as text mid-edit.
@@ -166,6 +191,7 @@ function plainInlineToEditorHtml(escaped: string): string {
         if (i !== undefined) return `<i>${i}</i>`;
         if (u !== undefined) return `<u>${u}</u>`;
         if (c !== undefined) return `<code>${c}</code>`;
+        if (st !== undefined) return `<s>${st}</s>`;
         return whole;
   });
 }
@@ -183,6 +209,9 @@ export function bulletsTextToHtml(text: string): string {
       // sibling in the <br>-joined flow (so line-splitting on read-back is
       // untouched), but forcing it to full width gives it its own "first
       // line" to indent independently of every other bullet.
+      if (QUOTE_LINE_PREFIX.test(line)) {
+        return `<span style="display:inline-block;width:100%;border-left:3px solid #cbd5e1;padding-left:8px;color:#64748b">${rendered}</span>`;
+      }
       if (!ANY_LIST_LINE_PREFIX.test(line)) return rendered;
       return `<span style="display:inline-block;width:100%;padding-left:1.25em;text-indent:-1.25em">${rendered}</span>`;
     })
@@ -199,9 +228,11 @@ interface FormatFlags {
   italic: boolean;
   underline: boolean;
   code: boolean;
-  /** ชื่อใน TEXT_COLORS / HIGHLIGHT_COLORS */
+  strike?: boolean;
+  /** ชื่อใน TEXT_COLORS / HIGHLIGHT_COLORS / TEXT_SIZES */
   color?: string;
   highlight?: string;
+  size?: string;
 }
 
 function applyFormatMarkers(text: string, flags: FormatFlags): string {
@@ -210,18 +241,23 @@ function applyFormatMarkers(text: string, flags: FormatFlags): string {
   if (flags.bold) t = `**${t}**`;
   if (flags.italic) t = `*${t}*`;
   if (flags.underline) t = `__${t}__`;
+  if (flags.strike) t = `~~${t}~~`;
   if (flags.color) t = `{{c:${flags.color}}}${t}{{/c}}`;
   if (flags.highlight) t = `{{h:${flags.highlight}}}${t}{{/h}}`;
+  if (flags.size) t = `{{s:${flags.size}}}${t}{{/s}}`;
   return t;
 }
 
 /** สีที่ element นี้ตั้งเอง — ตั้งสีนอกชุด (เช่น "ล้างสี" หรือสีที่วางมาจากที่อื่น) = ล้างสีของตัวแม่ */
-function colorFlagsOf(el: HTMLElement, flags: FormatFlags): Pick<FormatFlags, "color" | "highlight"> {
+function colorFlagsOf(el: HTMLElement, flags: FormatFlags): Pick<FormatFlags, "color" | "highlight" | "size" | "strike"> {
   const fg = (el.tagName === "FONT" ? el.getAttribute("color") : null) || el.style?.color;
   const bg = el.style?.backgroundColor;
+  const fontSize = el.tagName === "FONT" ? el.getAttribute("size") : null;
   return {
     color: fg ? paletteName("c", fg) : flags.color,
     highlight: bg ? paletteName("h", bg) : flags.highlight,
+    size: fontSize ? sizeNameOfFont(fontSize) : flags.size,
+    strike: flags.strike || el.tagName === "S" || el.tagName === "STRIKE" || el.tagName === "DEL" || el.style?.textDecorationLine === "line-through",
   };
 }
 
@@ -355,6 +391,7 @@ export function renderRichBulletText(text: string): ReactNode[] {
     const hex = paletteOf(seg.kind)[seg.name]?.hex;
     const inner = renderRichBulletText(seg.inner);
     if (!hex) return <Fragment key={i}>{inner}</Fragment>;
+    if (seg.kind === "s") return <span key={i} style={{ fontSize: hex, lineHeight: 1.35 }}>{inner}</span>;
     return seg.kind === "c" ? (
       <span key={i} style={{ color: hex }}>{inner}</span>
     ) : (
@@ -393,17 +430,18 @@ function renderPlainRichText(text: string): ReactNode[] {
           {match[7]}
         </code>
       );
-    else if (match[8] !== undefined)
+    else if (match[8] !== undefined) nodes.push(<s key={key++}>{match[8]}</s>);
+    else if (match[9] !== undefined)
       nodes.push(
         <a
           key={key++}
-          href={match[8]}
+          href={match[9]}
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
           className="text-[var(--brand-green-dark)] hover:underline break-all"
         >
-          {match[8]}
+          {match[9]}
         </a>
       );
     lastIndex = index + match[0].length;
@@ -607,6 +645,13 @@ export function renderSectionBullets(bullets: string[], onToggleChecklist?: (bul
         {run.map((b, bi) => {
           // บรรทัดว่างที่เว้นไว้ = เว้นจริงเท่าหนึ่งบรรทัด (เดิมสูง 0)
           if (!b.trim()) return <p key={bi} aria-hidden className="h-[1.5em]" />;
+          if (QUOTE_LINE_PREFIX.test(b.trim())) {
+            return (
+              <p key={bi} className="border-l-[3px] border-[var(--line)] pl-3 text-[15px] sm:text-base text-[var(--ink-soft)]">
+                <span className="whitespace-pre-wrap break-words">{renderRichBulletText(b.trim().replace(QUOTE_LINE_PREFIX, ""))}</span>
+              </p>
+            );
+          }
           const bulleted = BULLET_LINE_PREFIX.test(b.trim());
           return (
             <p key={bi} className="text-[15px] sm:text-base text-[var(--ink)] flex items-start gap-1.5">

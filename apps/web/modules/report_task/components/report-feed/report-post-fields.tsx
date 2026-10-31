@@ -13,6 +13,7 @@ import {
   CHECKLIST_LINE_PREFIX,
   CHECKLIST_UNCHECKED,
   HORIZONTAL_RULE_LINE,
+  QUOTE_MARKER,
   NUMBERED_LINE_PREFIX,
   bulletsTextToHtml,
   htmlEditorToBulletsText,
@@ -26,9 +27,16 @@ import {
 import { cn } from "@/modules/report_task/lib/utils";
 import { AlbumPickerButton } from "@/modules/report_task/components/report-feed/album-picker-button";
 import { TagPickerButton } from "@/modules/report_task/components/report-feed/tag-picker-button";
-import { Bold, Building2, Code, Crown, Hash, Italic, List, ListOrdered, Minus, Square, Table, TriangleAlert, Underline, User, Users, X } from "lucide-react";
+import { Bold, Building2, Code, Crown, Hash, Italic, List, ListIndentDecrease, ListIndentIncrease, ListOrdered, Minus, Redo2, RemoveFormatting, Square, Strikethrough, Table, TextQuote, TriangleAlert, Underline, Undo2, User, Users, X } from "lucide-react";
 import { LinkInsertPopover } from "@/modules/report_task/components/report-feed/link-insert-popover";
-import { TextColorButtons, applyTextColor } from "@/modules/report_task/components/report-feed/text-color-buttons";
+import {
+  TextColorButtons,
+  TextStyleMenu,
+  applyIndent,
+  applyTextColor,
+  applyTextSize,
+  applyTextStyle,
+} from "@/modules/report_task/components/report-feed/text-color-buttons";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
 import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
 import { dropZoneProps, hasClipboardText } from "@/lib/annotate/annotate";
@@ -56,8 +64,8 @@ export const newSection = (): DraftSection => ({
   bulletsText: "",
 });
 
-type ActiveFormat = { bold: boolean; italic: boolean; underline: boolean; code: boolean; list: "bullet" | "number" | "checklist" | null };
-const NO_ACTIVE_FORMAT: ActiveFormat = { bold: false, italic: false, underline: false, code: false, list: null };
+type ActiveFormat = { bold: boolean; italic: boolean; underline: boolean; strike: boolean; code: boolean; list: "bullet" | "number" | "checklist" | null };
+const NO_ACTIVE_FORMAT: ActiveFormat = { bold: false, italic: false, underline: false, strike: false, code: false, list: null };
 
 /** Text of the editor content from its start up to the caret, via a cloned range — reuses the same line/br serializer as final storage. */
 function textBeforeCaret(el: HTMLElement): string | null {
@@ -458,6 +466,7 @@ export function ReportPostFields({
         bold: document.queryCommandState("bold"),
         italic: document.queryCommandState("italic"),
         underline: document.queryCommandState("underline"),
+        strike: document.queryCommandState("strikeThrough"),
         code: !!window.getSelection()?.anchorNode?.parentElement?.closest("code"),
         list: numberedMatch ? "number" : bulletMatch ? "bullet" : checklistMatch ? "checklist" : null,
       },
@@ -482,6 +491,14 @@ export function ReportPostFields({
     const el = editableRefs.current[sectionId];
     if (!el) return;
     applyTextColor(el, kind, hex);
+    syncFromEditor(sectionId, el);
+  }
+
+  /** ปุ่มจัดรูปแบบเพิ่มเติมแบบ Teams (31/10/2569) — ทุกปุ่มทำกับช่องพิมพ์ตรง ๆ แล้วอ่านกลับเป็นข้อความเก็บ */
+  function withEditor(sectionId: string, run: (el: HTMLDivElement) => void) {
+    const el = editableRefs.current[sectionId];
+    if (!el) return;
+    run(el);
     syncFromEditor(sectionId, el);
   }
 
@@ -724,7 +741,7 @@ export function ReportPostFields({
             );
           return (
             <div key={s.id} className="rounded-lg border border-[var(--line)] p-2.5 space-y-2">
-              <div className="flex items-center gap-0.5">
+              <div className="flex flex-wrap items-center gap-0.5">
                 <button type="button" onMouseDown={preserveSelection} onClick={() => exec(s.id, "bold")} className={toolbarBtn(fmt.bold)} aria-label="ตัวหนา" title="ตัวหนา">
                   <Bold className="h-3 w-3" />
                 </button>
@@ -734,10 +751,18 @@ export function ReportPostFields({
                 <button type="button" onMouseDown={preserveSelection} onClick={() => exec(s.id, "underline")} className={toolbarBtn(fmt.underline)} aria-label="ขีดเส้นใต้" title="ขีดเส้นใต้">
                   <Underline className="h-3 w-3" />
                 </button>
+                <button type="button" onMouseDown={preserveSelection} onClick={() => exec(s.id, "strikeThrough")} className={toolbarBtn(fmt.strike)} aria-label="ขีดฆ่า" title="ขีดฆ่า">
+                  <Strikethrough className="h-3 w-3" />
+                </button>
                 <TextColorButtons
                   buttonClassName={toolbarBtn(false)}
                   onColor={(hex) => colorize(s.id, "c", hex)}
                   onHighlight={(hex) => colorize(s.id, "h", hex)}
+                />
+                <TextStyleMenu
+                  buttonClassName={toolbarBtn(false)}
+                  onStyle={(style) => withEditor(s.id, (el) => applyTextStyle(el, style))}
+                  onSize={(size) => withEditor(s.id, (el) => applyTextSize(el, size))}
                 />
                 <span className="w-px h-4 bg-[var(--line)] mx-0.5" />
                 <button
@@ -770,6 +795,15 @@ export function ReportPostFields({
                 >
                   <Square className="h-3 w-3" />
                 </button>
+                <button type="button" onMouseDown={preserveSelection} onClick={() => withEditor(s.id, (el) => applyIndent(el, "out"))} className={toolbarBtn(false)} aria-label="ลดการเยื้อง" title="ลดการเยื้อง">
+                  <ListIndentDecrease className="h-3 w-3" />
+                </button>
+                <button type="button" onMouseDown={preserveSelection} onClick={() => withEditor(s.id, (el) => applyIndent(el, "in"))} className={toolbarBtn(false)} aria-label="เพิ่มการเยื้อง" title="เพิ่มการเยื้อง">
+                  <ListIndentIncrease className="h-3 w-3" />
+                </button>
+                <button type="button" onMouseDown={preserveSelection} onClick={() => insertSnippet(s.id, QUOTE_MARKER)} className={toolbarBtn(false)} aria-label="ข้อความอ้างอิง" title="ข้อความอ้างอิง">
+                  <TextQuote className="h-3 w-3" />
+                </button>
                 <span className="w-px h-4 bg-[var(--line)] mx-0.5" />
                 <button type="button" onMouseDown={preserveSelection} onClick={() => toggleCode(s.id)} className={toolbarBtn(fmt.code)} aria-label="โค้ด" title="โค้ด">
                   <Code className="h-3 w-3" />
@@ -795,6 +829,16 @@ export function ReportPostFields({
                   <Table className="h-3 w-3" />
                 </button>
                 <LinkInsertPopover onInsert={(url) => insertLink(s.id, url)} className={toolbarBtn(false)} />
+                <span className="w-px h-4 bg-[var(--line)] mx-0.5" />
+                <button type="button" onMouseDown={preserveSelection} onClick={() => exec(s.id, "removeFormat")} className={toolbarBtn(false)} aria-label="ล้างรูปแบบ" title="ล้างรูปแบบ (ตัวหนา สี ขนาด ฯลฯ)">
+                  <RemoveFormatting className="h-3 w-3" />
+                </button>
+                <button type="button" onMouseDown={preserveSelection} onClick={() => exec(s.id, "undo")} className={toolbarBtn(false)} aria-label="เลิกทำ" title="เลิกทำ (Ctrl+Z)">
+                  <Undo2 className="h-3 w-3" />
+                </button>
+                <button type="button" onMouseDown={preserveSelection} onClick={() => exec(s.id, "redo")} className={toolbarBtn(false)} aria-label="ทำซ้ำ" title="ทำซ้ำ (Ctrl+Y)">
+                  <Redo2 className="h-3 w-3" />
+                </button>
               </div>
               <div
                 ref={(el) => {

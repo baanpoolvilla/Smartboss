@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Baseline, Highlighter, X } from "lucide-react";
+import { ALargeSmall, Baseline, Highlighter, X } from "lucide-react";
 import { HIGHLIGHT_COLORS, TEXT_COLORS } from "@/modules/report_task/lib/report-feed-rich-text";
 import { cn } from "@/modules/report_task/lib/utils";
 
@@ -134,4 +134,125 @@ export function applyTextColor(el: HTMLElement, kind: "c" | "h", hex: string | n
     const value = hex ?? "transparent";
     if (!document.execCommand("hiliteColor", false, value)) document.execCommand("backColor", false, value);
   }
+}
+
+export type TextStyleChoice = "h1" | "h2" | "h3" | "normal";
+export type TextSizeChoice = "sm" | "normal" | "lg" | "xl";
+
+const STYLE_ITEMS: { id: TextStyleChoice; label: string; className: string }[] = [
+  { id: "h1", label: "หัวข้อใหญ่", className: "text-lg font-bold" },
+  { id: "h2", label: "หัวข้อ", className: "text-base font-bold" },
+  { id: "h3", label: "หัวข้อย่อย", className: "text-sm font-bold" },
+  { id: "normal", label: "ข้อความปกติ", className: "text-sm" },
+];
+const SIZE_ITEMS: { id: TextSizeChoice; label: string; className: string }[] = [
+  { id: "sm", label: "เล็ก", className: "text-xs" },
+  { id: "normal", label: "ปกติ", className: "text-sm" },
+  { id: "lg", label: "ใหญ่", className: "text-base" },
+  { id: "xl", label: "ใหญ่มาก", className: "text-lg" },
+];
+
+/** เมนู "รูปแบบข้อความ" แบบ Teams — หัวข้อ (ขนาด+ตัวหนาทั้งบรรทัด) และขนาดตัวอักษร · ไม่ย้ายโฟกัสออกจากช่องพิมพ์ */
+export function TextStyleMenu({
+  onStyle,
+  onSize,
+  buttonClassName,
+  iconClassName = "h-3 w-3",
+}: {
+  onStyle: (style: TextStyleChoice) => void;
+  onSize: (size: TextSizeChoice) => void;
+  buttonClassName: string;
+  iconClassName?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+  const keep = (e: React.MouseEvent) => e.preventDefault();
+  const item = "flex w-full items-center rounded-md px-2.5 py-1.5 text-left text-[var(--ink)] hover:bg-[var(--bg-soft)]";
+  return (
+    <span ref={rootRef} className="relative inline-flex items-center">
+      <button
+        type="button"
+        onMouseDown={keep}
+        onClick={() => setOpen((v) => !v)}
+        className={buttonClassName}
+        aria-label="รูปแบบข้อความและขนาด"
+        aria-expanded={open}
+        title="หัวข้อ / ขนาดตัวอักษร"
+      >
+        <ALargeSmall className={iconClassName} />
+      </button>
+      {open && (
+        <span role="menu" aria-label="รูปแบบข้อความ" className="absolute left-0 top-full z-50 mt-1 flex w-48 flex-col rounded-lg border border-[var(--line)] bg-[var(--bg)] p-1 shadow-lg">
+          <span className="px-2.5 pb-0.5 pt-1 text-[11px] font-semibold text-[var(--ink-soft)]">รูปแบบ (ทั้งบรรทัด)</span>
+          {STYLE_ITEMS.map((s) => (
+            <button key={s.id} type="button" role="menuitem" onMouseDown={keep} onClick={() => { onStyle(s.id); setOpen(false); }} className={cn(item, s.className)}>
+              {s.label}
+            </button>
+          ))}
+          <span className="my-1 h-px bg-[var(--line)]" />
+          <span className="px-2.5 pb-0.5 text-[11px] font-semibold text-[var(--ink-soft)]">ขนาดตัวอักษร (ที่เลือกไว้)</span>
+          {SIZE_ITEMS.map((s) => (
+            <button key={s.id} type="button" role="menuitem" onMouseDown={keep} onClick={() => { onSize(s.id); setOpen(false); }} className={cn(item, s.className)}>
+              {s.label}
+            </button>
+          ))}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** เลือกทั้งบรรทัดที่เคอร์เซอร์อยู่ ถ้ายังไม่ได้เลือกอะไร (หัวข้อแบบ Teams ใช้กับทั้งย่อหน้า) */
+function selectLineIfCollapsed() {
+  const sel = window.getSelection() as (Selection & { modify?: (a: string, d: string, g: string) => void }) | null;
+  if (!sel || !sel.isCollapsed || !sel.modify) return;
+  sel.modify("move", "backward", "lineboundary");
+  sel.modify("extend", "forward", "lineboundary");
+}
+
+const FONT_SIZE_OF: Record<TextSizeChoice, string> = { sm: "2", normal: "3", lg: "5", xl: "6" };
+
+export function applyTextSize(el: HTMLElement, size: TextSizeChoice) {
+  el.focus();
+  document.execCommand("fontSize", false, FONT_SIZE_OF[size]);
+}
+
+export function applyTextStyle(el: HTMLElement, style: TextStyleChoice) {
+  el.focus();
+  selectLineIfCollapsed();
+  document.execCommand("fontSize", false, style === "h1" ? "6" : style === "h2" ? "5" : "3");
+  const wantBold = style !== "normal";
+  if (document.queryCommandState("bold") !== wantBold) document.execCommand("bold");
+}
+
+/** ย่อหน้าเข้า/ออก — ช่องว่างหน้าบรรทัด 4 ช่อง (โพสต์แสดงช่องว่างหน้าบรรทัดตามที่พิมพ์อยู่แล้ว) */
+export function applyIndent(el: HTMLElement, dir: "in" | "out") {
+  el.focus();
+  const sel = window.getSelection() as (Selection & { modify?: (a: string, d: string, g: string) => void }) | null;
+  if (!sel?.modify) return;
+  sel.modify("move", "backward", "lineboundary");
+  if (dir === "in") {
+    document.execCommand("insertText", false, "\u00a0\u00a0\u00a0\u00a0");
+    return;
+  }
+  for (let i = 0; i < 4; i++) sel.modify("extend", "forward", "character");
+  const picked = sel.toString();
+  const n = picked.length - picked.replace(/^[\s\u00a0]+/, "").length;
+  sel.collapseToStart();
+  if (n === 0) return;
+  for (let i = 0; i < n; i++) sel.modify("extend", "forward", "character");
+  document.execCommand("delete");
 }
