@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { hasPermission, requireOrg } from "@smartboss/auth";
 
 import { REQ_PERMS, VENDOR_PERMS } from "../permissions";
+import { isPettyHolder } from "./holders";
 import type { Viewer } from "./data";
 import type { RequestView } from "./db";
 import { statusInfo } from "./types";
@@ -17,14 +18,16 @@ export async function requestsPage(extra?: string) {
     canApprove: hasPermission(session, REQ_PERMS.approve),
     canApproveCeo: hasPermission(session, REQ_PERMS.approveCeo),
     canPay: hasPermission(session, REQ_PERMS.pay),
-    isPettyHolder: hasPermission(session, REQ_PERMS.pettyCash),
+    isPettyHolder: await isPettyHolder(session.orgId, session.userId),
     canViewAll: hasPermission(session, REQ_PERMS.viewAll),
     canFileOthers: hasPermission(session, REQ_PERMS.fileOthers),
   };
   return { session, viewer };
 }
 
-export const canManageVendors = (session: Parameters<typeof hasPermission>[0]) => VENDOR_PERMS.some((p) => hasPermission(session, p));
+export async function canManageVendors(session: { orgId: string; userId: string } & Parameters<typeof hasPermission>[0]) {
+  return VENDOR_PERMS.some((p) => hasPermission(session, p)) || (await isPettyHolder(session.orgId, session.userId));
+}
 
 /** สิทธิ์เงินสดย่อยรายข้อ — ไม่อยู่ใน Viewer เพราะไม่เกี่ยวกับการเห็นใบเบิก */
 export function pettyAccess(session: Parameters<typeof hasPermission>[0]) {

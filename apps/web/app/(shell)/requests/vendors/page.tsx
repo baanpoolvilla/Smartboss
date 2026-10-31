@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function VendorsPage() {
   const { session } = await requestsPage();
-  if (!canManageVendors(session)) redirect("/requests");
+  if (!(await canManageVendors(session))) redirect("/requests");
   const orgId = session.orgId;
   const year = bangkokToday().slice(0, 4);
   const { vendors, jobs, settings } = await withRequestsTenant(orgId, async (tx) => ({

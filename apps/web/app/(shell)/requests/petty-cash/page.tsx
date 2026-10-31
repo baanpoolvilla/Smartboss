@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@smartboss/database";
+import { hasPermission } from "@smartboss/auth";
 
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { InfoTip } from "@/modules/salary/components/help";
 import { REQ_PERMS } from "@/modules/requests/permissions";
+import { WORKER_ROLE_CODE } from "@/modules/daily_worker/permissions";
 import { pettyBalances, toPetty, toPettyTopup, withRequestsTenant } from "@/modules/requests/lib/db";
+import { listPettyHolders } from "@/modules/requests/lib/holders";
 import { pettyAccess, requestsPage } from "@/modules/requests/lib/page";
-import { PendingTopupRow, PettyHolderCard, VoidPettyButton } from "@/modules/requests/components/petty-forms";
+import { PendingTopupRow, PettyHolderCard, PettyHoldersButton, VoidPettyButton } from "@/modules/requests/components/petty-forms";
 import { bangkokToday, baht, thaiDateTime } from "@/modules/requests/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +24,7 @@ const KIND_LABEL = { top_up: "รับเงินเติม", spend: "จ่
  * ผู้ใช้ 30/10/2569: ปุ่มอยู่บนการ์ดของแต่ละคน + ⓘ อธิบาย · ผู้ถือขอเติมเอง → HR/CEO อนุมัติ (ไม่อนุมัติของตัวเอง,
  * HR ขอเอง = CEO) · บัญชีผู้ดูแลระบบสูงสุด (SUPER_ADMIN) ไม่ใช่คนถือเงินจริง ไม่ขึ้นการ์ด
  * 31/10/2569: ใครเห็น/เติม/ปรับยอด ใช้สิทธิ์เงินสดย่อยแยก (REQ_PERMS.petty*) ไม่ผูกกับสิทธิ์ใบเบิกแล้ว
+ *             ใครถือเงิน = HR/CEO ติ๊กรายคนที่ปุ่ม "ตั้งคนถือเงิน" บนหน้านี้ (lib/holders.ts)
  */
 export default async function PettyCashPage({ searchParams }: { searchParams: Promise<{ holder?: string }> }) {
   const { session, viewer } = await requestsPage();
@@ -30,15 +34,7 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
   if (!viewer.isPettyHolder && !petty.view && !petty.topUp && !petty.adjust) redirect("/requests");
   const orgId = session.orgId;
   const sp = await searchParams;
-  const holderUsers = await prisma.user.findMany({
-    where: {
-      orgId,
-      isActive: true,
-      roles: { some: { role: { code: { not: "SUPER_ADMIN" }, permissions: { some: { permission: { code: REQ_PERMS.pettyCash } } } } } },
-    },
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
-  });
+  const holderUsers = await listPettyHolders(orgId);
   const { balances, entries, pending } = await withRequestsTenant(orgId, async (tx) => ({
     balances: await pettyBalances(tx, orgId),
     entries: (await tx.moneyPettyCashEntry.findMany({ where: { orgId, ...(sp.holder ? { holderUserId: sp.holder } : {}) }, orderBy: { createdAt: "desc" }, take: 300 })).map(toPetty),
@@ -56,6 +52,15 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
   const codes = requestIds.length
     ? new Map((await withRequestsTenant(orgId, (tx) => tx.moneyRequest.findMany({ where: { orgId, id: { in: requestIds } }, select: { id: true, code: true } }))).map((r) => [r.id, r.code]))
     : new Map<string, string>();
+  // ตั้งคนถือเงิน: HR/CEO — รายชื่อให้ติ๊ก = ทุกคนที่ยังใช้งานอยู่ ยกเว้นคนงานรายวัน
+  const canSetHolders = canTopUp || hasPermission(session, REQ_PERMS.settings);
+  const people = canSetHolders
+    ? await prisma.user.findMany({
+        where: { orgId, isActive: true, roles: { none: { role: { code: WORKER_ROLE_CODE } } } },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      })
+    : [];
   const canDecide = (p: (typeof pending)[number]) => canTopUp && p.holderUserId !== session.userId && p.requestedByUserId !== session.userId && (!p.needsCeo || viewer.canApproveCeo);
 
   return (
@@ -75,11 +80,19 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
               ใบเบิกที่ HR เลือก “จ่ายจากเงินสดย่อย” จะหักยอดของคนที่จ่ายให้เองอัตโนมัติ · ไม่มีใครอนุมัติคำขอเติมของตัวเองได้ (HR ขอ = CEO อนุมัติ)
             </InfoTip>
           </p>
-          {seesAll && holders.length > 1 && (
-            <div className="text-sm text-(--ink-soft)">
-              รวมทุกคน <span className="font-bold tabular-nums text-(--ink)">{baht(total)}</span>
-            </div>
-          )}
+          <div className="flex flex-wrap items-center gap-3">
+            {seesAll && holders.length > 1 && (
+              <div className="text-sm text-(--ink-soft)">
+                รวมทุกคน <span className="font-bold tabular-nums text-(--ink)">{baht(total)}</span>
+              </div>
+            )}
+            {canSetHolders && (
+              <PettyHoldersButton
+                people={people.map((u) => ({ userId: u.id, name: u.name, balance: balances.get(u.id) ?? 0 }))}
+                holderIds={holders.map((h) => h.userId)}
+              />
+            )}
+          </div>
         </section>
 
         {visiblePending.length > 0 && (
@@ -99,7 +112,7 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
         )}
 
         {visibleHolders.length === 0 ? (
-          <div className="rounded-(--radius-lg) border border-dashed border-(--line) p-6 text-center text-sm text-(--ink-soft)">ยังไม่มีใครถือเงินสดย่อย — ให้สิทธิ์ &quot;ถือเงินสดย่อย&quot; ที่ /admin/roles</div>
+          <div className="rounded-(--radius-lg) border border-dashed border-(--line) p-6 text-center text-sm text-(--ink-soft)">ยังไม่มีใครถือเงินสดย่อย — HR/CEO กด &quot;ตั้งคนถือเงิน&quot; ด้านบน</div>
         ) : (
           <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {visibleHolders.map((h) => {

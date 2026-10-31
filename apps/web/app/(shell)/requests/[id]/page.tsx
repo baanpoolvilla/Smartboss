@@ -11,6 +11,7 @@ import { scorePeriodOf } from "@/lib/score-period";
 import { REQ_PERMS } from "@/modules/requests/permissions";
 import { canDecide, canSee } from "@/modules/requests/lib/data";
 import { loadRequests, pettyBalances, readSettings, withRequestsTenant, type RequestView } from "@/modules/requests/lib/db";
+import { listPettyHolders } from "@/modules/requests/lib/holders";
 import { beneficiaryLabel, requestsPage, statusOf } from "@/modules/requests/lib/page";
 import {
   KIND_META,
@@ -144,11 +145,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
   })();
 
   // ผู้ถือเงินสดย่อย (สำหรับจ่ายจากเงินสดย่อย / รับเงินทอน)
-  const holderUsers = await prisma.user.findMany({
-    where: { orgId, isActive: true, roles: { some: { role: { permissions: { some: { permission: { code: REQ_PERMS.pettyCash } } } } } } },
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
-  });
+  const holderUsers = await listPettyHolders(orgId);
   const holders: PettyHolder[] = holderUsers.map((u) => ({ userId: u.id, name: u.name, balance: balances.get(u.id) ?? 0 }));
   const period = scorePeriodOf(await loadScorePeriodConfig(orgId), new Date());
 

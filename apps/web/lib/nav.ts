@@ -11,6 +11,8 @@ import { WORKER_MENU_KEYS, WORKER_MODULE_KEYS, tr, type WorkerLang } from "@/mod
 import { workerLangFor } from "@/modules/daily_worker/lang-server";
 import { salaryAccess } from "@/modules/salary/lib/access";
 import { SALARY_EDIT_MENU } from "@/modules/salary/permissions";
+import { REQ_PERMS } from "@/modules/requests/permissions";
+import { isPettyHolder } from "@/modules/requests/lib/holders";
 
 export interface ShellNavUser {
   /** ใช้ฝั่งเบราว์เซอร์แยกของที่จำในเครื่องรายคน (เช่น อีโมจิที่ใช้ล่าสุด) — ไม่ใช่เส้นแบ่งสิทธิ์ */
@@ -62,8 +64,15 @@ export const loadShellNav = cache(async (): Promise<ShellNav | null> => {
   // เมนูของคนทำเงินเดือน (การเงินพนักงาน) ตัดสินจากรายชื่อที่ CEO เลือก ไม่ใช่บทบาท — SUPER_ADMIN ผ่านทุกสิทธิ์
   // ตาม resolvePermission จึงต้องตัดออกเองตรงนี้ถ้าไม่ได้รับเลือก
   const salaryEditor = user.orgId ? (await salaryAccess({ userId: user.id, roles: user.roles, orgId: user.orgId })).canEdit : false;
+  // คนถือเงินสดย่อยมาจากรายชื่อที่ติ๊กหน้าเงินสดย่อย ไม่ใช่บทบาท — ติ๊กที่บทบาทเดิมไม่มีผลกับเมนูแล้ว
+  const pettyHolder = user.orgId ? await isPettyHolder(user.orgId, user.id) : false;
+  const permissions = [
+    ...user.permissions.filter((p) => p !== REQ_PERMS.pettyCash),
+    ...(salaryEditor ? [SALARY_EDIT_MENU] : []),
+    ...(pettyHolder ? [REQ_PERMS.pettyCash] : []),
+  ];
   const visible = getVisibleModules({
-    permissions: salaryEditor ? [...user.permissions, SALARY_EDIT_MENU] : user.permissions,
+    permissions,
     roles: user.roles,
     enabledCodes,
     isSupportStaff: supportStaff,

@@ -4,6 +4,7 @@ import { AppScaffold } from "@/components/module/app-scaffold";
 import { REQ_PERMS } from "@/modules/requests/permissions";
 import { usersWithPermission } from "@/modules/maintenance/data/notify";
 import { pettyBalances, withRequestsTenant } from "@/modules/requests/lib/db";
+import { listPettyHolders } from "@/modules/requests/lib/holders";
 import { canDecide, listVisibleRequests } from "@/modules/requests/lib/data";
 import { beneficiaryLabel, isOpen, pettyAccess, requestsPage, statusOf } from "@/modules/requests/lib/page";
 import { RequestsHome, type ListRow } from "@/modules/requests/components/request-list";
@@ -34,11 +35,7 @@ export default async function RequestsPage() {
   const seesPetty = pettyAll || viewer.isPettyHolder;
   const petty = seesPetty
     ? await (async () => {
-        const holders = await prisma.user.findMany({
-          where: { orgId: session.orgId, isActive: true, roles: { some: { role: { permissions: { some: { permission: { code: REQ_PERMS.pettyCash } } } } } } },
-          select: { id: true, name: true },
-          orderBy: { name: "asc" },
-        });
+        const holders = await listPettyHolders(session.orgId);
         const bal = await withRequestsTenant(session.orgId, (tx) => pettyBalances(tx, session.orgId)).catch(() => new Map<string, number>());
         return holders
           .filter((h) => pettyAll || h.id === viewer.userId)

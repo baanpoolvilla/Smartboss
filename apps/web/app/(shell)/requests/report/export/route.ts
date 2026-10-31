@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { hasPermission, requireOrg } from "@smartboss/auth";
 
 import { REQ_PERMS } from "@/modules/requests/permissions";
+import { isPettyHolder } from "@/modules/requests/lib/holders";
 import { monthRequests } from "@/modules/requests/lib/report";
 import { beneficiaryLabel, statusOf } from "@/modules/requests/lib/page";
 import { KIND_META, METHOD_LABEL, bangkokToday, costOf } from "@/modules/requests/lib/types";
@@ -19,7 +20,7 @@ export async function GET(req: Request) {
     canApprove: hasPermission(session, REQ_PERMS.approve),
     canApproveCeo: hasPermission(session, REQ_PERMS.approveCeo),
     canPay: hasPermission(session, REQ_PERMS.pay),
-    isPettyHolder: hasPermission(session, REQ_PERMS.pettyCash),
+    isPettyHolder: await isPettyHolder(session.orgId, session.userId),
     canViewAll: true,
     canFileOthers: hasPermission(session, REQ_PERMS.fileOthers),
   };

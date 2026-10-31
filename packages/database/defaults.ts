@@ -225,7 +225,7 @@ const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
   // ผ่าน maintenance.admin แต่ไม่อนุมัติ และไม่ต้องได้แจ้งเตือน PR ใหม่ทุกใบ
   ADMIN: [...CORE_PERMS, ...HR_PERMS.filter(notPayData), ...MAINT_PERMS.filter((p) => p !== "maintenance.po.approve"), ...REPORT_TASK_PERMS, ...CHAT_PERMS, ...COMPANY_FILES_PERMS, ...ADS_PERMS,
     // เบิกจ่าย & OT: แอดมินลง OT/ค่าช่างให้คนอื่น ถือเงินสดย่อย ดูทุกใบ (ไม่อนุมัติ ไม่จ่าย)
-    "requests.file_others", "requests.petty_cash", "requests.view_all", "requests.petty_view"],
+    "requests.file_others", "requests.petty_cash", "requests.view_all"],
   CEO: [
     "core.admin", "core.user.view", "core.role.view", "core.audit.view",
     // ผู้บริหารเป็นคนกำหนดว่าบริษัทนี้ถือว่าอะไรคือ "ทำงานได้ดี"

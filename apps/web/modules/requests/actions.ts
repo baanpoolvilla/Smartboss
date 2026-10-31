@@ -27,6 +27,7 @@ import { dateOnly, insertEvent, loadRequests, pettyBalances, readSettings, withR
 import { clearActionNotifications, notifyApprovers, notifyClear, notifyPayers, notifyPettyTopupApprovers, notifyPettyTopupResult, notifyResult } from "./lib/notify";
 import { usersWithPermission } from "@/modules/maintenance/data/notify";
 import { readReceipt } from "./lib/receipt-ai";
+import { isPettyHolder } from "./lib/holders";
 import { PAYROLL_METHOD_BLOCKED, payPrivacy, payrollHandoffBlock, usesSalaryModule } from "./lib/pay-privacy";
 import {
   KIND_META,
@@ -72,13 +73,13 @@ async function nameOf(userId: string): Promise<string> {
   return u?.name ?? "";
 }
 
-function viewerOf(session: OrgSession): Viewer {
+async function viewerOf(session: OrgSession): Promise<Viewer> {
   return {
     userId: session.userId,
     canApprove: hasPermission(session, REQ_PERMS.approve),
     canApproveCeo: hasPermission(session, REQ_PERMS.approveCeo),
     canPay: hasPermission(session, REQ_PERMS.pay),
-    isPettyHolder: hasPermission(session, REQ_PERMS.pettyCash),
+    isPettyHolder: await isPettyHolder(session.orgId, session.userId),
     canViewAll: hasPermission(session, REQ_PERMS.viewAll),
     canFileOthers: hasPermission(session, REQ_PERMS.fileOthers),
   };
@@ -742,7 +743,7 @@ export async function decideRequestAction(input: { id: string; outcome: "approve
   try {
     const session = await guard();
     const orgId = session.orgId;
-    const viewer = viewerOf(session);
+    const viewer = await viewerOf(session);
     const note = input.note.trim().slice(0, 500);
     if (input.outcome === "reject" && !note) return { error: "ไม่อนุมัติต้องใส่เหตุผล" };
     const byName = await nameOf(session.userId);
@@ -881,7 +882,7 @@ export async function cancelRequestAction(input: { id: string; reason: string })
   try {
     const session = await guard();
     const orgId = session.orgId;
-    const viewer = viewerOf(session);
+    const viewer = await viewerOf(session);
     const reason = input.reason.trim().slice(0, 300);
     if (!reason) return { error: "ใส่เหตุผลที่ยกเลิก" };
     const byName = await nameOf(session.userId);
@@ -936,7 +937,7 @@ export async function recordPaymentAction(input: PayInput): Promise<Result> {
   try {
     const session = await guard();
     const orgId = session.orgId;
-    const viewer = viewerOf(session);
+    const viewer = await viewerOf(session);
     const byName = await nameOf(session.userId);
     const r = await withRequestsTenant(orgId, (tx) => loadOne(tx, orgId, input.id));
     if (!r) return { error: "ไม่พบคำขอ" };
@@ -948,6 +949,7 @@ export async function recordPaymentAction(input: PayInput): Promise<Result> {
     const pettyHolderId = method === "petty_cash" ? input.pettyHolderId || session.userId : null;
     const allowed = viewer.canPay || (method === "petty_cash" && viewer.isPettyHolder && pettyHolderId === session.userId);
     if (!allowed) return { error: "ไม่มีสิทธิ์บันทึกจ่ายเงิน (คนถือเงินสดย่อยจ่ายได้จากเงินสดย่อยของตัวเอง)" };
+    if (pettyHolderId && !(await isPettyHolder(orgId, pettyHolderId))) return { error: "คนนี้ไม่ได้ถือเงินสดย่อยแล้ว" };
     if (method === "payroll" && r.beneficiaryKind !== "staff") return { error: "รวมกับเงินเดือนได้เฉพาะพนักงานประจำ" };
     if (method === "payroll" && r.kind === "advance") return { error: "เบิกล่วงหน้าต้องจ่ายเป็นเงินจริง (หักคืนทีหลังในเงินเดือน)" };
     if (method === "payroll" && (await usesSalaryModule(orgId))) return { error: PAYROLL_METHOD_BLOCKED };
@@ -1095,7 +1097,7 @@ export async function voidPaymentAction(input: { paymentId: string; reason: stri
   try {
     const session = await guard();
     const orgId = session.orgId;
-    const viewer = viewerOf(session);
+    const viewer = await viewerOf(session);
     const reason = input.reason.trim().slice(0, 300);
     if (!reason) return { error: "ใส่เหตุผลที่ยกเลิกการจ่าย" };
     const byName = await nameOf(session.userId);
@@ -1211,7 +1213,7 @@ export async function confirmClearingAction(input: { id: string; returnedTo: str
   try {
     const session = await guard();
     const orgId = session.orgId;
-    const viewer = viewerOf(session);
+    const viewer = await viewerOf(session);
     if (!viewer.canPay) return { error: "ตรวจใบเสร็จได้เฉพาะ HR" };
     const byName = await nameOf(session.userId);
     const r = await withRequestsTenant(orgId, (tx) => loadOne(tx, orgId, input.id));
@@ -1338,7 +1340,7 @@ export async function saveVendorAction(input: VendorInput): Promise<Result<{ id:
   try {
     const session = await guard();
     const orgId = session.orgId;
-    if (!VENDOR_PERMS.some((p) => hasPermission(session, p))) return { error: "ไม่มีสิทธิ์แก้ทะเบียนช่างภายนอก" };
+    if (!VENDOR_PERMS.some((p) => hasPermission(session, p)) && !(await isPettyHolder(orgId, session.userId))) return { error: "ไม่มีสิทธิ์แก้ทะเบียนช่างภายนอก" };
     const name = input.name.trim().slice(0, 120);
     if (!name) return { error: "ใส่ชื่อช่าง/ร้าน" };
     const taxId = input.taxId.replace(/\D/g, "");
@@ -1385,10 +1387,7 @@ export async function addPettyEntryAction(input: { holderUserId: string; kind: "
   try {
     const session = await guard();
     const orgId = session.orgId;
-    const holder = await prisma.user.findFirst({
-      where: { orgId, id: input.holderUserId, isActive: true, roles: { some: { role: { permissions: { some: { permission: { code: REQ_PERMS.pettyCash } } } } } } },
-      select: { id: true, name: true },
-    });
+    const holder = await pettyHolder(orgId, input.holderUserId);
     if (!holder) return { error: "คนนี้ไม่ได้ถือเงินสดย่อย" };
     const canTopUp = hasPermission(session, REQ_PERMS.pettyTopup);
     if (holder.id !== session.userId && !hasPermission(session, REQ_PERMS.pettyAdjust) && !(input.kind === "top_up" && canTopUp))
@@ -1448,10 +1447,8 @@ export async function voidPettyEntryAction(input: { id: string; reason: string }
  *   - จ่ายค่าของ: ผู้ถือจดเองได้เลย แต่ต้องกรอกครบ — ค่าอะไร + หมวด + ใบเสร็จ · เกินเงินในมือไม่ได้
  */
 async function pettyHolder(orgId: string, userId: string) {
-  return prisma.user.findFirst({
-    where: { orgId, id: userId, isActive: true, roles: { some: { role: { permissions: { some: { permission: { code: REQ_PERMS.pettyCash } } } } } } },
-    select: { id: true, name: true },
-  });
+  if (!(await isPettyHolder(orgId, userId))) return null;
+  return prisma.user.findFirst({ where: { orgId, id: userId, isActive: true }, select: { id: true, name: true } });
 }
 
 /** ผู้ถือคนนี้เป็น HR (อนุมัติระดับ HR ได้ แต่ไม่ใช่ CEO) ⇒ คำขอเติมของเขาต้อง CEO อนุมัติ */
@@ -1491,7 +1488,7 @@ export async function decidePettyTopupAction(input: { id: string; outcome: "appr
   try {
     const session = await guard();
     const orgId = session.orgId;
-    const viewer = viewerOf(session);
+    const viewer = await viewerOf(session);
     if (!hasPermission(session, REQ_PERMS.pettyTopup)) return { error: "อนุมัติได้เฉพาะ HR หรือ CEO" };
     const note = input.note.trim().slice(0, 300);
     if (input.outcome === "reject" && !note) return { error: "ใส่เหตุผลที่ไม่อนุมัติ" };
@@ -1528,6 +1525,45 @@ export async function decidePettyTopupAction(input: { id: string; outcome: "appr
       input.outcome === "approve" ? `${byName} อนุมัติแล้ว — ตรวจรับเงินให้ครบ` : `${byName}: ${note}`,
     );
     void clearActionNotifications(orgId, res.t.id, ["petty_topup"]);
+    revalidatePath("/requests/petty-cash");
+    return { ok: true };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/**
+ * ติ๊ก/เอาออก คนถือเงินสดย่อย ที่หน้าเงินสดย่อย — HR/CEO (คนที่เติมเงินให้ได้ หรือตั้งค่าเบิกจ่ายได้)
+ * เอาออกได้เมื่อเงินในมือเป็น 0 และไม่มีคำขอเติมค้าง — ไม่งั้นยอดที่ยังถืออยู่หายจากหน้าจอ
+ */
+export async function setPettyHolderAction(input: { userId: string; holds: boolean }): Promise<Result> {
+  try {
+    const session = await guard();
+    const orgId = session.orgId;
+    if (!hasPermission(session, REQ_PERMS.pettyTopup) && !hasPermission(session, REQ_PERMS.settings)) return { error: "ตั้งคนถือเงินได้เฉพาะ HR หรือ CEO" };
+    const user = await prisma.user.findFirst({ where: { orgId, id: input.userId }, select: { id: true, name: true, isActive: true } });
+    if (!user) return { error: "ไม่พบผู้ใช้" };
+    if (input.holds && !user.isActive) return { error: "ผู้ใช้นี้ถูกปิดใช้งานอยู่" };
+    const byName = await nameOf(session.userId);
+    const res = await withRequestsTenant(orgId, async (tx) => {
+      if (input.holds) {
+        await tx.moneyPettyHolder.upsert({
+          where: { orgId_userId: { orgId, userId: user.id } },
+          create: { orgId, userId: user.id, addedByName: byName },
+          update: { removedAt: null, removedByName: null, addedAt: new Date(), addedByName: byName },
+        });
+        await insertEvent(tx, orgId, { byUserId: session.userId, byName, action: "petty", summary: `ตั้ง ${user.name} เป็นคนถือเงินสดย่อย` });
+        return "ok" as const;
+      }
+      const balance = (await pettyBalances(tx, orgId)).get(user.id) ?? 0;
+      if (Math.abs(balance) > 0.005) return "balance" as const;
+      if (await tx.moneyPettyTopup.findFirst({ where: { orgId, holderUserId: user.id, status: "pending" }, select: { id: true } })) return "pending" as const;
+      await tx.moneyPettyHolder.updateMany({ where: { orgId, userId: user.id, removedAt: null }, data: { removedAt: new Date(), removedByName: byName } });
+      await insertEvent(tx, orgId, { byUserId: session.userId, byName, action: "petty", summary: `เอา ${user.name} ออกจากคนถือเงินสดย่อย` });
+      return "ok" as const;
+    });
+    if (res === "balance") return { error: `${user.name} ยังมีเงินในมือ — ให้คืนเงินแล้วกด "นับเงินไม่ตรง" ปรับเป็น 0 ก่อน` };
+    if (res === "pending") return { error: `${user.name} มีคำขอเติมเงินรออยู่ — ตัดสินหรือยกเลิกก่อน` };
     revalidatePath("/requests/petty-cash");
     return { ok: true };
   } catch (error) {

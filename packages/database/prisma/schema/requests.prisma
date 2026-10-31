@@ -241,6 +241,21 @@ model MoneyPettyTopup {
   @@schema("requests")
 }
 
+/// คนถือเงินสดย่อย — HR/CEO ติ๊กรายคนที่หน้าเงินสดย่อย (ผู้ใช้ 31/10/2569) แทนการผูกกับบทบาท
+/// schema นี้ไม่มี DELETE ⇒ เอาออก = ตั้ง removedAt · เพิ่มกลับ = ล้าง removedAt
+model MoneyPettyHolder {
+  orgId         String    @map("org_id")
+  userId        String    @map("user_id")
+  addedByName   String    @default("") @map("added_by_name")
+  addedAt       DateTime  @default(now()) @map("added_at") @db.Timestamptz(6)
+  removedAt     DateTime? @map("removed_at") @db.Timestamptz(6)
+  removedByName String?   @map("removed_by_name")
+
+  @@id([orgId, userId])
+  @@map("petty_holders")
+  @@schema("requests")
+}
+
 /// ค่าตั้งของบริษัท
 model MoneyRequestSettings {
   orgId             String   @id @map("org_id")

@@ -20,7 +20,10 @@ export const REQ_PERMS = {
   approveCeo: "requests.approve_ceo",
   /** บันทึกจ่ายเงิน + ส่งเข้างวดเงินเดือน */
   pay: "requests.pay",
-  /** ถือเงินสดย่อย (จ่ายจากเงินสดย่อยของตัวเองได้) */
+  /**
+   * เลิกใช้ 31/10/2569 — คนถือเงินสดย่อยตั้งรายคนที่หน้าเงินสดย่อย (lib/holders.ts) แทน
+   * รหัสนี้เหลือไว้เป็น "สิทธิ์เมนู" ที่ lib/nav.ts ใส่ให้เฉพาะคนในรายชื่อ ติ๊กที่บทบาทไม่มีผล
+   */
   pettyCash: "requests.petty_cash",
   /**
    * เงินสดย่อยแยกจากสิทธิ์ใบเบิก (ผู้ใช้ 31/10/2569 "อยากให้ติ๊กได้มากกว่า") — เดิมผูกกับ อนุมัติ/จ่าย/ดูทุกใบ
@@ -39,13 +42,13 @@ export const REQ_PERMS = {
 } as const;
 
 /** เห็นเมนู/หน้าเงินสดย่อย — คนถือเงิน หรือคนที่ได้สิทธิ์เงินสดย่อยข้อใดข้อหนึ่ง */
-export const PETTY_PAGE_PERMS: string[] = [REQ_PERMS.pettyCash, REQ_PERMS.pettyView, REQ_PERMS.pettyTopup, REQ_PERMS.pettyAdjust];
+export const PETTY_PAGE_PERMS: string[] = [REQ_PERMS.pettyView, REQ_PERMS.pettyTopup, REQ_PERMS.pettyAdjust];
 
 /**
- * ทะเบียนช่าง/ร้านภายนอก — คนถือเงินสดย่อย (จ่ายช่างเองได้) + HR + CEO (ผู้ใช้ 31/10/2569)
+ * ทะเบียนช่าง/ร้านภายนอก — คนถือเงินสดย่อย (รายชื่อ lib/holders.ts จ่ายช่างเองได้) + HR + CEO (ผู้ใช้ 31/10/2569)
  * เดิมผูกกับ "ลงให้คนอื่น" ⇒ ผู้ดูแลบ้าน/หัวหน้างานก็เห็น · ยื่นค่าช่างยังพิมพ์ชื่อช่างที่ยังไม่อยู่ในทะเบียนได้
  */
-export const VENDOR_PERMS: string[] = [REQ_PERMS.pettyCash, REQ_PERMS.approve, REQ_PERMS.approveCeo, REQ_PERMS.pay, REQ_PERMS.settings];
+export const VENDOR_PERMS: string[] = [REQ_PERMS.approve, REQ_PERMS.approveCeo, REQ_PERMS.pay, REQ_PERMS.settings];
 
 export const ALL_REQ_PERMS: string[] = Object.values(REQ_PERMS);
 
@@ -55,7 +58,7 @@ export const REQ_PERM_LABELS: Record<string, string> = {
   [REQ_PERMS.approve]: "เบิกจ่าย & OT: อนุมัติ (ระดับ HR)",
   [REQ_PERMS.approveCeo]: "เบิกจ่าย & OT: อนุมัติระดับ CEO (ใบยอดเกินเกณฑ์ / ใบของ HR)",
   [REQ_PERMS.pay]: "เบิกจ่าย & OT: บันทึกจ่ายเงิน",
-  [REQ_PERMS.pettyCash]: "เงินสดย่อย: ถือเงิน (มีการ์ดของตัวเอง)",
+  [REQ_PERMS.pettyCash]: "เงินสดย่อย: ถือเงิน (เลิกใช้ — ตั้งคนถือเงินที่หน้าเงินสดย่อย ติ๊กตรงนี้ไม่มีผล)",
   [REQ_PERMS.pettyView]: "เงินสดย่อย: เห็นของทุกคน",
   [REQ_PERMS.pettyTopup]: "เงินสดย่อย: เติมเงินให้ + อนุมัติคำขอเติม",
   [REQ_PERMS.pettyAdjust]: "เงินสดย่อย: ปรับยอด/ยกเลิกรายการของคนอื่น",

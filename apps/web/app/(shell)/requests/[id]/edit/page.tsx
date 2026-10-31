@@ -70,7 +70,7 @@ export default async function EditRequestPage({ params }: { params: Promise<{ id
         initialKind={r.kind}
         me={{ userId: session.userId, name: me?.name ?? "" }}
         canFileOthers={viewer.canFileOthers}
-        canManageVendors={canManageVendors(session)}
+        canManageVendors={await canManageVendors(session)}
         people={people.map((p) => ({ userId: p.userId, name: p.name, email: p.email, roleLabel: roleLabel(p.roles), isWorker: p.isWorker, departmentName: p.departmentName }))}
         properties={properties}
         workOrders={workOrders}

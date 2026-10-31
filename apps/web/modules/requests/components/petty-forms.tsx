@@ -12,6 +12,7 @@ import {
   cancelPettyTopupAction,
   decidePettyTopupAction,
   requestPettyTopupAction,
+  setPettyHolderAction,
   voidPettyEntryAction,
   type UploadedFile,
 } from "../actions";
@@ -90,6 +91,72 @@ function SaveButtons({ busy, disabled, label, onSave, onClose }: { busy: boolean
         {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
         {label}
       </button>
+    </>
+  );
+}
+
+/* ───────────── ตั้งคนถือเงิน (HR/CEO) ───────────── */
+
+/**
+ * ติ๊กรายคน = ถือเงินสดย่อย (ผู้ใช้ 31/10/2569 "ติ๊กอันนี้แบบจบ") — ได้การ์ด + เมนูเงินสดย่อย + ทะเบียนช่าง/ร้านภายนอก
+ * กดแล้วบันทึกทันทีทีละคน · เอาออกไม่ได้ถ้ายังมีเงินในมือหรือมีคำขอเติมค้าง (เซิร์ฟเวอร์บอกเหตุผล)
+ */
+export function PettyHoldersButton({ people, holderIds }: { people: PettyHolderView[]; holderIds: string[] }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [, start] = useTransition();
+  const holds = new Set(holderIds);
+  const shown = people
+    .filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase()))
+    .sort((a, b) => Number(holds.has(b.userId)) - Number(holds.has(a.userId)));
+  const toggle = (p: PettyHolderView) => {
+    setError(null);
+    setBusyId(p.userId);
+    start(async () => {
+      const res = await setPettyHolderAction({ userId: p.userId, holds: !holds.has(p.userId) });
+      setBusyId(null);
+      if ("error" in res) return setError(res.error);
+      router.refresh();
+    });
+  };
+  return (
+    <>
+      <button type="button" className={ghost} onClick={() => setOpen(true)}>
+        ตั้งคนถือเงิน ({holderIds.length})
+      </button>
+      {open && (
+        <Modal title="ใครถือเงินสดย่อย" onClose={() => setOpen(false)} actions={<button type="button" className={primary} onClick={() => setOpen(false)}>เสร็จ</button>}>
+          <div className="flex flex-col gap-3">
+            <Explain>
+              ติ๊ก = คนนี้ถือเงินสดย่อย ได้การ์ดของตัวเอง เมนูเงินสดย่อย และทะเบียนช่าง/ร้านภายนอก · เอาติ๊กออกได้เมื่อเงินในมือเป็น ฿0 และไม่มีคำขอเติมค้าง
+            </Explain>
+            <input className={field} placeholder="ค้นหาชื่อ" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="ค้นหาชื่อ" />
+            {error && <Notice tone="danger">{error}</Notice>}
+            <ul className="max-h-[50vh] divide-y divide-(--line) overflow-y-auto rounded-(--radius) border border-(--line)">
+              {shown.map((p) => {
+                const on = holds.has(p.userId);
+                return (
+                  <li key={p.userId}>
+                    <label className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm hover:bg-(--bg-soft)">
+                      <input type="checkbox" className="h-4 w-4 accent-(--brand-navy,#1b2537)" checked={on} disabled={busyId !== null} onChange={() => toggle(p)} />
+                      <span className="min-w-0 flex-1 truncate text-(--ink)">{p.name}</span>
+                      {busyId === p.userId ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-(--ink-soft)" aria-hidden="true" />
+                      ) : on ? (
+                        <span className="text-xs tabular-nums text-(--ink-soft)">ในมือ {baht(p.balance)}</span>
+                      ) : null}
+                    </label>
+                  </li>
+                );
+              })}
+              {shown.length === 0 && <li className="px-3 py-6 text-center text-sm text-(--ink-soft)">ไม่พบชื่อ</li>}
+            </ul>
+          </div>
+        </Modal>
+      )}
     </>
   );
 }

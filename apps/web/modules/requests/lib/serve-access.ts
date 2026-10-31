@@ -4,6 +4,7 @@ import { hasPermission } from "@smartboss/auth";
 
 import { REQ_PERMS } from "../permissions";
 import { withRequestsTenant } from "./db";
+import { isPettyHolder } from "./holders";
 
 /**
  * ไฟล์แนบของเบิกจ่าย & OT (`<orgId>/requests/<uploaderId>/...`) — ใบเสร็จ/สลิปมีเลขบัญชี ชื่อร้าน
@@ -15,8 +16,8 @@ import { withRequestsTenant } from "./db";
 export async function canServeRequestFileKey(orgId: string, session: Session, key: string): Promise<boolean> {
   const parts = key.split("/");
   if (parts[2] && parts[2] === session.userId) return true;
-  const staff = [REQ_PERMS.viewAll, REQ_PERMS.approve, REQ_PERMS.approveCeo, REQ_PERMS.pay, REQ_PERMS.pettyCash];
-  if (staff.some((p) => hasPermission(session, p))) return true;
+  const staff = [REQ_PERMS.viewAll, REQ_PERMS.approve, REQ_PERMS.approveCeo, REQ_PERMS.pay];
+  if (staff.some((p) => hasPermission(session, p)) || (await isPettyHolder(orgId, session.userId))) return true;
   const url = `/api/files/${key}`;
   const rows = await withRequestsTenant(orgId, (tx) =>
     tx.$queryRawUnsafe<{ n: number }[]>(
