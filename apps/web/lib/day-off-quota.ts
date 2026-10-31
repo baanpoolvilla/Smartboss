@@ -8,7 +8,8 @@ import { prisma } from "@smartboss/database";
  * จำนวนวันมีสองชั้น เจาะจงกว่าชนะ:
  *   1. ของคนนี้ ในเดือนนี้ สำหรับประเภทนี้ — แถวในตารางนี้ (HR แก้ที่หน้าพนักงาน)
  *   2. วัน/เดือน ของประเภทนั้น — เก็บที่ตัวประเภทฝั่ง workforce (leave_types.monthly_quota_days)
- * เดือนที่ไม่ได้มาแก้ = ใช้ชั้นที่ 2 เสมอ ("เอาเป็นเดือน ๆ ไป แต่ถ้าไม่มาแก้ของเดือนนั้นก็เป็นค่าเดิม")
+ * ชั้นที่ 1 ใช้ต่อไปทุกเดือนจนกว่าจะแก้อีก (31 ต.ค. — "ตั้ง 4 ก็ 4 ตลอดจนกว่าจะมาแก้"): เดือนที่ไม่มีแถว
+ * ใช้แถวล่าสุดก่อนหน้า · กด "กลับไปใช้ค่าของประเภท" = เก็บแถว RESET_TO_TYPE ให้เดือนนั้นเป็นต้นไปกลับไปใช้ชั้นที่ 2
  *
  * ใช้ตอนลงวันหยุดตามสิทธิ์ — ทั้งที่พนักงานลงเองในปฏิทินทีมและที่ HR ลงให้จากหน้าพนักงาน: เว็บส่งเลขของ
  * ชั้นที่ 1 (ถ้ามี) ไปให้ workforce ใช้แทนโควตาของประเภท (submitLeaveAction → monthly_quota_days_override)
@@ -31,11 +32,15 @@ export const DAYS_OFF_LIMITS = { min: 0, max: 31 } as const;
 /** leave_type_id ของแถวที่ตั้งไว้ก่อนแยกตามประเภท */
 const LEGACY_TYPE = "";
 
+/** days_per_month ของแถวที่บอกว่า "ตั้งแต่เดือนนี้ใช้ค่าของประเภท" — หยุดเลขที่ยกมาจากเดือนก่อน */
+const RESET_TO_TYPE = -1;
+
 /** ตัวเลขที่ใช้จริงมาจากไหน — `month` = แก้ไว้เฉพาะคน/เดือน/ประเภทนี้ · `legacy` = ค่าที่ตั้งไว้ก่อนแยกตามประเภท · `type` = ค่าของประเภท */
 export type DayOffQuotaSource = "month" | "legacy" | "type";
 
 export interface DayOffOverrides {
-  byType: Map<string, { days: number; note: string }>;
+  /** `fromMonth` = เดือนที่ตั้งเลขนี้ไว้ (เดือนนี้หรือเดือนก่อนหน้าที่ยกมา) */
+  byType: Map<string, { days: number; note: string; fromMonth: string }>;
   legacyMonth: { days: number; note: string } | null;
   legacyStanding: number | null;
 }
@@ -50,15 +55,26 @@ export async function loadDayOffOverrides(
 ): Promise<DayOffOverrides> {
   if (!orgId) return NO_OVERRIDES;
   const [rows, standing] = await Promise.all([
-    prisma.employeeDayOffQuota.findMany({ where: { orgId, employmentId, month } }),
+    // "YYYY-MM" เรียงแบบสตริงได้ — ล่าสุดก่อน แถวแรกของแต่ละประเภทคือเลขที่ใช้ในเดือนนี้
+    prisma.employeeDayOffQuota.findMany({
+      where: { orgId, employmentId, month: { lte: month } },
+      orderBy: { month: "desc" },
+    }),
     prisma.employeeDayOffQuotaDefault.findUnique({ where: { orgId_employmentId: { orgId, employmentId } } }),
   ]);
-  const byType = new Map<string, { days: number; note: string }>();
+  const byType = new Map<string, { days: number; note: string; fromMonth: string }>();
+  const seen = new Set<string>();
   let legacyMonth: DayOffOverrides["legacyMonth"] = null;
   for (const row of rows) {
-    const value = { days: row.daysPerMonth, note: row.note };
-    if (row.leaveTypeId === LEGACY_TYPE) legacyMonth = value;
-    else byType.set(row.leaveTypeId, value);
+    if (row.leaveTypeId === LEGACY_TYPE) {
+      // แถวเดิมก่อนแยกประเภทยังมีผลแค่เดือนของมัน เหมือนเดิม
+      if (row.month === month) legacyMonth = { days: row.daysPerMonth, note: row.note };
+      continue;
+    }
+    if (seen.has(row.leaveTypeId)) continue;
+    seen.add(row.leaveTypeId);
+    if (row.daysPerMonth === RESET_TO_TYPE) continue;
+    byType.set(row.leaveTypeId, { days: row.daysPerMonth, note: row.note, fromMonth: row.month });
   }
   return { byType, legacyMonth, legacyStanding: standing?.daysPerMonth ?? null };
 }
@@ -73,16 +89,18 @@ export function resolveDayOffDays(
   overrides: DayOffOverrides,
   leaveTypeId: string,
   typeDefault: number,
-): { days: number; source: DayOffQuotaSource; note: string } {
+): { days: number; source: DayOffQuotaSource; note: string; fromMonth: string | null } {
   const own = overrides.byType.get(leaveTypeId);
-  if (own) return { days: own.days, source: "month", note: own.note };
-  if (overrides.legacyMonth) return { days: overrides.legacyMonth.days, source: "legacy", note: overrides.legacyMonth.note };
-  if (overrides.legacyStanding !== null) return { days: overrides.legacyStanding, source: "legacy", note: "" };
-  return { days: typeDefault, source: "type", note: "" };
+  if (own) return { days: own.days, source: "month", note: own.note, fromMonth: own.fromMonth };
+  if (overrides.legacyMonth)
+    return { days: overrides.legacyMonth.days, source: "legacy", note: overrides.legacyMonth.note, fromMonth: null };
+  if (overrides.legacyStanding !== null) return { days: overrides.legacyStanding, source: "legacy", note: "", fromMonth: null };
+  return { days: typeDefault, source: "type", note: "", fromMonth: null };
 }
 
 /**
- * ตั้งจำนวนวันของคนหนึ่ง เดือนหนึ่ง ประเภทหนึ่ง — `daysPerMonth: null` = กลับไปใช้ วัน/เดือน ของประเภท
+ * ตั้งจำนวนวันของคนหนึ่ง ตั้งแต่เดือนหนึ่ง ประเภทหนึ่ง — `daysPerMonth: null` = กลับไปใช้ วัน/เดือน ของประเภท
+ * (ถ้ามีเลขยกมาจากเดือนก่อน เก็บแถว RESET_TO_TYPE ไว้ตัดเลขนั้น ไม่งั้นแค่ลบแถวของเดือนนี้)
  * แถวเดิมที่ไม่มีประเภทของเดือนเดียวกันถูกลบไปด้วยทั้งสองกรณี (ดูหัวไฟล์)
  */
 export async function saveDayOffQuota(
@@ -98,7 +116,13 @@ export async function saveDayOffQuota(
     await tx.employeeDayOffQuota.deleteMany({ where: { orgId, employmentId, month, leaveTypeId: LEGACY_TYPE } });
     if (daysPerMonth === null) {
       await tx.employeeDayOffQuota.deleteMany({ where: { orgId, employmentId, month, leaveTypeId } });
-      return;
+      const earlier = await tx.employeeDayOffQuota.findFirst({
+        where: { orgId, employmentId, leaveTypeId, month: { lt: month } },
+        orderBy: { month: "desc" },
+      });
+      if (!earlier || earlier.daysPerMonth === RESET_TO_TYPE) return;
+      daysPerMonth = RESET_TO_TYPE;
+      note = "";
     }
     await tx.employeeDayOffQuota.upsert({
       where: { orgId_employmentId_month_leaveTypeId: { orgId, employmentId, month, leaveTypeId } },

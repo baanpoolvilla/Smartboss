@@ -11,7 +11,7 @@ const EMPTY: QuotaState = {};
 /**
  * วันหยุดตามสิทธิ์ของคนนี้ในเดือนที่กำลังดู — หนึ่งฟอร์มต่อหนึ่งประเภทวันหยุด (Day-Off, หยุดชดเชย ฯลฯ)
  *
- * เดือนที่ไม่ได้มาแก้ = วัน/เดือน ของประเภทนั้น (ตั้งที่ ตั้งค่า › ประเภทการลา) · มาแก้เดือนไหนก็มีผลแค่เดือนนั้น
+ * แก้เดือนไหน = มีผลตั้งแต่เดือนนั้นเป็นต้นไปจนกว่าจะแก้อีก · ไม่เคยแก้ = วัน/เดือน ของประเภทนั้น (ตั้งที่ ตั้งค่า › ประเภทการลา)
  * ช่องเดียว ใส่จำนวนวันที่ได้ตรง ๆ (เดือนนี้ให้ 7 ก็ใส่ 7 · ให้ 4 ก็ใส่ 4)
  *
  * เดิมมีสองช่อง "ค่าประจำทุกเดือน" กับ "ทับเฉพาะเดือน" และเป็นเลขเดียวของทุกประเภท — ค่าประจำย้อนไปมีผลกับ
@@ -28,6 +28,7 @@ export function DayOffQuotaForm({
   typeDefault,
   used,
   note,
+  fromMonth,
 }: {
   employmentId: string;
   /** "YYYY-MM" — เดือนที่การ์ดนี้กำลังตั้งค่าอยู่ */
@@ -42,6 +43,8 @@ export function DayOffQuotaForm({
   /** ลงไว้แล้วกี่วันในเดือนนี้ (รวมที่พนักงานลงเอง) */
   used: number;
   note: string;
+  /** เดือนที่ตั้งเลขนี้ไว้ — ไม่ใช่เดือนนี้ = ยกมาจากเดือนก่อน */
+  fromMonth: string | null;
 }) {
   const [state, formAction, pending] = useActionState(setDayOffQuotaAction, EMPTY);
   const edited = source !== "type";
@@ -53,7 +56,7 @@ export function DayOffQuotaForm({
       action={formAction}
       data-save-toast="off"
       // key = ค่าปัจจุบันของเดือน — บันทึก/ล้างแล้วช่องต้องกลับมาแสดงค่าจริงล่าสุด ไม่ค้างค่าที่พิมพ์ไว้
-      key={`${month}:${source}:${days}`}
+      key={`${month}:${source}:${days}:${fromMonth}`}
       className="flex flex-col gap-3 rounded-(--radius) border border-(--line) p-3"
     >
       <input type="hidden" name="employment_id" value={employmentId} />
@@ -71,10 +74,12 @@ export function DayOffQuotaForm({
           label={`${typeName} ของเดือน ${month} (วัน)`}
           hint={
             source === "month"
-              ? `แก้ไว้เฉพาะเดือนนี้ · เดือนที่ไม่ได้แก้ได้ ${defaultLabel}`
+              ? fromMonth === month
+                ? `ตั้งไว้เดือนนี้ · ใช้ต่อเดือนถัดไปจนกว่าจะแก้`
+                : `ยกมาจากที่ตั้งไว้ ${fromMonth} · แก้แล้วมีผลตั้งแต่เดือนนี้เป็นต้นไป`
               : source === "legacy"
                 ? `ค่าที่ตั้งไว้เดิมของคนนี้ · ค่าของประเภทคือ ${defaultLabel}`
-                : `ยังไม่ได้แก้ของเดือนนี้ — ใช้ค่าของประเภท (${defaultLabel}) · แก้แล้วมีผลแค่เดือนนี้`
+                : `ใช้ค่าของประเภท (${defaultLabel}) · แก้แล้วมีผลตั้งแต่เดือนนี้เป็นต้นไป`
           }
         >
           <input
@@ -91,12 +96,12 @@ export function DayOffQuotaForm({
           />
         </Field>
         <Field label="หมายเหตุ" hint="เช่น ปิดกิจการชั่วคราว">
-          <input name="note" maxLength={200} defaultValue={source === "month" ? note : ""} className={inputClass} />
+          <input name="note" maxLength={200} defaultValue={source === "month" && fromMonth === month ? note : ""} className={inputClass} />
         </Field>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Button type="submit" disabled={pending}>
-          {pending ? "กำลังบันทึก…" : "บันทึกของเดือนนี้"}
+          {pending ? "กำลังบันทึก…" : "บันทึก (เดือนนี้เป็นต้นไป)"}
         </Button>
         {edited && (
           <Button type="submit" name="reset" value="1" formNoValidate variant="outline" disabled={pending}>
@@ -108,8 +113,8 @@ export function DayOffQuotaForm({
       {state.ok && (
         <p className="text-sm text-(--ink-soft)">
           {state.cleared
-            ? `ล้างของเดือนนี้แล้ว — กลับไปใช้ค่าของประเภท (${defaultLabel})`
-            : `บันทึกแล้ว — เดือนนี้คนนี้ได้ ${typeName} ${state.daysPerMonth} วัน`}
+            ? `กลับไปใช้ค่าของประเภท (${defaultLabel}) ตั้งแต่เดือนนี้แล้ว`
+            : `บันทึกแล้ว — ตั้งแต่เดือนนี้คนนี้ได้ ${typeName} ${state.daysPerMonth} วัน/เดือน จนกว่าจะแก้`}
         </p>
       )}
     </form>

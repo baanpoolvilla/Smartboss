@@ -721,16 +721,16 @@ export default async function EmployeeDetailPage({
             {/* วันหยุดรายคน — ย้ายมาจาก /hr/holidays เดิม ที่นี่เป็นเจ้าของแหล่งเดียว */}
             <SectionCard
               title="วันหยุดของคนนี้"
-              description="เดือนนี้หยุดได้กี่วัน และลงวันไหนไว้แล้ว — วันหยุดชุดเดียวกับที่พนักงานลงเองในปฏิทินทีม · ไม่แก้ = ใช้จำนวนของทั้งบริษัท (ตั้งที่ ตั้งค่า › ประเภทการลา)"
+              description="เดือนนี้หยุดได้กี่วัน และลงวันไหนไว้แล้ว — วันหยุดชุดเดียวกับที่พนักงานลงเองในปฏิทินทีม · ตั้งแล้วใช้ต่อทุกเดือนจนกว่าจะแก้ · ไม่เคยตั้ง = ใช้จำนวนของทั้งบริษัท (ตั้งที่ ตั้งค่า › ประเภทการลา)"
               action={
                 <div className="flex items-center gap-1">
-                  <Link href={`/hr/employees/${id}?month=${prevMonth}`}>
+                  <Link href={`/hr/employees/${id}?tab=${tab}&month=${prevMonth}`} scroll={false}>
                     <Button size="sm" variant="outline">
                       ◀
                     </Button>
                   </Link>
                   <span className="px-1 font-mono text-sm">{month}</span>
-                  <Link href={`/hr/employees/${id}?month=${nextMonth}`}>
+                  <Link href={`/hr/employees/${id}?tab=${tab}&month=${nextMonth}`} scroll={false}>
                     <Button size="sm" variant="outline">
                       ▶
                     </Button>
@@ -752,6 +752,7 @@ export default async function EmployeeDetailPage({
                       typeDefault={t.typeDefault}
                       used={t.used}
                       note={t.note}
+                      fromMonth={t.fromMonth}
                     />
                   ))}
                   {dayOffOverrides.legacyStanding !== null && (
