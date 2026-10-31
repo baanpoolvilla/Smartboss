@@ -452,5 +452,8 @@ function historyNote(h: LeaveHistoryRow): string {
     const after = String(h.after?.display_label ?? "") || "(ชื่ออัตโนมัติ)";
     return `${before} → ${after}`;
   }
+  // วันเดิมของคำขอสลับที่อนุมัติแล้ว — workforce ใส่เหตุผลเป็นภาษาอังกฤษ (leave.service decideRequest)
+  const swapped = h.reason?.match(/^swapped to (\d{4}-\d{2}-\d{2})$/);
+  if (swapped) return `สลับไปวันที่ ${shortThaiDate(swapped[1]!)}`;
   return h.reason ?? "";
 }
