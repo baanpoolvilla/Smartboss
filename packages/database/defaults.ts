@@ -224,8 +224,9 @@ const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
   // อนุมัติ PR/PO เป็นของ CEO คนเดียว (หน้า PR ขึ้น "รอ CEO อนุมัติ") — IT ดูแล/ลบ/ดำเนินการได้
   // ผ่าน maintenance.admin แต่ไม่อนุมัติ และไม่ต้องได้แจ้งเตือน PR ใหม่ทุกใบ
   ADMIN: [...CORE_PERMS, ...HR_PERMS.filter(notPayData), ...MAINT_PERMS.filter((p) => p !== "maintenance.po.approve"), ...REPORT_TASK_PERMS, ...CHAT_PERMS, ...COMPANY_FILES_PERMS, ...ADS_PERMS,
-    // เบิกจ่าย & OT: แอดมินลง OT/ค่าช่างให้คนอื่น ถือเงินสดย่อย ดูทุกใบ (ไม่อนุมัติ ไม่จ่าย)
-    "requests.file_others", "requests.petty_cash", "requests.view_all"],
+    // เบิกจ่าย & OT: แอดมินลง OT/ค่าช่างให้คนอื่น (ไม่อนุมัติ ไม่จ่าย) · ไม่ดูทุกใบ — migration 20261031180000
+    // คนถือเงินสดย่อยตั้งรายคนที่หน้าเงินสดย่อย (requests.petty_holders) ไม่ใช่จากบทบาท
+    "requests.file_others"],
   CEO: [
     "core.admin", "core.user.view", "core.role.view", "core.audit.view",
     // ผู้บริหารเป็นคนกำหนดว่าบริษัทนี้ถือว่าอะไรคือ "ทำงานได้ดี"
