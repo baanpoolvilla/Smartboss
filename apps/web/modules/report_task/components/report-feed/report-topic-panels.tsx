@@ -619,6 +619,7 @@ export function ReportTopicPanels({
           albums={inAlbumId ? [] : (albumsByUrl.get(url) ?? [])}
           inLibrary={libByUrl.has(url)}
           temporaryDays={!f.source && !inAlbumId ? filesWindowDays : undefined}
+          createdAt={f.createdAt}
         />
         <div className="absolute top-1 right-1">{menuFor(f, "overlay", inAlbumId)}</div>
       </div>
@@ -650,7 +651,7 @@ export function ReportTopicPanels({
           ) : (
             <p className="truncate text-[11px] text-[var(--ink-soft)]">{sourceLine(f)}</p>
           )}
-          <StorageBadges albums={albumsByUrl.get(url) ?? []} inLibrary={libByUrl.has(url)} temporaryDays={!f.source ? filesWindowDays : undefined} />
+          <StorageBadges albums={albumsByUrl.get(url) ?? []} inLibrary={libByUrl.has(url)} temporaryDays={!f.source ? filesWindowDays : undefined} createdAt={f.createdAt} />
         </div>
         <div className="shrink-0">{menuFor(f, "row")}</div>
       </div>

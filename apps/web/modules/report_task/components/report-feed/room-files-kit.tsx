@@ -66,16 +66,25 @@ const EMPTY_LIBRARY: RoomLibraryFile[] = [];
 
 export const urlOf = (m: { url?: string; dataUrl?: string }) => m.url ?? m.dataUrl ?? "";
 
+/** แท็บไฟล์จะโชว์รูปนี้อีกกี่วัน (นับวันที่ 1 = วันสุดท้าย) — แยกนอก component เพราะเรียก Date.now() */
+function daysLeftInTab(createdAt: string, windowDays: number): number {
+  const ageDays = (Date.now() - new Date(createdAt).getTime()) / 86_400_000;
+  return Math.max(1, Math.ceil(windowDays - ageDays));
+}
+
 /** ป้ายใต้รูป — บอกว่าเก็บอยู่ที่ไหน ไม่ต้องเดาจากไอคอน */
 export function StorageBadges({
   albums,
   inLibrary,
   temporaryDays,
+  createdAt,
 }: {
   albums: ReportAlbum[];
   inLibrary: boolean;
   /** รูปจากโพสต์ที่ยังไม่ได้เก็บที่ไหน — แท็บไฟล์โชว์แค่ช่วงนี้ · undefined = ไม่ใช่รูปจากโพสต์ */
   temporaryDays?: number;
+  /** วันที่โพสต์ — นับถอยหลังว่าแท็บไฟล์จะโชว์อีกกี่วัน */
+  createdAt?: string;
 }) {
   const none = albums.length === 0 && !inLibrary;
   if (none && temporaryDays === undefined) return null;
@@ -96,9 +105,10 @@ export function StorageBadges({
       {none && temporaryDays !== undefined && (
         <span
           className="rounded bg-amber-100 px-1.5 text-[10.5px] font-semibold leading-[18px] text-amber-800"
-          title={`ยังไม่ได้เก็บ — แท็บไฟล์โชว์รูปจากโพสต์แค่ ${temporaryDays} วัน (รูปยังอยู่ในโพสต์)`}
+          title={`ยังไม่ได้เก็บลงอัลบั้มหรือไฟล์บริษัท — แท็บไฟล์โชว์รูปจากโพสต์ ${temporaryDays} วัน แล้วไม่ขึ้นที่นี่ (รูปไม่ถูกลบ ยังอยู่ในโพสต์เดิม) · กด ⋯ เพื่อเก็บ`}
         >
-          {temporaryDays >= 3650 ? "ยังไม่เก็บ" : `${temporaryDays} วัน`}
+          {/* เดิมเขียนแค่ "7 วัน" อ่านแล้วเหมือนรูปจะหาย (ผู้ใช้ 31/10/2569 "งง") */}
+          {temporaryDays >= 3650 || !createdAt ? "ยังไม่เก็บ" : `ยังไม่เก็บ · โชว์อีก ${daysLeftInTab(createdAt, temporaryDays)} วัน`}
         </span>
       )}
     </div>
