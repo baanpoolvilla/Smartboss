@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, ClipboardList, Clock, Inbox, PenLine, Plus, Search, SlidersHorizontal, Wallet, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Clock, Inbox, PenLine, Plus, Search, SlidersHorizontal, Wallet, X } from "lucide-react";
 
 import { AppScaffold } from "@/components/module/app-scaffold";
-import { KIND_META, KINDS, baht, thaiDate, type BeneficiaryKind, type RequestKind, type StatusInfo } from "../lib/types";
+import { KIND_META, KINDS, baht, monthTitle, shiftMonthOf, thaiDate, type BeneficiaryKind, type RequestKind, type StatusInfo } from "../lib/types";
 import { KindChip, Notice, StatusChip } from "./ui";
 
 export interface ListRow {
@@ -45,6 +45,7 @@ const TAB_ICON = { me: Inbox, pay: Wallet, mine: PenLine, open: Clock, all: Clip
  */
 export function RequestsHome({
   rows,
+  month,
   stats,
   statsTitle,
   petty,
@@ -54,6 +55,8 @@ export function RequestsHome({
   showApproveTab,
 }: {
   rows: ListRow[];
+  /** เดือนนี้ (YYYY-MM เวลาไทย) — แท็บ ทั้งหมด/ของฉัน เปิดมาที่เดือนนี้ */
+  month: string;
   stats: HomeStat[] | null;
   statsTitle: string;
   petty: { id: string; name: string; balance: number }[];
@@ -74,6 +77,8 @@ export function RequestsHome({
   const [who, setWho] = useState<BeneficiaryKind | null>(null);
   const [q, setQ] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
+  // ทั้งหมด/ของฉัน ดูทีละเดือน แบ่งตามวัน (ผู้ใช้ 31/10/2569 "กลัวมีเยอะแล้วมองไม่ออก") — แท็บงานค้างไม่แบ่งเดือน, พิมพ์ค้นหา = ค้นทุกเดือน
+  const [viewMonth, setViewMonth] = useState(month);
   const filterRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -99,9 +104,11 @@ export function RequestsHome({
   ];
   const activeFilters = kinds.length + (who ? 1 : 0) + (q.trim() ? 1 : 0);
 
+  const monthly = (tab === "all" || tab === "mine") && !q.trim();
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return rows.filter((r) => {
+    const list = rows.filter((r) => {
+      if (monthly && !r.workDate.startsWith(viewMonth)) return false;
       if (tab === "me" && !r.waitingMe) return false;
       if (tab === "pay" && !r.toPay) return false;
       if (tab === "mine" && !r.mine) return false;
@@ -111,7 +118,17 @@ export function RequestsHome({
       if (needle && ![r.code, r.title, r.beneficiaryName, r.createdByName, r.meta].some((s) => s.toLowerCase().includes(needle))) return false;
       return true;
     });
-  }, [rows, tab, kinds, who, q]);
+    // เรียงตามวันที่ในใบ ใหม่ก่อน (ลำดับเดิมในวันเดียวกันคงไว้) เพื่อจัดกลุ่มรายวัน
+    return monthly ? list.map((r, i) => ({ r, i })).sort((a, b) => b.r.workDate.localeCompare(a.r.workDate) || a.i - b.i).map((x) => x.r) : list;
+  }, [rows, tab, kinds, who, q, monthly, viewMonth]);
+  const dayTotal = (d: string) => shown.filter((r) => r.workDate === d && !r.amountHidden).reduce((t, r) => t + r.amount, 0);
+  const dayCount = (d: string) => shown.filter((r) => r.workDate === d).length;
+  // เขียนเองไม่ใช้ toLocaleDateString — เซิร์ฟเวอร์กับเบราว์เซอร์ออกไม่ตรงกันได้ (hydration)
+  const dayLabel = (d: string) => {
+    const [y, m, day] = d.split("-").map(Number);
+    const dow = ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."][new Date(Date.UTC(y!, m! - 1, day!)).getUTCDay()];
+    return `${dow} ${thaiDate(d)}`;
+  };
   const sum = shown.reduce((s, r) => s + (r.amountHidden ? 0 : r.amount), 0);
   const hiddenCount = shown.filter((r) => r.amountHidden).length;
 
@@ -365,9 +382,28 @@ export function RequestsHome({
             </div>
           )}
 
+          {monthly && (
+            <div className="flex flex-wrap items-center gap-2 rounded-(--radius-lg) border border-(--line) bg-(--bg) px-3 py-2">
+              <button type="button" onClick={() => setViewMonth(shiftMonthOf(viewMonth, -1))} aria-label="เดือนก่อน" className="rounded-full border border-(--line) p-2 hover:bg-(--bg-soft)">
+                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <div className="min-w-28 text-center text-sm font-bold text-(--ink)">{monthTitle(viewMonth)}</div>
+              <button type="button" onClick={() => setViewMonth(shiftMonthOf(viewMonth, 1))} aria-label="เดือนถัดไป" className="rounded-full border border-(--line) p-2 hover:bg-(--bg-soft)">
+                <ChevronRight className="h-4 w-4" aria-hidden="true" />
+              </button>
+              {viewMonth !== month && (
+                <button type="button" onClick={() => setViewMonth(month)} className="text-xs font-medium text-(--app-strong) hover:underline">
+                  กลับเดือนนี้
+                </button>
+              )}
+              <span className="ml-auto text-xs text-(--ink-soft)">
+                ทั้งเดือน <strong className="text-sm text-(--ink) tabular-nums">{baht(sum)}</strong> · {shown.length} ใบ
+              </span>
+            </div>
+          )}
           {shown.length === 0 ? (
             <div className="rounded-(--radius-lg) border border-dashed border-(--line) bg-(--bg) px-4 py-16 text-center text-sm text-(--ink-soft)">
-              {tab === "me" ? "ไม่มีใบรอคุณอนุมัติ" : tab === "pay" ? "ไม่มีใบรอจ่าย" : activeFilters ? "ไม่มีรายการตามตัวกรอง" : "ยังไม่มีรายการ"}
+              {tab === "me" ? "ไม่มีใบรอคุณอนุมัติ" : tab === "pay" ? "ไม่มีใบรอจ่าย" : activeFilters ? "ไม่มีรายการตามตัวกรอง" : monthly ? "ไม่มีรายการในเดือนนี้" : "ยังไม่มีรายการ"}
             </div>
           ) : (
             <div className="overflow-hidden rounded-(--radius-lg) border border-(--line) bg-(--bg)">
@@ -379,8 +415,16 @@ export function RequestsHome({
                 <span className="text-right">ยอด</span>
               </div>
               <ul className="divide-y divide-(--line)">
-                {shown.map((r) => (
+                {shown.map((r, i) => (
                   <li key={r.id}>
+                    {monthly && r.workDate !== shown[i - 1]?.workDate && (
+                      <div className="flex items-baseline justify-between gap-2 bg-(--bg-soft) px-4 py-1.5 text-xs font-semibold text-(--ink-soft)">
+                        <span>
+                          {dayLabel(r.workDate)} · {dayCount(r.workDate)} ใบ
+                        </span>
+                        <span className="tabular-nums text-(--ink)">{baht(dayTotal(r.workDate))}</span>
+                      </div>
+                    )}
                     <Link
                       href={`/requests/${r.id}`}
                       className={`grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 px-4 py-3 hover:bg-(--bg-soft) xl:grid-cols-[minmax(0,1fr)_170px_100px_160px_110px] xl:items-center xl:gap-4 ${r.waitingMe || r.toPay ? "bg-red-50/50" : ""}`}
@@ -412,7 +456,9 @@ export function RequestsHome({
                 ))}
               </ul>
               <div className="flex justify-between border-t border-(--line) bg-(--bg-soft) px-4 py-2 text-xs text-(--ink-soft)">
-                <span>{shown.length} รายการ</span>
+                <span>
+                  {shown.length} รายการ{monthly ? ` · ${monthTitle(viewMonth)}` : ""}
+                </span>
                 <span>
                   รวม <strong className="text-(--ink)">{baht(sum)}</strong>
                   {hiddenCount > 0 && <> (ไม่รวม OT ที่ซ่อนยอด {hiddenCount} ใบ)</>}

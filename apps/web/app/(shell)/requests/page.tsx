@@ -130,6 +130,7 @@ async function Body({
   return (
     <RequestsHome
       rows={rows}
+      month={month}
       stats={seesAll ? stats : null}
       statsTitle={monthTitle(month)}
       petty={petty}
