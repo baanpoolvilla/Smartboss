@@ -24,6 +24,15 @@ export async function requestsPage(extra?: string) {
   return { session, viewer };
 }
 
+/** สิทธิ์เงินสดย่อยรายข้อ — ไม่อยู่ใน Viewer เพราะไม่เกี่ยวกับการเห็นใบเบิก */
+export function pettyAccess(session: Parameters<typeof hasPermission>[0]) {
+  return {
+    view: hasPermission(session, REQ_PERMS.pettyView),
+    topUp: hasPermission(session, REQ_PERMS.pettyTopup),
+    adjust: hasPermission(session, REQ_PERMS.pettyAdjust),
+  };
+}
+
 export const statusOf = (r: RequestView) =>
   statusInfo({
     kind: r.kind,

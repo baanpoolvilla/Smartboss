@@ -5,7 +5,7 @@ import { REQ_PERMS } from "@/modules/requests/permissions";
 import { usersWithPermission } from "@/modules/maintenance/data/notify";
 import { pettyBalances, withRequestsTenant } from "@/modules/requests/lib/db";
 import { canDecide, listVisibleRequests } from "@/modules/requests/lib/data";
-import { beneficiaryLabel, isOpen, requestsPage, statusOf } from "@/modules/requests/lib/page";
+import { beneficiaryLabel, isOpen, pettyAccess, requestsPage, statusOf } from "@/modules/requests/lib/page";
 import { RequestsHome, type ListRow } from "@/modules/requests/components/request-list";
 import { maskRequest, payPrivacy } from "@/modules/requests/lib/pay-privacy";
 import { Notice } from "@/modules/requests/components/ui";
@@ -30,7 +30,8 @@ export default async function RequestsPage() {
       return null;
     });
   // เงินสดย่อยคงเหลือของคนถือเงินแต่ละคน — เห็นเฉพาะคนถือเงิน/HR/ผู้ดูทั้งหมด (คนถือเห็นแค่ของตัวเอง)
-  const seesPetty = viewer.canPay || viewer.canViewAll || viewer.isPettyHolder;
+  const pettyAll = pettyAccess(session).view;
+  const seesPetty = pettyAll || viewer.isPettyHolder;
   const petty = seesPetty
     ? await (async () => {
         const holders = await prisma.user.findMany({
@@ -40,7 +41,7 @@ export default async function RequestsPage() {
         });
         const bal = await withRequestsTenant(session.orgId, (tx) => pettyBalances(tx, session.orgId)).catch(() => new Map<string, number>());
         return holders
-          .filter((h) => viewer.canPay || viewer.canViewAll || h.id === viewer.userId)
+          .filter((h) => pettyAll || h.id === viewer.userId)
           .map((h) => ({ id: h.id, name: h.name, balance: bal.get(h.id) ?? 0 }));
       })()
     : [];

@@ -79,11 +79,15 @@ export async function clearActionNotifications(orgId: string, requestId: string,
 /**
  * เงินสดย่อย — คำขอเติมเงิน (type petty_topup ลิงก์ไป /requests/petty-cash · notifications/derive.ts)
  * needsCeo = ผู้ถือเป็น HR ⇒ แจ้ง CEO เท่านั้น · ไม่งั้นแจ้ง HR (ไม่มี HR ที่อนุมัติได้ → CEO) · ไม่แจ้งตัวผู้ถือเอง
+ * แจ้งเฉพาะคนที่มีสิทธิ์ "เติมเงินให้ + อนุมัติคำขอเติม" (requests.petty_topup) — คนที่เอาติ๊กออกไม่ได้แจ้งเตือน
  */
 export async function notifyPettyTopupApprovers(orgId: string, t: { id: string; holderUserId: string; holderName: string; amount: number; note: string; needsCeo: boolean }) {
-  const ids = t.needsCeo
-    ? (await usersWithPermission(orgId, REQ_PERMS.approveCeo)).filter((id) => id !== t.holderUserId)
-    : await approverRecipients(orgId, "hr", [t.holderUserId]);
+  const canTopUp = new Set(await usersWithPermission(orgId, REQ_PERMS.pettyTopup));
+  const ids = (
+    t.needsCeo
+      ? (await usersWithPermission(orgId, REQ_PERMS.approveCeo)).filter((id) => id !== t.holderUserId)
+      : await approverRecipients(orgId, "hr", [t.holderUserId])
+  ).filter((id) => canTopUp.has(id));
   await notifyUsers(orgId, ids, {
     title: `ขอเติมเงินสดย่อย: ${t.holderName} ${baht(t.amount)}`,
     body: t.note || "รออนุมัติ — แนบสลิปโอน/รูปเงินสดตอนอนุมัติ",

@@ -138,6 +138,8 @@ export const DAILY_WORKER_PAY_PERM = "daily_worker.pay";
 export const REQUESTS_PERMS = [
   "requests.access", "requests.file_others", "requests.approve", "requests.approve_ceo",
   "requests.pay", "requests.petty_cash", "requests.view_all", "requests.settings",
+  // เงินสดย่อยแยกจากสิทธิ์ใบเบิก — migration 20261031120000_petty_cash_perms
+  "requests.petty_view", "requests.petty_topup", "requests.petty_adjust",
 ];
 
 /**
@@ -223,7 +225,7 @@ const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
   // ผ่าน maintenance.admin แต่ไม่อนุมัติ และไม่ต้องได้แจ้งเตือน PR ใหม่ทุกใบ
   ADMIN: [...CORE_PERMS, ...HR_PERMS.filter(notPayData), ...MAINT_PERMS.filter((p) => p !== "maintenance.po.approve"), ...REPORT_TASK_PERMS, ...CHAT_PERMS, ...COMPANY_FILES_PERMS, ...ADS_PERMS,
     // เบิกจ่าย & OT: แอดมินลง OT/ค่าช่างให้คนอื่น ถือเงินสดย่อย ดูทุกใบ (ไม่อนุมัติ ไม่จ่าย)
-    "requests.file_others", "requests.petty_cash", "requests.view_all"],
+    "requests.file_others", "requests.petty_cash", "requests.view_all", "requests.petty_view"],
   CEO: [
     "core.admin", "core.user.view", "core.role.view", "core.audit.view",
     // ผู้บริหารเป็นคนกำหนดว่าบริษัทนี้ถือว่าอะไรคือ "ทำงานได้ดี"
@@ -246,6 +248,7 @@ const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
     "daily_worker.view", DAILY_WORKER_PAY_PERM,
     // เบิกจ่าย & OT: อนุมัติทุกระดับ (เบิกล่วงหน้า + ใบที่ HR ยื่นเอง) — ผู้ใช้กำหนด 21/10/2569
     "requests.file_others", "requests.approve", "requests.approve_ceo", "requests.view_all", "requests.settings",
+    "requests.petty_view", "requests.petty_topup",
   ],
   // หัวหน้างานเข้าหลังบ้านได้ แต่ได้แค่ "ดูแลคน" ไม่ใช่ "ตั้งค่าระบบ" —
   // จัดการผู้ใช้และดูบทบาทได้ แต่แก้บทบาท/สิทธิ์ เปิดปิดโมดูล ตั้งค่าบริษัท
@@ -279,6 +282,7 @@ const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
     DAILY_WORKER_PAY_PERM,
     // เบิกจ่าย & OT: HR อนุมัติ + จ่ายเงิน + ถือเงินสดย่อย (ใบที่ HR ยื่นเองไป CEO)
     "requests.file_others", "requests.approve", "requests.pay", "requests.petty_cash", "requests.view_all", "requests.settings",
+    "requests.petty_view", "requests.petty_topup", "requests.petty_adjust",
   ],
   // งานการเงิน — ตัวเลขจัดซื้อและค่าใช้จ่ายของงานซ่อมบำรุงที่ไม่อยู่ในชุดพื้นฐาน
   ACCOUNTANT: [

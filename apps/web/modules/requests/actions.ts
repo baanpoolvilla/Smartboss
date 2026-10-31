@@ -1385,15 +1385,16 @@ export async function addPettyEntryAction(input: { holderUserId: string; kind: "
   try {
     const session = await guard();
     const orgId = session.orgId;
-    const viewer = viewerOf(session);
     const holder = await prisma.user.findFirst({
       where: { orgId, id: input.holderUserId, isActive: true, roles: { some: { role: { permissions: { some: { permission: { code: REQ_PERMS.pettyCash } } } } } } },
       select: { id: true, name: true },
     });
     if (!holder) return { error: "คนนี้ไม่ได้ถือเงินสดย่อย" };
-    if (holder.id !== session.userId && !viewer.canPay) return { error: "ลงได้เฉพาะเงินสดย่อยของตัวเอง (หรือ HR)" };
+    const canTopUp = hasPermission(session, REQ_PERMS.pettyTopup);
+    if (holder.id !== session.userId && !hasPermission(session, REQ_PERMS.pettyAdjust) && !(input.kind === "top_up" && canTopUp))
+      return { error: "ลงได้เฉพาะเงินสดย่อยของตัวเอง (หรือ HR)" };
     // เติมเงิน: เฉพาะ HR/CEO และเติมให้ตัวเองตรง ๆ ไม่ได้ (ผู้ใช้ 30/10/2569) — ของตัวเองต้อง "ขอเติมเงิน" ให้อีกคนอนุมัติ
-    if (input.kind === "top_up" && !(viewer.canApprove || viewer.canApproveCeo)) return { error: "เติมเงินได้เฉพาะ HR หรือ CEO — ผู้ถือกด “ขอเติมเงิน” แทน" };
+    if (input.kind === "top_up" && !canTopUp) return { error: "เติมเงินได้เฉพาะ HR หรือ CEO — ผู้ถือกด “ขอเติมเงิน” แทน" };
     if (input.kind === "top_up" && holder.id === session.userId) return { error: "เติมเงินให้ตัวเองไม่ได้ — กด “ขอเติมเงิน” ให้อีกคนอนุมัติ" };
     const amount = round2(Number(input.amount));
     if (!Number.isFinite(amount) || amount === 0) return { error: "กรอกจำนวนเงิน" };
@@ -1425,7 +1426,7 @@ export async function voidPettyEntryAction(input: { id: string; reason: string }
       const e = await tx.moneyPettyCashEntry.findFirst({ where: { orgId, id: input.id, voidedAt: null } });
       if (!e) return "missing";
       if (e.paymentId || e.requestId) return "linked";
-      if (!hasPermission(session, REQ_PERMS.pay) && e.byUserId !== session.userId) return "denied";
+      if (!hasPermission(session, REQ_PERMS.pettyAdjust) && e.byUserId !== session.userId) return "denied";
       await tx.moneyPettyCashEntry.update({ where: { id: e.id }, data: { voidedAt: new Date(), voidedByName: byName, voidReason: reason } });
       await insertEvent(tx, orgId, { byUserId: session.userId, byName, action: "petty", summary: `ยกเลิกรายการเงินสดย่อย ${e.holderName} ${baht(Number(e.delta))} · ${reason}` });
       return "ok";
@@ -1491,7 +1492,7 @@ export async function decidePettyTopupAction(input: { id: string; outcome: "appr
     const session = await guard();
     const orgId = session.orgId;
     const viewer = viewerOf(session);
-    if (!(viewer.canApprove || viewer.canApproveCeo)) return { error: "อนุมัติได้เฉพาะ HR หรือ CEO" };
+    if (!hasPermission(session, REQ_PERMS.pettyTopup)) return { error: "อนุมัติได้เฉพาะ HR หรือ CEO" };
     const note = input.note.trim().slice(0, 300);
     if (input.outcome === "reject" && !note) return { error: "ใส่เหตุผลที่ไม่อนุมัติ" };
     if (input.outcome === "approve" && !["transfer", "cash"].includes(input.method)) return { error: "เลือกว่าให้เงินแบบโอนหรือเงินสด" };

@@ -22,6 +22,16 @@ export const REQ_PERMS = {
   pay: "requests.pay",
   /** ถือเงินสดย่อย (จ่ายจากเงินสดย่อยของตัวเองได้) */
   pettyCash: "requests.petty_cash",
+  /**
+   * เงินสดย่อยแยกจากสิทธิ์ใบเบิก (ผู้ใช้ 31/10/2569 "อยากให้ติ๊กได้มากกว่า") — เดิมผูกกับ อนุมัติ/จ่าย/ดูทุกใบ
+   * migration 20261031120000_petty_cash_perms ให้บทบาทที่มีสิทธิ์เดิมไปก่อน ไม่มีใครเห็นน้อยลงตอนอัปเดต
+   */
+  /** เห็นเงินสดย่อย + ประวัติของทุกคน (ไม่ติ๊ก = เห็นแค่ของตัวเอง) */
+  pettyView: "requests.petty_view",
+  /** เติมเงินให้คนอื่น + อนุมัติคำขอเติม (คำขอของ HR ยังต้องมีสิทธิ์อนุมัติระดับ CEO ด้วย) */
+  pettyTopup: "requests.petty_topup",
+  /** ปรับยอด "นับเงินไม่ตรง" + ยกเลิกรายการ ของเงินสดย่อยคนอื่น */
+  pettyAdjust: "requests.petty_adjust",
   /** เห็นทุกใบ + รายงาน */
   viewAll: "requests.view_all",
   /** ตั้งค่า + ทะเบียนช่าง/ร้านภายนอก */
@@ -36,7 +46,10 @@ export const REQ_PERM_LABELS: Record<string, string> = {
   [REQ_PERMS.approve]: "เบิกจ่าย & OT: อนุมัติ (ระดับ HR)",
   [REQ_PERMS.approveCeo]: "เบิกจ่าย & OT: อนุมัติระดับ CEO (ใบยอดเกินเกณฑ์ / ใบของ HR)",
   [REQ_PERMS.pay]: "เบิกจ่าย & OT: บันทึกจ่ายเงิน",
-  [REQ_PERMS.pettyCash]: "เบิกจ่าย & OT: ถือเงินสดย่อย",
+  [REQ_PERMS.pettyCash]: "เงินสดย่อย: ถือเงิน (มีการ์ดของตัวเอง)",
+  [REQ_PERMS.pettyView]: "เงินสดย่อย: เห็นของทุกคน",
+  [REQ_PERMS.pettyTopup]: "เงินสดย่อย: เติมเงินให้ + อนุมัติคำขอเติม",
+  [REQ_PERMS.pettyAdjust]: "เงินสดย่อย: ปรับยอด/ยกเลิกรายการของคนอื่น",
   [REQ_PERMS.viewAll]: "เบิกจ่าย & OT: ดูทุกใบ + รายงาน",
   [REQ_PERMS.settings]: "เบิกจ่าย & OT: ตั้งค่า + ทะเบียนช่างภายนอก",
 };

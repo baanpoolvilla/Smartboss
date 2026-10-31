@@ -6,7 +6,7 @@ import { AppScaffold } from "@/components/module/app-scaffold";
 import { InfoTip } from "@/modules/salary/components/help";
 import { REQ_PERMS } from "@/modules/requests/permissions";
 import { pettyBalances, toPetty, toPettyTopup, withRequestsTenant } from "@/modules/requests/lib/db";
-import { requestsPage } from "@/modules/requests/lib/page";
+import { pettyAccess, requestsPage } from "@/modules/requests/lib/page";
 import { PendingTopupRow, PettyHolderCard, VoidPettyButton } from "@/modules/requests/components/petty-forms";
 import { bangkokToday, baht, thaiDateTime } from "@/modules/requests/lib/types";
 
@@ -20,12 +20,14 @@ const KIND_LABEL = { top_up: "รับเงินเติม", spend: "จ่
  *
  * ผู้ใช้ 30/10/2569: ปุ่มอยู่บนการ์ดของแต่ละคน + ⓘ อธิบาย · ผู้ถือขอเติมเอง → HR/CEO อนุมัติ (ไม่อนุมัติของตัวเอง,
  * HR ขอเอง = CEO) · บัญชีผู้ดูแลระบบสูงสุด (SUPER_ADMIN) ไม่ใช่คนถือเงินจริง ไม่ขึ้นการ์ด
+ * 31/10/2569: ใครเห็น/เติม/ปรับยอด ใช้สิทธิ์เงินสดย่อยแยก (REQ_PERMS.petty*) ไม่ผูกกับสิทธิ์ใบเบิกแล้ว
  */
 export default async function PettyCashPage({ searchParams }: { searchParams: Promise<{ holder?: string }> }) {
   const { session, viewer } = await requestsPage();
   // HR/CEO ที่ไม่ได้ถือเงินเองก็ต้องเข้ามาอนุมัติคำขอเติม/เติมเงินให้คนอื่นได้
-  const canTopUp = viewer.canApprove || viewer.canApproveCeo;
-  if (!viewer.isPettyHolder && !canTopUp && !viewer.canPay && !viewer.canViewAll) redirect("/requests");
+  const petty = pettyAccess(session);
+  const canTopUp = petty.topUp;
+  if (!viewer.isPettyHolder && !petty.view && !petty.topUp && !petty.adjust) redirect("/requests");
   const orgId = session.orgId;
   const sp = await searchParams;
   const holderUsers = await prisma.user.findMany({
@@ -42,7 +44,7 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
     entries: (await tx.moneyPettyCashEntry.findMany({ where: { orgId, ...(sp.holder ? { holderUserId: sp.holder } : {}) }, orderBy: { createdAt: "desc" }, take: 300 })).map(toPetty),
     pending: (await tx.moneyPettyTopup.findMany({ where: { orgId, status: "pending" }, orderBy: { createdAt: "asc" } })).map(toPettyTopup),
   }));
-  const seesAll = viewer.canPay || canTopUp || viewer.canViewAll;
+  const seesAll = petty.view || petty.topUp || petty.adjust;
   const holders = holderUsers.map((u) => ({ userId: u.id, name: u.name, balance: balances.get(u.id) ?? 0 }));
   // ของตัวเองขึ้นก่อน
   const visibleHolders = (seesAll ? holders : holders.filter((h) => h.userId === session.userId)).sort((a, b) => Number(b.userId === session.userId) - Number(a.userId === session.userId));
@@ -108,7 +110,7 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
                   holder={h}
                   isMe={isMe && viewer.isPettyHolder}
                   canTopUp={canTopUp}
-                  canAdjust={isMe || viewer.canPay}
+                  canAdjust={isMe || petty.adjust}
                   pendingMine={pending.some((p) => p.holderUserId === h.userId)}
                   today={today}
                   selected={sp.holder === h.userId}
@@ -166,7 +168,7 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
                     )}
                   </div>
                   {e.voided && <div className="text-xs font-medium text-red-700">ยกเลิก · {e.voided.byName} · {e.voided.reason}</div>}
-                  {!e.voided && !e.requestId && (viewer.canPay || e.holderUserId === session.userId) && <VoidPettyButton id={e.id} />}
+                  {!e.voided && !e.requestId && (petty.adjust || e.holderUserId === session.userId) && <VoidPettyButton id={e.id} />}
                 </li>
               ))}
             </ul>
