@@ -679,6 +679,8 @@ export function LeaveCalendar({
                       // "วันนี้" = กรอบสีรอบช่อง ไม่ใช่พื้นสี — พื้นฟ้ากลืนกับแถบวันหยุดสีอ่อน (ผู้ใช้ 31/10/2569)
                       // วันที่คนหยุดเยอะเหลือแค่ ⚠ มุมซ้าย
                       boxShadow: isToday ? "inset 0 0 0 2px var(--app)" : undefined,
+                      // พื้นฟ้าเข้มกว่าแถบวันหยุด (แถบสว่าง ~93%) ให้ช่องวันนี้เด่นแต่แถบยังอ่านออก (ผู้ใช้ 31/10/2569 "อยากได้พื้นหลังให้ชัด")
+                      backgroundColor: isToday ? "color-mix(in srgb, var(--app) 18%, white)" : undefined,
                     }}
                   >
                     <span className="flex items-center justify-between">
