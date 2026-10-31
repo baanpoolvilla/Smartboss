@@ -26,7 +26,7 @@ export default async function NewRequestPage({ searchParams }: { searchParams: P
   const kinds = KINDS.filter((k) => (k === "expense" || k === "cash_advance" ? true : viewer.canFileOthers));
   const [people, properties, workOrders, vendors, settings, me] = await Promise.all([
     viewer.canFileOthers ? listPeople(session.orgId) : Promise.resolve([]),
-    listProperties(session.orgId),
+    listProperties(session.orgId, { activeOnly: true }),
     listLinkableWorkOrders(session.orgId),
     viewer.canFileOthers
       ? withRequestsTenant(session.orgId, (tx) => tx.moneyVendor.findMany({ where: { orgId: session.orgId, active: true }, orderBy: { name: "asc" } })).then((v) => v.map(toVendor))

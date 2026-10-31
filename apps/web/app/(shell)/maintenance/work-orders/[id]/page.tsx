@@ -284,7 +284,10 @@ export default async function WorkOrderDetailPage({
                 .join(", ")}
               {canEditProperties && (
                 <EditWorkOrderProperties
-                  options={properties.map((p) => ({ id: p.id, label: p.name }))}
+                  // บ้านที่เลิกใช้ไม่ให้เลือกเพิ่ม แต่บ้านที่อยู่ในใบงานนี้แล้วยังโชว์ (เอาออกได้)
+                  options={properties
+                    .filter((p) => !p.archivedAt || p.id === wo.propertyId || wo.additionalPropertyIds.includes(p.id))
+                    .map((p) => ({ id: p.id, label: p.name }))}
                   selected={[wo.propertyId, ...wo.additionalPropertyIds]}
                   action={updateWorkOrderPropertiesAction.bind(null, wo.id)}
                 />

@@ -162,8 +162,13 @@ export async function eligibleApprovers(orgId: string, level: ApproverLevel, cre
 
 /* ───────────── บ้าน / ใบงาน ───────────── */
 
-export async function listProperties(orgId: string) {
-  return prisma.property.findMany({ where: { orgId }, select: { id: true, name: true }, orderBy: { name: "asc" } });
+/** activeOnly: ช่องเลือกบ้านตอนยื่นใหม่ไม่เอาบ้านที่เลิกใช้ (ซ่อมบำรุง 31/10/2569) · หน้าแก้ไขใบเก่ายังเห็นทุกหลัง */
+export async function listProperties(orgId: string, opts: { activeOnly?: boolean } = {}) {
+  return prisma.property.findMany({
+    where: { orgId, ...(opts.activeOnly ? { archivedAt: null } : {}) },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
 }
 
 /** ใบงานที่ยังเปิด + ที่เพิ่งปิดใน 30 วัน — ให้ผูกคำขอเข้ากับงานที่ทำ */

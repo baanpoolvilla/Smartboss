@@ -92,6 +92,29 @@ export async function setPropertyCategory(
   });
 }
 
+/** เลิกใช้บ้าน / ใช้ต่อ — ประวัติทั้งหมดยังอยู่ แค่ไม่ขึ้นในรายชื่อบ้านและช่องเลือกบ้าน */
+export async function setPropertyArchived(orgId: string, id: string, archived: boolean, by: string) {
+  await prisma.property.updateMany({
+    where: { orgId, id },
+    data: archived ? { archivedAt: new Date(), archivedBy: by } : { archivedAt: null, archivedBy: null },
+  });
+}
+
+/** จำนวนข้อมูลที่จะหายไปด้วยถ้าลบบ้านจริง (FK cascade) — บอกในหน้าต่างยืนยันลบ */
+export async function propertyDependentCounts(orgId: string, id: string) {
+  const [workOrders, pm, assets] = await Promise.all([
+    prisma.workOrder.count({ where: { orgId, propertyId: id } }),
+    prisma.pmSchedule.count({ where: { orgId, propertyId: id } }),
+    prisma.asset.count({ where: { orgId, propertyId: id } }),
+  ]);
+  return { workOrders, pm, assets };
+}
+
+/** บ้านที่ใช้อยู่ — สำหรับช่องเลือกบ้าน (ที่ต้องโชว์ชื่อบ้านของใบงานเก่าใช้ listProperties ที่รวมบ้านเลิกใช้) */
+export function isActiveProperty(p: { archivedAt: Date | null }) {
+  return p.archivedAt === null;
+}
+
 export async function deleteProperty(orgId: string, id: string) {
   await prisma.property.deleteMany({ where: { orgId, id } });
 }

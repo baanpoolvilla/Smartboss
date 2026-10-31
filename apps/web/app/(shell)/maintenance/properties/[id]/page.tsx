@@ -13,12 +13,12 @@ import { Card } from "@smartboss/ui/components/card";
 import { Button } from "@smartboss/ui/components/button";
 import { Input } from "@smartboss/ui/components/input";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
-import { getProperty } from "@/modules/maintenance/data/properties";
+import { getProperty, propertyDependentCounts } from "@/modules/maintenance/data/properties";
 import { categoryNameById } from "@/modules/maintenance/data/categories";
 import { listAssets, lastMaintenanceDates } from "@/modules/maintenance/data/assets";
 import { userNameMap } from "@/modules/maintenance/data/users";
 import { createAssetAction } from "../../assets/actions";
-import { deletePropertyAction } from "../actions";
+import { PropertyArchiveButtons } from "./property-archive-buttons";
 import { AppScaffold } from "@/modules/maintenance/components/app-scaffold";
 import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 
@@ -51,6 +51,8 @@ export default async function PropertyDetailPage({
 
   const canManageProp = hasPermission(session, MAINT_PERMS.propertyManage);
   const canManageAsset = hasPermission(session, MAINT_PERMS.assetManage);
+  const canArchiveProp = canManageProp || hasPermission(session, MAINT_PERMS.propertyArchive);
+  const depCounts = canManageProp ? await propertyDependentCounts(orgId, id) : { workOrders: 0, pm: 0, assets: 0 };
 
   const assets = await listAssets(orgId, id);
   const [caretakerNames, lastMaint, categoryNames] = await Promise.all([
@@ -67,20 +69,31 @@ export default async function PropertyDetailPage({
       width="max-w-none"
       backHref="/maintenance/properties"
     >
+      {property.archivedAt && (
+        <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
+          บ้านนี้<b>เลิกใช้แล้ว</b> — ไม่ขึ้นในรายชื่อบ้านและช่องเลือกบ้าน แต่ใบงานและค่าใช้จ่ายเก่ายังดูได้ตามปกติ
+        </div>
+      )}
       <header className="mb-4 flex items-start justify-end gap-3">
-        {canManageProp && (
-          <div className="flex shrink-0 gap-2">
-            <Link href={`/maintenance/properties/${id}/edit`}>
-              <Button variant="outline" size="sm" className="gap-1">
-                <Pencil className="h-4 w-4" /> แก้ไข
-              </Button>
-            </Link>
-            <form action={deletePropertyAction}>
-              <input type="hidden" name="id" value={id} />
-              <Button type="submit" variant="ghost" size="sm">
-                ลบ
-              </Button>
-            </form>
+        {(canManageProp || canArchiveProp) && (
+          <div className="flex shrink-0 flex-wrap justify-end gap-2">
+            {canManageProp && (
+              <Link href={`/maintenance/properties/${id}/edit`}>
+                <Button variant="outline" size="sm" className="gap-1">
+                  <Pencil className="h-4 w-4" /> แก้ไข
+                </Button>
+              </Link>
+            )}
+            <PropertyArchiveButtons
+              // เปลี่ยนสถานะแล้วเริ่มใหม่ — ไม่งั้นกล่องยืนยันค้างอยู่หลังกดเลิกใช้
+              key={property.archivedAt ? "archived" : "active"}
+              id={id}
+              name={property.name}
+              archived={!!property.archivedAt}
+              canArchive={canArchiveProp}
+              canDelete={canManageProp}
+              counts={depCounts}
+            />
           </div>
         )}
       </header>

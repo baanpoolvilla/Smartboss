@@ -74,7 +74,7 @@ export default async function NewPoPage({
         canOpenPo={canOpenPo}
         workOrder={linked}
         fromTasks={fromTasks}
-        properties={properties.map((p) => ({ id: p.id, label: p.name }))}
+        properties={properties.filter((p) => !p.archivedAt).map((p) => ({ id: p.id, label: p.name }))}
         users={users.map((u) => ({
           id: u.id,
           label: u.name,

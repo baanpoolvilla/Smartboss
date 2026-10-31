@@ -11,6 +11,8 @@ export const MAINT_PERMS = {
 
   propertyView: "maintenance.property.view",
   propertyManage: "maintenance.property.manage",
+  /** เลิกใช้/ใช้บ้านต่อ — ไม่ลบประวัติ จึงให้หัวหน้างาน/ผู้ดูแลบ้านทำเองได้ (ลบจริงยังต้อง property.manage) */
+  propertyArchive: "maintenance.property.archive",
 
   assetView: "maintenance.asset.view",
   assetManage: "maintenance.asset.manage",
@@ -41,6 +43,7 @@ export const MAINT_PERM_LABELS: Record<string, string> = {
   [MAINT_PERMS.workorderComplete]: "ปิดงาน (แจ้งว่าทำเสร็จ)",
   [MAINT_PERMS.propertyView]: "ดูรายชื่อบ้าน",
   [MAINT_PERMS.propertyManage]: "เพิ่ม/แก้ไข/ลบบ้าน",
+  [MAINT_PERMS.propertyArchive]: "เลิกใช้บ้าน / ใช้บ้านต่อ (ไม่ลบประวัติ)",
   [MAINT_PERMS.assetView]: "ดูอุปกรณ์",
   [MAINT_PERMS.assetManage]: "เพิ่ม/แก้ไข/ลบอุปกรณ์",
   [MAINT_PERMS.pmView]: "ดูแผนบำรุงรักษา (PM)",

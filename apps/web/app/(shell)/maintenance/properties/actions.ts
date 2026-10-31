@@ -9,6 +9,7 @@ import {
   createProperty,
   updateProperty,
   deleteProperty,
+  setPropertyArchived,
   setPropertyCategory,
   getProperty,
 } from "@/modules/maintenance/data/properties";
@@ -116,6 +117,24 @@ export async function updatePropertyAction(id: string, formData: FormData) {
   });
   revalidatePath("/maintenance/properties");
   redirect(`/maintenance/properties/${id}`);
+}
+
+/** เลิกใช้บ้าน / ใช้ต่อ (ผู้ใช้ 31/10/2569) — สิทธิ์ property.archive หรือ property.manage */
+export async function setPropertyArchivedAction(formData: FormData) {
+  const s = await requireOrg();
+  if (!hasPermission(s, MAINT_PERMS.propertyArchive) && !hasPermission(s, MAINT_PERMS.propertyManage)) {
+    throw new Error("ไม่มีสิทธิ์เลิกใช้บ้าน");
+  }
+  const who = { orgId: s.orgId, userId: s.userId };
+  const id = String(formData.get("id") ?? "");
+  const archived = formData.get("archived") === "1";
+  if (!id) return;
+  const before = await getProperty(s.orgId, id);
+  if (!before) return;
+  await setPropertyArchived(s.orgId, id, archived, s.userId);
+  await propLog(who, "property", id, before.name, "update", archived ? "เลิกใช้บ้าน" : "ใช้บ้านต่อ");
+  revalidatePath("/maintenance/properties");
+  revalidatePath(`/maintenance/properties/${id}`);
 }
 
 export async function deletePropertyAction(formData: FormData) {

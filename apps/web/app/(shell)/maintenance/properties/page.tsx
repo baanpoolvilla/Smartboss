@@ -76,10 +76,13 @@ export default async function PropertiesListPage() {
   const canManage = hasPermission(session, MAINT_PERMS.propertyManage);
   const orgId = session.orgId;
 
-  const [properties, categories] = await Promise.all([
+  const [allProperties, categories] = await Promise.all([
     listProperties(orgId),
     listCategoriesWithCount(orgId),
   ]);
+  // บ้านที่เลิกใช้ไม่ปนในรายชื่อ — อยู่ในกล่องพับท้ายหน้า เปิดเข้าไปกด "ใช้บ้านนี้ต่อ" ได้
+  const properties = allProperties.filter((p) => !p.archivedAt);
+  const archivedProperties = allProperties.filter((p) => p.archivedAt);
   const counts = await workOrderStatusCounts(
     orgId,
     properties.map((p) => p.id)
@@ -154,7 +157,9 @@ export default async function PropertiesListPage() {
 
       {properties.length === 0 ? (
         <Card className="p-10 text-center text-sm text-(--ink-soft)">
-          ยังไม่มีข้อมูลบ้าน {canManage ? "— เพิ่มบ้านแรกได้เลย" : ""}
+          {archivedProperties.length > 0
+            ? "ไม่มีบ้านที่ใช้อยู่ — บ้านที่เลิกใช้อยู่ในกล่องด้านล่าง"
+            : `ยังไม่มีข้อมูลบ้าน ${canManage ? "— เพิ่มบ้านแรกได้เลย" : ""}`}
         </Card>
       ) : (
         <div className="flex flex-col gap-6">
@@ -253,6 +258,27 @@ export default async function PropertiesListPage() {
             </section>
           ))}
         </div>
+      )}
+
+      {archivedProperties.length > 0 && (
+        <details className="mt-6 rounded-lg border border-(--line) bg-(--bg) px-4 py-3">
+          <summary className="cursor-pointer text-sm font-semibold text-(--ink-soft)">
+            บ้านที่เลิกใช้แล้ว ({archivedProperties.length}) — ใบงานและค่าใช้จ่ายเก่ายังอยู่ · เปิดบ้านแล้วกด “ใช้บ้านนี้ต่อ” ได้
+          </summary>
+          <div className="mt-3 flex flex-col gap-1.5">
+            {archivedProperties.map((p) => (
+              <Link
+                key={p.id}
+                href={`/maintenance/properties/${p.id}`}
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-(--ink-soft) hover:bg-(--bg-soft)"
+              >
+                <HomeIcon className="h-4 w-4 shrink-0" />
+                <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                <ChevronRight className="h-4 w-4 shrink-0" />
+              </Link>
+            ))}
+          </div>
+        </details>
       )}
     </AppScaffold>
   );

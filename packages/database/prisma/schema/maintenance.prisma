@@ -18,6 +18,9 @@ model Property {
   /// ตั้งชื่อบ้านตามรหัสตลอดไป และย้ายบ้านข้ามหมวดไม่ได้เลยนอกจากเปลี่ยนชื่อบ้าน
   categoryId   String?  @map("category_id")
   createdAt    DateTime @default(now()) @map("created_at")
+  /// เลิกใช้บ้าน (31/10/2569) — หายจากรายชื่อและช่องเลือกบ้าน แต่ใบงาน/ค่าใช้จ่ายเก่ายังอยู่ครบ · null = ใช้อยู่
+  archivedAt   DateTime? @map("archived_at")
+  archivedBy   String?   @map("archived_by")
 
   category    PropertyCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   assets      Asset[]

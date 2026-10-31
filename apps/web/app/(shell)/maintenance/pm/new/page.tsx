@@ -35,7 +35,7 @@ export default async function NewPmPage({
     <AppScaffold title="เพิ่มแผน PM" width="max-w-none" backHref="/maintenance/pm">
       <PmForm
         action={createPmAction}
-        properties={properties.map((p) => ({ id: p.id, label: p.name }))}
+        properties={properties.filter((p) => !p.archivedAt).map((p) => ({ id: p.id, label: p.name }))}
         assets={assets.map((a) => ({
           id: a.id,
           name: a.name,
