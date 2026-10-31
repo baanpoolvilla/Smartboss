@@ -12,7 +12,6 @@ import {
   AlertDialogCancel,
 } from "@/modules/report_task/components/ui/alert-dialog";
 import { AlbumFormDialog } from "@/modules/report_task/components/report-feed/album-form-dialog";
-import { ReportTopicDocuments } from "@/modules/report_task/components/report-feed/report-topic-documents";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
 import { users, getUser, getDepartment, isOwner } from "@/modules/report_task/lib/directory";
 import { useReportFeedStore, type ReportPost, type ReportPostImage, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
@@ -30,8 +29,22 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/compo
 import { Badge } from "@/modules/report_task/components/ui/badge";
 import { Input } from "@/modules/report_task/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
-import { AlbumPickerButton } from "@/modules/report_task/components/report-feed/album-picker-button";
-import { SaveToDocumentsButton } from "@/modules/report_task/components/report-feed/save-to-documents-button";
+import {
+  AlbumAddPhotos,
+  RoomFileMenu,
+  RoomUploadButton,
+  StorageBadges,
+  WhereStoredPanel,
+  urlOf,
+  useRoomLibrary,
+  type PickableMedia,
+} from "@/modules/report_task/components/report-feed/room-files-kit";
+import { addFileToRoomFolder, saveItemsToRoomSubfolder } from "@/modules/company-files/data/files";
+import { uploadCompanyFile } from "@/modules/company-files/lib/upload";
+import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
+import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
+import { toast } from "sonner";
+import type { ReportAlbum } from "@/modules/report_task/store/report-feed-store";
 import { ReportFileChip } from "@/modules/report_task/components/report-feed/report-file-chip";
 import { PinLinkDialog } from "@/modules/report_task/components/report-feed/pin-link-dialog";
 import { isDocAttachment } from "@/modules/report_task/lib/report-attachment-kind";
@@ -41,6 +54,7 @@ import Link from "next/link";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import {
   ArrowLeft,
+  Building2,
   FileImage,
   FileText,
   FolderHeart,
@@ -75,11 +89,19 @@ export const UNLIMITED_FILES_RETENTION_DAYS = 36500;
 
 interface FileEntry {
   image: ReportPostImage;
+  /** "" = ไม่ได้มาจากโพสต์ (ไฟล์บริษัทของห้อง / อัปโหลดเข้าอัลบั้มตรง) */
   postId: string;
   postTitle: string;
   createdAt: string;
   authorId: string;
+  /** ไม่ใส่ = มาจากโพสต์ (ของเดิมทั้งหมด) · library = ไฟล์บริษัทของห้อง · album = อัปโหลด/เลือกเข้าอัลบั้มตรง */
+  source?: "library" | "album";
+  /** source "album": อยู่ในอัลบั้มไหน (ใช้เอาออก) */
+  albumItemOf?: string;
 }
+
+/** ตัวกรอง "ที่เก็บ" ของแท็บไฟล์ */
+type StoreFilter = "all" | "none" | "album" | "library";
 
 interface LinkEntry {
   url: string;
@@ -203,6 +225,14 @@ export function ReportTopicPanels({
   const renameAlbum = useReportFeedStore((s) => s.renameAlbum);
   const removeAlbum = useReportFeedStore((s) => s.removeAlbum);
   const setImageAlbum = useReportFeedStore((s) => s.setImageAlbum);
+  const addAlbumItems = useReportFeedStore((s) => s.addAlbumItems);
+  const removeAlbumItem = useReportFeedStore((s) => s.removeAlbumItem);
+  // ไฟล์บริษัทของห้อง (รวมโฟลเดอร์ย่อย) — ป้าย 🏢 + ไฟล์ที่อัปโหลดเองขึ้นรวมในตารางเดียว (ไม่มีกล่องแยกที่กดแล้วเด้งออกแล้ว)
+  const library = useRoomLibrary(topic.id);
+  const [uploading, setUploading] = useState(0);
+  const [fileStore, setFileStore] = useState<StoreFilter>("all");
+  /** สร้างอัลบั้มจากเมนู ⋯ — สร้างเสร็จแล้วเก็บรูปนี้ลงไปเลย */
+  const [newAlbumFor, setNewAlbumFor] = useState<FileEntry | null>(null);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const stickers = useStickerStore((s) => s.stickers);
   const removeStickerReaction = useReportFeedStore((s) => s.removeStickerReaction);
@@ -243,10 +273,44 @@ export function ReportTopicPanels({
   // an old photo already saved to an album still shows up fine in "อัลบั้ม"
   // even after it's aged out of this list.
   const filesWindowDays = topic.filesRetentionDays ?? FILES_TAB_WINDOW_DAYS;
-  const recentFiles = useMemo(() => {
+  const postRecentFiles = useMemo(() => {
     const cutoff = filesCutoffMs(filesWindowDays);
     return files.filter((f) => new Date(f.createdAt).getTime() >= cutoff);
   }, [files, filesWindowDays]);
+  const libByUrl = useMemo(() => new Map(library.files.map((f) => [f.storageKey, f])), [library.files]);
+  // ไฟล์บริษัทของห้องที่ไม่ใช่รูปจากโพสต์ (อัปโหลดเอง) — ถาวร ไม่ตัดตามช่วงวันของแท็บ · ที่ก๊อปมาจากโพสต์โชว์เป็นรูปโพสต์เดิมพร้อมป้าย 🏢 แทน
+  const libraryOnly = useMemo(() => {
+    // ไฟล์เดียวกันอยู่ได้หลายโฟลเดอร์ (โฟลเดอร์ห้อง + โฟลเดอร์อัลบั้มที่กดเก็บทั้งชุด) — โชว์ใบเดียว
+    const seen = new Set(files.map((f) => urlOf(f.image)));
+    return library.files
+      .filter((f) => !seen.has(f.storageKey) && !!seen.add(f.storageKey))
+      .map<FileEntry>((f) => ({
+        image: { id: `lib-${f.id}`, url: f.storageKey, name: f.name, mime: f.mimeType, size: f.size },
+        postId: "",
+        postTitle: "",
+        createdAt: f.createdAt,
+        authorId: f.createdBy,
+        source: "library",
+      }));
+  }, [files, library.files]);
+  const recentFiles = useMemo(
+    () => [...postRecentFiles, ...libraryOnly].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    [postRecentFiles, libraryOnly]
+  );
+  // รูปเดียวอยู่ได้หลายที่ — อัลบั้มที่มี url นี้ (รูปโพสต์ผูกด้วย albumId · รูปที่เพิ่มเข้าอัลบั้มตรงอยู่ใน album.items)
+  const albumsByUrl = useMemo(() => {
+    const m = new Map<string, ReportAlbum[]>();
+    const add = (url: string, a: ReportAlbum) => {
+      const list = m.get(url) ?? [];
+      if (!list.some((x) => x.id === a.id)) m.set(url, [...list, a]);
+    };
+    for (const f of files) {
+      const a = f.image.albumId ? albums.find((x) => x.id === f.image.albumId) : undefined;
+      if (a) add(urlOf(f.image), a);
+    }
+    for (const a of albums) for (const it of a.items ?? []) add(urlOf(it), a);
+    return m;
+  }, [files, albums]);
   const fileAuthorOptions = useMemo(
     () => [...new Set(recentFiles.map((f) => f.authorId))].map((id) => getUser(id)).filter((u): u is NonNullable<typeof u> => !!u),
     [recentFiles]
@@ -255,10 +319,17 @@ export function ReportTopicPanels({
     const q = fileSearch.trim().toLowerCase();
     return recentFiles.filter((f) => {
       if (fileAuthorId !== "all" && f.authorId !== fileAuthorId) return false;
+      if (fileStore !== "all") {
+        const inAlbum = (albumsByUrl.get(urlOf(f.image))?.length ?? 0) > 0;
+        const inLib = libByUrl.has(urlOf(f.image));
+        if (fileStore === "album" && !inAlbum) return false;
+        if (fileStore === "library" && !inLib) return false;
+        if (fileStore === "none" && (inAlbum || inLib)) return false;
+      }
       if (q && !f.image.name.toLowerCase().includes(q) && !f.postTitle.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [recentFiles, fileSearch, fileAuthorId]);
+  }, [recentFiles, fileSearch, fileAuthorId, fileStore, albumsByUrl, libByUrl]);
   // The two halves of what a post can carry: pictures/clips (a grid worth
   // looking at) and documents (a list worth reading names off). Same source,
   // same window, same search — split only at the point of display.
@@ -281,7 +352,8 @@ export function ReportTopicPanels({
     () =>
       albums.map((a) => {
         const inAlbum = files.filter((f) => f.image.albumId === a.id);
-        return { album: a, count: inAlbum.length, cover: inAlbum[0]?.image };
+        const cover = inAlbum[0]?.image ?? a.items?.[a.items.length - 1];
+        return { album: a, count: inAlbum.length + (a.items?.length ?? 0), cover };
       }),
     [albums, files]
   );
@@ -291,7 +363,33 @@ export function ReportTopicPanels({
     return albumFolders.filter((f) => f.album.name.toLowerCase().includes(q));
   }, [albumFolders, fileSearch]);
   const openAlbum = openAlbumId ? albumFolders.find((f) => f.album.id === openAlbumId) : undefined;
-  const openAlbumFiles = openAlbumId ? files.filter((f) => f.image.albumId === openAlbumId) : [];
+  const openAlbumFiles = useMemo<FileEntry[]>(() => {
+    if (!openAlbumId) return [];
+    const a = albums.find((x) => x.id === openAlbumId);
+    const direct = (a?.items ?? []).map<FileEntry>((it) => ({
+      image: it,
+      postId: "",
+      postTitle: "",
+      createdAt: it.addedAt,
+      authorId: it.addedBy,
+      source: "album",
+      albumItemOf: a!.id,
+    }));
+    return [...files.filter((f) => f.image.albumId === openAlbumId), ...direct].sort(
+      (x, y) => new Date(y.createdAt).getTime() - new Date(x.createdAt).getTime()
+    );
+  }, [openAlbumId, albums, files]);
+  // "เลือกจากรูปในห้องนี้" ในหน้าอัลบั้ม — รูป/คลิปทั้งหมดของห้อง (ไม่ตัดช่วงวัน) ที่ยังไม่อยู่ในอัลบั้มนี้
+  const albumCandidates = useMemo<PickableMedia[]>(() => {
+    if (!openAlbumId) return [];
+    const inThis = new Set(openAlbumFiles.map((f) => urlOf(f.image)));
+    const all = [...files, ...libraryOnly].filter((f) => !isDocAttachment(f.image.mime) && !inThis.has(urlOf(f.image)));
+    return all.map((f) => ({
+      key: f.source === "library" ? f.image.id : `${f.postId}:${f.image.id}`,
+      media: f.image,
+      albumName: albumsByUrl.get(urlOf(f.image))?.[0]?.name,
+    }));
+  }, [openAlbumId, openAlbumFiles, files, libraryOnly, albumsByUrl]);
 
   const filterCounts: Record<FileFilter, number> = {
     all: visibleImages.length + visibleDocs.length + visibleLinks.length + visiblePinnedLinks.length,
@@ -363,27 +461,166 @@ export function ReportTopicPanels({
   // One image thumbnail with its two overlay actions (เก็บลงอัลบั้ม /
   // เพิ่มเข้าเอกสาร) — identical in the "รูปภาพ" grid and the mixed
   // "ทั้งหมด" one, so it's written once here rather than twice below.
-  function imageCell(f: FileEntry, index: number) {
+  function openPostOf(f: FileEntry) {
+    if (!f.postId) return;
+    if (onOpenPost) onOpenPost(f.postId);
+    else scrollToPost(f.postId);
+  }
+
+  /** เก็บลง/เอาออกจากอัลบั้ม — รูปโพสต์ใช้ albumId เดิม (อยู่ได้อัลบั้มเดียว) · ที่เหลือเป็นรายการในอัลบั้มตรง */
+  function toggleAlbum(f: FileEntry, albumId: string) {
+    if (!f.source && f.postId) {
+      setImageAlbum(f.postId, f.image.id, f.image.albumId === albumId ? undefined : albumId);
+      return;
+    }
+    const url = urlOf(f.image);
+    const existing = useReportFeedStore.getState().albums.find((a) => a.id === albumId)?.items?.find((i) => urlOf(i) === url);
+    if (existing) removeAlbumItem(albumId, existing.id);
+    else addAlbumItems(albumId, [{ ...f.image, id: crypto.randomUUID(), albumId: undefined, addedBy: viewingAsUserId, addedAt: new Date().toISOString() }]);
+  }
+
+  async function saveToLibrary(f: FileEntry) {
+    const url = urlOf(f.image);
+    if (!url || url.startsWith("data:")) return;
+    try {
+      await addFileToRoomFolder(topic.id, topic.name, { url, name: f.image.name, mimeType: f.image.mime ?? "image/jpeg", size: f.image.size ?? 0 });
+      toast.success(`เก็บ "${f.image.name}" เข้าไฟล์บริษัท › ห้องรายงาน › ${topic.name} แล้ว`);
+      void library.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "เก็บเข้าไฟล์บริษัทไม่สำเร็จ");
+    }
+  }
+
+  async function uploadToLibrary(picked: File[]) {
+    setUploading((n) => n + picked.length);
+    let ok = 0;
+    for (const file of picked) {
+      try {
+        const uploaded = await uploadCompanyFile(file);
+        await addFileToRoomFolder(topic.id, topic.name, uploaded);
+        ok += 1;
+      } catch (err) {
+        toast.error(`${file.name}: ${err instanceof Error ? err.message : "อัปโหลดไม่สำเร็จ"}`);
+      } finally {
+        setUploading((n) => n - 1);
+      }
+    }
+    if (ok) toast.success(`อัปโหลด ${ok} ไฟล์เข้าไฟล์บริษัท › ห้องรายงาน › ${topic.name} แล้ว`);
+    void library.refresh();
+  }
+
+  async function uploadToAlbum(albumId: string, picked: File[]) {
+    setUploading((n) => n + picked.length);
+    let ok = 0;
+    for (const file of picked) {
+      try {
+        const m = await uploadReportMedia(file);
+        addAlbumItems(albumId, [
+          { id: crypto.randomUUID(), url: m.url, name: m.name, mime: m.mime, size: m.size, ...(m.thumbUrl ? { thumbUrl: m.thumbUrl } : {}), addedBy: viewingAsUserId, addedAt: new Date().toISOString() },
+        ]);
+        ok += 1;
+      } catch (err) {
+        toast.error(`${file.name}: ${err instanceof Error ? err.message : "อัปโหลดไม่สำเร็จ"}`);
+      } finally {
+        setUploading((n) => n - 1);
+      }
+    }
+    const name = useReportFeedStore.getState().albums.find((a) => a.id === albumId)?.name ?? "";
+    if (ok) toast.success(`เพิ่ม ${ok} รูปเข้าอัลบั้ม ${name} แล้ว`);
+  }
+
+  async function saveAlbumToLibrary(album: ReportAlbum, entries: FileEntry[]) {
+    const items = entries
+      .map((f) => ({ url: urlOf(f.image), name: f.image.name, mimeType: f.image.mime ?? "image/jpeg", size: f.image.size ?? 0 }))
+      .filter((i) => i.url && !i.url.startsWith("data:"));
+    if (items.length === 0) {
+      toast.error("อัลบั้มนี้ยังไม่มีรูปให้เก็บ");
+      return;
+    }
+    try {
+      const r = await saveItemsToRoomSubfolder(topic.id, topic.name, album.name, items);
+      toast.success(
+        r.added
+          ? `เก็บ ${r.added} รูปเข้าไฟล์บริษัท › ห้องรายงาน › ${topic.name} › ${album.name} แล้ว${r.skipped ? ` (มีอยู่แล้ว ${r.skipped} รูป)` : ""}`
+          : `ทุกรูปอยู่ในไฟล์บริษัท › ${topic.name} › ${album.name} แล้ว`
+      );
+      void library.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "เก็บเข้าไฟล์บริษัทไม่สำเร็จ");
+    }
+  }
+
+  function menuFor(f: FileEntry, variant: "overlay" | "row", inAlbumId?: string) {
+    const url = urlOf(f.image);
+    const inAlbums = albumsByUrl.get(url) ?? [];
+    return (
+      <RoomFileMenu
+        name={f.image.name}
+        url={url.startsWith("data:") ? "" : url}
+        roomName={topic.name}
+        roomAlbums={albums}
+        inAlbumIds={inAlbums.map((a) => a.id)}
+        libraryFile={libByUrl.get(url)}
+        canSaveToLibrary={library.canUpload && !!url && !url.startsWith("data:")}
+        onToggleAlbum={(albumId) => toggleAlbum(f, albumId)}
+        onNewAlbum={() => setNewAlbumFor(f)}
+        onSaveToLibrary={() => void saveToLibrary(f)}
+        onOpenPost={f.postId ? () => openPostOf(f) : undefined}
+        onRemoveFromThisAlbum={inAlbumId ? () => toggleAlbum(f, inAlbumId) : undefined}
+        variant={variant}
+      />
+    );
+  }
+
+  /** กล่อง "เก็บอยู่ที่" ในตัวดูรูป — รายการเดียวกับที่เปิดอยู่ */
+  function whereStored(items: FileEntry[]) {
+    return function renderWhereStored(_img: ReportPostImage, i: number) {
+      const f = items[i];
+      if (!f) return null;
+      const url = urlOf(f.image);
+      return (
+        <WhereStoredPanel
+          name={f.image.name}
+          albums={albumsByUrl.get(url) ?? []}
+          libraryFile={libByUrl.get(url)}
+          postTitle={f.postId ? f.postTitle : undefined}
+          onOpenPost={f.postId ? () => {
+            setLightbox(null);
+            openPostOf(f);
+          } : undefined}
+          canSaveToLibrary={library.canUpload && !!url && !url.startsWith("data:")}
+          onSaveToLibrary={() => void saveToLibrary(f)}
+        />
+      );
+    };
+  }
+
+  function sourceLine(f: FileEntry) {
+    const who = getUser(f.authorId)?.name ?? library.files.find((l) => l.createdBy === f.authorId)?.createdByName ?? "";
+    const from = f.source === "library" ? "อัปโหลด" : f.source === "album" ? "เพิ่มเข้าอัลบั้ม" : "จากโพสต์";
+    return (
+      <>
+        {who ? `${who} · ` : ""}
+        {from} · <TimeAgo date={f.createdAt} />
+      </>
+    );
+  }
+
+  function imageCell(f: FileEntry, index: number, list: FileEntry[] = visibleImages, inAlbumId?: string) {
+    const url = urlOf(f.image);
     return (
       <div key={`${f.image.id}-${index}`} className="relative group">
-        <button onClick={() => setLightbox({ items: visibleImages, index })} className="block text-left w-full">
+        <button onClick={() => setLightbox({ items: list, index })} className="block text-left w-full">
           <ReportMediaThumb media={f.image} className="w-full h-24 object-cover rounded-lg border border-[var(--line)] group-hover:opacity-90" />
           <p className="text-xs mt-1 truncate">{f.image.name}</p>
-          <p className="text-[11px] text-[var(--ink-soft)] truncate">
-            {getUser(f.authorId)?.name} · <TimeAgo date={f.createdAt} />
-          </p>
+          <p className="text-[11px] text-[var(--ink-soft)] truncate">{sourceLine(f)}</p>
         </button>
-        <div className="absolute top-1 left-1">
-          <AlbumPickerButton
-            topicId={topic.id}
-            imageName={f.image.name}
-            albumId={f.image.albumId}
-            onChange={(albumId) => setImageAlbum(f.postId, f.image.id, albumId)}
-          />
-        </div>
-        <div className="absolute top-1 right-1">
-          <SaveToDocumentsButton topicId={topic.id} topicName={topic.name} file={f.image} />
-        </div>
+        <StorageBadges
+          albums={inAlbumId ? [] : (albumsByUrl.get(url) ?? [])}
+          inLibrary={libByUrl.has(url)}
+          temporaryDays={!f.source && !inAlbumId ? filesWindowDays : undefined}
+        />
+        <div className="absolute top-1 right-1">{menuFor(f, "overlay", inAlbumId)}</div>
       </div>
     );
   }
@@ -393,25 +630,29 @@ export function ReportTopicPanels({
    * in a new tab; the same "เพิ่มเข้าไฟล์ทั้งหมดของห้องนี้" button the photos
    * have sits at the end. */
   function docRow(f: FileEntry, key: string) {
+    const url = urlOf(f.image);
     return (
       <div key={key} className="flex items-center gap-2.5 rounded-lg border border-[var(--line)] px-2.5 py-2">
         <ReportFileChip media={f.image} variant="icon" className="shrink-0" />
         <div className="min-w-0 flex-1">
           <a
-            href={f.image.url ?? f.image.dataUrl}
+            href={url}
             target="_blank"
             rel="noopener noreferrer"
             className="block truncate text-sm font-medium hover:text-[var(--brand-green-dark)] hover:underline"
           >
             {f.image.name}
           </a>
-          <button onClick={() => scrollToPost(f.postId)} className="block max-w-full truncate text-[11px] text-[var(--ink-soft)] hover:underline">
-            จาก &quot;{f.postTitle}&quot; · {getUser(f.authorId)?.name} · <TimeAgo date={f.createdAt} />
-          </button>
+          {f.postId ? (
+            <button onClick={() => openPostOf(f)} className="block max-w-full truncate text-[11px] text-[var(--ink-soft)] hover:underline">
+              จาก &quot;{f.postTitle}&quot; · {getUser(f.authorId)?.name} · <TimeAgo date={f.createdAt} />
+            </button>
+          ) : (
+            <p className="truncate text-[11px] text-[var(--ink-soft)]">{sourceLine(f)}</p>
+          )}
+          <StorageBadges albums={albumsByUrl.get(url) ?? []} inLibrary={libByUrl.has(url)} temporaryDays={!f.source ? filesWindowDays : undefined} />
         </div>
-        <div className="shrink-0">
-          <SaveToDocumentsButton topicId={topic.id} topicName={topic.name} file={f.image} variant="row" />
-        </div>
+        <div className="shrink-0">{menuFor(f, "row")}</div>
       </div>
     );
   }
@@ -521,7 +762,7 @@ export function ReportTopicPanels({
           <TopicEmptyState
             icon={FolderHeart}
             title={fileSearch.trim() ? "ไม่มีอัลบั้มตรงกับคำค้น" : "ยังไม่มีอัลบั้มในหัวข้อนี้"}
-            description={fileSearch.trim() ? "ลองค้นด้วยคำอื่น" : "สร้างอัลบั้มไว้ก่อน หรือเก็บรูปจากตัวกรอง “รูปภาพ” ลงอัลบั้มได้"}
+            description={fileSearch.trim() ? "ลองค้นด้วยคำอื่น" : "สร้างอัลบั้มแล้วกด “เพิ่มรูป” ในอัลบั้มได้เลย หรือกด ⋯ ที่รูปในแท็บไฟล์แล้วเลือก “เก็บลงอัลบั้ม”"}
             action={
               fileSearch.trim() ? undefined : (
                 <button
@@ -575,9 +816,11 @@ export function ReportTopicPanels({
     // folder now, and the way out is its own back button, same as before
     // this was a filter rather than a tab of its own.
     if (fileFilter === "albums" && openAlbum) {
+      const thisAlbum = openAlbum.album;
       return (
+        <PasteDropFiles label="ปล่อยเพื่อเพิ่มรูปเข้าอัลบั้มนี้" className="flex flex-1 min-h-0 flex-col">
         <div className="flex-1 overflow-y-auto p-4">
-          <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
             <button
               onClick={() => setOpenAlbumId(null)}
               className="flex items-center gap-1.5 text-sm font-semibold hover:text-[var(--brand-green-dark)]"
@@ -587,6 +830,33 @@ export function ReportTopicPanels({
               <span className="text-xs font-normal text-[var(--ink-soft)]">({openAlbum.count})</span>
             </button>
             <div className="flex items-center gap-1">
+              <AlbumAddPhotos
+                busy={uploading > 0}
+                onUpload={(picked) => void uploadToAlbum(thisAlbum.id, picked)}
+                candidates={albumCandidates}
+                onPick={(keys) => {
+                  const pool = [...files, ...libraryOnly];
+                  let n = 0;
+                  for (const key of keys) {
+                    const f = pool.find((x) => (x.source === "library" ? x.image.id : `${x.postId}:${x.image.id}`) === key);
+                    if (!f) continue;
+                    if (!f.source && f.postId) setImageAlbum(f.postId, f.image.id, thisAlbum.id);
+                    else addAlbumItems(thisAlbum.id, [{ ...f.image, id: crypto.randomUUID(), albumId: undefined, addedBy: viewingAsUserId, addedAt: new Date().toISOString() }]);
+                    n += 1;
+                  }
+                  if (n) toast.success(`เพิ่ม ${n} รูปเข้าอัลบั้ม ${thisAlbum.name} แล้ว`);
+                }}
+              />
+              {library.canUpload && openAlbumFiles.length > 0 && (
+                <button
+                  onClick={() => void saveAlbumToLibrary(thisAlbum, openAlbumFiles)}
+                  className="flex items-center gap-1.5 rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-medium hover:bg-[var(--bg-soft)]"
+                  title={`ก๊อปทุกรูปไปที่ ไฟล์บริษัท › ห้องรายงาน › ${topic.name} › ${thisAlbum.name} (กดซ้ำได้ เพิ่มเฉพาะรูปใหม่)`}
+                >
+                  <Building2 className="h-3.5 w-3.5" />
+                  เก็บทั้งอัลบั้มเข้าไฟล์บริษัท
+                </button>
+              )}
               <button
                 onClick={() => setRenameAlbumOpen(true)}
                 className="h-7 w-7 flex items-center justify-center rounded-md text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
@@ -603,24 +873,16 @@ export function ReportTopicPanels({
               </button>
             </div>
           </div>
+          {uploading > 0 && <p className="mb-2 text-xs text-[var(--ink-soft)]">กำลังอัปโหลด {uploading} ไฟล์…</p>}
           {openAlbumFiles.length === 0 ? (
-            <TopicEmptyState icon={FolderHeart} title="อัลบั้มนี้ยังไม่มีรูป" description="เก็บรูปจากตัวกรอง &quot;รูปภาพ&quot; ลงอัลบั้มนี้ได้" />
+            <TopicEmptyState
+              icon={FolderHeart}
+              title="อัลบั้มนี้ยังไม่มีรูป"
+              description="กด “เพิ่มรูป” ลากรูปมาวางที่นี่ หรือกด Ctrl+V วางรูป — เลือกจากรูปที่มีในห้องก็ได้"
+            />
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-              {openAlbumFiles.map((f, i) => (
-                <button
-                  key={`${f.image.id}-${i}`}
-                  onClick={() => setLightbox({ items: openAlbumFiles, index: i })}
-                  className="group text-left"
-                >
-                  <ReportMediaThumb
-                    media={f.image}
-                    className="w-full h-24 object-cover rounded-lg border border-[var(--line)] group-hover:opacity-90"
-                  />
-                  <p className="text-xs mt-1 truncate">{f.image.name}</p>
-                  <p className="text-[11px] text-[var(--ink-soft)] truncate">{f.postTitle} · <TimeAgo date={f.createdAt} /></p>
-                </button>
-              ))}
+              {openAlbumFiles.map((f, i) => imageCell(f, i, openAlbumFiles, thisAlbum.id))}
             </div>
           )}
           {lightbox && (
@@ -633,8 +895,19 @@ export function ReportTopicPanels({
                 const f = lightbox.items[i];
                 return f ? { authorId: f.authorId, at: f.createdAt } : null;
               }}
+              infoPanel={whereStored(lightbox.items)}
             />
           )}
+          <AlbumFormDialog
+            open={!!newAlbumFor}
+            onOpenChange={(v) => !v && setNewAlbumFor(null)}
+            title="สร้างอัลบั้มใหม่"
+            onSubmit={(name) => {
+              const id = addAlbum(topic.id, name, viewingAsUserId);
+              if (newAlbumFor) toggleAlbum(newAlbumFor, id);
+              setNewAlbumFor(null);
+            }}
+          />
           <AlbumFormDialog
             open={renameAlbumOpen}
             onOpenChange={setRenameAlbumOpen}
@@ -646,7 +919,9 @@ export function ReportTopicPanels({
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>ลบอัลบั้ม &quot;{deleteAlbumTarget?.name}&quot;?</AlertDialogTitle>
-                <AlertDialogDescription>รูปที่อยู่ในอัลบั้มนี้จะไม่ถูกลบ แค่ไม่ได้อยู่ในอัลบั้มนี้อีกต่อไป — ยังดูได้ในโพสต์เดิม</AlertDialogDescription>
+                <AlertDialogDescription>
+                  รูปจากโพสต์ไม่ถูกลบ ยังดูได้ในโพสต์เดิม · รูปที่อัปโหลดเข้าอัลบั้มนี้โดยตรงจะหายไปด้วย · ที่เคยเก็บเข้าไฟล์บริษัทแล้วยังอยู่ที่ไฟล์บริษัท
+                </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
@@ -665,12 +940,14 @@ export function ReportTopicPanels({
             </AlertDialogContent>
           </AlertDialog>
         </div>
+        </PasteDropFiles>
       );
     }
 
     const hasAnything = recentFiles.length + links.length + pinnedLinks.length + albumFolders.length > 0;
 
     return (
+      <PasteDropFiles label={`ปล่อยเพื่ออัปโหลดเข้าไฟล์บริษัท › ${topic.name}`} disabled={!library.canUpload} className="flex flex-1 min-h-0 flex-col">
       <div className="flex-1 overflow-y-auto p-4">
         {/* One search box for the whole tab, above the filter row rather than
             inside any one filter — a filename, a link's name and an album
@@ -678,8 +955,9 @@ export function ReportTopicPanels({
             to make people find a different box for each. The uploader
             dropdown only narrows things that have an uploader (photos and
             documents), so it hides on the link/album filters. */}
-        {hasAnything && (
-          <div className="flex items-center gap-2 flex-wrap mb-2.5">
+        <div className="flex items-center gap-2 flex-wrap mb-2.5">
+          {hasAnything && (
+          <>
             <div className="relative flex-1 min-w-[160px] max-w-xs">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--ink-soft)]" />
               <Input
@@ -702,8 +980,35 @@ export function ReportTopicPanels({
                 </SelectContent>
               </Select>
             )}
-          </div>
-        )}
+            {(fileFilter === "all" || fileFilter === "images" || fileFilter === "docs") && (
+              <Select value={fileStore} onValueChange={(v) => v && setFileStore(v as StoreFilter)}>
+                <SelectTrigger className="h-8 w-[170px] text-xs">
+                  <SelectValue>
+                    {{ all: "ที่เก็บ: ทั้งหมด", none: "ยังไม่ได้เก็บ", album: "อยู่ในอัลบั้ม", library: "อยู่ในไฟล์บริษัท" }[fileStore]}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">ที่เก็บ: ทั้งหมด</SelectItem>
+                  <SelectItem value="none">ยังไม่ได้เก็บ</SelectItem>
+                  <SelectItem value="album">อยู่ในอัลบั้ม</SelectItem>
+                  {library.canAccess && <SelectItem value="library">อยู่ในไฟล์บริษัท</SelectItem>}
+                </SelectContent>
+              </Select>
+            )}
+          </>
+          )}
+          {tab === "files" && (
+            <RoomUploadButton
+              roomName={topic.name}
+              canUploadToLibrary={library.canUpload}
+              albums={albums}
+              busy={uploading > 0}
+              onUploadToLibrary={(picked) => void uploadToLibrary(picked)}
+              onUploadToAlbum={(albumId, picked) => void uploadToAlbum(albumId, picked)}
+              onNewAlbum={() => setCreateAlbumOpen(true)}
+            />
+          )}
+        </div>
 
         {/* Segmented control, scroll-x on a phone rather than wrapping into a
             second row that shifts everything below it. */}
@@ -738,7 +1043,7 @@ export function ReportTopicPanels({
         {fileFilter === "images" && (
           <>
             <p className="text-xs text-[var(--ink-soft)] mb-3">
-              รูป/คลิปในช่วง {filesWindowDays} วันล่าสุด — แตะไอคอนที่มุมรูปเพื่อเก็บลงอัลบั้มแบบถาวร
+              รูป/คลิปจากโพสต์ช่วง {filesWindowDays} วันล่าสุด + ไฟล์บริษัทของห้อง — กด ⋯ ที่รูปเพื่อเก็บลงอัลบั้มหรือไฟล์บริษัท
             </p>
             {visibleImages.length === 0 ? (
               <TopicEmptyState
@@ -754,13 +1059,9 @@ export function ReportTopicPanels({
 
         {fileFilter === "docs" && (
           <div className="space-y-4">
-            {/* The room's real document library first — it's the permanent
-                half, unlike post attachments which age out of the window
-                above. Used to sit at the top of this tab regardless of what
-                you came here for, which is what made "ไฟล์" confusing. */}
-            <ReportTopicDocuments topicId={topic.id} topicName={topic.name} search={fileSearch} />
+            {/* ไฟล์บริษัทของห้องรวมอยู่ในรายการนี้แล้ว (ป้าย 🏢) — เดิมเป็นกล่องแยกด้านบน กดแล้วเด้งไปหน้าไฟล์บริษัท ("งง" 31/10/2569) */}
             <div className="space-y-1.5">
-              {sectionHeading("เอกสารที่แนบในโพสต์", visibleDocs.length)}
+              {sectionHeading("เอกสาร", visibleDocs.length)}
               {visibleDocs.length === 0 ? (
                 <p className="text-xs text-[var(--ink-soft)]">
                   {recentFiles.length === 0
@@ -802,17 +1103,7 @@ export function ReportTopicPanels({
 
         {fileFilter === "all" && (
           <div className="space-y-4">
-            {/* The room's own permanent file library (company-files) isn't
-                a documents-only shelf — its upload picker and the "เพิ่มเข้า
-                ไฟล์ทั้งหมดของห้องนี้" button on any thumbnail both accept any
-                file kind, photos and clips included. Nesting it only under
-                the "เอกสาร" filter (as the "docs" branch below still does,
-                for whoever specifically wants the library view) meant a
-                photo saved there was invisible from "ทั้งหมด" and "รูปภาพ"
-                both — surfacing it here too, unconditionally like "docs"
-                does, so nothing saved into it goes missing from the one
-                filter meant to show everything. */}
-            <ReportTopicDocuments topicId={topic.id} topicName={topic.name} search={fileSearch} />
+            {/* ไฟล์บริษัทของห้องรวมอยู่ในรูปภาพ/เอกสารด้านล่างแล้ว พร้อมป้ายบอกที่เก็บ */}
             {filterCounts.all === 0 ? (
               <TopicEmptyState
                 icon={LayoutGrid}
@@ -860,13 +1151,28 @@ export function ReportTopicPanels({
               const f = lightbox.items[i];
               return f ? { authorId: f.authorId, at: f.createdAt } : null;
             }}
+            infoPanel={whereStored(lightbox.items)}
           />
         )}
         <AlbumFormDialog
           open={createAlbumOpen}
           onOpenChange={setCreateAlbumOpen}
           title="สร้างอัลบั้มใหม่"
-          onSubmit={(name) => setOpenAlbumId(addAlbum(topic.id, name, viewingAsUserId))}
+          onSubmit={(name) => {
+            // สร้างจากปุ่มอัปโหลดในแท็บไฟล์ก็เปิดอัลบั้มใหม่ให้เลย เพิ่มรูปต่อได้ทันที
+            setFileFilter("albums");
+            setOpenAlbumId(addAlbum(topic.id, name, viewingAsUserId));
+          }}
+        />
+        <AlbumFormDialog
+          open={!!newAlbumFor}
+          onOpenChange={(v) => !v && setNewAlbumFor(null)}
+          title="สร้างอัลบั้มใหม่"
+          onSubmit={(name) => {
+            const id = addAlbum(topic.id, name, viewingAsUserId);
+            if (newAlbumFor) toggleAlbum(newAlbumFor, id);
+            setNewAlbumFor(null);
+          }}
         />
         <PinLinkDialog
           open={!!pinTarget}
@@ -881,6 +1187,7 @@ export function ReportTopicPanels({
           }}
         />
       </div>
+      </PasteDropFiles>
     );
   }
 

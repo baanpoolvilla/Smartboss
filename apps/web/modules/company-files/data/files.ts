@@ -220,7 +220,7 @@ export async function purgeFolder(folderId: string) {
   if (!canModify(session, folder.createdBy)) throw new Error("ไม่มีสิทธิ์ลบถาวรโฟลเดอร์นี้");
   const storageKeys = await collectStorageKeysUnderFolder(session.orgId, folderId);
   await prisma.companyFolder.delete({ where: { id: folderId } });
-  await Promise.all(storageKeys.map((key) => deleteStoredFile(key)));
+  await deleteOwnedStorage(session.orgId, storageKeys);
   await logActivity(session, { action: "purge", detail: `โฟลเดอร์ ${folder.name}` });
 }
 
@@ -232,6 +232,20 @@ async function collectStorageKeysUnderFolder(orgId: string, folderId: string): P
     select: { storageKey: true },
   });
   return [...nested.flat(), ...versions.map((v) => v.storageKey)];
+}
+
+/**
+ * ลบไบต์จริงหลัง purge — เฉพาะไฟล์ที่ไฟล์บริษัทอัปโหลดเอง (`/company-files/` ใน key) และไม่มีไฟล์อื่นชี้อยู่แล้ว
+ * ไฟล์ที่ "เก็บเข้าไฟล์บริษัท" จากห้องรายงานชี้ไบต์เดียวกับรูปในโพสต์/อัลบั้ม — ลบทิ้งแล้วรูปในห้องจะหายไปด้วย
+ * (31/10/2569 ตอนทำปุ่มเก็บทั้งอัลบั้มเข้าไฟล์บริษัท) · เรียกหลังลบแถวแล้ว ตัวนับจะไม่รวมแถวที่เพิ่งลบ
+ */
+async function deleteOwnedStorage(orgId: string, keys: string[]): Promise<void> {
+  for (const key of new Set(keys)) {
+    if (!key.includes("/company-files/")) continue;
+    const stillUsed = await prisma.companyFileVersion.count({ where: { storageKey: key, file: { orgId } } });
+    if (stillUsed > 0) continue;
+    await deleteStoredFile(key);
+  }
 }
 
 export interface UploadedFileInfo {
@@ -393,7 +407,7 @@ export async function purgeCompanyFile(fileId: string) {
   if (!canModify(session, file.createdBy)) throw new Error("ไม่มีสิทธิ์ลบถาวรไฟล์นี้");
   const versions = await prisma.companyFileVersion.findMany({ where: { fileId }, select: { storageKey: true } });
   await prisma.companyFile.delete({ where: { id: fileId } });
-  await Promise.all(versions.map((v) => deleteStoredFile(v.storageKey)));
+  await deleteOwnedStorage(session.orgId, versions.map((v) => v.storageKey));
   await logActivity(session, { action: "purge", detail: file.name });
 }
 
@@ -578,6 +592,85 @@ export async function listRoomFiles(topicId: string) {
     orderBy: { name: "asc" },
   });
   return { folder, files };
+}
+
+export interface RoomLibraryFile {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  /** /api/files/... — ไฟล์ที่เก็บจากโพสต์ใช้ค่าเดียวกับ url ของรูปในโพสต์ ใช้จับคู่ "รูปนี้อยู่ในไฟล์บริษัทแล้ว" */
+  storageKey: string;
+  createdAt: string;
+  createdBy: string;
+  createdByName: string | null;
+  /** null = อยู่ที่โฟลเดอร์ห้องเลย · มีค่า = โฟลเดอร์ย่อย (เช่น อัลบั้มที่กดเก็บทั้งชุด) */
+  folderName: string | null;
+}
+
+/**
+ * ไฟล์ทั้งหมดของห้องในไฟล์บริษัท รวมโฟลเดอร์ย่อย — แท็บ "ไฟล์" ของห้องใช้ขึ้นป้าย "🏢 ไฟล์บริษัท" และโชว์ไฟล์ที่อัปโหลดเอง
+ * ไม่ redirect ตอนไม่มีสิทธิ์ (ต่างจาก listRoomFiles) — คนที่ไม่มีสิทธิ์ไฟล์บริษัทยังใช้แท็บไฟล์ได้ แค่ไม่มีส่วนนี้
+ */
+export async function listRoomLibrary(topicId: string): Promise<{ canAccess: boolean; canUpload: boolean; files: RoomLibraryFile[] }> {
+  const session = await requireOrg();
+  if (!hasPermission(session, COMPANY_FILES_PERMS.access)) return { canAccess: false, canUpload: false, files: [] };
+  if (!(await canUserAccessReportTopic(session.orgId, topicId, session.userId))) return { canAccess: false, canUpload: false, files: [] };
+  const canUpload = hasPermission(session, COMPANY_FILES_PERMS.upload);
+  const room = await prisma.companyFolder.findFirst({ where: { orgId: session.orgId, roomId: topicId } });
+  if (!room) return { canAccess: true, canUpload, files: [] };
+  const folderIds = await collectSubtreeFolderIds(session.orgId, room.id);
+  const folders = await prisma.companyFolder.findMany({ where: { orgId: session.orgId, id: { in: folderIds }, deletedAt: null }, select: { id: true, name: true } });
+  const nameOf = new Map(folders.map((f) => [f.id, f.name]));
+  const rows = await prisma.companyFile.findMany({
+    where: { orgId: session.orgId, folderId: { in: folders.map((f) => f.id) }, deletedAt: null },
+    orderBy: { createdAt: "desc" },
+  });
+  const users = await prisma.user.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.createdBy))] } }, select: { id: true, name: true } });
+  const userName = new Map(users.map((u) => [u.id, u.name]));
+  return {
+    canAccess: true,
+    canUpload,
+    files: rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      mimeType: r.mimeType,
+      size: r.size,
+      storageKey: r.storageKey,
+      createdAt: r.createdAt.toISOString(),
+      createdBy: r.createdBy,
+      createdByName: userName.get(r.createdBy) ?? null,
+      folderName: r.folderId === room.id ? null : (nameOf.get(r.folderId ?? "") ?? null),
+    })),
+  };
+}
+
+/**
+ * เก็บทั้งอัลบั้มของห้องเข้าไฟล์บริษัท (ผู้ใช้ 31/10/2569) — โฟลเดอร์ย่อยชื่อเดียวกับอัลบั้มใต้โฟลเดอร์ห้อง
+ * ชี้ไบต์เดิม ไม่อัปโหลดซ้ำ · กดซ้ำได้: ข้ามไฟล์ที่มีในโฟลเดอร์นั้นแล้ว (เทียบ storageKey) เพิ่มแค่รูปใหม่
+ */
+export async function saveItemsToRoomSubfolder(
+  topicId: string,
+  topicName: string,
+  folderName: string,
+  items: UploadedFileInfo[]
+): Promise<{ folderId: string; added: number; skipped: number }> {
+  const room = await getOrCreateRoomFolder(topicId, topicName);
+  const session = await requireUpload();
+  const name = folderName.trim() || "อัลบั้ม";
+  const folder =
+    (await prisma.companyFolder.findFirst({ where: { orgId: session.orgId, parentId: room.id, name, deletedAt: null } })) ??
+    (await prisma.companyFolder.create({ data: { orgId: session.orgId, parentId: room.id, name, createdBy: session.userId } }));
+  const existing = await prisma.companyFile.findMany({ where: { orgId: session.orgId, folderId: folder.id, deletedAt: null }, select: { storageKey: true } });
+  const have = new Set(existing.map((f) => f.storageKey));
+  let added = 0;
+  for (const item of items) {
+    if (!item.url || have.has(item.url)) continue;
+    await createFile(folder.id, item);
+    have.add(item.url);
+    added += 1;
+  }
+  return { folderId: folder.id, added, skipped: items.length - added };
 }
 
 /** โฟลเดอร์ห้องทั้งหมดที่ผู้ใช้ปัจจุบันเห็นได้ — สำหรับ section "ห้องรายงาน"

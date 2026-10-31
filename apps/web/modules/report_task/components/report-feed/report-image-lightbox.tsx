@@ -35,6 +35,7 @@ export function ReportImageLightbox({
   onClose,
   imageMeta,
   onEditImage,
+  infoPanel,
 }: {
   images: ReportPostImage[];
   index: number;
@@ -49,6 +50,9 @@ export function ReportImageLightbox({
   /** ปุ่มดินสอ: วาด/เขียนบนรูปนี้ แล้วส่งไฟล์ที่วาดแล้วกลับไปให้ผู้เรียกแนบเข้าช่องพิมพ์ของห้อง/งานนั้น
    * ไม่ใส่ = วาดเสร็จแล้วดาวน์โหลดลงเครื่องแทน (หน้าที่ไม่มีช่องพิมพ์ให้แนบ) */
   onEditImage?: (file: File) => void;
+  /** กล่องข้อมูลมุมซ้ายล่างต่อรูป — แท็บ "ไฟล์" ของห้องใช้บอก "เก็บอยู่ที่" (อัลบั้ม/ไฟล์บริษัท/โพสต์ต้นทาง)
+   * พร้อมปุ่มลัด (31/10/2569) · ไม่ใส่ = ไม่มีกล่องนี้ เหมือนเดิม */
+  infoPanel?: (image: ReportPostImage, index: number) => React.ReactNode;
 }) {
   const hasMultiple = images.length > 1;
   // กรอบนอกสุด (พื้นดำ) — ระบบปัดใช้จางพื้นตอนลากเพื่อปิด · มือถือแตะรูป = ซ่อน/โชว์ปุ่ม (แบบแอปรูป/Discord)
@@ -672,6 +676,15 @@ export function ReportImageLightbox({
           >
             <ChevronRight className="h-6 w-6" />
           </button>
+        )}
+
+        {infoPanel && images[index] && (
+          <div
+            className={`absolute left-4 z-10 w-[min(22rem,calc(100%-2rem))] cursor-default rounded-2xl bg-black/70 p-3 text-white ring-1 ring-white/25 backdrop-blur-sm transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none ${hasMultiple ? "bottom-24" : "bottom-4"}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {infoPanel(images[index], index)}
+          </div>
         )}
 
         {hasMultiple && (

@@ -73,6 +73,15 @@ export interface ReportAlbum {
   name: string;
   createdAt: string;
   createdBy: string;
+  /** รูป/คลิปที่อยู่ในอัลบั้มโดยไม่ได้มาจากโพสต์ — อัปโหลดเข้าอัลบั้มตรง หรือเลือกไฟล์จากไฟล์บริษัทของห้อง
+   * (ผู้ใช้ 31/10/2569 "จะเพิ่มรูปในอัลบั้มแล้วเพิ่มไม่ได้") · รูปจากโพสต์ยังผูกด้วย ReportPostImage.albumId เหมือนเดิม
+   * ไม่มี = อัลบั้มเก่า ไม่มีรูปแบบนี้ · ลบอัลบั้ม = รายการพวกนี้หายไปด้วย (ไฟล์จริงยังอยู่ที่ /api/files) */
+  items?: ReportAlbumItem[];
+}
+
+export interface ReportAlbumItem extends ReportPostImage {
+  addedBy: string;
+  addedAt: string;
 }
 
 /**
@@ -623,6 +632,9 @@ interface ReportFeedStore {
    * just fall back to "not in any album" (see ReportPostImage.albumId) —
    * so nothing about the posts themselves needs to change here. */
   removeAlbum: (id: string) => void;
+  /** เพิ่มรูปเข้าอัลบั้มตรง (ไม่ผ่านโพสต์) — url ซ้ำกับที่มีในอัลบั้มแล้วข้าม */
+  addAlbumItems: (albumId: string, items: ReportAlbumItem[]) => void;
+  removeAlbumItem: (albumId: string, itemId: string) => void;
   /** Keeps one link for the room and returns its id. Pinning the same URL
    * twice in a room updates the existing pin's title rather than stacking a
    * duplicate next to it. */
@@ -1299,6 +1311,19 @@ export const useReportFeedStore = create<ReportFeedStore>()(
       removeAlbum: (id) =>
         set((s) => ({
           albums: s.albums.filter((a) => a.id !== id),
+        })),
+      addAlbumItems: (albumId, items) =>
+        set((s) => ({
+          albums: s.albums.map((a) => {
+            if (a.id !== albumId) return a;
+            const have = new Set((a.items ?? []).map((i) => i.url ?? i.dataUrl));
+            const fresh = items.filter((i) => !have.has(i.url ?? i.dataUrl));
+            return fresh.length ? { ...a, items: [...(a.items ?? []), ...fresh] } : a;
+          }),
+        })),
+      removeAlbumItem: (albumId, itemId) =>
+        set((s) => ({
+          albums: s.albums.map((a) => (a.id === albumId ? { ...a, items: (a.items ?? []).filter((i) => i.id !== itemId) } : a)),
         })),
       pinLink: (topicId, url, title, userId) => {
         // The same URL posted twice in a room is one link worth keeping, not
