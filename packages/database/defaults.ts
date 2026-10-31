@@ -262,7 +262,7 @@ const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
     "hr.access", "hr.employee.view", "hr.employee.manage",
     "maintenance.access",
     "maintenance.workorder.view", "maintenance.workorder.manage", "maintenance.workorder.complete",
-    "maintenance.property.view", "maintenance.property.manage", "maintenance.property.archive",
+    "maintenance.property.view", "maintenance.property.manage",
     "maintenance.asset.view", "maintenance.asset.manage",
     "maintenance.pm.view", "maintenance.pm.manage",
     "maintenance.expense.view", "maintenance.expense.manage",
@@ -294,7 +294,7 @@ const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
     ...DAILY_WORKER_PERMS,
     // ขอเบิกล่วงหน้า/ลง OT ให้คนงานที่ดูแล
     "requests.file_others",
-    "maintenance.workorder.manage", "maintenance.property.archive",
+    "maintenance.workorder.manage",
     "maintenance.asset.manage", "maintenance.pm.manage",
     "maintenance.po.view", "maintenance.expense.view",
   ],
