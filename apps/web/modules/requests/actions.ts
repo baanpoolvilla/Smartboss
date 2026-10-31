@@ -10,7 +10,7 @@ import { nextRequestCode } from "@/lib/document-code";
 import { OT_KEY, updateStoreList } from "@/modules/daily_worker/lib/data";
 import { insertAudit as insertDwAudit, logDw } from "@/modules/daily_worker/lib/db";
 import type { OtEntry } from "@/modules/daily_worker/lib/types";
-import { REQ_PERMS } from "./permissions";
+import { REQ_PERMS, VENDOR_PERMS } from "./permissions";
 import {
   approverLevelFor,
   canDecide,
@@ -1338,7 +1338,7 @@ export async function saveVendorAction(input: VendorInput): Promise<Result<{ id:
   try {
     const session = await guard();
     const orgId = session.orgId;
-    if (!hasPermission(session, REQ_PERMS.fileOthers) && !hasPermission(session, REQ_PERMS.settings)) return { error: "ไม่มีสิทธิ์แก้ทะเบียนช่างภายนอก" };
+    if (!VENDOR_PERMS.some((p) => hasPermission(session, p))) return { error: "ไม่มีสิทธิ์แก้ทะเบียนช่างภายนอก" };
     const name = input.name.trim().slice(0, 120);
     if (!name) return { error: "ใส่ชื่อช่าง/ร้าน" };
     const taxId = input.taxId.replace(/\D/g, "");

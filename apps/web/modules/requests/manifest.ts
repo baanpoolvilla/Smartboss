@@ -1,6 +1,6 @@
 import type { ModuleManifest } from "@/module-registry";
 import { WORKER_ROLE_CODE } from "@/modules/daily_worker/permissions";
-import { REQ_PERMS } from "./permissions";
+import { PETTY_PAGE_PERMS, REQ_PERMS, VENDOR_PERMS } from "./permissions";
 
 /** Module.code — ไม่มีแถว Module ใน DB · เปิดตามโมดูลบุคคลของบริษัท (requiresModule) */
 export const REQUESTS_CODE = "requests";
@@ -22,9 +22,9 @@ export const requestsManifest: ModuleManifest = {
     { label: "รายการคำขอ", path: "/requests", permission: REQ_PERMS.access, icon: "ClipboardList", hideForRoles: [WORKER_ROLE_CODE] },
     { label: "ยื่นคำขอ", path: "/requests/new", permission: REQ_PERMS.access, icon: "PenLine", hideForRoles: [WORKER_ROLE_CODE] },
     { label: "ส่งเข้าเงินเดือน", path: "/requests/payroll", permission: REQ_PERMS.pay, icon: "ScrollText" },
-    { label: "เงินสดย่อย", path: "/requests/petty-cash", permission: REQ_PERMS.pettyCash, icon: "Wallet" },
+    { label: "เงินสดย่อย", path: "/requests/petty-cash", permission: REQ_PERMS.pettyCash, anyPermission: PETTY_PAGE_PERMS, icon: "Wallet" },
     { label: "รายงาน", path: "/requests/report", permission: REQ_PERMS.viewAll, icon: "ChartColumn" },
-    { label: "ช่าง/ร้านภายนอก", path: "/requests/vendors", permission: REQ_PERMS.fileOthers, icon: "Contact" },
+    { label: "ช่าง/ร้านภายนอก", path: "/requests/vendors", permission: REQ_PERMS.pettyCash, anyPermission: VENDOR_PERMS, icon: "Contact" },
     { label: "ตั้งค่า", path: "/requests/settings", permission: REQ_PERMS.settings, icon: "Settings" },
   ],
   permissions: Object.values(REQ_PERMS),

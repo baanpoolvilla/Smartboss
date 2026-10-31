@@ -2,7 +2,7 @@ import "server-only";
 import { redirect } from "next/navigation";
 import { hasPermission, requireOrg } from "@smartboss/auth";
 
-import { REQ_PERMS } from "../permissions";
+import { REQ_PERMS, VENDOR_PERMS } from "../permissions";
 import type { Viewer } from "./data";
 import type { RequestView } from "./db";
 import { statusInfo } from "./types";
@@ -23,6 +23,8 @@ export async function requestsPage(extra?: string) {
   };
   return { session, viewer };
 }
+
+export const canManageVendors = (session: Parameters<typeof hasPermission>[0]) => VENDOR_PERMS.some((p) => hasPermission(session, p));
 
 /** สิทธิ์เงินสดย่อยรายข้อ — ไม่อยู่ใน Viewer เพราะไม่เกี่ยวกับการเห็นใบเบิก */
 export function pettyAccess(session: Parameters<typeof hasPermission>[0]) {

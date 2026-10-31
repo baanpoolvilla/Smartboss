@@ -3,7 +3,7 @@ import { prisma } from "@smartboss/database";
 
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { listLinkableWorkOrders, listPeople, listProperties, loadSettings } from "@/modules/requests/lib/data";
-import { requestsPage } from "@/modules/requests/lib/page";
+import { canManageVendors, requestsPage } from "@/modules/requests/lib/page";
 import { loadRequests, toVendor, withRequestsTenant } from "@/modules/requests/lib/db";
 import { RequestForm, type EditInitial } from "@/modules/requests/components/request-form";
 import { bangkokToday } from "@/modules/requests/lib/types";
@@ -70,6 +70,7 @@ export default async function EditRequestPage({ params }: { params: Promise<{ id
         initialKind={r.kind}
         me={{ userId: session.userId, name: me?.name ?? "" }}
         canFileOthers={viewer.canFileOthers}
+        canManageVendors={canManageVendors(session)}
         people={people.map((p) => ({ userId: p.userId, name: p.name, email: p.email, roleLabel: roleLabel(p.roles), isWorker: p.isWorker, departmentName: p.departmentName }))}
         properties={properties}
         workOrders={workOrders}

@@ -2,7 +2,7 @@ import { prisma } from "@smartboss/database";
 
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { listLinkableWorkOrders, listPeople, listProperties, loadSettings } from "@/modules/requests/lib/data";
-import { requestsPage } from "@/modules/requests/lib/page";
+import { canManageVendors, requestsPage } from "@/modules/requests/lib/page";
 import { withRequestsTenant, toVendor } from "@/modules/requests/lib/db";
 import { RequestForm } from "@/modules/requests/components/request-form";
 import { usesSalaryModule } from "@/modules/requests/lib/pay-privacy";
@@ -54,6 +54,7 @@ export default async function NewRequestPage({ searchParams }: { searchParams: P
         initialKind={initialKind}
         me={{ userId: session.userId, name: me?.name ?? "" }}
         canFileOthers={viewer.canFileOthers}
+        canManageVendors={canManageVendors(session)}
         people={people.map((p) => ({ userId: p.userId, name: p.name, email: p.email, roleLabel: roleLabel(p.roles), isWorker: p.isWorker, departmentName: p.departmentName }))}
         properties={properties}
         workOrders={workOrders}

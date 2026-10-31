@@ -71,6 +71,7 @@ export function RequestForm({
   initialKind,
   me,
   canFileOthers,
+  canManageVendors = false,
   people,
   properties,
   workOrders,
@@ -83,6 +84,8 @@ export function RequestForm({
   initialKind: RequestKind | null;
   me: { userId: string; name: string };
   canFileOthers: boolean;
+  /** เห็นลิงก์ "+ เพิ่มเข้าทะเบียน" — เฉพาะคนที่เข้าหน้าทะเบียนช่างได้ (VENDOR_PERMS) */
+  canManageVendors?: boolean;
   people: FormPerson[];
   properties: { id: string; name: string }[];
   workOrders: { id: string; code: string; title: string; propertyId: string }[];
@@ -353,9 +356,11 @@ export function RequestForm({
               {!vendorId && (
                 <input className={field} placeholder="ชื่อช่าง/ร้าน (ยังไม่อยู่ในทะเบียน)" value={vendorName} onChange={(e) => setVendorName(e.target.value)} aria-label="ชื่อช่างหรือร้าน" />
               )}
-              <Link href="/requests/vendors" className="self-start text-xs font-medium text-(--app-strong) underline-offset-2 hover:underline">
-                + เพิ่มเข้าทะเบียน (เก็บเลขภาษี บัญชีธนาคาร ไว้ใช้ครั้งต่อไป)
-              </Link>
+              {canManageVendors && (
+                <Link href="/requests/vendors" className="self-start text-xs font-medium text-(--app-strong) underline-offset-2 hover:underline">
+                  + เพิ่มเข้าทะเบียน (เก็บเลขภาษี บัญชีธนาคาร ไว้ใช้ครั้งต่อไป)
+                </Link>
+              )}
             </div>
           ) : selfKind ? (
             <div className="flex flex-col gap-2">

@@ -38,6 +38,15 @@ export const REQ_PERMS = {
   settings: "requests.settings",
 } as const;
 
+/** เห็นเมนู/หน้าเงินสดย่อย — คนถือเงิน หรือคนที่ได้สิทธิ์เงินสดย่อยข้อใดข้อหนึ่ง */
+export const PETTY_PAGE_PERMS: string[] = [REQ_PERMS.pettyCash, REQ_PERMS.pettyView, REQ_PERMS.pettyTopup, REQ_PERMS.pettyAdjust];
+
+/**
+ * ทะเบียนช่าง/ร้านภายนอก — คนถือเงินสดย่อย (จ่ายช่างเองได้) + HR + CEO (ผู้ใช้ 31/10/2569)
+ * เดิมผูกกับ "ลงให้คนอื่น" ⇒ ผู้ดูแลบ้าน/หัวหน้างานก็เห็น · ยื่นค่าช่างยังพิมพ์ชื่อช่างที่ยังไม่อยู่ในทะเบียนได้
+ */
+export const VENDOR_PERMS: string[] = [REQ_PERMS.pettyCash, REQ_PERMS.approve, REQ_PERMS.approveCeo, REQ_PERMS.pay, REQ_PERMS.settings];
+
 export const ALL_REQ_PERMS: string[] = Object.values(REQ_PERMS);
 
 export const REQ_PERM_LABELS: Record<string, string> = {

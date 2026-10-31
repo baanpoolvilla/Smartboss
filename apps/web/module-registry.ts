@@ -18,6 +18,8 @@ export interface ModuleMenuItem {
   label: string;
   path: string;
   permission: string; // เมนูแสดงเมื่อ user มี permission นี้
+  /** มีสิทธิ์ข้อใดข้อหนึ่งในนี้ก็เห็นเมนู (นอกจาก permission ข้างบน) */
+  anyPermission?: string[];
   icon?: string; // ชื่อ icon จาก lucide-react
   /**
    * Discord-style unread pill rendered at the end of this menu's row in
@@ -142,7 +144,7 @@ export function getVisibleModules({
           !menu.hideForRoles?.some((r) => roles.includes(r)) &&
           (!menu.onlyForRoles || menu.onlyForRoles.some((r) => roles.includes(r))) &&
           ((isSupportStaff && menu.allowSupportStaff) ||
-            resolvePermission({ permissions, roles, permission: menu.permission }))
+            [menu.permission, ...(menu.anyPermission ?? [])].some((permission) => resolvePermission({ permissions, roles, permission })))
       ),
     }))
     .filter((m) => m.menus.length > 0);

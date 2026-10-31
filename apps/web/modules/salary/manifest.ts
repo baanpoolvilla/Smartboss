@@ -1,6 +1,6 @@
 import type { ModuleManifest, ModuleMenuItem } from "@/module-registry";
 import { WORKER_ROLE_CODE } from "@/modules/daily_worker/permissions";
-import { REQ_PERMS } from "@/modules/requests/permissions";
+import { PETTY_PAGE_PERMS, REQ_PERMS, VENDOR_PERMS } from "@/modules/requests/permissions";
 import { SALARY_EDIT_MENU, SALARY_PERMS } from "./permissions";
 
 /** Module.code — ไม่มีแถว Module ใน DB · เปิดตามโมดูลบุคคลของบริษัท (requiresModule) */
@@ -28,9 +28,9 @@ export const MONEY_MENUS: ModuleMenuItem[] = [
 
     { group: "การเงิน · คำขอเงิน", label: "OT & เบิกจ่าย", path: "/requests", permission: REQ_PERMS.access, icon: "ClipboardList", hideForRoles: [WORKER_ROLE_CODE] },
     { group: "การเงิน · คำขอเงิน", label: "ยื่นคำขอ", path: "/requests/new", permission: REQ_PERMS.access, icon: "PenLine", hideForRoles: [WORKER_ROLE_CODE] },
-    { group: "การเงิน · คำขอเงิน", label: "เงินสดย่อย", path: "/requests/petty-cash", permission: REQ_PERMS.pettyCash, icon: "Wallet", hideForRoles: [WORKER_ROLE_CODE] },
+    { group: "การเงิน · คำขอเงิน", label: "เงินสดย่อย", path: "/requests/petty-cash", permission: REQ_PERMS.pettyCash, anyPermission: PETTY_PAGE_PERMS, icon: "Wallet", hideForRoles: [WORKER_ROLE_CODE] },
     { group: "การเงิน · คำขอเงิน", label: "ส่งเข้าเงินเดือน", path: "/requests/payroll", permission: REQ_PERMS.pay, icon: "ScrollText", hideForRoles: [WORKER_ROLE_CODE] },
-    { group: "การเงิน · คำขอเงิน", label: "ช่าง/ร้านภายนอก", path: "/requests/vendors", permission: REQ_PERMS.fileOthers, icon: "Contact", hideForRoles: [WORKER_ROLE_CODE] },
+    { group: "การเงิน · คำขอเงิน", label: "ช่าง/ร้านภายนอก", path: "/requests/vendors", permission: REQ_PERMS.pettyCash, anyPermission: VENDOR_PERMS, icon: "Contact", hideForRoles: [WORKER_ROLE_CODE] },
 
     { group: "การเงิน · ข้อมูล", label: "เงินเดือนรายคน", path: "/salary/employees", permission: SALARY_EDIT_MENU, icon: "Users", hideForRoles: [WORKER_ROLE_CODE] },
     { group: "การเงิน · ข้อมูล", label: "รายงานเบิกจ่าย", path: "/requests/report", permission: REQ_PERMS.viewAll, icon: "ChartColumn", hideForRoles: [WORKER_ROLE_CODE] },

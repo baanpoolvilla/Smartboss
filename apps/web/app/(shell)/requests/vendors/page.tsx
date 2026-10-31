@@ -1,9 +1,9 @@
 import Link from "next/link";
 
 import { AppScaffold } from "@/components/module/app-scaffold";
-import { REQ_PERMS } from "@/modules/requests/permissions";
+import { redirect } from "next/navigation";
 import { loadRequests, readSettings, toVendor, withRequestsTenant } from "@/modules/requests/lib/db";
-import { requestsPage, statusOf } from "@/modules/requests/lib/page";
+import { canManageVendors, requestsPage, statusOf } from "@/modules/requests/lib/page";
 import { VendorEditToggle, VendorForm } from "@/modules/requests/components/vendor-form";
 import { StatusChip } from "@/modules/requests/components/ui";
 import { bangkokToday, baht, round2, thaiDate } from "@/modules/requests/lib/types";
@@ -15,7 +15,8 @@ export const dynamic = "force-dynamic";
  * ยอดปีนี้แยก ก่อนหัก / หัก ณ ที่จ่าย / จ่ายจริง ให้เห็นชัดว่าหักอะไรไปเท่าไหร่
  */
 export default async function VendorsPage() {
-  const { session } = await requestsPage(REQ_PERMS.fileOthers);
+  const { session } = await requestsPage();
+  if (!canManageVendors(session)) redirect("/requests");
   const orgId = session.orgId;
   const year = bangkokToday().slice(0, 4);
   const { vendors, jobs, settings } = await withRequestsTenant(orgId, async (tx) => ({
