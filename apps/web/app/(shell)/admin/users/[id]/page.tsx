@@ -87,7 +87,7 @@ export default async function AdminUserDetailPage({
   const isSelf = user.id === session.userId;
 
   return (
-    <AppScaffold title={user.name} width="max-w-2xl" backHref="/admin/users">
+    <AppScaffold title={user.name} width="max-w-none" backHref="/admin/users">
       <div className="flex flex-col gap-4">
         {/* ─── ข้อมูลพื้นฐาน ─── */}
         <SectionCard title="ข้อมูลผู้ใช้">

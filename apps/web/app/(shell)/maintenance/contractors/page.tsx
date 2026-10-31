@@ -57,7 +57,7 @@ export default async function ContractorsPage({
   return (
     <AppScaffold
       title="รายชื่อ Contact"
-      width="max-w-5xl"
+      width="max-w-none"
       fab={
         canManage ? (
           <Fab href="/maintenance/contractors?add=1" label="เพิ่ม Contact" />

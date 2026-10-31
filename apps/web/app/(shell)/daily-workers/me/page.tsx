@@ -69,7 +69,7 @@ export default async function MyWeekPage({ searchParams }: { searchParams: Promi
   const mc = monthMine ? monthCounts(monthMine.worker.cells) : null;
 
   return (
-    <AppScaffold title={t("menuMyWeek")} width="max-w-lg">
+    <AppScaffold title={t("menuMyWeek")} width="max-w-none">
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-2">
           <Link href={`?week=${addDays(start, -7)}`} className="rounded-full border border-(--line) bg-(--bg) p-2.5" aria-label={t("prevWeek")}>

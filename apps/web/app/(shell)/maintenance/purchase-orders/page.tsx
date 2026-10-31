@@ -141,7 +141,7 @@ export default async function PurchaseOrdersPage({
   return (
     <AppScaffold
       title="สั่งอุปกรณ์ (PR/PO)"
-      width="max-w-[1600px]"
+      width="max-w-none"
       actions={
         <AppBarLink
           href="/maintenance/purchase-orders/returns/new"

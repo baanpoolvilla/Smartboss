@@ -20,7 +20,7 @@ export default async function NewPropertyPage() {
   return (
     <AppScaffold
       title="เพิ่มบ้านใหม่"
-      width="max-w-2xl"
+      width="max-w-none"
       backHref="/maintenance/properties"
     >
       <PropertyForm

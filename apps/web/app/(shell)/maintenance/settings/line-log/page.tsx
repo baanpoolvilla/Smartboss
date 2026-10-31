@@ -21,7 +21,7 @@ export default async function LineLogPage() {
   return (
     <AppScaffold
       title="Log การส่ง LINE"
-      width="max-w-3xl"
+      width="max-w-none"
       backHref="/maintenance/settings"
     >
 

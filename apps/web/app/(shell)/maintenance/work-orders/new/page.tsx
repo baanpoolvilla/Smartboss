@@ -91,7 +91,7 @@ export default async function NewWorkOrderPage({
   return (
     <AppScaffold
       title="สร้างใบงานใหม่"
-      width="max-w-2xl"
+      width="max-w-none"
       backHref="/maintenance/work-orders"
     >
       <Card className="p-5">

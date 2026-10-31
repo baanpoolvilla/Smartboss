@@ -30,7 +30,7 @@ export default async function NewExpensePage({
     return (
       <AppScaffold
         title="เพิ่มค่าใช้จ่าย"
-        width="max-w-2xl"
+        width="max-w-none"
         backHref={returnTo}
       >
         <Card className="p-6 text-center text-sm text-(--ink-soft)">
@@ -66,7 +66,7 @@ export default async function NewExpensePage({
   return (
     <AppScaffold
       title="เพิ่มค่าใช้จ่าย"
-      width="max-w-2xl"
+      width="max-w-none"
       backHref={returnTo}
     >
       <ExpenseForm

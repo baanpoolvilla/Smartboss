@@ -20,7 +20,7 @@ export default async function HrClockPage() {
     <HrPage
       title="ลงเวลา"
       permission={HR_PERMS.access}
-      width="max-w-lg"
+      width="max-w-none"
       load={async () => {
         const me = await prisma.user.findUnique({ where: { id: session.userId }, select: { name: true } });
         return <Today userName={me?.name ?? ""} showFriendHint={false} />;

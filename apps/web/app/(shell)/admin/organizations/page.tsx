@@ -37,7 +37,7 @@ export default async function OrganizationsPage({
   return (
     <AppScaffold
       title="บริษัททั้งหมด"
-      width="max-w-4xl"
+      width="max-w-none"
       backHref="/admin"
       actions={
         <Link href="/admin/organizations/new">

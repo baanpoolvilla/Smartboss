@@ -38,7 +38,7 @@ export default async function CompanyFilesPage({
   const searchResults = query ? await searchFiles(query) : null;
 
   return (
-    <AppScaffold title="ไฟล์บริษัท" width="max-w-5xl">
+    <AppScaffold title="ไฟล์บริษัท" width="max-w-none">
       <div className="flex flex-col gap-6">
         <form action="/company-files" method="get" className="flex items-center gap-2">
           <input

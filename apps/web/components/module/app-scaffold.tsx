@@ -16,7 +16,7 @@ export function AppScaffold({
   leading,
   actions,
   fab,
-  width = "max-w-4xl",
+  width = "max-w-none",
   fill = false,
   fillMaxWidth = false,
   hideDefaultActions = false,

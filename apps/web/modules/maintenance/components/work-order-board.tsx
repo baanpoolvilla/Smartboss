@@ -245,7 +245,7 @@ export function WorkOrderFilteredList({
      * ⇒ เดิมรายการยาว ๆ ถูกตัดที่ขอบจอแล้วเลื่อนไม่ได้ ทั้งบนมือถือและจอใหญ่
      */
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto flex max-w-4xl flex-col gap-3 p-4 sm:p-5">
+      <div className="mx-auto flex flex-col gap-3 p-4 sm:p-5">
         {orders.map((wo) => (
           <OrderCard
             key={wo.id}

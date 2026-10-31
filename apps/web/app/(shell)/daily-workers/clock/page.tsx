@@ -21,7 +21,7 @@ export default async function DailyWorkerClockPage() {
     <HrPage
       title={tr(lang, "menuClock")}
       permission={HR_PERMS.access}
-      width="max-w-lg"
+      width="max-w-none"
       load={async () => {
         const me = await prisma.user.findUnique({ where: { id: session.userId }, select: { name: true } });
         return (

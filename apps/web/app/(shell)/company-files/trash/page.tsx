@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function CompanyFilesTrashPage() {
   const items = await listTrash();
   return (
-    <AppScaffold title="ถังขยะ" width="max-w-3xl" backHref="/company-files">
+    <AppScaffold title="ถังขยะ" width="max-w-none" backHref="/company-files">
       <p className="text-xs text-(--ink-soft) mb-3">
         ไฟล์และโฟลเดอร์ที่ลบจะมาพักที่นี่ก่อน — กู้คืนได้ หรือกดลบถาวรเพื่อล้างทิ้ง (กู้คืนไม่ได้อีก)
       </p>

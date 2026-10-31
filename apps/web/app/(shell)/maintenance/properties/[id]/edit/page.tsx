@@ -30,7 +30,7 @@ export default async function EditPropertyPage({
   return (
     <AppScaffold
       title="แก้ไขบ้าน"
-      width="max-w-2xl"
+      width="max-w-none"
       backHref={`/maintenance/properties/${id}`}
     >
       <PropertyForm

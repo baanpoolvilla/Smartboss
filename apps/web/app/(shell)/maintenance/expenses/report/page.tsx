@@ -53,7 +53,7 @@ export default async function ExpenseReportPage({
   return (
     <AppScaffold
       title="รายงานค่าใช้จ่ายรายเดือน"
-      width="max-w-4xl"
+      width="max-w-none"
       backHref="/maintenance/expenses"
     >
 

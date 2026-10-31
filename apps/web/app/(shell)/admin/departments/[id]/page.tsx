@@ -44,7 +44,7 @@ export default async function DepartmentDetailPage({
       : null;
 
   return (
-    <AppScaffold title={department.name} width="max-w-3xl" backHref="/admin/departments">
+    <AppScaffold title={department.name} width="max-w-none" backHref="/admin/departments">
       <div className="flex flex-col gap-4">
         <SectionCard title="ข้อมูลแผนก">
           {canEdit ? (

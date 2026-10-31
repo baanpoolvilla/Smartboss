@@ -64,7 +64,7 @@ export default async function PropertyDetailPage({
   return (
     <AppScaffold
       title={property.name}
-      width="max-w-3xl"
+      width="max-w-none"
       backHref="/maintenance/properties"
     >
       <header className="mb-4 flex items-start justify-end gap-3">

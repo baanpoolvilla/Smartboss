@@ -32,7 +32,7 @@ export default async function NewPmPage({
   );
 
   return (
-    <AppScaffold title="เพิ่มแผน PM" width="max-w-2xl" backHref="/maintenance/pm">
+    <AppScaffold title="เพิ่มแผน PM" width="max-w-none" backHref="/maintenance/pm">
       <PmForm
         action={createPmAction}
         properties={properties.map((p) => ({ id: p.id, label: p.name }))}

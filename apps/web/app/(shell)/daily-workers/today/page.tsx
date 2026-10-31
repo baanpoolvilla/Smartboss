@@ -66,7 +66,7 @@ export default async function DailyWorkersTodayPage({ searchParams }: { searchPa
   const count = (s: string) => data?.rows.filter((r) => r.status === s).length ?? 0;
 
   return (
-    <AppScaffold title="ลงเวลาคนงาน" width="max-w-3xl">
+    <AppScaffold title="ลงเวลาคนงาน" width="max-w-none">
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-2">
           <Link href={`?date=${shiftDate(date, -1)}`} className="rounded-full border border-(--line) bg-(--bg) p-2 hover:bg-(--bg-soft)" aria-label="วันก่อน">

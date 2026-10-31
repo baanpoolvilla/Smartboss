@@ -20,7 +20,7 @@ export default async function PaySettingsPage() {
   });
 
   return (
-    <AppScaffold title="จ่ายเงินคนงาน" width="max-w-5xl">
+    <AppScaffold title="จ่ายเงินคนงาน" width="max-w-none">
       <div className="flex flex-col gap-4">
         <PayTabs active="settings" month={today.slice(0, 7)} canSetPay />
         {!data ? (

@@ -54,7 +54,7 @@ export default async function DailyWorkerPayPage({ searchParams }: { searchParam
 
 
   return (
-    <AppScaffold title="จ่ายเงินคนงาน" width="max-w-5xl">
+    <AppScaffold title="จ่ายเงินคนงาน" width="max-w-none">
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-2">
           <PayTabs active={monthView ? "month" : "day"} month={month} date={monthView ? undefined : date} canSetPay={canAdvance} />

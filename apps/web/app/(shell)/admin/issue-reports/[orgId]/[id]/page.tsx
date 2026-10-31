@@ -77,7 +77,7 @@ export default async function AdminIssueTicketDetailPage({
   const pageLink = orgId === session.orgId ? source.recordPath : null;
 
   return (
-    <AppScaffold title={`ตั๋ว ${ticket.code}`} width="max-w-4xl" backHref="/admin/issue-reports">
+    <AppScaffold title={`ตั๋ว ${ticket.code}`} width="max-w-none" backHref="/admin/issue-reports">
       <MarkReadOnView referenceId={`${orgId}:${id}`} />
       <IssueTicketDetailClient
         orgId={orgId}

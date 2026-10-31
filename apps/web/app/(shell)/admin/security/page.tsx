@@ -32,7 +32,7 @@ export default async function SecuritySettingsPage() {
   const s = await loadSecuritySettings(session.orgId);
 
   return (
-    <AppScaffold title="ความปลอดภัยการเข้าสู่ระบบ" width="max-w-3xl" backHref="/admin">
+    <AppScaffold title="ความปลอดภัยการเข้าสู่ระบบ" width="max-w-none" backHref="/admin">
       <form action={saveSecuritySettingsAction} className="flex flex-col gap-4">
         <SectionCard
           title="ล็อกบัญชีเมื่อกรอกรหัสผิด"

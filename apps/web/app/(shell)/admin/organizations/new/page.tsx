@@ -28,7 +28,7 @@ export default async function NewOrganizationPage() {
   return (
     <AppScaffold
       title="เปิดบริษัทใหม่"
-      width="max-w-2xl"
+      width="max-w-none"
       backHref="/admin/organizations"
     >
       <form action={createOrganizationAction} className="flex flex-col gap-4">

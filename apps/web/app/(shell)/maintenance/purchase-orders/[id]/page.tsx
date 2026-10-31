@@ -152,7 +152,7 @@ export default async function PoDetailPage({
   return (
     <AppScaffold
       title="รายละเอียด PR/PO"
-      width="max-w-3xl"
+      width="max-w-none"
       backHref={backHref}
     >
       <MarkReadOnView referenceId={po.id} />

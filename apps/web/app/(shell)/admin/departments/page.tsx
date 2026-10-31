@@ -18,7 +18,7 @@ export default async function AdminDepartmentsPage() {
   return (
     <AppScaffold
       title="แผนก"
-      width="max-w-3xl"
+      width="max-w-none"
       fab={canManage ? <Fab href="/admin/departments/new" label="สร้างแผนก" /> : null}
     >
       <p className="mb-4 text-sm text-(--ink-soft)">

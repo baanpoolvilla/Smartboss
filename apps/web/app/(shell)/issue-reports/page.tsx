@@ -148,7 +148,7 @@ export default function IssueReportsPage() {
   }, [visibleTickets]);
 
   return (
-    <div className="mx-auto flex w-full max-w-[860px] flex-col gap-5 py-2">
+    <div className="mx-auto flex w-full flex-col gap-5 py-2">
       {/* Read-only company-wide oversight note — makes it obvious this list
           isn't just "your own reports" for whoever has it (CEO/owner, or
           whoever they delegated the issueDesk section to). */}

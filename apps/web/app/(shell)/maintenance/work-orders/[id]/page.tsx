@@ -215,7 +215,7 @@ export default async function WorkOrderDetailPage({
   return (
     <AppScaffold
       title="รายละเอียดใบงาน"
-      width="max-w-3xl"
+      width="max-w-none"
       backHref={fromTasks ? "/report-task/tasks" : "/maintenance/work-orders"}
     >
       <MarkReadOnView referenceId={wo.id} />

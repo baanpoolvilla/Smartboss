@@ -64,7 +64,7 @@ export default async function AssetDetailPage({
   return (
     <AppScaffold
       title={asset.name}
-      width="max-w-2xl"
+      width="max-w-none"
       backHref={
         property ? `/maintenance/properties/${property.id}` : "/maintenance/assets"
       }

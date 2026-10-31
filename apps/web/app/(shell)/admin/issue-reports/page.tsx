@@ -215,7 +215,7 @@ export async function renderIssueReportsPage(
   return (
     <AppScaffold
       title={hideTabSwitcher ? "แจ้งบัค — ตั๋วของฉัน" : "แจ้งปัญหาระบบ (ทุกบริษัท)"}
-      width="max-w-6xl"
+      width="max-w-none"
       backHref={hideTabSwitcher ? "/admin/issue-reports" : "/admin"}
     >
       <p className="mb-4 text-sm text-(--ink-soft)">

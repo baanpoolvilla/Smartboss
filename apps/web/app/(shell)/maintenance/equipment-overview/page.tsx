@@ -68,7 +68,7 @@ export default async function EquipmentOverviewPage({
   return (
     <AppScaffold
       title="สรุปอุปกรณ์ทุกหลัง"
-      width="max-w-3xl"
+      width="max-w-none"
       backHref="/maintenance/pm"
     >
       <div className="mb-4 flex flex-wrap gap-2">

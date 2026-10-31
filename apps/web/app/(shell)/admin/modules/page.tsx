@@ -17,7 +17,7 @@ export default async function AdminModulesPage() {
   const modules = await listOrgModules(session.orgId);
 
   return (
-    <AppScaffold title="โมดูล" width="max-w-3xl">
+    <AppScaffold title="โมดูล" width="max-w-none">
       <p className="mb-4 text-sm text-(--ink-soft)">
         เปิด/ปิดโมดูลที่บริษัทใช้งาน — ปิดแล้วไอคอนจะหายจากหน้ารวมแอปของทุกคนในบริษัท
       </p>

@@ -128,7 +128,7 @@ export default async function ActivityLogPage({
   const field = "rounded-(--radius) border border-(--line) bg-(--bg) px-2.5 py-2 text-sm";
 
   return (
-    <AppScaffold title="Log การใช้งาน" width="max-w-4xl" backHref="/maintenance/settings">
+    <AppScaffold title="Log การใช้งาน" width="max-w-none" backHref="/maintenance/settings">
       <form method="get" className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-6">
         <select id="al-user" name="user" defaultValue={sp.user ?? ""} className={`${field} col-span-2 sm:col-span-2`} aria-label="คน">
           <option value="">ทุกคน</option>

@@ -36,7 +36,7 @@ export default async function CompanyFileDetailPage({ params }: { params: Promis
   const activity = await listFileActivity(id).catch(() => []);
 
   return (
-    <AppScaffold title={file.name} width="max-w-3xl" backHref={file.folderId ? `/company-files?folder=${file.folderId}` : "/company-files"}>
+    <AppScaffold title={file.name} width="max-w-none" backHref={file.folderId ? `/company-files?folder=${file.folderId}` : "/company-files"}>
       <FileDetail file={file} versions={versions} shareLinks={shareLinks} uploaderNames={uploaderNames} movableFolders={movableFolders} activity={activity} />
     </AppScaffold>
   );

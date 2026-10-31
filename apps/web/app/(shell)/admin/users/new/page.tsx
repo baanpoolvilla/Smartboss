@@ -41,7 +41,7 @@ export default async function NewUserPage({
   const { passwordMinLength } = await loadSecuritySettings(targetOrgId);
 
   return (
-    <AppScaffold title="เพิ่มผู้ใช้งาน" width="max-w-2xl" backHref="/admin/users">
+    <AppScaffold title="เพิ่มผู้ใช้งาน" width="max-w-none" backHref="/admin/users">
       {superAdmin && (
         /*
          * เปลี่ยนบริษัทแล้วต้องโหลดบทบาทของบริษัทนั้นใหม่ จึงส่งเป็น GET ให้หน้า

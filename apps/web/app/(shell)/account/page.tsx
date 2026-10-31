@@ -46,7 +46,7 @@ export default async function AccountPage() {
   const { passwordMinLength } = await loadSecuritySettings(session.orgId ?? null);
 
   return (
-    <LauncherPage title="บัญชีของฉัน" width="max-w-2xl">
+    <LauncherPage title="บัญชีของฉัน" width="max-w-none">
       <AccountTabs active="/account" />
 
       <SectionCard title="ข้อมูลบัญชี">

@@ -42,7 +42,7 @@ export default async function AdminUsersPage({
   return (
     <AppScaffold
       title="ผู้ใช้งาน"
-      width="max-w-4xl"
+      width="max-w-none"
       fab={canManage ? <Fab href="/admin/users/new" label="เพิ่มผู้ใช้" /> : null}
     >
       {superAdmin && (

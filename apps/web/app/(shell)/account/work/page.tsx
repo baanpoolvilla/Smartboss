@@ -20,7 +20,7 @@ export default async function MyWorkPage() {
   const overview = await buildMyWorkOverview(session.orgId, session.userId);
 
   return (
-    <LauncherPage title="บัญชีของฉัน" width="max-w-2xl">
+    <LauncherPage title="บัญชีของฉัน" width="max-w-none">
       <AccountTabs active="/account/work" />
 
       <SectionCard

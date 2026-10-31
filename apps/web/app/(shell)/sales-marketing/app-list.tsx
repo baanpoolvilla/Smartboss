@@ -15,7 +15,7 @@ export function ExternalAppList({ group }: { group: ExternalAppGroup }) {
   const info = EXTERNAL_APP_GROUPS[group];
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto">
       <Link
         href="/"
         className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-(--ink-soft) transition-colors hover:bg-(--bg) hover:text-(--ink)"

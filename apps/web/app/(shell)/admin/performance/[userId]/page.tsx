@@ -47,7 +47,7 @@ export default async function PerformanceUserDetailPage({
   return (
     <AppScaffold
       title={card.name}
-      width="max-w-3xl"
+      width="max-w-none"
       backHref={`/admin/performance?month=${month}`}
     >
       <Link

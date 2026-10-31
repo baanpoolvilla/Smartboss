@@ -42,7 +42,7 @@ export default async function PayLogPage({ searchParams }: { searchParams: Promi
   const [y, m] = month.split("-").map(Number) as [number, number];
 
   return (
-    <AppScaffold title="จ่ายเงินคนงาน" width="max-w-5xl">
+    <AppScaffold title="จ่ายเงินคนงาน" width="max-w-none">
       <div className="flex flex-col gap-4">
         <PayTabs active="log" month={month} canSetPay={hasPermission(session, DW_PERMS.pay)} />
 

@@ -23,7 +23,7 @@ export default async function AdminAuditPage() {
   const logs = await listAuditLogs(session.orgId, 200);
 
   return (
-    <AppScaffold title="ประวัติการใช้งาน" width="max-w-3xl">
+    <AppScaffold title="ประวัติการใช้งาน" width="max-w-none">
       <p className="mb-3 text-sm text-(--ink-soft)">
         แสดง {logs.length} รายการล่าสุดของผู้ใช้ในบริษัท
       </p>

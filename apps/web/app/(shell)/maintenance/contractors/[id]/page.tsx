@@ -53,7 +53,7 @@ export default async function ContractorDetailPage({
   return (
     <AppScaffold
       title="รายละเอียด Contact"
-      width="max-w-2xl"
+      width="max-w-none"
       backHref="/maintenance/contractors"
     >
 

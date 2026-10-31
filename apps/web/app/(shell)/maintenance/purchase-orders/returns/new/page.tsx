@@ -29,7 +29,7 @@ export default async function NewReturnPage({
   return (
     <AppScaffold
       title="แจ้งคืนของ / ของมีปัญหา"
-      width="max-w-2xl"
+      width="max-w-none"
       backHref="/maintenance/purchase-orders"
     >
       <ReturnForm action={createReturnAction} pos={pos} initialPoId={poId} />

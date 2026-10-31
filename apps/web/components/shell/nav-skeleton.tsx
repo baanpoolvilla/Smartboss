@@ -65,7 +65,7 @@ export function NavSkeleton({ variant }: { variant: "module" | "launcher" }) {
           <Bone className="h-5 w-36" />
         </div>
       )}
-      <div className="mx-auto w-full max-w-4xl space-y-3 px-4 py-5 sm:px-6">
+      <div className="mx-auto w-full space-y-3 px-4 py-5 sm:px-6">
         <Bone className="h-4 w-2/5" />
         {[0, 1, 2, 3, 4].map((i) => (
           <div key={i} className="flex items-center gap-3 rounded-2xl border border-(--line) bg-(--bg) p-4">

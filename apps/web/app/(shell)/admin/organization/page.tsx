@@ -23,7 +23,7 @@ export default async function AdminOrganizationPage() {
   if (!org) notFound();
 
   return (
-    <AppScaffold title="ข้อมูลบริษัท" width="max-w-2xl">
+    <AppScaffold title="ข้อมูลบริษัท" width="max-w-none">
       <div className="flex flex-col gap-4">
         <SectionCard title="ข้อมูลทั่วไป">
           <form action={updateOrganizationAction} className="flex flex-col gap-3">

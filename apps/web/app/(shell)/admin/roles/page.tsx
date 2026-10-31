@@ -20,7 +20,7 @@ export default async function AdminRolesPage() {
   return (
     <AppScaffold
       title="บทบาท & สิทธิ์"
-      width="max-w-3xl"
+      width="max-w-none"
       fab={canManage ? <Fab href="/admin/roles/new" label="สร้างบทบาท" /> : null}
     >
       <p className="mb-4 text-sm text-(--ink-soft)">

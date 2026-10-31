@@ -53,7 +53,7 @@ export default async function WorkerLedgerPage({ params, searchParams }: { param
   const [y, mo] = month.split("-").map(Number) as [number, number];
 
   return (
-    <AppScaffold title={w.name} width="max-w-5xl" backHref={`/daily-workers/pay?month=${month}`}>
+    <AppScaffold title={w.name} width="max-w-none" backHref={`/daily-workers/pay?month=${month}`}>
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-(--line) bg-(--bg) p-4">
           <div className="min-w-0 flex-1 basis-56">

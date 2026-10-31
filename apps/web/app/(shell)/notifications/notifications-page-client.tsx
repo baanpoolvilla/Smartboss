@@ -204,7 +204,7 @@ export function NotificationsPageClient() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="mx-auto">
       <header className="mb-4 flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-(--ink)">การแจ้งเตือน</h1>
         <div className="flex items-center gap-3">

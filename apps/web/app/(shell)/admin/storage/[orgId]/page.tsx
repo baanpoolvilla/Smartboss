@@ -52,7 +52,7 @@ export default async function OrgStoragePage({ params }: { params: Promise<{ org
   const pct = (b: number) => (totalBytes > 0 ? (b / totalBytes) * 100 : 0);
 
   return (
-    <AppScaffold title={`พื้นที่ไฟล์ · ${org.name}`} width="max-w-4xl" backHref="/admin/storage">
+    <AppScaffold title={`พื้นที่ไฟล์ · ${org.name}`} width="max-w-none" backHref="/admin/storage">
       <p className="mb-4 text-sm text-(--ink-soft)">
         นับจากไฟล์ที่เก็บอยู่จริงทุกระบบ (รวมรูปในรีพอร์ต/ใบงาน/PO ที่หน้ารวมยังไม่นับ) · หน้านี้ดูอย่างเดียว
         จะเคลียร์พื้นที่ให้กดลิงก์ไปลบที่ต้นทาง รูปในโพสต์/ใบงานจะได้ไม่หายไปเฉย ๆ

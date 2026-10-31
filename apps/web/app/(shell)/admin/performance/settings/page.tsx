@@ -27,7 +27,7 @@ export default async function PerformanceSettingsPage() {
   ]);
 
   return (
-    <AppScaffold title="เกณฑ์คะแนนผลงาน" width="max-w-3xl" backHref="/admin/performance">
+    <AppScaffold title="เกณฑ์คะแนนผลงาน" width="max-w-none" backHref="/admin/performance">
       <div className="flex flex-col gap-4">
         <ScorePeriodForm period={period} />
         <PerformanceSettingsForm settings={settings} />

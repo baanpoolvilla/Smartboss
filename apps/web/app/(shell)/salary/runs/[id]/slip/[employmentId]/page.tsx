@@ -24,7 +24,7 @@ export default async function RunSlipPage({ params, searchParams }: { params: Pr
   const position = await positionOf(session.orgId, employmentId, slip.endsOn);
   const base = `/salary/runs/${id}/slip/${employmentId}`;
   return (
-    <AppScaffold title="สลิปเงินเดือน" backHref={`/salary/runs/${id}?edit=${employmentId}`} width={detail ? "max-w-xl" : "max-w-none"}>
+    <AppScaffold title="สลิปเงินเดือน" backHref={`/salary/runs/${id}?edit=${employmentId}`} width="max-w-none">
       <div className="flex flex-col gap-3">
         {slip.status !== "paid" && <Notice tone="warn">ตัวอย่างสลิป — รอบนี้ยังไม่จ่าย ตัวเลขอาจเปลี่ยน · พนักงานยังไม่เห็น</Notice>}
         <SlipTabs docHref={base} detailHref={`${base}?view=detail`} detail={detail} printHref={`/salary/slips/${id}?only=${employmentId}`} />

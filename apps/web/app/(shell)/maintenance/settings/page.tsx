@@ -24,7 +24,7 @@ export default async function MaintenanceSettingsPage() {
   return (
     <AppScaffold
       title="ตั้งค่าแจ้งซ่อมบำรุง"
-      width="max-w-3xl"
+      width="max-w-none"
       actions={
         <AppBarLink href="/maintenance/settings/line-log" label="Log การส่ง LINE">
           <FileText className="h-5 w-5" />

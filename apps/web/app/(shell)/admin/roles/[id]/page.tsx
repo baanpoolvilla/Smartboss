@@ -71,7 +71,7 @@ export default async function RoleDetailPage({
   ]);
 
   return (
-    <AppScaffold title={role.name} width="max-w-3xl" backHref="/admin/roles">
+    <AppScaffold title={role.name} width="max-w-none" backHref="/admin/roles">
       <div className="flex flex-col gap-4">
         <SectionCard title="ข้อมูลบทบาท">
           {role.isSystem && (

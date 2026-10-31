@@ -260,7 +260,7 @@ export function PmCalendar({
   const selectedIso = pick.kind === "day" ? pick.iso : null;
 
   return (
-    <div className="mx-auto max-w-[1100px]">
+    <div className="mx-auto">
       {/* ─── แถบเดือน ─── */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1">

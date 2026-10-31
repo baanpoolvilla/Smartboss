@@ -228,7 +228,7 @@ export function NotificationSettingsClient() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="mx-auto w-full">
       {/* มือถือ: หน้าหัวข้อของโมดูล */}
       {selected && <div className="lg:hidden">{detail(selected, true)}</div>}
 

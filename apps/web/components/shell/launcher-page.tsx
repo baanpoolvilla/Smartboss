@@ -8,7 +8,7 @@ import { ArrowLeft } from "lucide-react";
  */
 export function LauncherPage({
   title,
-  width = "max-w-3xl",
+  width = "max-w-none",
   backHref = "/",
   backLabel = "หน้าหลัก",
   children,

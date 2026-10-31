@@ -44,7 +44,7 @@ export default async function StorageAdminPage() {
   const totalUsed = usages.reduce((s, b) => s + b, 0);
 
   return (
-    <AppScaffold title="พื้นที่จัดเก็บไฟล์ (ทุกบริษัท)" width="max-w-4xl" backHref="/admin">
+    <AppScaffold title="พื้นที่จัดเก็บไฟล์ (ทุกบริษัท)" width="max-w-none" backHref="/admin">
       <p className="mb-4 text-sm text-(--ink-soft)">
         ตั้งเพดานพื้นที่ไฟล์ (คลังไฟล์บริษัท + แชท) ได้รายบริษัท — เว้นว่างเพื่อใช้ค่ากลาง{" "}
         <span className="font-medium text-(--ink)">{toGB(globalLimit)} GB</span>{" "}

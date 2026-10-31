@@ -132,7 +132,7 @@ export default async function PmListPage({
   return (
     <AppScaffold
       title="ปฏิทิน PM"
-      width="max-w-[1100px]"
+      width="max-w-none"
       actions={
         <AppBarLink
           href="/maintenance/equipment-overview"

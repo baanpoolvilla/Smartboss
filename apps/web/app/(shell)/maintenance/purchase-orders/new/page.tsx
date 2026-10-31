@@ -62,7 +62,7 @@ export default async function NewPoPage({
   return (
     <AppScaffold
       title={linked ? `เปิด PR / PO — ${linked.code}` : "เปิด PR / PO"}
-      width="max-w-2xl"
+      width="max-w-none"
       backHref={
         linked
           ? `/maintenance/work-orders/${linked.id}${fromTasks ? "?from=tasks" : ""}`

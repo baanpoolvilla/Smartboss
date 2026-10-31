@@ -88,7 +88,7 @@ export default async function PerformancePage({
   const canConfigure = hasPermission(session, ADMIN_PERMS.performanceSettingManage);
 
   return (
-    <AppScaffold title="ผลงานรายคน" width="max-w-5xl" backHref="/admin">
+    <AppScaffold title="ผลงานรายคน" width="max-w-none" backHref="/admin">
       <div className="mb-4">
         <ScorePeriodNotice
           period={period}

@@ -12,7 +12,7 @@ export default async function NewRolePage() {
   if (!hasPermission(session, ADMIN_PERMS.roleManage)) redirect("/admin/roles");
 
   return (
-    <AppScaffold title="สร้างบทบาท" width="max-w-2xl" backHref="/admin/roles">
+    <AppScaffold title="สร้างบทบาท" width="max-w-none" backHref="/admin/roles">
       <Card className="p-5">
         <form action={createRoleAction} className="flex flex-col gap-4">
           <Field label="ชื่อบทบาท *" hint="เช่น หัวหน้าช่าง">

@@ -54,7 +54,7 @@ export default async function AdminHomePage() {
     .filter((m): m is NonNullable<typeof m> => m !== null);
 
   return (
-    <AppScaffold title="หลังบ้าน" width="max-w-5xl">
+    <AppScaffold title="หลังบ้าน" width="max-w-none">
       <p className="mb-4 text-sm text-(--ink-soft)">
         จัดการผู้ใช้ สิทธิ์ และการตั้งค่าของทุกโมดูลใน{" "}
         <span className="font-medium text-(--ink)">{org?.name}</span>
