@@ -14,7 +14,7 @@ export default async function NewEmployeePage() {
       title="เพิ่มพนักงาน"
       permission={HR_PERMS.employeeManage}
       backHref="/hr/employees"
-      width="max-w-2xl"
+      width="max-w-none"
       load={async () => {
         const companies = await wfFetch<Paged<Company>>("/companies");
         const company = companies.items[0];

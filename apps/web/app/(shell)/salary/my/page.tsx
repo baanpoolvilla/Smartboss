@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function MySlipsPage() {
   const { session, access } = await salaryPage();
   return (
-    <AppScaffold title="สลิปเงินเดือน" width={access.canEdit ? "max-w-6xl" : "max-w-2xl"}>
+    <AppScaffold title="สลิปเงินเดือน" width="max-w-none">
       <div className="flex flex-col gap-4">
         {access.canEdit && <SalaryTabs active="my" />}
         <MySlipList orgId={session.orgId} userId={session.userId} />

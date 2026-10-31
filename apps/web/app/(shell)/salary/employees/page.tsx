@@ -15,7 +15,7 @@ export default async function SalaryEmployeesPage() {
   const staff = await listStaff(session.orgId);
   const incomplete = staff.filter((s) => s.problems.length > 0).length;
   return (
-    <AppScaffold title="เงินเดือน" width="max-w-6xl">
+    <AppScaffold title="เงินเดือน" width="max-w-none">
       <div className="flex flex-col gap-4">
         <SalaryTabs active="employees" />
         <div>

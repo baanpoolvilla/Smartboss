@@ -27,7 +27,7 @@ export default async function SalaryEmployeePage({ params }: { params: Promise<{
   const ownLocked = !access.isCeo && row.userId === session.userId;
   const thisPeriod = periodDates(p, settings.cutoffDay, settings.payDay).endsOn >= today ? p : shiftPeriod(p, 1);
   return (
-    <AppScaffold title="ข้อมูลเงินเดือน" backHref="/salary/employees" width="max-w-3xl">
+    <AppScaffold title="ข้อมูลเงินเดือน" backHref="/salary/employees" width="max-w-none">
       <div className="flex flex-col gap-4">
         <div>
           <h1 className="text-xl font-bold text-(--ink)">{row.name}</h1>

@@ -57,7 +57,7 @@ export async function HrPage({
   return (
     <AppScaffold
       title={title}
-      width={width ?? "max-w-5xl"}
+      width={width ?? "max-w-none"}
       backHref={backHref}
       actions={actions}
       fab={fab}

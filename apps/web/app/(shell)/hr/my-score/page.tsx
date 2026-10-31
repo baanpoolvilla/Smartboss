@@ -37,7 +37,7 @@ export default async function MyScorePage({
     <HrPage
       title="คะแนนของฉัน"
       permission={HR_PERMS.access}
-      width="max-w-2xl"
+      width="max-w-none"
       load={async () => {
         const session = await requireOrg();
         // เดือนนี้ (1 ถึงสิ้นเดือน) ตรงกับเกรด/ค่าคอมที่ตัดรอบรายเดือน — เดิม 30 วันล่าสุด วันที่ 1

@@ -56,7 +56,7 @@ export default async function AttendanceSettingsPage() {
     <HrPage
       title="การลงเวลา"
       permission={HR_PERMS.settingManage}
-      width="max-w-5xl"
+      width="max-w-none"
       load={async () => {
         const [sites, companies, groups, memberships, employments] = await Promise.all([
           wfFetch<Paged<Site>>("/sites"),

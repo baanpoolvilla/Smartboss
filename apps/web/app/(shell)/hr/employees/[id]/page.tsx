@@ -134,7 +134,7 @@ export default async function EmployeeDetailPage({
       title="พนักงาน"
       permission={HR_PERMS.employeeView}
       backHref="/hr/employees"
-      width="max-w-4xl"
+      width="max-w-none"
       load={async () => {
         let employment: Employment;
         try {

@@ -31,7 +31,7 @@ export default async function HrScoringSettingsPage() {
         return (
           <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
             <SettingsSubnav active="/hr/settings/scoring" />
-            <div className="min-w-0 max-w-3xl flex-1">
+            <div className="min-w-0 flex-1">
               <div className="flex flex-col gap-4">
                 <ScorePeriodForm period={period} />
                 <PerformanceSettingsForm settings={settings} />

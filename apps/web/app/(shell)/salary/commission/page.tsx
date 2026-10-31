@@ -16,7 +16,7 @@ export default async function SalaryCommissionPage({ searchParams }: { searchPar
   const sp = await searchParams;
   const month = resolveScorePeriodParam(await loadScorePeriodConfig(session.orgId), sp.month);
   return (
-    <AppScaffold title="เงินเดือน" width="max-w-5xl">
+    <AppScaffold title="เงินเดือน" width="max-w-none">
       <div className="flex flex-col gap-4">
         <SalaryTabs active="commission" />
         {await renderCommissionTab(session, month, access.canEdit, "/salary/commission")}

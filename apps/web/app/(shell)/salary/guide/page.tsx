@@ -11,7 +11,7 @@ export default async function SalaryGuidePage() {
   const { session } = await salaryPage({ edit: true });
   const settings = await withSalaryTenant(session.orgId, (tx) => readSettings(tx, session.orgId));
   return (
-    <AppScaffold title="เงินเดือน" width="max-w-4xl">
+    <AppScaffold title="เงินเดือน" width="max-w-none">
       <div className="flex flex-col gap-4">
         <SalaryTabs active="guide" />
         <div>

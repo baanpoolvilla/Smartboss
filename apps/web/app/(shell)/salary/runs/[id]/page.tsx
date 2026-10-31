@@ -168,7 +168,7 @@ export default async function RunPage({ params, searchParams }: { params: Promis
           : [{ target: "downloads", title: "ไฟล์สำหรับยื่นและเก็บ", body: `สรุปประกันสังคมและ ภ.ง.ด.1 ใช้ยื่นภายใน ${fileMonth} · พิมพ์สลิปทั้งหมดได้ที่นี่` }];
 
   return (
-    <AppScaffold title={`เงินเดือน ${periodLabel(run.period)}`} backHref="/salary" width="max-w-6xl">
+    <AppScaffold title={`เงินเดือน ${periodLabel(run.period)}`} backHref="/salary" width="max-w-none">
       <div className="flex flex-col gap-4">
         {/* หัวเอกสาร */}
         <section className={`${card} flex flex-col gap-4 p-4 sm:p-5`}>

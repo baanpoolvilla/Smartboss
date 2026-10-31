@@ -17,7 +17,7 @@ export default async function PenaltyRequestsPage() {
     <HrPage
       title="คำร้องขอแก้ไขคะแนน"
       permission={HR_PERMS.access}
-      width="max-w-3xl"
+      width="max-w-none"
       load={async () => {
         const session = await requireOrg();
         const canDecide = hasRole(session, "CEO") || isSuperAdmin(session);

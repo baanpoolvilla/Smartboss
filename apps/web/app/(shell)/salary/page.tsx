@@ -25,7 +25,7 @@ export default async function SalaryHome() {
   const { session, access } = await salaryPage();
   if (!access.canEdit) {
     return (
-      <AppScaffold title="สลิปเงินเดือน" width="max-w-2xl">
+      <AppScaffold title="สลิปเงินเดือน" width="max-w-none">
         <MySlipList orgId={session.orgId} userId={session.userId} />
       </AppScaffold>
     );
@@ -67,7 +67,7 @@ export default async function SalaryHome() {
   const noBank = staff.filter((s) => s.profile.payChannel === "transfer" && !s.profile.bankAccount && s.salary !== null).length;
 
   return (
-    <AppScaffold title="เงินเดือน" width="max-w-6xl">
+    <AppScaffold title="เงินเดือน" width="max-w-none">
       <div className="flex flex-col gap-4">
         <SalaryTabs active="runs" />
         <div className="flex flex-wrap items-center justify-between gap-3">

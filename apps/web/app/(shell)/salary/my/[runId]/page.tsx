@@ -28,7 +28,7 @@ export default async function MySlipPage({ params, searchParams }: { params: Pro
   const position = await positionOf(session.orgId, slip.line.employmentId, slip.endsOn);
   const base = `/salary/my/${runId}`;
   return (
-    <AppScaffold title={`สลิป ${periodLabel(slip.period)}`} backHref="/salary/my" width={detail ? "max-w-xl" : "max-w-5xl"}>
+    <AppScaffold title={`สลิป ${periodLabel(slip.period)}`} backHref="/salary/my" width={detail ? "max-w-xl" : "max-w-none"}>
       <div className="flex flex-col gap-3">
         <SlipTabs docHref={base} detailHref={`${base}?view=detail`} detail={detail} />
         {detail ? (

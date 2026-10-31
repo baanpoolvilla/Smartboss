@@ -118,7 +118,7 @@ export default async function CheckinReviewPage() {
     <HrPage
       title="ลงเวลาผิดปกติ"
       permission={HR_PERMS.employeeManage}
-      width="max-w-3xl"
+      width="max-w-none"
       load={async () => {
         const { orgId } = await requireOrg();
         const [warnedApi, openApi, pendingApi, employments, dupDays] = await Promise.all([

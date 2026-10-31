@@ -13,7 +13,7 @@ export default async function MyPayslipsPage() {
     <HrPage
       title="สลิปของฉัน"
       permission={HR_PERMS.access}
-      width="max-w-3xl"
+      width="max-w-none"
       load={async () => {
         const slips = await wfFetch<Paged<Payslip>>("/me/payslips");
 
