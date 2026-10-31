@@ -51,6 +51,7 @@ export function RequestsHome({
   overdueNote,
   showPayTab,
   showAllTab,
+  showApproveTab,
 }: {
   rows: ListRow[];
   stats: HomeStat[] | null;
@@ -59,6 +60,8 @@ export function RequestsHome({
   overdueNote: string | null;
   showPayTab: boolean;
   showAllTab: boolean;
+  /** คนที่อนุมัติได้ (HR/CEO) — เห็นแท็บ "รอฉันอนุมัติ" แม้ว่าง · คนดูทุกใบอย่างเดียว (เช่น IT) ไม่ต้องเห็น */
+  showApproveTab: boolean;
 }) {
   const counts = {
     me: rows.filter((r) => r.waitingMe).length,
@@ -88,7 +91,7 @@ export function RequestsHome({
   }, [filterOpen]);
 
   const tabs: { id: Tab; label: string; n?: number; alert?: boolean; show: boolean }[] = [
-    { id: "me", label: "รอฉันอนุมัติ", n: counts.me, alert: true, show: counts.me > 0 || showAllTab },
+    { id: "me", label: "รอฉันอนุมัติ", n: counts.me, alert: true, show: counts.me > 0 || showApproveTab },
     { id: "pay", label: "รอจ่าย", n: counts.pay, alert: true, show: showPayTab },
     { id: "mine", label: "ของฉัน", n: counts.mine, show: true },
     { id: "open", label: "ค้างอยู่", n: counts.open, show: showAllTab },

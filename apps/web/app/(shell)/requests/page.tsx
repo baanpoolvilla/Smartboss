@@ -138,6 +138,7 @@ async function Body({
       }
       showPayTab={viewer.canPay}
       showAllTab={seesAll}
+      showApproveTab={viewer.canApprove || viewer.canApproveCeo}
     />
   );
 }
