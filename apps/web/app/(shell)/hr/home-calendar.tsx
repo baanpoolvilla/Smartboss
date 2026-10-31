@@ -27,6 +27,7 @@ import {
 } from "@/modules/hr/components/ui";
 import { decideLeaveAction } from "./actions";
 import { loadOtMarks } from "./calendar-ot";
+import { loadLeaveHistory, type LeaveHistoryRow } from "@/modules/hr/lib/leave-history";
 import { ScrollToElement } from "./scroll-to-element";
 import {
   LeaveCalendar,
@@ -141,6 +142,13 @@ export async function renderCalendarTab(
   );
   const canApprove = me.permissions.includes("workforce.leave.approve");
   const canManageTypes = me.permissions.includes("workforce.scheduling.manage");
+  // ประวัติใครลง/ยกเลิก/สลับ — เห็นเฉพาะคนอนุมัติการลา (อ่านไม่ได้ = ไม่โชว์ ไม่ทำให้ทั้งหน้าพัง)
+  const history = canApprove
+    ? await loadLeaveHistory(session.orgId, from, to).catch((error: unknown) => {
+        console.error("[hr] leave history failed", error);
+        return null;
+      })
+    : null;
 
   // ใบของตัวเองที่ "ยังมีผล" (ไม่ใช่ REJECTED/CANCELLED) — ใช้ starts_on
   // เป็นคีย์ตรง ๆ ได้ เพราะ submitLeaveAction ส่งทีละวัน (starts_on = ends_on
@@ -332,6 +340,43 @@ export async function renderCalendarTab(
         <ScrollToElement id={`leave-request-${focusLeaveId}`} />
       )}
 
+      {history && (
+        <SectionCard
+          title={`ประวัติการลง / ยกเลิก / สลับ · ${THAI_MONTH[Number(month.slice(5, 7)) - 1]} ${formatBuddhistYear(Number(month.slice(0, 4)))}`}
+          description="ทุกครั้งที่มีคนลงวันหยุด ยกเลิก สลับวัน อนุมัติ หรือเปลี่ยนชื่อบนปฏิทิน ของวันในเดือนนี้ — บันทึกแก้หรือลบไม่ได้ แถวแดง = ยกเลิกตอนวันนั้นถึงแล้วหรือผ่านไปแล้ว"
+        >
+          {history.length === 0 ? (
+            <EmptyState>ยังไม่มีการเปลี่ยนแปลงในเดือนนี้</EmptyState>
+          ) : (
+            <DataTable head={["เวลาที่กด", "ใครทำ", "ทำอะไร", "ของใคร", "วันหยุด", "หมายเหตุ"]}>
+              {history.map((h) => {
+                const late = h.action === "cancel" && h.occurredOn >= h.startsOn;
+                const backdated = h.action === "submit" && h.occurredOn > h.startsOn;
+                return (
+                  <tr key={h.id} className={late ? "bg-red-50" : "hover:bg-(--bg-soft)"}>
+                    <Td className="whitespace-nowrap text-xs tabular-nums">{bangkokDateTime(h.occurredAt)}</Td>
+                    <Td className="whitespace-nowrap">{h.actorName}</Td>
+                    <Td className="whitespace-nowrap">
+                      <span className={`font-medium ${late ? "text-(--danger)" : ""}`}>{historyVerb(h)}</span>
+                      {late && <span className="ml-1 text-xs text-(--danger)">· หลังถึงวันแล้ว</span>}
+                      {backdated && <span className="ml-1 text-xs text-amber-700">· ลงย้อนหลัง</span>}
+                    </Td>
+                    <Td className="whitespace-nowrap font-medium">{nameOf.get(h.employmentId) || h.ownerName || "—"}</Td>
+                    <Td className="whitespace-nowrap text-xs">
+                      {shortThaiDate(h.startsOn)}
+                      {h.endsOn !== h.startsOn && ` → ${shortThaiDate(h.endsOn)}`}
+                      {h.typeName && <span className="text-(--ink-soft)"> · {h.typeName}</span>}
+                      {h.swapFromDate && <span className="block text-[11px] text-(--ink-soft)">สลับมาจาก {shortThaiDate(h.swapFromDate)}</span>}
+                    </Td>
+                    <Td className="text-xs text-(--ink-soft)">{historyNote(h) || "—"}</Td>
+                  </tr>
+                );
+              })}
+            </DataTable>
+          )}
+        </SectionCard>
+      )}
+
       {/*
         ฟอร์มแก้ประเภทการลาย้ายไป /hr/settings/leave-types แล้ว — ที่นี่เหลือแค่สรุปว่า
         ตอนนี้มีประเภทอะไรและอันไหนหยุดได้ทันที เพราะเป็นคำถามที่คนอนุมัติ
@@ -371,4 +416,41 @@ export async function renderCalendarTab(
       )}
     </div>
   );
+}
+
+const SHORT_MONTH = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+
+/** "12 ต.ค." จาก YYYY-MM-DD — ไม่พึ่ง timezone ของเครื่อง */
+function shortThaiDate(ymd: string): string {
+  return `${Number(ymd.slice(8, 10))} ${SHORT_MONTH[Number(ymd.slice(5, 7)) - 1]}`;
+}
+
+/** เวลาไทยเสมอ (เครื่องจริงอาจตั้งเป็น UTC) */
+function bangkokDateTime(iso: string): string {
+  const d = new Date(new Date(iso).getTime() + 7 * 3_600_000).toISOString();
+  return `${shortThaiDate(d.slice(0, 10))} ${d.slice(11, 16)}`;
+}
+
+function historyVerb(h: LeaveHistoryRow): string {
+  switch (h.action) {
+    case "submit":
+      return h.swapFromDate ? "ขอสลับวันหยุด" : "ลงวันหยุด";
+    case "decide":
+      return h.after?.status === "APPROVED" ? "อนุมัติ" : h.after?.status === "REJECTED" ? "ไม่อนุมัติ" : "ตัดสินใบลา";
+    case "cancel":
+      return h.byOwner ? "ยกเลิกเอง" : "ยกเลิกให้";
+    case "relabel":
+      return "เปลี่ยนชื่อบนปฏิทิน";
+    default:
+      return "แก้ไข";
+  }
+}
+
+function historyNote(h: LeaveHistoryRow): string {
+  if (h.action === "relabel") {
+    const before = String(h.before?.display_label ?? "") || "(ชื่ออัตโนมัติ)";
+    const after = String(h.after?.display_label ?? "") || "(ชื่ออัตโนมัติ)";
+    return `${before} → ${after}`;
+  }
+  return h.reason ?? "";
 }
