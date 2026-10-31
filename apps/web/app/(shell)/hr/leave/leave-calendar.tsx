@@ -61,8 +61,8 @@ export interface OtMark {
   times: string | null;
 }
 
-/** สีของแถบ OT — ส้ม ไม่ชนกับเขียว (Day-Off) / น้ำเงิน (Holiday) / ประเภทลา */
-const OT_HUE = 28;
+/** สีของแถบ OT — ฟ้า (เดิมส้ม 28 ดูคล้ายลาพักร้อนจนงง ผู้ใช้ 31/10/2569) ไม่ชนกับเขียว (Day-Off/Holiday) / ประเภทลา */
+const OT_HUE = 205;
 
 function otHours(minutes: number): string {
   const h = Math.floor(minutes / 60);
@@ -676,9 +676,9 @@ export function LeaveCalendar({
                     className="flex h-full min-h-[3.25rem] min-w-0 flex-col gap-0.5 border-b border-r border-(--line)/70 p-0.5 text-left sm:min-h-24 sm:p-1 lg:min-h-[7.5rem] xl:min-h-[8.75rem] xl:gap-1 xl:p-1.5"
                     style={{
                       opacity: cell.inMonth ? 1 : 0.4,
-                      // พื้นสีมีไว้บอก "วันนี้" อย่างเดียว — วันที่คนหยุดเยอะเหลือแค่ ⚠ มุมซ้าย
-                      // (เดิมพื้นส้มจาง ๆ ทั้งช่อง พอหลายวันติดกันทั้งตารางเป็นส้มจนหาวันนี้ไม่เจอ)
-                      backgroundColor: isToday ? "var(--app-soft)" : undefined,
+                      // "วันนี้" = กรอบสีรอบช่อง ไม่ใช่พื้นสี — พื้นฟ้ากลืนกับแถบวันหยุดสีอ่อน (ผู้ใช้ 31/10/2569)
+                      // วันที่คนหยุดเยอะเหลือแค่ ⚠ มุมซ้าย
+                      boxShadow: isToday ? "inset 0 0 0 2px var(--app)" : undefined,
                     }}
                   >
                     <span className="flex items-center justify-between">

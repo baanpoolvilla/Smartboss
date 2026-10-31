@@ -18,7 +18,8 @@ function hueOf(id: string): number {
  */
 export function typeHue(name: string | null, autoApprove: boolean): number {
   const n = (name ?? "").toLowerCase();
-  if (/holiday|ฮอลิเดย์|นักขัตฤกษ์/.test(n)) return 215; // น้ำเงิน
+  // Holiday = เขียวใบไม้ ต่างจาก Day-Off (เขียวมิ้นต์) ให้เห็นชัด (ผู้ใช้ 31/10/2569) — เดิมน้ำเงิน 215
+  if (/holiday|ฮอลิเดย์|นักขัตฤกษ์/.test(n)) return 112; // เขียวใบไม้
   if (/day.?off|หยุดประจำ|^off$/.test(n)) return 150; // เขียว
   if (/ป่วย|sick/.test(n)) return 0; // แดง
   if (/กิจ|personal/.test(n)) return 175; // เขียวอมฟ้า
