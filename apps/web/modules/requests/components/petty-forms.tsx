@@ -11,18 +11,22 @@ import {
   addPettySpendAction,
   cancelPettyTopupAction,
   decidePettyTopupAction,
+  recordPaymentAction,
   requestPettyTopupAction,
   setPettyHolderAction,
   voidPettyEntryAction,
   type UploadedFile,
 } from "../actions";
-import { PETTY_CATEGORIES, baht, parseMoney, thaiDateTime } from "../lib/types";
+import { PETTY_CATEGORIES, SIMILAR_SLIP_PREFIX, baht, parseMoney, thaiDateTime } from "../lib/types";
 import { FilePicker } from "./file-picker";
 import { Notice } from "./ui";
 
 /*
  * เงินสดย่อย (ผู้ใช้ 30/10/2569: "ใช้ยาก งง" → ปุ่มอยู่บนการ์ดของแต่ละคน + ปุ่ม ⓘ บอกว่าทำอะไร)
- *   ผู้ถือ:   − จ่ายค่าของ (หมวด + ใบเสร็จบังคับ) · + ขอเติมเงิน (รอ HR/CEO อนุมัติ)
+ *   ผู้ถือ:   − จ่ายเงิน = หน้าต่างเดียวสองแบบ (ผู้ใช้ 31/10/2569 "ทำทีเดียวกันเลย")
+ *             · ให้คนที่ขอมา — เลือกใบเบิกที่ HR อนุมัติแล้ว แนบรูปตอนให้เงิน กดจ่าย (recordPaymentAction แบบเงินสดย่อย)
+ *             · ซื้อของเอง — ค่าอะไร + หมวด + ใบเสร็จ (addPettySpendAction) ไม่ต้องมีใบเบิก
+ *           + ขอเติมเงิน (รอ HR/CEO อนุมัติ)
  *   HR/CEO:  + เติมเงิน ให้คนอื่น (สลิปบังคับ) · อนุมัติคำขอเติม (แนบสลิปโอน/รูปเงินสด) · ของตัวเองอนุมัติไม่ได้
  *   นับเงินไม่ตรง: ผู้ถือเอง หรือ HR — ใส่ยอดที่นับได้จริง ระบบปรับให้ตรง
  */
@@ -223,7 +227,8 @@ export function PettyHolderCard({
           <>
             <button type="button" onClick={() => setOpen("spend")} className="inline-flex h-10 items-center gap-1.5 rounded-(--radius) bg-(--app) px-3.5 text-sm font-semibold text-white hover:brightness-95">
               <Minus className="h-4 w-4" aria-hidden="true" />
-              จ่ายค่าของ
+              จ่ายเงิน
+              {payable.length > 0 && <span className="rounded-full bg-white/25 px-1.5 text-xs">{payable.length}</span>}
             </button>
             <button
               type="button"
@@ -246,7 +251,7 @@ export function PettyHolderCard({
           <InfoTip label="ปุ่มเหล่านี้ทำอะไร" title="ปุ่มบนการ์ดนี้ทำอะไร">
             {isMe && (
               <>
-                <b>− จ่ายค่าของ</b> — ใช้เงินในมือซื้อของ/จ่ายค่าบริการ จดตรงนี้เลย ไม่ต้องทำใบเบิก ต้องบอกว่าค่าอะไร เลือกหมวด และแนบรูปใบเสร็จทุกครั้ง ยอดในมือลดลงทันที
+                <b>− จ่ายเงิน</b> — ทุกครั้งที่เงินออกจากมือ กดที่นี่ เลือกว่า <b>ให้คนที่ขอมา</b> (ใบเบิกที่ HR อนุมัติแล้ว — ตัวเลขบนปุ่มคือจำนวนใบที่รอ) หรือ <b>ซื้อของเอง</b> (บอกว่าค่าอะไร เลือกหมวด แนบใบเสร็จ ไม่ต้องทำใบเบิก) ยอดในมือลดลงทันทีทั้งสองแบบ
                 <br />
                 <br />
                 <b>+ ขอเติมเงิน</b> — เงินใกล้หมด กดขอ ระบบแจ้ง HR หรือ CEO ให้อนุมัติ (HR ขอเอง = CEO อนุมัติ) คนอนุมัติโอน/ให้เงินสดแล้วแนบหลักฐาน ยอดถึงจะเพิ่ม
@@ -272,7 +277,7 @@ export function PettyHolderCard({
         </button>
       )}
 
-      {open === "spend" && <SpendModal balance={holder.balance} today={today} payable={payable} onClose={close} />}
+      {open === "spend" && <PayModal holder={holder} today={today} payable={payable} onClose={close} />}
       {open === "request" && <RequestTopupModal holder={holder} onClose={close} />}
       {open === "topup" && <TopUpModal holder={holder} today={today} onClose={close} />}
       {open === "adjust" && <AdjustModal holder={holder} onClose={close} />}
@@ -280,9 +285,106 @@ export function PettyHolderCard({
   );
 }
 
-/* ───────────── − จ่ายค่าของ ───────────── */
+/* ───────────── − จ่ายเงิน: ให้คนที่ขอมา / ซื้อของเอง ───────────── */
 
-function SpendModal({ balance, today, payable, onClose }: { balance: number; today: string; payable: PettyPayableItem[]; onClose: () => void }) {
+function PayModal({ holder, today, payable, onClose }: { holder: PettyHolderView; today: string; payable: PettyPayableItem[]; onClose: () => void }) {
+  const [mode, setMode] = useState<"request" | "self">(payable.length > 0 ? "request" : "self");
+  const tab = (on: boolean) => `h-10 rounded-(--radius) text-sm ${on ? "bg-(--brand-navy,#1b2537) font-semibold text-white" : "text-(--ink) hover:bg-white"}`;
+  return (
+    <Modal title="จ่ายเงินจากเงินสดย่อย" onClose={onClose}>
+      <div className="flex flex-col gap-3">
+        <div className="grid grid-cols-2 gap-1 rounded-(--radius) bg-(--bg-soft) p-1" role="tablist" aria-label="จ่ายให้ใคร">
+          <button type="button" role="tab" aria-selected={mode === "request"} className={tab(mode === "request")} onClick={() => setMode("request")}>
+            ให้คนที่ขอมา ({payable.length})
+          </button>
+          <button type="button" role="tab" aria-selected={mode === "self"} className={tab(mode === "self")} onClick={() => setMode("self")}>
+            ซื้อของเอง
+          </button>
+        </div>
+        {mode === "request" ? (
+          <RequestPayForm holder={holder} today={today} payable={payable} onClose={onClose} />
+        ) : (
+          <SpendForm balance={holder.balance} today={today} onClose={onClose} />
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+/** จ่ายใบเบิกที่ HR อนุมัติแล้ว จากเงินในมือของตัวเอง — จ่ายเต็มยอดที่ค้าง (จ่ายบางส่วน: เปิดใบ) */
+function RequestPayForm({ holder, today, payable, onClose }: { holder: PettyHolderView; today: string; payable: PettyPayableItem[]; onClose: () => void }) {
+  const router = useRouter();
+  const [busy, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [similar, setSimilar] = useState<string | null>(null);
+  const [picked, setPicked] = useState(payable[0]?.id ?? "");
+  const [paidOn, setPaidOn] = useState(today);
+  const [slips, setSlips] = useState<UploadedFile[]>([]);
+  const item = payable.find((p) => p.id === picked);
+  const over = !!item && item.outstanding > holder.balance + 0.005;
+  const ready = !!item && !over && !!paidOn && slips.length > 0;
+
+  if (payable.length === 0) {
+    return <Explain>ยังไม่มีใบเบิกที่ HR อนุมัติแล้วรอจ่าย — ใครอยากได้เงินคืนต้องยื่นใบเบิกก่อน แล้วรอ HR อนุมัติ ใบจะขึ้นที่นี่</Explain>;
+  }
+  const pay = (confirmSimilar: boolean) => {
+    if (!item) return;
+    setError(null);
+    setSimilar(null);
+    start(async () => {
+      const res = await recordPaymentAction({ id: item.id, amount: item.outstanding, method: "petty_cash", paidOn, pettyHolderId: holder.userId, payrollPeriod: null, note: "", slips, confirmSimilar });
+      if ("error" in res) {
+        if (res.error.startsWith(SIMILAR_SLIP_PREFIX)) return setSimilar(res.error.split("|").slice(2).join("|"));
+        return setError(res.error);
+      }
+      onClose();
+      router.refresh();
+    });
+  };
+  return (
+    <div className="flex flex-col gap-3">
+      <Explain>เลือกใบที่ HR อนุมัติแล้ว ให้เงินกับคนนั้น แล้วแนบรูปตอนให้เงิน — กดจ่ายแล้วใบเป็น “จ่ายแล้ว” และหักจากเงินในมือ ({baht(holder.balance)}) ให้เอง</Explain>
+      <fieldset className="flex max-h-64 flex-col gap-2 overflow-y-auto">
+        <legend className="sr-only">เลือกใบที่จะจ่าย</legend>
+        {payable.map((p) => (
+          <label key={p.id} className={`flex cursor-pointer items-center gap-3 rounded-(--radius) border p-3 text-sm ${picked === p.id ? "border-2 border-(--brand-navy,#1b2537)" : "border-(--line)"}`}>
+            <input type="radio" name="petty-pay-request" className="h-4 w-4 accent-(--brand-navy,#1b2537)" checked={picked === p.id} onChange={() => setPicked(p.id)} />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-(--ink)">
+                {p.beneficiaryName} · {p.title}
+              </span>
+              <a href={`/requests/${p.id}`} target="_blank" rel="noreferrer" className="text-xs text-(--app-strong) hover:underline">
+                {p.code} · ดูใบ/ใบเสร็จ
+              </a>
+            </span>
+            <span className="shrink-0 font-semibold tabular-nums text-(--ink)">{baht(p.outstanding)}</span>
+          </label>
+        ))}
+      </fieldset>
+      <Field label="วันที่ให้เงิน" required>
+        <input type="date" max={today} className={field} value={paidOn} onChange={(e) => setPaidOn(e.target.value)} />
+      </Field>
+      {over && <Notice tone="warn">เงินในมือไม่พอ (เหลือ {baht(holder.balance)}) — กด “ขอเติมเงิน” ก่อน</Notice>}
+      <FilePicker role="slip" files={slips} onChange={setSlips} label="รูปตอนให้เงิน / สลิป *" hint="รูปผู้รับเซ็นรับเงิน หรือรูปตอนส่งเงิน" today={today} />
+      {error && <Notice tone="danger">{error}</Notice>}
+      {similar && (
+        <div className="flex flex-col gap-2 rounded-(--radius) border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <span>{similar}</span>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className={ghost} onClick={() => setSimilar(null)}>เปลี่ยนรูป</button>
+            <button type="button" className={primary} disabled={busy} onClick={() => pay(true)}>ยืนยันว่าเป็นคนละรายการ แล้วจ่าย</button>
+          </div>
+        </div>
+      )}
+      <div className="flex justify-end gap-2 border-t border-(--line) pt-3">
+        <SaveButtons busy={busy} disabled={!ready} label={item ? `จ่าย ${baht(item.outstanding)}` : "จ่าย"} onClose={onClose} onSave={() => pay(false)} />
+      </div>
+    </div>
+  );
+}
+
+/** ซื้อของเองด้วยเงินในมือ — ไม่มีใบเบิก */
+function SpendForm({ balance, today, onClose }: { balance: number; today: string; onClose: () => void }) {
   const { busy, error, run } = useSave(onClose);
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
@@ -293,31 +395,8 @@ function SpendModal({ balance, today, payable, onClose }: { balance: number; tod
   const over = Number.isFinite(value) && value > balance + 0.005;
   const ready = title.trim() && category && Number.isFinite(value) && value > 0 && !over && spentOn && files.length > 0;
   return (
-    <Modal
-      title="จ่ายค่าของจากเงินสดย่อย"
-      onClose={onClose}
-      actions={<SaveButtons busy={busy} disabled={!ready} label="บันทึกการจ่าย" onClose={onClose} onSave={() => run(() => addPettySpendAction({ title, category, amount: value, spentOn, attachments: files }))} />}
-    >
       <div className="flex flex-col gap-3">
-        {payable.length > 0 && (
-          <div className="flex flex-col gap-1.5 rounded-(--radius) border border-(--line) p-3">
-            <p className="text-sm font-semibold text-(--ink)">จ่ายตามใบเบิกที่อนุมัติแล้ว ({payable.length})</p>
-            <p className="text-xs text-(--ink-soft)">กดใบที่จะจ่าย แล้วกด “บันทึกจ่ายเงิน” ในใบนั้น — ยอดหักจากเงินในมือให้เอง ไม่ต้องกรอกที่นี่</p>
-            <ul className="flex max-h-48 flex-col divide-y divide-(--line) overflow-y-auto">
-              {payable.map((p) => (
-                <li key={p.id}>
-                  <a href={`/requests/${p.id}`} className="flex items-baseline justify-between gap-3 py-1.5 text-sm hover:underline">
-                    <span className="min-w-0 truncate text-(--ink)">
-                      <span className="text-(--app-strong)">{p.code}</span> · {p.beneficiaryName} · {p.title}
-                    </span>
-                    <span className="shrink-0 font-semibold tabular-nums text-(--ink)">{baht(p.outstanding)}</span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        <Explain>{payable.length > 0 ? "ไม่มีใบเบิก — " : ""}จดทุกครั้งที่ใช้เงินในมือจ่ายค่าอะไร — กรอกครบทุกช่องที่มี * และแนบรูปใบเสร็จ บันทึกแล้วยอดในมือลดลงทันที · เงินในมือตอนนี้ {baht(balance)}</Explain>
+        <Explain>ใช้เงินในมือซื้อของ/จ่ายค่าบริการเอง ไม่ต้องทำใบเบิก — กรอกครบทุกช่องที่มี * และแนบรูปใบเสร็จ บันทึกแล้วยอดในมือลดลงทันที · เงินในมือตอนนี้ {baht(balance)}</Explain>
         <Field label="จ่ายค่าอะไร" required>
           <input className={field} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="เช่น น้ำแข็ง 2 ถุง บ้าน A3" />
         </Field>
@@ -351,8 +430,10 @@ function SpendModal({ balance, today, payable, onClose }: { balance: number; tod
           }}
         />
         {error && <Notice tone="danger">{error}</Notice>}
+        <div className="flex justify-end gap-2 border-t border-(--line) pt-3">
+          <SaveButtons busy={busy} disabled={!ready} label="บันทึกการจ่าย" onClose={onClose} onSave={() => run(() => addPettySpendAction({ title, category, amount: value, spentOn, attachments: files }))} />
+        </div>
       </div>
-    </Modal>
   );
 }
 

@@ -16,7 +16,7 @@ import { bangkokToday, baht, thaiDateTime } from "@/modules/requests/lib/types";
 
 export const dynamic = "force-dynamic";
 
-const KIND_LABEL = { top_up: "รับเงินเติม", spend: "จ่ายค่าของ", return: "รับเงินทอนคืน", adjust: "ปรับยอด (นับเงินจริง)" } as const;
+const KIND_LABEL = { top_up: "รับเงินเติม", spend: "จ่ายเงิน", return: "รับเงินทอนคืน", adjust: "ปรับยอด (นับเงินจริง)" } as const;
 
 /**
  * เงินสดย่อย — แอดมิน/HR แต่ละคนถือเงินก้อนของตัวเอง ยอดคงเหลือ = เติม + รับคืน − จ่าย ± ปรับ
@@ -62,7 +62,7 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
         orderBy: { name: "asc" },
       })
     : [];
-  // ใบเบิกที่อนุมัติแล้วรอจ่าย — ให้คนถือเงินกดจ่ายตามใบได้จากปุ่ม "จ่ายค่าของ" (ยอดหักจากเงินในมือเอง)
+  // ใบเบิกที่อนุมัติแล้วรอจ่าย — ให้คนถือเงินกดจ่ายตามใบได้จากปุ่ม "จ่ายเงิน" › ให้คนที่ขอมา (ยอดหักจากเงินในมือเอง)
   const privacy = viewer.isPettyHolder ? await payPrivacy(session) : null;
   const payable = privacy
     ? (await withRequestsTenant(orgId, (tx) => loadRequests(tx, orgId, { status: "approved" }, 200)))
@@ -81,7 +81,7 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
             <InfoTip label="เงินสดย่อยคืออะไร" title="เงินสดย่อยใช้ยังไง">
               <b>1. ได้เงินมาถือ</b> — HR/CEO กด “เติมเงินให้” หรือผู้ถือกด “ขอเติมเงิน” แล้วรออนุมัติ (ทุกครั้งต้องแนบสลิปโอน/รูปเงินสด)
               <br />
-              <b>2. ใช้จ่าย</b> — ซื้อของ/จ่ายค่าบริการแล้วกด “จ่ายค่าของ” บนการ์ดของตัวเอง บอกว่าค่าอะไร เลือกหมวด แนบใบเสร็จ
+              <b>2. ใช้จ่าย</b> — กด “จ่ายเงิน” บนการ์ดของตัวเอง แล้วเลือก “ให้คนที่ขอมา” (ใบเบิกที่ HR อนุมัติแล้ว) หรือ “ซื้อของเอง” (บอกว่าค่าอะไร เลือกหมวด แนบใบเสร็จ)
               <br />
               <b>3. เงินใกล้หมด</b> — กด “ขอเติมเงิน” อีกรอบ
               <br />
