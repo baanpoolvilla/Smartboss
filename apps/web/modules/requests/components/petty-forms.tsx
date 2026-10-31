@@ -37,6 +37,15 @@ export interface PettyHolderView {
   balance: number;
 }
 
+/** ใบเบิกที่อนุมัติแล้วรอจ่าย — คนถือเงินกดเข้าไปจ่ายในใบได้ */
+export interface PettyPayableItem {
+  id: string;
+  code: string;
+  title: string;
+  beneficiaryName: string;
+  outstanding: number;
+}
+
 export interface PettyTopupItem {
   id: string;
   holderUserId: string;
@@ -172,6 +181,7 @@ export function PettyHolderCard({
   today,
   selected,
   href,
+  payable = [],
 }: {
   holder: PettyHolderView;
   isMe: boolean;
@@ -183,6 +193,8 @@ export function PettyHolderCard({
   today: string;
   selected: boolean;
   href: string;
+  /** ใบเบิกที่รอคนนี้จ่ายจากเงินสดย่อย (เฉพาะการ์ดของตัวเอง) */
+  payable?: PettyPayableItem[];
 }) {
   const [open, setOpen] = useState<"spend" | "request" | "topup" | "adjust" | null>(null);
   const close = () => setOpen(null);
@@ -260,7 +272,7 @@ export function PettyHolderCard({
         </button>
       )}
 
-      {open === "spend" && <SpendModal balance={holder.balance} today={today} onClose={close} />}
+      {open === "spend" && <SpendModal balance={holder.balance} today={today} payable={payable} onClose={close} />}
       {open === "request" && <RequestTopupModal holder={holder} onClose={close} />}
       {open === "topup" && <TopUpModal holder={holder} today={today} onClose={close} />}
       {open === "adjust" && <AdjustModal holder={holder} onClose={close} />}
@@ -270,7 +282,7 @@ export function PettyHolderCard({
 
 /* ───────────── − จ่ายค่าของ ───────────── */
 
-function SpendModal({ balance, today, onClose }: { balance: number; today: string; onClose: () => void }) {
+function SpendModal({ balance, today, payable, onClose }: { balance: number; today: string; payable: PettyPayableItem[]; onClose: () => void }) {
   const { busy, error, run } = useSave(onClose);
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
@@ -287,7 +299,25 @@ function SpendModal({ balance, today, onClose }: { balance: number; today: strin
       actions={<SaveButtons busy={busy} disabled={!ready} label="บันทึกการจ่าย" onClose={onClose} onSave={() => run(() => addPettySpendAction({ title, category, amount: value, spentOn, attachments: files }))} />}
     >
       <div className="flex flex-col gap-3">
-        <Explain>จดทุกครั้งที่ใช้เงินในมือจ่ายค่าอะไร — กรอกครบทุกช่องที่มี * และแนบรูปใบเสร็จ บันทึกแล้วยอดในมือลดลงทันที · เงินในมือตอนนี้ {baht(balance)}</Explain>
+        {payable.length > 0 && (
+          <div className="flex flex-col gap-1.5 rounded-(--radius) border border-(--line) p-3">
+            <p className="text-sm font-semibold text-(--ink)">จ่ายตามใบเบิกที่อนุมัติแล้ว ({payable.length})</p>
+            <p className="text-xs text-(--ink-soft)">กดใบที่จะจ่าย แล้วกด “บันทึกจ่ายเงิน” ในใบนั้น — ยอดหักจากเงินในมือให้เอง ไม่ต้องกรอกที่นี่</p>
+            <ul className="flex max-h-48 flex-col divide-y divide-(--line) overflow-y-auto">
+              {payable.map((p) => (
+                <li key={p.id}>
+                  <a href={`/requests/${p.id}`} className="flex items-baseline justify-between gap-3 py-1.5 text-sm hover:underline">
+                    <span className="min-w-0 truncate text-(--ink)">
+                      <span className="text-(--app-strong)">{p.code}</span> · {p.beneficiaryName} · {p.title}
+                    </span>
+                    <span className="shrink-0 font-semibold tabular-nums text-(--ink)">{baht(p.outstanding)}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <Explain>{payable.length > 0 ? "ไม่มีใบเบิก — " : ""}จดทุกครั้งที่ใช้เงินในมือจ่ายค่าอะไร — กรอกครบทุกช่องที่มี * และแนบรูปใบเสร็จ บันทึกแล้วยอดในมือลดลงทันที · เงินในมือตอนนี้ {baht(balance)}</Explain>
         <Field label="จ่ายค่าอะไร" required>
           <input className={field} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="เช่น น้ำแข็ง 2 ถุง บ้าน A3" />
         </Field>

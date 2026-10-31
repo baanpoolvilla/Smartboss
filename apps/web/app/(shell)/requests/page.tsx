@@ -6,7 +6,7 @@ import { usersWithPermission } from "@/modules/maintenance/data/notify";
 import { pettyBalances, withRequestsTenant } from "@/modules/requests/lib/db";
 import { listPettyHolders } from "@/modules/requests/lib/holders";
 import { canDecide, listVisibleRequests } from "@/modules/requests/lib/data";
-import { beneficiaryLabel, isOpen, pettyAccess, requestsPage, statusOf } from "@/modules/requests/lib/page";
+import { beneficiaryLabel, isOpen, payableByHolder, pettyAccess, requestsPage, statusOf } from "@/modules/requests/lib/page";
 import { RequestsHome, type ListRow } from "@/modules/requests/components/request-list";
 import { maskRequest, payPrivacy } from "@/modules/requests/lib/pay-privacy";
 import { Notice } from "@/modules/requests/components/ui";
@@ -107,7 +107,9 @@ async function Body({
       waitingMe: canDecide(r, viewer) && (r.approverLevel === "ceo" || !viewer.canApproveCeo || !hasPureHr(r)),
       toPay:
         (viewer.canPay && r.status === "approved" && r.beneficiaryUserId !== viewer.userId && !(r.kind === "ot" && r.beneficiaryKind === "worker")) ||
-        (viewer.canPay && r.kind === "cash_advance" && r.clearStatus === "submitted" && r.beneficiaryUserId !== viewer.userId),
+        (viewer.canPay && r.kind === "cash_advance" && r.clearStatus === "submitted" && r.beneficiaryUserId !== viewer.userId) ||
+        // คนถือเงินสดย่อยจ่ายจากเงินในมือได้ (ผู้ใช้ 31/10/2569 "คนจ่ายเลือกเลยไม่ได้หรอว่าจ่ายบิลไหน")
+        (!viewer.canPay && viewer.isPettyHolder && payableByHolder(r, viewer.userId)),
       mine: r.createdBy === viewer.userId || r.beneficiaryUserId === viewer.userId,
       open: isOpen(r),
     };
@@ -136,7 +138,7 @@ async function Body({
           ? `เบิกเงินไปซื้อของแล้วเลยกำหนดส่งใบเสร็จ ${overdueClear.length} ใบ (${overdueClear.map((r) => `${r.code} ${r.beneficiaryName}`).join(", ")})`
           : null
       }
-      showPayTab={viewer.canPay}
+      showPayTab={viewer.canPay || viewer.isPettyHolder}
       showAllTab={seesAll}
       showApproveTab={viewer.canApprove || viewer.canApproveCeo}
     />

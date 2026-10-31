@@ -38,6 +38,20 @@ export function pettyAccess(session: Parameters<typeof hasPermission>[0]) {
   };
 }
 
+/**
+ * ใบที่คนถือเงินสดย่อยจ่ายเองได้ — เกณฑ์เดียวกับปุ่มจ่ายในหน้าใบ ([id]/page.tsx canPayHere):
+ * อนุมัติแล้ว ยังค้างจ่าย ไม่ใช่ใบของตัวเอง ไม่ใช่ OT คนงาน (จ่ายผ่านค่าแรง) และไม่ซ่อนยอด (จ่ายผ่านรอบเงินเดือน)
+ */
+export function payableByHolder(r: RequestView & { payHidden: boolean }, userId: string): boolean {
+  return (
+    r.status === "approved" &&
+    r.beneficiaryUserId !== userId &&
+    !(r.kind === "ot" && r.beneficiaryKind === "worker") &&
+    !r.payHidden &&
+    r.netAmount - r.paidTotal > 0.005
+  );
+}
+
 export const statusOf = (r: RequestView) =>
   statusInfo({
     kind: r.kind,

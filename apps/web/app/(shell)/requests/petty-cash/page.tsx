@@ -7,9 +7,10 @@ import { AppScaffold } from "@/components/module/app-scaffold";
 import { InfoTip } from "@/modules/salary/components/help";
 import { REQ_PERMS } from "@/modules/requests/permissions";
 import { WORKER_ROLE_CODE } from "@/modules/daily_worker/permissions";
-import { pettyBalances, toPetty, toPettyTopup, withRequestsTenant } from "@/modules/requests/lib/db";
+import { loadRequests, pettyBalances, toPetty, toPettyTopup, withRequestsTenant } from "@/modules/requests/lib/db";
 import { listPettyHolders } from "@/modules/requests/lib/holders";
-import { pettyAccess, requestsPage } from "@/modules/requests/lib/page";
+import { payableByHolder, pettyAccess, requestsPage } from "@/modules/requests/lib/page";
+import { maskRequest, payPrivacy } from "@/modules/requests/lib/pay-privacy";
 import { PendingTopupRow, PettyHolderCard, PettyHoldersButton, VoidPettyButton } from "@/modules/requests/components/petty-forms";
 import { bangkokToday, baht, thaiDateTime } from "@/modules/requests/lib/types";
 
@@ -60,6 +61,14 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
         select: { id: true, name: true },
         orderBy: { name: "asc" },
       })
+    : [];
+  // ใบเบิกที่อนุมัติแล้วรอจ่าย — ให้คนถือเงินกดจ่ายตามใบได้จากปุ่ม "จ่ายค่าของ" (ยอดหักจากเงินในมือเอง)
+  const privacy = viewer.isPettyHolder ? await payPrivacy(session) : null;
+  const payable = privacy
+    ? (await withRequestsTenant(orgId, (tx) => loadRequests(tx, orgId, { status: "approved" }, 200)))
+        .map((r) => maskRequest(privacy, r))
+        .filter((r) => payableByHolder(r, session.userId))
+        .map((r) => ({ id: r.id, code: r.code, title: r.title, beneficiaryName: r.beneficiaryName, outstanding: r.netAmount - r.paidTotal }))
     : [];
   const canDecide = (p: (typeof pending)[number]) => canTopUp && p.holderUserId !== session.userId && p.requestedByUserId !== session.userId && (!p.needsCeo || viewer.canApproveCeo);
 
@@ -125,6 +134,7 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
                   canTopUp={canTopUp}
                   canAdjust={isMe || petty.adjust}
                   pendingMine={pending.some((p) => p.holderUserId === h.userId)}
+                  payable={isMe ? payable : []}
                   today={today}
                   selected={sp.holder === h.userId}
                   href={sp.holder === h.userId ? "/requests/petty-cash" : `?holder=${h.userId}`}
