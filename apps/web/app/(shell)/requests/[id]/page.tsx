@@ -208,7 +208,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
   const vendor = r.vendorId ? await withRequestsTenant(orgId, (tx) => tx.moneyVendor.findFirst({ where: { orgId, id: r.vendorId! } })) : null;
 
   return (
-    <AppScaffold title={r.code} backHref="/requests" width="max-w-6xl">
+    <AppScaffold title={r.code} backHref="/requests" width="max-w-none">
       <div className="flex flex-col gap-4">
         {sp.created && <Notice tone="ok">ส่งแล้ว — {st.next}</Notice>}
         {sp.edited && <Notice tone="ok">บันทึกการแก้ไขแล้ว — ผู้อนุมัติได้แจ้งเตือนยอดใหม่</Notice>}

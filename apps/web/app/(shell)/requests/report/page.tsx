@@ -31,7 +31,7 @@ export default async function RequestsReportPage({ searchParams }: { searchParam
   const out = await moneyOutOfMonth(session.orgId, month, (r) => !canSeePay(privacy, r));
 
   return (
-    <AppScaffold title="รายงาน" backHref="/requests" width="max-w-7xl">
+    <AppScaffold title="รายงาน" backHref="/requests" width="max-w-none">
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-2 print:hidden">
           <Link href={`?month=${shiftMonthOf(month, -1)}`} aria-label="เดือนก่อน" className="rounded-full border border-(--line) bg-(--bg) p-2 hover:bg-(--bg-soft)"><ChevronLeft className="h-4 w-4" /></Link>

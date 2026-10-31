@@ -80,7 +80,7 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
   const canDecide = (p: (typeof pending)[number]) => canTopUp && p.holderUserId !== session.userId && p.requestedByUserId !== session.userId && (!p.needsCeo || viewer.canApproveCeo);
 
   return (
-    <AppScaffold title="เงินสดย่อย" backHref="/requests" width="max-w-6xl">
+    <AppScaffold title="เงินสดย่อย" backHref="/requests" width="max-w-none">
       <div className="flex flex-col gap-4">
         <section className="flex flex-wrap items-center justify-between gap-3 rounded-(--radius-lg) border border-(--line) bg-(--bg) px-4 py-3">
           <p className="flex items-center text-sm text-(--ink)">

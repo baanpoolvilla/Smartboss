@@ -48,7 +48,7 @@ export default async function NewRequestPage({ searchParams }: { searchParams: P
   const initialKind = KINDS.includes(sp.kind as RequestKind) ? (sp.kind as RequestKind) : null;
 
   return (
-    <AppScaffold title="ยื่นคำขอ" backHref="/requests" width="max-w-6xl">
+    <AppScaffold title="ยื่นคำขอ" backHref="/requests" width="max-w-none">
       <RequestForm
         kinds={kinds}
         initialKind={initialKind}

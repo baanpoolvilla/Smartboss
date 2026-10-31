@@ -62,7 +62,7 @@ export default async function EditRequestPage({ params }: { params: Promise<{ id
   };
 
   return (
-    <AppScaffold title={`แก้ไข ${r.code}`} backHref={`/requests/${id}`} width="max-w-6xl">
+    <AppScaffold title={`แก้ไข ${r.code}`} backHref={`/requests/${id}`} width="max-w-none">
       <RequestForm
         editId={id}
         initial={initial}

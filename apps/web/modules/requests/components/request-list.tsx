@@ -318,7 +318,7 @@ export function RequestsHome({
       hideTitle
       leading={leading}
       actions={actions}
-      width="max-w-[1600px]"
+      width="max-w-none"
       // ยื่นคำขอ = ปุ่มลอย + มุมขวาล่าง แบบบอร์ดงาน (ผู้ใช้ขอ 21/10/2569) — มือถือลอยเหนือเมนูล่าง
       fab={
         <Link

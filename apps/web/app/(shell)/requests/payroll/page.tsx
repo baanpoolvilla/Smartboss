@@ -25,7 +25,7 @@ export default async function RequestsPayrollPage() {
   const block = await payrollHandoffBlock(session);
   if (block) {
     return (
-      <AppScaffold title="ส่งเข้าเงินเดือน" backHref="/requests" width="max-w-4xl">
+      <AppScaffold title="ส่งเข้าเงินเดือน" backHref="/requests" width="max-w-none">
         <div className="rounded-(--radius-lg) border border-(--line) bg-(--bg) px-4 py-3 text-sm text-(--ink)">
           {block}
           {block.startsWith("ตั้งแต่") && (
@@ -57,7 +57,7 @@ export default async function RequestsPayrollPage() {
   });
 
   return (
-    <AppScaffold title="ส่งเข้าเงินเดือน" backHref="/requests" width="max-w-4xl">
+    <AppScaffold title="ส่งเข้าเงินเดือน" backHref="/requests" width="max-w-none">
       <div className="flex flex-col gap-4">
         <div className="rounded-(--radius-lg) border border-(--line) bg-(--bg) px-4 py-3 text-sm">
           งวด <strong>{scorePeriodLabel(config, period)}</strong> — ตามรอบตัดเกรด

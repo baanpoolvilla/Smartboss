@@ -64,7 +64,7 @@ async function Body({
 }) {
   if (!all) {
     return (
-      <AppScaffold title="เบิกจ่าย & OT" width="max-w-5xl">
+      <AppScaffold title="เบิกจ่าย & OT" width="max-w-none">
         <Notice tone="danger">โหลดรายการไม่สำเร็จ — ระบบอาจยังไม่ได้อัปเดตฐานข้อมูล (migration) แจ้งไอที</Notice>
       </AppScaffold>
     );
