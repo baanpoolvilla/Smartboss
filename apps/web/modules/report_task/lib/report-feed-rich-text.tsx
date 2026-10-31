@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import Link from "next/link";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Square, SquareCheckBig } from "lucide-react";
@@ -39,7 +39,14 @@ export function extractMentionedIds(text: string, type: MentionType): string[] {
  * mentionSymbolFor) — even though the underlying marker is always written
  * with a literal `@[...]` regardless of type. */
 export function mentionMarkersToPlainText(text: string): string {
-  return text.replace(MENTION_ONLY_PATTERN, (_m, label: string, type: string) => `${mentionSymbolFor(type as MentionType)}${label}`);
+  return stripColorMarkers(text).replace(MENTION_ONLY_PATTERN, (_m, label: string, type: string) => `${mentionSymbolFor(type as MentionType)}${label}`);
+}
+
+/** `{{c:red}}ข้อความ{{/c}}` → `ข้อความ` — ที่ที่แสดงสีไม่ได้ (แจ้งเตือน ฯลฯ) ไม่ให้เห็นรหัสสี */
+export function stripColorMarkers(text: string): string {
+  let t = text;
+  for (let i = 0; i < 3 && /\{\{(c|h):/.test(t); i++) t = t.replace(COLOR_SEGMENT, "$3");
+  return t;
 }
 
 /** Which leading character a mention type reads back as — `#` for a room
@@ -70,6 +77,56 @@ export const richTextMarkers = {
 
 export const HORIZONTAL_RULE_LINE = "---";
 
+/**
+ * สีตัวอักษร / ไฮไลต์ แบบ Microsoft Teams (ผู้ใช้ 31/10/2569 "ขอปรับสีข้อความ")
+ * เก็บเป็นชื่อสีในชุดที่กำหนด ไม่ใช่ค่าสีอิสระ — กันสีแปลก ๆ ที่ติดมาตอนวางจากที่อื่น และกันค่าแปลกปลอมในข้อความ
+ * รูปแบบที่เก็บ: `{{c:red}}ข้อความ{{/c}}` (สีตัวอักษร) · `{{h:yellow}}ข้อความ{{/h}}` (ไฮไลต์) · ใส่ตัวหนา/ลิงก์ข้างในได้
+ */
+export const TEXT_COLORS = {
+  red: { hex: "#dc2626", label: "แดง" },
+  orange: { hex: "#ea580c", label: "ส้ม" },
+  green: { hex: "#16a34a", label: "เขียว" },
+  blue: { hex: "#2563eb", label: "น้ำเงิน" },
+  purple: { hex: "#9333ea", label: "ม่วง" },
+  gray: { hex: "#6b7280", label: "เทา" },
+} as const;
+export const HIGHLIGHT_COLORS = {
+  yellow: { hex: "#fef08a", label: "เหลือง" },
+  green: { hex: "#bbf7d0", label: "เขียว" },
+  blue: { hex: "#bfdbfe", label: "ฟ้า" },
+  pink: { hex: "#fbcfe8", label: "ชมพู" },
+} as const;
+type ColorKind = "c" | "h";
+const COLOR_SEGMENT = /\{\{(c|h):([a-z]+)\}\}(.+?)\{\{\/\1\}\}/g;
+
+function paletteOf(kind: ColorKind): Record<string, { hex: string; label: string }> {
+  return kind === "c" ? TEXT_COLORS : HIGHLIGHT_COLORS;
+}
+
+/** "#DC2626" / "rgb(220, 38, 38)" → ชื่อในชุดสี · ไม่อยู่ในชุด = undefined */
+function paletteName(kind: ColorKind, value: string | null | undefined): string | undefined {
+  if (!value) return undefined;
+  let hex = value.trim().toLowerCase();
+  const rgb = hex.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  if (rgb) hex = "#" + rgb.slice(1, 4).map((n) => Number(n).toString(16).padStart(2, "0")).join("");
+  return Object.entries(paletteOf(kind)).find(([, v]) => v.hex === hex)?.[0];
+}
+
+type ColorSegment = { text: string } | { kind: ColorKind; name: string; inner: string };
+
+function splitColorSegments(text: string): ColorSegment[] {
+  const out: ColorSegment[] = [];
+  let last = 0;
+  for (const m of text.matchAll(COLOR_SEGMENT)) {
+    const at = m.index ?? 0;
+    if (at > last) out.push({ text: text.slice(last, at) });
+    out.push({ kind: m[1] as ColorKind, name: m[2]!, inner: m[3]! });
+    last = at + m[0].length;
+  }
+  if (last < text.length) out.push({ text: text.slice(last) });
+  return out;
+}
+
 // The bare-URL branch must come last — it has no closing delimiter to stop
 // at, so it only gets a turn once the delimited branches have had first pick.
 // The mention branch comes first — its label can itself contain characters
@@ -85,11 +142,20 @@ function escapeHtml(text: string): string {
 const ANY_LIST_LINE_PREFIX = /^(•|\d+\.|☐|☑)\s+/;
 
 /** Converts stored `**bold**`/`*italic*`/`__underline__`/`` `code` ``/`@[label](type:id)` marker text into the WYSIWYG editor's live HTML. */
-export function bulletsTextToHtml(text: string): string {
-  const html = text
-    .split("\n")
-    .map((line) => {
-      const rendered = escapeHtml(line).replace(RICH_TEXT_PATTERN, (whole, mLabel, mType, mId, b, i, u, c) => {
+function inlineToEditorHtml(escaped: string): string {
+  return splitColorSegments(escaped)
+    .map((seg) => {
+      if ("text" in seg) return plainInlineToEditorHtml(seg.text);
+      const inner = inlineToEditorHtml(seg.inner);
+      const hex = paletteOf(seg.kind)[seg.name]?.hex;
+      if (!hex) return inner;
+      return seg.kind === "c" ? `<font color="${hex}">${inner}</font>` : `<span style="background-color:${hex}">${inner}</span>`;
+    })
+    .join("");
+}
+
+function plainInlineToEditorHtml(escaped: string): string {
+  return escaped.replace(RICH_TEXT_PATTERN, (whole, mLabel, mType, mId, b, i, u, c) => {
         // A bare URL match falls through to here too — left as plain text in
         // the editor (not a live <a>), since linkifying it would make the
         // URL uneditable as text mid-edit.
@@ -101,7 +167,14 @@ export function bulletsTextToHtml(text: string): string {
         if (u !== undefined) return `<u>${u}</u>`;
         if (c !== undefined) return `<code>${c}</code>`;
         return whole;
-      });
+  });
+}
+
+export function bulletsTextToHtml(text: string): string {
+  const html = text
+    .split("\n")
+    .map((line) => {
+      const rendered = inlineToEditorHtml(escapeHtml(line));
       // A wrapped list line otherwise snaps its continuation back to the
       // editor's own left edge instead of hanging under the marker's text —
       // text-indent only ever affects a block's *first* line, and every
@@ -126,6 +199,9 @@ interface FormatFlags {
   italic: boolean;
   underline: boolean;
   code: boolean;
+  /** ชื่อใน TEXT_COLORS / HIGHLIGHT_COLORS */
+  color?: string;
+  highlight?: string;
 }
 
 function applyFormatMarkers(text: string, flags: FormatFlags): string {
@@ -134,7 +210,19 @@ function applyFormatMarkers(text: string, flags: FormatFlags): string {
   if (flags.bold) t = `**${t}**`;
   if (flags.italic) t = `*${t}*`;
   if (flags.underline) t = `__${t}__`;
+  if (flags.color) t = `{{c:${flags.color}}}${t}{{/c}}`;
+  if (flags.highlight) t = `{{h:${flags.highlight}}}${t}{{/h}}`;
   return t;
+}
+
+/** สีที่ element นี้ตั้งเอง — ตั้งสีนอกชุด (เช่น "ล้างสี" หรือสีที่วางมาจากที่อื่น) = ล้างสีของตัวแม่ */
+function colorFlagsOf(el: HTMLElement, flags: FormatFlags): Pick<FormatFlags, "color" | "highlight"> {
+  const fg = (el.tagName === "FONT" ? el.getAttribute("color") : null) || el.style?.color;
+  const bg = el.style?.backgroundColor;
+  return {
+    color: fg ? paletteName("c", fg) : flags.color,
+    highlight: bg ? paletteName("h", bg) : flags.highlight,
+  };
 }
 
 /**
@@ -210,6 +298,7 @@ function collectLines(el: HTMLElement): string[] {
         italic: flags.italic || false,
         underline: flags.underline || false,
         code: flags.code || false,
+        ...colorFlagsOf(elNode, flags),
       };
       for (const child of Array.from(elNode.childNodes)) walk(child, nextFlags);
       lines.push(current);
@@ -221,6 +310,7 @@ function collectLines(el: HTMLElement): string[] {
       italic: flags.italic || elNode.tagName === "I" || elNode.tagName === "EM",
       underline: flags.underline || elNode.tagName === "U",
       code: flags.code || elNode.tagName === "CODE",
+      ...colorFlagsOf(elNode, flags),
     };
     for (const child of Array.from(elNode.childNodes)) walk(child, nextFlags);
   }
@@ -258,6 +348,23 @@ const mentionChipClass = "inline-flex items-center rounded bg-[#5865f2]/15 text-
 
 /** Renders **bold**, *italic*, __underline__, `code`, bare http(s) links, and `@[label](type:id)` mentions written via the bullet toolbar. A topic mention links straight to that room; person/department mentions are just a styled highlight — nothing to navigate to. */
 export function renderRichBulletText(text: string): ReactNode[] {
+  const segs = splitColorSegments(text);
+  if (segs.length === 1 && "text" in segs[0]!) return renderPlainRichText(text);
+  return segs.map((seg, i) => {
+    if ("text" in seg) return <Fragment key={i}>{renderPlainRichText(seg.text)}</Fragment>;
+    const hex = paletteOf(seg.kind)[seg.name]?.hex;
+    const inner = renderRichBulletText(seg.inner);
+    if (!hex) return <Fragment key={i}>{inner}</Fragment>;
+    return seg.kind === "c" ? (
+      <span key={i} style={{ color: hex }}>{inner}</span>
+    ) : (
+      // ไฮไลต์ใช้ตัวอักษรสีเข้มเสมอ — พื้นสีอ่อนบนธีมมืด ตัวอักษรสีอ่อนจะอ่านไม่ออก
+      <span key={i} className="rounded-sm px-0.5 text-[#1b2537]" style={{ backgroundColor: hex }}>{inner}</span>
+    );
+  });
+}
+
+function renderPlainRichText(text: string): ReactNode[] {
   const nodes: ReactNode[] = [];
   let lastIndex = 0;
   let key = 0;

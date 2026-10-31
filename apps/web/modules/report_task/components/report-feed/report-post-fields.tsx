@@ -28,6 +28,7 @@ import { AlbumPickerButton } from "@/modules/report_task/components/report-feed/
 import { TagPickerButton } from "@/modules/report_task/components/report-feed/tag-picker-button";
 import { Bold, Building2, Code, Crown, Hash, Italic, List, ListOrdered, Minus, Square, Table, TriangleAlert, Underline, User, Users, X } from "lucide-react";
 import { LinkInsertPopover } from "@/modules/report_task/components/report-feed/link-insert-popover";
+import { TextColorButtons, applyTextColor } from "@/modules/report_task/components/report-feed/text-color-buttons";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
 import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
 import { dropZoneProps, hasClipboardText } from "@/lib/annotate/annotate";
@@ -477,6 +478,13 @@ export function ReportPostFields({
     syncFromEditor(sectionId, el);
   }
 
+  function colorize(sectionId: string, kind: "c" | "h", hex: string | null) {
+    const el = editableRefs.current[sectionId];
+    if (!el) return;
+    applyTextColor(el, kind, hex);
+    syncFromEditor(sectionId, el);
+  }
+
   function toggleCode(sectionId: string) {
     const el = editableRefs.current[sectionId];
     if (!el) return;
@@ -726,6 +734,11 @@ export function ReportPostFields({
                 <button type="button" onMouseDown={preserveSelection} onClick={() => exec(s.id, "underline")} className={toolbarBtn(fmt.underline)} aria-label="ขีดเส้นใต้" title="ขีดเส้นใต้">
                   <Underline className="h-3 w-3" />
                 </button>
+                <TextColorButtons
+                  buttonClassName={toolbarBtn(false)}
+                  onColor={(hex) => colorize(s.id, "c", hex)}
+                  onHighlight={(hex) => colorize(s.id, "h", hex)}
+                />
                 <span className="w-px h-4 bg-[var(--line)] mx-0.5" />
                 <button
                   type="button"

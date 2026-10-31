@@ -84,6 +84,7 @@ import { ReportTagChip } from "@/modules/report_task/components/report-feed/repo
 import { ReportImageLightbox } from "@/modules/report_task/components/report-feed/report-image-lightbox";
 import { ReportReply } from "@/modules/report_task/components/report-feed/report-reply";
 import { detectMentionTrigger, insertMentionChip, type MentionItem } from "@/modules/report_task/components/report-feed/mention-utils";
+import { TextColorButtons, applyTextColor } from "@/modules/report_task/components/report-feed/text-color-buttons";
 import { LinkInsertPopover } from "@/modules/report_task/components/report-feed/link-insert-popover";
 import { cn } from "@/modules/report_task/lib/utils";
 import { REACTION_CHIP_CLASS, ReactionPicker } from "@/components/emoji-picker";
@@ -733,6 +734,13 @@ export function ReportCard({
   // instead of literal **/__ marker text sitting in a plain <input>.
   // htmlEditorToBulletsText serializes it back to the same marker text
   // renderRichBulletText expects once posted.
+  function colorizeReply(kind: "c" | "h", hex: string | null) {
+    const el = replyEditorRef.current;
+    if (!el) return;
+    applyTextColor(el, kind, hex);
+    setReplyText(htmlEditorToBulletsText(el));
+  }
+
   function execReplyFormat(command: string) {
     const el = replyEditorRef.current;
     if (!el) return;
@@ -2130,6 +2138,12 @@ export function ReportCard({
                   >
                     <Underline className="h-3.5 w-3.5" />
                   </button>
+                  <TextColorButtons
+                    buttonClassName={REPLY_FORMAT_BTN}
+                    iconClassName="h-3.5 w-3.5"
+                    onColor={(hex) => colorizeReply("c", hex)}
+                    onHighlight={(hex) => colorizeReply("h", hex)}
+                  />
                   <LinkInsertPopover
                     onInsert={insertReplyLink}
                     className={REPLY_FORMAT_BTN}
