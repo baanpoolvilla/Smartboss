@@ -8,7 +8,8 @@ import { requestsPage, statusOf, beneficiaryLabel } from "@/modules/requests/lib
 import { groupBy, kindTotals, monthRequests } from "@/modules/requests/lib/report";
 import { KindChip, StatusChip } from "@/modules/requests/components/ui";
 import { KINDS, KIND_META, bangkokToday, baht, costOf, monthTitle, round2, shiftMonthOf, thaiDate } from "@/modules/requests/lib/types";
-import { maskRequest, payPrivacy } from "@/modules/requests/lib/pay-privacy";
+import { canSeePay, maskRequest, payPrivacy } from "@/modules/requests/lib/pay-privacy";
+import { moneyOutOfMonth } from "@/modules/requests/lib/petty-report";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,7 @@ export default async function RequestsReportPage({ searchParams }: { searchParam
   const people = groupBy(rows, (r) => [r.beneficiaryUserId ?? r.vendorId ?? r.beneficiaryName, `${r.beneficiaryName} (${beneficiaryLabel(r)})`]);
   const places = groupBy(rows.filter((r) => r.propertyName), (r) => [r.propertyId ?? r.propertyName!, r.propertyName!]);
   const wht = round2(rows.reduce((s, r) => s + r.whtAmount, 0));
+  const out = await moneyOutOfMonth(session.orgId, month, (r) => !canSeePay(privacy, r));
 
   return (
     <AppScaffold title="รายงาน" backHref="/requests" width="max-w-7xl">
@@ -47,6 +49,25 @@ export default async function RequestsReportPage({ searchParams }: { searchParam
             ยอดรวมไม่รวม OT พนักงานประจำ {hiddenCount} ใบ — ยอด OT บอกเงินเดือนได้ จึงเห็นเฉพาะเจ้าตัว / CEO / ผู้ดูแลเงินเดือน
           </p>
         )}
+
+        <section className="rounded-(--radius-lg) border-2 border-(--brand-navy,#1b2537) bg-(--bg) p-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div className="text-sm font-bold">เงินออกทั้งหมด · {monthTitle(month)}</div>
+            <div className="text-2xl font-bold tabular-nums">{baht(out.total)}</div>
+          </div>
+          <ul className="mt-2 flex flex-col gap-1 text-sm">
+            <li className="flex justify-between gap-3"><span>จ่ายตามใบเบิก — โอน / เงินสด / รวมเงินเดือน</span><span className="tabular-nums">{baht(out.viaOther)}</span></li>
+            <li className="flex justify-between gap-3"><span>จ่ายตามใบเบิก — จากเงินสดย่อย</span><span className="tabular-nums">{baht(out.viaPetty)}</span></li>
+            <li className="flex justify-between gap-3">
+              <span>ซื้อของเองจากเงินสดย่อย (ไม่มีใบเบิก) <Link href={`/requests/petty-cash?month=${month}`} className="text-xs text-(--app-strong) hover:underline print:hidden">ดูรายการ</Link></span>
+              <span className="tabular-nums">{baht(out.selfSpend)}</span>
+            </li>
+          </ul>
+          <p className="mt-2 text-[11px] text-(--ink-soft)">
+            นับตามวันที่จ่ายจริง (ใบที่ยื่นเดือนก่อนแต่จ่ายเดือนนี้ นับเดือนนี้) · การเติมเงินสดย่อยไม่นับเป็นรายจ่าย นับตอนเงินถูกใช้
+            {out.hiddenCount > 0 ? ` · ไม่รวม OT พนักงานประจำ ${out.hiddenCount} ใบ (ซ่อนยอด)` : ""}
+          </p>
+        </section>
 
         <section className="grid grid-cols-2 gap-2 lg:grid-cols-3">
           <div className="rounded-(--radius-lg) border border-(--line) bg-(--bg) p-3.5">

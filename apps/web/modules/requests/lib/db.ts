@@ -49,7 +49,7 @@ export async function withRequestsTenantAfter<P, T>(orgId: string, pre: (tx: Tx)
 export const ymd = (d: Date) => d.toISOString().slice(0, 10);
 export const dateOnly = (s: string) => new Date(`${s}T00:00:00Z`);
 const num = (d: { toString(): string } | null | undefined) => (d === null || d === undefined ? null : Number(d.toString()));
-const num0 = (d: { toString(): string } | null | undefined) => num(d) ?? 0;
+export const num0 = (d: { toString(): string } | null | undefined) => num(d) ?? 0;
 
 export interface PaymentView {
   id: string;
