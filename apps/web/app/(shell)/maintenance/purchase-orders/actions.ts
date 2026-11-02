@@ -246,6 +246,33 @@ async function notifyPoParties(
   });
 }
 
+/**
+ * แจ้งผู้รับผิดชอบใบงานที่ PR/PO นี้ผูกอยู่ (ผู้ใช้ 2/11/2569) — คนอื่นเปิด PR ให้ใบงานของช่าง ช่างไม่เคยรู้ว่า
+ * อนุมัติ/ของมาถึงหรือยัง ต้องเข้าไปเปิดดูเอง · ข้ามถ้าเขาได้แจ้งเตือนของจังหวะนี้แล้ว (alreadyTold) หรือเป็นคนกดเอง
+ * กดแล้วไปหน้าใบงาน (ที่ทำงานต่อ) ไม่ใช่หน้า PR
+ */
+async function notifyWorkOrderOwner(
+  orgId: string,
+  po: { title: string; workOrderId: string | null },
+  alreadyTold: (string | null | undefined)[],
+  actorId: string,
+  msg: { emoji: string; text: string; body?: string },
+) {
+  if (!po.workOrderId) return;
+  const wo = await prisma.workOrder.findFirst({
+    where: { orgId, id: po.workOrderId, status: { in: ["open", "in_progress", "completed"] } },
+    select: { id: true, code: true, title: true, assignedTo: true },
+  });
+  if (!wo?.assignedTo || wo.assignedTo === actorId || alreadyTold.includes(wo.assignedTo)) return;
+  await notifyUser(orgId, wo.assignedTo, {
+    title: `${msg.emoji} ${msg.text} · ใบงาน ${wo.code}`,
+    body: [`${wo.title} · ${po.title}`, msg.body].filter(Boolean).join("\n"),
+    type: "work_order",
+    referenceId: wo.id,
+    line: `${msg.emoji} ${msg.text}\n🔧 ใบงาน ${wo.code} ${wo.title}\n📦 ${po.title}${msg.body ? `\n${msg.body}` : ""}`,
+  });
+}
+
 async function ceoOnly() {
   const s = await requireOrg();
   if (!hasPermission(s, MAINT_PERMS.poApprove)) {
@@ -323,6 +350,14 @@ export async function approveNormalAction(formData: FormData) {
       body: assigneeName ? `มอบให้ ${assigneeName} ไปสั่งซื้อ` : undefined,
     });
   }
+  if (changed && po) {
+    const assigneeName = assignee ? await notifyActorName(assignee) : null;
+    await notifyWorkOrderOwner(s.orgId, po, [po.createdBy, assignee], s.userId, {
+      emoji: "✅",
+      text: "PR สำหรับใบงานของคุณอนุมัติแล้ว",
+      body: assigneeName ? `${assigneeName} เป็นคนไปสั่งซื้อ` : undefined,
+    });
+  }
   // จัดการแล้ว ⇒ แจ้งเตือน "รอคุณทำ" ของเรื่องนี้ไม่ต้องค้างที่ใคร (notify.ts resolveActionNotifications)
   if (changed) await resolveActionNotifications(id, "purchase_order", ["รออนุมัติ"]);
   revalidatePath(`/maintenance/purchase-orders/${id}`);
@@ -348,6 +383,10 @@ export async function approveEmergencyAction(formData: FormData) {
       emoji: "✅",
       text: "PR ฉุกเฉินอนุมัติแล้ว",
     });
+    await notifyWorkOrderOwner(s.orgId, po, [po.createdBy], s.userId, {
+      emoji: "✅",
+      text: "PR ฉุกเฉินสำหรับใบงานของคุณอนุมัติแล้ว",
+    });
   }
   // จัดการแล้ว ⇒ แจ้งเตือน "รอคุณทำ" ของเรื่องนี้ไม่ต้องค้างที่ใคร (notify.ts resolveActionNotifications)
   if (changed) await resolveActionNotifications(id, "purchase_order", ["รออนุมัติ"]);
@@ -372,6 +411,10 @@ export async function rejectAction(formData: FormData) {
       emoji: "❌",
       text: po.status === "pending" ? "PR ไม่ได้รับอนุมัติ" : "PO ถูกยกเลิก",
       body: po.poAssignedTo ? "ไม่ต้องดำเนินการสั่งซื้อรายการนี้แล้ว" : undefined,
+    });
+    await notifyWorkOrderOwner(s.orgId, po, [po.createdBy, po.poAssignedTo], s.userId, {
+      emoji: "❌",
+      text: po.status === "pending" ? "PR สำหรับใบงานของคุณไม่ได้รับอนุมัติ" : "PO สำหรับใบงานของคุณถูกยกเลิก",
     });
   }
   // จัดการแล้ว ⇒ แจ้งเตือน "รอคุณทำ" ของเรื่องนี้ไม่ต้องค้างที่ใคร (notify.ts resolveActionNotifications)
@@ -477,6 +520,10 @@ export async function confirmOrderAction(formData: FormData) {
     s.userId,
     { emoji: "🚚", text: "สั่งซื้อแล้ว รอรับของ", body: `ยอด ฿${total.toLocaleString()}` }
   );
+  await notifyWorkOrderOwner(s.orgId, po, [po.createdBy, receiver], s.userId, {
+    emoji: "🚚",
+    text: "ของสำหรับใบงานของคุณสั่งซื้อแล้ว รอรับของ",
+  });
 
   // จัดการแล้ว ⇒ แจ้งเตือน "รอคุณทำ" ของเรื่องนี้ไม่ต้องค้างที่ใคร (notify.ts resolveActionNotifications)
   if (changed) await resolveActionNotifications(id, "purchase_order", ["ได้รับมอบ PO"]);
@@ -511,6 +558,10 @@ export async function receiveAction(formData: FormData) {
     await notifyPoParties(s.orgId, po, [po.createdBy, po.poAssignedTo], s.userId, {
       emoji: "📥",
       text: "รับของแล้ว",
+    });
+    await notifyWorkOrderOwner(s.orgId, po, [po.createdBy, po.poAssignedTo], s.userId, {
+      emoji: "📥",
+      text: "ของสำหรับใบงานของคุณมาถึงแล้ว ทำงานต่อได้",
     });
   }
   // จัดการแล้ว ⇒ แจ้งเตือน "รอคุณทำ" ของเรื่องนี้ไม่ต้องค้างที่ใคร (notify.ts resolveActionNotifications)
@@ -557,6 +608,10 @@ export async function selfReceiveAction(formData: FormData) {
       emoji: "📥",
       text: "ซื้อและรับของแล้ว",
       body: `ยอด ฿${total.toLocaleString()}`,
+    });
+    await notifyWorkOrderOwner(s.orgId, po, [po.createdBy, po.poAssignedTo], s.userId, {
+      emoji: "📥",
+      text: "ของสำหรับใบงานของคุณมาถึงแล้ว ทำงานต่อได้",
     });
   } else if (urls.length > 0) await deleteFiles(urls).catch(() => 0);
   // จัดการแล้ว ⇒ แจ้งเตือน "รอคุณทำ" ของเรื่องนี้ไม่ต้องค้างที่ใคร (notify.ts resolveActionNotifications)
