@@ -3,6 +3,7 @@
 import { useDismissKeyboardOnDrag } from "@/lib/dismiss-keyboard-on-drag";
 import { ReactionPicker } from "@/components/emoji-picker";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { NewDivider } from "@/components/new-divider";
 import {
   Dialog,
@@ -85,6 +86,7 @@ import {
   Eye,
   ImagePlus,
   SendHorizontal,
+  CornerUpLeft,
 } from "lucide-react";
 import type { Attachment, Sticker, Task, TaskPriority, TaskStatus } from "@/modules/report_task/types";
 import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
@@ -940,6 +942,18 @@ export function TaskDetailSheet({
             screens since there's no room for two columns there. */}
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
         <div className={cn("flex-1 overflow-y-auto px-6 py-5 space-y-5 min-w-0 min-h-0", chatExpanded && "md:hidden")}>
+          {/* เปิดจากโพสต์/ความคิดเห็น/แชท — กดกลับไปดูต้นทาง */}
+          {task.source && (
+            <Link
+              href={task.source.link}
+              onClick={() => onOpenChange(false)}
+              className="flex items-center gap-2 rounded-lg border border-[#d5dbe6] bg-[#eaeef5] px-3 py-2 text-xs text-[var(--brand-navy)] hover:bg-[#dfe5ef]"
+            >
+              <CornerUpLeft className="h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">สร้างจาก {task.source.label}</span>
+              <span className="shrink-0 font-semibold">ไปดูต้นทาง</span>
+            </Link>
+          )}
           {/* Editable description (creator only) — staged in draftDescription */}
           <div className="space-y-1">
             <Label className="text-xs text-[var(--ink-soft)]">รายละเอียด</Label>

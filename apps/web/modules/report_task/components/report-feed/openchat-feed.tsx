@@ -15,6 +15,7 @@ import {
 } from "@/modules/report_task/components/ui/alert-dialog";
 import { ReportImageLightbox } from "@/modules/report_task/components/report-feed/report-image-lightbox";
 import { NewMessagesDivider } from "@/modules/report_task/components/report-feed/report-new-divider";
+import { useReportTaskOpener } from "@/modules/report_task/components/report-feed/use-report-task-opener";
 import { useReportFeedStore, type ReportPost, type ReportPostImage, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { getUser, departments, users as directoryUsers } from "@/modules/report_task/lib/directory";
@@ -42,7 +43,7 @@ import type { Sticker } from "@/lib/stickers-client";
 import { activeReactionList } from "@/lib/emoji";
 import { toast } from "sonner";
 import { MentionEditBox } from "@/modules/report_task/components/report-feed/mention-edit-box";
-import { Building2, Check, Crown, Hash, ImagePlus, MoreHorizontal, Pencil, Plus, Send, SmilePlus, Trash2, User, Users, X } from "lucide-react";
+import { Building2, Check, ClipboardList, Crown, Hash, ImagePlus, MoreHorizontal, Pencil, Plus, Send, SmilePlus, Trash2, User, Users, X } from "lucide-react";
 import { uuid } from "@/modules/report_task/lib/uuid";
 import { isCoarsePointer } from "@/modules/report_task/lib/device";
 
@@ -123,6 +124,15 @@ export function OpenchatFeed({
   onOpenTask?: (taskId: string) => void;
 }) {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
+  const taskOpener = useReportTaskOpener(topic, onOpenTask);
+  // ข้อความที่มีแต่สติกเกอร์เปิดงานไม่ได้ — ไม่มีเนื้อหา
+  function canOpenAsTask(m: OpenchatMessage) {
+    return !!m.body.trim() || !!m.images?.some((img) => !img.sticker);
+  }
+  function openMessageAsTask(m: OpenchatMessage) {
+    const post = topicPosts.find((p) => p.id === m.postId);
+    if (post) void taskOpener.openAsTask(post, m.kind === "reply" ? post.replies.find((r) => r.id === m.id) : undefined);
+  }
   const addPost = useReportFeedStore((s) => s.addPost);
   const removePost = useReportFeedStore((s) => s.removePost);
   const editPost = useReportFeedStore((s) => s.editPost);
@@ -686,6 +696,16 @@ export function OpenchatFeed({
                             />
                           </PopoverContent>
                         </Popover>
+                        {canOpenAsTask(m) && (
+                          <button
+                            onClick={() => openMessageAsTask(m)}
+                            className="h-7 w-7 flex items-center justify-center rounded text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"
+                            aria-label="เปิดเป็นงาน"
+                            title="เปิดเป็นงาน"
+                          >
+                            <ClipboardList className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                         {isOwn && (
                           <>
                             <button
@@ -747,6 +767,21 @@ export function OpenchatFeed({
                                 </button>
                               ))}
                             </div>
+                            {canOpenAsTask(m) && (
+                              <>
+                                <div className="h-px bg-[var(--line)] mx-1" />
+                                <button
+                                  onClick={() => {
+                                    openMessageAsTask(m);
+                                    setOpenActionsFor(null);
+                                  }}
+                                  className="flex items-center gap-2 rounded-md px-2.5 py-2 text-sm text-left hover:bg-[var(--bg-soft)]"
+                                >
+                                  <ClipboardList className="h-3.5 w-3.5 text-[var(--ink-soft)]" />
+                                  เปิดเป็นงาน
+                                </button>
+                              </>
+                            )}
                             {isOwn && (
                               <>
                                 <div className="h-px bg-[var(--line)] mx-1" />
@@ -784,6 +819,8 @@ export function OpenchatFeed({
           ))
         )}
       </div>
+
+      {taskOpener.dialog}
 
       {lightbox && (
         <ReportImageLightbox

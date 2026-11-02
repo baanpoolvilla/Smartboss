@@ -134,6 +134,8 @@ export interface ReportPostReply {
    * list (not a real tree) with a quoted reference shown above the body,
    * same shape as Teams' "reply to a message" instead of deep nesting. */
   replyToId?: string;
+  /** เปิดความคิดเห็นนี้เป็นงานแล้ว — เหมือน ReportPost.linkedTaskId กดอีกครั้งไปงานเดิม ไม่สร้างซ้ำ */
+  linkedTaskId?: string;
 }
 
 export interface ReportPostFields {
@@ -583,6 +585,7 @@ interface ReportFeedStore {
   removePost: (id: string) => void;
   /** Records which Task a post was opened/converted into (see report-card.tsx's "เปิดเป็นงาน"). */
   setPostLinkedTask: (postId: string, taskId: string) => void;
+  setReplyLinkedTask: (postId: string, replyId: string, taskId: string) => void;
   /** Moves an already-posted image in or out of an album after the fact
    * (the "ไฟล์" tab's one-tap save) — searches the post's own images and
    * every reply's images, since the caller only knows the image id, not
@@ -913,6 +916,12 @@ export const useReportFeedStore = create<ReportFeedStore>()(
       },
       setPostLinkedTask: (postId, taskId) =>
         set((s) => ({ posts: s.posts.map((p) => (p.id === postId ? { ...p, linkedTaskId: taskId } : p)) })),
+      setReplyLinkedTask: (postId, replyId, taskId) =>
+        set((s) => ({
+          posts: s.posts.map((p) =>
+            p.id === postId ? { ...p, replies: p.replies.map((r) => (r.id === replyId ? { ...r, linkedTaskId: taskId } : r)) } : p
+          ),
+        })),
       setImageAlbum: (postId, imageId, albumId) =>
         set((s) => ({
           posts: s.posts.map((p) => {

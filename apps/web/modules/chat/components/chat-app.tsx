@@ -118,6 +118,8 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const urlChannel = searchParams.get("c");
+  /** ลิงก์ "ไปดูต้นทาง" จากหน้างาน — ชี้ข้อความในห้อง */
+  const urlMessage = searchParams.get("m");
 
   const channels = useChatStore((s) => s.channels);
   const loaded = useChatStore((s) => s.channelsLoaded);
@@ -177,14 +179,19 @@ export function ChatApp({ currentUser }: { currentUser: ChatUser }) {
       if (useChatStore.getState().activeChannelId) setActive(null);
       return;
     }
-    if (openedRef.current === urlChannel) return;
+    if (openedRef.current === urlChannel) {
+      if (urlMessage) void jumpToMessage(urlChannel, urlMessage);
+      return;
+    }
     openedRef.current = urlChannel;
     const unread =
       useChatStore.getState().channels.find((c) => c.id === urlChannel)
         ?.unreadCount ?? 0;
     setInitialUnread((m) => ({ ...m, [urlChannel]: unread }));
-    void openChannel(urlChannel);
-  }, [urlChannel, setActive]);
+    void openChannel(urlChannel).then(() => {
+      if (urlMessage) void jumpToMessage(urlChannel, urlMessage);
+    });
+  }, [urlChannel, urlMessage, setActive]);
 
   // คอม: ไม่ได้ระบุห้อง → เปิดห้องบนสุดให้เลย (มือถือให้เห็นรายการก่อน)
   useEffect(() => {

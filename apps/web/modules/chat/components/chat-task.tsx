@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { NewTaskDialog } from "@/modules/report_task/components/kanban/new-task-dialog";
 import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-detail-sheet";
 import { useChatStore, type RoomMessage } from "../store/chat-store";
+import type { TaskSource } from "@/modules/report_task/types";
 import type { ChatChannelSummary } from "../types";
 import { channelTitle } from "../lib/format";
 
@@ -34,6 +35,7 @@ interface Prefill {
   description: string;
   assigneeIds: string[];
   files: File[];
+  source: TaskSource;
 }
 
 /** ไฟล์ในข้อความ → File สำหรับแนบในงาน (ดึงไม่ได้ก็ข้าม ไม่ล้มทั้งหมด) */
@@ -80,6 +82,11 @@ export function ChatTaskHost({ channel }: { channel: ChatChannelSummary }) {
         description: m ? `${body}${body ? "\n\n" : ""}— จากแชท "${room}" · ${users[m.authorId]?.name ?? "สมาชิก"} · ${when}` : "",
         assigneeIds: assignee ? [assignee] : [],
         files,
+        source: {
+          kind: "chat",
+          label: m ? `แชท "${room}" · ข้อความของ ${users[m.authorId]?.name ?? "สมาชิก"}` : `แชท "${room}"`,
+          link: `/chat-report/chat?c=${encodeURIComponent(channel.id)}${m ? `&m=${encodeURIComponent(m.id)}` : ""}`,
+        },
       });
     };
     window.addEventListener(CHAT_CREATE_TASK_EVENT, onCreate);
@@ -99,6 +106,7 @@ export function ChatTaskHost({ channel }: { channel: ChatChannelSummary }) {
           defaultDescription={prefill.description}
           defaultAssigneeIds={prefill.assigneeIds}
           defaultFiles={prefill.files}
+          source={prefill.source}
           onCreated={(taskId) => {
             setPrefill(null);
             toast.success("สร้างงานแล้ว — ผู้รับผิดชอบได้แจ้งเตือน", {

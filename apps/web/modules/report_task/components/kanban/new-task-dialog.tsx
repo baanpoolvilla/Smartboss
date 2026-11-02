@@ -54,7 +54,7 @@ import { expandRule, projectedRoutineQuotaTotal, quotaForDepartment, weekdayLabe
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
-import type { Attachment, CalendarEvent, ChecklistItem, LeaveType, Task, TaskPriority, TaskRecurrenceRule } from "@/modules/report_task/types";
+import type { Attachment, CalendarEvent, ChecklistItem, LeaveType, Task, TaskPriority, TaskRecurrenceRule, TaskSource } from "@/modules/report_task/types";
 import { describeRule, formatThaiDate, occurrenceDate, templateFromTask, validateRule } from "@/modules/report_task/lib/task-recurrence";
 import { defaultRecurrenceRule, RecurrenceFields, RecurrencePreview } from "@/modules/report_task/components/kanban/recurrence-fields";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -222,6 +222,7 @@ export function NewTaskDialog({
   defaultDescription,
   defaultAssigneeIds,
   defaultFiles,
+  source,
   onCreated,
 }: {
   open: boolean;
@@ -236,6 +237,8 @@ export function NewTaskDialog({
   defaultDescription?: string;
   defaultAssigneeIds?: string[];
   defaultFiles?: File[];
+  /** ต้นทางของงาน (โพสต์/ความคิดเห็น/แชท) — เก็บในงาน กดกลับไปดูได้จากหน้ารายละเอียดงาน */
+  source?: TaskSource;
   /** Fires with the new task's id right after a task (not meeting/leave) is created — lets a caller that opened this dialog for a specific purpose (e.g. linking a report post to the task it spawned) follow up without guessing the id. */
   onCreated?: (taskId: string) => void;
 }) {
@@ -351,7 +354,7 @@ export function NewTaskDialog({
   // งานเดี่ยว/งานกลุ่ม — explicit, chosen at creation (not re-derived from
   // assigneeIds.length later). Individual locks the assignee picker to one
   // person; group allows multi-select.
-  const [taskMode, setTaskMode] = useState<"individual" | "group">("individual");
+  const [taskMode, setTaskMode] = useState<"individual" | "group">((defaultAssigneeIds?.length ?? 0) > 1 ? "group" : "individual");
   // ติ๊ก "งานส่วนตัว" = ผู้รับผิดชอบคือตัวเองคนเดียว ซ่อนช่องเลือกคน (personal-task.ts)
   // เลือกตัวเองคนเดียวจากช่องเลือกคนเองก็เป็นงานส่วนตัวเหมือนกัน — ขึ้นข้อความบอกใต้ช่องนั้น
   const [personalMode, setPersonalMode] = useState(false);
@@ -632,6 +635,7 @@ export function NewTaskDialog({
       id: `task-${uuid()}`,
       title: title.trim(),
       description: description.trim(),
+      ...(source ? { source } : {}),
       status: "todo",
       priority,
       taskMode,

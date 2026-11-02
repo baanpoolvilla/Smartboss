@@ -24,7 +24,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/modules/report_task/components/ui/dialog";
-import { NewTaskDialog } from "@/modules/report_task/components/kanban/new-task-dialog";
+import { useReportTaskOpener } from "@/modules/report_task/components/report-feed/use-report-task-opener";
 import { getUser, users as directoryUsers, departments, isOwner } from "@/modules/report_task/lib/directory";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useStickerUsageStore, sortByUsage } from "@/modules/report_task/store/sticker-usage-store";
@@ -630,7 +630,7 @@ export function ReportCard({
     showStickerToast(pendingSticker, post.title, "โพสต์");
     setPendingSticker(null);
   }
-  const [createTaskOpen, setCreateTaskOpen] = useState(false);
+  const taskOpener = useReportTaskOpener(topic, onOpenTask);
   const [showFull, setShowFull] = useState(false);
   const [editing, setEditing] = useState(false);
   // Collapsed comment box's formatting toolbar (B/I/U/link/highlight) only
@@ -1004,11 +1004,8 @@ export function ReportCard({
 
   function handleOpenAsTask() {
     setMoreOpen(false);
-    if (post.linkedTaskId) {
-      onOpenTask?.(post.linkedTaskId);
-    } else {
-      setCreateTaskOpen(true);
-    }
+    setTouchMenuOpen(false);
+    void taskOpener.openAsTask(post);
   }
 
   function openReplyLightbox(images: ReportPostImage[], index: number, authorId: string, createdAt: string) {
@@ -1829,6 +1826,7 @@ export function ReportCard({
                     onReplyTo={startReplyTo}
                     onJumpToQuote={jumpToQuote}
                     onCopyLink={() => copyLink(post.replies[post.replies.length - 1]!.id)}
+                    onOpenAsTask={() => void taskOpener.openAsTask(post, post.replies[post.replies.length - 1]!)}
                     onToggleReaction={(emoji) =>
                       toggleReplyReaction(post.id, post.replies[post.replies.length - 1]!.id, emoji, viewingAsUserId)
                     }
@@ -1863,6 +1861,7 @@ export function ReportCard({
                           onReplyTo={startReplyTo}
                           onJumpToQuote={jumpToQuote}
                           onCopyLink={() => copyLink(r.id)}
+                          onOpenAsTask={() => void taskOpener.openAsTask(post, r)}
                           onToggleReaction={(emoji) => toggleReplyReaction(post.id, r.id, emoji, viewingAsUserId)}
                           mentionCandidates={replyMentionCandidates}
                           onEdit={(body) => editReplyAction(post.id, r.id, { body, images: r.images })}
@@ -2428,20 +2427,7 @@ export function ReportCard({
         </DialogContent>
       </Dialog>
 
-      {createTaskOpen && (
-        <NewTaskDialog
-          open={createTaskOpen}
-          onOpenChange={setCreateTaskOpen}
-          defaultType="task"
-          allowedTypes={["task"]}
-          defaultTitle={post.title}
-          onCreated={(taskId) => {
-            setPostLinkedTask(post.id, taskId);
-            setCreateTaskOpen(false);
-            onOpenTask?.(taskId);
-          }}
-        />
-      )}
+      {taskOpener.dialog}
     </div>
   );
 }

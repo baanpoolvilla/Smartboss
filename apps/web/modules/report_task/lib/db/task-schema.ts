@@ -127,6 +127,7 @@ export const taskSchema = z.object({
   checklist: z.array(checklistItemSchema),
   showChecklistOnCard: z.boolean(),
   projectTopicId: z.string().optional(),
+  source: z.object({ kind: z.enum(["report_post", "report_reply", "chat"]), label: z.string(), link: z.string().regex(/^\/(?!\/)/) }).optional(),
   // ฟิลด์ที่หน้าจอใช้อยู่แต่เคยไม่มีในนี้ → zod ตัดทิ้งทุกครั้งที่บันทึก (เหมือน reviewedBy ด้านบน)
   // เห็นบนจอได้จนรีเฟรช แล้วหาย: เวลาส่ง · อีโมจิ · คนติดตาม · งานทำซ้ำ · โปรเจกต์
   dueTime: z.string().optional(),

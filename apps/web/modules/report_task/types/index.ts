@@ -166,6 +166,15 @@ export interface TaskPenalty {
   waived?: { byUserId: string; at: string; reason: string };
 }
 
+/** งานนี้เปิดมาจากไหน — กดกลับไปดูต้นทางได้จากหน้ารายละเอียดงาน (ผู้ใช้ 2/11/2569) */
+export interface TaskSource {
+  kind: "report_post" | "report_reply" | "chat";
+  /** ข้อความที่แสดง จดไว้ตอนสร้างงาน — ห้อง/คนเปลี่ยนชื่อทีหลังก็ยังอ่านรู้เรื่อง */
+  label: string;
+  /** ลิงก์ภายในแอป ขึ้นต้นด้วย "/" */
+  link: string;
+}
+
 export interface Task {
   id: string;
   /** Human-readable task number, e.g. "T-2569-0001" — assigned once, server-side
@@ -176,6 +185,8 @@ export interface Task {
   code?: string;
   title: string;
   description: string;
+  /** เปิดจากโพสต์/ความคิดเห็น/ข้อความแชท — งานที่สร้างจากบอร์ดไม่มีช่องนี้ */
+  source?: TaskSource;
   status: TaskStatus;
   priority: TaskPriority;
   /** Set explicitly at creation, not re-derived from assigneeIds.length later
