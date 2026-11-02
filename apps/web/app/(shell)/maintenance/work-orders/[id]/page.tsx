@@ -400,7 +400,9 @@ export default async function WorkOrderDetailPage({
                 <WorkOrderDueRequest
                   workOrderId={wo.id}
                   dueDate={ymdBkk(wo.dueDate)}
-                  canRequest={isOpenOrRunning && wo.assignedTo === session.userId}
+                  // คนที่แก้กำหนดส่งเองได้ (คนเปิดใบ / CEO) ไม่ต้องขอเลื่อน — กดแก้ได้เลย (ผู้ใช้ 2/11/2569
+                  // "เราเป็นคนสั่ง") · เดิมมอบงานให้ตัวเองแล้วกดขอเลื่อน คำขอวิ่งไปหา CEO โดยไม่จำเป็น
+                  canRequest={isOpenOrRunning && wo.assignedTo === session.userId && !canEditDueDate({ userId: session.userId, viewAll }, wo)}
                   canEdit={isOpenOrRunning && canEditDueDate({ userId: session.userId, viewAll }, wo)}
                   myId={session.userId}
                   requests={dueRequestViews}

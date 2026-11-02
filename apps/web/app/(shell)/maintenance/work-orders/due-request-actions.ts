@@ -55,6 +55,7 @@ export async function requestDueDateAction(workOrderId: string, newDate: string,
   const wo = await getWorkOrder(s.orgId, workOrderId);
   if (!wo || !canSeeWorkOrder(await workOrderAccess(s), wo)) return { error: "ไม่พบใบงาน" };
   if (wo.assignedTo !== s.userId) return { error: "ขอเลื่อนได้เฉพาะผู้รับผิดชอบใบงาน" };
+  if (canEditDueDate({ userId: s.userId, viewAll: canViewAll(s) }, wo)) return { error: "คุณแก้กำหนดส่งเองได้เลย ไม่ต้องขอเลื่อน" };
   if (wo.status === "completed" || wo.status === "cancelled") return { error: "ใบงานนี้ปิดแล้ว" };
   if (!wo.dueDate) return { error: "ใบงานนี้ไม่มีกำหนดส่ง" };
   const d = endOfDayBkk(newDate);
