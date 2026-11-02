@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { isWorkOrderSourceLink } from "@/modules/maintenance/lib/report-prefill";
+import { postWorkOrderCard } from "@/modules/chat/data/task-cards";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import {
   createWorkOrder,
@@ -189,6 +190,11 @@ export async function createWorkOrderAction(formData: FormData) {
       referenceId: wo.id,
       line: `📢 งานใหม่: ${d.title}\n${dueDate ? `📅 ครบกำหนด ${fmtThaiDate(dueDate)}\n` : ""}เข้าดูรายละเอียดในระบบ Smartboss`,
     });
+  }
+
+  // การ์ดในแชทส่วนตัว คนสร้าง ↔ ผู้รับผิดชอบ แบบเดียวกับงาน (CC ไม่ได้การ์ด — ได้แค่แจ้งเตือนด้านบน)
+  if (assignedTo) {
+    await postWorkOrderCard(s.orgId, { assignerId: s.userId, assigneeId: assignedTo, workOrderId: wo.id, title: d.title, dueDate });
   }
 
   revalidatePath("/maintenance/work-orders");

@@ -37,40 +37,84 @@ export async function postTaskCard(
       dueDate: task?.dueDate || null,
       link: input.link,
     };
-    const channelId = await getOrCreateDm(orgId, input.assignerId, input.assigneeId);
-    const row = await prisma.$transaction(async (tx) => {
-      const created = await tx.chatMessage.create({
-        data: {
-          orgId,
-          channelId,
-          authorId: input.assignerId,
-          kind: "task",
-          body: `มอบหมายงาน "${card.title}"`,
-          meta: card as unknown as Prisma.InputJsonValue,
-          clientId: `task-${input.taskId}`,
-        },
-      });
-      // คนมอบหมายเห็นแล้วในตัว (ไม่ขึ้นยังไม่อ่านฝั่งตัวเอง)
-      await tx.chatReadState.upsert({
-        where: { channelId_userId: { channelId, userId: input.assignerId } },
-        update: { lastReadSeq: created.seq, lastReadAt: created.createdAt },
-        create: { channelId, userId: input.assignerId, orgId, lastReadSeq: created.seq, lastReadAt: created.createdAt },
-      });
-      return created;
+    await insertCard(orgId, {
+      assignerId: input.assignerId,
+      assigneeId: input.assigneeId,
+      clientId: `task-${input.taskId}`,
+      body: `มอบหมายงาน "${card.title}"`,
+      card,
     });
-    const [[message], author] = await Promise.all([
-      hydrateMessages(orgId, [row]),
-      prisma.user.findUnique({ where: { id: input.assignerId }, select: { name: true } }),
-    ]);
-    await broadcastToChannel(
-      orgId,
-      channelId,
-      { type: "chat.message", channelId, message: message!, authorName: author?.name, channelType: "dm" },
-      [input.assignerId, input.assigneeId]
-    );
   } catch (err) {
     // มอบหมายงานเดิมให้คนเดิมซ้ำ = การ์ดเดิมยังอยู่ในห้อง ไม่ต้องโพสต์ใหม่
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return;
     console.error("[chat] task card failed", err);
   }
+}
+
+/**
+ * การ์ด "ใบแจ้งซ่อมใหม่" ลงแชทส่วนตัว คนสร้างใบงาน ↔ ผู้รับผิดชอบ (ผู้ใช้ 2/11/2569 "อยากให้ทำแบบของ task")
+ * เรียกตอนคนสร้างใบงานและมอบหมายให้คนอื่น — ใบงานอัตโนมัติจาก PM ไม่มีการ์ด เหมือนรอบอัตโนมัติของงาน
+ * ไม่ throw — การ์ดพลาดต้องไม่ทำให้การสร้างใบงานพลาด
+ */
+export async function postWorkOrderCard(
+  orgId: string,
+  input: { assignerId: string; assigneeId: string; workOrderId: string; title: string; dueDate: Date | null }
+): Promise<void> {
+  if (input.assignerId === input.assigneeId) return;
+  try {
+    await insertCard(orgId, {
+      assignerId: input.assignerId,
+      assigneeId: input.assigneeId,
+      clientId: `wo-${input.workOrderId}`,
+      body: `มอบหมายใบแจ้งซ่อม "${input.title}"`,
+      card: {
+        taskId: input.workOrderId,
+        title: input.title,
+        dueDate: input.dueDate?.toISOString() ?? null,
+        link: `/maintenance/work-orders/${input.workOrderId}`,
+        target: "work_order",
+      },
+    });
+  } catch (err) {
+    // สร้างซ้ำ = การ์ดเดิม (clientId ซ้ำ) ไม่ถือว่าพลาด
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return;
+    console.error("[chat] work order card failed", err);
+  }
+}
+
+async function insertCard(
+  orgId: string,
+  input: { assignerId: string; assigneeId: string; clientId: string; body: string; card: ChatTaskCard }
+): Promise<void> {
+  const channelId = await getOrCreateDm(orgId, input.assignerId, input.assigneeId);
+  const row = await prisma.$transaction(async (tx) => {
+    const created = await tx.chatMessage.create({
+      data: {
+        orgId,
+        channelId,
+        authorId: input.assignerId,
+        kind: "task",
+        body: input.body,
+        meta: input.card as unknown as Prisma.InputJsonValue,
+        clientId: input.clientId,
+      },
+    });
+    // คนมอบหมายเห็นแล้วในตัว (ไม่ขึ้นยังไม่อ่านฝั่งตัวเอง)
+    await tx.chatReadState.upsert({
+      where: { channelId_userId: { channelId, userId: input.assignerId } },
+      update: { lastReadSeq: created.seq, lastReadAt: created.createdAt },
+      create: { channelId, userId: input.assignerId, orgId, lastReadSeq: created.seq, lastReadAt: created.createdAt },
+    });
+    return created;
+  });
+  const [[message], author] = await Promise.all([
+    hydrateMessages(orgId, [row]),
+    prisma.user.findUnique({ where: { id: input.assignerId }, select: { name: true } }),
+  ]);
+  await broadcastToChannel(
+    orgId,
+    channelId,
+    { type: "chat.message", channelId, message: message!, authorName: author?.name, channelType: "dm" },
+    [input.assignerId, input.assigneeId]
+  );
 }

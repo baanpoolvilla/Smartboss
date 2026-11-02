@@ -100,7 +100,13 @@ function taskCard(row: MessageRow): ChatTaskCard | null {
   const m = row.meta && typeof row.meta === "object" ? (row.meta as Partial<ChatTaskCard>) : null;
   if (!m || typeof m.taskId !== "string" || typeof m.title !== "string") return null;
   const link = typeof m.link === "string" && m.link.startsWith("/") ? m.link : `/report-task/tasks?task=${encodeURIComponent(m.taskId)}`;
-  return { taskId: m.taskId, title: m.title, dueDate: typeof m.dueDate === "string" ? m.dueDate : null, link };
+  return {
+    taskId: m.taskId,
+    title: m.title,
+    dueDate: typeof m.dueDate === "string" ? m.dueDate : null,
+    link,
+    ...(m.target === "work_order" ? { target: "work_order" as const } : {}),
+  };
 }
 
 export async function hydrateMessages(orgId: string, rows: MessageRow[]): Promise<ChatMessageDTO[]> {

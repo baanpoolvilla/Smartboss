@@ -138,6 +138,8 @@ export interface ChatTaskCard {
   /** YYYY-MM-DD หรือ ISO — null = ไม่รู้ (อ่านงานไม่ได้ตอนโพสต์) */
   dueDate: string | null;
   link: string;
+  /** "work_order" = การ์ดใบแจ้งซ่อม (taskId คือ id ใบงาน) · ไม่มี = การ์ดงาน */
+  target?: "work_order";
 }
 
 /** ข้อความที่คนพิมพ์/โพสต์ (ไม่ใช่ข้อความระบบ) — นับยังไม่อ่าน เด้งแจ้งเตือน มีเสียง */

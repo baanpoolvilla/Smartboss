@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarClock, ChevronRight, ClipboardList } from "lucide-react";
+import { CalendarClock, ChevronRight, ClipboardList, Wrench } from "lucide-react";
 import { cn } from "@smartboss/ui/cn";
 
 import { formatShortDate } from "@/modules/report_task/lib/format";
@@ -12,6 +12,8 @@ import type { ChatTaskCard } from "../types";
  * ให้เด้งเป็นการ์ดบอกในแชทด้วย · กดการ์ดแล้วไปหน้ารายละเอียดงาน (data/task-cards.ts เป็นคนโพสต์)
  */
 export function TaskCard({ card, body, mine }: { card: ChatTaskCard; body: string | null; mine: boolean }) {
+  const isWorkOrder = card.target === "work_order";
+  const assigned = body?.startsWith("มอบหมาย");
   return (
     <Link
       href={card.link}
@@ -21,20 +23,20 @@ export function TaskCard({ card, body, mine }: { card: ChatTaskCard; body: strin
       )}
     >
       <div className="flex items-center gap-2 border-b border-(--line) bg-(--bg-soft) px-3 py-2 text-xs font-semibold text-(--ink-soft)">
-        <ClipboardList className="h-4 w-4" aria-hidden="true" />
-        {body?.startsWith("มอบหมาย") ? "งานใหม่" : "งาน"}
+        {isWorkOrder ? <Wrench className="h-4 w-4" aria-hidden="true" /> : <ClipboardList className="h-4 w-4" aria-hidden="true" />}
+        {isWorkOrder ? (assigned ? "ใบแจ้งซ่อมใหม่" : "ใบแจ้งซ่อม") : assigned ? "งานใหม่" : "งาน"}
       </div>
       <div className="flex flex-col gap-1 px-3 py-2.5">
         <div className="line-clamp-2 text-[15px] font-semibold text-(--ink)">{card.title}</div>
         {card.dueDate && (
           <div className="flex items-center gap-1 text-xs text-(--ink-soft)">
             <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
-            ส่งภายใน {formatShortDate(card.dueDate)}
+            {isWorkOrder ? "ครบกำหนด" : "ส่งภายใน"} {formatShortDate(card.dueDate)}
           </div>
         )}
       </div>
       <div className="flex items-center justify-between border-t border-(--line) px-3 py-2 text-sm font-semibold text-(--chat-accent,#06c755)">
-        เปิดดูรายละเอียดงาน
+        {isWorkOrder ? "เปิดดูรายละเอียดใบงาน" : "เปิดดูรายละเอียดงาน"}
         <ChevronRight className="h-4 w-4" aria-hidden="true" />
       </div>
     </Link>
