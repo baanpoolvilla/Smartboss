@@ -200,6 +200,24 @@ export type WriteResult =
   | { ok: true; version: number; created: number; updated: number; deleted: number; codes: Record<string, string> }
   | { ok: false; currentVersion: number };
 
+// งานใหม่ทั้งชุด / คนบันทึกพร้อมกันหลายคน ยังใช้เวลาได้ — ค่าเริ่มต้น 5 วินาทีของ Prisma แน่นเกินไปสำหรับงานที่พลาดแล้วงานหาย
+const WRITE_TX_TIMEOUT_MS = 30_000;
+const WRITE_TX_MAX_WAIT_MS = 10_000;
+
+/** เรียง key ก่อนเทียบ — jsonb ใน Postgres ไม่เก็บลำดับ key เดิม เทียบตรง ๆ จะเห็นว่าเปลี่ยนทุกใบ */
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    v && typeof v === "object" && !Array.isArray(v)
+      ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : v
+  );
+}
+
+/** ข้อมูลงานเท่าเดิมไหม — ไม่แน่ใจให้ตอบ false (เขียนซ้ำเสียเวลานิดเดียว ดีกว่าข้ามการบันทึกจริง) */
+export function sameTaskData(prior: unknown, next: unknown): boolean {
+  return prior !== undefined && canonicalJson(prior) === canonicalJson(next);
+}
+
 /**
  * เขียนงานทั้งชุด — แปลงเป็น insert/update/delete รายแถวใน transaction เดียว
  *
@@ -302,12 +320,16 @@ export async function writeTasks(
       const known = codeById.get(task.id);
 
       if (known) {
-        await tx.reportTask.update({
-          where: { orgId_id: { orgId, id: task.id } },
-          data: cols,
-        });
+        // client ส่งงานทั้งบริษัทมาทุกครั้ง — เขียนเฉพาะใบที่เปลี่ยนจริง (เดิมเขียนทุกแถว ~180 ใบ เกินเพดาน
+        // transaction 5 วินาที ⇒ P2028 ตอบ 500 งานที่เพิ่งสร้างหายถ้าปิด/โหลดหน้าก่อนลองใหม่สำเร็จ 2/11/2569)
+        if (!sameTaskData(priorById.get(task.id), task)) {
+          await tx.reportTask.update({
+            where: { orgId_id: { orgId, id: task.id } },
+            data: cols,
+          });
+          updated += 1;
+        }
         codes[task.id] = known;
-        updated += 1;
       } else {
         // จองเลขในทรานแซกชันเดียวกับการสร้าง — แยกกันแล้วถ้าล้มทีหลัง
         // เลขจะถูกกินไปเปล่า ๆ เกิดช่องว่างที่คนอ่านนึกว่างานหาย
@@ -346,7 +368,7 @@ export async function writeTasks(
       removedIds: removed,
       codes,
     };
-  });
+  }, { timeout: WRITE_TX_TIMEOUT_MS, maxWait: WRITE_TX_MAX_WAIT_MS });
 
   // ทำหลัง transaction ของ report_task จบแล้ว — core.performance_events เป็นคนละ
   // schema เขียนผ่าน prisma client ตัวหลัก ไม่ใช่ tx ของธุรกรรมนี้ ผูกกันไม่ได้
