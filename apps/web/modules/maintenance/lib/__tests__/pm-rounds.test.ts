@@ -79,9 +79,16 @@ test("ยกเลิกใบรอบธรรมดา — คืนเหม
   assert.equal(workOrderDockRevokeReason(dock, { ...roundWo, status: "cancelled" }, st), "ใบงานถูกยกเลิก");
 });
 
-test("อนุมัติเลื่อนกำหนดหลังโดนหัก — คืน", () => {
-  assert.equal(
-    workOrderDockRevokeReason(dock, { ...roundWo, dueDate: roundDueAt(d("2026-12-08")) }, st),
-    "เลื่อนกำหนดส่งหลังโดนหัก",
-  );
+test("ใบรอบ: อนุมัติเลื่อนหลังโดนหักไปแล้ว — หักคงไว้ (แบบงานบนบอร์ด)", () => {
+  assert.equal(workOrderDockRevokeReason(dock, { ...roundWo, dueDate: roundDueAt(d("2026-12-08")) }, st), null);
+});
+
+test("ใบรอบ: เลื่อนแล้วปิดทันวันใหม่ — หักที่โดนไปแล้วก็ยังคงไว้", () => {
+  const wo = { ...roundWo, dueDate: roundDueAt(d("2026-12-08")), status: "completed", completedAt: new Date("2026-12-05T03:00:00Z") };
+  assert.equal(workOrderDockRevokeReason(dock, wo, st), null);
+});
+
+test("ใบงานทั่วไป: เลื่อนหลังโดนหัก — คืนเหมือนเดิม", () => {
+  const wo = { ...roundWo, pmRoundDate: null, dueDate: roundDueAt(d("2026-12-08")) };
+  assert.equal(workOrderDockRevokeReason({ ...dock, occurredAt: new Date("2026-12-09T03:00:00Z") }, { ...wo, dueDate: roundDueAt(d("2026-12-10")) }, { ...st, workOrderGraceDays: 0 }), "เลื่อนกำหนดส่งหลังโดนหัก");
 });

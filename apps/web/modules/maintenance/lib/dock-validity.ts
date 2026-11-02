@@ -66,7 +66,9 @@ export function workOrderDockRevokeReason(
   if (!wo.dueDate) return "ใบงานไม่มีกำหนดส่งแล้ว";
   if (roundBeforeStart(wo, st.pmRoundsFrom)) return "รอบ PM ก่อนเริ่มนับแบบรอบ";
   const lapse = addDays(wo.dueDate, overdueGraceDays(wo, st.workOrderGraceDays));
-  if (lapse >= dock.occurredAt) return "เลื่อนกำหนดส่งหลังโดนหัก";
+  // ใบรอบ PM: เลื่อนกำหนดส่งหลังโดนหักไปแล้ว (อนุมัติช้า/แก้วันทีหลัง) = หักคงไว้ แบบงานบนบอร์ด (ผู้ใช้ 2/11/2569
+  // "โดนหักไปเลยแบบ task") — เลยกำหนดไปแล้วตอนนั้น ต้องขอเลื่อนให้ได้อนุมัติก่อนถึงกำหนด · ใบงานอื่นคืนเหมือนเดิม
+  if (lapse >= dock.occurredAt) return wo.pmRoundDate ? null : "เลื่อนกำหนดส่งหลังโดนหัก";
   if (wo.completedAt && wo.completedAt <= lapse) return "ปิดงานทันกำหนด";
   if (st.scoringStartDate && lapse < st.scoringStartDate) return "เลยกำหนดก่อนวันเริ่มนับคะแนน";
   if (isBacklog(lapse, dock.occurredAt)) return "งานค้างเก่า (เลยกำหนดก่อนระบบคะแนนเห็น)";

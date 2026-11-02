@@ -149,10 +149,11 @@ export function WorkOrderDueRequest({
           <p className="m-0 text-(--ink)">เหตุผล: {pendingReq.reason}</p>
           {pendingReq.canDecide && (
             <div className="grid gap-2">
-              <input value={notes[pendingReq.id] ?? ""} onChange={(e) => setNotes({ ...notes, [pendingReq.id]: e.target.value })} placeholder="หมายเหตุ (ไม่บังคับ)"
+              <input value={notes[pendingReq.id] ?? ""} onChange={(e) => setNotes({ ...notes, [pendingReq.id]: e.target.value })} placeholder="เหตุผล (ไม่อนุมัติต้องใส่ · อนุมัติไม่บังคับ)"
                 className="w-full rounded-lg border border-(--line) bg-white px-2.5 py-1.5 text-base text-(--ink) sm:text-sm" />
               <div className="flex flex-wrap justify-end gap-2">
-                <button type="button" disabled={pending} className="rounded-lg border border-red-300 bg-white px-3 py-1.5 font-semibold text-red-700 disabled:opacity-50"
+                {/* ไม่อนุมัติต้องบอกเหตุผล (ผู้ใช้ 2/11/2569) — คนขอต้องรู้ว่าทำไม จะได้ทำทันหรือหาทางอื่น */}
+                <button type="button" disabled={pending || !(notes[pendingReq.id] ?? "").trim()} title={(notes[pendingReq.id] ?? "").trim() ? undefined : "ใส่เหตุผลก่อนกดไม่อนุมัติ"} className="rounded-lg border border-red-300 bg-white px-3 py-1.5 font-semibold text-red-700 disabled:opacity-50"
                   onClick={() => run(() => decideDueRequestAction(pendingReq.id, false, notes[pendingReq.id] ?? ""), "ไม่อนุมัติแล้ว · แจ้งคนขอแล้ว")}>
                   ไม่อนุมัติ
                 </button>

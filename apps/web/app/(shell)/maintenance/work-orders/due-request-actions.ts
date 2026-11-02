@@ -115,6 +115,8 @@ export async function decideDueRequestAction(requestId: string, approve: boolean
   if (!wo || !canSeeWorkOrder(await workOrderAccess(s), wo)) return { error: "ไม่พบใบงาน" };
   if (!canDecideDueRequest({ userId: s.userId, viewAll: canViewAll(s) }, wo, r.requestedBy)) return { error: "ไม่มีสิทธิ์อนุมัติคำขอนี้" };
   const memo = note.trim() || null;
+  // ไม่อนุมัติต้องบอกเหตุผล (ผู้ใช้ 2/11/2569) — อนุมัติไม่บังคับ
+  if (!approve && !memo) return { error: "ใส่เหตุผลที่ไม่อนุมัติ" };
 
   const ok = await decideDueRequest(s.orgId, requestId, { status: approve ? "approved" : "rejected", decidedBy: s.userId, decisionNote: memo });
   if (!ok) return { error: "คำขอนี้ถูกตัดสินไปแล้ว" };
