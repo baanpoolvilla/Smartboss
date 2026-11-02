@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
+import { whenHistorySettled } from "@/lib/back-to-close";
 import {
   WORK_ORDER_DESCRIPTION_MAX,
   WORK_ORDER_PREFILL_KEY,
@@ -50,7 +51,8 @@ export function useReportWorkOrderOpener(topic: ReportTopic) {
     } catch {
       toast.error("เติมข้อมูลจากรีพอตไม่ได้ กรุณากรอกในหน้าสร้างใบงานเอง");
     }
-    router.push("/maintenance/work-orders/new?fromReport=1");
+    // เมนู ⋯ บนมือถือเพิ่งปิด ระบบปุ่มย้อนกลับกำลังถอยประวัติ 1 ช่อง — push ทันทีจะถูกถอยทิ้ง หน้าไม่เปลี่ยน
+    setTimeout(() => whenHistorySettled(() => router.push("/maintenance/work-orders/new?fromReport=1")), 0);
   }
 
   return { canOpen, open };
