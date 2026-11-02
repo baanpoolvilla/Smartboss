@@ -2,7 +2,7 @@ import { useState } from "react";
 import { REACTION_CHIP_CLASS, ReactionPicker } from "@/components/emoji-picker";
 import { StickerImage } from "@/components/sticker-panel";
 import { activeReactionList } from "@/lib/emoji";
-import { Check, ClipboardList, CornerUpLeft, Link2, MoreHorizontal, Pencil, Reply as ReplyIcon, SmilePlus, Trash2 } from "lucide-react";
+import { Check, ClipboardList, CornerUpLeft, Link2, MoreHorizontal, Pencil, Reply as ReplyIcon, SmilePlus, Trash2, Wrench } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
@@ -51,6 +51,7 @@ export function ReportReply({
   onJumpToQuote,
   onCopyLink,
   onOpenAsTask,
+  onOpenWorkOrder,
   onToggleReaction,
   onEdit,
   onDelete,
@@ -77,6 +78,8 @@ export function ReportReply({
   onCopyLink: () => void;
   /** เปิดความคิดเห็นนี้เป็นงาน (ซ่อนเมื่อมีแต่สติกเกอร์ — ไม่มีเนื้อหาให้เปิดงาน) */
   onOpenAsTask?: () => void;
+  /** เปิดใบแจ้งซ่อมจากความคิดเห็นนี้ — ไม่ส่งมา = ผู้ใช้ไม่มีสิทธิ์สร้างใบงาน */
+  onOpenWorkOrder?: () => void;
   /** Reacting to one specific comment, same as the post's own reaction row — Teams lets you do this per-message, not just per-post. */
   onToggleReaction: (emoji: string) => void;
   onEdit: (body: string) => void;
@@ -93,6 +96,7 @@ export function ReportReply({
   const quotedAuthor = quoted ? getUser(quoted.authorId) : undefined;
 
   const canOpenAsTask = !!onOpenAsTask && (!!reply.linkedTaskId || !!reply.body.trim() || !!reply.images?.some((img) => !img.sticker));
+  const canOpenWorkOrder = !!onOpenWorkOrder && (!!reply.body.trim() || !!reply.images?.some((img) => !img.sticker));
   const openAsTaskLabel = reply.linkedTaskId ? "เปิดงานที่เชื่อมไว้" : "เปิดเป็นงาน";
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
   const [touchMenuOpen, setTouchMenuOpen] = useState(false);
@@ -213,6 +217,16 @@ export function ReportReply({
                 <ClipboardList className="h-5 w-5" />
               </button>
             )}
+            {canOpenWorkOrder && (
+              <button
+                onClick={onOpenWorkOrder}
+                className="flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-lg px-1.5 text-[13px] font-medium text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--brand-green-dark)]"
+                aria-label="เปิดใบแจ้งซ่อม"
+                title="เปิดใบแจ้งซ่อม"
+              >
+                <Wrench className="h-5 w-5" />
+              </button>
+            )}
             <button
               onClick={() => onReplyTo(reply)}
               className="flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-lg px-1.5 text-[13px] font-medium text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--brand-green-dark)]"
@@ -305,6 +319,18 @@ export function ReportReply({
                   >
                     <ClipboardList className="h-3.5 w-3.5 text-[var(--ink-soft)]" />
                     {openAsTaskLabel}
+                  </button>
+                )}
+                {canOpenWorkOrder && (
+                  <button
+                    onClick={() => {
+                      setTouchMenuOpen(false);
+                      onOpenWorkOrder?.();
+                    }}
+                    className="flex items-center gap-2 rounded-md px-2.5 py-2 text-sm text-left hover:bg-[var(--bg-soft)]"
+                  >
+                    <Wrench className="h-3.5 w-3.5 text-[var(--ink-soft)]" />
+                    เปิดใบแจ้งซ่อม
                   </button>
                 )}
                 {isOwn && (

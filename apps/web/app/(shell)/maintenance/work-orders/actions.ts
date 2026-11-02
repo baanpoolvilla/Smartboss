@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireOrg, hasPermission } from "@smartboss/auth";
+import { isWorkOrderSourceLink } from "@/modules/maintenance/lib/report-prefill";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import {
   createWorkOrder,
@@ -132,6 +133,8 @@ export async function createWorkOrderAction(formData: FormData) {
 
   const photoFiles = formData.getAll("photos").filter((f): f is File => f instanceof File);
   const photoUrls = await putFiles(`${s.orgId}/maintenance/work-orders`, photoFiles);
+  const sourceLabel = String(formData.get("sourceLabel") ?? "");
+  const sourceLink = String(formData.get("sourceLink") ?? "");
 
   const { workOrder: wo, duplicate } = await createWorkOrder(s.orgId, {
     propertyId: primary!,
@@ -150,6 +153,7 @@ export async function createWorkOrderAction(formData: FormData) {
     // ติ๊ก "ไม่มีค่าใช้จ่าย" ⇒ requiresExpense = false
     // ⚠ ใบงานที่เกิดจาก PM ใช้ค่าจากแผน PM แทน (ดู modules/maintenance/data/cron.ts)
     requiresExpense: formData.get("noExpense") !== "1",
+    ...(sourceLink && isWorkOrderSourceLink(sourceLink) ? { sourceLink, sourceLabel: sourceLabel.slice(0, 200) || null } : {}),
   });
 
   // กดบันทึกซ้ำ / PM รอบนี้มีใบงานเปิดอยู่แล้ว ⇒ ไม่สร้างใหม่ พาไปใบที่มีอยู่

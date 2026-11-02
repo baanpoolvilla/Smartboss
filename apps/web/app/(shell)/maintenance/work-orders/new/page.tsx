@@ -20,6 +20,7 @@ import { createWorkOrderAction } from "../actions";
 import { todayBangkok } from "@/modules/maintenance/lib/no-past-date";
 import { SubmitButton } from "@/modules/maintenance/components/submit-button";
 import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
+import { ReportPrefill } from "@/modules/maintenance/components/report-prefill";
 
 const ROLE_LABEL: Record<string, string> = {
   SUPER_ADMIN: "ผู้ดูแลระบบ",
@@ -48,6 +49,7 @@ export default async function NewWorkOrderPage({
     pmScheduleId?: string;
     pmScheduleIds?: string;
     description?: string;
+    fromReport?: string;
   }>;
 }) {
   const session = await requireOrg();
@@ -97,6 +99,7 @@ export default async function NewWorkOrderPage({
       <Card className="p-5">
         <PasteDropFiles label="ปล่อยเพื่อแนบรูป">
         <form action={createWorkOrderAction} className="flex flex-col gap-4">
+          {sp.fromReport && <ReportPrefill />}
           {sp.assetId && <input type="hidden" name="assetId" value={sp.assetId} />}
           {sp.pmScheduleId && (
             <input type="hidden" name="pmScheduleId" value={sp.pmScheduleId} />

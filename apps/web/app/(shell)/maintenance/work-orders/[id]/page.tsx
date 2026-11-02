@@ -18,6 +18,7 @@ import {
   ReceiptText,
   RefreshCw,
   ShoppingCart,
+  CornerUpLeft,
 } from "lucide-react";
 import { requireOrg, hasPermission, canViewAll } from "@smartboss/auth";
 import { Card } from "@smartboss/ui/components/card";
@@ -458,6 +459,18 @@ export default async function WorkOrderDetailPage({
         >
           <PhotoStrip urls={wo.afterPhotoUrls} />
         </SectionCard>
+      )}
+
+      {/* เปิดจากรีพอต — กดกลับไปดูข้อความต้นทาง */}
+      {wo.sourceLink && (
+        <Link
+          href={wo.sourceLink}
+          className="mb-4 flex items-center gap-2 rounded-(--radius) border border-[#d5dbe6] bg-[#eaeef5] px-3 py-2 text-xs text-(--brand-navy) hover:bg-[#dfe5ef]"
+        >
+          <CornerUpLeft className="h-3.5 w-3.5 shrink-0" />
+          <span className="min-w-0 flex-1 truncate">สร้างจาก {wo.sourceLabel}</span>
+          <span className="shrink-0 font-semibold">ไปดูต้นทาง</span>
+        </Link>
       )}
 
       {/* ─── รายละเอียด ─── */}

@@ -25,6 +25,7 @@ import {
   DialogDescription,
 } from "@/modules/report_task/components/ui/dialog";
 import { useReportTaskOpener } from "@/modules/report_task/components/report-feed/use-report-task-opener";
+import { useReportWorkOrderOpener } from "@/modules/report_task/components/report-feed/use-report-work-order-opener";
 import { getUser, users as directoryUsers, departments, isOwner } from "@/modules/report_task/lib/directory";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useStickerUsageStore, sortByUsage } from "@/modules/report_task/store/sticker-usage-store";
@@ -102,6 +103,7 @@ import {
   Crown,
   Check,
   ClipboardList,
+  Wrench,
   Copy,
   Eye,
   EyeOff,
@@ -631,6 +633,7 @@ export function ReportCard({
     setPendingSticker(null);
   }
   const taskOpener = useReportTaskOpener(topic, onOpenTask);
+  const workOrderOpener = useReportWorkOrderOpener(topic);
   const [showFull, setShowFull] = useState(false);
   const [editing, setEditing] = useState(false);
   // Collapsed comment box's formatting toolbar (B/I/U/link/highlight) only
@@ -1032,6 +1035,9 @@ export function ReportCard({
           label={post.linkedTaskId ? "เปิดงานที่เชื่อมไว้" : "เปิดเป็นงาน"}
           onClick={handleOpenAsTask}
         />
+        {workOrderOpener.canOpen && (
+          <MenuButton icon={Wrench} label="เปิดใบแจ้งซ่อม" onClick={() => { close(); workOrderOpener.open(post); }} />
+        )}
         <MenuButton
           icon={isUnread ? Eye : EyeOff}
           label={isUnread ? "ทำเครื่องหมายว่าอ่านแล้ว" : "ทำเครื่องหมายว่ายังไม่อ่าน"}
@@ -1827,6 +1833,7 @@ export function ReportCard({
                     onJumpToQuote={jumpToQuote}
                     onCopyLink={() => copyLink(post.replies[post.replies.length - 1]!.id)}
                     onOpenAsTask={() => void taskOpener.openAsTask(post, post.replies[post.replies.length - 1]!)}
+                    onOpenWorkOrder={workOrderOpener.canOpen ? () => workOrderOpener.open(post, post.replies[post.replies.length - 1]!) : undefined}
                     onToggleReaction={(emoji) =>
                       toggleReplyReaction(post.id, post.replies[post.replies.length - 1]!.id, emoji, viewingAsUserId)
                     }
@@ -1862,6 +1869,7 @@ export function ReportCard({
                           onJumpToQuote={jumpToQuote}
                           onCopyLink={() => copyLink(r.id)}
                           onOpenAsTask={() => void taskOpener.openAsTask(post, r)}
+                          onOpenWorkOrder={workOrderOpener.canOpen ? () => workOrderOpener.open(post, r) : undefined}
                           onToggleReaction={(emoji) => toggleReplyReaction(post.id, r.id, emoji, viewingAsUserId)}
                           mentionCandidates={replyMentionCandidates}
                           onEdit={(body) => editReplyAction(post.id, r.id, { body, images: r.images })}

@@ -10,6 +10,7 @@ import { ISSUE_REPORTS_BASE, REPORT_FEED_PATH, REPORT_TASK_BASE } from "../../co
 import { chatReportManifest } from "../../chat-report-manifest";
 import { reportTaskManifest } from "../../manifest";
 import { useEmployeeStore } from "../../store/employee-store";
+import { useWorkOrderAccessStore } from "@/modules/report_task/store/work-order-access-store";
 import { useIdentityStore } from "../../store/identity-store";
 import { setSessionOwner } from "../../lib/directory";
 import type { User } from "../../types";
@@ -33,13 +34,19 @@ import { TourOverlay } from "./tour-overlay";
  */
 export function ReportTaskScaffold({
   currentUser,
+  canOpenWorkOrder = false,
   children,
 }: {
   /** ผู้ใช้ที่ล็อกอิน — ประกอบจาก core.users ที่ layout ฝั่งเซิร์ฟเวอร์ */
   currentUser: User;
+  canOpenWorkOrder?: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+
+  useEffect(() => {
+    useWorkOrderAccessStore.setState({ canOpen: canOpenWorkOrder });
+  }, [canOpenWorkOrder]);
 
   /*
    * โมดูลต้นทางออกแบบตอนยังไม่มี auth จึงมีตัวสลับ "ดูในนามของ" ฝั่ง client

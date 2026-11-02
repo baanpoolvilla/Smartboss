@@ -1,6 +1,7 @@
-import { requireOrg } from "@smartboss/auth";
+import { hasPermission, requireOrg } from "@smartboss/auth";
 import { prisma } from "@smartboss/database";
 
+import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { ReportTaskScaffold } from "@/modules/report_task/components/shared/report-task-scaffold";
 import type { User } from "@/modules/report_task/types";
 
@@ -59,7 +60,16 @@ export default async function ReportTaskLayout({
     departmentId: "",
   };
 
+  // เมนู "เปิดใบแจ้งซ่อม" ในรีพอต — ต้องมีสิทธิ์สร้างใบงาน และบริษัทเปิดโมดูลแจ้งซ่อม
+  const canOpenWorkOrder =
+    hasPermission(session, MAINT_PERMS.workorderManage) &&
+    (await prisma.orgModule.count({
+      where: { orgId: session.orgId, isEnabled: true, module: { code: "maintenance" } },
+    })) > 0;
+
   return (
-    <ReportTaskScaffold currentUser={currentUser}>{children}</ReportTaskScaffold>
+    <ReportTaskScaffold currentUser={currentUser} canOpenWorkOrder={canOpenWorkOrder}>
+      {children}
+    </ReportTaskScaffold>
   );
 }

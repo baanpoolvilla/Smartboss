@@ -155,6 +155,8 @@ export interface WorkOrderInput {
   requiresExpense?: boolean;
   photoUrls?: string[];
   afterPhotoUrls?: string[];
+  sourceLabel?: string | null;
+  sourceLink?: string | null;
 }
 
 /** ส่งฟอร์มเดิมซ้ำภายในช่วงนี้ (คนเดิม หัวข้อเดิม บ้านเดิม) = กดเบิ้ล ไม่ใช่งานใหม่ */
@@ -220,6 +222,8 @@ export function createWorkOrder(orgId: string, data: WorkOrderInput) {
         createdBy: data.createdBy ?? null,
         title: data.title,
         description: data.description ?? null,
+        sourceLabel: data.sourceLabel ?? null,
+        sourceLink: data.sourceLink ?? null,
         priority: data.priority ?? "medium",
         dueDate: data.dueDate ?? null,
         ccUserIds: data.ccUserIds ?? [],
