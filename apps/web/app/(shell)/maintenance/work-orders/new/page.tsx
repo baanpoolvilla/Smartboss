@@ -17,14 +17,14 @@ import { todayBangkok } from "@/modules/maintenance/lib/no-past-date";
 import { SubmitButton } from "@/modules/maintenance/components/submit-button";
 import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 import { ReportPrefill } from "@/modules/maintenance/components/report-prefill";
-import { WoAdvancedOptions, WoDueDateField, WoPriorityField } from "@/modules/maintenance/components/wo-form-fields";
+import { WoAdvancedOptions, WoDueDateField, WoPriorityField, WoPrivateToggle } from "@/modules/maintenance/components/wo-form-fields";
 import Link from "next/link";
 import { AlignLeft, CalendarDays, House, ImageIcon, Type, User, type LucideIcon } from "lucide-react";
 
 /** แถวของฟอร์ม: ไอคอนซ้าย + เนื้อหา — จัดวางแบบหน้าสร้างงาน (ผู้ใช้ 2/11/2569 "ให้เหมือนรูปแบบของ task") */
-function Row({ icon: Icon, children }: { icon: LucideIcon; children: React.ReactNode }) {
+function Row({ icon: Icon, children, className = "" }: { icon: LucideIcon; children: React.ReactNode; className?: string }) {
   return (
-    <div className="grid grid-cols-[20px_1fr] items-start gap-3">
+    <div className={`grid grid-cols-[20px_1fr] items-start gap-3 ${className}`}>
       <Icon className="mt-2.5 h-[18px] w-[18px] text-(--ink-soft)" aria-hidden="true" />
       <div className="min-w-0">{children}</div>
     </div>
@@ -107,7 +107,7 @@ export default async function NewWorkOrderPage({
     >
       <Card className="p-5">
         <PasteDropFiles label="ปล่อยเพื่อแนบรูป">
-        <form action={createWorkOrderAction} className="flex flex-col gap-4">
+        <form action={createWorkOrderAction} className="group/wo flex flex-col gap-4">
           {sp.fromReport && <ReportPrefill />}
           {sp.assetId && <input type="hidden" name="assetId" value={sp.assetId} />}
           {sp.pmScheduleId && (
@@ -120,6 +120,8 @@ export default async function NewWorkOrderPage({
               .map((pid) => (
                 <input key={pid} type="hidden" name="pmScheduleIds" value={pid} />
               ))}
+
+          <WoPrivateToggle />
 
           <Row icon={Type}>
             <div className="flex items-center gap-2 border-b border-(--line) pb-1">
@@ -161,7 +163,8 @@ export default async function NewWorkOrderPage({
             />
           </Row>
 
-          <Row icon={User}>
+          {/* ใบส่วนตัว: ผู้รับผิดชอบคือคนเปิดเอง ไม่มี CC — ซ่อนช่องนี้ */}
+          <Row icon={User} className="group-data-[private=1]/wo:hidden">
             <div className="grid gap-4 sm:grid-cols-2">
               <AssigneeAndCc
                 users={assignable.map((u) => ({
@@ -183,7 +186,7 @@ export default async function NewWorkOrderPage({
             <FilePreviewInput name="photos" label="รูปภาพ" />
           </Row>
 
-          <div className="pl-8">
+          <div className="pl-8 group-data-[private=1]/wo:hidden">
             <WoAdvancedOptions canOpenPr={canOpenPr} />
           </div>
 

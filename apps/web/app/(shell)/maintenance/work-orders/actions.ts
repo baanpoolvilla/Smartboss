@@ -123,8 +123,11 @@ export async function createWorkOrderAction(formData: FormData) {
   if (!parsed.success) return;
   const d = parsed.data;
 
-  const assignedTo = d.assignedTo || null;
-  const cc = (d.ccUserIds ?? []).filter((id) => id !== assignedTo);
+  // ใบส่วนตัว (ติ๊ก "ส่วนตัว" แบบหน้าสร้างงาน) — กันลืมของตัวเอง: ผู้รับผิดชอบคือคนเปิด ไม่มี CC
+  // ไม่มีค่าใช้จ่ายให้ทวง ไม่แจ้งใคร ไม่ลงแชท · เห็นแค่คนเปิดกับ CEO · ไม่หักคะแนน ไม่นับสถิติ
+  const isPrivate = formData.get("isPrivate") === "1";
+  const assignedTo = isPrivate ? s.userId : d.assignedTo || null;
+  const cc = isPrivate ? [] : (d.ccUserIds ?? []).filter((id) => id !== assignedTo);
   const [primary, ...additional] = d.propertyIds;
 
   if (d.dueDate && isPastDay(d.dueDate)) {
@@ -153,7 +156,8 @@ export async function createWorkOrderAction(formData: FormData) {
     photoUrls,
     // ติ๊ก "ไม่มีค่าใช้จ่าย" ⇒ requiresExpense = false
     // ⚠ ใบงานที่เกิดจาก PM ใช้ค่าจากแผน PM แทน (ดู modules/maintenance/data/cron.ts)
-    requiresExpense: formData.get("noExpense") !== "1",
+    requiresExpense: !isPrivate && formData.get("noExpense") !== "1",
+    isPrivate,
     ...(sourceLink && isWorkOrderSourceLink(sourceLink) ? { sourceLink, sourceLabel: sourceLabel.slice(0, 200) || null } : {}),
   });
 
@@ -175,8 +179,8 @@ export async function createWorkOrderAction(formData: FormData) {
 
   await woLog(s, wo, "create", "สร้างใบงาน", { propertyIds: d.propertyIds, assignedTo, cc, priority: d.priority, photos: photoUrls.length });
 
-  // แจ้งเตือนผู้รับผิดชอบ + CC (in-app + LINE)
-  const notifyTargets = new Set<string>([...(assignedTo ? [assignedTo] : []), ...cc]);
+  // แจ้งเตือนผู้รับผิดชอบ + CC (in-app + LINE) · ใบส่วนตัวไม่แจ้งใคร (คนเปิดเป็นคนรับเอง)
+  const notifyTargets = new Set<string>(isPrivate ? [] : [...(assignedTo ? [assignedTo] : []), ...cc]);
   for (const uid of notifyTargets) {
     await notifyUser(s.orgId, uid, {
       title: `📋 ได้รับมอบหมายงานใหม่: ${d.title}`,
@@ -202,6 +206,7 @@ export async function createWorkOrderAction(formData: FormData) {
   // ติ๊ก "เปิด PR ต่อเลย" ⇒ ไปต่อหน้าเปิด PR ที่ผูกใบงานนี้ให้เลย ไม่ต้องย้อน
   // เข้าใบงานไปกดเอง — เช็คสิทธิ์ซ้ำที่นี่ เพราะ checkbox ถูกยิงตรงมาได้
   if (
+    !isPrivate &&
     formData.get("openPr") === "1" &&
     hasPermission(s, MAINT_PERMS.poCreate)
   ) {
@@ -267,10 +272,12 @@ const STATUS_TEXT: Record<string, { emoji: string; label: string }> = {
  * propertyCaretaker) ยกเว้นคนที่เพิ่งกดเปลี่ยนสถานะเอง ไม่ต้องแจ้งตัวเอง */
 async function notifyStatusChanged(
   orgId: string,
-  wo: { id: string; title: string; propertyId: string; assignedTo: string | null; createdBy: string | null; ccUserIds: string[]; pmRoundDate?: Date | null },
+  wo: { id: string; title: string; propertyId: string; assignedTo: string | null; createdBy: string | null; ccUserIds: string[]; pmRoundDate?: Date | null; isPrivate?: boolean },
   status: string,
   actorId: string
 ) {
+  // ใบส่วนตัว — ไม่มีใครต้องรู้ (ผู้ดูแลบ้านก็ไม่เห็นใบนี้)
+  if (wo.isPrivate) return;
   // ปิดงาน/ยกเลิกแล้ว ⇒ "ได้รับมอบหมาย" / "ขอเลื่อน…รออนุมัติ" ของใบนี้ไม่มีอะไรให้ทำแล้ว ไม่ต้องค้างที่ใคร
   if (status === "completed" || status === "cancelled") {
     await resolveActionNotifications(wo.id, "work_order", ["ได้รับมอบหมายงานใหม่", "ขอเลื่อนกำหนดส่งใบงาน รออนุมัติ"]);
@@ -514,8 +521,19 @@ export async function addCommentAction(workOrderId: string, formData: FormData) 
     { content, images: imageUrls.length }
   );
 
+  // ใบส่วนตัว: มีแค่คนเปิดที่ต้องรู้ (เช่น CEO เข้ามาเขียน) — ไม่แจ้ง/แท็กคนอื่น เขาเปิดใบนี้ไม่ได้
+  if (wo.isPrivate) {
+    if (wo.createdBy && wo.createdBy !== s.userId) {
+      await notifyUser(s.orgId, wo.createdBy, {
+        title: `💬 ความคิดเห็นใหม่ในใบงานส่วนตัว: ${wo.title}`,
+        body: content ? clip(content, 120) : undefined,
+        type: "work_order",
+        referenceId: wo.id,
+      });
+    }
+  }
   // แจ้งผู้เกี่ยวข้องเมื่อมีความคิดเห็นใหม่ (ยกเว้นคนที่พิมพ์เอง)
-  {
+  else {
     const targets = new Set<string>([
       ...(wo.assignedTo ? [wo.assignedTo] : []),
       ...(wo.createdBy ? [wo.createdBy] : []),

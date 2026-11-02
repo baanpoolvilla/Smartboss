@@ -10,6 +10,7 @@ import {
   ReceiptText,
   Check,
   CheckCircle2,
+  Lock,
 } from "lucide-react";
 import { Card } from "@smartboss/ui/components/card";
 import { PendingBand, usePendingFor } from "@/modules/notifications/pending-for-you";
@@ -47,6 +48,8 @@ export interface BoardOrder {
   requiresExpense: boolean;
   /** ใบรอบ PM (แบบนับรอบ) เท่านั้น — รอบไหน + เหลือ/เลยกี่วัน · ใบอื่นไม่มี การ์ดหน้าตาเดิม */
   pmRound?: { label: string; due: string | null; late: boolean } | null;
+  /** ใบส่วนตัว (กันลืม) — เห็นแค่คนเปิดกับ CEO */
+  isPrivate?: boolean;
 }
 
 /** สีสถานะ = ค่าจริงของ Material palette ที่ ChangYai ใช้ */
@@ -155,6 +158,11 @@ function OrderCard({
               {wo.code}
             </p>
             <p className="line-clamp-2 text-sm font-bold text-(--ink)">
+              {wo.isPrivate && (
+                <span className="mr-1 inline-flex items-center gap-0.5 rounded bg-(--brand-navy) px-1 align-[1px] text-[10px] font-bold text-white">
+                  <Lock className="h-2.5 w-2.5" aria-hidden="true" /> ส่วนตัว
+                </span>
+              )}
               {wo.title}
             </p>
           </div>

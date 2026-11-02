@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, Flag, Settings2 } from "lucide-react";
+import { useRef, useState } from "react";
+import { ChevronDown, Flag, Lock, Settings2 } from "lucide-react";
 
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
@@ -10,6 +10,45 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
  * ช่องของฟอร์มสร้างใบงานที่ต้องมี state ฝั่งเครื่อง (ผู้ใช้ 2/11/2569 "ให้เหมือนรูปแบบของ task")
  * ส่งค่าผ่าน input ชื่อเดิมทุกช่อง (dueDate, noExpense, openPr) — createWorkOrderAction ไม่ต้องแก้
  */
+
+/**
+ * ติ๊ก "ส่วนตัว" แบบหน้าสร้างงาน (ผู้ใช้ 2/11/2569) — ใบกันลืมของตัวเอง
+ * ติ๊กแล้วตั้ง data-private="1" ที่ฟอร์ม ⇒ ช่องผู้รับผิดชอบ/CC และตัวเลือกเพิ่มเติม (ค่าใช้จ่าย/PR) ซ่อนไป
+ * (class group-data-[private=1]/wo:hidden ในหน้า) · เซิร์ฟเวอร์บังคับซ้ำ: ผู้รับคือคนเปิด ไม่มี CC ไม่มีค่าใช้จ่าย
+ */
+export function WoPrivateToggle() {
+  const [on, setOn] = useState(false);
+  const ref = useRef<HTMLLabelElement>(null);
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <label
+        ref={ref}
+        className={`flex w-fit cursor-pointer items-center gap-1.5 text-xs font-medium ${on ? "text-(--brand-navy)" : "text-(--ink-soft)"}`}
+        title="ใบงานส่วนตัว — เห็นเฉพาะคุณกับ CEO ไม่มีผลกับคะแนน"
+      >
+        <input
+          type="checkbox"
+          checked={on}
+          onChange={(e) => {
+            setOn(e.target.checked);
+            const form = ref.current?.closest("form");
+            if (form) form.dataset.private = e.target.checked ? "1" : "0";
+          }}
+          aria-label="ใบงานส่วนตัว"
+          className="h-4 w-4"
+        />
+        <Lock className="h-3 w-3" aria-hidden="true" />
+        ส่วนตัว
+      </label>
+      {on && (
+        <span className="text-xs text-(--ink-soft)">
+          กันลืมของคุณเอง · เห็นเฉพาะคุณกับ CEO · ไม่หักคะแนน ไม่นับสถิติ ไม่แจ้งใคร
+        </span>
+      )}
+      {on && <input type="hidden" name="isPrivate" value="1" />}
+    </div>
+  );
+}
 
 /** ใบงานมี 3 ระดับ (ไม่ใช่ 4 แบบงาน) — สีจุดใช้ชุดเดียวกับ priorityMeta ของงาน */
 const WO_PRIORITIES = [

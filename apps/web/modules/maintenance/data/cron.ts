@@ -477,6 +477,7 @@ export async function dockOverdueMaintenance(): Promise<{
       where: {
         status: { in: ["open", "in_progress"] },
         dueDate: { lt: workOrderGraceDate },
+        isPrivate: false, // ใบส่วนตัวไม่หักคะแนน
       },
       select: {
         id: true,
@@ -765,7 +766,7 @@ async function revokeInvalidMaintenanceDocks(
       prisma.workOrder.findMany({
         where: { id: { in: woIds } },
         select: {
-          id: true, status: true, dueDate: true, completedAt: true, assignedTo: true, pmRoundDate: true, pmScheduleId: true, overdueScore: true,
+          id: true, status: true, dueDate: true, completedAt: true, assignedTo: true, pmRoundDate: true, pmScheduleId: true, overdueScore: true, isPrivate: true,
           property: { select: { caretakerId: true } },
         },
       }),

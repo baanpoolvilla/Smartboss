@@ -86,6 +86,7 @@ export async function lastMaintenanceDates(
         assetId: { in: missing },
         status: "completed",
         completedAt: { not: null },
+        isPrivate: false,
       },
       select: { assetId: true, completedAt: true },
     });

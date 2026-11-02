@@ -151,6 +151,7 @@ export async function workOrderStatusCounts(
       orgId,
       propertyId: { in: propertyIds },
       status: { in: ["open", "in_progress"] },
+      isPrivate: false, // ใบส่วนตัวไม่นับเป็นงานค้างของบ้าน
     },
     select: { propertyId: true, status: true },
   });

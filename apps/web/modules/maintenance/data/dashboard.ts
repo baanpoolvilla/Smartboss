@@ -12,7 +12,8 @@ import {
  */
 function visible(access: WorkOrderAccess) {
   const w = workOrderVisibilityWhere(access);
-  return w ? [w] : [];
+  // ใบส่วนตัวไม่นับในแดชบอร์ด (ผู้ใช้ 2/11/2569 "ไม่ถูกเอาไปนับอะไร")
+  return w ? [w, { isPrivate: false }] : [{ isPrivate: false }];
 }
 
 export async function dashboardStats(orgId: string, access: WorkOrderAccess) {

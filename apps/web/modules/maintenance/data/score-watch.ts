@@ -63,7 +63,8 @@ export async function maintenanceScoreWatch(
   const today = bangkokMidnight();
   const soonEnd = bangkokMidnight(SOON_DAYS);
   const period = await loadScorePeriodConfig(orgId);
-  const openVisible = { orgId, status: { in: ["open", "in_progress"] }, AND: vis ? [vis] : [] };
+  // ใบส่วนตัวไม่มีผลกับคะแนน ไม่นับในกล่องนี้
+  const openVisible = { orgId, status: { in: ["open", "in_progress"] }, isPrivate: false, AND: vis ? [vis] : [] };
   const select = {
     id: true,
     code: true,

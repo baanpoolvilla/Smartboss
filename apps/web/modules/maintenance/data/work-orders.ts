@@ -49,6 +49,8 @@ function buildWhere(orgId: string, f: WorkOrderFilters): Prisma.WorkOrderWhereIn
 
   const visibility = f.access ? workOrderVisibilityWhere(f.access) : null;
   if (visibility) and.push(visibility);
+  // ไม่ได้ส่งสิทธิ์คนดูมา (หน้าค่าใช้จ่าย/ส่งออก ใช้เป็นตัวเลือก/ชื่อใบ) ⇒ ไม่เอาใบส่วนตัว (กันลืมของคนเปิด ไม่ใช่งานบริษัท)
+  if (!f.access) and.push({ isPrivate: false });
 
   return { AND: and };
 }
@@ -157,6 +159,8 @@ export interface WorkOrderInput {
   afterPhotoUrls?: string[];
   sourceLabel?: string | null;
   sourceLink?: string | null;
+  /** ใบส่วนตัว — เห็นแค่คนเปิดกับ CEO ไม่นับคะแนน (data/work-order-access.ts) */
+  isPrivate?: boolean;
 }
 
 /** ส่งฟอร์มเดิมซ้ำภายในช่วงนี้ (คนเดิม หัวข้อเดิม บ้านเดิม) = กดเบิ้ล ไม่ใช่งานใหม่ */
@@ -224,6 +228,7 @@ export function createWorkOrder(orgId: string, data: WorkOrderInput) {
         description: data.description ?? null,
         sourceLabel: data.sourceLabel ?? null,
         sourceLink: data.sourceLink ?? null,
+        isPrivate: data.isPrivate ?? false,
         priority: data.priority ?? "medium",
         dueDate: data.dueDate ?? null,
         ccUserIds: data.ccUserIds ?? [],

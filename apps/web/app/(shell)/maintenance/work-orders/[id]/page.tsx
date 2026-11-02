@@ -137,8 +137,8 @@ export default async function WorkOrderDetailPage({
   // ผู้ใช้ 2/11/2569 — เดิมไม่เห็นอะไรเลย ต้องรอแจ้งเตือนอย่างเดียว
   const seeOwnPoStatus = !canSeePo && wo.assignedTo === session.userId;
   const canCreatePo = hasPermission(session, MAINT_PERMS.poCreate);
-  // ใบงานที่ยกเลิกไปแล้วไม่ควรเปิดใบสั่งซื้อเพิ่ม
-  const canOpenPoHere = canCreatePo && wo.status !== "cancelled";
+  // ใบงานที่ยกเลิกไปแล้ว / ใบส่วนตัว (กันลืม ไม่นับเป็นงานบริษัท — ค่าใช้จ่ายจาก PR จะไปนับ) ไม่เปิดใบสั่งซื้อ
+  const canOpenPoHere = canCreatePo && wo.status !== "cancelled" && !wo.isPrivate;
   const isSuperAdmin = hasPermission(session, MAINT_PERMS.admin);
   const isTechnicianOnly = !canManage;
 
@@ -355,6 +355,14 @@ export default async function WorkOrderDetailPage({
           label="สร้างเมื่อ"
           value={fmtThaiDateTime(wo.createdAt)}
         />
+        {wo.isPrivate && (
+          <InfoRow
+            icon={<Info className="h-5 w-5" />}
+            label="ส่วนตัว"
+            value="🔒 ใบกันลืมของคนเปิด · เห็นเฉพาะคนเปิดกับ CEO · ไม่หักคะแนน ไม่นับสถิติ"
+            valueColor="#1b2537"
+          />
+        )}
         {wo.pmRoundDate && (
           <InfoRow
             icon={<CalendarDays className="h-5 w-5" />}

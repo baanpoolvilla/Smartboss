@@ -50,6 +50,8 @@ export interface WorkOrderState {
   pmRoundDate?: Date | null;
   /** CEO ตัดสินคะแนน: waived = ไม่หัก · kept = หักไว้แม้ยกเลิกใบ */
   overdueScore?: string | null;
+  /** ใบส่วนตัว — ไม่หักคะแนน */
+  isPrivate?: boolean;
 }
 
 /** "ใบงานเกินกำหนด" ที่หักไปแล้ว — คืนเหตุผลถ้าควรคืน */
@@ -59,6 +61,7 @@ export function workOrderDockRevokeReason(
   st: DockSettings,
 ): string | null {
   if (!wo) return "ใบงานถูกลบ";
+  if (wo.isPrivate) return "ใบงานส่วนตัว (ไม่นับคะแนน)";
   if (wo.overdueScore === "waived") return "CEO ยกเว้นคะแนนใบนี้";
   // CEO สั่ง "ไม่ต้องทำ แต่หักไว้" (ยกเลิกใบ/รวบเข้าใบอื่น) — คะแนนที่หักไปแล้วคงไว้
   if (wo.status === "cancelled" && wo.overdueScore === "kept") return null;

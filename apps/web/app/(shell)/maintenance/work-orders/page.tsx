@@ -95,6 +95,7 @@ export default async function WorkOrdersPage({
       hasExpense: expenseSet.has(o.id),
       requiresExpense: o.requiresExpense,
       pmRound: o.pmRoundDate ? pmRoundTag(o.pmRoundDate, o.dueDate, o.status) : null,
+      isPrivate: o.isPrivate,
     }));
 
   const isFilterMode = filter === "today" || filter === "urgent" || filter === "no-expense";

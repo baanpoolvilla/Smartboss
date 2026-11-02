@@ -175,7 +175,8 @@ export async function listProperties(orgId: string, opts: { activeOnly?: boolean
 export async function listLinkableWorkOrders(orgId: string) {
   const since = new Date(Date.now() - 30 * 86_400_000);
   return prisma.workOrder.findMany({
-    where: { orgId, OR: [{ status: { in: ["open", "in_progress"] } }, { completedAt: { gte: since } }] },
+    // ใบส่วนตัว (กันลืมของคนเปิด) ไม่ใช่งานของบริษัท — ไม่ให้ผูกเบิกจ่าย
+    where: { orgId, isPrivate: false, OR: [{ status: { in: ["open", "in_progress"] } }, { completedAt: { gte: since } }] },
     select: { id: true, code: true, title: true, propertyId: true },
     orderBy: { createdAt: "desc" },
     take: 300,

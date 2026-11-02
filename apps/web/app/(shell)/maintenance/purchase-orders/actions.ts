@@ -118,8 +118,9 @@ export async function createPoAction(formData: FormData) {
    */
   const woId = String(formData.get("workOrderId") ?? "");
   const wo = woId ? await getWorkOrder(s.orgId, woId) : null;
+  // ใบส่วนตัว (กันลืม) ไม่ผูก PR — ค่าใช้จ่ายของ PR จะไปนับเข้าใบที่ไม่นับสถิติ
   const linkedWo =
-    wo && canSeeWorkOrder(await workOrderAccess(s), wo) ? wo : null;
+    wo && !wo.isPrivate && canSeeWorkOrder(await workOrderAccess(s), wo) ? wo : null;
 
   const isEmergency = formData.get("isEmergency") === "1";
   const wantsPo = formData.get("openAsPo") === "1";

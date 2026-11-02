@@ -55,6 +55,8 @@ export function workOrderVisibilityWhere(
   if (access.seeAll) return null;
   const props = access.caretakerPropertyIds;
   return {
+    // ใบส่วนตัว — เห็นเฉพาะคนเปิด (ผู้รับผิดชอบ/CC/ผู้ดูแลบ้านก็ไม่เห็น) · คนเห็นทั้งบริษัทผ่านทาง seeAll ข้างบน
+    AND: [{ OR: [{ isPrivate: false }, { createdBy: access.userId }] }],
     OR: [
       { assignedTo: access.userId },
       { createdBy: access.userId },
@@ -84,9 +86,11 @@ export function canSeeWorkOrder(
     ccUserIds: string[];
     propertyId: string;
     additionalPropertyIds: string[];
+    isPrivate?: boolean;
   }
 ): boolean {
   if (access.seeAll) return true;
+  if (wo.isPrivate) return wo.createdBy === access.userId;
   if (wo.assignedTo === access.userId || wo.createdBy === access.userId) {
     return true;
   }
