@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { ChevronDown, Flag, Lock, Settings2 } from "lucide-react";
 
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
@@ -10,6 +11,40 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
  * ช่องของฟอร์มสร้างใบงานที่ต้องมี state ฝั่งเครื่อง (ผู้ใช้ 2/11/2569 "ให้เหมือนรูปแบบของ task")
  * ส่งค่าผ่าน input ชื่อเดิมทุกช่อง (dueDate, noExpense, openPr) — createWorkOrderAction ไม่ต้องแก้
  */
+
+/**
+ * ตรวจช่องบังคับก่อนส่งฟอร์มสร้างใบงาน (ผู้ใช้ 2/11/2569 "กรอกไม่ครบทำไมสร้างได้และขึ้นสำเร็จ")
+ *
+ * ช่องที่เบราว์เซอร์ตรวจเองไม่ได้ — บ้าน (ช่องซ่อนจากตัวเลือก ไม่มี required) — เดิมส่งไปได้ เซิร์ฟเวอร์
+ * ไม่สร้างแต่ตอบเงียบ ๆ แล้ว SaveFeedback ขึ้น "สร้างใบแจ้งซ่อมสำเร็จ" ทั้งที่ไม่มีใบเกิดขึ้น
+ * ฟังที่ window (capture) ⇒ ทำงานก่อน SaveFeedback ที่ฟังบน document — ไม่ผ่านก็ไม่มีข้อความสำเร็จ ไม่ล็อกฟอร์ม
+ * (หัวข้อ/ผู้รับผิดชอบมี required ให้เบราว์เซอร์เตือนอยู่แล้ว ตรวจซ้ำกันพลาด)
+ */
+export function WoRequiredGuard() {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const form = ref.current?.closest("form");
+    if (!form) return;
+    const onSubmit = (e: Event) => {
+      if (e.target !== form) return;
+      const missing: { text: string; el: Element | null }[] = [];
+      const title = form.querySelector<HTMLInputElement>('input[name="title"]');
+      if (!title?.value.trim()) missing.push({ text: "หัวข้องาน", el: title });
+      if (form.querySelectorAll('input[name="propertyIds"]').length === 0)
+        missing.push({ text: "บ้าน (อย่างน้อย 1 หลัง)", el: form.querySelector("[data-wo-field='house']") });
+      const assignee = form.querySelector<HTMLSelectElement>('select[name="assignedTo"]');
+      if (assignee && !assignee.disabled && !assignee.value) missing.push({ text: "ผู้รับผิดชอบ", el: assignee });
+      if (missing.length === 0) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      toast.error("ยังสร้างใบแจ้งซ่อมไม่ได้ — ข้อมูลไม่ครบ", { description: `กรุณาใส่: ${missing.map((m) => m.text).join(", ")}` });
+      missing[0]!.el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    };
+    window.addEventListener("submit", onSubmit, true);
+    return () => window.removeEventListener("submit", onSubmit, true);
+  }, []);
+  return <span ref={ref} hidden />;
+}
 
 /**
  * ติ๊ก "ส่วนตัว" แบบหน้าสร้างงาน (ผู้ใช้ 2/11/2569) — ใบกันลืมของตัวเอง

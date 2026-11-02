@@ -17,7 +17,7 @@ import { todayBangkok } from "@/modules/maintenance/lib/no-past-date";
 import { SubmitButton } from "@/modules/maintenance/components/submit-button";
 import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 import { ReportPrefill } from "@/modules/maintenance/components/report-prefill";
-import { WoAdvancedOptions, WoDueDateField, WoPriorityField, WoPrivateToggle } from "@/modules/maintenance/components/wo-form-fields";
+import { WoAdvancedOptions, WoDueDateField, WoPriorityField, WoPrivateToggle, WoRequiredGuard } from "@/modules/maintenance/components/wo-form-fields";
 import Link from "next/link";
 import { AlignLeft, CalendarDays, House, ImageIcon, Type, User, type LucideIcon } from "lucide-react";
 
@@ -121,6 +121,7 @@ export default async function NewWorkOrderPage({
                 <input key={pid} type="hidden" name="pmScheduleIds" value={pid} />
               ))}
 
+          <WoRequiredGuard />
           <WoPrivateToggle />
 
           <Row icon={Type}>
@@ -144,6 +145,7 @@ export default async function NewWorkOrderPage({
               <textarea
                 name="description"
                 rows={3}
+                maxLength={2000}
                 defaultValue={sp.description ?? ""}
                 placeholder="อาการ ตำแหน่ง หรือสิ่งที่ช่างควรรู้"
                 className={textareaClass}
@@ -152,6 +154,7 @@ export default async function NewWorkOrderPage({
           </Row>
 
           <Row icon={House}>
+            <div data-wo-field="house">
             <MultiPicker
               name="propertyIds"
               title="เลือกบ้าน"
@@ -161,6 +164,7 @@ export default async function NewWorkOrderPage({
               options={properties.filter((p) => !p.archivedAt).map((p) => ({ id: p.id, label: p.name }))}
               defaultSelected={prefillProps}
             />
+            </div>
           </Row>
 
           {/* ใบส่วนตัว: ผู้รับผิดชอบคือคนเปิดเอง ไม่มี CC — ซ่อนช่องนี้ */}
