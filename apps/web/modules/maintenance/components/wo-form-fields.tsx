@@ -32,7 +32,12 @@ export function WoPrivateToggle() {
           onChange={(e) => {
             setOn(e.target.checked);
             const form = ref.current?.closest("form");
-            if (form) form.dataset.private = e.target.checked ? "1" : "0";
+            if (form) {
+              form.dataset.private = e.target.checked ? "1" : "0";
+              // ใบส่วนตัว: ผู้รับผิดชอบคือคนเปิดเอง — ช่องผู้รับผิดชอบซ่อนอยู่และบังคับเลือก ต้องปิดไว้ ไม่งั้นส่งฟอร์มไม่ได้
+              const sel = form.querySelector<HTMLSelectElement>('select[name="assignedTo"]');
+              if (sel) sel.disabled = e.target.checked;
+            }
           }}
           aria-label="ใบงานส่วนตัว"
           className="h-4 w-4"

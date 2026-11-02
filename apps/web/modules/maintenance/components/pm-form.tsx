@@ -236,9 +236,10 @@ export function PmForm({
         </label>
 
         <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-(--ink)">มอบหมายช่าง</span>
-          <select name="assignedTo" defaultValue="" className={inputClass}>
-            <option value="">— ยังไม่ระบุ —</option>
+          <span className="text-sm font-medium text-(--ink)">มอบหมายช่าง *</span>
+          {/* ทุกแผนต้องมีผู้รับผิดชอบ — ใบรอบที่ระบบเปิดเองไปหาคนนี้ และคนนี้คือคนที่โดนหักคะแนนถ้าเลยกำหนด */}
+          <select name="assignedTo" defaultValue="" required className={inputClass}>
+            <option value="" disabled>— เลือกผู้รับผิดชอบ —</option>
             {users.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.sub ? `${u.label} (${u.sub})` : u.label}

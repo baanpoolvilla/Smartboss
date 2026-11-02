@@ -68,7 +68,8 @@ const createSchema = z.object({
   nextDueDate: z.string().min(1, "เลือกวันกำหนด"),
   roundsPerYear: z.string().optional(),
   totalRounds: z.string().optional(),
-  assignedTo: z.string().optional(),
+  // ทุกแผนต้องมีผู้รับผิดชอบ (ผู้ใช้ 2/11/2569) — ใบรอบไปหาคนนี้ และคนนี้คือคนที่โดนหักถ้าเลยกำหนด
+  assignedTo: z.string().min(1, "เลือกผู้รับผิดชอบ"),
 });
 
 /**
@@ -175,6 +176,8 @@ export async function updatePmAction(formData: FormData) {
   if (dueChanged && isPastDay(nextDueDate)) throw new Error("วันกำหนดถัดไปย้อนหลังไม่ได้");
   const description = String(formData.get("description") ?? "").trim();
   const assignedTo = String(formData.get("assignedTo") ?? "").trim();
+  // ถอนมอบหมายให้ว่างไม่ได้แล้ว — ทุกแผนต้องมีผู้รับผิดชอบ (ผู้ใช้ 2/11/2569)
+  if (!assignedTo) throw new Error("เลือกผู้รับผิดชอบของแผน PM");
   const before = await prisma.pmSchedule.findFirst({
     where: { orgId, id },
     select: { nextDueDate: true, frequency: true, assignedTo: true, title: true, propertyId: true },
@@ -186,8 +189,7 @@ export async function updatePmAction(formData: FormData) {
     ...(dueChanged
       ? { nextDueDate: parseDate(nextDueDate), anchorDate: parseDate(nextDueDate) }
       : {}),
-    // ช่องนี้อยู่ในฟอร์มเสมอ ค่าว่าง = ตั้งใจถอนมอบหมาย ไม่ใช่ "ไม่ได้ส่งมา"
-    assignedTo: assignedTo || null,
+    assignedTo,
     // มีผลกับใบงานที่ระบบสร้างหลังจากนี้เท่านั้น — ใบที่เปิดค้างอยู่เก็บค่าของตัวเองไว้แล้ว
     requiresExpense: formData.get("noExpense") !== "1",
     description: description || null,

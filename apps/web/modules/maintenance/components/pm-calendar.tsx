@@ -654,13 +654,14 @@ export function PmCalendar({
               />
             </label>
             <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-(--ink)">ผู้รับผิดชอบ</span>
+              <span className="text-sm font-medium text-(--ink)">ผู้รับผิดชอบ *</span>
               <select
                 name="assignedTo"
+                required
                 defaultValue={editing.assignedTo ?? ""}
                 className="h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm text-(--ink)"
               >
-                <option value="">ยังไม่มอบหมาย</option>
+                <option value="" disabled>— เลือกผู้รับผิดชอบ —</option>
                 {userOptions.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.label}

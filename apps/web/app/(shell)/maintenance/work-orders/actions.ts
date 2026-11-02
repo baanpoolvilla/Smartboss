@@ -127,6 +127,8 @@ export async function createWorkOrderAction(formData: FormData) {
   // ไม่มีค่าใช้จ่ายให้ทวง ไม่แจ้งใคร ไม่ลงแชท · เห็นแค่คนเปิดกับ CEO · ไม่หักคะแนน ไม่นับสถิติ
   const isPrivate = formData.get("isPrivate") === "1";
   const assignedTo = isPrivate ? s.userId : d.assignedTo || null;
+  // ทุกใบต้องมีผู้รับผิดชอบ (ผู้ใช้ 2/11/2569) — ฟอร์มบังคับเลือกแล้ว ตรงนี้กันคำขอที่ยิงตรงมา
+  if (!assignedTo) throw new Error("เลือกผู้รับผิดชอบก่อนสร้างใบแจ้งซ่อม");
   const cc = isPrivate ? [] : (d.ccUserIds ?? []).filter((id) => id !== assignedTo);
   const [primary, ...additional] = d.propertyIds;
 
