@@ -17,7 +17,7 @@ import { todayBangkok } from "@/modules/maintenance/lib/no-past-date";
 import { SubmitButton } from "@/modules/maintenance/components/submit-button";
 import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 import { ReportPrefill } from "@/modules/maintenance/components/report-prefill";
-import { WoAdvancedOptions, WoDueDateField } from "@/modules/maintenance/components/wo-form-fields";
+import { WoAdvancedOptions, WoDueDateField, WoPriorityField } from "@/modules/maintenance/components/wo-form-fields";
 import Link from "next/link";
 import { AlignLeft, CalendarDays, House, ImageIcon, Type, User, type LucideIcon } from "lucide-react";
 
@@ -132,16 +132,7 @@ export default async function NewWorkOrderPage({
                 aria-label="หัวข้องาน"
                 className="h-10 flex-1 border-0 px-0 text-base font-semibold shadow-none focus-visible:ring-0"
               />
-              <select
-                name="priority"
-                defaultValue={sp.priority ?? "medium"}
-                aria-label="ความสำคัญ"
-                className="h-8 shrink-0 rounded-full border border-(--line) bg-(--bg) px-3 text-xs text-(--ink)"
-              >
-                <option value="low">ต่ำ</option>
-                <option value="medium">ปานกลาง</option>
-                <option value="urgent">เร่งด่วน</option>
-              </select>
+              <WoPriorityField defaultValue={sp.priority} />
             </div>
           </Row>
 

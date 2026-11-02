@@ -1,14 +1,55 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, Settings2 } from "lucide-react";
+import { ChevronDown, Flag, Settings2 } from "lucide-react";
 
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
 
 /**
  * ช่องของฟอร์มสร้างใบงานที่ต้องมี state ฝั่งเครื่อง (ผู้ใช้ 2/11/2569 "ให้เหมือนรูปแบบของ task")
  * ส่งค่าผ่าน input ชื่อเดิมทุกช่อง (dueDate, noExpense, openPr) — createWorkOrderAction ไม่ต้องแก้
  */
+
+/** ใบงานมี 3 ระดับ (ไม่ใช่ 4 แบบงาน) — สีจุดใช้ชุดเดียวกับ priorityMeta ของงาน */
+const WO_PRIORITIES = [
+  { value: "urgent", label: "เร่งด่วน", color: "var(--chart-red)" },
+  { value: "medium", label: "ปานกลาง", color: "var(--chart-green)" },
+  { value: "low", label: "ต่ำ", color: "var(--chart-gray)" },
+] as const;
+
+/** ความสำคัญ — ป้ายเล็กท้ายหัวข้อ หน้าตาเดียวกับหน้าสร้างงาน (ผู้ใช้ 2/11/2569 "แก้ให้เหมือน task") */
+export function WoPriorityField({ defaultValue }: { defaultValue?: string }) {
+  const [value, setValue] = useState<string>(WO_PRIORITIES.some((p) => p.value === defaultValue) ? defaultValue! : "medium");
+  const current = WO_PRIORITIES.find((p) => p.value === value) ?? WO_PRIORITIES[1];
+  return (
+    <>
+      <Select value={value} onValueChange={(v) => v && setValue(v as string)}>
+        <SelectTrigger
+          size="sm"
+          title="ความสำคัญ"
+          aria-label="ความสำคัญ"
+          className="h-7 w-auto shrink-0 gap-1 rounded-full border-transparent bg-transparent px-2 text-xs text-[var(--ink-soft)] shadow-none hover:border-[var(--line)] hover:bg-[var(--bg-soft)]"
+        >
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: current.color }} />
+          <Flag className="h-3 w-3" />
+          <SelectValue>{current.label}</SelectValue>
+        </SelectTrigger>
+        <SelectContent align="end" alignItemWithTrigger={false}>
+          {WO_PRIORITIES.map((p) => (
+            <SelectItem key={p.value} value={p.value}>
+              <span className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color }} />
+                {p.label}
+              </span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <input type="hidden" name="priority" value={value} />
+    </>
+  );
+}
 
 /** วันครบกำหนด แสดง วัน/เดือน/ปี (ช่องวันที่ของเบราว์เซอร์ขึ้น mm/dd/yyyy ตามภาษาเครื่อง) */
 export function WoDueDateField({ defaultValue, minDate }: { defaultValue?: string; minDate: string }) {
