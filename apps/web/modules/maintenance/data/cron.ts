@@ -307,7 +307,40 @@ export async function notifyDuePmSchedules(): Promise<{ notified: number }> {
   }
 
   notified += await notifyDueRoundWorkOrders([...roundOrgs.keys()], soon);
+  notified += await notifyDuePrivateWorkOrders(soon);
   return { notified };
+}
+
+/**
+ * ใบแจ้งซ่อมส่วนตัว (กันลืม) — เตือนเฉพาะคนเปิดใบคนเดียว (ผู้ใช้ 2/11/2569 "แจ้งเตือนแค่ตัวเองพอ")
+ * เกณฑ์วันเดียวกับ PM: 7/3/1 วันก่อน + วันครบกำหนด + เลยแล้วทุก 3 วัน · ไม่มีกำหนดส่ง = ไม่เตือน
+ */
+async function notifyDuePrivateWorkOrders(soon: Date): Promise<number> {
+  const wos = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.workOrder.findMany({
+      where: { isPrivate: true, status: { in: ["open", "in_progress"] }, dueDate: { lte: soon }, createdBy: { not: null } },
+      select: { id: true, orgId: true, code: true, title: true, dueDate: true, createdBy: true },
+    })
+  );
+  const today = ymd(todayBkkDate());
+  let notified = 0;
+  for (const wo of wos) {
+    const dueDay = new Date(wo.dueDate!.getTime() + 7 * 3600e3).toISOString().slice(0, 10);
+    const days = Math.round((Date.parse(dueDay) - Date.parse(today)) / 86_400_000);
+    if (!shouldNotifyPmToday(days)) continue;
+    const statusText = days < 0 ? `เกินกำหนด ${-days} วัน` : days === 0 ? "ถึงกำหนดวันนี้" : `อีก ${days} วัน`;
+    await notifyUser(wo.orgId, wo.createdBy, {
+      title: `🔒 ${days <= 0 ? "🔴" : "🟡"} ใบส่วนตัว ${statusText}: ${wo.title}`,
+      body: `${wo.code} · กำหนด ${fmtThaiDate(wo.dueDate!)}`,
+      type: "work_order",
+      referenceId: wo.id,
+      line: `🔒 เตือนใบส่วนตัว (${statusText})
+📝 ${wo.title}
+📅 กำหนด ${fmtThaiDate(wo.dueDate!)}`,
+    });
+    notified++;
+  }
+  return notified;
 }
 
 /** เตือนใบรอบ PM ตามกำหนดส่งของใบ (เลื่อนแล้วก็ตามวันใหม่) — เกณฑ์วันเดียวกับ PM แบบเดิม */
