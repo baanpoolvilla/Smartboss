@@ -106,6 +106,8 @@ function taskCard(row: MessageRow): ChatTaskCard | null {
     dueDate: typeof m.dueDate === "string" ? m.dueDate : null,
     link,
     ...(m.target === "work_order" ? { target: "work_order" as const } : {}),
+    ...(typeof m.code === "string" && m.code ? { code: m.code.slice(0, 40) } : {}),
+    ...(Array.isArray(m.tags) ? { tags: m.tags.filter((t): t is string => typeof t === "string").slice(0, 4) } : {}),
   };
 }
 

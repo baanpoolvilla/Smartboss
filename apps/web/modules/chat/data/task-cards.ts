@@ -25,7 +25,9 @@ export async function postTaskCard(
   try {
     // แจ้งเตือนกับตัวงานบันทึกคนละจังหวะ — งานใหม่อาจยังไม่ลงตาราง รอแป๊บแล้วอ่านอีกรอบ (ไม่เจอก็โพสต์โดยไม่มีวันส่ง)
     const readTask = () =>
-      prisma.reportTask.findUnique({ where: { orgId_id: { orgId, id: input.taskId } }, select: { title: true, dueDate: true } }).catch(() => null);
+      prisma.reportTask
+        .findUnique({ where: { orgId_id: { orgId, id: input.taskId } }, select: { title: true, dueDate: true, code: true, parentId: true, data: true } })
+        .catch(() => null);
     let task = await readTask();
     if (!task) {
       await new Promise((r) => setTimeout(r, 2500));
@@ -36,6 +38,8 @@ export async function postTaskCard(
       title: task?.title ?? input.title,
       dueDate: task?.dueDate || null,
       link: input.link,
+      ...(task?.code ? { code: task.code } : {}),
+      tags: taskTags(task),
     };
     await insertCard(orgId, {
       assignerId: input.assignerId,
@@ -62,6 +66,12 @@ export async function postWorkOrderCard(
 ): Promise<void> {
   if (input.assignerId === input.assigneeId) return;
   try {
+    const wo = await prisma.workOrder
+      .findFirst({
+        where: { orgId, id: input.workOrderId },
+        select: { code: true, pmScheduleId: true, pmScheduleIds: true, autoCreated: true, createdBy: true },
+      })
+      .catch(() => null);
     await insertCard(orgId, {
       assignerId: input.assignerId,
       assigneeId: input.assigneeId,
@@ -73,6 +83,8 @@ export async function postWorkOrderCard(
         dueDate: input.dueDate?.toISOString() ?? null,
         link: `/maintenance/work-orders/${input.workOrderId}`,
         target: "work_order",
+        ...(wo?.code ? { code: wo.code } : {}),
+        tags: workOrderTags(wo),
       },
     });
   } catch (err) {
@@ -117,4 +129,28 @@ async function insertCard(
     { type: "chat.message", channelId, message: message!, authorName: author?.name, channelType: "dm" },
     [input.assignerId, input.assigneeId]
   );
+}
+
+/**
+ * ป้ายประเภทบนการ์ด — ชุดคำเดียวกับป้ายบนบอร์ดงาน (PM / อัตโนมัติ) ให้รู้ว่าเป็นใบอะไรโดยไม่ต้องกดเข้าไป
+ * ใบรอบ PM ที่ CEO รวบหลายรอบ = autoCreated แต่มีคนเปิด (CEO) ⇒ "CEO รวบ" ไม่ใช่ "อัตโนมัติ"
+ */
+function workOrderTags(
+  wo: { pmScheduleId: string | null; pmScheduleIds: string[]; autoCreated: boolean; createdBy: string | null } | null,
+): string[] {
+  if (!wo) return [];
+  const tags: string[] = [];
+  if (wo.pmScheduleId || wo.pmScheduleIds.length > 0) tags.push("PM");
+  if (wo.autoCreated) tags.push(wo.createdBy ? "CEO รวบ" : "อัตโนมัติ");
+  return tags;
+}
+
+/** ป้ายของการ์ดงาน: Task เสมอ · งานในโปรเจกต์ / งานย่อย บอกเพิ่ม */
+function taskTags(task: { parentId: string | null; data: unknown } | null): string[] {
+  const tags = ["Task"];
+  const data = task?.data && typeof task.data === "object" ? (task.data as Record<string, unknown>) : null;
+  const project = data?.project && typeof data.project === "object" ? (data.project as Record<string, unknown>) : null;
+  if (project && typeof project.projectId === "string" && project.projectId) tags.push("โปรเจกต์");
+  if (task?.parentId) tags.push("งานย่อย");
+  return tags;
 }
