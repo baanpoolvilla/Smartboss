@@ -1,8 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
+import { whenHistorySettled } from "@/lib/back-to-close";
+import {
+  WORK_ORDER_DESCRIPTION_MAX,
+  WORK_ORDER_PREFILL_KEY,
+  WORK_ORDER_TITLE_MAX,
+  type WorkOrderPrefill,
+} from "@/modules/maintenance/lib/report-prefill";
 import { NewTaskDialog } from "@/modules/report_task/components/kanban/new-task-dialog";
 import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-detail-sheet";
 import { useChatStore, type RoomMessage } from "../store/chat-store";
@@ -22,6 +30,12 @@ export type CreateTaskDetail = { channelId: string; message?: RoomMessage };
 
 export function requestCreateTask(detail: CreateTaskDetail) {
   window.dispatchEvent(new CustomEvent<CreateTaskDetail>(CHAT_CREATE_TASK_EVENT, { detail }));
+}
+
+/** เปิดใบแจ้งซ่อมจากข้อความแชท (ผู้ใช้ 2/11/2569) — หน้าสร้างใบงานเดิม เติมหัวข้อ รายละเอียด และรูปให้ */
+export const CHAT_CREATE_WORK_ORDER_EVENT = "chat:create-work-order";
+export function requestCreateWorkOrder(detail: { channelId: string; message: RoomMessage }) {
+  window.dispatchEvent(new CustomEvent(CHAT_CREATE_WORK_ORDER_EVENT, { detail }));
 }
 
 /** ข้อความที่เปิดเป็นงานได้ — มีเนื้อหาจริง (ไม่ใช่การ์ด/ข้อความระบบ/ที่ยกเลิกแล้ว/ยังส่งไม่เสร็จ) */
@@ -60,6 +74,7 @@ async function filesOf(m: RoomMessage): Promise<File[]> {
 export function ChatTaskHost({ channel }: { channel: ChatChannelSummary }) {
   const meId = useChatStore((s) => s.meId);
   const users = useChatStore((s) => s.users);
+  const router = useRouter();
   const [prefill, setPrefill] = useState<Prefill | null>(null);
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
 
@@ -92,6 +107,40 @@ export function ChatTaskHost({ channel }: { channel: ChatChannelSummary }) {
     window.addEventListener(CHAT_CREATE_TASK_EVENT, onCreate);
     return () => window.removeEventListener(CHAT_CREATE_TASK_EVENT, onCreate);
   }, [channel, meId, users]);
+
+  useEffect(() => {
+    const onCreate = (e: Event) => {
+      const d = (e as CustomEvent<{ channelId: string; message: RoomMessage }>).detail;
+      if (d?.channelId !== channel.id) return;
+      const m = d.message;
+      const room = channelTitle(channel, meId, users);
+      const author = users[m.authorId]?.name ?? "สมาชิก";
+      const body = m.body?.trim() ?? "";
+      const firstLine = body.split("\n").find((l) => l.trim())?.trim() ?? "";
+      const when = new Date(m.createdAt).toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+      const data: WorkOrderPrefill = {
+        title: firstLine.slice(0, WORK_ORDER_TITLE_MAX) || `แจ้งซ่อมจากแชท ${room}`.slice(0, WORK_ORDER_TITLE_MAX),
+        description: `${body}${body ? "\n\n" : ""}— จากแชท "${room}" · ${author} · ${when}`.slice(0, WORK_ORDER_DESCRIPTION_MAX),
+        images: m.attachments
+          .filter((a) => a.kind === "image" && !!a.url && !a.expired)
+          .slice(0, 10)
+          .map((a) => ({ url: a.url, name: a.name, mime: a.mime })),
+        source: {
+          label: `แชท "${room}" · ข้อความของ ${author}`,
+          link: `/chat-report/chat?c=${encodeURIComponent(channel.id)}&m=${encodeURIComponent(m.id)}`,
+        },
+      };
+      try {
+        sessionStorage.setItem(WORK_ORDER_PREFILL_KEY, JSON.stringify(data));
+      } catch {
+        toast.error("เติมข้อมูลจากแชทไม่ได้ กรุณากรอกในหน้าสร้างใบงานเอง");
+      }
+      // เมนูข้อความเพิ่งปิด ระบบปุ่มย้อนกลับกำลังถอยประวัติ 1 ช่อง — push ทันทีจะถูกถอยทิ้ง
+      setTimeout(() => whenHistorySettled(() => router.push("/maintenance/work-orders/new?fromReport=1")), 0);
+    };
+    window.addEventListener(CHAT_CREATE_WORK_ORDER_EVENT, onCreate);
+    return () => window.removeEventListener(CHAT_CREATE_WORK_ORDER_EVENT, onCreate);
+  }, [channel, meId, users, router]);
 
   return (
     <>

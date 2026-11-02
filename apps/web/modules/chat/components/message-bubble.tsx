@@ -2,7 +2,7 @@
 
 import { memo, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertCircle, Bookmark, ClipboardList, Clock, Copy, CornerUpLeft, Download, FileText, Hourglass, ImageOff, Megaphone, MicOff, MoreHorizontal, Pause, Play, RotateCw, SmilePlus, Trash2, X } from "lucide-react";
+import { AlertCircle, Bookmark, ClipboardList, Clock, Copy, CornerUpLeft, Download, FileText, Hourglass, ImageOff, Megaphone, MicOff, MoreHorizontal, Pause, Play, RotateCw, SmilePlus, Trash2, X, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
 import { REACTION_CHIP_CLASS, ReactionPicker } from "@/components/emoji-picker";
@@ -18,7 +18,8 @@ import { daysUntilExpiry } from "../lib/retention";
 import { NoteCard } from "./notes";
 import { AlbumCard } from "./album-card";
 import { TaskCard } from "./task-card";
-import { canOpenAsTask, requestCreateTask } from "./chat-task";
+import { canOpenAsTask, requestCreateTask, requestCreateWorkOrder } from "./chat-task";
+import { useWorkOrderAccessStore } from "@/modules/report_task/store/work-order-access-store";
 import { MessageText } from "./message-text";
 import { useBackToClose, useBackToCloseOnTouch } from "@/lib/back-to-close";
 
@@ -289,6 +290,7 @@ function ActionMenu({
   onPin: () => void;
 }) {
   const [confirmUnsend, setConfirmUnsend] = useState(false);
+  const canOpenWorkOrder = useWorkOrderAccessStore((s) => s.canOpen);
   useBackToClose(true, onClose);
   const canKeep =
     !message.deleted &&
@@ -376,6 +378,18 @@ function ActionMenu({
             }}
           >
             <ClipboardList className="h-4 w-4 text-(--ink-soft)" /> เปิดเป็นงาน
+          </button>
+        )}
+        {canOpenWorkOrder && canOpenAsTask(message) && (
+          <button
+            type="button"
+            className={item}
+            onClick={() => {
+              onClose();
+              requestCreateWorkOrder({ channelId: message.channelId, message });
+            }}
+          >
+            <Wrench className="h-4 w-4 text-(--ink-soft)" /> เปิดใบแจ้งซ่อม
           </button>
         )}
         {canPin && (
