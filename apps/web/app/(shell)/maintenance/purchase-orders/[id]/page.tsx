@@ -7,7 +7,6 @@ import {
   AlertTriangle,
   ShoppingBag,
   FileEdit,
-  ClipboardCheck,
   Truck,
   Package,
   PackageCheck,
@@ -121,7 +120,6 @@ export default async function PoDetailPage({
     po.createdBy,
     po.poAssignedTo,
     po.receiverAssignedTo,
-    po.poCreatedBy,
     po.orderedBy,
     po.receivedBy,
     ...comments.map((c) => c.userId),
@@ -242,7 +240,7 @@ export default async function PoDetailPage({
 
         <div className="my-3 border-t border-(--line)" />
 
-        {/* ─── Timeline: เปิด PR → สร้าง PO → ดำเนินการซื้อ → รับของ ─── */}
+        {/* ─── Timeline: เปิด PR → ดำเนินการซื้อ → รับของ ─── */}
         <TimelineRow
           icon={<FileEdit className="h-4 w-4" />}
           color="#C2410C"
@@ -250,15 +248,6 @@ export default async function PoDetailPage({
           who={(po.createdBy && names[po.createdBy]) || "ไม่ทราบ"}
           when={po.createdAt}
         />
-        {po.poCreatedAt && (
-          <TimelineRow
-            icon={<ClipboardCheck className="h-4 w-4" />}
-            color="#1D4ED8"
-            label="สร้าง PO"
-            who={(po.poCreatedBy && names[po.poCreatedBy]) || "ไม่ทราบ"}
-            when={po.poCreatedAt}
-          />
-        )}
         {po.orderedAt && (
           <TimelineRow
             icon={<Truck className="h-4 w-4" />}
