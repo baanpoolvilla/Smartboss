@@ -143,7 +143,7 @@ export async function generateRoundWorkOrders(orgs: Map<string, RoundOrg>): Prom
  * ใบรอบใหม่เปิดแล้ว — บอกผู้รับให้กด "รับงาน" (ผู้ใช้ 2/11/2569 "แจ้งเตือนให้ผู้รับ pm รู้และรับเรื่อง")
  * แจ้งเตือน (ในระบบ + LINE) ใช้หัวข้อ "ได้รับมอบหมายงานใหม่" แบบใบที่คนสร้าง ⇒ ค้างจนกดรับงาน/ปิด/ยกเลิก
  * การ์ดในแชทส่วนตัว: คนสร้างแผน PM ↔ ผู้รับ (แบบเดียวกับใบที่คนมอบหมาย) · ไม่มีคนสร้าง/คนเดียวกัน = แจ้งเตือนอย่างเดียว
- * CC ได้แจ้งเตือนแบบรับทราบ ไม่ใช่งานที่ต้องกดรับ
+ * CC ไม่ได้แจ้ง — แจ้งเฉพาะคนที่จะโดนหักคะแนน
  */
 async function announceRound(
   pm: { orgId: string; title: string; createdBy: string | null; ccUserIds: string[] },
@@ -171,15 +171,7 @@ ${how}`,
       await postWorkOrderCard(pm.orgId, { assignerId: assigner.id, assigneeId: wo.assignedTo, workOrderId: wo.id, title: wo.title, dueDate: wo.dueDate });
     }
   }
-  for (const uid of pm.ccUserIds) {
-    if (uid === wo.assignedTo) continue;
-    await notifyUser(pm.orgId, uid, {
-      title: `📋 PM รอบใหม่ (CC): ${wo.title} · รอบ ${due}`,
-      body: `${wo.code} · ครบกำหนด ${due}`,
-      type: "work_order",
-      referenceId: wo.id,
-    });
-  }
+  // CC ของแผนไม่ได้แจ้ง — แจ้งเฉพาะคนที่จะโดนหักคะแนน (ผู้ใช้ 2/11/2569) · CC ยังเปิดดูใบได้ตามสิทธิ์เดิม
 }
 
 export interface PileupRound {

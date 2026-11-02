@@ -290,11 +290,9 @@ export async function notifyDuePmSchedules(): Promise<{ notified: number }> {
       `📅 กำหนด: ${fmtThaiDate(pm.nextDueDate)}\n` +
       statusText;
 
-    const targets = [
-      pm.assignedTo,
-      ...pm.ccUserIds,
-      ...(await propertyCaretaker(pm.orgId, pm.propertyId)),
-    ];
+    // เฉพาะคนที่จะโดนหักคะแนน (ผู้ใช้ 2/11/2569) — ผู้รับผิดชอบ ไม่มีค่อยเป็นผู้ดูแลบ้าน (กติกาเดียวกับ dockOverdueMaintenance)
+    // เดิมแจ้ง CC + ผู้ดูแลบ้านด้วยทุกครั้ง
+    const targets = pm.assignedTo ? [pm.assignedTo] : (await propertyCaretaker(pm.orgId, pm.propertyId)).slice(0, 1);
     await notifyUsers(pm.orgId, targets, {
       title: `${head} PM ${statusText}: ${pm.title}`,
       body: `บ้าน: ${property?.name ?? "-"} • กำหนด ${fmtThaiDate(pm.nextDueDate)}`,
@@ -413,7 +411,9 @@ async function notifyDueRoundWorkOrders(orgIds: string[], soon: Date): Promise<n
     const house = wo.property?.name ?? "-";
     // ยังไม่กด "รับงาน" (สถานะยังเปิด) — ย้ำในแจ้งเตือนว่ายังไม่มีใครรับเรื่อง
     const notTaken = wo.status === "open" ? " · ยังไม่ได้กดรับงาน" : "";
-    await notifyUsers(wo.orgId, [wo.assignedTo, ...wo.ccUserIds, ...(await propertyCaretaker(wo.orgId, wo.propertyId))], {
+    // เฉพาะคนที่จะโดนหัก — ผู้รับผิดชอบ ไม่มีค่อยเป็นผู้ดูแลบ้าน (ไม่แจ้ง CC/ผู้ดูแลบ้านซ้อน)
+    const responsible = wo.assignedTo ? [wo.assignedTo] : (await propertyCaretaker(wo.orgId, wo.propertyId)).slice(0, 1);
+    await notifyUsers(wo.orgId, responsible, {
       title: `${head} PM ${statusText}: ${wo.title}${notTaken}`,
       body: `${wo.code} • บ้าน: ${house} • กำหนด ${fmtThaiDate(wo.dueDate!)} • ทำไม่ทันกด "ขอเลื่อนกำหนดส่ง"`,
       type: "work_order",
