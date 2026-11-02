@@ -5,6 +5,8 @@ import { crossOrg } from "@smartboss/database/cross-org";
 import { nextWorkOrderCode } from "@/lib/document-code";
 import { fmtThaiDate } from "@/modules/maintenance/lib/format";
 import { logActivity } from "@/modules/maintenance/data/activity";
+import { notifyUser } from "@/modules/maintenance/data/notify";
+import { postWorkOrderCard } from "@/modules/chat/data/task-cards";
 import {
   dueRounds,
   PILEUP_MIN_ROUNDS,
@@ -123,6 +125,7 @@ export async function generateRoundWorkOrders(orgs: Map<string, RoundOrg>): Prom
           summary: `เปิดใบงานอัตโนมัติจาก PM รอบ ${fmtThaiDate(round)} ${made.code} "${made.title}"`,
           detail: { pmScheduleId: pm.id, round: round.toISOString().slice(0, 10) },
         });
+        await announceRound(pm, made, round);
       }
     }
 
@@ -132,6 +135,49 @@ export async function generateRoundWorkOrders(orgs: Map<string, RoundOrg>): Prom
     });
   }
   return { created };
+}
+
+/**
+ * ใบรอบใหม่เปิดแล้ว — บอกผู้รับให้กด "รับงาน" (ผู้ใช้ 2/11/2569 "แจ้งเตือนให้ผู้รับ pm รู้และรับเรื่อง")
+ * แจ้งเตือน (ในระบบ + LINE) ใช้หัวข้อ "ได้รับมอบหมายงานใหม่" แบบใบที่คนสร้าง ⇒ ค้างจนกดรับงาน/ปิด/ยกเลิก
+ * การ์ดในแชทส่วนตัว: คนสร้างแผน PM ↔ ผู้รับ (แบบเดียวกับใบที่คนมอบหมาย) · ไม่มีคนสร้าง/คนเดียวกัน = แจ้งเตือนอย่างเดียว
+ * CC ได้แจ้งเตือนแบบรับทราบ ไม่ใช่งานที่ต้องกดรับ
+ */
+async function announceRound(
+  pm: { orgId: string; title: string; createdBy: string | null; ccUserIds: string[] },
+  wo: { id: string; code: string; title: string; assignedTo: string | null; dueDate: Date | null },
+  round: Date,
+): Promise<void> {
+  const due = fmtThaiDate(round);
+  const how = `กด "รับงาน" ในใบงานเพื่อรับเรื่อง · ทำไม่ทันกด "ขอเลื่อนกำหนดส่ง" พร้อมเหตุผลก่อนถึงกำหนด (เลยกำหนดหักคะแนนทันที)`;
+  if (wo.assignedTo) {
+    await notifyUser(pm.orgId, wo.assignedTo, {
+      title: `📋 ได้รับมอบหมายงานใหม่: PM ${wo.title} · รอบ ${due}`,
+      body: `${wo.code} · ครบกำหนด ${due}
+${how}`,
+      type: "work_order",
+      referenceId: wo.id,
+      line: `📢 PM รอบใหม่: ${wo.title}
+📅 ครบกำหนด ${due}
+✅ กด "รับงาน" ในใบงาน ${wo.code}
+⏰ ทำไม่ทันให้ขอเลื่อนพร้อมเหตุผลก่อนถึงกำหนด`,
+    });
+    const assigner = pm.createdBy && pm.createdBy !== wo.assignedTo
+      ? await prisma.user.findFirst({ where: { orgId: pm.orgId, id: pm.createdBy, isActive: true }, select: { id: true } })
+      : null;
+    if (assigner) {
+      await postWorkOrderCard(pm.orgId, { assignerId: assigner.id, assigneeId: wo.assignedTo, workOrderId: wo.id, title: wo.title, dueDate: wo.dueDate });
+    }
+  }
+  for (const uid of pm.ccUserIds) {
+    if (uid === wo.assignedTo) continue;
+    await notifyUser(pm.orgId, uid, {
+      title: `📋 PM รอบใหม่ (CC): ${wo.title} · รอบ ${due}`,
+      body: `${wo.code} · ครบกำหนด ${due}`,
+      type: "work_order",
+      referenceId: wo.id,
+    });
+  }
 }
 
 export interface PileupRound {

@@ -267,13 +267,17 @@ const STATUS_TEXT: Record<string, { emoji: string; label: string }> = {
  * propertyCaretaker) ยกเว้นคนที่เพิ่งกดเปลี่ยนสถานะเอง ไม่ต้องแจ้งตัวเอง */
 async function notifyStatusChanged(
   orgId: string,
-  wo: { id: string; title: string; propertyId: string; assignedTo: string | null; createdBy: string | null; ccUserIds: string[] },
+  wo: { id: string; title: string; propertyId: string; assignedTo: string | null; createdBy: string | null; ccUserIds: string[]; pmRoundDate?: Date | null },
   status: string,
   actorId: string
 ) {
   // ปิดงาน/ยกเลิกแล้ว ⇒ "ได้รับมอบหมาย" / "ขอเลื่อน…รออนุมัติ" ของใบนี้ไม่มีอะไรให้ทำแล้ว ไม่ต้องค้างที่ใคร
   if (status === "completed" || status === "cancelled") {
     await resolveActionNotifications(wo.id, "work_order", ["ได้รับมอบหมายงานใหม่", "ขอเลื่อนกำหนดส่งใบงาน รออนุมัติ"]);
+  }
+  // ใบรอบ PM: กด "รับงาน" = รับเรื่องแล้ว ⇒ แจ้งเตือนให้รับงานไม่ต้องค้าง (ใบอื่นคงไว้ตามเดิม)
+  if (status === "in_progress" && wo.pmRoundDate) {
+    await resolveActionNotifications(wo.id, "work_order", ["ได้รับมอบหมายงานใหม่"]);
   }
   const st = STATUS_TEXT[status] ?? { emoji: "📋", label: status };
   const property = await getProperty(orgId, wo.propertyId);

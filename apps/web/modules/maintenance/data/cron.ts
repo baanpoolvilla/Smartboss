@@ -316,7 +316,7 @@ async function notifyDueRoundWorkOrders(orgIds: string[], soon: Date): Promise<n
         OR: [{ overdueScore: null }, { overdueScore: { not: "waived" } }],
       },
       select: {
-        id: true, orgId: true, title: true, dueDate: true, pmRoundDate: true, assignedTo: true, ccUserIds: true,
+        id: true, orgId: true, code: true, status: true, title: true, dueDate: true, pmRoundDate: true, assignedTo: true, ccUserIds: true,
         propertyId: true, property: { select: { name: true } },
       },
     })
@@ -330,17 +330,19 @@ async function notifyDueRoundWorkOrders(orgIds: string[], soon: Date): Promise<n
     const statusText = days < 0 ? `⚠️ เกินกำหนด ${-days} วัน` : days === 0 ? "⏰ ถึงกำหนดวันนี้" : `⏰ อีก ${days} วัน`;
     const head = days <= 0 ? "🔴" : "🟡";
     const house = wo.property?.name ?? "-";
+    // ยังไม่กด "รับงาน" (สถานะยังเปิด) — ย้ำในแจ้งเตือนว่ายังไม่มีใครรับเรื่อง
+    const notTaken = wo.status === "open" ? " · ยังไม่ได้กดรับงาน" : "";
     await notifyUsers(wo.orgId, [wo.assignedTo, ...wo.ccUserIds, ...(await propertyCaretaker(wo.orgId, wo.propertyId))], {
-      title: `${head} PM ${statusText}: ${wo.title}`,
-      body: `บ้าน: ${house} • กำหนด ${fmtThaiDate(wo.dueDate!)} • ทำไม่ทันกด "ขอเลื่อนกำหนดส่ง"`,
+      title: `${head} PM ${statusText}: ${wo.title}${notTaken}`,
+      body: `${wo.code} • บ้าน: ${house} • กำหนด ${fmtThaiDate(wo.dueDate!)} • ทำไม่ทันกด "ขอเลื่อนกำหนดส่ง"`,
       type: "work_order",
       referenceId: wo.id,
       line:
         `${head} แจ้งเตือน PM
-📋 ${wo.title}
+📋 ${wo.title} (${wo.code})
 🏠 บ้าน: ${house}
 📅 กำหนด: ${fmtThaiDate(wo.dueDate!)}
-${statusText}
+${statusText}${notTaken}
 ` +
         `ทำไม่ทันให้กด "ขอเลื่อนกำหนดส่ง" ในใบงาน พร้อมเหตุผล`,
     });
