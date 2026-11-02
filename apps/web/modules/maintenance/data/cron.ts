@@ -219,8 +219,7 @@ async function closeStaleAutoWorkOrders(): Promise<void> {
  * รันอีกที เลยเทกองแจ้งเตือนที่ค้างไว้ทั้งหมดออกมาพร้อมกันทีเดียว
  * "เหมือนไม่มีแจ้ง...แล้วแจ้งทีเป็นชุดใหญ่ๆ") และกันเงียบหาย (ไม่แจ้งเฉพาะวันที่
  * เพิ่งครบกำหนดแล้วปล่อยเลยไปเรื่อยๆ) — ยืนยันจากเจ้าของระบบ: เตือนล่วงหน้า
- * 7/3/1 วัน + วันที่ถึงกำหนด แล้วพอเลยกำหนดไปแล้ว เตือนซ้ำทุก 3 วัน (1, 4, 7, ...
- * วันที่เลยมา) แทนที่จะแจ้งทุกวันจนกว่าจะปิดงาน
+ * 7/3/1 วัน + วันที่ถึงกำหนด แล้วพอเลยกำหนดไปแล้ว เตือนซ้ำ (เดิมทุก 3 วัน — ผู้ใช้ 2/11/2569 ให้เตือนทุกวัน ดูข้างล่าง)
  *
  * ขึ้นกับ cron งานนี้ถูกเรียกทุกวันจริง — ถ้าขาดไปวันใดวันหนึ่งพอดีกับวันที่
  * ตรงเกณฑ์ ก็จะข้ามรอบนั้นไปเงียบๆ (ไม่มีการจำ "เคยแจ้งไปแล้วหรือยัง" แยกต่างหาก
@@ -228,8 +227,8 @@ async function closeStaleAutoWorkOrders(): Promise<void> {
  */
 function shouldNotifyPmToday(daysUntilDue: number): boolean {
   if (daysUntilDue >= 0) return [7, 3, 1, 0].includes(daysUntilDue);
-  const overdueDays = -daysUntilDue;
-  return (overdueDays - 1) % 3 === 0; // 1, 4, 7, 10 วันที่เลยกำหนดมา
+  // เลยกำหนดแล้วเตือนทุกวันจนกว่าจะปิดงาน (ผู้ใช้ 2/11/2569 "ถ้าเลยเตือนทุกวันเลย") — เดิมทุก 3 วัน
+  return true;
 }
 
 /**
@@ -308,12 +307,53 @@ export async function notifyDuePmSchedules(): Promise<{ notified: number }> {
 
   notified += await notifyDueRoundWorkOrders([...roundOrgs.keys()], soon);
   notified += await notifyDuePrivateWorkOrders(soon);
+  notified += await notifyOverdueWorkOrders();
   return { notified };
 }
 
 /**
+ * ใบแจ้งซ่อมทั่วไปที่เลยกำหนดแล้วยังไม่ปิด — เตือนผู้รับผิดชอบทุกวัน (ผู้ใช้ 2/11/2569)
+ * เดิมไม่มีเตือนเลย มีแค่แจ้งตอนโดนหักคะแนน · ไม่แจ้ง CEO/คนอื่น (เรื่องของผู้รับผิดชอบ)
+ * ใบรอบ PM และใบส่วนตัวมีตัวเตือนของตัวเองข้างบนแล้ว — ไม่นับซ้ำ
+ */
+async function notifyOverdueWorkOrders(): Promise<number> {
+  const startToday = new Date(`${ymd(todayBkkDate())}T00:00:00.000+07:00`);
+  const wos = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.workOrder.findMany({
+      where: {
+        status: { in: ["open", "in_progress"] },
+        dueDate: { lt: startToday },
+        isPrivate: false,
+        pmRoundDate: null,
+        assignedTo: { not: null },
+      },
+      select: { id: true, orgId: true, code: true, title: true, dueDate: true, assignedTo: true, property: { select: { name: true } } },
+    })
+  );
+  const today = ymd(todayBkkDate());
+  let notified = 0;
+  for (const wo of wos) {
+    const dueDay = new Date(wo.dueDate!.getTime() + 7 * 3600e3).toISOString().slice(0, 10);
+    const late = Math.round((Date.parse(today) - Date.parse(dueDay)) / 86_400_000);
+    if (late < 1) continue;
+    await notifyUser(wo.orgId, wo.assignedTo, {
+      title: `🔴 ใบงานเลยกำหนด ${late} วัน: ${wo.title}`,
+      body: `${wo.code} · บ้าน ${wo.property?.name ?? "-"} · กำหนด ${fmtThaiDate(wo.dueDate!)}`,
+      type: "work_order",
+      referenceId: wo.id,
+      line: `🔴 ใบงานเลยกำหนด ${late} วัน
+📝 ${wo.title} (${wo.code})
+🏠 บ้าน: ${wo.property?.name ?? "-"}
+📅 กำหนด ${fmtThaiDate(wo.dueDate!)}`,
+    });
+    notified++;
+  }
+  return notified;
+}
+
+/**
  * ใบแจ้งซ่อมส่วนตัว (กันลืม) — เตือนเฉพาะคนเปิดใบคนเดียว (ผู้ใช้ 2/11/2569 "แจ้งเตือนแค่ตัวเองพอ")
- * เกณฑ์วันเดียวกับ PM: 7/3/1 วันก่อน + วันครบกำหนด + เลยแล้วทุก 3 วัน · ไม่มีกำหนดส่ง = ไม่เตือน
+ * เกณฑ์วันเดียวกับ PM: 7/3/1 วันก่อน + วันครบกำหนด + เลยแล้วทุกวัน · ไม่มีกำหนดส่ง = ไม่เตือน
  */
 async function notifyDuePrivateWorkOrders(soon: Date): Promise<number> {
   const wos = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
