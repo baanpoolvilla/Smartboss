@@ -337,6 +337,33 @@ export default async function WorkOrderDetailPage({
           label="สร้างเมื่อ"
           value={fmtThaiDateTime(wo.createdAt)}
         />
+        {wo.pmRoundDate && (
+          <InfoRow
+            icon={<CalendarDays className="h-5 w-5" />}
+            label="รอบ PM"
+            value={
+              <span className="grid gap-0.5">
+                <span>ครบกำหนด {fmtThaiDate(wo.pmRoundDate)}</span>
+                {isOpenOrRunning && (
+                  <span className="text-[12.5px] font-normal text-(--ink-soft)">
+                    เลยกำหนดส่งแล้วหักคะแนนทันที · ทำไม่ทันให้กด &quot;ขอเลื่อนกำหนดส่ง&quot; พร้อมเหตุผลก่อนถึงกำหนด
+                  </span>
+                )}
+              </span>
+            }
+          />
+        )}
+        {wo.mergedIntoId && (
+          <InfoRow
+            icon={<Info className="h-5 w-5" />}
+            label="รวมเข้าใบ"
+            value={
+              <Link href={`/maintenance/work-orders/${wo.mergedIntoId}`} className="text-(--brand-navy) hover:underline">
+                ดูใบรวมที่ CEO รวบไว้ →
+              </Link>
+            }
+          />
+        )}
         {wo.dueDate && (
           <InfoRow
             icon={<CalendarClock className="h-5 w-5" />}

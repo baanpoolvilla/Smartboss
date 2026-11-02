@@ -45,6 +45,8 @@ export interface BoardOrder {
    * ต้องซื้อ) ⇒ ปิดงานแล้วถือว่าจบเลย ไม่ต้องรอบันทึกค่าใช้จ่ายก่อน
    */
   requiresExpense: boolean;
+  /** ใบรอบ PM (แบบนับรอบ) เท่านั้น — รอบไหน + เหลือ/เลยกี่วัน · ใบอื่นไม่มี การ์ดหน้าตาเดิม */
+  pmRound?: { label: string; due: string | null; late: boolean } | null;
 }
 
 /** สีสถานะ = ค่าจริงของ Material palette ที่ ChangYai ใช้ */
@@ -184,6 +186,19 @@ function OrderCard({
             </span>
           )}
         </div>
+
+        {wo.pmRound && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+            <span className="rounded-full bg-(--bg-soft) px-2 py-0.5 text-(--ink-soft)">รอบ {wo.pmRound.label}</span>
+            {wo.pmRound.due && (
+              <span
+                className={`rounded-full px-2 py-0.5 font-semibold ${wo.pmRound.late ? "bg-red-50 text-red-700" : "bg-blue-50 text-blue-700"}`}
+              >
+                {wo.pmRound.due}
+              </span>
+            )}
+          </div>
+        )}
 
         {wo.description && (
           <p className="mt-1 line-clamp-2 text-xs text-(--ink-soft)">

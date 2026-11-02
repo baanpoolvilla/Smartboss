@@ -6,6 +6,8 @@
  * ของ dockOverdueMaintenance พอดี ไม่งั้น cron จะคืน-หักวนไปมาทุกนาที
  */
 
+import { overdueGraceDays, roundBeforeStart } from "@/modules/maintenance/lib/pm-rounds";
+
 export function addDays(d: Date, days: number): Date {
   return new Date(d.getTime() + days * 86_400_000);
 }
@@ -29,6 +31,8 @@ export interface DockSettings {
   workOrderGraceDays: number;
   pmGraceDays: number;
   scoringStartDate: Date | null;
+  /** PM แบบนับรอบเริ่มวันนี้ (ไม่มี = แบบเดิม) */
+  pmRoundsFrom?: Date | null;
 }
 
 export interface WorkOrderDock {
@@ -42,6 +46,10 @@ export interface WorkOrderState {
   completedAt: Date | null;
   assignedTo: string | null;
   caretakerId: string | null;
+  /** ใบรอบ PM (แบบนับรอบ) — ไม่มีผ่อนผัน */
+  pmRoundDate?: Date | null;
+  /** CEO ตัดสินคะแนน: waived = ไม่หัก · kept = หักไว้แม้ยกเลิกใบ */
+  overdueScore?: string | null;
 }
 
 /** "ใบงานเกินกำหนด" ที่หักไปแล้ว — คืนเหตุผลถ้าควรคืน */
@@ -51,9 +59,13 @@ export function workOrderDockRevokeReason(
   st: DockSettings,
 ): string | null {
   if (!wo) return "ใบงานถูกลบ";
+  if (wo.overdueScore === "waived") return "CEO ยกเว้นคะแนนใบนี้";
+  // CEO สั่ง "ไม่ต้องทำ แต่หักไว้" (ยกเลิกใบ/รวบเข้าใบอื่น) — คะแนนที่หักไปแล้วคงไว้
+  if (wo.status === "cancelled" && wo.overdueScore === "kept") return null;
   if (wo.status === "cancelled") return "ใบงานถูกยกเลิก";
   if (!wo.dueDate) return "ใบงานไม่มีกำหนดส่งแล้ว";
-  const lapse = addDays(wo.dueDate, st.workOrderGraceDays);
+  if (roundBeforeStart(wo, st.pmRoundsFrom)) return "รอบ PM ก่อนเริ่มนับแบบรอบ";
+  const lapse = addDays(wo.dueDate, overdueGraceDays(wo, st.workOrderGraceDays));
   if (lapse >= dock.occurredAt) return "เลื่อนกำหนดส่งหลังโดนหัก";
   if (wo.completedAt && wo.completedAt <= lapse) return "ปิดงานทันกำหนด";
   if (st.scoringStartDate && lapse < st.scoringStartDate) return "เลยกำหนดก่อนวันเริ่มนับคะแนน";

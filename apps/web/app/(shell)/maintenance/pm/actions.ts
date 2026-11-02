@@ -21,6 +21,7 @@ import { getAsset } from "@/modules/maintenance/data/assets";
 import { roundsPerYearOptions } from "@/modules/maintenance/lib/pm-schedule";
 import { deleteNotificationsByReference } from "@/modules/maintenance/data/notify";
 import { isPastDay } from "@/modules/maintenance/lib/no-past-date";
+import { pmIsRoundMode } from "@/modules/maintenance/data/pm-rounds";
 
 function parseDate(s: string): Date {
   return new Date(s + "T00:00:00.000Z");
@@ -226,9 +227,23 @@ export async function completePmAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   const pm = await getPmSchedule(orgId, id);
+  // PM แบบนับรอบ: "ปิดรอบ" = ปิดใบรอบที่ค้างเก่าสุด (รอบอื่นยังเป็นงานค้างของมันเอง)
+  const oldestRound = pm && (await pmIsRoundMode(orgId, pm))
+    ? await prisma.workOrder.findFirst({
+        where: { orgId, pmScheduleId: id, pmRoundDate: { not: null }, status: { in: ["open", "in_progress"] } },
+        orderBy: { pmRoundDate: "asc" },
+        select: { id: true, pmRoundDate: true },
+      })
+    : null;
+  if (oldestRound) {
+    await prisma.workOrder.updateMany({
+      where: { orgId, id: oldestRound.id, status: { in: ["open", "in_progress"] } },
+      data: { status: "completed", completedAt: new Date(), completionNotes: "ปิดรอบที่หน้าแผน PM", requiresExpense: false },
+    });
+  }
   await completePmSchedule(orgId, id);
   await closeAutoWorkOrdersOfPm(orgId, id, "done");
-  if (pm) await pmLog(orgId, pm, "status", `ปิดรอบ PM (กำหนด ${fmtDay(pm.nextDueDate)})`);
+  if (pm) await pmLog(orgId, pm, "status", `ปิดรอบ PM (กำหนด ${fmtDay(oldestRound?.pmRoundDate ?? pm.nextDueDate)})`);
   const session = await requireOrg();
   await audit({ userId: session.userId, action: "PM_ROUND_CLOSED", targetId: id });
   revalidatePath("/maintenance/pm");

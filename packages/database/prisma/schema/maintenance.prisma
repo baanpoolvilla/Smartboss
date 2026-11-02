@@ -104,6 +104,12 @@ model WorkOrder {
   pmScheduleId          String?   @map("pm_schedule_id")
   pmScheduleIds         String[]  @map("pm_schedule_ids")
   autoCreated           Boolean   @default(false) @map("auto_created")
+  /// PM แบบนับรอบ: วันครบกำหนดของรอบที่ใบนี้ทำ (ใบอื่น null) — PM เดียวมีหลายใบค้างพร้อมกันได้ แยกกันด้วยค่านี้
+  pmRoundDate           DateTime? @map("pm_round_date") @db.Date
+  /// CEO ตัดสินคะแนนเลยกำหนดของใบนี้ — null ตามปกติ · waived = ไม่หัก (คืนที่หักไปแล้ว) · kept = หักไว้แม้ยกเลิกใบ
+  overdueScore          String?   @map("overdue_score")
+  /// CEO รวบหลายรอบเป็นใบเดียว — ใบเดิมถูกยกเลิกและชี้ไปใบรวม
+  mergedIntoId          String?   @map("merged_into_id")
   /// จบงานแล้วต้องบันทึกค่าใช้จ่ายไหม — ใบงานที่เกิดจาก PM รับค่านี้มาจากแผน PM
   /// (งานอย่างล้างแอร์ตามรอบที่จ้างเหมารายปีไว้แล้ว ไม่มีค่าใช้จ่ายแยกต่อครั้ง
   ///  ถ้าบังคับให้กรอกทุกใบ คนจะกรอก 0 ไปเรื่อย ๆ จนตัวเลขรายงานเชื่อไม่ได้)
@@ -123,6 +129,7 @@ model WorkOrder {
   @@index([propertyId])
   @@index([assignedTo])
   @@index([status])
+  @@index([pmScheduleId, pmRoundDate])
   @@map("work_orders")
   @@schema("maintenance")
 }

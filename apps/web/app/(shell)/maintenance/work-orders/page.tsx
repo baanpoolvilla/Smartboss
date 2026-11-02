@@ -94,6 +94,7 @@ export default async function WorkOrdersPage({
       createdAtLabel: fmtThaiDate(o.createdAt),
       hasExpense: expenseSet.has(o.id),
       requiresExpense: o.requiresExpense,
+      pmRound: o.pmRoundDate ? pmRoundTag(o.pmRoundDate, o.dueDate, o.status) : null,
     }));
 
   const isFilterMode = filter === "today" || filter === "urgent" || filter === "no-expense";
@@ -140,4 +141,17 @@ export default async function WorkOrdersPage({
       )}
     </AppScaffold>
   );
+}
+
+/** ป้ายใบรอบ PM บนการ์ด — "รอบ 1 ธ.ค. 2569" + เหลือ/เลยกี่วัน (นับตามวันไทยของกำหนดส่ง) */
+function pmRoundTag(round: Date, due: Date | null, status: string): BoardOrder["pmRound"] {
+  const open = status === "open" || status === "in_progress";
+  if (!open || !due) return { label: fmtThaiDate(round), due: null, late: false };
+  const day = (d: Date) => Date.parse(new Date(d.getTime() + 7 * 3600e3).toISOString().slice(0, 10));
+  const days = Math.round((day(due) - day(new Date())) / 86_400_000);
+  return {
+    label: fmtThaiDate(round),
+    due: days < 0 ? `เลยกำหนด ${-days} วัน` : days === 0 ? "ครบกำหนดวันนี้" : `เหลือ ${days} วัน`,
+    late: days < 0,
+  };
 }

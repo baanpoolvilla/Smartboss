@@ -4,6 +4,7 @@ import {
   nextDueAfterCompletion,
   toDateOnly,
 } from "@/modules/maintenance/lib/pm-schedule";
+import { pmIsRoundMode } from "@/modules/maintenance/data/pm-rounds";
 
 export interface PmInput {
   propertyId: string;
@@ -96,6 +97,8 @@ export async function closeAutoWorkOrdersOfPm(
       pmScheduleId: { in: ids },
       autoCreated: true,
       status: { in: ["open", "in_progress"] },
+      // ใบรอบ (PM แบบนับรอบ) แต่ละใบคือคนละรอบ — ปิด/แทนรอบหนึ่งไม่ปิดรอบอื่น · ลบแผนเท่านั้นที่ยกเลิกทุกใบ
+      ...(outcome === "cancelled" ? {} : { pmRoundDate: null }),
       ...(exceptWorkOrderId ? { id: { not: exceptWorkOrderId } } : {}),
     },
     data:
@@ -123,6 +126,12 @@ export async function completePmSchedule(orgId: string, id: string) {
   const pm = await prisma.pmSchedule.findFirst({ where: { orgId, id } });
   if (!pm) return;
   const now = new Date();
+
+  // PM แบบนับรอบ: รอบถัดไปตามแผน ไม่ขึ้นกับวันปิดงาน (cron เดินแผนเองตอนเปิดใบ) — จดแค่วันที่ทำล่าสุด
+  if (await pmIsRoundMode(orgId, pm)) {
+    await prisma.pmSchedule.update({ where: { id: pm.id }, data: { lastCompletedDate: toDateOnly(now) } });
+    return;
+  }
 
   // limitedCount: นับครั้ง → รอนัดวันถัดไป / ครบแล้วปิด
   if (pm.totalRounds != null) {
@@ -167,6 +176,8 @@ export async function completePmSchedule(orgId: string, id: string) {
 export async function skipPmSchedule(orgId: string, id: string) {
   const pm = await prisma.pmSchedule.findFirst({ where: { orgId, id } });
   if (!pm || !pm.isActive) return;
+  // PM แบบนับรอบ: ยกเลิกใบรอบหนึ่งไม่กระทบแผน (รอบมีใบของตัวเอง cron ไม่เปิดซ้ำ)
+  if (await pmIsRoundMode(orgId, pm)) return;
 
   if (pm.totalRounds != null) {
     await prisma.pmSchedule.update({ where: { id: pm.id }, data: { awaitingSchedule: true } });

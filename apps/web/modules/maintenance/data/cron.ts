@@ -7,6 +7,8 @@ import { closePendingScoreRequests } from "@/lib/score-request-store";
 import { fmtThaiDate } from "@/modules/maintenance/lib/format";
 import { notifyUser, notifyUsers, propertyCaretaker } from "@/modules/maintenance/data/notify";
 import { logActivity } from "@/modules/maintenance/data/activity";
+import { generateRoundWorkOrders, loadRoundOrgs } from "@/modules/maintenance/data/pm-rounds";
+import { overdueGraceDays, pmUsesRounds, roundBeforeStart, todayBkkDate, ymd } from "@/modules/maintenance/lib/pm-rounds";
 import {
   loadPerformanceSettingsMap,
   recordPerformanceEvents,
@@ -45,8 +47,11 @@ export async function generateWorkOrdersForDuePms(): Promise<{
 
   await closeStaleAutoWorkOrders();
 
-  let created = 0;
+  // PM แบบนับรอบ (บริษัทที่เปิดใช้) เปิดใบเองที่ data/pm-rounds.ts — ข้างล่างนี้คือแบบเดิมล้วน
+  const roundOrgs = await loadRoundOrgs();
+  let created = (await generateRoundWorkOrders(roundOrgs)).created;
   for (const pm of duePms) {
+    if (pmUsesRounds(roundOrgs.get(pm.orgId), pm)) continue;
     /**
      * ข้ามถ้ามีใบงานที่ยังไม่ปิดผูก PM นี้อยู่แล้ว (กันสร้างซ้ำ)
      *
@@ -135,7 +140,8 @@ export async function generateWorkOrdersForDuePms(): Promise<{
 async function closeStaleAutoWorkOrders(): Promise<void> {
   const open = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
     prisma.workOrder.findMany({
-      where: { autoCreated: true, status: { in: ["open", "in_progress"] }, pmScheduleId: { not: null } },
+      // ใบรอบ (PM แบบนับรอบ) ซ้อนกันได้โดยตั้งใจ และปิดรอบหนึ่งไม่ได้แปลว่ารอบอื่นเสร็จ — ไม่แตะ
+      where: { autoCreated: true, status: { in: ["open", "in_progress"] }, pmScheduleId: { not: null }, pmRoundDate: null },
       select: { id: true, orgId: true, pmScheduleId: true, createdAt: true },
     })
   );
@@ -234,8 +240,11 @@ export async function notifyDuePmSchedules(): Promise<{ notified: number }> {
     })
   );
 
+  const roundOrgs = await loadRoundOrgs();
   let notified = 0;
   for (const pm of pms) {
+    // PM แบบนับรอบ: วันครบกำหนดของแผนคือรอบที่ยังไม่เปิด — เตือนจากใบรอบข้างล่างแทน
+    if (pmUsesRounds(roundOrgs.get(pm.orgId), pm)) continue;
     const [property, asset] = await Promise.all([
       prisma.property.findUnique({
         where: { id: pm.propertyId },
@@ -289,7 +298,55 @@ export async function notifyDuePmSchedules(): Promise<{ notified: number }> {
     notified++;
   }
 
+  notified += await notifyDueRoundWorkOrders([...roundOrgs.keys()], soon);
   return { notified };
+}
+
+/** เตือนใบรอบ PM ตามกำหนดส่งของใบ (เลื่อนแล้วก็ตามวันใหม่) — เกณฑ์วันเดียวกับ PM แบบเดิม */
+async function notifyDueRoundWorkOrders(orgIds: string[], soon: Date): Promise<number> {
+  if (orgIds.length === 0) return 0;
+  const wos = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.workOrder.findMany({
+      where: {
+        orgId: { in: orgIds },
+        status: { in: ["open", "in_progress"] },
+        pmRoundDate: { not: null },
+        dueDate: { lte: soon },
+        // ⚠ { not: "waived" } อย่างเดียวตัดแถว null ทิ้งด้วย (SQL <> กับ null) — ใบปกติจะไม่ถูกเตือนเลย
+        OR: [{ overdueScore: null }, { overdueScore: { not: "waived" } }],
+      },
+      select: {
+        id: true, orgId: true, title: true, dueDate: true, pmRoundDate: true, assignedTo: true, ccUserIds: true,
+        propertyId: true, property: { select: { name: true } },
+      },
+    })
+  );
+  const today = ymd(todayBkkDate());
+  let notified = 0;
+  for (const wo of wos) {
+    const dueDay = new Date(wo.dueDate!.getTime() + 7 * 3600e3).toISOString().slice(0, 10);
+    const days = Math.round((Date.parse(dueDay) - Date.parse(today)) / 86_400_000);
+    if (!shouldNotifyPmToday(days)) continue;
+    const statusText = days < 0 ? `⚠️ เกินกำหนด ${-days} วัน` : days === 0 ? "⏰ ถึงกำหนดวันนี้" : `⏰ อีก ${days} วัน`;
+    const head = days <= 0 ? "🔴" : "🟡";
+    const house = wo.property?.name ?? "-";
+    await notifyUsers(wo.orgId, [wo.assignedTo, ...wo.ccUserIds, ...(await propertyCaretaker(wo.orgId, wo.propertyId))], {
+      title: `${head} PM ${statusText}: ${wo.title}`,
+      body: `บ้าน: ${house} • กำหนด ${fmtThaiDate(wo.dueDate!)} • ทำไม่ทันกด "ขอเลื่อนกำหนดส่ง"`,
+      type: "work_order",
+      referenceId: wo.id,
+      line:
+        `${head} แจ้งเตือน PM
+📋 ${wo.title}
+🏠 บ้าน: ${house}
+📅 กำหนด: ${fmtThaiDate(wo.dueDate!)}
+${statusText}
+` +
+        `ทำไม่ทันให้กด "ขอเลื่อนกำหนดส่ง" ในใบงาน พร้อมเหตุผล`,
+    });
+    notified++;
+  }
+  return notified;
 }
 
 /**
@@ -394,9 +451,10 @@ export async function dockOverdueMaintenance(): Promise<{
   await cancelTwinWorkOrders();
   const revoked = await revokeInvalidMaintenanceDocks(settingsByOrg);
   const minPmGraceDays = Math.min(...activeSettings.map((s) => s.pmGraceDays));
-  const minWorkOrderGraceDays = Math.min(
-    ...activeSettings.map((s) => s.workOrderGraceDays),
-  );
+  // ใบรอบ PM ไม่มีผ่อนผัน — มีบริษัทไหนเปิดแบบนับรอบ ดึงตั้งแต่เลยกำหนดวินาทีแรกแล้วกรองทีหลัง
+  const minWorkOrderGraceDays = activeSettings.some((s) => s.pmRoundsFrom)
+    ? 0
+    : Math.min(...activeSettings.map((s) => s.workOrderGraceDays));
 
   // ── ใบงานที่เลยกำหนดเกินระยะผ่อนผันแล้วยังไม่ปิด ──
   // ผ่อนผันได้เหมือน PM (ตั้งค่าได้ที่ /admin/performance/settings) — ค่าเริ่มต้น 0
@@ -417,6 +475,8 @@ export async function dockOverdueMaintenance(): Promise<{
         title: true,
         dueDate: true,
         assignedTo: true,
+        pmRoundDate: true,
+        overdueScore: true,
         property: { select: { caretakerId: true, name: true } },
       },
     })
@@ -430,7 +490,10 @@ export async function dockOverdueMaintenance(): Promise<{
     if (wo.dueDate === null) continue; // where: { lt: ... } กันไว้แล้วจริง ๆ ไม่มีทางเข้า แต่ TS ไม่รู้
 
     // กรองอีกชั้นด้วยระยะผ่อนผันของบริษัทนั้นจริง ๆ (ข้างบนดึงมาด้วยระยะสั้นสุดก่อน)
-    const lapse = addDays(wo.dueDate, woSt.workOrderGraceDays);
+    // CEO ยกเว้นคะแนนใบนี้แล้ว (หน้า PM ค้างหลายรอบ) · ใบรอบที่ครบกำหนดก่อนเปิดใช้แบบนับรอบ ไม่หักย้อนหลัง
+    if (wo.overdueScore === "waived") continue;
+    if (roundBeforeStart(wo, woSt.pmRoundsFrom)) continue;
+    const lapse = addDays(wo.dueDate, overdueGraceDays(wo, woSt.workOrderGraceDays));
     if (lapse >= now) continue;
     // เลยกำหนดไปตั้งแต่ก่อนวันเริ่มนับคะแนน = งานค้างเก่า ไม่ใช่การปล่อยปละในช่วงที่นับ —
     // เดิม occurredAt = วันที่ตรวจพบ (หลังวันเริ่มนับเสมอ) งานค้างเก่าเลยโดนหักทั้งกอง
@@ -467,11 +530,14 @@ export async function dockOverdueMaintenance(): Promise<{
         orgId: true,
         title: true,
         nextDueDate: true,
+        totalRounds: true,
         assignedTo: true,
         property: { select: { caretakerId: true, name: true } },
       },
     })
   );
+  // PM แบบนับรอบ: ใบรอบมีกำหนดส่งเสมอ หักผ่าน "ใบงานเกินกำหนด" ข้างบนแล้ว · nextDueDate ของแผนคือรอบที่ยังไม่เปิด
+  const roundOrgs = await loadRoundOrgs();
 
   // PM ที่มีใบงานเปิดอยู่และใบนั้นมีวันครบกำหนดของตัวเอง — วันของใบงานคือกำหนดจริง
   // (ผู้จัดการนัดไว้แล้ว) ถ้าเลยก็โดน "ใบงานเกินกำหนด" อยู่แล้ว ไม่หัก "ไม่ทำตามรอบ" ซ้อน
@@ -498,6 +564,7 @@ export async function dockOverdueMaintenance(): Promise<{
     const st = settingsByOrg.get(pm.orgId);
     if (!st || !st.enabled) continue;
     if (pmIdsWithDatedWo.has(pm.id)) continue;
+    if (pmUsesRounds(roundOrgs.get(pm.orgId), pm)) continue;
 
     // กรองอีกชั้นด้วยระยะผ่อนผันของบริษัทนั้นจริง ๆ
     const lapse = addDays(pm.nextDueDate, st.pmGraceDays);
@@ -677,7 +744,7 @@ async function revokeInvalidMaintenanceDocks(
       prisma.workOrder.findMany({
         where: { id: { in: woIds } },
         select: {
-          id: true, status: true, dueDate: true, completedAt: true, assignedTo: true,
+          id: true, status: true, dueDate: true, completedAt: true, assignedTo: true, pmRoundDate: true, overdueScore: true,
           property: { select: { caretakerId: true } },
         },
       }),

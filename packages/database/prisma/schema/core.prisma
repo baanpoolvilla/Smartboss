@@ -469,6 +469,18 @@ model PerformanceSetting {
   missingPunchCountsAsAbsent Boolean @default(false) @map("missing_punch_counts_as_absent")
 
   /**
+   * PM แบบนับรอบ (ผู้ใช้ 2/11/2569) — null = แบบเดิม (เปิดใบวันครบกำหนด · ผ่อนผัน pmGraceDays
+   * · รอบถัดไปนับจากวันปิดงาน) · มีวันที่ = ตั้งแต่วันนี้ ใบ PM เปิดก่อน pmLeadDays วัน มีกำหนดส่ง
+   * ของรอบ เลยกำหนดหักทันที รอบถัดไปตามแผนไม่รอใบเก่า ใบรอบก่อนวันนี้ไม่หักย้อนหลัง
+   */
+  pmRoundsFrom DateTime? @db.Date @map("pm_rounds_from")
+
+  /**
+   * PM แบบนับรอบ: เปิดใบงานก่อนวันครบกำหนดกี่วัน
+   */
+  pmLeadDays Int @default(14) @map("pm_lead_days")
+
+  /**
    * ย้อนดูผลลงเวลากี่วันในแต่ละรอบ cron
    */
   attendanceLookbackDays Int @default(45) @map("attendance_lookback_days")

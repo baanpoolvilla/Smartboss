@@ -10,7 +10,7 @@ import {
   CheckCircle2,
   XCircle,
 } from "lucide-react";
-import { requireOrg, hasPermission } from "@smartboss/auth";
+import { requireOrg, hasPermission, canViewAll } from "@smartboss/auth";
 import { Card } from "@smartboss/ui/components/card";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { ADMIN_PERMS } from "@/modules/admin/permissions";
@@ -32,6 +32,7 @@ import {
 import { AppScaffold } from "@/modules/maintenance/components/app-scaffold";
 import { maintenanceScoreWatch } from "@/modules/maintenance/data/score-watch";
 import { ScoreWatchSection } from "@/modules/maintenance/components/score-watch-section";
+import { countPileups } from "@/modules/maintenance/data/pm-rounds";
 
 const STATUS_META: Record<
   string,
@@ -101,7 +102,7 @@ export default async function MaintenanceDashboardPage() {
   const now = new Date();
   // ใบงานบนแดชบอร์ดกรองด้วยกติกาเดียวกับหน้ารายการ (data/work-order-access.ts)
   const access = await workOrderAccess(session);
-  const [stats, noExpense, recent, properties, propCats, monthExpenses, scoreWatch] =
+  const [stats, noExpense, recent, properties, propCats, monthExpenses, scoreWatch, pileups] =
     await Promise.all([
       dashboardStats(orgId, access),
       noExpenseWorkOrderCount(orgId, access),
@@ -111,6 +112,8 @@ export default async function MaintenanceDashboardPage() {
       listExpensesForMonth(orgId, now.getFullYear(), now.getMonth() + 1),
       // คะแนนรวมทั้งบริษัทเฉพาะคนที่ดูผลงานรายคนได้ — คนอื่นเห็นของตัวเอง
       maintenanceScoreWatch(orgId, access, hasPermission(session, ADMIN_PERMS.performanceView)),
+      // PM ค้างหลายรอบ (แบบนับรอบ) — CEO เป็นคนตัดสิน คนอื่นไม่ต้องเห็นกล่องนี้
+      canViewAll(session) ? countPileups(orgId) : Promise.resolve(0),
     ]);
 
   const propNames: Record<string, string> = Object.fromEntries(
@@ -151,6 +154,18 @@ export default async function MaintenanceDashboardPage() {
 
   return (
     <AppScaffold title="แดชบอร์ด">
+      {pileups > 0 && (
+        <Link
+          href="/maintenance/pm/rounds"
+          className="flex items-center gap-3 rounded-(--radius) border border-red-200 bg-red-50 px-4 py-3 text-sm text-(--ink) hover:bg-red-100"
+        >
+          <span aria-hidden="true">⚠</span>
+          <span className="flex-1">
+            <b className="text-red-700">PM ค้างหลายรอบ {pileups} แผน</b> รอ CEO ตัดสิน: รอบไหนไม่ต้องทำ, หักคะแนนหรือไม่ หรือรวบเป็นใบเดียว
+          </span>
+          <span className="font-semibold text-red-700">ดูและตัดสิน →</span>
+        </Link>
+      )}
       {/* ─── การ์ดสรุป 4 ช่อง ─── */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <SummaryCard
