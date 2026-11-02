@@ -21,6 +21,7 @@ import {
   updateEquipmentReturnStatus,
   deleteEquipmentReturn,
   returnStatusMeta,
+  RETURN_PROBLEM,
 } from "@/modules/maintenance/data/equipment-returns";
 import { createExpense } from "@/modules/maintenance/data/expenses";
 import { logActivity, type ActivityKind } from "@/modules/maintenance/data/activity";
@@ -738,6 +739,11 @@ export async function createReturnAction(formData: FormData) {
     text: "แจ้งคืนของ / ของมีปัญหา",
     body: `${itemName ? `${itemName} · ` : ""}${reason}`,
   });
+  await notifyWorkOrderOwner(s.orgId, po, [...poBuyers(po), po.createdBy], s.userId, {
+    emoji: "↩️",
+    text: "ของสำหรับใบงานของคุณมีปัญหา ส่งคืนแล้ว",
+    body: `${itemName ? `${itemName} · ` : ""}${RETURN_PROBLEM[String(formData.get("problemType") ?? "other")] ?? RETURN_PROBLEM.other} · ${reason}`,
+  });
 
   revalidatePath("/maintenance/purchase-orders");
   redirect("/maintenance/purchase-orders?tab=returns");
@@ -782,6 +788,16 @@ export async function setReturnStatusAction(formData: FormData) {
       await notifyPoParties(s.orgId, po, [before.createdBy, ...poBuyers(po)], s.userId, {
         emoji: status === "cancelled" ? "❌" : status === "resolved" ? "✅" : "↩️",
         text: `เรื่องคืนของ: ${returnStatusMeta(status).label}`,
+        body: [before.itemName, note].filter(Boolean).join(" · ") || undefined,
+      });
+      await notifyWorkOrderOwner(s.orgId, po, [before.createdBy, ...poBuyers(po)], s.userId, {
+        emoji: status === "cancelled" ? "❌" : status === "resolved" ? "✅" : "🔄",
+        text:
+          status === "resolved"
+            ? "เรื่องคืนของสำหรับใบงานของคุณจบแล้ว ทำงานต่อได้"
+            : status === "cancelled"
+              ? "เรื่องคืนของสำหรับใบงานของคุณถูกยกเลิก"
+              : `เรื่องคืนของสำหรับใบงานของคุณ: ${returnStatusMeta(status).label}`,
         body: [before.itemName, note].filter(Boolean).join(" · ") || undefined,
       });
     }

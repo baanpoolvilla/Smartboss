@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { requireOrg, hasPermission, canViewAll } from "@smartboss/auth";
 import { Card } from "@smartboss/ui/components/card";
+import { prisma } from "@smartboss/database";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import {
   getWorkOrder,
@@ -39,6 +40,7 @@ import { userNameMap } from "@/modules/maintenance/data/users";
 import { workOrderMentionPeople } from "@/modules/maintenance/data/wo-mentions";
 import { listExpenses } from "@/modules/maintenance/data/expenses";
 import { listPurchaseOrdersForWorkOrder } from "@/modules/maintenance/data/purchase-orders";
+import { returnStatusMeta } from "@/modules/maintenance/data/equipment-returns";
 import { poItemsFromJson, poStatusMeta } from "@/modules/maintenance/lib/po";
 import { getPmScheduleIdForAsset } from "@/modules/maintenance/data/pm";
 import {
@@ -131,6 +133,9 @@ export default async function WorkOrderDetailPage({
     (hasPermission(session, MAINT_PERMS.workorderComplete) && isOwnJob);
   const canExpense = hasPermission(session, MAINT_PERMS.expenseManage);
   const canSeePo = hasPermission(session, MAINT_PERMS.poView);
+  // ผู้รับผิดชอบใบงานที่ไม่มีสิทธิ์ดู PR/PO ยังเห็น "PR ของใบงานตัวเองถึงไหนแล้ว" (ชื่อ + สถานะ ไม่มีราคา ไม่มีลิงก์)
+  // ผู้ใช้ 2/11/2569 — เดิมไม่เห็นอะไรเลย ต้องรอแจ้งเตือนอย่างเดียว
+  const seeOwnPoStatus = !canSeePo && wo.assignedTo === session.userId;
   const canCreatePo = hasPermission(session, MAINT_PERMS.poCreate);
   // ใบงานที่ยกเลิกไปแล้วไม่ควรเปิดใบสั่งซื้อเพิ่ม
   const canOpenPoHere = canCreatePo && wo.status !== "cancelled";
@@ -144,11 +149,24 @@ export default async function WorkOrderDetailPage({
       listWorkOrderComments(orgId, id),
       listExpenses(orgId, { workOrderId: id }),
       listExternalPhotos(orgId, id),
-      canSeePo
+      canSeePo || seeOwnPoStatus
         ? listPurchaseOrdersForWorkOrder(orgId, id)
         : Promise.resolve([]),
       listDueRequests(orgId, id),
     ]);
+
+  // เรื่องคืนของที่ยังไม่จบของ PR ใบงานนี้ — บอกไว้ใต้ PR ให้รู้ว่าของยังไม่ครบ/รอเปลี่ยน
+  const openReturns = new Map<string, string>(
+    linkedPos.length === 0
+      ? []
+      : (
+          await prisma.equipmentReturn.findMany({
+            where: { orgId, purchaseOrderId: { in: linkedPos.map((p) => p.id) }, status: { in: ["pending", "processing"] } },
+            select: { purchaseOrderId: true, status: true },
+            orderBy: { createdAt: "asc" },
+          })
+        ).map((r) => [r.purchaseOrderId, r.status])
+  );
 
   const propNames: Record<string, string> = Object.fromEntries(
     properties.map((p) => [p.id, p.name])
@@ -512,17 +530,45 @@ export default async function WorkOrderDetailPage({
       {/* ─── สั่งซื้ออุปกรณ์สำหรับงานนี้ ─── */}
       {/* บทบาทแก้ได้รายบริษัท จึงมีสิทธิ์เปิด PR แต่ไม่มีสิทธิ์ดูรายการ PR ได้จริง
           — แยกสองเงื่อนไขไว้ ไม่ผูกปุ่ม "เปิด PR/PO" ไว้กับสิทธิ์ดู */}
-      {(canOpenPoHere || (canSeePo && linkedPos.length > 0)) && (
+      {(canOpenPoHere || ((canSeePo || seeOwnPoStatus) && linkedPos.length > 0)) && (
         <SectionCard
           className="mb-4"
           icon={<ShoppingCart className="h-4 w-4 text-[#0F766E]" />}
           title={
-            canSeePo
+            canSeePo || (seeOwnPoStatus && linkedPos.length > 0)
               ? `สั่งซื้ออุปกรณ์สำหรับงานนี้ (${linkedPos.length})`
               : "สั่งซื้ออุปกรณ์สำหรับงานนี้"
           }
         >
-          {!canSeePo ? (
+          {seeOwnPoStatus && linkedPos.length > 0 ? (
+            <ul className="flex flex-col">
+              {linkedPos.map((po, i) => {
+                const m = poStatusMeta(po.status);
+                const ret = openReturns.get(po.id);
+                return (
+                  <li
+                    key={po.id}
+                    className={`flex items-start gap-2 py-2.5${i < linkedPos.length - 1 ? " border-b border-(--line)" : ""}`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="font-mono text-[11px] text-(--ink-soft)">{po.code}</p>
+                      <p className="truncate text-sm font-medium text-(--ink)">{po.title}</p>
+                      <p className="text-xs text-(--ink-soft)">
+                        เปิดเมื่อ {fmtThaiDate(po.createdAt)}
+                        {ret && <span className="ml-1 text-[#EA580C]">· ↩️ คืนของ: {returnStatusMeta(ret).label}</span>}
+                      </p>
+                    </div>
+                    <span
+                      className="shrink-0 rounded-full px-2 py-0.5 text-[11px]"
+                      style={{ color: m.color, backgroundColor: `${m.color}1a`, border: `1px solid ${m.color}4d` }}
+                    >
+                      {m.label}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : !canSeePo ? (
             <p className="text-sm text-(--ink-soft)">
               เปิด PR/PO จากตรงนี้แล้วระบบจะผูกกลับมาที่ใบงานนี้ให้เอง
             </p>
@@ -563,6 +609,9 @@ export default async function WorkOrderDetailPage({
                             : ""}
                           {" • "}
                           {fmtThaiDate(po.createdAt)}
+                          {openReturns.get(po.id) && (
+                            <span className="text-[#EA580C]"> · ↩️ คืนของ: {returnStatusMeta(openReturns.get(po.id)!).label}</span>
+                          )}
                         </p>
                       </div>
                       <span
