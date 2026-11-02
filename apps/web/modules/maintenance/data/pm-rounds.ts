@@ -12,6 +12,8 @@ import {
   PILEUP_MIN_ROUNDS,
   pmUsesRounds,
   roundDueAt,
+  roundDockRefId,
+  roundDockWorkOrderId,
   roundModeOn,
   todayBkkDate,
   type RoundOrg,
@@ -218,12 +220,21 @@ export async function listPileups(orgId: string): Promise<Pileup[]> {
       select: { id: true, title: true, frequency: true, property: { select: { name: true } } },
     }),
     prisma.performanceEvent.findMany({
-      where: { orgId, category: "workorder_overdue", refId: { in: pmIds.flatMap((id) => byPm.get(id)!.map((w) => w.id)) } },
+      where: {
+        orgId,
+        category: "pm_missed",
+        refType: "pm_schedule",
+        refId: { in: pmIds.flatMap((id) => byPm.get(id)!.map((w) => roundDockRefId(id, w.pmRoundDate!, w.id))) },
+      },
       select: { refId: true, points: true },
     }),
   ]);
   const dockBy = new Map<string, number>();
-  for (const d of docks) dockBy.set(d.refId!, (dockBy.get(d.refId!) ?? 0) + Number(d.points));
+  // คะแนนที่หักไปแล้ว (รวมที่คืนด้วยคำขอแก้คะแนน — refType _undo ไม่อยู่ในชุดนี้ จึงนับเฉพาะที่หัก)
+  for (const d of docks) {
+    const woId = roundDockWorkOrderId(d.refId);
+    if (woId) dockBy.set(woId, (dockBy.get(woId) ?? 0) + Number(d.points));
+  }
 
   return pms
     .map((pm) => ({

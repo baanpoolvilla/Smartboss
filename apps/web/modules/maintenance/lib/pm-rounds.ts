@@ -94,5 +94,20 @@ export function roundBeforeStart(wo: { pmRoundDate?: Date | null }, pmRoundsFrom
   return !!wo.pmRoundDate && !!pmRoundsFrom && wo.pmRoundDate.getTime() < pmRoundsFrom.getTime();
 }
 
+/**
+ * refId ของคะแนน "ไม่ทำบำรุงรักษาตามรอบ" ของใบรอบ = แผน:รอบ:ใบงาน
+ * ส่วนแรกเป็นแผนเหมือนแบบเดิม (ขอแก้คะแนนหาคนสร้างแผนจากตรงนี้) · มีส่วนที่สาม = ใบรอบ (แบบเดิมมีแค่ แผน:รอบ)
+ * ใบที่ CEO รวบใช้วันรอบเดียวกับใบเดิมได้ — ใบงานต่อท้ายทำให้ไม่ชนกัน
+ */
+export function roundDockRefId(pmId: string, round: Date, workOrderId: string): string {
+  return `${pmId}:${ymd(round)}:${workOrderId}`;
+}
+
+/** ใบงานของคะแนนใบรอบ — null = คะแนน "ไม่ทำตามรอบ" แบบเดิม (แผน:รอบ) */
+export function roundDockWorkOrderId(refId: string | null | undefined): string | null {
+  const parts = (refId ?? "").split(":");
+  return parts.length === 3 && parts[2] ? parts[2] : null;
+}
+
 /** ค้างพร้อมกันกี่รอบถึงส่งให้ CEO ตัดสิน */
 export const PILEUP_MIN_ROUNDS = 2;

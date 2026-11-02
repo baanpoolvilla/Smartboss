@@ -8,7 +8,15 @@ import { fmtThaiDate } from "@/modules/maintenance/lib/format";
 import { notifyUser, notifyUsers, propertyCaretaker } from "@/modules/maintenance/data/notify";
 import { logActivity } from "@/modules/maintenance/data/activity";
 import { generateRoundWorkOrders, loadRoundOrgs } from "@/modules/maintenance/data/pm-rounds";
-import { overdueGraceDays, pmUsesRounds, roundBeforeStart, todayBkkDate, ymd } from "@/modules/maintenance/lib/pm-rounds";
+import {
+  overdueGraceDays,
+  pmUsesRounds,
+  roundBeforeStart,
+  roundDockRefId,
+  roundDockWorkOrderId,
+  todayBkkDate,
+  ymd,
+} from "@/modules/maintenance/lib/pm-rounds";
 import {
   loadPerformanceSettingsMap,
   recordPerformanceEvents,
@@ -478,6 +486,7 @@ export async function dockOverdueMaintenance(): Promise<{
         dueDate: true,
         assignedTo: true,
         pmRoundDate: true,
+        pmScheduleId: true,
         overdueScore: true,
         property: { select: { caretakerId: true, name: true } },
       },
@@ -504,15 +513,18 @@ export async function dockOverdueMaintenance(): Promise<{
 
     const responsible = wo.assignedTo ?? wo.property?.caretakerId;
     if (!responsible) continue; // ไม่มีใครรับผิดชอบเลย — หักใครไม่ได้
+    // ใบรอบ PM หักในหัวข้อ "ไม่ทำบำรุงรักษาตามรอบ" (คะแนนตั้งแยกจากใบงานทั่วไป · ขอแก้คะแนนไปหาคนสร้างแผน PM)
+    // refId = แผน:รอบ:ใบงาน — ส่วนแรกคือแผน (lib/score-requests.ts ใช้หาคนอนุมัติ) ส่วนท้ายชี้ใบงานที่ค้าง
+    const round = wo.pmRoundDate && wo.pmScheduleId ? roundDockRefId(wo.pmScheduleId, wo.pmRoundDate, wo.id) : null;
     events.push({
       orgId: wo.orgId,
       userId: responsible,
       source: "maintenance",
-      category: "workorder_overdue",
+      category: round ? "pm_missed" : "workorder_overdue",
       occurredAt: now,
-      refType: "work_order",
-      refId: wo.id,
-      note: `${wo.title}${wo.property?.name ? ` · ${wo.property.name}` : ""} · ครบกำหนด ${fmtThaiDate(wo.dueDate)}`,
+      refType: round ? "pm_schedule" : "work_order",
+      refId: round ?? wo.id,
+      note: `${wo.title}${wo.property?.name ? ` · ${wo.property.name}` : ""} · ${round ? `รอบ ${fmtThaiDate(wo.pmRoundDate!)} · ` : ""}ครบกำหนด ${fmtThaiDate(wo.dueDate)}`,
     });
   }
 
@@ -634,13 +646,17 @@ async function notifyMaintenanceDocks(
     const pts = settingsByOrg.get(e.orgId)?.rulePoints[e.category];
     if (!pts) continue; // บริษัทตั้งหมวดนี้เป็น 0 = ไม่ได้หักจริง
     const isWo = e.category === "workorder_overdue";
+    const roundWo = !isWo ? roundDockWorkOrderId(e.refId) : null;
     await notifyUser(e.orgId, e.userId, {
       title: isWo
         ? `ระบบหักคะแนน ${fmtPoints(pts)} · ใบงาน ${woCodes.get(e.refId ?? "") ?? ""} เลยกำหนด`.replace("  ", " ")
-        : `ระบบหักคะแนน ${fmtPoints(pts)} · ไม่ทำบำรุงรักษาตามรอบ`,
+        : roundWo
+          ? `ระบบหักคะแนน ${fmtPoints(pts)} · ไม่ทำบำรุงรักษาตามรอบ · ใบงาน ${woCodes.get(roundWo) ?? ""}`.trim()
+          : `ระบบหักคะแนน ${fmtPoints(pts)} · ไม่ทำบำรุงรักษาตามรอบ`,
       body: e.note ?? null,
-      type: isWo ? "work_order" : "pm",
-      referenceId: isWo ? (e.refId ?? null) : (e.refId?.split(":")[0] ?? null),
+      // ใบรอบ PM กดแล้วไปใบงานที่ค้าง (ทำ/ขอเลื่อนจากตรงนั้น) ไม่ใช่หน้ารายการแผน
+      type: isWo || roundWo ? "work_order" : "pm",
+      referenceId: isWo ? (e.refId ?? null) : (roundWo ?? e.refId?.split(":")[0] ?? null),
     });
   }
 }
@@ -736,7 +752,10 @@ async function revokeInvalidMaintenanceDocks(
   );
   if (docks.length === 0) return 0;
 
-  const woIds = docks.filter((d) => d.category === "workorder_overdue" && d.refId).map((d) => d.refId!);
+  const woIds = [
+    ...docks.filter((d) => d.category === "workorder_overdue" && d.refId).map((d) => d.refId!),
+    ...docks.map((d) => (d.category === "pm_missed" ? roundDockWorkOrderId(d.refId) : null)).filter((x): x is string => !!x),
+  ];
   const pmIds = [
     ...new Set(docks.filter((d) => d.category === "pm_missed" && d.refId).map((d) => d.refId!.split(":")[0]!)),
   ];
@@ -746,7 +765,7 @@ async function revokeInvalidMaintenanceDocks(
       prisma.workOrder.findMany({
         where: { id: { in: woIds } },
         select: {
-          id: true, status: true, dueDate: true, completedAt: true, assignedTo: true, pmRoundDate: true, overdueScore: true,
+          id: true, status: true, dueDate: true, completedAt: true, assignedTo: true, pmRoundDate: true, pmScheduleId: true, overdueScore: true,
           property: { select: { caretakerId: true } },
         },
       }),
@@ -776,8 +795,20 @@ async function revokeInvalidMaintenanceDocks(
     if (!st || !st.enabled || !d.refId) continue;
 
     let reason: string | null;
+    const roundWoId = d.category === "pm_missed" ? roundDockWorkOrderId(d.refId) : null;
     if (d.category === "workorder_overdue") {
       const wo = woById.get(d.refId);
+      // ใบรอบ PM หักในหัวข้อ "ไม่ทำบำรุงรักษาตามรอบ" แล้ว — "ใบงานเกินกำหนด" ของใบเดียวกัน (ถ้ามีจากก่อนเปลี่ยน) ต้องคืน
+      reason = wo?.pmRoundDate && wo.pmScheduleId
+        ? "ใบรอบ PM หักในหัวข้อไม่ทำบำรุงรักษาตามรอบแทน"
+        : workOrderDockRevokeReason(
+            d,
+            wo && { ...wo, caretakerId: wo.property?.caretakerId ?? null },
+            st,
+          );
+    } else if (roundWoId) {
+      // ใบรอบ PM — กติกาเดียวกับใบงานเกินกำหนด (ไม่มีผ่อนผัน · CEO ยกเว้น/หักไว้ · เลื่อน/ปิดทัน/ย้ายคน)
+      const wo = woById.get(roundWoId);
       reason = workOrderDockRevokeReason(
         d,
         wo && { ...wo, caretakerId: wo.property?.caretakerId ?? null },
