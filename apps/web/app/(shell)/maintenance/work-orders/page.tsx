@@ -106,6 +106,10 @@ export default async function WorkOrdersPage({
   return (
     <AppScaffold
       title={titleFor(filter, activeProp)}
+      // บอร์ด: ไม่มีชื่อหน้ากลางแถบ ตัวกรองผู้รับผิดชอบขึ้นไปอยู่ซ้ายของแถบหัว แบบบอร์ดงาน (ผู้ใช้ 2/11/2569)
+      // โหมดกรอง (งานวันนี้/งานด่วน/ยังไม่บันทึกค่าใช้จ่าย) ยังมีชื่อหน้าบอกว่ากรองอะไรอยู่
+      hideTitle={!isFilterMode && rows.length > 0}
+      leading={!isFilterMode && rows.length > 0 ? <div id="wo-board-toolbar" className="flex min-w-0 items-center" /> : undefined}
       fill
       actions={
         isFilterMode ? <ClearFilterLink href="/maintenance/work-orders" /> : null

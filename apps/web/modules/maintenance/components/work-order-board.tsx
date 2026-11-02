@@ -1,8 +1,9 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ASSIGNED_BY_ME, ASSIGNED_TO_ME, PersonFilter, UNASSIGNED } from "./person-filter";
 import Link from "next/link";
+import { createPortal } from "react-dom";
 import {
   Home as HomeIcon,
   User,
@@ -55,6 +56,8 @@ export interface BoardOrder {
   /** กำหนดส่ง — "ครบ 28/11/2569" / "เลยกำหนด 3 วัน" (ใบที่ไม่มีกำหนดส่ง = null) */
   due?: { text: string; late: boolean } | null;
 }
+
+const noopSubscribe = () => () => {};
 
 /** สีสถานะ = ค่าจริงของ Material palette ที่ ChangYai ใช้ */
 const M = {
@@ -288,6 +291,66 @@ const COLUMNS = [
   { key: "done", title: "เสร็จแล้ว", short: "✅ เสร็จแล้ว", color: M.green, byPriority: false },
 ] as const;
 
+/**
+ * หัวคอลัมน์แบบบอร์ดงาน (ผู้ใช้ 2/11/2569 "กรอบบนนี้ด้วย"): กล่องขาวมุมมน · ป้ายจำนวนสีทึบ · ชื่อ · % ของบอร์ด
+ * พื้นจาง = สัดส่วนในคอลัมน์ (ตรงเวลา = สีคอลัมน์ · เลยกำหนด = แดง) + เส้นสีเข้มที่ขอบล่าง — แบบ kanban-column.tsx ของงาน
+ */
+function ColumnHeader({
+  col,
+  orders,
+  boardTotal,
+}: {
+  col: (typeof COLUMNS)[number];
+  orders: BoardOrder[];
+  boardTotal: number;
+}) {
+  const total = orders.length;
+  const percent = boardTotal > 0 ? Math.round((total / boardTotal) * 100) : 0;
+  const late = col.key === "open" || col.key === "in_progress" ? orders.filter((w) => w.due?.late || w.pmRound?.late).length : 0;
+  const segments = total === 0 ? [] : [
+    ...(total - late > 0 ? [{ pct: ((total - late) / total) * 100, color: col.color }] : []),
+    ...(late > 0 ? [{ pct: (late / total) * 100, color: M.red }] : []),
+  ];
+  return (
+    <div
+      className="relative mb-2.5 h-[42px] w-full shrink-0 overflow-hidden rounded-xl border border-(--line) bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]"
+      title={`${col.title} ${total} ใบ · ${percent}% ของบอร์ด${late > 0 ? ` · เลยกำหนด ${late}` : ""}`}
+    >
+      {segments.length > 0 && (
+        <>
+          <span className="absolute inset-0 flex" aria-hidden>
+            {segments.map((seg, i) => (
+              <span
+                key={i}
+                className="h-full"
+                style={{ width: `${seg.pct}%`, backgroundColor: `color-mix(in srgb, ${seg.color} 18%, white)`, boxShadow: i > 0 ? "inset 1.5px 0 0 white" : undefined }}
+              />
+            ))}
+          </span>
+          <span className="absolute inset-x-0 bottom-0 flex h-[3px]" aria-hidden>
+            {segments.map((seg, i) => (
+              <span key={i} className="h-full" style={{ width: `${seg.pct}%`, backgroundColor: seg.color }} />
+            ))}
+          </span>
+        </>
+      )}
+      <span className="relative flex h-full items-center gap-2 px-2">
+        <span
+          className="flex h-6 min-w-[26px] shrink-0 items-center justify-center rounded-[7px] px-1.5 text-[13px] font-bold tabular-nums text-white"
+          style={{ backgroundColor: `color-mix(in srgb, ${col.color} 82%, black)` }}
+        >
+          {total}
+        </span>
+        <span className="min-w-0 truncate text-sm font-bold tracking-tight text-(--ink)">{col.title}</span>
+        <span className="-ml-0.5 shrink-0 text-xs font-semibold tabular-nums text-(--ink-soft)">{percent}%</span>
+        {late > 0 && (
+          <span className="ml-auto shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white">เลย {late}</span>
+        )}
+      </span>
+    </div>
+  );
+}
+
 /** รายการการ์ดในคอลัมน์เดียว — จัดกลุ่มหรือไม่ก็ได้ */
 function ColumnList({
   orders,
@@ -445,6 +508,13 @@ export function WorkOrderBoard({
   /** true = ผู้ดูแล/เห็นทั้งบริษัท — เลือกดูงานรายคนได้ · false = พนักงานทั่วไป มีแค่ "ของฉัน" */
   canPickPeople?: boolean;
 }) {
+  // ช่องบนแถบหัว (หน้าใบงานส่ง leading = <div id="wo-board-toolbar">) — หาเจอหลังเมาท์ แล้ววางตัวกรองผ่าน portal
+  // เซิร์ฟเวอร์ = null (วาดตัวกรองไว้ในบอร์ดก่อน ตรงกับ HTML ที่ส่งมา) · ฝั่งเครื่อง = ช่องจริง แล้วย้ายขึ้นแถบหัว
+  const toolbarSlot = useSyncExternalStore(
+    noopSubscribe,
+    () => document.getElementById("wo-board-toolbar"),
+    () => null,
+  );
   const [group, setGroup] = useState<string | null>(null);
   const [houseId, setHouseId] = useState<string | null>(null);
   const [tab, setTab] = useState(0);
@@ -555,6 +625,20 @@ export function WorkOrderBoard({
         (w.status === "completed" && (w.hasExpense || !w.requiresExpense))
     ),
   };
+  const boardTotal = COLUMNS.reduce((n, c) => n + (buckets[c.key]?.length ?? 0), 0);
+
+  const personFilter =
+    (canPickPeople && assigneeOptions.length > 0) || !!currentUserId ? (
+      <PersonFilter
+        label="ผู้รับผิดชอบ"
+        value={assignee}
+        onChange={setAssignee}
+        people={assigneeOptions}
+        showUnassigned={hasUnassigned}
+        showMine={!!currentUserId}
+        showPeople={canPickPeople}
+      />
+    ) : null;
 
   return (
     /*
@@ -566,21 +650,14 @@ export function WorkOrderBoard({
      * แล้วเลื่อนไม่ได้เลย เห็นแค่ไม่กี่ใบแรก
      */
     <div className="flex h-full flex-col">
+      {toolbarSlot && personFilter && createPortal(personFilter, toolbarSlot)}
       {/* ─── กรองตามบ้าน: แถวบน = หมวด, แถวล่าง = บ้านในหมวด ─── */}
-      {(groups.length > 1 || assigneeOptions.length > 0 || !!currentUserId) && (
+      {/* ตัวกรองผู้รับผิดชอบขึ้นแถบหัวแล้ว — แถวนี้เหลือแค่ปุ่มบ้าน ไม่มีบ้านให้เลือกก็ไม่ต้องมีแถวว่าง */}
+      {(groups.length > 1 || (!toolbarSlot && personFilter !== null)) && (
         <div className="shrink-0">
           <div className="flex gap-2 overflow-x-auto px-3 py-1.5">
-            {((canPickPeople && assigneeOptions.length > 0) || !!currentUserId) && (
-              <PersonFilter
-                label="ผู้รับผิดชอบ"
-                value={assignee}
-                onChange={setAssignee}
-                people={assigneeOptions}
-                showUnassigned={hasUnassigned}
-                showMine={!!currentUserId}
-                showPeople={canPickPeople}
-              />
-            )}
+            {/* ตัวกรองผู้รับผิดชอบอยู่บนแถบหัวซ้าย แบบบอร์ดงาน (ผู้ใช้ 2/11/2569) — ไม่มีช่องบนแถบหัว ค่อยวางตรงนี้ */}
+            {!toolbarSlot && personFilter}
             {groups.length > 1 && (
             <FilterChip
               selected={group === null && houseId === null}
@@ -673,33 +750,12 @@ export function WorkOrderBoard({
         {COLUMNS.map((c, i) => (
           <div
             key={c.key}
-            className={`flex min-w-0 flex-1 flex-col ${
-              i > 0 ? "border-l border-(--line)" : ""
-            }`}
+            // แบบบอร์ดงาน: คอลัมน์มีระยะห่างกัน หัวเป็นกล่องลอย (ไม่ใช่แถบเต็มความกว้างคั่นเส้นตั้ง)
+            className={`flex min-w-0 flex-1 flex-col px-1.5 pt-2.5 ${i === 0 ? "pl-2.5" : ""} ${i === COLUMNS.length - 1 ? "pr-2.5" : ""}`}
           >
-            <div
-              className="flex shrink-0 items-center gap-2 px-4 py-2.5"
-              style={{
-                backgroundColor: `${c.color}14`,
-                borderBottom: `1px solid ${c.color}33`,
-              }}
-            >
-              <ColumnIcon col={c.key} color={c.color} />
-              <span
-                className="truncate text-sm font-bold"
-                style={{ color: c.color }}
-              >
-                {c.title}
-              </span>
-              <span
-                className="ml-auto shrink-0 rounded-xl px-2 py-0.5 text-xs font-bold"
-                style={{ color: c.color, backgroundColor: `${c.color}26` }}
-              >
-                {buckets[c.key]!.length}
-              </span>
-            </div>
+            <ColumnHeader col={c} orders={buckets[c.key]!} boardTotal={boardTotal} />
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-2.5">
+            <div className="min-h-0 flex-1 overflow-y-auto pb-2.5">
               <ColumnList
                 orders={buckets[c.key]!}
                 propertyNames={propertyNames}
