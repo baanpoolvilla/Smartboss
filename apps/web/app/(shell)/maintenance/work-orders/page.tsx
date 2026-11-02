@@ -96,6 +96,8 @@ export default async function WorkOrdersPage({
       requiresExpense: o.requiresExpense,
       pmRound: o.pmRoundDate ? pmRoundTag(o.pmRoundDate, o.dueDate, o.status) : null,
       isPrivate: o.isPrivate,
+      isPm: !!o.pmScheduleId || o.pmScheduleIds.length > 0,
+      due: dueTag(o.dueDate, o.status),
     }));
 
   const isFilterMode = filter === "today" || filter === "urgent" || filter === "no-expense";
@@ -155,4 +157,14 @@ function pmRoundTag(round: Date, due: Date | null, status: string): BoardOrder["
     due: days < 0 ? `เลยกำหนด ${-days} วัน` : days === 0 ? "ครบกำหนดวันนี้" : `เหลือ ${days} วัน`,
     late: days < 0,
   };
+}
+
+/** วันครบกำหนดบนการ์ด (แบบการ์ดงาน) — ใบที่ยังเปิดและเลยแล้วขึ้นแดง "เลยกำหนด N วัน" */
+function dueTag(due: Date | null, status: string): BoardOrder["due"] {
+  if (!due) return null;
+  const day = (d: Date) => Date.parse(new Date(d.getTime() + 7 * 3600e3).toISOString().slice(0, 10));
+  const open = status === "open" || status === "in_progress";
+  const days = Math.round((day(due) - day(new Date())) / 86_400_000);
+  if (open && days < 0) return { text: `เลยกำหนด ${-days} วัน`, late: true };
+  return { text: `ครบ ${fmtThaiDate(due)}`, late: false };
 }

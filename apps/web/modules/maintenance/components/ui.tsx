@@ -87,14 +87,32 @@ export function InfoRow({
   label,
   value,
   valueColor,
+  stacked,
+  className = "",
 }: {
   icon?: React.ReactNode;
   label: string;
   value: React.ReactNode;
   valueColor?: string;
+  /** หัวข้อเล็กอยู่บน ค่าอยู่ล่าง แบบหน้ารายละเอียดงาน (หน้าใบงาน) — ไม่ใส่ = แบบเดิม (ไอคอน · หัวข้อ · ค่า ในบรรทัดเดียว) */
+  stacked?: boolean;
+  className?: string;
 }) {
+  if (stacked) {
+    return (
+      <div className={`flex flex-col gap-1 py-1.5 text-sm ${className}`}>
+        <span className="flex items-center gap-1.5 text-xs text-(--ink-soft) [&_svg]:h-3.5 [&_svg]:w-3.5">
+          {icon}
+          {label}
+        </span>
+        <span className="min-w-0 font-medium text-(--ink)" style={valueColor ? { color: valueColor } : undefined}>
+          {value}
+        </span>
+      </div>
+    );
+  }
   return (
-    <div className="flex items-start gap-3 py-1.5 text-sm">
+    <div className={`flex items-start gap-3 py-1.5 text-sm ${className}`}>
       {icon && <span className="mt-0.5 text-(--ink-soft)">{icon}</span>}
       <span className="w-[110px] shrink-0 text-(--ink-soft)">{label}</span>
       <span

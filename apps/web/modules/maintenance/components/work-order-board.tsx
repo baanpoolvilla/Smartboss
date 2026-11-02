@@ -50,6 +50,10 @@ export interface BoardOrder {
   pmRound?: { label: string; due: string | null; late: boolean } | null;
   /** ใบส่วนตัว (กันลืม) — เห็นแค่คนเปิดกับ CEO */
   isPrivate?: boolean;
+  /** ผูกแผน PM (ป้าย PM บนหัวการ์ด) */
+  isPm?: boolean;
+  /** กำหนดส่ง — "ครบ 28/11/2569" / "เลยกำหนด 3 วัน" (ใบที่ไม่มีกำหนดส่ง = null) */
+  due?: { text: string; late: boolean } | null;
 }
 
 /** สีสถานะ = ค่าจริงของ Material palette ที่ ChangYai ใช้ */
@@ -135,118 +139,100 @@ function OrderCard({
   wo,
   propertyName,
   creatorName,
+  assigneeName,
 }: {
   wo: BoardOrder;
   propertyName: string;
   creatorName?: string;
+  assigneeName?: string;
 }) {
-  const isNew = wo.status === "open";
   // มีแจ้งเตือนที่ยังไม่อ่านของใบนี้ = พื้นแดงอ่อน + ป้ายบอกเรื่อง (ผู้ใช้ขอ 18/10/2569 "พื้นการ์ดเป็นสีแดง")
   const pending = usePendingFor(wo.id, WO_CATEGORIES);
+  const tags = [
+    ...(wo.isPm ? [{ t: "PM", bg: "#7c3aed" }] : []),
+    ...(wo.autoCreated ? [{ t: "อัตโนมัติ", bg: "#475569" }] : []),
+    ...(wo.isPrivate ? [{ t: "ส่วนตัว", bg: "#1b2537" }] : []),
+  ];
+  // การ์ดแบบเดียวกับการ์ดใบงานซ่อมบนบอร์ดงาน (ผู้ใช้ 2/11/2569 "แปลงเป็นแบบ task"):
+  // แถบหัวสีแจ้งซ่อม + ป้ายประเภท + เลขที่ → บ้าน · ความสำคัญ → หัวข้อ → วันที่ → สถานะ · ผู้รับผิดชอบ
   return (
     <Link href={`/maintenance/work-orders/${wo.id}`} className="block">
-      <Card
-        className={`p-3 pl-[11px] transition-colors hover:bg-(--app-pale)${pending.length > 0 ? " border-[#f3a4a4] bg-[#fdecec]" : ""}`}
-        style={{
-          borderLeft: `3px solid ${isNew ? M.redShade400 : "transparent"}`,
-        }}
+      <div
+        className="overflow-hidden rounded-xl border shadow-[0_4px_14px_rgba(16,24,40,0.10),0_1px_3px_rgba(16,24,40,0.08)] transition-shadow hover:shadow-md"
+        style={{ borderColor: pending.length > 0 ? "#f3a4a4" : "#b7e3dd", background: pending.length > 0 ? "#fdecec" : "#fff" }}
       >
-        <PendingBand notifs={pending} className="-mx-3 -mt-3 mb-2 -ml-[11px] rounded-t-[inherit]" />
-        <div className="flex items-start gap-2">
-          <div className="min-w-0 flex-1">
-            <p className="font-mono text-[11px] tracking-tight text-(--ink-soft)">
-              {wo.code}
-            </p>
-            <p className="line-clamp-2 text-sm font-bold text-(--ink)">
-              {wo.isPrivate && (
-                <span className="mr-1 inline-flex items-center gap-0.5 rounded bg-(--brand-navy) px-1 align-[1px] text-[10px] font-bold text-white">
-                  <Lock className="h-2.5 w-2.5" aria-hidden="true" /> ส่วนตัว
+        <PendingBand notifs={pending} />
+        <div className="flex items-center justify-between gap-2 bg-[#0d9488] px-2.5 py-0.5 text-[10.5px] font-semibold leading-4 text-white">
+          <span className="inline-flex min-w-0 items-center gap-1">
+            🔧 ใบงานซ่อม
+            {tags.map((x) => (
+              <span key={x.t} className="rounded px-1 text-[9px] font-bold leading-[13px] text-white ring-1 ring-white/40" style={{ backgroundColor: x.bg }}>
+                {x.t === "ส่วนตัว" ? <Lock className="mr-0.5 inline h-2 w-2 align-[-1px]" aria-hidden="true" /> : null}
+                {x.t}
+              </span>
+            ))}
+          </span>
+          <span className="truncate font-medium opacity-90">{wo.code}</span>
+        </div>
+        <div className="flex flex-col gap-1.5 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="inline-flex min-w-0 items-center gap-1 truncate rounded-md bg-[#e6f6f4] px-1.5 py-0.5 text-[11.5px] font-semibold text-[#0f766e]">
+              <HomeIcon className="h-3 w-3 shrink-0" />
+              <span className="truncate">{propertyName}</span>
+            </span>
+            {/* งานอัตโนมัติไม่แสดงความเร่งด่วน — cron ใส่ medium ให้ทุกใบโดยไม่มีใครประเมิน ป้ายจึงเป็นข้อมูลลวง */}
+            {!wo.autoCreated && <PriorityBadge priority={wo.priority} />}
+          </div>
+          <p className="line-clamp-2 text-sm font-semibold text-(--ink)">{wo.title}</p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-(--ink-soft)">
+            <span>สร้าง {wo.createdAtLabel}</span>
+            {wo.due && <span className={wo.due.late ? "font-semibold text-red-600" : undefined}>📅 {wo.due.text}</span>}
+            {creatorName && <span>เปิดโดย {creatorName}</span>}
+          </div>
+          {wo.pmRound && (
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+              <span className="rounded-full bg-(--bg-soft) px-2 py-0.5 text-(--ink-soft)">รอบ {wo.pmRound.label}</span>
+              {wo.pmRound.due && (
+                <span className={`rounded-full px-2 py-0.5 font-semibold ${wo.pmRound.late ? "bg-red-50 text-red-700" : "bg-blue-50 text-blue-700"}`}>
+                  {wo.pmRound.due}
                 </span>
               )}
-              {wo.title}
-            </p>
-          </div>
-          {/*
-            งานอัตโนมัติไม่แสดงความเร่งด่วน — cron ใส่ medium ให้ทุกใบโดยไม่มีใคร
-            ประเมิน ป้าย "ปานกลาง" จึงเป็นข้อมูลลวง งานพวกนี้ถึงกำหนดก็ต้องทำอยู่แล้ว
-          */}
-          {wo.autoCreated ? (
-            <span
-              className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold"
-              style={{ color: "var(--app)", backgroundColor: "#0D94881f" }}
-            >
-              <RefreshCw className="h-2.5 w-2.5" /> อัตโนมัติ
-            </span>
-          ) : (
-            <PriorityBadge priority={wo.priority} />
+            </div>
           )}
-        </div>
-
-        <div className="mt-1 flex items-center gap-3 text-xs text-(--ink-soft)">
-          <span className="inline-flex min-w-0 items-center gap-1">
-            <HomeIcon className="h-3 w-3 shrink-0" />
-            <span className="truncate">{propertyName}</span>
-          </span>
-          {creatorName && (
-            <span className="inline-flex items-center gap-1">
-              <User className="h-3 w-3" />
-              {creatorName}
-            </span>
-          )}
-        </div>
-
-        {wo.pmRound && (
-          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
-            <span className="rounded-full bg-(--bg-soft) px-2 py-0.5 text-(--ink-soft)">รอบ {wo.pmRound.label}</span>
-            {wo.pmRound.due && (
+          <div className="mt-0.5 flex items-center justify-between gap-2 border-t border-(--line) pt-2">
+            {wo.status === "completed" ? (
+              (() => {
+                // ใบที่ไม่ต้องกรอกค่าใช้จ่ายไม่ควรขึ้นป้ายสีส้มว่า "ยังไม่บันทึก" — ขึ้นสีเทาบอกตรง ๆ ว่าไม่มีค่าใช้จ่าย
+                const settled = wo.hasExpense || !wo.requiresExpense;
+                const tone = !wo.requiresExpense ? M.grey : wo.hasExpense ? M.green : M.orange;
+                return (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-[10px]"
+                    style={{ color: tone, backgroundColor: `${tone}1a`, border: `1px solid ${tone}4d` }}
+                  >
+                    <ReceiptText className="h-3 w-3" />
+                    {!wo.requiresExpense ? "ไม่มีค่าใช้จ่าย" : settled ? "บันทึกค่าใช้จ่ายแล้ว" : "ยังไม่บันทึกค่าใช้จ่าย"}
+                  </span>
+                );
+              })()
+            ) : (
               <span
-                className={`rounded-full px-2 py-0.5 font-semibold ${wo.pmRound.late ? "bg-red-50 text-red-700" : "bg-blue-50 text-blue-700"}`}
+                className={`rounded-lg border px-1.5 py-0.5 text-[10px] font-semibold ${
+                  wo.status === "in_progress" ? "border-amber-300 bg-amber-50 text-amber-700" : "border-[#b7e3dd] bg-white text-[#0f766e]"
+                }`}
               >
-                {wo.pmRound.due}
+                {wo.status === "in_progress" ? "กำลังทำ" : "ยังไม่ทำ"}
+              </span>
+            )}
+            {assigneeName && (
+              <span className="inline-flex min-w-0 items-center gap-1 truncate text-[11px] text-(--ink-soft)">
+                <User className="h-3 w-3 shrink-0" />
+                <span className="truncate">{assigneeName}</span>
               </span>
             )}
           </div>
-        )}
-
-        {wo.description && (
-          <p className="mt-1 line-clamp-2 text-xs text-(--ink-soft)">
-            {wo.description}
-          </p>
-        )}
-
-        <div className="mt-2 flex items-center justify-between">
-          {wo.status === "completed" ? (
-            (() => {
-              // ใบที่ไม่ต้องกรอกค่าใช้จ่ายไม่ควรขึ้นป้ายสีส้มว่า "ยังไม่บันทึก"
-              // เพราะไม่มีอะไรให้บันทึก — ขึ้นเป็นสีเทาบอกไปตรง ๆ ว่าไม่มีค่าใช้จ่าย
-              const settled = wo.hasExpense || !wo.requiresExpense;
-              const tone = !wo.requiresExpense ? M.grey : wo.hasExpense ? M.green : M.orange;
-              return (
-                <span
-                  className="inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-[10px]"
-                  style={{
-                    color: tone,
-                    backgroundColor: `${tone}1a`,
-                    border: `1px solid ${tone}4d`,
-                  }}
-                >
-                  <ReceiptText className="h-3 w-3" />
-                  {!wo.requiresExpense
-                    ? "ไม่มีค่าใช้จ่าย"
-                    : settled
-                      ? "บันทึกค่าใช้จ่ายแล้ว"
-                      : "ยังไม่บันทึกค่าใช้จ่าย"}
-                </span>
-              );
-            })()
-          ) : (
-            <span />
-          )}
-          <span className="text-[11px] text-(--ink-soft)">
-            {wo.createdAtLabel}
-          </span>
         </div>
-      </Card>
+      </div>
     </Link>
   );
 }
@@ -275,6 +261,7 @@ export function WorkOrderFilteredList({
             wo={wo}
             propertyName={propertyNames[wo.propertyId] ?? ""}
             creatorName={wo.createdBy ? creatorNames[wo.createdBy] : undefined}
+            assigneeName={wo.assignedTo ? creatorNames[wo.assignedTo] : undefined}
           />
         ))}
       </div>
@@ -327,6 +314,7 @@ function ColumnList({
       wo={wo}
       propertyName={propertyNames[wo.propertyId] ?? ""}
       creatorName={wo.createdBy ? creatorNames[wo.createdBy] : undefined}
+      assigneeName={wo.assignedTo ? creatorNames[wo.assignedTo] : undefined}
     />
   );
 

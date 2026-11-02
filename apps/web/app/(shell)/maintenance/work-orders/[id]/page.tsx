@@ -249,29 +249,20 @@ export default async function WorkOrderDetailPage({
         </div>
       )}
 
+      {/* แบบหน้ารายละเอียดงาน: ซ้าย = ข้อมูลใบงาน · ขวา = ความคิดเห็น (จอเล็กเรียงต่อกัน ความคิดเห็นอยู่ล่าง) */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(340px,420px)] lg:items-start">
+      <div className="min-w-0">
       {/* ─── หัวข้อ + ข้อมูลใบงาน ─── */}
       <Card className="mb-4 p-4 sm:p-5">
-        <div className="flex items-start gap-2">
-          <div className="min-w-0 flex-1">
-            {/* เลขที่ใบงาน — ให้อ่านให้ช่างฟังทางโทรศัพท์ได้ ต่างจาก id ที่เป็น uuid */}
-            <p className="font-mono text-xs text-(--ink-soft)">{wo.code}</p>
-            <h1 className="text-xl font-bold text-(--ink)">{wo.title}</h1>
-          </div>
+        {/* หัวใบแบบหน้ารายละเอียดงาน (ผู้ใช้ 2/11/2569 "แปลงเป็นแบบ task"): ป้าย · เลขที่ → หัวข้อ → รายละเอียด → ข้อมูล 2 คอลัมน์ */}
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
           {/* งานอัตโนมัติไม่แสดงความเร่งด่วน — ดูเหตุผลใน components/work-order-board.tsx */}
           <span
-            className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-bold"
+            className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 font-semibold"
             style={
               wo.autoCreated
-                ? {
-                    color: "#0D9488",
-                    backgroundColor: "#0D94881a",
-                    border: "1px solid #0D94884d",
-                  }
-                : {
-                    color: pr.color,
-                    backgroundColor: `${pr.color}1a`,
-                    border: `1px solid ${pr.color}4d`,
-                  }
+                ? { color: "#0D9488", backgroundColor: "#0D94881a", border: "1px solid #0D94884d" }
+                : { color: pr.color, backgroundColor: `${pr.color}1a`, border: `1px solid ${pr.color}4d` }
             }
           >
             {wo.autoCreated ? (
@@ -282,17 +273,35 @@ export default async function WorkOrderDetailPage({
               pr.label
             )}
           </span>
+          {(wo.pmScheduleId || wo.pmScheduleIds.length > 0) && (
+            <span className="rounded px-1.5 py-0.5 text-[11px] font-bold text-white" style={{ backgroundColor: "#7c3aed" }}>PM</span>
+          )}
+          {wo.isPrivate && (
+            <span className="rounded bg-(--brand-navy) px-1.5 py-0.5 text-[11px] font-bold text-white">🔒 ส่วนตัว</span>
+          )}
+          {/* เลขที่ใบงาน — ให้อ่านให้ช่างฟังทางโทรศัพท์ได้ ต่างจาก id ที่เป็น uuid */}
+          <span className="font-mono text-(--ink-soft)">{wo.code}</span>
+        </div>
+        <h1 className="mt-2 border-b border-(--line) pb-2 text-xl font-bold text-(--ink)">{wo.title}</h1>
+
+        <div className="mt-3">
+          <p className="mb-1 text-xs text-(--ink-soft)">รายละเอียด</p>
+          <div className="min-h-12 whitespace-pre-wrap rounded-(--radius) border border-(--line) px-3 py-2 text-sm text-(--ink)">
+            {wo.description || <span className="text-(--ink-soft)">ไม่มีรายละเอียด</span>}
+          </div>
         </div>
 
-        <div className="my-4 border-t border-(--line)" />
+        <div className="mt-3 grid gap-x-6 sm:grid-cols-2">
 
         <InfoRow
+            stacked
           icon={<Info className="h-5 w-5" />}
           label="สถานะ"
           value={STATUS_LABEL[wo.status] ?? wo.status}
           valueColor={STATUS_COLOR[wo.status]}
         />
         <InfoRow
+            stacked
           icon={<HomeIcon className="h-5 w-5" />}
           label="บ้าน"
           value={
@@ -316,6 +325,7 @@ export default async function WorkOrderDetailPage({
         />
         {asset && (
           <InfoRow
+            stacked
             icon={<Info className="h-5 w-5" />}
             label="อุปกรณ์"
             value={asset.name}
@@ -323,6 +333,7 @@ export default async function WorkOrderDetailPage({
         )}
         {wo.createdBy && (
           <InfoRow
+            stacked
             icon={<UserPlus className="h-5 w-5" />}
             label="สร้างโดย"
             value={names[wo.createdBy] ?? "-"}
@@ -330,6 +341,7 @@ export default async function WorkOrderDetailPage({
         )}
         {wo.assignedTo && (
           <InfoRow
+            stacked
             icon={<HardHat className="h-5 w-5" />}
             label="รับผิดชอบโดย"
             value={names[wo.assignedTo] ?? "-"}
@@ -337,6 +349,7 @@ export default async function WorkOrderDetailPage({
         )}
         {wo.ccUserIds.length > 0 && (
           <InfoRow
+            stacked
             icon={<Users className="h-5 w-5" />}
             label="CC"
             value={wo.ccUserIds.map((u) => names[u] ?? "-").join(", ")}
@@ -344,6 +357,7 @@ export default async function WorkOrderDetailPage({
         )}
         {!wo.autoCreated && (
           <InfoRow
+            stacked
             icon={<Flag className="h-5 w-5" />}
             label="ความเร่งด่วน"
             value={pr.label}
@@ -351,22 +365,27 @@ export default async function WorkOrderDetailPage({
           />
         )}
         <InfoRow
+            stacked
           icon={<CalendarDays className="h-5 w-5" />}
           label="สร้างเมื่อ"
           value={fmtThaiDateTime(wo.createdAt)}
         />
         {wo.isPrivate && (
           <InfoRow
+            stacked
             icon={<Info className="h-5 w-5" />}
             label="ส่วนตัว"
+            className="sm:col-span-2"
             value="🔒 ใบกันลืมของคนเปิด · เห็นเฉพาะคนเปิดกับ CEO · ไม่หักคะแนน ไม่นับสถิติ"
             valueColor="#1b2537"
           />
         )}
         {wo.pmRoundDate && (
           <InfoRow
+            stacked
             icon={<CalendarDays className="h-5 w-5" />}
             label="รอบ PM"
+            className="sm:col-span-2"
             value={
               <span className="grid gap-0.5">
                 <span>ครบกำหนด {fmtThaiDate(wo.pmRoundDate)}</span>
@@ -381,8 +400,10 @@ export default async function WorkOrderDetailPage({
         )}
         {wo.mergedIntoId && (
           <InfoRow
+            stacked
             icon={<Info className="h-5 w-5" />}
             label="รวมเข้าใบ"
+            className="sm:col-span-2"
             value={
               <Link href={`/maintenance/work-orders/${wo.mergedIntoId}`} className="text-(--brand-navy) hover:underline">
                 ดูใบรวมที่ CEO รวบไว้ →
@@ -392,8 +413,10 @@ export default async function WorkOrderDetailPage({
         )}
         {wo.dueDate && (
           <InfoRow
+            stacked
             icon={<CalendarClock className="h-5 w-5" />}
             label="กำหนดส่ง"
+            className="sm:col-span-2"
             value={
               <div className="grid gap-2">
                 <span style={overdue ? { color: "#DC2626" } : undefined}>{fmtThaiDate(wo.dueDate)}</span>
@@ -421,6 +444,7 @@ export default async function WorkOrderDetailPage({
         )}
         {wo.completedAt && (
           <InfoRow
+            stacked
             icon={<CheckCircle2 className="h-5 w-5" />}
             label="เสร็จเมื่อ"
             value={fmtThaiDate(wo.completedAt)}
@@ -429,8 +453,10 @@ export default async function WorkOrderDetailPage({
         )}
         {wo.completionNotes && (
           <InfoRow
+            stacked
             icon={<StickyNote className="h-5 w-5" />}
             label="รายละเอียดจบงาน"
+            className="sm:col-span-2"
             value={
               <span className="whitespace-pre-wrap">{wo.completionNotes}</span>
             }
@@ -438,20 +464,25 @@ export default async function WorkOrderDetailPage({
         )}
         {wo.autoCreated && (
           <InfoRow
+            stacked
             icon={<Info className="h-5 w-5" />}
             label="ที่มา"
+            className="sm:col-span-2"
             value="สร้างอัตโนมัติจาก PM"
             valueColor="#0D9488"
           />
         )}
         {!wo.requiresExpense && (
           <InfoRow
+            stacked
             icon={<Info className="h-5 w-5" />}
             label="ค่าใช้จ่าย"
+            className="sm:col-span-2"
             value="งานนี้ไม่มีค่าใช้จ่าย — ปิดงานได้โดยไม่ต้องกรอก"
             valueColor="#0D9488"
           />
         )}
+        </div>
       </Card>
 
       {/* ─── ลิงก์ส่งรูปสำหรับช่างภายนอก ─── */}
@@ -528,14 +559,7 @@ export default async function WorkOrderDetailPage({
         </Link>
       )}
 
-      {/* ─── รายละเอียด ─── */}
-      {wo.description && (
-        <SectionCard className="mb-4" title="รายละเอียด">
-          <p className="whitespace-pre-wrap text-sm text-(--ink)">
-            {wo.description}
-          </p>
-        </SectionCard>
-      )}
+      {/* รายละเอียดอยู่ในหัวใบแล้ว (แบบหน้ารายละเอียดงาน) */}
 
       {/* ─── สั่งซื้ออุปกรณ์สำหรับงานนี้ ─── */}
       {/* บทบาทแก้ได้รายบริษัท จึงมีสิทธิ์เปิด PR แต่ไม่มีสิทธิ์ดูรายการ PR ได้จริง
@@ -658,9 +682,12 @@ export default async function WorkOrderDetailPage({
         </SectionCard>
       )}
 
+
+      </div>
+      <aside className="min-w-0 lg:sticky lg:top-4 lg:col-start-2 lg:row-span-2 lg:row-start-1">
       {/* ─── ความคิดเห็น ─── */}
       <SectionCard
-        className="mb-4"
+        className="mb-4 lg:mb-0"
         icon={<MessageSquare className="h-4 w-4 text-[#607D8B]" />}
         title={`ความคิดเห็น (${comments.filter((c) => c.kind !== "log").length})`}
       >
@@ -702,9 +729,10 @@ export default async function WorkOrderDetailPage({
           <CommentComposer action={addCommentAction.bind(null, id)} mentionPeople={(await workOrderMentionPeople(orgId, wo)).filter((p) => p.id !== session.userId)} />
         </div>
       </SectionCard>
-
+      </aside>
       {/* ─── ปุ่มดำเนินการ ─── */}
-      <div className="flex flex-col gap-2">
+      {/* จอเล็ก: ข้อมูล → ความคิดเห็น → ปุ่ม (ลำดับเดิม) · จอใหญ่: ปุ่มอยู่ใต้ข้อมูลฝั่งซ้าย */}
+      <div className="flex min-w-0 flex-col gap-2 lg:col-start-1">
         {wo.status === "completed" && !hasExpense && canExpense && (
           <Link
             href={`/maintenance/expenses/new?workOrderId=${id}${
@@ -750,6 +778,7 @@ export default async function WorkOrderDetailPage({
             />
           </div>
         )}
+      </div>
       </div>
     </AppScaffold>
   );
