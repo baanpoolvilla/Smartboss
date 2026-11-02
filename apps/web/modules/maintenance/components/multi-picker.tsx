@@ -199,7 +199,7 @@ export function AssigneeAndCc({
     <>
       <label className="flex flex-col gap-1.5">
         <span className="text-sm font-medium text-(--ink)">
-          รับผิดชอบโดย (หลัก)
+          ผู้รับผิดชอบ
         </span>
         <select
           name="assignedTo"

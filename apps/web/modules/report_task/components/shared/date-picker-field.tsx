@@ -52,6 +52,8 @@ export function DatePickerField({
       <PopoverTrigger
         render={
           <button
+            // อยู่ในฟอร์มได้ (ฟอร์มใบงาน) — ไม่ระบุ type ปุ่มจะเป็น submit กดเลือกวันแล้วฟอร์มถูกส่ง
+            type="button"
             className={cn(
               // min-w-0: a flex item's default min-width is its content's own
               // width, which blocks it from ever shrinking below that no

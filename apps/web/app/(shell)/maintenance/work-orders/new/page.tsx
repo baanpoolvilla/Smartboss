@@ -5,11 +5,7 @@ import { Input } from "@smartboss/ui/components/input";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { listProperties } from "@/modules/maintenance/data/properties";
 import { listOrgUsers } from "@/modules/maintenance/data/users";
-import {
-  Field,
-  selectClass,
-  textareaClass,
-} from "@/modules/maintenance/components/ui";
+import { textareaClass } from "@/modules/maintenance/components/ui";
 import { AppScaffold } from "@/modules/maintenance/components/app-scaffold";
 import { FilePreviewInput } from "@/modules/maintenance/components/photos";
 import {
@@ -21,6 +17,19 @@ import { todayBangkok } from "@/modules/maintenance/lib/no-past-date";
 import { SubmitButton } from "@/modules/maintenance/components/submit-button";
 import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 import { ReportPrefill } from "@/modules/maintenance/components/report-prefill";
+import { WoAdvancedOptions, WoDueDateField } from "@/modules/maintenance/components/wo-form-fields";
+import Link from "next/link";
+import { AlignLeft, CalendarDays, House, ImageIcon, Type, User, type LucideIcon } from "lucide-react";
+
+/** แถวของฟอร์ม: ไอคอนซ้าย + เนื้อหา — จัดวางแบบหน้าสร้างงาน (ผู้ใช้ 2/11/2569 "ให้เหมือนรูปแบบของ task") */
+function Row({ icon: Icon, children }: { icon: LucideIcon; children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-[20px_1fr] items-start gap-3">
+      <Icon className="mt-2.5 h-[18px] w-[18px] text-(--ink-soft)" aria-hidden="true" />
+      <div className="min-w-0">{children}</div>
+    </div>
+  );
+}
 
 const ROLE_LABEL: Record<string, string> = {
   SUPER_ADMIN: "ผู้ดูแลระบบ",
@@ -92,7 +101,7 @@ export default async function NewWorkOrderPage({
 
   return (
     <AppScaffold
-      title="สร้างใบงานใหม่"
+      title="สร้างใบแจ้งซ่อม"
       width="max-w-none"
       backHref="/maintenance/work-orders"
     >
@@ -112,107 +121,94 @@ export default async function NewWorkOrderPage({
                 <input key={pid} type="hidden" name="pmScheduleIds" value={pid} />
               ))}
 
-          <Field label="หัวข้องาน *">
-            <Input
-              name="title"
-              required
-              maxLength={200}
-              defaultValue={sp.title ?? ""}
-              placeholder="เช่น แอร์ไม่เย็น ห้องนอน"
-            />
-          </Field>
-
-          <MultiPicker
-            name="propertyIds"
-            title="เลือกบ้าน"
-            heading="บ้าน *"
-            emptyText="กรุณาเลือกอย่างน้อย 1 บ้าน"
-            addLabel="เลือกบ้าน"
-            options={properties.filter((p) => !p.archivedAt).map((p) => ({ id: p.id, label: p.name }))}
-            defaultSelected={prefillProps}
-          />
-
-          <AssigneeAndCc
-            users={assignable.map((u) => ({
-              id: u.id,
-              label: u.name,
-              sub: roleLabel(u.roleCodes),
-            }))}
-            ccOptions={userOptions}
-            defaultAssignee={sp.technicianId ?? ""}
-          />
-
-          <Field label="ความสำคัญ">
-            <select
-              name="priority"
-              defaultValue={sp.priority ?? "medium"}
-              className={selectClass}
-            >
-              <option value="low">ต่ำ</option>
-              <option value="medium">ปานกลาง</option>
-              <option value="urgent">เร่งด่วน</option>
-            </select>
-          </Field>
-
-          <Field label="วันครบกำหนด" hint="(ไม่ใส่ก็ได้)">
-            <Input name="dueDate" type="date" min={todayBangkok()} defaultValue={sp.dueDate ?? ""} />
-            <span className="text-xs font-normal text-(--ink-soft)">
-              ใส่แล้วถ้าเลยวันนี้ยังไม่ปิดงาน ใบงานจะขึ้นแดงว่าเลยกำหนด
-              และถูกนับเป็นงานค้างของผู้รับผิดชอบในรายงานผลงาน
-            </span>
-          </Field>
-
-          <label className="flex items-start gap-2.5 rounded-(--radius) border border-(--line) p-3">
-            <input
-              type="checkbox"
-              name="noExpense"
-              value="1"
-              className="mt-0.5 h-4 w-4"
-            />
-            <span>
-              <span className="block text-sm font-medium text-(--ink)">
-                งานนี้ไม่มีค่าใช้จ่าย
-              </span>
-              <span className="block text-xs text-(--ink-soft)">
-                เช่น งานที่จ้างเหมารายปีไว้แล้ว — ติ๊กแล้วตอนปิดงานจะไม่ถามค่าใช้จ่าย
-                และไม่ถูกทวงในรายงาน
-              </span>
-            </span>
-          </label>
-
-          <Field label="รายละเอียด">
-            <textarea
-              name="description"
-              rows={4}
-              defaultValue={sp.description ?? ""}
-              className={textareaClass}
-            />
-          </Field>
-
-          <FilePreviewInput name="photos" label="แนบรูปภาพ" />
-
-          {canOpenPr && (
-            <label className="flex items-start gap-2.5 rounded-(--radius) border border-(--line) p-3">
-              <input
-                type="checkbox"
-                name="openPr"
-                value="1"
-                className="mt-0.5 h-4 w-4"
+          <Row icon={Type}>
+            <div className="flex items-center gap-2 border-b border-(--line) pb-1">
+              <Input
+                name="title"
+                required
+                maxLength={200}
+                defaultValue={sp.title ?? ""}
+                placeholder="หัวข้องาน เช่น แอร์ไม่เย็น ห้องนอน"
+                aria-label="หัวข้องาน"
+                className="h-10 flex-1 border-0 px-0 text-base font-semibold shadow-none focus-visible:ring-0"
               />
-              <span>
-                <span className="block text-sm font-medium text-(--ink)">
-                  เปิด PR ขอซื้ออุปกรณ์ต่อเลย
-                </span>
-                <span className="block text-xs text-(--ink-soft)">
-                  ติ๊กแล้วพอบันทึกใบงานเสร็จ จะพาไปหน้าเปิด PR
-                  ที่ผูกกับใบงานนี้ให้ทันที
-                </span>
-              </span>
-            </label>
-          )}
+              <select
+                name="priority"
+                defaultValue={sp.priority ?? "medium"}
+                aria-label="ความสำคัญ"
+                className="h-8 shrink-0 rounded-full border border-(--line) bg-(--bg) px-3 text-xs text-(--ink)"
+              >
+                <option value="low">ต่ำ</option>
+                <option value="medium">ปานกลาง</option>
+                <option value="urgent">เร่งด่วน</option>
+              </select>
+            </div>
+          </Row>
 
-          <div>
-            <SubmitButton className="w-full sm:w-48">บันทึกใบงาน</SubmitButton>
+          <Row icon={AlignLeft}>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-(--ink-soft)">รายละเอียด</span>
+              <textarea
+                name="description"
+                rows={3}
+                defaultValue={sp.description ?? ""}
+                placeholder="อาการ ตำแหน่ง หรือสิ่งที่ช่างควรรู้"
+                className={textareaClass}
+              />
+            </label>
+          </Row>
+
+          <Row icon={House}>
+            <MultiPicker
+              name="propertyIds"
+              title="เลือกบ้าน"
+              heading="บ้าน *"
+              emptyText="กรุณาเลือกอย่างน้อย 1 บ้าน"
+              addLabel="เลือกบ้าน"
+              options={properties.filter((p) => !p.archivedAt).map((p) => ({ id: p.id, label: p.name }))}
+              defaultSelected={prefillProps}
+            />
+          </Row>
+
+          <Row icon={User}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <AssigneeAndCc
+                users={assignable.map((u) => ({
+                  id: u.id,
+                  label: u.name,
+                  sub: roleLabel(u.roleCodes),
+                }))}
+                ccOptions={userOptions}
+                defaultAssignee={sp.technicianId ?? ""}
+              />
+            </div>
+          </Row>
+
+          <Row icon={CalendarDays}>
+            <WoDueDateField defaultValue={sp.dueDate} minDate={todayBangkok()} />
+          </Row>
+
+          <Row icon={ImageIcon}>
+            <FilePreviewInput name="photos" label="รูปภาพ" />
+          </Row>
+
+          <div className="pl-8">
+            <WoAdvancedOptions canOpenPr={canOpenPr} />
+          </div>
+
+          <div className="-mx-5 -mb-5 mt-1 flex flex-wrap items-center justify-between gap-3 border-t border-(--line) px-5 py-3">
+            <span className="text-xs text-(--ink-soft)">
+              เปิดโดย {users.find((u) => u.id === session.userId)?.name ?? "คุณ"}
+            </span>
+            <div className="flex gap-2">
+              <Link
+                href="/maintenance/work-orders"
+                className="inline-flex h-10 items-center rounded-(--radius) border border-(--line) px-4 text-sm font-medium text-(--ink) hover:bg-(--bg-soft)"
+              >
+                ยกเลิก
+              </Link>
+              <SubmitButton className="w-auto px-5">สร้างใบแจ้งซ่อม</SubmitButton>
+            </div>
           </div>
         </form>
         </PasteDropFiles>
