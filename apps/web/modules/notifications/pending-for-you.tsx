@@ -45,6 +45,21 @@ export function usePendingFor(referenceId: string, categories: NotifCategory[]):
   );
 }
 
+/** ใช้ทั้งการ์ดและหัวคอลัมน์ — แจ้งเตือนความคิดเห็นใหม่ (หัวข้อ "…ความคิดเห็น…") */
+export function isCommentNotif(n: MaintenanceNotif): boolean {
+  return n.title.includes("ความคิดเห็น");
+}
+
+/** จำนวนแจ้งเตือนความคิดเห็นที่ยังไม่อ่าน แยกตามรายการ — หัวคอลัมน์บอร์ดแจ้งซ่อม (แบบบอร์ดงาน) */
+export function useUnreadCommentCounts(categories: NotifCategory[]): Map<string, number> {
+  const unread = useUnread(categories);
+  return useMemo(() => {
+    const m = new Map<string, number>();
+    for (const n of unread) if (n.referenceId && isCommentNotif(n)) m.set(n.referenceId, (m.get(n.referenceId) ?? 0) + 1);
+    return m;
+  }, [unread]);
+}
+
 /**
  * แถบแดงขอบบนการ์ด "ยังไม่ได้อ่าน · 💬 ความคิดเห็นใหม่" (+N ถ้ามีหลายเรื่อง) — ผู้ใช้ขอ 18/10/2569
  * "ขอบบนว่ายังไม่ได้อ่าน ทำให้รู้" · เปิดดูแล้วแจ้งเตือนถูกอ่าน แถบ/พื้นแดงหายเอง

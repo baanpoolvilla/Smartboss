@@ -4,7 +4,9 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import { ASSIGNED_BY_ME, ASSIGNED_TO_ME, PersonFilter, UNASSIGNED } from "./person-filter";
 import { createPortal } from "react-dom";
 import { InitialAvatar, WoCard } from "./wo-card";
-import { RefreshCw, ReceiptText, Check, CheckCircle2, Clock } from "lucide-react";
+import { RefreshCw, ReceiptText, Check, CheckCircle2, Clock, MessageCircle } from "lucide-react";
+import { useUnreadCommentCounts } from "@/modules/notifications/pending-for-you";
+import type { NotifCategory } from "@/modules/notifications/types";
 import { groupByPriority } from "@/modules/maintenance/lib/priority";
 
 
@@ -56,6 +58,8 @@ const M = {
   blue: "#2196F3",
   grey: "#9E9E9E",
 };
+
+const WO_COMMENT_NOTIF: NotifCategory[] = ["work_order"];
 
 /** ป้ายของกลุ่มบ้านที่ยังไม่ถูกจัดหมวด — ต้องตรงกับหน้ารายชื่อบ้าน */
 export const NO_CATEGORY = "ยังไม่จัดหมวด";
@@ -185,6 +189,9 @@ function ColumnHeader({
   const total = orders.length;
   const percent = boardTotal > 0 ? Math.round((total / boardTotal) * 100) : 0;
   const dueRequests = orders.filter((w) => (w.pendingDue ?? 0) > 0).length;
+  // ความคิดเห็นที่ยังไม่อ่านในคอลัมน์นี้ — ป้ายแดงขวาสุด แบบบอร์ดงาน
+  const unreadMap = useUnreadCommentCounts(WO_COMMENT_NOTIF);
+  const unreadComments = orders.reduce((n, w) => n + (unreadMap.get(w.id) ?? 0), 0);
   const late = col.key === "open" || col.key === "in_progress" ? orders.filter((w) => w.due?.late || w.pmRound?.late).length : 0;
   const segments = total === 0 ? [] : [
     ...(total - late > 0 ? [{ pct: ((total - late) / total) * 100, color: col.color }] : []),
@@ -231,6 +238,15 @@ function ColumnHeader({
           >
             <Clock className="h-3.5 w-3.5" />
             {dueRequests}
+          </span>
+        )}
+        {unreadComments > 0 && (
+          <span
+            className={`inline-flex h-6 shrink-0 items-center gap-1 rounded-full bg-[var(--chart-red)] px-2 text-xs font-bold tabular-nums text-white shadow-[0_1px_3px_rgba(229,72,77,0.35)] ${dueRequests === 0 ? "ml-auto" : ""}`}
+            title={`มีความคิดเห็นที่ยังไม่ได้อ่าน ${unreadComments} รายการ ในคอลัมน์นี้`}
+          >
+            <MessageCircle className="h-3.5 w-3.5" />
+            {unreadComments}
           </span>
         )}
       </span>

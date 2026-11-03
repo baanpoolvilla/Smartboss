@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { CalendarClock, CalendarDays, CalendarX2, Check, Circle, Clock, Lock, MapPin, MessageSquare, Paperclip } from "lucide-react";
 
-import { PendingBand, usePendingFor } from "@/modules/notifications/pending-for-you";
+import { isCommentNotif, PendingBand, usePendingFor } from "@/modules/notifications/pending-for-you";
 import type { NotifCategory } from "@/modules/notifications/types";
 
 /**
@@ -105,6 +105,8 @@ function DueBadge({ due, open }: { due: Date; open: boolean }) {
 
 export function WoCard(p: WoCardProps) {
   const pending = usePendingFor(p.id, WO_NOTIF);
+  // ความคิดเห็นใหม่ที่ยังไม่อ่าน = ป้ายแดง "N ใหม่" แทนจำนวน (แบบการ์ดงาน) — เปิดอ่านแล้วกลับเป็นตัวเลขเทา
+  const unreadComments = pending.filter(isCommentNotif).length;
   const open = p.status === "open" || p.status === "in_progress";
   const done = p.status === "completed" || p.status === "cancelled";
   const due = p.dueDate ? new Date(p.dueDate) : null;
@@ -116,7 +118,7 @@ export function WoCard(p: WoCardProps) {
       : doneTone === "gray"
         ? "bg-(--bg-soft) text-(--ink-soft) ring-(--line)"
         : "bg-[color-mix(in_srgb,var(--brand-green)_14%,white)] text-[var(--brand-green-dark)] ring-transparent";
-  const showMetaRow = (open && !p.autoCreated) || p.pendingDue > 0 || p.commentCount > 0;
+  const showMetaRow = (open && !p.autoCreated) || p.pendingDue > 0 || p.commentCount > 0 || unreadComments > 0;
 
   return (
     <Link
@@ -191,9 +193,16 @@ export function WoCard(p: WoCardProps) {
                 <Clock className="h-2.5 w-2.5" /> ขอเลื่อน · รออนุมัติ
               </span>
             )}
-            {p.commentCount > 0 && (
-              <span className="flex items-center gap-0.5 text-[10px] font-medium text-[var(--chart-gray)]" title="ความคิดเห็น">
-                <MessageSquare className="h-2.5 w-2.5" /> {p.commentCount}
+            {(p.commentCount > 0 || unreadComments > 0) && (
+              <span
+                className={
+                  unreadComments > 0
+                    ? "flex h-4 items-center gap-1 rounded-full bg-(--danger) px-1.5 text-[10px] font-bold text-white"
+                    : "flex items-center gap-0.5 text-[10px] font-medium text-[var(--chart-gray)]"
+                }
+                title={unreadComments > 0 ? `มีความคิดเห็นใหม่ที่ยังไม่ได้อ่าน ${unreadComments} รายการ (ทั้งหมด ${p.commentCount})` : "ความคิดเห็น"}
+              >
+                <MessageSquare className="h-2.5 w-2.5" /> {unreadComments > 0 ? `${unreadComments} ใหม่` : p.commentCount}
               </span>
             )}
           </div>
