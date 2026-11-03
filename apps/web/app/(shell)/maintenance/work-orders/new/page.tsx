@@ -5,6 +5,7 @@ import { Input } from "@smartboss/ui/components/input";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { listProperties } from "@/modules/maintenance/data/properties";
 import { listOrgUsers } from "@/modules/maintenance/data/users";
+import { pmPlansSkipExpense } from "@/modules/maintenance/data/pm";
 import { textareaClass } from "@/modules/maintenance/components/ui";
 import { AppScaffold } from "@/modules/maintenance/components/app-scaffold";
 import { FilePreviewInput } from "@/modules/maintenance/components/photos";
@@ -66,9 +67,11 @@ export default async function NewWorkOrderPage({
     redirect("/maintenance/work-orders");
   }
   const sp = await searchParams;
-  const [properties, users] = await Promise.all([
+  const pmIds = [sp.pmScheduleId, ...(sp.pmScheduleIds?.split(",") ?? [])].filter((x): x is string => !!x);
+  const [properties, users, defaultNoExpense] = await Promise.all([
     listProperties(session.orgId),
     listOrgUsers(session.orgId),
+    pmPlansSkipExpense(session.orgId, pmIds),
   ]);
 
   // ผู้ดูแลบ้านมอบหมายได้เฉพาะช่าง/ผู้ดูแลบ้าน (เหมือนของเดิม)
@@ -191,7 +194,7 @@ export default async function NewWorkOrderPage({
           </Row>
 
           <div className="pl-8 group-data-[private=1]/wo:hidden">
-            <WoAdvancedOptions canOpenPr={canOpenPr} />
+            <WoAdvancedOptions canOpenPr={canOpenPr} defaultNoExpense={defaultNoExpense} />
           </div>
 
           <div className="-mx-5 -mb-5 mt-1 flex flex-wrap items-center justify-between gap-3 border-t border-(--line) px-5 py-3">

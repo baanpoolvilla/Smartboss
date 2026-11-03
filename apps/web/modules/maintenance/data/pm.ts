@@ -273,3 +273,14 @@ export function listActivePmSchedules(orgId: string) {
     orderBy: { nextDueDate: "asc" },
   });
 }
+
+/**
+ * สร้างใบงานจาก PM (ปุ่มบนปฏิทิน PM) — แผนที่ส่งมาทุกแผนตั้ง "ไม่มีค่าใช้จ่าย" ไว้ ⇒ ฟอร์มเลือก "ไม่มีค่าใช้จ่าย" ให้ก่อน
+ * (เดิมฟอร์มตั้ง "มีค่าใช้จ่าย" เสมอ ใบ PM วัดค่าน้ำเลยโดนถามค่าใช้จ่ายตอนปิดงาน — ผู้ใช้ 3/11/2569)
+ * ไม่มีแผน / มีแผนใดแผนหนึ่งต้องกรอก = false (แบบเดิม)
+ */
+export async function pmPlansSkipExpense(orgId: string, ids: string[]): Promise<boolean> {
+  if (ids.length === 0) return false;
+  const rows = await prisma.pmSchedule.findMany({ where: { orgId, id: { in: ids } }, select: { requiresExpense: true } });
+  return rows.length > 0 && rows.every((r) => !r.requiresExpense);
+}

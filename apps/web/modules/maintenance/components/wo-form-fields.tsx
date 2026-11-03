@@ -153,9 +153,10 @@ export function WoDueDateField({ defaultValue, minDate }: { defaultValue?: strin
 }
 
 /** ตัวเลือกเพิ่มเติม (พับไว้): ค่าใช้จ่าย + เปิด PR ต่อ — เลือก "ไม่มีค่าใช้จ่าย" แล้วหัวข้อบอกไว้ให้เห็นตอนพับ */
-export function WoAdvancedOptions({ canOpenPr }: { canOpenPr: boolean }) {
+export function WoAdvancedOptions({ canOpenPr, defaultNoExpense = false }: { canOpenPr: boolean; defaultNoExpense?: boolean }) {
   const [open, setOpen] = useState(false);
-  const [noExpense, setNoExpense] = useState(false);
+  // สร้างจากแผน PM ที่ตั้ง "ไม่มีค่าใช้จ่าย" ⇒ เลือกไว้ให้ก่อน (เปลี่ยนเองได้) — ดู pmPlansSkipExpense
+  const [noExpense, setNoExpense] = useState(defaultNoExpense);
   const [openPr, setOpenPr] = useState(false);
   const summary = [noExpense ? "ไม่มีค่าใช้จ่าย" : null, openPr ? "เปิด PR ต่อ" : null].filter(Boolean).join(" · ");
 
