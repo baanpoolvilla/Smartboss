@@ -627,6 +627,50 @@ export function WorkOrderBoard({
   };
   const boardTotal = COLUMNS.reduce((n, c) => n + (buckets[c.key]?.length ?? 0), 0);
 
+  // ช่องเลือกบ้านบนแถบหัว (จอใหญ่) — ทุกบ้าน / ทั้งหมวด / รายหลัง ในช่องเดียว แบบช่องผู้รับผิดชอบ (ผู้ใช้ 3/11/2569 แบบ B)
+  // มือถือแถบหัวแคบ ไม่พอใส่ ⇒ ยังใช้แถวปุ่มบ้านใต้แถบหัวเหมือนเดิม (ซ่อนช่องนี้ใต้ lg)
+  const houseSelect =
+    groups.length > 1 ? (
+      <label className="relative hidden h-9 shrink-0 items-center rounded-(--radius) border border-(--line) bg-(--bg) pl-3 pr-8 text-sm lg:inline-flex">
+        <span className="mr-1 text-(--ink-soft)">🏠 บ้าน:</span>
+        <select
+          aria-label="กรองตามบ้าน"
+          className="appearance-none bg-transparent pr-1 font-medium text-(--ink) outline-none"
+          value={houseId ? `h:${houseId}` : group ? `g:${group}` : ""}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (!v) {
+              setGroup(null);
+              setHouseId(null);
+            } else if (v.startsWith("g:")) {
+              setGroup(v.slice(2));
+              setHouseId(null);
+            } else {
+              const id = v.slice(2);
+              setGroup(propertyCategories[id] ?? NO_CATEGORY);
+              setHouseId(id);
+            }
+          }}
+        >
+          <option value="">ทุกบ้าน</option>
+          {groups.map((g) => (
+            <optgroup key={g} label={g}>
+              <option value={`g:${g}`}>ทุกหลังใน {g}</option>
+              {Object.entries(propertyNames)
+                .filter(([id]) => (propertyCategories[id] ?? NO_CATEGORY) === g)
+                .sort((a, b) => a[1].localeCompare(b[1], "th"))
+                .map(([id, name]) => (
+                  <option key={id} value={`h:${id}`}>
+                    {name}
+                  </option>
+                ))}
+            </optgroup>
+          ))}
+        </select>
+        <span className="pointer-events-none absolute right-2.5 text-(--ink-soft)" aria-hidden="true">▾</span>
+      </label>
+    ) : null;
+
   const personFilter =
     (canPickPeople && assigneeOptions.length > 0) || !!currentUserId ? (
       <PersonFilter
@@ -650,11 +694,20 @@ export function WorkOrderBoard({
      * แล้วเลื่อนไม่ได้เลย เห็นแค่ไม่กี่ใบแรก
      */
     <div className="flex h-full flex-col">
-      {toolbarSlot && personFilter && createPortal(personFilter, toolbarSlot)}
+      {toolbarSlot &&
+        (personFilter || houseSelect) &&
+        createPortal(
+          <div className="flex min-w-0 items-center gap-2">
+            {personFilter}
+            {houseSelect}
+          </div>,
+          toolbarSlot,
+        )}
       {/* ─── กรองตามบ้าน: แถวบน = หมวด, แถวล่าง = บ้านในหมวด ─── */}
       {/* ตัวกรองผู้รับผิดชอบขึ้นแถบหัวแล้ว — แถวนี้เหลือแค่ปุ่มบ้าน ไม่มีบ้านให้เลือกก็ไม่ต้องมีแถวว่าง */}
       {(groups.length > 1 || (!toolbarSlot && personFilter !== null)) && (
-        <div className="shrink-0">
+        // มีช่องบนแถบหัวแล้ว: แถวปุ่มบ้านเหลือแค่มือถือ (จอใหญ่ใช้ช่องเลือกบ้านบนแถบหัว)
+        <div className={`shrink-0 ${toolbarSlot && groups.length > 1 ? "lg:hidden" : ""}`}>
           <div className="flex gap-2 overflow-x-auto px-3 py-1.5">
             {/* ตัวกรองผู้รับผิดชอบอยู่บนแถบหัวซ้าย แบบบอร์ดงาน (ผู้ใช้ 2/11/2569) — ไม่มีช่องบนแถบหัว ค่อยวางตรงนี้ */}
             {!toolbarSlot && personFilter}
