@@ -58,7 +58,7 @@ export const DEFAULT_RULE_POINTS: Record<PerformanceCategory, number> = {
   report_late: -1,
   workorder_overdue: -3,
   pm_missed: -5,
-  expense_overdue: -3,
+  expense_overdue: -3, // ไม่มีช่องตั้งแยก — ตอนหักใช้ค่าของ workorder_overdue (data/cron.ts)
   attendance_late: -1,
   attendance_absent: -5,
 };

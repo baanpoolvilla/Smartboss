@@ -738,6 +738,8 @@ export async function dockOverdueMaintenance(): Promise<{
           userId: u.id,
           source: "maintenance",
           category: "expense_overdue",
+          // คะแนนใช้ค่าเดียวกับ "ใบงานเกินกำหนด" ไม่มีช่องตั้งแยก (ผู้ใช้ 3/11/2569 "ตั้งค่าอันเดียวกับแจ้งซ่อม")
+          points: st.rulePoints.workorder_overdue,
           occurredAt: now,
           refType: "work_order_expense",
           refId: `${wo.id}:${u.id}`,
@@ -789,7 +791,7 @@ async function notifyMaintenanceDocks(
   woCodes: Map<string, string>,
 ): Promise<void> {
   for (const e of fresh) {
-    const pts = settingsByOrg.get(e.orgId)?.rulePoints[e.category];
+    const pts = e.points ?? settingsByOrg.get(e.orgId)?.rulePoints[e.category];
     if (!pts) continue; // บริษัทตั้งหมวดนี้เป็น 0 = ไม่ได้หักจริง
     if (e.category === "expense_overdue") {
       const woId = e.refId?.split(":")[0] ?? null;
