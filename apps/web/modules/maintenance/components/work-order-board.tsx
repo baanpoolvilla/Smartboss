@@ -1,31 +1,12 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ASSIGNED_BY_ME, ASSIGNED_TO_ME, PersonFilter, UNASSIGNED } from "./person-filter";
-import Link from "next/link";
 import { createPortal } from "react-dom";
 import { InitialAvatar, WoCard } from "./wo-card";
-import {
-  Home as HomeIcon,
-  User,
-  RefreshCw,
-  ReceiptText,
-  Check,
-  CheckCircle2,
-  Lock,
-} from "lucide-react";
-import { Card } from "@smartboss/ui/components/card";
-import { PendingBand, usePendingFor } from "@/modules/notifications/pending-for-you";
-import type { NotifCategory } from "@/modules/notifications/types";
-import {
-  AUTO_GROUP_KEY,
-  groupByPriority,
-  priorityLabel,
-  type PriorityGroup,
-} from "@/modules/maintenance/lib/priority";
+import { RefreshCw, ReceiptText, Check, CheckCircle2 } from "lucide-react";
+import { groupByPriority } from "@/modules/maintenance/lib/priority";
 
-/** แจ้งเตือนหมวดเดียวกับเลขแดงที่เมนู "แจ้งซ่อม" (manifest.ts) */
-const WO_CATEGORIES: NotifCategory[] = ["work_order"];
 
 export interface BoardOrder {
   id: string;
@@ -76,60 +57,11 @@ const M = {
   grey: "#9E9E9E",
 };
 
-/** สีของแต่ละความเร่งด่วน — label กับลำดับมาจาก lib/priority.ts */
-const PRIORITY_COLOR: Record<string, string> = {
-  urgent: M.red,
-  high: M.orange,
-  medium: M.blue,
-  low: M.grey,
-};
-
-function priorityColor(p: string): string {
-  return PRIORITY_COLOR[p] ?? M.blue;
-}
-
-/** สีของหัวกลุ่ม — งานอัตโนมัติใช้สีของโมดูล ไม่ใช่แดง/ส้มที่แปลว่าเร่งด่วน */
-function groupColor(key: string): string {
-  return key === AUTO_GROUP_KEY ? "#0D9488" : priorityColor(key);
-}
-
 /** ป้ายของกลุ่มบ้านที่ยังไม่ถูกจัดหมวด — ต้องตรงกับหน้ารายชื่อบ้าน */
 export const NO_CATEGORY = "ยังไม่จัดหมวด";
 
-function PriorityBadge({ priority }: { priority: string }) {
-  const color = priorityColor(priority);
-  return (
-    <span
-      className="shrink-0 rounded px-2 py-0.5 text-[11px] font-bold"
-      style={{
-        color,
-        backgroundColor: `${color}1a`,
-        border: `1px solid ${color}4d`,
-      }}
-    >
-      {priorityLabel(priority)}
-    </span>
-  );
-}
 
 /** หัวกลุ่มบาง ๆ คั่นระหว่างระดับความเร่งด่วน */
-function GroupHeader({ group }: { group: PriorityGroup<BoardOrder> }) {
-  const color = groupColor(group.key);
-  return (
-    <div className="flex items-center gap-1.5 px-1 pt-1">
-      <span
-        className="h-2 w-2 shrink-0 rounded-full"
-        style={{ backgroundColor: color }}
-        aria-hidden
-      />
-      <span className="text-[11px] font-bold tracking-wide" style={{ color }}>
-        {group.label}
-      </span>
-      <span className="text-[11px] text-(--ink-soft)">{group.orders.length}</span>
-      <span className="ml-1 h-px flex-1 bg-(--line)" />
-    </div>
-  );
-}
 
 /** ไอคอน fiber_new ของ Material — กรอบมน + ตัวอักษร NEW */
 function FiberNew({ color }: { color: string }) {
@@ -333,16 +265,8 @@ function ColumnList({
     return <div className={`flex flex-col ${gap}`}>{orders.map(card)}</div>;
   }
 
-  return (
-    <div className={`flex flex-col ${gap}`}>
-      {groups.map((g) => (
-        <Fragment key={g.key}>
-          <GroupHeader group={g} />
-          {g.orders.map(card)}
-        </Fragment>
-      ))}
-    </div>
-  );
+  // ไม่มีหัวกลุ่มความสำคัญแล้ว (ผู้ใช้ 3/11/2569 "เอาออกเลย") — ยังเรียงด่วนก่อน ความสำคัญดูจากจุดสีบนการ์ด แบบบอร์ดงาน
+  return <div className={`flex flex-col ${gap}`}>{groups.flatMap((g) => g.orders).map(card)}</div>;
 }
 
 function ColumnIcon({ col, color }: { col: string; color: string }) {
