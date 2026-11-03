@@ -81,7 +81,16 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
         pmScheduleId: true,
         pmScheduleIds: true,
         autoCreated: true,
-        _count: { select: { purchaseOrders: { where: { status: { not: "cancelled" } } } } },
+        isPrivate: true,
+        photoUrls: true,
+        afterPhotoUrls: true,
+        _count: {
+          select: {
+            purchaseOrders: { where: { status: { not: "cancelled" } } },
+            comments: { where: { OR: [{ kind: null }, { kind: { not: "log" } }] } },
+            dueRequests: { where: { status: "pending" } },
+          },
+        },
         property: { select: { name: true } },
       },
       orderBy: { createdAt: "desc" },
@@ -116,6 +125,12 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
         href: `/maintenance/work-orders/${w.id}`,
         reactions: reactionsByWo.get(w.id) ?? [],
         woTypes,
+        commentCount: w._count?.comments ?? 0,
+        photoCount: w.photoUrls.length + w.afterPhotoUrls.length,
+        pendingDue: w._count?.dueRequests ?? 0,
+        isPrivate: w.isPrivate,
+        status: w.status,
+        autoCreated: w.autoCreated,
       });
     }
   }

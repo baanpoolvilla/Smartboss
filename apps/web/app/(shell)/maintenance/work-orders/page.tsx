@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
+import { prisma } from "@smartboss/database";
 import { AppScaffold, Fab } from "@/modules/maintenance/components/app-scaffold";
 import {
   listWorkOrders,
@@ -65,6 +66,24 @@ export default async function WorkOrdersPage({
   const propNames: Record<string, string> = Object.fromEntries(
     properties.map((p) => [p.id, p.name])
   );
+  // การ์ดแบบการ์ดงาน: จำนวนความคิดเห็น (ไม่นับบันทึกระบบ) + คำขอเลื่อนที่รออนุมัติ ต่อใบ
+  const orderIds = orders.map((o) => o.id);
+  const [commentCounts, dueReqCounts] = orderIds.length
+    ? await Promise.all([
+        prisma.workOrderComment.groupBy({
+          by: ["workOrderId"],
+          where: { workOrderId: { in: orderIds }, workOrder: { orgId }, OR: [{ kind: null }, { kind: { not: "log" } }] },
+          _count: { _all: true },
+        }),
+        prisma.workOrderDueRequest.groupBy({
+          by: ["workOrderId"],
+          where: { orgId, workOrderId: { in: orderIds }, status: "pending" },
+          _count: { _all: true },
+        }),
+      ])
+    : [[], []];
+  const commentsBy = new Map(commentCounts.map((c) => [c.workOrderId, c._count._all]));
+  const dueReqBy = new Map(dueReqCounts.map((c) => [c.workOrderId, c._count._all]));
   // ชื่อทั้งผู้เปิดและผู้ได้รับมอบหมาย — ใช้ตารางเดียวกัน (การ์ด + ตัวกรองผู้รับผิดชอบ)
   const creatorNames = await userNameMap(
     orgId,
@@ -97,6 +116,10 @@ export default async function WorkOrdersPage({
       pmRound: o.pmRoundDate ? pmRoundTag(o.pmRoundDate, o.dueDate, o.status) : null,
       isPrivate: o.isPrivate,
       isPm: !!o.pmScheduleId || o.pmScheduleIds.length > 0,
+      dueDateIso: o.dueDate?.toISOString() ?? null,
+      commentCount: commentsBy.get(o.id) ?? 0,
+      photoCount: o.photoUrls.length + o.afterPhotoUrls.length,
+      pendingDue: dueReqBy.get(o.id) ?? 0,
       due: dueTag(o.dueDate, o.status),
     }));
 

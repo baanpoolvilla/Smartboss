@@ -70,6 +70,14 @@ export interface MaintenanceBoardItem {
   reactions: WorkOrderReaction[];
   /** ประเภทย่อย (ดู WoType) — อ่านผ่าน woTypesOf() */
   woTypes?: WoType[];
+  /** การ์ดแบบการ์ดงาน (maintenance/components/wo-card.tsx) — ข้อมูลเก่าที่ยังไม่มี = 0 */
+  commentCount?: number;
+  photoCount?: number;
+  pendingDue?: number;
+  isPrivate?: boolean;
+  /** สถานะจริง open | in_progress | completed */
+  status?: string;
+  autoCreated?: boolean;
 }
 
 /** สติกเกอร์ 1 ครั้งบนใบงานซ่อม — ชุดสติกเกอร์เดียวกับงาน คะแนนเข้า targetUserId (ผู้รับผิดชอบตอนที่ติด) */
