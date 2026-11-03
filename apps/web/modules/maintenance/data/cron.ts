@@ -24,7 +24,7 @@ import {
   type PerformanceSettings,
 } from "@/lib/performance";
 import { expenseDaysLabel, expenseDaysLeft, expenseDueAt, isExpenseBacklog, trackingActive, type ExpenseTracking } from "@/modules/maintenance/lib/expense-deadline";
-import { queryPendingExpenseOrders } from "@/modules/maintenance/data/expense-tracking";
+import { closeStaleExpenseRequests, queryPendingExpenseOrders, workingRecorders } from "@/modules/maintenance/data/expense-tracking";
 import {
   addDays,
   isBacklog,
@@ -440,37 +440,48 @@ ${statusText}${notTaken}
  * เตือนใบงานที่ปิดแล้วแต่ยังไม่บันทึกค่าใช้จ่าย
  * (port จาก checkAndNotifyMissingExpenses — เดิมรันทุกวัน 17:00)
  */
-export async function notifyExpenseDeadlines(): Promise<{ expenseDeadlineNotified: number }> {
+export async function notifyExpenseDeadlines(): Promise<{ expenseDeadlineNotified: number; expenseRequestsClosed: number }> {
   const rows = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
     prisma.performanceSetting.findMany({
       where: { expenseTrackFrom: { not: null } },
       select: { orgId: true, expenseTrackFrom: true, expenseTrackDays: true, expenseRecorderIds: true },
     }),
   );
+  const now = Date.now();
   let notified = 0;
+  let closed = 0;
   for (const row of rows) {
     const tracking: ExpenseTracking = { from: row.expenseTrackFrom, days: row.expenseTrackDays, recorderIds: row.expenseRecorderIds };
-    if (!trackingActive(tracking) || tracking.recorderIds.length === 0) continue;
-    const orders = (await queryPendingExpenseOrders(row.orgId))
+    if (!trackingActive(tracking)) continue;
+    const pending = await queryPendingExpenseOrders(row.orgId);
+    // คำขอเลื่อนของใบที่ไม่รอบันทึกแล้ว (PR/PO หรือใบเบิกลงยอดให้ ใบถูกเปิดกลับ) — ไม่ให้ค้างที่ CEO ทั้งที่ไม่มีอะไรให้อนุมัติ
+    closed += await closeStaleExpenseRequests(row.orgId, pending.map((o) => o.id));
+    if (tracking.recorderIds.length === 0) continue;
+    const orders = pending
       .map((wo) => ({ wo, left: expenseDaysLeft(expenseDueAt(wo, tracking)) }))
       .sort((a, b) => a.left - b.left);
     const late = orders.filter((o) => o.left < 0).length;
     const near = orders.filter((o) => o.left >= 0 && o.left <= EXPENSE_NEAR_DAYS).length;
-    if (late + near === 0) continue;
-    const head = [late > 0 ? `เลยกำหนด ${late} ใบ` : null, near > 0 ? `ใกล้ครบ ${near} ใบ` : null].filter(Boolean).join(" · ");
+    // งานใหม่ใน 24 ชม. (ปิดงาน หรือต้นทางเพิ่งจบ) รวมในสรุปวันละครั้ง ไม่เด้งทีละใบ · วันแรกที่เปิดใช้ ของค้างทั้งหมดนับเป็นงานใหม่
+    const firstDay = !!row.expenseTrackFrom && now - row.expenseTrackFrom.getTime() < DAY_MS + 7 * 3600_000;
+    const fresh = orders.filter((o) => firstDay || (o.wo.clockFrom ?? o.wo.completedAt ?? new Date(0)).getTime() >= now - DAY_MS).length;
+    if (late + near + fresh === 0) continue;
+    const head = [fresh > 0 ? `ใหม่ ${fresh} ใบ` : null, near > 0 ? `ใกล้ครบ ${near} ใบ` : null, late > 0 ? `เลยกำหนด ${late} ใบ` : null].filter(Boolean).join(" · ");
     const list = orders.slice(0, 5).map((o) => `${o.wo.code} ${o.wo.title} (${expenseDaysLabel(o.left)})`).join("\n");
-    for (const userId of tracking.recorderIds) {
+    for (const userId of await workingRecorders(row.orgId, tracking.recorderIds)) {
+      // สรุปวันนี้แทนของเมื่อวาน กระดิ่งไม่กองวันละแถว
+      await prisma.notification.deleteMany({ where: { orgId: row.orgId, userId, type: "expense", referenceId: EXPENSE_TASKS_REF } });
       await notifyUser(row.orgId, userId, {
         title: `💰 รอบันทึกค่าใช้จ่าย ${orders.length} ใบ · ${head}`,
         body: list,
-        type: "work_order",
-        referenceId: orders[0]!.wo.id,
+        type: "expense",
+        referenceId: EXPENSE_TASKS_REF,
         line: `💰 รอบันทึกค่าใช้จ่าย ${orders.length} ใบ\n${head}\n${list}`,
       });
       notified++;
     }
   }
-  return { expenseDeadlineNotified: notified };
+  return { expenseDeadlineNotified: notified, expenseRequestsClosed: closed };
 }
 
 export async function notifyMissingExpenses(): Promise<{ reminded: number }> {
@@ -736,7 +747,7 @@ export async function dockOverdueMaintenance(): Promise<{
     const tracking: ExpenseTracking = { from: row.expenseTrackFrom, days: row.expenseTrackDays, recorderIds: row.expenseRecorderIds };
     if (!st?.enabled || !trackingActive(tracking, now) || tracking.recorderIds.length === 0) continue;
     const orders = await queryPendingExpenseOrders(row.orgId);
-    const active = await prisma.user.findMany({ where: { orgId: row.orgId, id: { in: tracking.recorderIds }, isActive: true }, select: { id: true } });
+    const active = await workingRecorders(row.orgId, tracking.recorderIds);
     for (const wo of orders) {
       if (isExpenseBacklog(wo, tracking)) continue;
       const lapse = expenseDueAt(wo, tracking);
@@ -744,17 +755,17 @@ export async function dockOverdueMaintenance(): Promise<{
       if (st.scoringStartDate && lapse < st.scoringStartDate) continue;
       if (isBacklog(lapse, now)) continue;
       woCodes.set(wo.id, wo.code);
-      for (const u of active) {
+      for (const userId of active) {
         events.push({
           orgId: row.orgId,
-          userId: u.id,
+          userId,
           source: "maintenance",
           category: "expense_overdue",
           // คะแนนใช้ค่าเดียวกับ "ใบงานเกินกำหนด" ไม่มีช่องตั้งแยก (ผู้ใช้ 3/11/2569 "ตั้งค่าอันเดียวกับแจ้งซ่อม")
           points: st.rulePoints.workorder_overdue,
           occurredAt: now,
           refType: "work_order_expense",
-          refId: `${wo.id}:${u.id}`,
+          refId: `${wo.id}:${userId}`,
           note: `${wo.code} ${wo.title} · ครบกำหนดบันทึก ${fmtThaiDate(lapse)}`,
         });
       }
@@ -831,6 +842,9 @@ async function notifyMaintenanceDocks(
   }
 }
 
+const DAY_MS = 86_400_000;
+/** referenceId ของแจ้งเตือนสรุปงานรอบันทึก — ดู maintenanceHrefFor */
+const EXPENSE_TASKS_REF = "pending-tasks";
 /** เตือนผู้บันทึกเมื่อเหลือไม่เกินกี่วัน */
 const EXPENSE_NEAR_DAYS = 3;
 

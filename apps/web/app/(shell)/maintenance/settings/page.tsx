@@ -26,6 +26,9 @@ export default async function MaintenanceSettingsPage() {
   const expenseHolders = await usersWithPermission(session.orgId, MAINT_PERMS.expenseManage);
   const holderNames = await userNameMap(session.orgId, expenseHolders);
   const pendingCount = (await pendingExpenseWorkOrders(session.orgId)).length;
+  // ติ๊กไว้แต่ทำงานไม่ได้แล้ว (ปิดบัญชี/ถอนสิทธิ์) — ไม่มีใครรับงาน ไม่มีใครโดนหัก ต้องบอกให้รู้
+  const lostRecorders = tracking.recorderIds.filter((id) => !expenseHolders.includes(id)).length;
+  const noRecorder = !!tracking.from && tracking.recorderIds.length === lostRecorders;
 
   return (
     <AppScaffold
@@ -60,6 +63,11 @@ export default async function MaintenanceSettingsPage() {
           </div>
           <div className="flex flex-col gap-1.5">
             <span className="text-sm">ผู้บันทึกค่าใช้จ่าย</span>
+            {lostRecorders > 0 && (
+              <span role="alert" className="rounded-(--radius) bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                มีผู้บันทึก {lostRecorders} คนที่ปิดบัญชีหรือถูกถอนสิทธิ์แล้ว{noRecorder ? " ตอนนี้ไม่มีใครรับงานนี้เลย" : ""} เลือกคนใหม่แล้วกดบันทึก
+              </span>
+            )}
             {expenseHolders.length === 0 ? (
               <span className="text-xs text-(--ink-soft)">ยังไม่มีใครมีสิทธิ์บันทึก/แก้ไขค่าใช้จ่าย ให้สิทธิ์ที่หน้าบทบาทก่อน</span>
             ) : (

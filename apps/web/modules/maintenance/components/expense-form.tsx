@@ -32,6 +32,7 @@ export function ExpenseForm({
   returnTo,
   edit,
   prefill,
+  expectedExpenses,
 }: {
   saveAction: ExpenseAction;
   noExpenseAction: ExpenseAction;
@@ -55,6 +56,8 @@ export function ExpenseForm({
     paymentMethod: string;
     noReceipt: boolean;
   };
+  /** จำนวนรายการของใบนี้ตอนเปิดฟอร์ม — กันบันทึกชนกับคนอื่น */
+  expectedExpenses?: number;
   /** ที่ช่างกรอกตอนปิดงาน รอตรวจ */
   prefill?: {
     amount: string;
@@ -178,6 +181,7 @@ export function ExpenseForm({
             (ช่องเลือกใบงานข้างล่างไม่ได้แสดงตอนเป็น PM — เดิมเลยไม่ได้ส่ง ใบงานค้าง "ยังไม่บันทึกค่าใช้จ่าย") */}
         {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
         {edit && <input type="hidden" name="expenseId" value={edit.id} />}
+        {expectedExpenses !== undefined && <input type="hidden" name="expectedExpenses" value={expectedExpenses} />}
 
         {costType === "pm" && lockedWorkOrderId && (
           <input type="hidden" name="workOrderId" value={lockedWorkOrderId} />

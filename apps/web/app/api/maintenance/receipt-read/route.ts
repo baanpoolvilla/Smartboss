@@ -9,6 +9,10 @@ import { receiptDateWarning } from "@/modules/maintenance/lib/receipt-read";
 
 /** อ่านใบเสร็จตอนเลือกรูปในฟอร์มค่าใช้จ่าย — เป็น route ไม่ใช่ server action เพราะไม่ใช่การบันทึก (toast กลางจะขึ้น "สำเร็จ") */
 const MAX_BYTES = 10 * 1024 * 1024;
+/** เสียเงินทุกครั้งที่อ่าน — จำกัดต่อคน กันกดรัว/สคริปต์ · เกินแล้วกรอกเองได้ตามปกติ */
+const LIMIT = 30;
+const WINDOW_MS = 10 * 60_000;
+const hits = new Map<string, number[]>();
 
 export async function POST(req: Request) {
   const session = await requireOrg();
@@ -28,6 +32,12 @@ export async function POST(req: Request) {
   const sha = createHash("sha256").update(Buffer.from(await file.arrayBuffer())).digest("hex");
   const used = await receiptUsedElsewhere(session.orgId, sha, workOrderId).catch(() => null);
   if (used) warnings.push(`รูปนี้เคยใช้แล้วที่ ${used} ตรวจว่าไม่ได้ลงซ้ำ`);
+  const now = Date.now();
+  const recent = (hits.get(session.userId) ?? []).filter((t) => now - t < WINDOW_MS);
+  if (recent.length >= LIMIT) {
+    return Response.json({ error: "อ่านใบเสร็จถี่เกินไป กรอกเองไปก่อน แล้วลองใหม่ภายหลัง", warnings, sha }, { status: 429 });
+  }
+  hits.set(session.userId, [...recent, now]);
   try {
     const data = await readReceiptImage(file);
     if (!data.isReceipt) warnings.push("รูปนี้ดูไม่เหมือนใบเสร็จหรือสลิป");

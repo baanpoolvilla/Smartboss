@@ -2,10 +2,10 @@
 
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import type { Prisma } from "@smartboss/database";
+import { prisma, Prisma } from "@smartboss/database";
 import { receiptDataFromForm } from "@/modules/maintenance/lib/receipt-read";
 import { revalidatePath } from "next/cache";
-import { expenseHasSource, loadExpenseTracking } from "@/modules/maintenance/data/expense-tracking";
+import { closeExpenseRequests, expenseHasSource, loadExpenseTracking } from "@/modules/maintenance/data/expense-tracking";
 import { trackingActive } from "@/modules/maintenance/lib/expense-deadline";
 import { redirect } from "next/navigation";
 import { requireOrg, hasPermission, isSuperAdmin } from "@smartboss/auth";
@@ -54,6 +54,9 @@ export async function createNoExpenseAction(
 ): Promise<ExpenseFormState> {
   return saveExpense(formData, true);
 }
+
+/** เพดานคอลัมน์ amount Decimal(12,2) — เกินแล้วฐานข้อมูลโยน error หน้าจอไม่บอกสาเหตุ */
+const MAX_EXPENSE = 9_999_999_999.99;
 
 /** "1,500" / "฿ 1,500.50" → 1500.5 — เดิม Number("1,500") ได้ NaN แล้วถูกทิ้งเงียบ ๆ */
 function parseAmount(raw: string | undefined): number {
@@ -123,6 +126,7 @@ async function saveExpense(
   }
 
   const amount = isNoExpense ? 0 : parseAmount(d.amount);
+  if (!isNoExpense && amount > MAX_EXPENSE) return { error: "จำนวนเงินเกินกว่าที่ระบบรับได้ ตรวจว่าพิมพ์เลขถูกไหม" };
   if (!isNoExpense && (!Number.isFinite(amount) || amount <= 0)) {
     return {
       error: d.amount
@@ -134,6 +138,9 @@ async function saveExpense(
   // แนบรูปใบเสร็จ (ข้ามเมื่อบันทึกว่า "ไม่มีค่าใช้จ่าย" เหมือนของเดิม)
   const file = formData.get("receipt");
   const receipt = receiptFields(formData);
+  if (!isNoExpense && file instanceof File && file.size > 0 && !file.type.startsWith("image/")) {
+    return { error: "แนบได้เฉพาะไฟล์รูป" };
+  }
   const newFile = !isNoExpense && !receipt.noReceipt && file instanceof File && file.size > 0;
   // รูปที่ช่างแนบตอนปิดงาน — อ่านจากใบงาน ไม่เชื่อ URL จากฟอร์ม
   const draft = (linkedWo?.expenseDraft ?? null) as { receiptUrl?: string | null; receiptSha256?: string | null; ai?: unknown } | null;
@@ -142,6 +149,11 @@ async function saveExpense(
   const tracked = trackingActive(await loadExpenseTracking(s.orgId));
   if (!isNoExpense && !receipt.noReceipt && !newFile && !draftUrl && tracked) {
     return { error: "แนบรูปใบเสร็จ หรือติ๊ก \"ไม่มีใบเสร็จ\"" };
+  }
+  // ระหว่างเปิดฟอร์มค้าง มีคนอื่นลงยอดใบนี้แล้ว (ผู้บันทึกอีกคน / PR/PO / ใบเบิก) — บันทึกต่อยอดจะเบิ้ล
+  const expected = formData.get("expectedExpenses");
+  if (tracked && workOrderId && expected !== null && (await prisma.expense.count({ where: { orgId: s.orgId, workOrderId } })) !== Number(expected)) {
+    return { error: "ระหว่างที่เปิดหน้านี้ มีการลงค่าใช้จ่ายของใบงานนี้แล้ว กลับไปดูที่ใบงานก่อน ไม่งั้นยอดจะเบิ้ล" };
   }
   const receiptUrl = newFile ? await putFile(`${s.orgId}/maintenance/receipts`, file) : draftUrl;
   const receiptSha256 = newFile ? createHash("sha256").update(Buffer.from(await file.arrayBuffer())).digest("hex") : draftUrl ? (draft?.receiptSha256 ?? null) : null;
@@ -168,6 +180,12 @@ async function saveExpense(
   // คำขอซ้ำ — รูปใบเสร็จที่เพิ่งอัปโหลดมากับคำขอนี้ไม่มีรายการไหนใช้
   if (!saved && newFile && receiptUrl) await deleteFiles([receiptUrl]).catch(() => 0);
   if (saved) {
+    // บันทึกแล้ว คำขอเลื่อนที่ค้างไม่มีอะไรให้ CEO อนุมัติ
+    if (workOrderId) await closeExpenseRequests(s.orgId, workOrderId, "บันทึกค่าใช้จ่ายแล้ว");
+    // ลงยอดแล้ว ของที่ช่างกรอกหมดหน้าที่ — ไม่ล้าง "เพิ่มรายการ" จะเติมยอดเดิมมาให้ลงซ้ำ
+    if (workOrderId && linkedWo?.expenseDraft) {
+      await prisma.workOrder.updateMany({ where: { orgId: s.orgId, id: workOrderId }, data: { expenseDraft: Prisma.DbNull } });
+    }
     await logActivity(s.orgId, {
       userId: s.userId,
       entity: "expense",
@@ -234,9 +252,11 @@ export async function updateExpenseAction(_prev: ExpenseFormState, formData: For
   const rawAmount = String(formData.get("amount") ?? "");
   const amount = parseAmount(rawAmount);
   if (!Number.isFinite(amount) || amount <= 0) return { error: "จำนวนเงินต้องเป็นตัวเลขมากกว่า 0" };
+  if (amount > MAX_EXPENSE) return { error: "จำนวนเงินเกินกว่าที่ระบบรับได้ ตรวจว่าพิมพ์เลขถูกไหม" };
   const paidBy = String(formData.get("paidBy") ?? "");
   const receipt = receiptFields(formData);
   const file = formData.get("receipt");
+  if (file instanceof File && file.size > 0 && !file.type.startsWith("image/")) return { error: "แนบได้เฉพาะไฟล์รูป" };
   const newFile = !receipt.noReceipt && file instanceof File && file.size > 0;
   if (!receipt.noReceipt && !newFile && !before.receiptUrl && trackingActive(await loadExpenseTracking(s.orgId))) {
     return { error: "แนบรูปใบเสร็จ หรือติ๊ก \"ไม่มีใบเสร็จ\"" };

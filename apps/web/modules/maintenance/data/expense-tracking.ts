@@ -3,6 +3,8 @@ import { cache } from "react";
 import { prisma } from "@smartboss/database";
 import type { ExpenseTracking } from "@/modules/maintenance/lib/expense-deadline";
 import { realExpenseTotal } from "@/modules/maintenance/lib/expense-batches";
+import { deleteActionNotifications, usersWithPermission } from "@/modules/maintenance/data/notify";
+import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { withRequestsTenant } from "@/modules/requests/lib/db";
 
 /** การตั้งค่าของบริษัท — ดู lib/expense-deadline.ts */
@@ -131,6 +133,37 @@ export function listExpenseDueRequests(orgId: string, workOrderId: string) {
     where: { orgId, workOrderId, kind: "expense" },
     orderBy: { createdAt: "desc" },
   });
+}
+
+/** ผู้บันทึกที่ทำงานได้จริง: บัญชียังใช้งานและยังมีสิทธิ์บันทึก — คนถูกถอนสิทธิ์ทำไม่ได้ จึงต้องไม่โดนหัก */
+export async function workingRecorders(orgId: string, recorderIds: string[]): Promise<string[]> {
+  if (recorderIds.length === 0) return [];
+  const can = new Set(await usersWithPermission(orgId, MAINT_PERMS.expenseManage));
+  return recorderIds.filter((id) => can.has(id));
+}
+
+const EXPENSE_REQUEST_TITLE = "ขอเลื่อนบันทึกค่าใช้จ่าย รออนุมัติ";
+
+/** ปิดคำขอเลื่อนที่ค้าง + ลบ "รออนุมัติ" ออกจากกระดิ่ง CEO — ใบนี้ไม่มีอะไรให้อนุมัติแล้ว */
+export async function closeExpenseRequests(orgId: string, workOrderId: string, note: string): Promise<number> {
+  const pending = await prisma.workOrderDueRequest.findMany({ where: { orgId, workOrderId, kind: "expense", status: "pending" } });
+  for (const r of pending) {
+    await prisma.workOrderDueRequest.updateMany({ where: { orgId, id: r.id, status: "pending" }, data: { status: "cancelled", decidedAt: new Date(), decisionNote: note } });
+    await deleteActionNotifications(workOrderId, "work_order", [EXPENSE_REQUEST_TITLE], r.createdAt);
+  }
+  return pending.length;
+}
+
+/** กวาดคำขอของใบที่ไม่รอบันทึกแล้ว — ใบที่ PR/PO หรือใบเบิกลงยอดให้ ไม่ได้ผ่านหน้าบันทึกของแจ้งซ่อม */
+export async function closeStaleExpenseRequests(orgId: string, pendingWorkOrderIds: string[]): Promise<number> {
+  const stale = await prisma.workOrderDueRequest.findMany({
+    where: { orgId, kind: "expense", status: "pending", workOrderId: { notIn: pendingWorkOrderIds } },
+    select: { workOrderId: true },
+    distinct: ["workOrderId"],
+  });
+  let closed = 0;
+  for (const s of stale) closed += await closeExpenseRequests(orgId, s.workOrderId, "ใบนี้ไม่รอบันทึกแล้ว");
+  return closed;
 }
 
 /** ใบเบิกที่ลงรายการค่าใช้จ่ายเหล่านี้ — รายการจากใบเบิกแก้ที่ต้นทาง ไม่แก้ที่แจ้งซ่อม */

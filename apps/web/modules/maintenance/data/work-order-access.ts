@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma, Prisma } from "@smartboss/database";
-import { canViewAll, hasRole, isSuperAdmin, type OrgSession } from "@smartboss/auth";
+import { canViewAll, hasPermission, hasRole, isSuperAdmin, type OrgSession } from "@smartboss/auth";
+import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { loadExpenseTracking, pendingExpenseWorkOrders, recordedExpenseWorkOrders } from "@/modules/maintenance/data/expense-tracking";
 import { trackingActive } from "@/modules/maintenance/lib/expense-deadline";
 
@@ -42,7 +43,7 @@ export async function workOrderAccess(
 ): Promise<WorkOrderAccess> {
   const tracking = await loadExpenseTracking(session.orgId);
   const recorder =
-    trackingActive(tracking) && tracking.recorderIds.includes(session.userId) && !hasRole(session, "CEO") && !isSuperAdmin(session);
+    trackingActive(tracking) && tracking.recorderIds.includes(session.userId) && hasPermission(session, MAINT_PERMS.expenseManage) && !hasRole(session, "CEO") && !isSuperAdmin(session);
   if (canViewAll(session) && !recorder) {
     return { seeAll: true, userId: session.userId, caretakerPropertyIds: [] };
   }

@@ -255,6 +255,7 @@ export default async function WorkOrderDetailPage({
   }));
   const canSeeExpense = hasPermission(session, MAINT_PERMS.expenseView) || canExpense;
   const expenseTotal = realExpenseTotal(expenses);
+  const closerDraft = wo.expenseDraft as { name?: string; price?: string } | null;
   const expenseBatches = groupExpenseBatches(expenses);
   const expenseRequestLinks = hasExpense && canSeeExpense ? await requestsOfExpenses(orgId, expenses.map((e) => e.id)) : new Map<string, { id: string; code: string }>();
   const expenseRecorderNames = hasExpense && canSeeExpense ? await userNameMap(orgId, expenses.map((e) => e.createdBy)) : {};
@@ -543,6 +544,11 @@ export default async function WorkOrderDetailPage({
       {/* ─── ค่าใช้จ่ายที่บันทึกแล้ว: บอกว่าเสร็จแล้ว + กลับมาแก้ได้ ─── */}
       {hasExpense && canSeeExpense && (
         <Card className="mb-4 p-4 sm:p-5" data-testid="expense-recorded">
+          {closerDraft && (closerDraft.price || closerDraft.name) && (
+            <p className="mb-2 rounded-(--radius) bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="draft-left">
+              ช่างแจ้งไว้ตอนปิดงาน: {closerDraft.name || "-"}{closerDraft.price ? ` ฿${Number(closerDraft.price).toLocaleString()}` : ""} · ตรวจว่ารวมในรายการด้านล่างแล้วหรือยัง ถ้าเป็นคนละยอดกด เพิ่มรายการ
+            </p>
+          )}
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-bold text-emerald-800">✅ บันทึกค่าใช้จ่ายแล้ว ฿{expenseTotal.toLocaleString()}</h2>
             {canExpense && wo.status === "completed" && (

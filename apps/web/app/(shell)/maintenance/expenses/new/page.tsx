@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireOrg, hasPermission } from "@smartboss/auth";
+import { prisma } from "@smartboss/database";
 import { Card } from "@smartboss/ui/components/card";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { listWorkOrders, workOrderIdsWithExpenses } from "@/modules/maintenance/data/work-orders";
@@ -66,6 +67,8 @@ export default async function NewExpensePage({
 
   // ที่ช่างกรอกตอนปิดงาน — เติมให้ผู้บันทึกตรวจ (completeWorkOrderAction)
   const lockedWo = workOrderId ? orders.find((o) => o.id === workOrderId) : undefined;
+  // จำนวนรายการตอนเปิดฟอร์ม — กันบันทึกชนกัน (ดู saveExpense)
+  const expectedExpenses = workOrderId ? await prisma.expense.count({ where: { orgId: session.orgId, workOrderId } }) : undefined;
   const draft = (lockedWo?.expenseDraft ?? null) as { name?: string; price?: string; noReceipt?: boolean; receiptUrl?: string | null; ai?: ReceiptData | null } | null;
   const ai = draft?.ai ?? null;
   const prefill = draft
@@ -98,6 +101,7 @@ export default async function NewExpensePage({
         lockedPmScheduleId={pmScheduleId}
         returnTo={workOrderId ? returnTo : undefined}
         prefill={prefill}
+        expectedExpenses={expectedExpenses}
       />
     </AppScaffold>
   );

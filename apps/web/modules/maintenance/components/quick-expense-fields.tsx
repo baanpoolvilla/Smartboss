@@ -27,7 +27,8 @@ export function QuickExpenseFields({ workOrderId, onValidChange }: { workOrderId
     const nm = next.name ?? name;
     const p = next.price ?? price;
     // ไม่มีค่าใช้จ่าย จบ · ไม่งั้นต้องมีรูป หรือบอกว่าจ่ายค่าอะไร · ราคาใส่ได้เฉพาะตัวเลข
-    const priceOk = p.trim() === "" || Number.isFinite(Number(p.replace(/[\s,฿]/g, "")));
+    const num = Number(p.replace(/[\s,฿]/g, ""));
+    const priceOk = p.trim() === "" || (Number.isFinite(num) && num >= 0);
     onValidChange(n || ((f || nm.trim() !== "") && priceOk));
   };
 

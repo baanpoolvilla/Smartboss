@@ -417,12 +417,15 @@ export async function completeWorkOrderAction(formData: FormData) {
   const allZero = estimate.some((x) => x.name !== "" && x.price !== "") && estimate.filter((x) => x.price !== "").every((x) => parseBaht(x.price) === 0);
   if (tracked && !quickNone && !allZero) {
     const receipt = formData.get("expenseReceipt");
-    const hasReceipt = receipt instanceof File && receipt.size > 0;
+    // รับเฉพาะรูป — ฟอร์มกรองแล้ว แต่คำขอยิงตรงได้ ไฟล์อื่นจะถูกเปิดจากโดเมนเรา
+    const hasReceipt = receipt instanceof File && receipt.size > 0 && receipt.type.startsWith("image/");
     const first = estimate.find((x) => x.name !== "" || x.price !== "");
+    const firstPrice = first ? parseBaht(first.price) : NaN;
     await updateWorkOrder(s.orgId, id, {
       expenseDraft: {
-        name: first?.name ?? "",
-        price: first?.price ?? "",
+        name: (first?.name ?? "").slice(0, 300),
+        // ราคาอ่านไม่ออก/ติดลบ/เกินหลัก = ไม่รู้ราคา ให้ผู้บันทึกลงเอง
+        price: first && first.price !== "" && Number.isFinite(firstPrice) && firstPrice >= 0 && firstPrice <= MAX_EXPENSE ? String(firstPrice) : "",
         noReceipt: formData.get("noReceipt") === "1",
         receiptUrl: hasReceipt ? await putFile(`${s.orgId}/maintenance/receipts`, receipt) : null,
         receiptSha256: hasReceipt ? createHash("sha256").update(Buffer.from(await receipt.arrayBuffer())).digest("hex") : null,
@@ -514,6 +517,9 @@ async function recordEstimateAsExpense(
   }
   return true;
 }
+
+/** เพดานคอลัมน์ amount Decimal(12,2) */
+const MAX_EXPENSE = 9_999_999_999.99;
 
 /** ค่าที่ AI อ่านจากฟอร์ม — ใช้เทียบย้อนหลังเท่านั้น ไม่ได้ใช้คำนวณ */
 function parseReceiptAi(v: FormDataEntryValue | null): Prisma.InputJsonValue | null {
