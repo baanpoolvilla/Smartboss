@@ -305,41 +305,43 @@ export async function notifyDuePmSchedules(): Promise<{ notified: number }> {
 
   notified += await notifyDueRoundWorkOrders([...roundOrgs.keys()], soon);
   notified += await notifyDuePrivateWorkOrders(soon);
-  notified += await notifyOverdueWorkOrders();
+  notified += await notifyOverdueWorkOrders(soon);
   return { notified };
 }
 
 /**
- * ใบแจ้งซ่อมทั่วไปที่เลยกำหนดแล้วยังไม่ปิด — เตือนผู้รับผิดชอบทุกวัน (ผู้ใช้ 2/11/2569)
+ * ใบแจ้งซ่อมทั่วไป — เตือนผู้รับผิดชอบก่อนครบกำหนด 7/3/1 วัน + วันครบกำหนด (3/11/2569) และเลยแล้วทุกวัน (2/11/2569)
  * เดิมไม่มีเตือนเลย มีแค่แจ้งตอนโดนหักคะแนน · ไม่แจ้ง CEO/คนอื่น (เรื่องของผู้รับผิดชอบ)
  * ใบรอบ PM และใบส่วนตัวมีตัวเตือนของตัวเองข้างบนแล้ว — ไม่นับซ้ำ
  */
-async function notifyOverdueWorkOrders(): Promise<number> {
-  const startToday = new Date(`${ymd(todayBkkDate())}T00:00:00.000+07:00`);
+async function notifyOverdueWorkOrders(soon: Date): Promise<number> {
   const wos = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
     prisma.workOrder.findMany({
       where: {
         status: { in: ["open", "in_progress"] },
-        dueDate: { lt: startToday },
+        // ก่อนครบกำหนดด้วย (ผู้ใช้ 3/11/2569 "เตือนด้วย") — เกณฑ์วันเดียวกับ PM: 7/3/1 วันก่อน + วันครบกำหนด + เลยแล้วทุกวัน
+        dueDate: { lte: soon },
         isPrivate: false,
         pmRoundDate: null,
         assignedTo: { not: null },
       },
-      select: { id: true, orgId: true, code: true, title: true, dueDate: true, assignedTo: true, property: { select: { name: true } } },
+      select: { id: true, orgId: true, code: true, title: true, dueDate: true, assignedTo: true, status: true, property: { select: { name: true } } },
     })
   );
   const today = ymd(todayBkkDate());
   let notified = 0;
   for (const wo of wos) {
     const dueDay = new Date(wo.dueDate!.getTime() + 7 * 3600e3).toISOString().slice(0, 10);
-    const late = Math.round((Date.parse(today) - Date.parse(dueDay)) / 86_400_000);
-    if (late < 1) continue;
+    const days = Math.round((Date.parse(dueDay) - Date.parse(today)) / 86_400_000);
+    if (!shouldNotifyPmToday(days)) continue;
+    const head = days < 0 ? "🔴 ใบงานเลยกำหนด " + -days + " วัน" : days === 0 ? "🔴 ใบงานครบกำหนดวันนี้" : `🟡 ใบงานครบกำหนดอีก ${days} วัน`;
+    const notTaken = wo.status === "open" ? " · ยังไม่ได้กดรับงาน" : "";
     await notifyUser(wo.orgId, wo.assignedTo, {
-      title: `🔴 ใบงานเลยกำหนด ${late} วัน: ${wo.title}`,
-      body: `${wo.code} · บ้าน ${wo.property?.name ?? "-"} · กำหนด ${fmtThaiDate(wo.dueDate!)}`,
+      title: `${head}: ${wo.title}${notTaken}`,
+      body: `${wo.code} · บ้าน ${wo.property?.name ?? "-"} · กำหนด ${fmtThaiDate(wo.dueDate!)}${days >= 0 ? " · ทำไม่ทันกด \"ขอเลื่อนกำหนดส่ง\"" : ""}`,
       type: "work_order",
       referenceId: wo.id,
-      line: `🔴 ใบงานเลยกำหนด ${late} วัน
+      line: `${head}${notTaken}
 📝 ${wo.title} (${wo.code})
 🏠 บ้าน: ${wo.property?.name ?? "-"}
 📅 กำหนด ${fmtThaiDate(wo.dueDate!)}`,
