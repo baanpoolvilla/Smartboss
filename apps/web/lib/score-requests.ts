@@ -41,12 +41,14 @@ const BASE_REF_TYPE: Record<ScoreRequestCategory, string> = {
   task_late: "task",
   workorder_overdue: "work_order",
   pm_missed: "pm_schedule",
+  expense_overdue: "work_order_expense",
 };
 
 const APPROVER_ROLE: Record<ScoreRequestCategory, string> = {
   task_late: "คนสั่งงาน",
   workorder_overdue: "คนเปิดใบงาน",
   pm_missed: "คนสร้างแผน PM",
+  expense_overdue: "CEO",
 };
 
 export function isScoreRequestCategory(c: string): c is ScoreRequestCategory {
@@ -92,6 +94,16 @@ async function resolveTarget(
       target: { kind: "work_order", id: refId, code: wo?.code ?? null },
       approverId: await activeUserId(orgId, wo?.createdBy, exclude),
       title: wo ? `${wo.code ? `${wo.code} · ` : ""}${wo.title}` : null,
+    };
+  }
+  // บันทึกค่าใช้จ่ายเลยกำหนด: CEO ตัดสินคนเดียว เหมือนขอเลื่อนบันทึก · refId = ใบงาน:ผู้บันทึก (ดู dockOverdueMaintenance)
+  if (category === "expense_overdue") {
+    const woId = refId.split(":")[0]!;
+    const wo = await prisma.workOrder.findFirst({ where: { orgId, id: woId }, select: { code: true, title: true } });
+    return {
+      target: { kind: "work_order", id: woId, code: wo?.code ?? null },
+      approverId: null,
+      title: wo ? `บันทึกค่าใช้จ่าย ${wo.code} · ${wo.title}` : null,
     };
   }
   const pmId = refId.split(":")[0]!;

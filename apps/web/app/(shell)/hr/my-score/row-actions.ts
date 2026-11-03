@@ -28,8 +28,8 @@ interface Ev {
   refId: string | null;
 }
 
-const SCORE_BASE: Record<string, string> = { task_late: "task", workorder_overdue: "work_order", pm_missed: "pm_schedule" };
-const SCORE_ROLE: Record<string, string> = { task_late: "คนสั่งงาน", workorder_overdue: "คนเปิดใบงาน", pm_missed: "คนสร้างแผน PM" };
+const SCORE_BASE: Record<string, string> = { task_late: "task", workorder_overdue: "work_order", pm_missed: "pm_schedule", expense_overdue: "work_order_expense" };
+const SCORE_ROLE: Record<string, string> = { task_late: "คนสั่งงาน", workorder_overdue: "คนเปิดใบงาน", pm_missed: "คนสร้างแผน PM", expense_overdue: "CEO" };
 
 function deadlineText(day: string, period: ScorePeriodConfig): string {
   const close = new Date(retroSubmitDeadline(day, period).getTime() - 60_000);
@@ -109,7 +109,7 @@ export async function buildRowActions(orgId: string, userId: string, events: Ev[
             title: e.note ?? label,
             points,
             day,
-            approverText: `${SCORE_ROLE[e.category]} (หรือ CEO)`,
+            approverText: e.category === "expense_overdue" ? "CEO" : `${SCORE_ROLE[e.category]} (หรือ CEO)`,
             reasonTags: [...SCORE_REASON_TAGS],
           },
         });

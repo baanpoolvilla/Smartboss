@@ -14,7 +14,7 @@ import { resolveActionNotifications } from "@/modules/maintenance/data/notify";
  * เขียนได้เฉพาะผ่านโค้ดฝั่งเซิร์ฟเวอร์) · อนุมัติ = event ตรงข้าม `<refType>_undo` (lib/score-requests.ts)
  */
 
-export const SCORE_REQUEST_CATEGORIES = ["task_late", "workorder_overdue", "pm_missed"] as const;
+export const SCORE_REQUEST_CATEGORIES = ["task_late", "workorder_overdue", "pm_missed", "expense_overdue"] as const;
 export type ScoreRequestCategory = (typeof SCORE_REQUEST_CATEGORIES)[number];
 
 export type ScoreRequestStatus = "pending" | "approved" | "rejected" | "closed";
