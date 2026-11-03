@@ -136,6 +136,12 @@ export function WoCard(p: WoCardProps) {
       aria-label={`ใบงานซ่อม ${p.code} ${p.title}`}
     >
       <PendingBand notifs={pending} soft />
+      {expenseDue && (
+        <div className={`flex items-center justify-between gap-2 px-3 py-1 text-[12px] font-bold sm:px-4 ${expenseLeft < 0 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>
+          <span className="truncate">💰 รอบันทึกค่าใช้จ่าย</span>
+          <span className="shrink-0 tabular-nums">{expenseDaysLabel(expenseLeft)}</span>
+        </div>
+      )}
       {/* แถบหัวสีแจ้งซ่อม — มองไกลก็รู้ว่าเป็นใบของแจ้งซ่อม ไม่ใช่งาน */}
       <div className="flex items-center justify-between gap-2 bg-[#0d9488] px-3 py-0.5 text-[10.5px] font-semibold leading-4 text-white">
         <span className="inline-flex min-w-0 items-center gap-1">
@@ -149,13 +155,6 @@ export function WoCard(p: WoCardProps) {
         </span>
         <span className="truncate font-medium opacity-90">{p.code}</span>
       </div>
-
-      {expenseDue && (
-        <div className={`flex items-center justify-between gap-2 px-3 py-1 text-[12px] font-bold sm:px-4 ${expenseLeft < 0 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>
-          <span className="truncate">💰 รอบันทึกค่าใช้จ่าย</span>
-          <span className="shrink-0 tabular-nums">{expenseDaysLabel(expenseLeft)}</span>
-        </div>
-      )}
 
       <div className="p-3 sm:px-4 sm:py-3">
         {done && (
