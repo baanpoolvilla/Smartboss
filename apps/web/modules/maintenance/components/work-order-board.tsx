@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import { ASSIGNED_BY_ME, ASSIGNED_TO_ME, PersonFilter, UNASSIGNED } from "./person-filter";
 import { createPortal } from "react-dom";
 import { InitialAvatar, WoCard } from "./wo-card";
-import { RefreshCw, ReceiptText, Check, CheckCircle2 } from "lucide-react";
+import { RefreshCw, ReceiptText, Check, CheckCircle2, Clock } from "lucide-react";
 import { groupByPriority } from "@/modules/maintenance/lib/priority";
 
 
@@ -184,6 +184,7 @@ function ColumnHeader({
 }) {
   const total = orders.length;
   const percent = boardTotal > 0 ? Math.round((total / boardTotal) * 100) : 0;
+  const dueRequests = orders.filter((w) => (w.pendingDue ?? 0) > 0).length;
   const late = col.key === "open" || col.key === "in_progress" ? orders.filter((w) => w.due?.late || w.pmRound?.late).length : 0;
   const segments = total === 0 ? [] : [
     ...(total - late > 0 ? [{ pct: ((total - late) / total) * 100, color: col.color }] : []),
@@ -192,7 +193,8 @@ function ColumnHeader({
   return (
     <div
       className="relative mb-2.5 h-[42px] w-full shrink-0 overflow-hidden rounded-xl border border-(--line) bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]"
-      title={`${col.title} ${total} ใบ · ${percent}% ของบอร์ด${late > 0 ? ` · เลยกำหนด ${late}` : ""}`}
+      title={`${col.title} ${total} ใบ · ${percent}% ของบอร์ด${late > 0 ? `
+ตรงเวลา ${total - late} · เลยกำหนด ${late}` : ""}`}
     >
       {segments.length > 0 && (
         <>
@@ -221,8 +223,15 @@ function ColumnHeader({
         </span>
         <span className="min-w-0 truncate text-sm font-bold tracking-tight text-(--ink)">{col.title}</span>
         <span className="-ml-0.5 shrink-0 text-xs font-semibold tabular-nums text-(--ink-soft)">{percent}%</span>
-        {late > 0 && (
-          <span className="ml-auto shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white">เลย {late}</span>
+        {/* แบบบอร์ดงาน: ใบที่เลยกำหนดบอกด้วยพื้นแดงอย่างเดียว · ป้ายแดงขวา = คำขอเลื่อนที่รออนุมัติ (ผู้ใช้ 3/11/2569) */}
+        {dueRequests > 0 && (
+          <span
+            className="ml-auto inline-flex h-6 shrink-0 items-center gap-1 rounded-full bg-[var(--chart-red)] px-2 text-xs font-bold tabular-nums text-white shadow-[0_1px_3px_rgba(229,72,77,0.35)]"
+            title={`มี ${dueRequests} ใบในคอลัมน์นี้ที่ขอเลื่อนกำหนดส่ง รออนุมัติ`}
+          >
+            <Clock className="h-3.5 w-3.5" />
+            {dueRequests}
+          </span>
         )}
       </span>
     </div>
