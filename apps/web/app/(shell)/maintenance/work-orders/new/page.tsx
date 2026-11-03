@@ -110,7 +110,10 @@ export default async function NewWorkOrderPage({
     >
       <Card className="p-5">
         <PasteDropFiles label="ปล่อยเพื่อแนบรูป">
-        <form action={createWorkOrderAction} className="group/wo flex flex-col gap-4">
+        {/* noValidate: ให้ WoRequiredGuard บอกเป็นภาษาไทยทีเดียวว่าขาดอะไรบ้าง — ไม่งั้นเบราว์เซอร์เด้ง
+            "Please select an item in the list." (อังกฤษ ทีละช่อง) ก่อน แล้วข้อความไทยไม่ขึ้นเลย (ทดสอบ 3/11/2569)
+            ช่องที่ต้องกรอกถูกตรวจซ้ำที่เซิร์ฟเวอร์อยู่แล้ว (createWorkOrderAction) */}
+        <form action={createWorkOrderAction} noValidate className="group/wo flex flex-col gap-4">
           {sp.fromReport && <ReportPrefill />}
           {sp.assetId && <input type="hidden" name="assetId" value={sp.assetId} />}
           {sp.pmScheduleId && (
