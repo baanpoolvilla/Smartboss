@@ -494,7 +494,8 @@ export function ReportImageLightbox({
           onPointerCancel={swipeUp}
           onClickCapture={swipeClickCapture}
           onWheel={swipeWheel}
-          className="absolute inset-0 overflow-hidden"
+          // มีแถบรูปย่อ + เมาส์: กันที่ด้านล่างให้แถบ ไม่ให้บังรูป (ผู้ใช้ 3/11/2569 "มันบังรูป") · จอสัมผัสแตะรูปซ่อนแถบได้ ใช้เต็มจอเหมือนเดิม
+          className={`absolute inset-0 overflow-hidden ${hasMultiple ? "[@media(pointer:fine)]:bottom-[5.25rem]" : ""}`}
         >
           <div ref={trackRef} className="absolute inset-0" style={trackStyle}>
             {slides.map((sl) => (

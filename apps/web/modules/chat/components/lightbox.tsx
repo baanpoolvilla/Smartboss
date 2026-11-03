@@ -262,7 +262,8 @@ export function Lightbox({
         onPointerCancel={swipeUp}
         onClickCapture={swipeClickCapture}
         onWheel={swipeWheel}
-        className="relative min-h-0 flex-1 select-none overflow-hidden"
+        // มีแถบรูปย่อ + เมาส์: กันที่ด้านล่างให้แถบ ไม่ให้บังรูป (แบบเดียวกับ report-image-lightbox.tsx) · จอสัมผัสแตะรูปซ่อนแถบได้ ใช้เต็มจอเหมือนเดิม
+        className={`relative min-h-0 flex-1 select-none overflow-hidden ${items.length > 1 ? "[@media(pointer:fine)]:mb-[5.25rem]" : ""}`}
         style={{ touchAction: "none", cursor: items.length > 1 && !zoom.zoomed ? "grab" : undefined }}
       >
         <div ref={trackRef} className="absolute inset-0" style={trackStyle}>
