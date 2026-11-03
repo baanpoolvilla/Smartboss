@@ -222,6 +222,8 @@ export async function updatePmAction(formData: FormData) {
   });
 
   revalidatePath("/maintenance/pm");
+  // แก้จากหน้าอุปกรณ์ด้วย (assets/[id]) — ให้หน้านั้นเห็นค่าใหม่ทันที
+  revalidatePath("/maintenance/assets/[id]", "page");
 }
 
 export async function completePmAction(formData: FormData) {

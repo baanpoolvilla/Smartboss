@@ -15,9 +15,12 @@ import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { getAsset, lastMaintenanceDates } from "@/modules/maintenance/data/assets";
 import { getProperty } from "@/modules/maintenance/data/properties";
 import { listPmForAsset } from "@/modules/maintenance/data/pm";
-import { freqLabel } from "@/modules/maintenance/lib/pm-schedule";
+import { listOrgUsers } from "@/modules/maintenance/data/users";
+import { freqLabel, PM_FREQUENCIES } from "@/modules/maintenance/lib/pm-schedule";
+import { toDateInput } from "@/modules/maintenance/lib/format";
+import { todayBangkok } from "@/modules/maintenance/lib/no-past-date";
 import { updateAssetAction, deleteAssetAction } from "../actions";
-import { deletePmAction } from "../../pm/actions";
+import { deletePmAction, updatePmAction } from "../../pm/actions";
 import { AppScaffold } from "@/modules/maintenance/components/app-scaffold";
 import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 
@@ -53,11 +56,13 @@ export default async function AssetDetailPage({
 
   const canManage = hasPermission(session, MAINT_PERMS.assetManage);
   const canManagePm = hasPermission(session, MAINT_PERMS.pmManage);
-  const [property, lastMap, schedules] = await Promise.all([
+  const [property, lastMap, schedules, users] = await Promise.all([
     getProperty(orgId, asset.propertyId),
     lastMaintenanceDates(orgId, [id]),
     listPmForAsset(orgId, id),
+    canManagePm ? listOrgUsers(orgId) : Promise.resolve([]),
   ]);
+  const today = todayBangkok();
   const warrantyExpired =
     asset.warrantyExpiry != null && asset.warrantyExpiry < new Date();
 
@@ -233,6 +238,7 @@ export default async function AssetDetailPage({
                     {statusText}
                   </span>
                 </div>
+                {canManagePm && <PmEditForm s={s} users={users} today={today} />}
                 {canManagePm && (
                   <div className="mt-2 flex items-center gap-2">
                     <Link
@@ -261,5 +267,72 @@ export default async function AssetDetailPage({
         </div>
       )}
     </AppScaffold>
+  );
+}
+
+const fieldClass = "h-10 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm text-(--ink)";
+
+/**
+ * แก้แผน PM ตรงหน้าอุปกรณ์ (ผู้ใช้ 3/11/2569 "อยากให้แก้ไขตั้งค่าตรงนี้ได้") — ช่องเดียวกับ "แก้ไข PM"
+ * บนปฏิทิน PM ส่งเข้า updatePmAction ตัวเดิม (กติกาเดิมทั้งหมด: วันย้อนหลังไม่ได้, ต้องมีผู้รับผิดชอบ,
+ * originalNextDueDate กันวันเก่าทับ)
+ */
+function PmEditForm({
+  s,
+  users,
+  today,
+}: {
+  s: { id: string; title: string; frequency: string; nextDueDate: Date; assignedTo: string | null; requiresExpense: boolean; description: string | null };
+  users: { id: string; name: string }[];
+  today: string;
+}) {
+  const due = toDateInput(s.nextDueDate);
+  return (
+    <details className="mt-2">
+      <summary className="inline-flex cursor-pointer items-center gap-1 text-xs text-(--brand-green)">
+        <Pencil className="h-3.5 w-3.5" /> แก้ไขแผน PM
+      </summary>
+      <form action={updatePmAction} className="mt-2 grid grid-cols-1 gap-3 rounded-(--radius) border border-(--line) p-3 sm:grid-cols-2">
+        <input type="hidden" name="id" value={s.id} />
+        <input type="hidden" name="originalNextDueDate" value={due} />
+        <label className="flex flex-col gap-1 text-xs text-(--ink-soft) sm:col-span-2">
+          ชื่องาน PM
+          <input name="title" defaultValue={s.title} required className={fieldClass} />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-(--ink-soft)">
+          ความถี่
+          <select name="frequency" defaultValue={s.frequency} className={fieldClass}>
+            {PM_FREQUENCIES.map((f) => (
+              <option key={f.value} value={f.value}>{f.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-(--ink-soft)">
+          วันกำหนดถัดไป
+          <input type="date" name="nextDueDate" defaultValue={due} min={due < today ? due : today} className={fieldClass} />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-(--ink-soft) sm:col-span-2">
+          ผู้รับผิดชอบ *
+          <select name="assignedTo" required defaultValue={s.assignedTo ?? ""} className={fieldClass}>
+            <option value="" disabled>— เลือกผู้รับผิดชอบ —</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>{u.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-start gap-2.5 rounded-(--radius) border border-(--line) p-2.5 sm:col-span-2">
+          <input type="checkbox" name="noExpense" value="1" defaultChecked={!s.requiresExpense} className="mt-0.5 h-4 w-4" />
+          <span>
+            <span className="block text-sm font-medium text-(--ink)">แผนนี้ไม่มีค่าใช้จ่าย</span>
+            <span className="block text-xs text-(--ink-soft)">มีผลกับใบงานที่ระบบสร้างหลังจากนี้ ใบที่เปิดค้างอยู่ไม่เปลี่ยนตาม</span>
+          </span>
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-(--ink-soft) sm:col-span-2">
+          รายละเอียด
+          <textarea name="description" rows={2} defaultValue={s.description ?? ""} className="w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 py-2 text-sm text-(--ink)" />
+        </label>
+        <Button type="submit" size="sm" className="sm:w-32">บันทึก</Button>
+      </form>
+    </details>
   );
 }
