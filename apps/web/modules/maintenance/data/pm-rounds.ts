@@ -71,6 +71,11 @@ export async function generateRoundWorkOrders(orgs: Map<string, RoundOrg>): Prom
     if (!st || !pmUsesRounds(st, pm)) continue;
     const plan = dueRounds(pm, st.pmLeadDays);
     if (plan.rounds.length === 0) continue;
+    // รอบที่ครบก่อนวันเริ่มใช้ (ค้างจากแบบเดิม): ไม่เปิดย้อนทุกรอบ แต่ถ้าแผนนี้ไม่มีใบเปิดค้างเลย และรอบนี้ไม่มีรอบปัจจุบัน
+    // ให้เปิด "รอบล่าสุดที่ค้าง" 1 ใบ (ผู้ใช้ 3/11/2569 "ออโต้ pm ทำไมไม่เปิดเอง") — งานไม่หายตอนเปิดใช้ · ไม่หักคะแนน (roundBeforeStart)
+    const from = st.pmRoundsFrom;
+    const hasCurrentRound = !from || plan.rounds.some((r) => r.getTime() >= from.getTime());
+    const lastPast = from ? plan.rounds.filter((r) => r.getTime() < from.getTime()).at(-1) : undefined;
 
     for (const round of plan.rounds) {
       const made = await prisma.$transaction(async (tx) => {
@@ -92,7 +97,11 @@ export async function generateRoundWorkOrders(orgs: Map<string, RoundOrg>): Prom
           });
           return null;
         }
-        if (st.pmRoundsFrom && round.getTime() < st.pmRoundsFrom.getTime()) return null;
+        if (from && round.getTime() < from.getTime()) {
+          if (hasCurrentRound || round.getTime() !== lastPast?.getTime()) return null;
+          const anyOpen = await tx.workOrder.findFirst({ where: { orgId: pm.orgId, status: { in: OPEN }, ...linked }, select: { id: true } });
+          if (anyOpen) return null;
+        }
         const code = await nextWorkOrderCode(tx, pm.orgId);
         return tx.workOrder.create({
           data: {
