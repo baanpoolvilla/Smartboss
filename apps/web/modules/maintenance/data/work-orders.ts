@@ -430,3 +430,18 @@ export async function moveWorkOrderProperties(
     await tx.contractorHistory.updateMany({ where: { orgId, workOrderId: id, propertyId: stale }, data: { propertyId: primary! } });
   });
 }
+
+/**
+ * "คนเปิดใบ" ในแง่ใครอนุมัติ/แก้กำหนดส่ง — ใบที่คนเปิด = คนนั้น · ใบ PM ที่ระบบเปิดเอง = คนสร้างแผน PM
+ * (ผู้ใช้ 3/11/2569 "คุณสุจิตาสร้างแผน PM เป็นคนเปิดไม่ใช่หรอ") เดิมใบอัตโนมัติไม่มีคนเปิด คำขอเลื่อนทุกใบไปกองที่ CEO
+ * แผนเก่าที่ไม่มีคนสร้าง (ย้ายมาจากระบบเดิม) = null → CEO เหมือนเดิม
+ */
+export async function workOrderOwnerId(
+  orgId: string,
+  wo: { createdBy: string | null; autoCreated: boolean; pmScheduleId: string | null },
+): Promise<string | null> {
+  if (wo.createdBy) return wo.createdBy;
+  if (!wo.autoCreated || !wo.pmScheduleId) return null;
+  const pm = await prisma.pmSchedule.findFirst({ where: { orgId, id: wo.pmScheduleId }, select: { createdBy: true } });
+  return pm?.createdBy ?? null;
+}

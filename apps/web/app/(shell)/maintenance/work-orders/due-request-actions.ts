@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@smartboss/database";
 import { canViewAll, requireOrg } from "@smartboss/auth";
-import { getWorkOrder, updateWorkOrder, addWorkOrderComment } from "@/modules/maintenance/data/work-orders";
+import { getWorkOrder, updateWorkOrder, addWorkOrderComment, workOrderOwnerId } from "@/modules/maintenance/data/work-orders";
 import { workOrderAccess, canSeeWorkOrder } from "@/modules/maintenance/data/work-order-access";
 import { deleteActionNotifications, notifyActorName, notifyUser, notifyUsers, resolveActionNotifications, usersWithPermission } from "@/modules/maintenance/data/notify";
 import { createDueRequest, decideDueRequest, getDueRequest, listDueRequests, pendingDueRequest } from "@/modules/maintenance/data/work-order-due-requests";
@@ -55,7 +55,9 @@ export async function requestDueDateAction(workOrderId: string, newDate: string,
   const wo = await getWorkOrder(s.orgId, workOrderId);
   if (!wo || !canSeeWorkOrder(await workOrderAccess(s), wo)) return { error: "ไม่พบใบงาน" };
   if (wo.assignedTo !== s.userId) return { error: "ขอเลื่อนได้เฉพาะผู้รับผิดชอบใบงาน" };
-  if (canEditDueDate({ userId: s.userId, viewAll: canViewAll(s) }, wo)) return { error: "คุณแก้กำหนดส่งเองได้เลย ไม่ต้องขอเลื่อน" };
+  // คนเปิดใบ (ใบ PM อัตโนมัติ = คนสร้างแผน) — ใช้ทั้งตรวจสิทธิ์และหาคนอนุมัติ
+  const ownerId = await workOrderOwnerId(s.orgId, wo);
+  if (canEditDueDate({ userId: s.userId, viewAll: canViewAll(s) }, { createdBy: ownerId })) return { error: "คุณแก้กำหนดส่งเองได้เลย ไม่ต้องขอเลื่อน" };
   if (wo.status === "completed" || wo.status === "cancelled") return { error: "ใบงานนี้ปิดแล้ว" };
   if (!wo.dueDate) return { error: "ใบงานนี้ไม่มีกำหนดส่ง" };
   const d = endOfDayBkk(newDate);
@@ -74,9 +76,10 @@ export async function requestDueDateAction(workOrderId: string, newDate: string,
   // แจ้งคนเปิดใบงาน (อนุมัติเองได้) — CEO/ผู้ดูทั้งบริษัทได้แจ้งเตือนเฉพาะเมื่อไม่มีคนอื่นอนุมัติ: คนเปิดใบคือคนขอเอง
   // ใบไม่มีคนเปิด หรือคนเปิดปิดบัญชีไปแล้ว (เดิมแจ้ง CEO ทุกใบ ผู้ใช้ขอตัด 21/10/2569 "ไม่เกี่ยวกับ CEO ทำไมยังแจ้ง")
   // CEO ยังเข้าไปอนุมัติเองได้เหมือนเดิม (canDecideDueRequest ไม่เปลี่ยน)
+  // ใบ PM อัตโนมัติ: คนเปิด = คนสร้างแผน PM (workOrderOwnerId) ไม่ใช่ CEO ทุกใบ
   const opener =
-    wo.createdBy && wo.createdBy !== s.userId
-      ? await prisma.user.findFirst({ where: { orgId: s.orgId, id: wo.createdBy, isActive: true }, select: { id: true } })
+    ownerId && ownerId !== s.userId
+      ? await prisma.user.findFirst({ where: { orgId: s.orgId, id: ownerId, isActive: true }, select: { id: true } })
       : null;
   const approvers = new Set<string>(opener ? [opener.id] : await usersWithPermission(s.orgId, "core.data.view_all"));
   approvers.delete(s.userId);
@@ -114,7 +117,7 @@ export async function decideDueRequestAction(requestId: string, approve: boolean
   if (!r || r.status !== "pending") return { error: "คำขอนี้ถูกตัดสินไปแล้ว" };
   const wo = await getWorkOrder(s.orgId, r.workOrderId);
   if (!wo || !canSeeWorkOrder(await workOrderAccess(s), wo)) return { error: "ไม่พบใบงาน" };
-  if (!canDecideDueRequest({ userId: s.userId, viewAll: canViewAll(s) }, wo, r.requestedBy)) return { error: "ไม่มีสิทธิ์อนุมัติคำขอนี้" };
+  if (!canDecideDueRequest({ userId: s.userId, viewAll: canViewAll(s) }, { createdBy: await workOrderOwnerId(s.orgId, wo) }, r.requestedBy)) return { error: "ไม่มีสิทธิ์อนุมัติคำขอนี้" };
   const memo = note.trim() || null;
   // ไม่อนุมัติต้องบอกเหตุผล (ผู้ใช้ 2/11/2569) — อนุมัติไม่บังคับ
   if (!approve && !memo) return { error: "ใส่เหตุผลที่ไม่อนุมัติ" };
@@ -153,7 +156,7 @@ export async function editDueDateAction(workOrderId: string, newDate: string, re
   const s = await requireOrg();
   const wo = await getWorkOrder(s.orgId, workOrderId);
   if (!wo || !canSeeWorkOrder(await workOrderAccess(s), wo)) return { error: "ไม่พบใบงาน" };
-  if (!canEditDueDate({ userId: s.userId, viewAll: canViewAll(s) }, wo)) return { error: "แก้กำหนดส่งได้เฉพาะ CEO หรือคนเปิดใบงาน" };
+  if (!canEditDueDate({ userId: s.userId, viewAll: canViewAll(s) }, { createdBy: await workOrderOwnerId(s.orgId, wo) })) return { error: "แก้กำหนดส่งได้เฉพาะ CEO หรือคนเปิดใบงาน" };
   if (wo.status === "completed" || wo.status === "cancelled") return { error: "ใบงานนี้ปิดแล้ว" };
   const d = endOfDayBkk(newDate);
   if (!d) return { error: "วันที่ไม่ถูกต้อง" };

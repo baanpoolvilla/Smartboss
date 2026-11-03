@@ -28,6 +28,7 @@ import {
   getWorkOrder,
   listWorkOrderComments,
   commentImages,
+  workOrderOwnerId,
 } from "@/modules/maintenance/data/work-orders";
 import { WorkOrderComment } from "@/modules/maintenance/components/work-order-comment";
 import { listProperties } from "@/modules/maintenance/data/properties";
@@ -210,6 +211,8 @@ export default async function WorkOrderDetailPage({
     .reverse()
     .find((c) => c.kind === "log" && /^(แก้กำหนดส่ง|อนุมัติเลื่อนกำหนดส่ง) /.test(c.content ?? ""));
   const viewAll = canViewAll(session);
+  // คนเปิดใบ — ใบ PM อัตโนมัติ = คนสร้างแผน PM (อนุมัติ/แก้กำหนดส่งได้แทน CEO)
+  const ownerId = await workOrderOwnerId(orgId, wo);
   const dueRequestViews: DueRequestView[] = dueRequests.map((r) => ({
     id: r.id,
     requestedBy: r.requestedBy,
@@ -221,7 +224,7 @@ export default async function WorkOrderDetailPage({
     decidedByName: r.decidedBy ? (names[r.decidedBy] ?? "-") : null,
     decisionNote: r.decisionNote,
     createdAt: r.createdAt.toISOString(),
-    canDecide: r.status === "pending" && isOpenOrRunning && canDecideDueRequest({ userId: session.userId, viewAll }, wo, r.requestedBy),
+    canDecide: r.status === "pending" && isOpenOrRunning && canDecideDueRequest({ userId: session.userId, viewAll }, { createdBy: ownerId }, r.requestedBy),
   }));
   // ช่างนอกส่งข้อความเปล่าได้ (ไม่มีรูป) แถวแบบนั้น storagePath เป็นค่าว่าง
   const externalUrls = externalPhotos
@@ -433,8 +436,8 @@ export default async function WorkOrderDetailPage({
                   dueDate={ymdBkk(wo.dueDate)}
                   // คนที่แก้กำหนดส่งเองได้ (คนเปิดใบ / CEO) ไม่ต้องขอเลื่อน — กดแก้ได้เลย (ผู้ใช้ 2/11/2569
                   // "เราเป็นคนสั่ง") · เดิมมอบงานให้ตัวเองแล้วกดขอเลื่อน คำขอวิ่งไปหา CEO โดยไม่จำเป็น
-                  canRequest={isOpenOrRunning && wo.assignedTo === session.userId && !canEditDueDate({ userId: session.userId, viewAll }, wo)}
-                  canEdit={isOpenOrRunning && canEditDueDate({ userId: session.userId, viewAll }, wo)}
+                  canRequest={isOpenOrRunning && wo.assignedTo === session.userId && !canEditDueDate({ userId: session.userId, viewAll }, { createdBy: ownerId })}
+                  canEdit={isOpenOrRunning && canEditDueDate({ userId: session.userId, viewAll }, { createdBy: ownerId })}
                   myId={session.userId}
                   requests={dueRequestViews}
                 />
