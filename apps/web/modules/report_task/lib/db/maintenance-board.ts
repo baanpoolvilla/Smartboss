@@ -5,7 +5,7 @@ import { hasPermission, isSuperAdmin, type OrgSession } from "@smartboss/auth";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { workOrderAccess, workOrderVisibilityWhere, type WorkOrderAccess } from "@/modules/maintenance/data/work-order-access";
 import type { MaintenanceBoardItem, MaintenanceColumn, WoType, WorkOrderReaction } from "@/modules/report_task/lib/maintenance-board";
-import { loadExpenseTracking, recordedExpenseWorkOrders } from "@/modules/maintenance/data/expense-tracking";
+import { loadExpenseTracking, pendingExpenseWorkOrders, recordedExpenseWorkOrders } from "@/modules/maintenance/data/expense-tracking";
 import { expenseDueAt } from "@/modules/maintenance/lib/expense-deadline";
 import { listWorkOrderReactions } from "./work-order-reactions";
 import type { TaskPriority } from "@/modules/report_task/types";
@@ -117,6 +117,7 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
     });
     const pendingRows = specialIds.length > 0 ? await prisma.workOrder.findMany({ where: { orgId, id: { in: specialIds } }, select }) : [];
     const tracking = pendingIds.length > 0 ? await loadExpenseTracking(orgId) : null;
+    const clockFrom = new Map(tracking ? (await pendingExpenseWorkOrders(orgId)).map((o) => [o.id, o.clockFrom] as const) : []);
     for (const w of [...pendingRows, ...rows]) {
       const expensePending = pendingSet.has(w.id);
       const expenseRecordedTotal = recordedMap.get(w.id);
@@ -129,7 +130,7 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
         ...((w._count?.purchaseOrders ?? 0) > 0 ? (["po"] as const) : []),
       ];
       const column: MaintenanceColumn = done ? "done" : w.status === "in_progress" ? "in_progress" : "todo";
-      const expenseDue = expensePending && tracking ? expenseDueAt(w, tracking) : null;
+      const expenseDue = expensePending && tracking ? expenseDueAt({ ...w, clockFrom: clockFrom.get(w.id) }, tracking) : null;
       items.push({
         kind: "wo",
         id: w.id,

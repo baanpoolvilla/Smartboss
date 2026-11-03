@@ -5,6 +5,7 @@
  *   ใบค้าง = status completed · requiresExpense · ไม่ใช่ใบส่วนตัว · ยังไม่มีแถวค่าใช้จ่ายผูกอยู่
  *   กำหนด = วันปิดงาน + expense_track_days (ค่าเริ่มต้น 14) สิ้นวันเวลาไทย · CEO อนุมัติเลื่อน = work_orders.expense_due_date
  *   ใบที่ปิดก่อนวันเริ่มใช้ (ของค้างเก่า) นับ 14 วันจากวันเริ่มใช้ และไม่หักคะแนน — ถ้าหัก ของค้างทั้งกองจะหักพร้อมกันวันเดียว
+ *   มี PR/PO หรือใบเบิกยังไม่จบ = ยังไม่เป็นงานและไม่นับเวลา เริ่มนับเมื่อต้นทางจบ (clockFrom) — ดู data/expense-tracking.ts expenseLinks
  */
 export interface ExpenseTracking {
   from: Date | null;
@@ -28,9 +29,10 @@ export function isExpenseBacklog(wo: { completedAt: Date | null }, t: ExpenseTra
 }
 
 /** วันครบกำหนดบันทึก — สิ้นวันเวลาไทย */
-export function expenseDueAt(wo: { completedAt: Date | null; expenseDueDate?: Date | null }, t: ExpenseTracking): Date {
+export function expenseDueAt(wo: { completedAt: Date | null; expenseDueDate?: Date | null; clockFrom?: Date | null }, t: ExpenseTracking): Date {
   if (wo.expenseDueDate) return wo.expenseDueDate;
-  const start = isExpenseBacklog(wo, t) || !wo.completedAt ? t.from! : wo.completedAt;
+  const base = isExpenseBacklog(wo, t) || !wo.completedAt ? t.from! : wo.completedAt;
+  const start = wo.clockFrom && wo.clockFrom > base ? wo.clockFrom : base;
   const day = new Date(Date.parse(`${ymdBkk(start)}T00:00:00Z`) + t.days * DAY).toISOString().slice(0, 10);
   return new Date(`${day}T23:59:59.999+07:00`);
 }

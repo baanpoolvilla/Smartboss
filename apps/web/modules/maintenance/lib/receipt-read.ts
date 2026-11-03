@@ -24,6 +24,10 @@ export interface ReceiptData {
   payer: string | null;
   paymentMethod: PaymentMethod | null;
   summary: string | null;
+  /** AI เห็นว่ารูปนี้เป็นใบเสร็จ/สลิปไหม */
+  isReceipt: boolean;
+  /** สิ่งผิดปกติที่ AI เห็น เช่น ตัวเลขถูกเขียนทับ — ช่วยเตือน คนตัดสินจากรูปเอง */
+  notes: string | null;
 }
 
 const text = (v: unknown, max = 200): string | null => {
@@ -57,7 +61,36 @@ export function normalizeReceipt(raw: unknown): ReceiptData {
     payer: text(r.payer),
     paymentMethod: PAYMENT_METHODS.some((p) => p.value === method) ? (method as PaymentMethod) : null,
     summary: text(r.summary, 300),
+    isReceipt: r.is_receipt !== false,
+    notes: text(r.notes, 200),
   };
+}
+
+/** ค่าที่ส่งกลับมาจากฟอร์ม (รูปแบบ ReceiptData) — ตรวจซ้ำก่อนเก็บ คีย์คนละแบบกับคำตอบของ AI */
+export function receiptDataFromForm(json: string): ReceiptData {
+  const r = JSON.parse(json) as Partial<ReceiptData>;
+  return normalizeReceipt({
+    amount: r.amount,
+    paid_at: r.paidAt,
+    receipt_no: r.receiptNo,
+    payee: r.payee,
+    payer: r.payer,
+    payment_method: r.paymentMethod,
+    summary: r.summary,
+    is_receipt: r.isReceipt,
+    notes: r.notes,
+  });
+}
+
+/** วันบนใบเสร็จดูผิดปกติ — AI อ่านปีพลาด แล้วยอดจะไปลงผิดเดือน ต้องเตือนก่อนบันทึก */
+export function receiptDateWarning(paidAt: string | null, now: Date = new Date()): string | null {
+  if (!paidAt) return null;
+  const t = Date.parse(`${paidAt}:00+07:00`);
+  if (Number.isNaN(t)) return null;
+  const days = (t - now.getTime()) / 86_400_000;
+  if (days > 1) return "วันที่บนใบเสร็จอยู่ในอนาคต ตรวจว่าอ่านถูกไหม";
+  if (days < -60) return "วันที่บนใบเสร็จเก่ากว่า 60 วัน ยอดจะลงเดือนนั้น ตรวจว่าอ่านถูกไหม";
+  return null;
 }
 
 /** อ่านอะไรได้บ้าง — ไม่ได้เลยให้บอกคนว่าต้องกรอกเอง */

@@ -21,6 +21,7 @@ import { Card } from "@smartboss/ui/components/card";
 import { Modal } from "./dialog";
 import { CommentTextarea } from "./comment-textarea";
 import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
+import { QuickExpenseFields } from "./quick-expense-fields";
 
 type Action = (formData: FormData) => void | Promise<void>;
 
@@ -59,11 +60,14 @@ export function CompleteJobButton({
   action,
   externalPhotoCount,
   requiresExpense = true,
+  quickExpense = false,
 }: {
   id: string;
   action: Action;
   externalPhotoCount: number;
   requiresExpense?: boolean;
+  /** เปิดใช้กำหนดบันทึกแล้ว: ช่างกรอกสั้น ๆ ยังไม่ลงยอด ผู้บันทึกตรวจแล้วลงเอง (quick-expense-fields.tsx) */
+  quickExpense?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<{ name: string; price: string }[]>([
@@ -82,7 +86,9 @@ export function CompleteJobButton({
     }
   };
 
-  const hasValidItem = !requiresExpense || items.some((i) => i.name.trim() !== "");
+  const [quickOk, setQuickOk] = useState(false);
+  const quick = requiresExpense && quickExpense;
+  const hasValidItem = quick ? quickOk : !requiresExpense || items.some((i) => i.name.trim() !== "");
   const photoOk = photoCount > 0 || externalPhotoCount > 0;
 
   return (
@@ -125,13 +131,16 @@ export function CompleteJobButton({
           <form id="complete-wo-form" action={submit} className="flex flex-col gap-3">
             <input type="hidden" name="id" value={id} />
             <p className="text-sm text-(--ink-soft)">
-              {!requiresExpense
+              {quick
+                ? "แนบใบเสร็จหรือกรอกค่าใช้จ่ายสั้น ๆ พร้อมรูปหลังแก้ไข แล้วกดยืนยัน"
+                : !requiresExpense
                 ? "งานนี้ตั้งไว้ว่าไม่มีค่าใช้จ่าย — แนบรูปถ่ายแล้วกดยืนยันได้เลย"
                 : externalPhotoCount > 0
                   ? "มีรูปจากช่างภายนอกแล้ว กรุณากรอกประมาณการค่าใช้จ่ายก่อนกดยืนยัน"
                   : "กรุณากรอกประมาณการค่าใช้จ่ายและแนบรูปถ่ายก่อนกดยืนยัน"}
             </p>
-            {requiresExpense && (
+            {quick && <QuickExpenseFields workOrderId={id} onValidChange={setQuickOk} />}
+            {requiresExpense && !quick && (
               <div>
                 <p className="text-sm font-bold text-(--ink)">ค่าใช้จ่าย *</p>
                 {/* ราคาที่ใส่ตรงนี้ลงเป็นค่าใช้จ่ายของใบงานทันที (recordEstimateAsExpense) — บอกให้รู้ว่าไม่ต้องไปลงซ้ำ */}
@@ -140,7 +149,7 @@ export function CompleteJobButton({
                 </p>
               </div>
             )}
-            {requiresExpense && items.map((item, i) => (
+            {requiresExpense && !quick && items.map((item, i) => (
               <div key={i} className="flex items-start gap-2">
                 <input
                   name="itemName"
@@ -183,7 +192,7 @@ export function CompleteJobButton({
                 )}
               </div>
             ))}
-            {requiresExpense && (
+            {requiresExpense && !quick && (
               <button
                 type="button"
                 onClick={() => setItems([...items, { name: "", price: "" }])}

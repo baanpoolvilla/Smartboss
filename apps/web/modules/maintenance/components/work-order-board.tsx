@@ -45,6 +45,8 @@ export interface BoardOrder {
   expenseDeadlineIso?: string | null;
   /** ยอดค่าใช้จ่ายที่บันทึกแล้ว (เปิดใช้กำหนดบันทึกแล้ว + ใบปิดแล้ว) */
   expenseRecordedTotal?: number | null;
+  /** ยังมี PR/PO หรือใบเบิกไม่จบ — ต้นทางจะลงยอดให้เอง ยังไม่เป็นงานของผู้บันทึก */
+  expenseHeld?: boolean;
   commentCount?: number;
   photoCount?: number;
   pendingDue?: number;
@@ -112,7 +114,7 @@ function OrderCard({
       autoCreated={wo.autoCreated}
       status={wo.status}
       doneLabel={
-        wo.status === "cancelled" ? "ยกเลิก" : !wo.requiresExpense ? "เสร็จแล้ว · ไม่มีค่าใช้จ่าย" : settled ? "เสร็จแล้ว" : "ยังไม่บันทึกค่าใช้จ่าย"
+        wo.status === "cancelled" ? "ยกเลิก" : !wo.requiresExpense ? "เสร็จแล้ว · ไม่มีค่าใช้จ่าย" : settled ? "เสร็จแล้ว" : wo.expenseHeld ? "รอ PR/PO หรือใบเบิกจบ" : "ยังไม่บันทึกค่าใช้จ่าย"
       }
       doneTone={wo.status === "cancelled" ? "gray" : settled ? "green" : "orange"}
       dueDate={wo.dueDateIso ?? null}

@@ -77,7 +77,9 @@ import { WorkOrderDueRequest, type DueRequestView } from "@/modules/maintenance/
 import { buildScoreQueue } from "@/lib/score-request-views";
 import { ScoreRequestCard } from "@/app/(shell)/hr/penalty-requests/score-requests-queue";
 import { listDueRequests } from "@/modules/maintenance/data/work-order-due-requests";
-import { listExpenseDueRequests, loadExpenseTracking } from "@/modules/maintenance/data/expense-tracking";
+import { expenseHasSource, expenseLinks, listExpenseDueRequests, loadExpenseTracking, requestsOfExpenses } from "@/modules/maintenance/data/expense-tracking";
+import { groupExpenseBatches, realExpenseTotal } from "@/modules/maintenance/lib/expense-batches";
+import type { ReceiptData } from "@/modules/maintenance/lib/receipt-read";
 import { expenseDaysLeft, expenseDueAt, isExpenseBacklog, trackingActive } from "@/modules/maintenance/lib/expense-deadline";
 import { paymentMethodLabel } from "@/modules/maintenance/lib/receipt-read";
 import { ExpenseDeadlineBox, type ExpenseRequestView } from "@/modules/maintenance/components/expense-deadline-box";
@@ -232,8 +234,13 @@ export default async function WorkOrderDetailPage({
   }));
   // รอบันทึกค่าใช้จ่าย + เปิดใช้กำหนดบันทึกแล้ว — กล่องบอกเหลือกี่วัน ปุ่มบันทึก ขอเลื่อน/อนุมัติ
   const tracking = await loadExpenseTracking(orgId);
-  const expenseWaiting = trackingActive(tracking) && wo.status === "completed" && wo.requiresExpense && !wo.isPrivate && !hasExpense;
-  const expenseDue = expenseWaiting ? expenseDueAt(wo, tracking) : null;
+  const expenseOn = trackingActive(tracking);
+  const noExpenseYet = expenseOn && wo.status === "completed" && wo.requiresExpense && !wo.isPrivate && !hasExpense;
+  const expenseLink = noExpenseYet ? (await expenseLinks(orgId, [id])).get(id) : undefined;
+  // ยังมี PR/PO หรือใบเบิกไม่จบ: ต้นทางจะลงยอดให้เอง ถ้าลงที่นี่ด้วยยอดจะเบิ้ล
+  const expenseHeld = !!expenseLink?.hold;
+  const expenseWaiting = noExpenseYet && !expenseHeld;
+  const expenseDue = expenseWaiting ? expenseDueAt({ ...wo, clockFrom: expenseLink?.clockFrom }, tracking) : null;
   const expenseRequests = expenseWaiting ? await listExpenseDueRequests(orgId, id) : [];
   const expenseNames = expenseRequests.length ? await userNameMap(orgId, expenseRequests.flatMap((r) => [r.requestedBy, r.decidedBy])) : {};
   const expenseRequestViews: ExpenseRequestView[] = expenseRequests.map((r) => ({
@@ -247,7 +254,9 @@ export default async function WorkOrderDetailPage({
     decisionNote: r.decisionNote,
   }));
   const canSeeExpense = hasPermission(session, MAINT_PERMS.expenseView) || canExpense;
-  const expenseTotal = expenses.reduce((n, e) => n + Number(e.amount), 0);
+  const expenseTotal = realExpenseTotal(expenses);
+  const expenseBatches = groupExpenseBatches(expenses);
+  const expenseRequestLinks = hasExpense && canSeeExpense ? await requestsOfExpenses(orgId, expenses.map((e) => e.id)) : new Map<string, { id: string; code: string }>();
   const expenseRecorderNames = hasExpense && canSeeExpense ? await userNameMap(orgId, expenses.map((e) => e.createdBy)) : {};
   const recordExpenseHref = `/maintenance/expenses/new?workOrderId=${id}${pmForExpense ? `&pmScheduleId=${pmForExpense}` : ""}${fromTasks ? "&from=tasks" : ""}`;
   // ช่างนอกส่งข้อความเปล่าได้ (ไม่มีรูป) แถวแบบนั้น storagePath เป็นค่าว่าง
@@ -277,6 +286,11 @@ export default async function WorkOrderDetailPage({
       )}
 
       {/* แบบหน้ารายละเอียดงาน: ซ้าย = ข้อมูลใบงาน · ขวา = ความคิดเห็น (จอเล็กเรียงต่อกัน ความคิดเห็นอยู่ล่าง) */}
+      {expenseHeld && (
+        <div className="mb-4 rounded-xl border border-(--line) bg-(--bg-soft) p-4 text-sm text-(--ink)" data-testid="expense-held">
+          <b>รอ PR/PO หรือใบเบิกจบ</b> · ระบบจะลงค่าใช้จ่ายให้เองเมื่อต้นทางจบ ยังไม่ต้องบันทึกที่นี่ และยังไม่นับวัน
+        </div>
+      )}
       {expenseDue && (
         <ExpenseDeadlineBox
           workOrderId={wo.id}
@@ -538,13 +552,20 @@ export default async function WorkOrderDetailPage({
             )}
           </div>
           <div className="flex flex-col divide-y divide-(--line)">
-            {expenses.map((e) => (
+            {expenseBatches.map(({ first: e, houses }) => {
+              const req = expenseRequestLinks.get(e.id);
+              const read = e.receiptAi as ReceiptData | null;
+              return (
               <div key={e.id} className="flex flex-wrap items-start justify-between gap-2 py-2 text-sm">
                 <div className="min-w-0">
                   <p className="font-semibold text-(--ink)">
                     {e.isNoExpense ? "ไม่มีค่าใช้จ่าย" : `฿${Number(e.amount).toLocaleString()}`}
+                    {houses > 1 ? <span className="font-normal text-(--ink-soft)"> × ลงให้ {houses} บ้าน</span> : null}
                     {e.description ? <span className="font-normal"> · {e.description}</span> : null}
                   </p>
+                  {read?.amount != null && read.amount !== Number(e.amount) && (
+                    <p className="text-xs text-amber-700">ระบบอ่านใบเสร็จได้ ฿{read.amount.toLocaleString()} · คนแก้เป็น ฿{Number(e.amount).toLocaleString()}</p>
+                  )}
                   <p className="text-xs text-(--ink-soft)">
                     {[
                       e.payee ? `จ่ายให้ ${e.payee}` : null,
@@ -567,14 +588,28 @@ export default async function WorkOrderDetailPage({
                       ดูใบเสร็จ
                     </a>
                   )}
-                  {canExpense && (
-                    <Link href={`/maintenance/expenses/${e.id}/edit`} className="font-medium text-[#0F766E] hover:underline">
-                      แก้ไข
+                  {/* มาจาก PR/PO หรือใบเบิก แก้ที่ต้นทาง — แก้ที่นี่ยอดจะไม่ตรงต้นทาง */}
+                  {e.purchaseOrderId ? (
+                    <Link href={`/maintenance/purchase-orders/${e.purchaseOrderId}`} className="text-[#0F766E] hover:underline">
+                      มาจาก PR/PO
                     </Link>
+                  ) : req ? (
+                    <Link href={`/requests/${req.id}`} className="text-[#0F766E] hover:underline">
+                      มาจากใบเบิก {req.code}
+                    </Link>
+                  ) : expenseHasSource(e) ? (
+                    <span className="text-(--ink-soft)">มาจากใบเบิก</span>
+                  ) : (
+                    canExpense && (
+                      <Link href={`/maintenance/expenses/${e.id}/edit`} className="font-medium text-[#0F766E] hover:underline">
+                        แก้ไข
+                      </Link>
+                    )
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </Card>
       )}
@@ -827,7 +862,7 @@ export default async function WorkOrderDetailPage({
       {/* ─── ปุ่มดำเนินการ ─── */}
       {/* จอเล็ก: ข้อมูล → ความคิดเห็น → ปุ่ม (ลำดับเดิม) · จอใหญ่: ปุ่มอยู่ใต้ข้อมูลฝั่งซ้าย */}
       <div className="flex min-w-0 flex-col gap-2 lg:col-start-1">
-        {wo.status === "completed" && !hasExpense && canExpense && !expenseDue && (
+        {wo.status === "completed" && !hasExpense && canExpense && !expenseDue && !expenseHeld && (
           <Link
             href={`/maintenance/expenses/new?workOrderId=${id}${
               pmForExpense ? `&pmScheduleId=${pmForExpense}` : ""
@@ -856,6 +891,7 @@ export default async function WorkOrderDetailPage({
                 action={completeWorkOrderAction}
                 externalPhotoCount={externalUrls.length}
                 requiresExpense={wo.requiresExpense}
+                quickExpense={expenseOn}
               />
             )}
           </>

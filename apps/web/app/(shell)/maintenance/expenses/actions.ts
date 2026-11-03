@@ -1,8 +1,11 @@
 "use server";
 
+import { createHash } from "node:crypto";
 import { z } from "zod";
+import type { Prisma } from "@smartboss/database";
+import { receiptDataFromForm } from "@/modules/maintenance/lib/receipt-read";
 import { revalidatePath } from "next/cache";
-import { loadExpenseTracking } from "@/modules/maintenance/data/expense-tracking";
+import { expenseHasSource, loadExpenseTracking } from "@/modules/maintenance/data/expense-tracking";
 import { trackingActive } from "@/modules/maintenance/lib/expense-deadline";
 import { redirect } from "next/navigation";
 import { requireOrg, hasPermission, isSuperAdmin } from "@smartboss/auth";
@@ -82,6 +85,8 @@ async function saveExpense(
   let propertyIds: (string | null)[] = [null];
   let workOrderId: string | null = null;
   let pmScheduleId: string | null = null;
+  /** ใบงานที่ผูก — เอาวันปิดงานกับสิ่งที่ช่างแนบมาใช้ */
+  let linkedWo: Awaited<ReturnType<typeof getWorkOrder>> = null;
   /** ใบงาน/PM ที่ผูก — ไว้เขียนบันทึกการใช้งานให้คนอ่านรู้เรื่อง */
   let target = "";
 
@@ -89,6 +94,7 @@ async function saveExpense(
     if (!d.workOrderId) return { error: "กรุณาเลือกใบงาน" };
     const wo = await getWorkOrder(s.orgId, d.workOrderId);
     if (!wo) return { error: "ไม่พบใบงานนี้ — อาจถูกลบไปแล้ว" };
+    linkedWo = wo;
     workOrderId = wo.id;
     propertyIds = [wo.propertyId, ...wo.additionalPropertyIds];
     target = `${wo.code ?? ""} "${wo.title}"`;
@@ -107,6 +113,7 @@ async function saveExpense(
     if (d.workOrderId) {
       const wo = await getWorkOrder(s.orgId, d.workOrderId);
       if (!wo) return { error: "ไม่พบใบงานนี้ — อาจถูกลบไปแล้ว" };
+      linkedWo = wo;
       workOrderId = wo.id;
       propertyIds = [wo.propertyId, ...wo.additionalPropertyIds];
     } else {
@@ -127,14 +134,18 @@ async function saveExpense(
   // แนบรูปใบเสร็จ (ข้ามเมื่อบันทึกว่า "ไม่มีค่าใช้จ่าย" เหมือนของเดิม)
   const file = formData.get("receipt");
   const receipt = receiptFields(formData);
+  const newFile = !isNoExpense && !receipt.noReceipt && file instanceof File && file.size > 0;
+  // รูปที่ช่างแนบตอนปิดงาน — อ่านจากใบงาน ไม่เชื่อ URL จากฟอร์ม
+  const draft = (linkedWo?.expenseDraft ?? null) as { receiptUrl?: string | null; receiptSha256?: string | null; ai?: unknown } | null;
+  const draftUrl = !isNoExpense && !receipt.noReceipt && !newFile ? (draft?.receiptUrl ?? null) : null;
   // เปิดใช้กำหนดบันทึกแล้ว ต้องแนบใบเสร็จ หรือติ๊กว่าไม่มี (ผู้ใช้ 3/11/2569)
-  if (!isNoExpense && !receipt.noReceipt && !(file instanceof File && file.size > 0) && trackingActive(await loadExpenseTracking(s.orgId))) {
+  const tracked = trackingActive(await loadExpenseTracking(s.orgId));
+  if (!isNoExpense && !receipt.noReceipt && !newFile && !draftUrl && tracked) {
     return { error: "แนบรูปใบเสร็จ หรือติ๊ก \"ไม่มีใบเสร็จ\"" };
   }
-  const receiptUrl =
-    !isNoExpense && file instanceof File && file.size > 0
-      ? await putFile(`${s.orgId}/maintenance/receipts`, file)
-      : null;
+  const receiptUrl = newFile ? await putFile(`${s.orgId}/maintenance/receipts`, file) : draftUrl;
+  const receiptSha256 = newFile ? createHash("sha256").update(Buffer.from(await file.arrayBuffer())).digest("hex") : draftUrl ? (draft?.receiptSha256 ?? null) : null;
+  const receiptAi = isNoExpense ? null : (parseAi(formData.get("receiptAi")) ?? (draftUrl ? ((draft?.ai ?? null) as Prisma.InputJsonValue | null) : null));
 
   const saved = await createExpensesForProperties(s.orgId, propertyIds, {
     workOrderId,
@@ -145,13 +156,17 @@ async function saveExpense(
       : (d.description ?? null),
     receiptUrl,
     ...(isNoExpense ? {} : receipt),
+    receiptSha256,
+    receiptAi,
+    // เปิดใช้แล้ว นับเดือนตามวันบนใบเสร็จ ไม่มีใช้วันปิดงาน (ผู้ใช้ 3/11/2569) · ปิดอยู่ = วันที่บันทึกเหมือนเดิม
+    ...(tracked ? { expenseDate: monthDate(receipt.paidAt, linkedWo?.completedAt ?? null) } : {}),
     costType: d.costType,
     paidBy: d.paidBy,
     isNoExpense,
     createdBy: s.userId,
   });
   // คำขอซ้ำ — รูปใบเสร็จที่เพิ่งอัปโหลดมากับคำขอนี้ไม่มีรายการไหนใช้
-  if (!saved && receiptUrl) await deleteFiles([receiptUrl]).catch(() => 0);
+  if (!saved && newFile && receiptUrl) await deleteFiles([receiptUrl]).catch(() => 0);
   if (saved) {
     await logActivity(s.orgId, {
       userId: s.userId,
@@ -193,12 +208,29 @@ function receiptFields(formData: FormData) {
   };
 }
 
+/** วันที่ลงบัญชี (คอลัมน์วันล้วน เวลาไทย): วันบนใบเสร็จ → วันปิดงาน → วันนี้ */
+function monthDate(paidAt: Date | null, completedAt: Date | null): Date {
+  const d = paidAt ?? completedAt ?? new Date();
+  return new Date(`${new Date(d.getTime() + 7 * 3600e3).toISOString().slice(0, 10)}T00:00:00.000Z`);
+}
+
+/** ค่าที่ AI อ่านจากฟอร์ม — เก็บไว้เทียบกับค่าที่คนแก้เท่านั้น ไม่ได้ใช้คำนวณ */
+function parseAi(v: FormDataEntryValue | null): Prisma.InputJsonValue | null {
+  if (typeof v !== "string" || !v || v.length > 2000) return null;
+  try {
+    return receiptDataFromForm(v) as unknown as Prisma.InputJsonValue;
+  } catch {
+    return null;
+  }
+}
+
 /** แก้รายการที่บันทึกแล้ว — ไม่เลือกรูปใหม่ = ใช้รูปเดิม · ติ๊กไม่มีใบเสร็จ = เอารูปออก */
 export async function updateExpenseAction(_prev: ExpenseFormState, formData: FormData): Promise<ExpenseFormState> {
   const s = await requireOrg();
   if (!hasPermission(s, MAINT_PERMS.expenseManage)) return { error: "ไม่มีสิทธิ์แก้ค่าใช้จ่าย" };
   const before = await getExpense(s.orgId, String(formData.get("expenseId") ?? ""));
   if (!before) return { error: "ไม่พบรายการนี้ — อาจถูกลบไปแล้ว" };
+  if (expenseHasSource(before)) return { error: "รายการนี้มาจาก PR/PO หรือใบเบิก — แก้ที่ต้นทาง ไม่งั้นยอดจะไม่ตรงกัน" };
   const rawAmount = String(formData.get("amount") ?? "");
   const amount = parseAmount(rawAmount);
   if (!Number.isFinite(amount) || amount <= 0) return { error: "จำนวนเงินต้องเป็นตัวเลขมากกว่า 0" };
@@ -210,12 +242,17 @@ export async function updateExpenseAction(_prev: ExpenseFormState, formData: For
     return { error: "แนบรูปใบเสร็จ หรือติ๊ก \"ไม่มีใบเสร็จ\"" };
   }
   const receiptUrl = receipt.noReceipt ? null : newFile ? await putFile(`${s.orgId}/maintenance/receipts`, file) : before.receiptUrl;
+  const tracked = trackingActive(await loadExpenseTracking(s.orgId));
   await updateExpenseBatch(s.orgId, before.id, {
     amount,
     description: String(formData.get("description") ?? "").trim().slice(0, 1000) || null,
     paidBy: paidBy === "owner" ? "owner" : paidBy === "company" ? "company" : before.paidBy,
     receiptUrl,
     ...receipt,
+    ...(newFile ? { receiptSha256: createHash("sha256").update(Buffer.from(await file.arrayBuffer())).digest("hex"), receiptAi: parseAi(formData.get("receiptAi")) ?? undefined } : {}),
+    ...(receipt.noReceipt ? { receiptSha256: null } : {}),
+    // แก้วันบนใบเสร็จ = ย้ายเดือนตาม · ไม่มีวันเดิมไว้
+    ...(tracked && receipt.paidAt ? { expenseDate: monthDate(receipt.paidAt, null) } : {}),
   });
   const wo = before.workOrderId ? await getWorkOrder(s.orgId, before.workOrderId) : null;
   const was = Number(before.amount);

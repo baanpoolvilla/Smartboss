@@ -24,6 +24,7 @@ import {
   type PerformanceSettings,
 } from "@/lib/performance";
 import { expenseDaysLabel, expenseDaysLeft, expenseDueAt, isExpenseBacklog, trackingActive, type ExpenseTracking } from "@/modules/maintenance/lib/expense-deadline";
+import { queryPendingExpenseOrders } from "@/modules/maintenance/data/expense-tracking";
 import {
   addDays,
   isBacklog,
@@ -450,7 +451,7 @@ export async function notifyExpenseDeadlines(): Promise<{ expenseDeadlineNotifie
   for (const row of rows) {
     const tracking: ExpenseTracking = { from: row.expenseTrackFrom, days: row.expenseTrackDays, recorderIds: row.expenseRecorderIds };
     if (!trackingActive(tracking) || tracking.recorderIds.length === 0) continue;
-    const orders = (await pendingExpenseOrdersForCron(row.orgId))
+    const orders = (await queryPendingExpenseOrders(row.orgId))
       .map((wo) => ({ wo, left: expenseDaysLeft(expenseDueAt(wo, tracking)) }))
       .sort((a, b) => a.left - b.left);
     const late = orders.filter((o) => o.left < 0).length;
@@ -495,12 +496,23 @@ export async function notifyMissingExpenses(): Promise<{ reminded: number }> {
     })
   );
 
+  // บริษัทที่เปิดกำหนดบันทึกแล้ว งานนี้เป็นของผู้บันทึก (notifyExpenseDeadlines) — ไม่ทวงช่างซ้ำ
+  const tracked = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.performanceSetting.findMany({ where: { expenseTrackFrom: { not: null } }, select: { orgId: true, expenseTrackFrom: true, expenseTrackDays: true, expenseRecorderIds: true } }),
+  );
+  const skipOrgs = new Set(
+    tracked
+      .filter((t) => t.expenseRecorderIds.length > 0 && trackingActive({ from: t.expenseTrackFrom, days: t.expenseTrackDays, recorderIds: t.expenseRecorderIds }))
+      .map((t) => t.orgId),
+  );
+
   // รวมเป็นสรุปรายคนที่รับผิดชอบ (ผู้รับมอบหมาย ไม่งั้นตกเป็นของผู้สร้างงาน)
   // แทนการยิงหาผู้จัดการทั้งบริษัท — เพื่อไม่ให้คนที่ไม่เกี่ยวข้องกับใบงานนั้นเห็น
   // แจ้งเตือนของบ้าน/งานที่ตัวเองไม่ได้รับผิดชอบ ใบงานที่ไม่มีทั้งสองอย่างข้ามไป
   // เพราะไม่มีใครให้เตือน
   const byResponsible = new Map<string, { orgId: string; orders: typeof orders }>();
   for (const o of orders) {
+    if (skipOrgs.has(o.orgId)) continue;
     const responsible = o.assignedTo ?? o.createdBy;
     if (!responsible) continue;
     if (!byResponsible.has(responsible)) byResponsible.set(responsible, { orgId: o.orgId, orders: [] });
@@ -723,7 +735,7 @@ export async function dockOverdueMaintenance(): Promise<{
     const st = settingsByOrg.get(row.orgId);
     const tracking: ExpenseTracking = { from: row.expenseTrackFrom, days: row.expenseTrackDays, recorderIds: row.expenseRecorderIds };
     if (!st?.enabled || !trackingActive(tracking, now) || tracking.recorderIds.length === 0) continue;
-    const orders = await pendingExpenseOrdersForCron(row.orgId);
+    const orders = await queryPendingExpenseOrders(row.orgId);
     const active = await prisma.user.findMany({ where: { orgId: row.orgId, id: { in: tracking.recorderIds }, isActive: true }, select: { id: true } });
     for (const wo of orders) {
       if (isExpenseBacklog(wo, tracking)) continue;
@@ -821,16 +833,6 @@ async function notifyMaintenanceDocks(
 
 /** เตือนผู้บันทึกเมื่อเหลือไม่เกินกี่วัน */
 const EXPENSE_NEAR_DAYS = 3;
-
-/** ใบรอบันทึกของบริษัท — เกณฑ์เดียวกับ pendingExpenseWorkOrders (ตัวนั้นใช้ cache ต่อคำขอ ใช้ใน cron ไม่ได้) */
-async function pendingExpenseOrdersForCron(orgId: string) {
-  const rows = await prisma.expense.findMany({ where: { orgId, workOrderId: { not: null } }, select: { workOrderId: true }, distinct: ["workOrderId"] });
-  const withExpense = rows.map((r) => r.workOrderId).filter((x): x is string => !!x);
-  return prisma.workOrder.findMany({
-    where: { orgId, status: "completed", requiresExpense: true, isPrivate: false, ...(withExpense.length > 0 ? { id: { notIn: withExpense } } : {}) },
-    select: { id: true, code: true, title: true, completedAt: true, expenseDueDate: true },
-  });
-}
 
 /** ใบงานที่สร้างห่างกันไม่เกินนี้ โดยคนเดียวกัน บ้านเดียวกัน หัวข้อเดียวกัน = กดบันทึกซ้ำ */
 const TWIN_WINDOW_MS = 2 * 60_000;

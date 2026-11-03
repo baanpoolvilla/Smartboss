@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getSession } from "@smartboss/auth";
 import { canServeCompanyFileKey } from "@/modules/company-files/lib/serve-access";
 import { canServeRequestFileKey } from "@/modules/requests/lib/serve-access";
+import { hasPermission } from "@smartboss/auth";
+import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import {
   getSignedFileUrl,
   readStoredFile,
@@ -74,6 +76,13 @@ export async function GET(
   if (ownedByOrg && session.orgId && joined.startsWith(`${session.orgId}/requests/`)) {
     const allowed = await canServeRequestFileKey(session.orgId, session, joined);
     if (!allowed) return new NextResponse("Forbidden", { status: 403 });
+  }
+
+  // ใบเสร็จค่าใช้จ่ายแจ้งซ่อม — มีชื่อคนและเลขบัญชี เปิดได้เฉพาะคนดูค่าใช้จ่ายได้ (ผู้ใช้ 3/11/2569)
+  if (ownedByOrg && session.orgId && joined.startsWith(`${session.orgId}/maintenance/receipts/`)) {
+    if (![MAINT_PERMS.expenseView, MAINT_PERMS.expenseManage].some((p) => hasPermission(session, p))) {
+      return new NextResponse("Forbidden", { status: 403 });
+    }
   }
 
   const signedUrl = await getSignedFileUrl(joined, { downloadFileName });

@@ -7,6 +7,7 @@ import { listProperties } from "@/modules/maintenance/data/properties";
 import { listActivePmSchedules } from "@/modules/maintenance/data/pm";
 import { ExpenseForm } from "@/modules/maintenance/components/expense-form";
 import { AppScaffold } from "@/modules/maintenance/components/app-scaffold";
+import type { ReceiptData } from "@/modules/maintenance/lib/receipt-read";
 import { createExpenseAction, createNoExpenseAction } from "../actions";
 
 export default async function NewExpensePage({
@@ -63,6 +64,25 @@ export default async function NewExpensePage({
       propertyCount: 1 + o.additionalPropertyIds.length,
     }));
 
+  // ที่ช่างกรอกตอนปิดงาน — เติมให้ผู้บันทึกตรวจ (completeWorkOrderAction)
+  const lockedWo = workOrderId ? orders.find((o) => o.id === workOrderId) : undefined;
+  const draft = (lockedWo?.expenseDraft ?? null) as { name?: string; price?: string; noReceipt?: boolean; receiptUrl?: string | null; ai?: ReceiptData | null } | null;
+  const ai = draft?.ai ?? null;
+  const prefill = draft
+    ? {
+        amount: String(draft.price ?? "").replace(/[\s,฿]/g, "") || (ai?.amount != null ? String(ai.amount) : ""),
+        description: draft.name ?? ai?.summary ?? "",
+        paidBy: "company",
+        receiptUrl: draft.receiptUrl ?? null,
+        receiptNo: ai?.receiptNo ?? "",
+        payee: ai?.payee ?? "",
+        payer: ai?.payer ?? "",
+        paidAt: ai?.paidAt ?? "",
+        paymentMethod: ai?.paymentMethod ?? (draft.noReceipt ? "cash" : ""),
+        noReceipt: !!draft.noReceipt,
+      }
+    : undefined;
+
   return (
     <AppScaffold
       title="เพิ่มค่าใช้จ่าย"
@@ -77,6 +97,7 @@ export default async function NewExpensePage({
         lockedWorkOrderId={workOrderId}
         lockedPmScheduleId={pmScheduleId}
         returnTo={workOrderId ? returnTo : undefined}
+        prefill={prefill}
       />
     </AppScaffold>
   );

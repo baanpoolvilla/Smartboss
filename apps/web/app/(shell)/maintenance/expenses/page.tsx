@@ -135,14 +135,22 @@ export default async function ExpensesReportPage({
     <AppScaffold
       title="ค่าใช้จ่าย"
       actions={
-        <a
-          href={`/maintenance/expenses/export?year=${year}&month=${month}${catQ}`}
-          title="Export รายงาน"
-          aria-label="Export รายงาน"
-          className="rounded-full p-2 text-(--app-strong) transition-colors hover:bg-(--bg-soft)"
-        >
-          <Download className="h-5 w-5" />
-        </a>
+        <>
+          <a
+            href={`/maintenance/expenses/receipts?year=${year}&month=${month}`}
+            className="rounded-(--radius) border border-(--line) px-3 py-1.5 text-sm font-medium text-(--ink) hover:bg-(--bg-soft)"
+          >
+            ใบเสร็จ
+          </a>
+          <a
+            href={`/maintenance/expenses/export?year=${year}&month=${month}${catQ}`}
+            title="Export รายงาน"
+            aria-label="Export รายงาน"
+            className="rounded-full p-2 text-(--app-strong) transition-colors hover:bg-(--bg-soft)"
+          >
+            <Download className="h-5 w-5" />
+          </a>
+        </>
       }
       fab={
         canManage ? (

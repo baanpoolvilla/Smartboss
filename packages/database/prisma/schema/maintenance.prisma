@@ -119,6 +119,8 @@ model WorkOrder {
   requiresExpense       Boolean   @default(true) @map("requires_expense")
   /// กำหนดบันทึกค่าใช้จ่ายที่ CEO อนุมัติเลื่อนให้ — null = วันปิดงาน + expense_track_days (ดู lib/expense-deadline.ts)
   expenseDueDate        DateTime? @map("expense_due_date")
+  /// ที่ช่างกรอกตอนปิดงาน รอผู้บันทึกตรวจและลงยอด { name, price, receiptUrl, receiptSha256, noReceipt, ai, by, at }
+  expenseDraft          Json?     @map("expense_draft")
   createdAt             DateTime  @default(now()) @map("created_at")
 
   property       Property                 @relation(fields: [propertyId], references: [id], onDelete: Cascade)
@@ -218,6 +220,10 @@ model Expense {
   paidAt            DateTime? @map("paid_at")
   /// cash|transfer|card|other
   paymentMethod     String?  @map("payment_method")
+  /// ลายนิ้วมือรูปใบเสร็จ — เตือนรูปเดิมที่เคยใช้แล้ว
+  receiptSha256     String?  @map("receipt_sha256")
+  /// ค่าที่ AI อ่านได้ เก็บไว้เทียบกับค่าที่คนแก้
+  receiptAi         Json?    @map("receipt_ai")
   /// ติ๊กว่าไม่มีใบเสร็จ
   noReceipt         Boolean  @default(false) @map("no_receipt")
   billableToPartner Boolean  @default(false) @map("billable_to_partner")
@@ -231,6 +237,7 @@ model Expense {
   @@index([orgId])
   @@index([workOrderId])
   @@index([propertyId])
+  @@index([orgId, receiptSha256])
   @@map("expenses")
   @@schema("maintenance")
 }

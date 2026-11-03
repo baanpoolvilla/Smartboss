@@ -1,5 +1,5 @@
 import "server-only";
-import { prisma } from "@smartboss/database";
+import { prisma, type Prisma } from "@smartboss/database";
 
 export interface ExpenseFilters {
   workOrderId?: string;
@@ -56,6 +56,8 @@ export interface ExpenseInput {
   paidAt?: Date | null;
   paymentMethod?: string | null;
   noReceipt?: boolean;
+  receiptSha256?: string | null;
+  receiptAi?: Prisma.InputJsonValue | null;
   costType: string; // work_order | pm
   paidBy: string; // company | owner
   isNoExpense?: boolean;
@@ -81,6 +83,8 @@ export function createExpense(orgId: string, data: ExpenseInput) {
       paidAt: data.paidAt ?? null,
       paymentMethod: data.paymentMethod ?? null,
       noReceipt: data.noReceipt ?? false,
+      receiptSha256: data.receiptSha256 ?? null,
+      ...(data.receiptAi ? { receiptAi: data.receiptAi } : {}),
       costType: data.costType,
       paidBy: data.paidBy,
       isNoExpense: data.isNoExpense ?? false,
@@ -138,6 +142,8 @@ export async function createExpensesForProperties(
           paidAt: base.paidAt ?? null,
           paymentMethod: base.paymentMethod ?? null,
           noReceipt: base.noReceipt ?? false,
+          receiptSha256: base.receiptSha256 ?? null,
+          ...(base.receiptAi ? { receiptAi: base.receiptAi } : {}),
           costType: base.costType,
           paidBy: base.paidBy,
           isNoExpense: base.isNoExpense ?? false,
@@ -168,6 +174,9 @@ export async function updateExpenseBatch(
     paidAt: Date | null;
     paymentMethod: string | null;
     noReceipt: boolean;
+    receiptSha256?: string | null;
+    receiptAi?: Prisma.InputJsonValue;
+    expenseDate?: Date;
   },
 ): Promise<void> {
   const row = await prisma.expense.findFirst({ where: { orgId, id } });

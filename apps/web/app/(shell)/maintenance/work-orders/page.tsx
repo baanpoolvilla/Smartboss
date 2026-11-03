@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { loadExpenseTracking } from "@/modules/maintenance/data/expense-tracking";
+import { loadExpenseTracking, pendingExpenseWorkOrders } from "@/modules/maintenance/data/expense-tracking";
+import { realExpenseTotal } from "@/modules/maintenance/lib/expense-batches";
 import { expenseDueAt, trackingActive } from "@/modules/maintenance/lib/expense-deadline";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
@@ -89,17 +90,17 @@ export default async function WorkOrdersPage({
   const commentsBy = new Map(commentCounts.map((c) => [c.workOrderId, c._count._all]));
   const dueReqBy = new Map(dueReqCounts.map((c) => [c.workOrderId, c._count._all]));
   // ชื่อทั้งผู้เปิดและผู้ได้รับมอบหมาย — ใช้ตารางเดียวกัน (การ์ด + ตัวกรองผู้รับผิดชอบ)
-  const expenseTotals = trackingOn && orderIds.length
-    ? new Map(
-        (
-          await prisma.expense.groupBy({
-            by: ["workOrderId"],
-            where: { orgId, workOrderId: { in: orderIds } },
-            _sum: { amount: true },
-          })
-        ).map((r) => [r.workOrderId, Number(r._sum.amount ?? 0)] as const),
-      )
-    : new Map<string | null, number>();
+  // ยอดจ่ายจริง (ใบหลายบ้านนับครั้งเดียว) · ใบรอต้นทาง (PR/PO/ใบเบิก) = ไม่อยู่ในรายการรอบันทึก
+  const expenseRows = trackingOn && orderIds.length
+    ? await prisma.expense.findMany({
+        where: { orgId, workOrderId: { in: orderIds } },
+        select: { workOrderId: true, createdBy: true, amount: true, description: true, createdAt: true },
+      })
+    : [];
+  const expenseTotals = new Map(
+    [...new Set(expenseRows.map((r) => r.workOrderId))].map((id) => [id, realExpenseTotal(expenseRows.filter((r) => r.workOrderId === id))] as const),
+  );
+  const pendingClock = new Map(trackingOn ? (await pendingExpenseWorkOrders(orgId)).map((o) => [o.id, o.clockFrom] as const) : []);
   const creatorNames = await userNameMap(
     orgId,
     orders.flatMap((o) => [o.createdBy, o.assignedTo])
@@ -133,10 +134,8 @@ export default async function WorkOrdersPage({
       isPm: !!o.pmScheduleId || o.pmScheduleIds.length > 0,
       dueDateIso: o.dueDate?.toISOString() ?? null,
       expenseRecordedTotal: o.status === "completed" ? (expenseTotals.get(o.id) ?? null) : null,
-      expenseDeadlineIso:
-        trackingOn && o.status === "completed" && o.requiresExpense && !o.isPrivate && !expenseSet.has(o.id)
-          ? expenseDueAt(o, tracking).toISOString()
-          : null,
+      expenseDeadlineIso: pendingClock.has(o.id) ? expenseDueAt({ ...o, clockFrom: pendingClock.get(o.id) }, tracking).toISOString() : null,
+      expenseHeld: trackingOn && o.status === "completed" && o.requiresExpense && !o.isPrivate && !expenseSet.has(o.id) && !pendingClock.has(o.id),
       commentCount: commentsBy.get(o.id) ?? 0,
       photoCount: o.photoUrls.length + o.afterPhotoUrls.length,
       pendingDue: dueReqBy.get(o.id) ?? 0,

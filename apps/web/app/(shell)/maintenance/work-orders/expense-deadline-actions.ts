@@ -6,7 +6,7 @@ import { hasRole, isSuperAdmin, requireOrg } from "@smartboss/auth";
 import { addWorkOrderComment, getWorkOrder, updateWorkOrder } from "@/modules/maintenance/data/work-orders";
 import { deleteActionNotifications, notifyActorName, notifyUser, notifyUsers, resolveActionNotifications } from "@/modules/maintenance/data/notify";
 import { logActivity } from "@/modules/maintenance/data/activity";
-import { ceoUserIds, loadExpenseTracking } from "@/modules/maintenance/data/expense-tracking";
+import { ceoUserIds, expenseLinks, loadExpenseTracking } from "@/modules/maintenance/data/expense-tracking";
 import { expenseDueAt, trackingActive } from "@/modules/maintenance/lib/expense-deadline";
 import { fmtThaiDate } from "@/modules/maintenance/lib/format";
 
@@ -42,7 +42,9 @@ async function stillPending(orgId: string, id: string) {
   const wo = await getWorkOrder(orgId, id);
   if (!wo || wo.status !== "completed" || !wo.requiresExpense || wo.isPrivate) return null;
   const has = await prisma.expense.count({ where: { orgId, workOrderId: id } });
-  return has > 0 ? null : wo;
+  if (has > 0) return null;
+  const link = (await expenseLinks(orgId, [id])).get(id);
+  return link?.hold ? null : { ...wo, clockFrom: link?.clockFrom ?? null };
 }
 
 export async function requestExpenseExtensionAction(workOrderId: string, newDate: string, reason: string): Promise<{ error?: string }> {

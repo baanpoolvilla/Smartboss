@@ -1,6 +1,11 @@
 "use server";
 
+import { createHash } from "node:crypto";
 import { z } from "zod";
+import type { Prisma } from "@smartboss/database";
+import { loadExpenseTracking } from "@/modules/maintenance/data/expense-tracking";
+import { trackingActive } from "@/modules/maintenance/lib/expense-deadline";
+import { receiptDataFromForm } from "@/modules/maintenance/lib/receipt-read";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireOrg, hasPermission } from "@smartboss/auth";
@@ -59,7 +64,7 @@ import {
   canSeeWorkOrder,
 } from "@/modules/maintenance/data/work-order-access";
 import { fmtThaiDate, fmtThaiDateTime } from "@/modules/maintenance/lib/format";
-import { putFiles, deleteFiles } from "@/modules/maintenance/lib/storage";
+import { putFile, putFiles, deleteFiles } from "@/modules/maintenance/lib/storage";
 import { isPastDay } from "@/modules/maintenance/lib/no-past-date";
 import { createUploadLink } from "@/modules/maintenance/data/external-upload";
 import { createExpensesForProperties, listExpenses } from "@/modules/maintenance/data/expenses";
@@ -404,12 +409,33 @@ export async function completeWorkOrderAction(formData: FormData) {
     await notifyStatusChanged(s.orgId, wo, "completed", s.userId);
   }
 
-  const recorded = await recordEstimateAsExpense(
-    s.orgId,
-    wo,
-    names.map((name, i) => ({ name: name.trim(), price: (prices[i] ?? "").trim() })),
-    s.userId
-  );
+  // เปิดใช้กำหนดบันทึกแล้ว: ช่างแจ้ง ผู้บันทึกลงยอด (ผู้ใช้ 3/11/2569) — เก็บที่กรอกไว้รอตรวจ ยังไม่ลงยอด
+  // ติ๊กไม่มีค่าใช้จ่าย/ใส่ 0 จบเลย ไม่เป็นงานของผู้บันทึก (เห็นในคอลัมน์เสร็จ แก้ได้)
+  const tracked = wo.requiresExpense && !wo.isPrivate && trackingActive(await loadExpenseTracking(s.orgId));
+  const quickNone = formData.get("noExpense") === "1";
+  const estimate = names.map((name, i) => ({ name: name.trim(), price: (prices[i] ?? "").trim() }));
+  const allZero = estimate.some((x) => x.name !== "" && x.price !== "") && estimate.filter((x) => x.price !== "").every((x) => parseBaht(x.price) === 0);
+  if (tracked && !quickNone && !allZero) {
+    const receipt = formData.get("expenseReceipt");
+    const hasReceipt = receipt instanceof File && receipt.size > 0;
+    const first = estimate.find((x) => x.name !== "" || x.price !== "");
+    await updateWorkOrder(s.orgId, id, {
+      expenseDraft: {
+        name: first?.name ?? "",
+        price: first?.price ?? "",
+        noReceipt: formData.get("noReceipt") === "1",
+        receiptUrl: hasReceipt ? await putFile(`${s.orgId}/maintenance/receipts`, receipt) : null,
+        receiptSha256: hasReceipt ? createHash("sha256").update(Buffer.from(await receipt.arrayBuffer())).digest("hex") : null,
+        ai: parseReceiptAi(formData.get("receiptAi")),
+        by: s.userId,
+        at: new Date().toISOString(),
+      },
+    });
+  }
+  const recorded =
+    tracked && !quickNone && !allZero
+      ? false
+      : await recordEstimateAsExpense(s.orgId, wo, quickNone ? [{ name: "ไม่มีค่าใช้จ่าย", price: "0" }] : estimate, s.userId);
   await woLog(
     s,
     wo,
@@ -487,6 +513,16 @@ async function recordEstimateAsExpense(
     });
   }
   return true;
+}
+
+/** ค่าที่ AI อ่านจากฟอร์ม — ใช้เทียบย้อนหลังเท่านั้น ไม่ได้ใช้คำนวณ */
+function parseReceiptAi(v: FormDataEntryValue | null): Prisma.InputJsonValue | null {
+  if (typeof v !== "string" || !v || v.length > 2000) return null;
+  try {
+    return receiptDataFromForm(v) as unknown as Prisma.InputJsonValue;
+  } catch {
+    return null;
+  }
 }
 
 export async function addCommentAction(workOrderId: string, formData: FormData) {

@@ -4,7 +4,7 @@ import { SubmitButton } from "./submit-button";
 
 import { useActionState, useRef, useState } from "react";
 import { Info, Loader2, Receipt, MinusCircle, Sparkles } from "lucide-react";
-import { PAYMENT_METHODS, receiptHasData, type ReceiptData } from "@/modules/maintenance/lib/receipt-read";
+import { PAYMENT_METHODS, paymentMethodLabel, receiptDateWarning, receiptHasData, type ReceiptData } from "@/modules/maintenance/lib/receipt-read";
 import type { ExpenseFormState } from "@/app/(shell)/maintenance/expenses/actions";
 import { Card } from "@smartboss/ui/components/card";
 import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
@@ -31,6 +31,7 @@ export function ExpenseForm({
   lockedPmScheduleId,
   returnTo,
   edit,
+  prefill,
 }: {
   saveAction: ExpenseAction;
   noExpenseAction: ExpenseAction;
@@ -54,6 +55,19 @@ export function ExpenseForm({
     paymentMethod: string;
     noReceipt: boolean;
   };
+  /** ที่ช่างกรอกตอนปิดงาน รอตรวจ */
+  prefill?: {
+    amount: string;
+    description: string;
+    paidBy: string;
+    receiptUrl: string | null;
+    receiptNo: string;
+    payee: string;
+    payer: string;
+    paidAt: string;
+    paymentMethod: string;
+    noReceipt: boolean;
+  };
 }) {
   const locked = Boolean(lockedWorkOrderId || lockedPmScheduleId);
   const [costType, setCostType] = useState(
@@ -61,14 +75,20 @@ export function ExpenseForm({
   );
   const [woId, setWoId] = useState(lockedWorkOrderId ?? "");
   const [receiptName, setReceiptName] = useState<string | null>(null);
-  const [amount, setAmount] = useState(edit?.amount ?? "");
-  const [description, setDescription] = useState(edit?.description ?? "");
-  const [receiptNo, setReceiptNo] = useState(edit?.receiptNo ?? "");
-  const [payee, setPayee] = useState(edit?.payee ?? "");
-  const [payer, setPayer] = useState(edit?.payer ?? "");
-  const [paidAt, setPaidAt] = useState(edit?.paidAt ?? "");
-  const [paymentMethod, setPaymentMethod] = useState(edit?.paymentMethod ?? "");
-  const [noReceipt, setNoReceipt] = useState(edit?.noReceipt ?? false);
+  const init = edit ?? prefill;
+  const [amount, setAmount] = useState(init?.amount ?? "");
+  const [description, setDescription] = useState(init?.description ?? "");
+  const [receiptNo, setReceiptNo] = useState(init?.receiptNo ?? "");
+  const [payee, setPayee] = useState(init?.payee ?? "");
+  const [payer, setPayer] = useState(init?.payer ?? "");
+  const [paidAt, setPaidAt] = useState(init?.paidAt ?? "");
+  const [paymentMethod, setPaymentMethod] = useState(init?.paymentMethod ?? "");
+  const [noReceipt, setNoReceipt] = useState(init?.noReceipt ?? false);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [aiRead, setAiRead] = useState<ReceiptData | null>(null);
+  const dateWarning = receiptDateWarning(paidAt || null);
+  // ช่องรายละเอียดพับไว้ (ผู้ใช้ 3/11/2569 "ไม่ต้องเยอะ") บรรทัดสรุปบอกว่าเติมอะไรแล้ว
+  const detailSummary = [payee, paidAt ? paidAt.replace("T", " ") : "", receiptNo ? `เลขที่ ${receiptNo}` : "", paymentMethodLabel(paymentMethod) ?? ""].filter(Boolean).join(" · ");
   // อ่านใบเสร็จ: เติมลงช่องให้ คนตรวจแล้วกดบันทึกเอง (lib/receipt-read.ts) · เลือกรูปใหม่ระหว่างรอ = ทิ้งผลของรูปเก่า
   const [reading, setReading] = useState(false);
   const [readNote, setReadNote] = useState<{ ok: boolean; text: string } | null>(null);
@@ -77,17 +97,23 @@ export function ExpenseForm({
     const seq = ++readSeq.current;
     setReading(true);
     setReadNote(null);
+    setWarnings([]);
+    setAiRead(null);
     try {
       const body = new FormData();
       body.append("receipt", file);
+      if (lockedWorkOrderId) body.append("workOrderId", lockedWorkOrderId);
       const res = await fetch("/api/maintenance/receipt-read", { method: "POST", body });
-      const json = (await res.json().catch(() => null)) as { data?: ReceiptData; error?: string } | null;
+      const json = (await res.json().catch(() => null)) as { data?: ReceiptData; warnings?: string[]; error?: string } | null;
       if (seq !== readSeq.current) return;
+      // เตือนวันที่คิดสดจากช่อง (แก้แล้วหายเอง) ไม่ใช้ของ route
+      setWarnings((json?.warnings ?? []).filter((w) => !w.includes("วันที่บนใบเสร็จ")));
       const d = json?.data;
       if (!d || !receiptHasData(d)) {
         setReadNote({ ok: false, text: json?.error ?? "อ่านรูปนี้ไม่ได้ กรอกเองได้เลย" });
         return;
       }
+      setAiRead(d);
       if (d.amount !== null) setAmount(String(d.amount));
       if (d.paidAt) setPaidAt(d.paidAt);
       if (d.receiptNo) setReceiptNo(d.receiptNo);
@@ -224,7 +250,7 @@ export function ExpenseForm({
             {!noReceipt && (
               <label className="inline-flex w-fit cursor-pointer items-center gap-2 rounded-(--radius) border border-[#0D9488] px-3 py-2 text-sm text-[#0F766E]">
                 <Receipt className="h-4 w-4" />
-                {receiptName || edit?.receiptUrl ? "เปลี่ยนรูปใบเสร็จ" : "แนบรูปใบเสร็จ"}
+                {receiptName || init?.receiptUrl ? "เปลี่ยนรูปใบเสร็จ" : "แนบรูปใบเสร็จ"}
                 <input
                   type="file"
                   name="receipt"
@@ -250,6 +276,8 @@ export function ExpenseForm({
                     readSeq.current++;
                     setReading(false);
                     setReadNote(null);
+                    setWarnings([]);
+                    setAiRead(null);
                     setPaymentMethod((m) => m || "cash");
                   }
                 }}
@@ -259,11 +287,18 @@ export function ExpenseForm({
             </label>
           </div>
           {!noReceipt && receiptName && <p className="truncate text-xs text-(--ink-soft)">{receiptName}</p>}
-          {!noReceipt && !receiptName && edit?.receiptUrl && (
-            <a href={edit.receiptUrl} target="_blank" rel="noreferrer" className="w-fit text-xs text-[#0F766E] underline">
-              ดูรูปใบเสร็จเดิม
+          {!noReceipt && !receiptName && init?.receiptUrl && (
+            <a href={init.receiptUrl} target="_blank" rel="noreferrer" className="w-fit text-xs text-[#0F766E] underline">
+              {edit ? "ดูรูปใบเสร็จเดิม" : "ดูรูปใบเสร็จที่ช่างแนบ"}
             </a>
           )}
+          {prefill && !edit && <p className="text-xs text-(--ink-soft)">ข้อมูลจากช่างตอนปิดงาน ตรวจให้ตรงกับใบเสร็จก่อนบันทึก</p>}
+          {aiRead && <input type="hidden" name="receiptAi" value={JSON.stringify(aiRead)} />}
+          {[...warnings, ...(dateWarning ? [dateWarning] : [])].map((w) => (
+            <p key={w} className="rounded-(--radius) bg-amber-50 px-2 py-1 text-xs text-amber-800">
+              ⚠ {w}
+            </p>
+          ))}
           {reading && (
             <p className="inline-flex items-center gap-1.5 text-xs text-(--ink-soft)">
               <Loader2 className="h-3.5 w-3.5 animate-spin" /> กำลังอ่านใบเสร็จ...
@@ -284,7 +319,12 @@ export function ExpenseForm({
           <input name="amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} />
         </label>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <details className="rounded-(--radius) border border-(--line) p-3" data-testid="receipt-details">
+          <summary className="cursor-pointer text-sm text-(--ink)">
+            รายละเอียดใบเสร็จ
+            <span className="ml-2 text-xs text-(--ink-soft)">{detailSummary || "ร้าน วันเวลา เลขที่ วิธีจ่าย (ไม่บังคับ)"}</span>
+          </summary>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-(--ink)">จ่ายให้ใคร (ร้าน/ผู้รับเงิน)</span>
             <input name="payee" value={payee} onChange={(e) => setPayee(e.target.value)} maxLength={200} className={inputClass} />
@@ -310,7 +350,8 @@ export function ExpenseForm({
               ))}
             </select>
           </label>
-        </div>
+          </div>
+        </details>
 
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-medium text-(--ink)">รายละเอียด</span>

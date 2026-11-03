@@ -4,6 +4,7 @@ import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { getExpense } from "@/modules/maintenance/data/expenses";
 import { getWorkOrder } from "@/modules/maintenance/data/work-orders";
 import { getProperty } from "@/modules/maintenance/data/properties";
+import { expenseHasSource } from "@/modules/maintenance/data/expense-tracking";
 import { ExpenseForm } from "@/modules/maintenance/components/expense-form";
 import { AppScaffold } from "@/modules/maintenance/components/app-scaffold";
 import { createNoExpenseAction, updateExpenseAction } from "../../actions";
@@ -19,6 +20,7 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
   const e = await getExpense(session.orgId, id);
   if (!e) notFound();
   const wo = e.workOrderId ? await getWorkOrder(session.orgId, e.workOrderId) : null;
+  if (expenseHasSource(e)) redirect(wo ? `/maintenance/work-orders/${wo.id}` : "/maintenance/expenses");
   const house = wo ? await getProperty(session.orgId, wo.propertyId) : null;
   const returnTo = wo ? `/maintenance/work-orders/${wo.id}` : "/maintenance/expenses";
 
