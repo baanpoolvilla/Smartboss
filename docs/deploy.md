@@ -449,46 +449,49 @@ VERIFY_EMAIL=<อีเมลแอดมิน> VERIFY_PASSWORD=<รหัส�
 
 ### cron ประจำวัน
 
-แผนเดิมใช้ cron ของ Vercel ซึ่งไม่มีแล้วบน VM ใช้ crontab ของเครื่องแทน
+ตารางงานอยู่ในโค้ด ไม่ต้อง `crontab -e` บนเครื่อง (3/11/2569) — ย้ายเครื่องแล้วไม่ต้องจำไปตั้งใหม่
+
+- **งานของแอป** — `deploy/smartboss.crontab` · `release.sh` ติดตั้งเป็น crontab ของ user smartboss ให้เองทุกครั้งที่ deploy
+  เปิด/ปิดงานไหน แก้ที่ไฟล์นี้ (ลบหรือใส่ `#` หน้าบรรทัด) แล้ว deploy · log: `journalctl -t smartboss-cron --since today`
+- **งานของ root (สำรองฐานข้อมูล)** — `deploy/smartboss-root.cron` · ติดตั้งครั้งเดียวตอนตั้งเครื่อง (release.sh เตือนถ้ายังไม่มี):
 
 ```bash
-sudo crontab -e
+sudo install -m 644 -o root -g root /opt/smartboss/deploy/smartboss-root.cron /etc/cron.d/smartboss-root
 ```
+
+> เครื่องปัจจุบัน (smartboss-prod) ตั้ง backup ไว้ใน crontab ของ root ตั้งแต่ 3/11/2569 — พอติดตั้งไฟล์ข้างบนแล้ว
+> ลบบรรทัดเดิมใน `sudo crontab -e` ออก ไม่งั้นสำรองซ้ำสองรอบ
+
+ตารางงานที่ใช้ได้ทั้งหมด (บางตัวยังปิดอยู่ในไฟล์ ดูเหตุผลในไฟล์):
 
 ```cron
 # งานประจำวันของโมดูลซ่อมบำรุง + คะแนนผลงาน + แจ้ง OT รออนุมัติ — 08:00 เวลาไทย
-0 8 * * * bash /opt/smartboss/deploy/cron-run.sh all >> /var/log/smartboss-cron.log 2>&1
+0 8 * * * bash /opt/smartboss/deploy/cron-run.sh all
 
 # แจ้งเตือนมาสายให้ตัวพนักงาน — ทุก 5 นาที 07:00–12:55 (วันละครั้งต่อคน รันซ้ำได้)
-*/5 7-12 * * * bash /opt/smartboss/deploy/cron-run.sh late-alerts >> /var/log/smartboss-cron.log 2>&1
+*/5 7-12 * * * bash /opt/smartboss/deploy/cron-run.sh late-alerts
 
 # เด้งเวลาเข้า/ออกงานเข้าห้องแชท "🕐 ระบบลงเวลา" ของแต่ละคน — ทุกนาที (ไม่มีอะไรใหม่ = จบเร็ว)
 # รอบเดียวกันนี้เช็กแจ้งเตือนใกล้ถึงกำหนด งาน/ประชุม/รีพอต ด้วย (เตือนเช้าตรงเวลาแม้ไม่มีใครเปิดเว็บ)
-* * * * * bash /opt/smartboss/deploy/cron-run.sh attendance-chat >> /var/log/smartboss-cron.log 2>&1
+* * * * * bash /opt/smartboss/deploy/cron-run.sh attendance-chat
 
 # กวาดคะแนนผลงานอีกรอบตอนเย็น ให้ผู้บริหารเห็นของวันนี้ก่อนเลิกงาน
-0 17 * * * bash /opt/smartboss/deploy/cron-run.sh performance >> /var/log/smartboss-cron.log 2>&1
+0 17 * * * bash /opt/smartboss/deploy/cron-run.sh performance
 
-# งานคะแนนรายชั่วโมงที่นาที 59 — หักลงเวลาเมื่อกะจบ (กะปกติ/ไม่มีกะภายใน 23:59 · กะดึกหลังเลิกกะ 2 ชม.)
-# + หักคะแนนรายงาน/งานเลยกำหนดของทุกบริษัท ไม่ต้องรอให้มีคนเปิดเว็บ (ทันก่อนรอบเกรดปิด 23:59 วันตัดรอบ)
-59 * * * * bash /opt/smartboss/deploy/cron-run.sh score-hourly >> /var/log/smartboss-cron.log 2>&1
-# รอบเก็บตก 00:05 — ไม่ส่งรายงาน/งานเลยกำหนดของเมื่อวาน + คืนคะแนนใบลาที่อนุมัติทัน ⇒ เกรดวันตัดรอบพร้อมใช้ 00:30
-5 0 * * * bash /opt/smartboss/deploy/cron-run.sh score-final >> /var/log/smartboss-cron.log 2>&1
+# งานคะแนนรายชั่วโมงที่นาที 59 + รอบเก็บตก 00:05
+59 * * * * bash /opt/smartboss/deploy/cron-run.sh score-hourly
+5 0 * * * bash /opt/smartboss/deploy/cron-run.sh score-final
 
-# สำรองฐานข้อมูล 02:30 ทุกคืน
-30 2 * * * bash /opt/smartboss/deploy/backup.sh >> /var/log/smartboss-backup.log 2>&1
-
-# Google Ads Report (google-ads-report-module-spec.md §3.1 / §6.6)
-# ซิงค์ย้อนหลัง 30 วันทุกเช้า · สรุปรายสัปดาห์ + อีเมลวันจันทร์ · รายงานรอบครึ่งเดือนวันที่ 1 และ 16
-0 6 * * * bash /opt/smartboss/deploy/cron-run.sh sync ads >> /var/log/smartboss-cron.log 2>&1
-0 7 * * 1 bash /opt/smartboss/deploy/cron-run.sh weekly ads >> /var/log/smartboss-cron.log 2>&1
-0 7 1,16 * * bash /opt/smartboss/deploy/cron-run.sh half-month ads >> /var/log/smartboss-cron.log 2>&1
+# Google Ads Report — ซิงค์ทุกเช้า · สรุปวันจันทร์ · รอบครึ่งเดือน
+0 6 * * * bash /opt/smartboss/deploy/cron-run.sh sync ads
+0 7 * * 1 bash /opt/smartboss/deploy/cron-run.sh weekly ads
+0 7 1,16 * * bash /opt/smartboss/deploy/cron-run.sh half-month ads
 ```
 
-ทดสอบเลยโดยไม่ต้องรอพรุ่งนี้
+ทดสอบเลยโดยไม่ต้องรอพรุ่งนี้ (เลือกงานที่เปิดอยู่ — `all` รวมการลบสื่อในแชทที่หมดอายุด้วย)
 
 ```bash
-sudo bash /opt/smartboss/deploy/cron-run.sh all
+sudo -u smartboss bash /opt/smartboss/deploy/cron-run.sh work-orders
 ```
 
 ต้องได้ JSON ที่ขึ้นต้น `{"ok":true` — ถ้าได้ 401 แปลว่า `CRON_SECRET` ไม่ตรง

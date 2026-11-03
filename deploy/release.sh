@@ -109,6 +109,20 @@ for i in $(seq 1 60); do
   sleep 1
 done
 
+step "ติดตั้งตารางงานอัตโนมัติ (deploy/smartboss.crontab)"
+# ตารางงานอยู่ในโค้ด ไม่ได้ตั้งมือบนเครื่อง ⇒ ย้ายเครื่องแล้ว deploy ครั้งแรกก็มาครบ (ผู้ใช้ 3/11/2569)
+# ลงเป็น crontab ของ smartboss เอง ไม่ต้องใช้ sudo · ไม่สำเร็จ = เตือน ไม่หยุด deploy (แอปขึ้นแล้ว)
+if crontab deploy/smartboss.crontab; then
+  echo "ตารางงานปัจจุบัน:"
+  crontab -l | grep -v '^\s*#' | grep -v '^\s*$' || true
+else
+  echo "⚠ ติดตั้งตารางงานไม่ได้ — ดูว่า smartboss ถูกห้ามใช้ cron ไหม (/etc/cron.allow, /etc/cron.deny)" >&2
+fi
+if [ ! -f /etc/cron.d/smartboss-root ]; then
+  echo "⚠ ยังไม่ได้ติดตั้งงานของ root (สำรองฐานข้อมูล) — ติดตั้งครั้งเดียวด้วยบัญชีที่มี sudo:" >&2
+  echo "    sudo install -m 644 -o root -g root /opt/smartboss/deploy/smartboss-root.cron /etc/cron.d/smartboss-root" >&2
+fi
+
 systemctl --no-pager --lines=0 status \
   smartboss-web smartboss-api smartboss-worker smartboss-gateway || true
 

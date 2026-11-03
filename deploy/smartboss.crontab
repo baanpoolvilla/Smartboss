@@ -1,0 +1,28 @@
+# ตารางงานอัตโนมัติของ SmartBoss (crontab ของ user smartboss)
+#
+# release.sh ติดตั้งไฟล์นี้ให้เองทุกครั้งที่ deploy — แก้ตารางงานที่ไฟล์นี้ แล้ว deploy
+# ไม่ต้อง crontab -e บนเครื่อง · ย้ายเครื่องแล้ว deploy ครั้งแรก ตารางงานก็มาเอง
+# (ผู้ใช้ 3/11/2569 "เวลาย้ายเครื่องจะได้ไปด้วย ไม่ต้องมาติดตั้งแยก")
+#
+# งานที่ต้องใช้สิทธิ์ root (สำรองฐานข้อมูล) อยู่ที่ deploy/smartboss-root.cron — ติดตั้งครั้งเดียวตอนตั้งเครื่อง
+#
+# ดู log:  journalctl -t smartboss-cron --since today
+# เวลาเป็นเวลาไทย (เครื่องตั้ง Asia/Bangkok ตาม docs/deploy.md)
+SHELL=/bin/bash
+
+# เปิดใบงานจาก PM ที่ถึงกำหนด (PM แบบนับรอบ: เปิดล่วงหน้าตามที่ตั้ง) — 08:00
+0 8 * * * bash /opt/smartboss/deploy/cron-run.sh work-orders 2>&1 | systemd-cat -t smartboss-cron
+# เตือน PM / ใบงานใกล้ครบกำหนดและเลยกำหนด (เฉพาะผู้รับผิดชอบ) — 08:05
+5 8 * * * bash /opt/smartboss/deploy/cron-run.sh pm-notify 2>&1 | systemd-cat -t smartboss-cron
+
+# ── รอบถัดไป: ยังไม่เปิด (3/11/2569 คุยกันก่อน) — ลบ # หน้าบรรทัดแล้ว deploy เพื่อเปิด ──
+# งานประจำวันที่เหลือ (เตือนค่าใช้จ่าย, แจ้งมาสาย, วันหยุด, OT รออนุมัติ, เตือนโปรเจกต์ ฯลฯ)
+#   ⚠ "all" รวมการลบรูป/วิดีโอในแชทที่หมดอายุด้วย — ลองดูก่อน: bash deploy/cron-run.sh "chat-media&dryRun=1"
+#   ⚠ "all" รวม work-orders กับ pm-notify ด้วย — เปิดบรรทัดนี้แล้วให้ปิดสองบรรทัดบน ไม่งั้นรันซ้ำ
+# 0 8 * * * bash /opt/smartboss/deploy/cron-run.sh all 2>&1 | systemd-cat -t smartboss-cron
+# */5 7-12 * * * bash /opt/smartboss/deploy/cron-run.sh late-alerts 2>&1 | systemd-cat -t smartboss-cron
+# * * * * * bash /opt/smartboss/deploy/cron-run.sh attendance-chat 2>&1 | systemd-cat -t smartboss-cron
+# 0 17 * * * bash /opt/smartboss/deploy/cron-run.sh performance 2>&1 | systemd-cat -t smartboss-cron
+#   ⚠ score-hourly เริ่มหักคะแนนใบงาน/PM ที่เลยกำหนดทันที (ไม่ย้อนเกิน 3 วัน)
+# 59 * * * * bash /opt/smartboss/deploy/cron-run.sh score-hourly 2>&1 | systemd-cat -t smartboss-cron
+# 5 0 * * * bash /opt/smartboss/deploy/cron-run.sh score-final 2>&1 | systemd-cat -t smartboss-cron

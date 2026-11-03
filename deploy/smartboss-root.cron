@@ -1,0 +1,11 @@
+# งานอัตโนมัติที่ต้องใช้สิทธิ์ root — รูปแบบ /etc/cron.d (มีช่องชื่อ user)
+#
+# ติดตั้งครั้งเดียวตอนตั้งเครื่อง (หรือหลังแก้ไฟล์นี้):
+#   sudo install -m 644 -o root -g root /opt/smartboss/deploy/smartboss-root.cron /etc/cron.d/smartboss-root
+#
+# ไม่ให้ release.sh ติดตั้งเอง — บัญชี smartboss แก้ไฟล์ในโค้ดได้ ถ้าให้มันลงไฟล์นี้เองได้
+# เท่ากับบัญชีแอปสั่งงานในนาม root ได้
+SHELL=/bin/bash
+
+# สำรองฐานข้อมูลทุกคืน 02:30 — เก็บ 14 วันใน /var/backups/smartboss (ตั้ง BACKUP_BUCKET เพื่อส่งออกนอกเครื่องด้วย)
+30 2 * * * root bash /opt/smartboss/deploy/backup.sh >> /var/log/smartboss-backup.log 2>&1
