@@ -20,7 +20,7 @@ import {
   ShoppingCart,
   CornerUpLeft,
 } from "lucide-react";
-import { requireOrg, hasPermission, canViewAll } from "@smartboss/auth";
+import { requireOrg, hasPermission, canViewAll, hasRole, isSuperAdmin as isTopAdmin } from "@smartboss/auth";
 import { Card } from "@smartboss/ui/components/card";
 import { prisma } from "@smartboss/database";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
@@ -77,6 +77,9 @@ import { WorkOrderDueRequest, type DueRequestView } from "@/modules/maintenance/
 import { buildScoreQueue } from "@/lib/score-request-views";
 import { ScoreRequestCard } from "@/app/(shell)/hr/penalty-requests/score-requests-queue";
 import { listDueRequests } from "@/modules/maintenance/data/work-order-due-requests";
+import { listExpenseDueRequests, loadExpenseTracking } from "@/modules/maintenance/data/expense-tracking";
+import { expenseDaysLeft, expenseDueAt, isExpenseBacklog, trackingActive } from "@/modules/maintenance/lib/expense-deadline";
+import { ExpenseDeadlineBox, type ExpenseRequestView } from "@/modules/maintenance/components/expense-deadline-box";
 import { canDecideDueRequest, canEditDueDate } from "@/modules/maintenance/lib/due-request-access";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -226,6 +229,23 @@ export default async function WorkOrderDetailPage({
     createdAt: r.createdAt.toISOString(),
     canDecide: r.status === "pending" && isOpenOrRunning && canDecideDueRequest({ userId: session.userId, viewAll }, { createdBy: ownerId }, r.requestedBy),
   }));
+  // รอบันทึกค่าใช้จ่าย + เปิดใช้กำหนดบันทึกแล้ว — กล่องบอกเหลือกี่วัน ปุ่มบันทึก ขอเลื่อน/อนุมัติ
+  const tracking = await loadExpenseTracking(orgId);
+  const expenseWaiting = trackingActive(tracking) && wo.status === "completed" && wo.requiresExpense && !wo.isPrivate && !hasExpense;
+  const expenseDue = expenseWaiting ? expenseDueAt(wo, tracking) : null;
+  const expenseRequests = expenseWaiting ? await listExpenseDueRequests(orgId, id) : [];
+  const expenseNames = expenseRequests.length ? await userNameMap(orgId, expenseRequests.flatMap((r) => [r.requestedBy, r.decidedBy])) : {};
+  const expenseRequestViews: ExpenseRequestView[] = expenseRequests.map((r) => ({
+    id: r.id,
+    requestedBy: r.requestedBy,
+    requestedByName: expenseNames[r.requestedBy] ?? "-",
+    newDate: ymdBkk(r.newDate),
+    reason: r.reason,
+    status: r.status as ExpenseRequestView["status"],
+    decidedByName: r.decidedBy ? (expenseNames[r.decidedBy] ?? "-") : null,
+    decisionNote: r.decisionNote,
+  }));
+  const recordExpenseHref = `/maintenance/expenses/new?workOrderId=${id}${pmForExpense ? `&pmScheduleId=${pmForExpense}` : ""}${fromTasks ? "&from=tasks" : ""}`;
   // ช่างนอกส่งข้อความเปล่าได้ (ไม่มีรูป) แถวแบบนั้น storagePath เป็นค่าว่าง
   const externalUrls = externalPhotos
     .map((p) => p.storagePath)
@@ -253,6 +273,20 @@ export default async function WorkOrderDetailPage({
       )}
 
       {/* แบบหน้ารายละเอียดงาน: ซ้าย = ข้อมูลใบงาน · ขวา = ความคิดเห็น (จอเล็กเรียงต่อกัน ความคิดเห็นอยู่ล่าง) */}
+      {expenseDue && (
+        <ExpenseDeadlineBox
+          workOrderId={wo.id}
+          dueDate={ymdBkk(expenseDue)}
+          daysLeft={expenseDaysLeft(expenseDue)}
+          closedLabel={wo.completedAt ? fmtThaiDate(wo.completedAt) : "-"}
+          recordHref={canExpense ? recordExpenseHref : null}
+          canRequest={tracking.recorderIds.includes(session.userId)}
+          canDecide={hasRole(session, "CEO") || isTopAdmin(session)}
+          myId={session.userId}
+          noDock={isExpenseBacklog(wo, tracking)}
+          requests={expenseRequestViews}
+        />
+      )}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(340px,420px)] lg:items-start">
       <div className="min-w-0">
       {/* ─── หัวข้อ + ข้อมูลใบงาน ─── */}
@@ -736,7 +770,7 @@ export default async function WorkOrderDetailPage({
       {/* ─── ปุ่มดำเนินการ ─── */}
       {/* จอเล็ก: ข้อมูล → ความคิดเห็น → ปุ่ม (ลำดับเดิม) · จอใหญ่: ปุ่มอยู่ใต้ข้อมูลฝั่งซ้าย */}
       <div className="flex min-w-0 flex-col gap-2 lg:col-start-1">
-        {wo.status === "completed" && !hasExpense && canExpense && (
+        {wo.status === "completed" && !hasExpense && canExpense && !expenseDue && (
           <Link
             href={`/maintenance/expenses/new?workOrderId=${id}${
               pmForExpense ? `&pmScheduleId=${pmForExpense}` : ""

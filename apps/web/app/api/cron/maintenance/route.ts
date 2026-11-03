@@ -3,6 +3,7 @@ import {
   dockOverdueMaintenance,
   generateWorkOrdersForDuePms,
   notifyDuePmSchedules,
+  notifyExpenseDeadlines,
   notifyMissingExpenses,
 } from "@/modules/maintenance/data/cron";
 import { dockAttendance, dockFinishedShifts, refundAttendanceDocks } from "@/lib/attendance-performance";
@@ -124,6 +125,7 @@ export async function GET(req: NextRequest) {
   }
   if (task === "pm-notify" || task === "all") {
     Object.assign(result, await notifyDuePmSchedules());
+    Object.assign(result, await notifyExpenseDeadlines());
   }
   if (task === "expense-reminder" || task === "all") {
     Object.assign(result, await notifyMissingExpenses());

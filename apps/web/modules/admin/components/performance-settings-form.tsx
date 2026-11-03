@@ -46,7 +46,7 @@ const GROUPS: { title: string; hint: string; keys: PerformanceCategory[] }[] = [
   {
     title: "งานซ่อมบำรุง",
     hint: "จากโมดูลแจ้งซ่อมบำรุง — ใช้จับการปล่อยงานค้าง",
-    keys: ["workorder_overdue", "pm_missed"],
+    keys: ["workorder_overdue", "pm_missed", "expense_overdue"],
   },
   {
     title: "การลงเวลา",

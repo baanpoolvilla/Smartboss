@@ -1,9 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { prisma } from "@smartboss/database";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
-import { upsertLineConfig } from "@/modules/maintenance/data/notify";
+import { upsertLineConfig, usersWithPermission } from "@/modules/maintenance/data/notify";
 import { logActivity } from "@/modules/maintenance/data/activity";
 
 /**
@@ -16,6 +17,32 @@ async function requireAdmin(): Promise<string> {
     throw new Error("ไม่มีสิทธิ์");
   }
   return s.orgId;
+}
+
+/** กำหนดบันทึกค่าใช้จ่าย (lib/expense-deadline.ts) — ไม่ใส่วันเริ่มใช้ = ปิด */
+export async function saveExpenseTrackingAction(formData: FormData) {
+  const orgId = await requireAdmin();
+  const fromRaw = String(formData.get("from") ?? "").trim();
+  if (fromRaw && !/^\d{4}-\d{2}-\d{2}$/.test(fromRaw)) throw new Error("วันเริ่มใช้ไม่ถูกต้อง");
+  const days = Number(formData.get("days"));
+  if (!Number.isInteger(days) || days < 1 || days > 90) throw new Error("จำนวนวันต้องอยู่ระหว่าง 1–90");
+  const allowed = new Set(await usersWithPermission(orgId, MAINT_PERMS.expenseManage));
+  const recorderIds = formData.getAll("recorderIds").map(String).filter((id) => allowed.has(id));
+  if (fromRaw && recorderIds.length === 0) throw new Error("เลือกผู้บันทึกค่าใช้จ่ายอย่างน้อย 1 คนก่อนเปิดใช้");
+  const data = {
+    expenseTrackFrom: fromRaw ? new Date(`${fromRaw}T00:00:00.000Z`) : null,
+    expenseTrackDays: days,
+    expenseRecorderIds: recorderIds,
+  };
+  await prisma.performanceSetting.upsert({ where: { orgId }, create: { orgId, ...data }, update: data });
+  await logActivity(orgId, {
+    userId: (await requireOrg()).userId,
+    entity: "settings",
+    action: "update",
+    summary: fromRaw ? `ตั้งกำหนดบันทึกค่าใช้จ่าย เริ่ม ${fromRaw} · ${days} วัน · ผู้บันทึก ${recorderIds.length} คน` : "ปิดกำหนดบันทึกค่าใช้จ่าย",
+  });
+  revalidatePath("/maintenance/settings");
+  revalidatePath("/maintenance/work-orders");
 }
 
 export async function saveLineConfigAction(formData: FormData) {

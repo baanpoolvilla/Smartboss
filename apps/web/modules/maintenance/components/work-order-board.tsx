@@ -41,6 +41,8 @@ export interface BoardOrder {
   due?: { text: string; late: boolean } | null;
   /** การ์ดแบบการ์ดงาน (wo-card.tsx) */
   dueDateIso?: string | null;
+  /** กำหนดบันทึกค่าใช้จ่าย (เปิดใช้แล้ว + ใบรอบันทึก) — lib/expense-deadline.ts */
+  expenseDeadlineIso?: string | null;
   commentCount?: number;
   photoCount?: number;
   pendingDue?: number;
@@ -112,6 +114,7 @@ function OrderCard({
       }
       doneTone={wo.status === "cancelled" ? "gray" : settled ? "green" : "orange"}
       dueDate={wo.dueDateIso ?? null}
+      expenseDeadline={settled ? null : wo.expenseDeadlineIso}
       commentCount={wo.commentCount ?? 0}
       photoCount={wo.photoCount ?? 0}
       pendingDue={wo.pendingDue ?? 0}
@@ -387,6 +390,7 @@ export function WorkOrderBoard({
   creatorNames,
   currentUserId,
   canPickPeople = true,
+  expenseFirst = false,
 }: {
   orders: BoardOrder[];
   propertyNames: Record<string, string>;
@@ -402,6 +406,8 @@ export function WorkOrderBoard({
   currentUserId?: string;
   /** true = ผู้ดูแล/เห็นทั้งบริษัท — เลือกดูงานรายคนได้ · false = พนักงานทั่วไป มีแค่ "ของฉัน" */
   canPickPeople?: boolean;
+  /** ผู้บันทึกค่าใช้จ่าย: คอลัมน์ "ยังไม่บันทึก" ขึ้นก่อน (ผู้ใช้ 3/11/2569 "ต้องขึ้นมาอยู่บนเลย") */
+  expenseFirst?: boolean;
 }) {
   // ช่องบนแถบหัว (หน้าใบงานส่ง leading = <div id="wo-board-toolbar">) — หาเจอหลังเมาท์ แล้ววางตัวกรองผ่าน portal
   // เซิร์ฟเวอร์ = null (วาดตัวกรองไว้ในบอร์ดก่อน ตรงกับ HTML ที่ส่งมา) · ฝั่งเครื่อง = ช่องจริง แล้วย้ายขึ้นแถบหัว
@@ -511,16 +517,18 @@ export function WorkOrderBoard({
      * ค่าใช้จ่าย — ปิดงานได้โดยไม่ต้องกรอก" (ตัวเตือนทาง LINE ใน data/cron.ts
      * กรองด้วย requiresExpense ถูกอยู่แล้ว ตกหล่นเฉพาะฝั่งหน้าจอ)
      */
-    no_expense: visible.filter(
-      (w) => w.status === "completed" && w.requiresExpense && !w.hasExpense
-    ),
+    no_expense: visible
+      .filter((w) => w.status === "completed" && w.requiresExpense && !w.hasExpense)
+      // ครบกำหนดบันทึกใกล้สุดขึ้นก่อน (ใบที่ไม่มีกำหนดคงลำดับเดิม)
+      .sort((a, b) => (a.expenseDeadlineIso && b.expenseDeadlineIso ? a.expenseDeadlineIso.localeCompare(b.expenseDeadlineIso) : 0)),
     done: visible.filter(
       (w) =>
         w.status === "cancelled" ||
         (w.status === "completed" && (w.hasExpense || !w.requiresExpense))
     ),
   };
-  const boardTotal = COLUMNS.reduce((n, c) => n + (buckets[c.key]?.length ?? 0), 0);
+  const columns: (typeof COLUMNS)[number][] = expenseFirst ? [...COLUMNS.filter((c) => c.key === "no_expense"), ...COLUMNS.filter((c) => c.key !== "no_expense")] : [...COLUMNS];
+  const boardTotal = columns.reduce((n, c) => n + (buckets[c.key]?.length ?? 0), 0);
 
   // ช่องเลือกบ้านบนแถบหัว (จอใหญ่) — ทุกบ้าน / ทั้งหมวด / รายหลัง ในช่องเดียว แบบช่องผู้รับผิดชอบ (ผู้ใช้ 3/11/2569 แบบ B)
   // มือถือแถบหัวแคบ ไม่พอใส่ ⇒ ยังใช้แถวปุ่มบ้านใต้แถบหัวเหมือนเดิม (ซ่อนช่องนี้ใต้ lg)
@@ -656,7 +664,7 @@ export function WorkOrderBoard({
       {/* ─── มือถือ: แท็บ 4 สถานะ ─── */}
       <div className="flex min-h-0 flex-1 flex-col lg:hidden">
         <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-(--line)">
-          {COLUMNS.map((c, i) => (
+          {columns.map((c, i) => (
             <button
               key={c.key}
               type="button"
@@ -683,10 +691,10 @@ export function WorkOrderBoard({
         {/* แถบแท็บอยู่กับที่ เลื่อนเฉพาะรายการ — แบบเดียวกับคอลัมน์ฝั่งจอใหญ่ */}
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
           <ColumnList
-            orders={buckets[COLUMNS[tab]!.key]!}
+            orders={buckets[columns[tab]!.key]!}
             propertyNames={propertyNames}
             creatorNames={creatorNames}
-            byPriority={COLUMNS[tab]!.byPriority}
+            byPriority={columns[tab]!.byPriority}
             gap="gap-3"
             emptyClass="py-10 text-center text-sm text-(--ink-soft)"
           />
@@ -695,11 +703,11 @@ export function WorkOrderBoard({
 
       {/* ─── จอใหญ่: Kanban 4 คอลัมน์ คั่นด้วยเส้นตั้ง แต่ละคอลัมน์เลื่อนแยกกัน ─── */}
       <div className="hidden min-h-0 flex-1 lg:flex">
-        {COLUMNS.map((c, i) => (
+        {columns.map((c, i) => (
           <div
             key={c.key}
             // แบบบอร์ดงาน: คอลัมน์มีระยะห่างกัน หัวเป็นกล่องลอย (ไม่ใช่แถบเต็มความกว้างคั่นเส้นตั้ง)
-            className={`flex min-w-0 flex-1 flex-col px-1.5 pt-2.5 ${i === 0 ? "pl-2.5" : ""} ${i === COLUMNS.length - 1 ? "pr-2.5" : ""}`}
+            className={`flex min-w-0 flex-1 flex-col px-1.5 pt-2.5 ${i === 0 ? "pl-2.5" : ""} ${i === columns.length - 1 ? "pr-2.5" : ""}`}
           >
             <ColumnHeader col={c} orders={buckets[c.key]!} boardTotal={boardTotal} />
 

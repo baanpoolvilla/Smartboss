@@ -78,6 +78,11 @@ export interface MaintenanceBoardItem {
   /** สถานะจริง open | in_progress | completed */
   status?: string;
   autoCreated?: boolean;
+  /**
+   * งานบันทึกค่าใช้จ่ายของผู้บันทึก (ใบปิดแล้ว รอบันทึก) — dueDate = กำหนดบันทึก · responsibleId = ผู้บันทึกที่ดูอยู่
+   * อยู่คอลัมน์รอดำเนินการ เรียงบนสุด (ผู้ใช้ 3/11/2569 "ต้องขึ้นมาอยู่บนเลย") ดู lib/db/maintenance-board.ts
+   */
+  expensePending?: boolean;
 }
 
 /** สติกเกอร์ 1 ครั้งบนใบงานซ่อม — ชุดสติกเกอร์เดียวกับงาน คะแนนเข้า targetUserId (ผู้รับผิดชอบตอนที่ติด) */
@@ -99,7 +104,7 @@ export function maintenanceDate(item: MaintenanceBoardItem): string {
 export function matchesMaintenanceFilters(item: MaintenanceBoardItem, filters: TaskFilterState): boolean {
   // "งานของฉัน"/เลือกผู้รับผิดชอบ = ใบที่คนนั้น **ได้รับมอบหมาย** · "ที่ฉันมอบหมาย" = ใบที่คนนั้นเปิด
   // (ผู้ใช้ขอ 20/10/2569 — เดิม "งานของฉัน" จับทุกคนที่เกี่ยว รวมคนเปิดใบ/CC และ "ที่ฉันมอบหมาย" ไม่ขึ้นใบงานเลย)
-  if (filters.assigneeId !== "all" && item.assigneeId !== filters.assigneeId) return false;
+  if (filters.assigneeId !== "all" && item.assigneeId !== filters.assigneeId && !(item.expensePending && item.responsibleId === filters.assigneeId)) return false;
   if (filters.assignedById !== "all" && (item.createdById ?? null) !== filters.assignedById) return false;
   if (filters.departmentId !== "all") {
     const dept = item.responsibleId ? getUser(item.responsibleId)?.departmentId : undefined;
@@ -141,6 +146,7 @@ export function sortBoardEntries(entries: BoardEntry[]): BoardEntry[] {
       const t = e.task;
       const done = t.status === "done" ? 1 : 0;
       return {
+        pin: 1,
         done,
         overdue: !done && dueUrgency(t) === "overdue" ? 0 : 1,
         reviewed: t.reviewedBy ? 1 : 0,
@@ -152,6 +158,7 @@ export function sortBoardEntries(entries: BoardEntry[]): BoardEntry[] {
     const i = e.item;
     const done = i.column === "done" ? 1 : 0;
     return {
+      pin: i.expensePending ? 0 : 1,
       done,
       overdue: i.overdue ? 0 : 1,
       reviewed: done,
@@ -163,6 +170,7 @@ export function sortBoardEntries(entries: BoardEntry[]): BoardEntry[] {
   return entries
     .map((e) => ({ e, k: key(e) }))
     .sort((a, b) => {
+      if (a.k.pin !== b.k.pin) return a.k.pin - b.k.pin;
       if (a.k.done !== b.k.done) return a.k.done - b.k.done;
       if (a.k.overdue !== b.k.overdue) return a.k.overdue - b.k.overdue;
       if (a.k.done === 1 && a.k.reviewed !== b.k.reviewed) return a.k.reviewed - b.k.reviewed;

@@ -22,7 +22,7 @@ SHELL=/bin/bash
 # 0 8 * * * bash /opt/smartboss/deploy/cron-run.sh all 2>&1 | systemd-cat -t smartboss-cron
 # */5 7-12 * * * bash /opt/smartboss/deploy/cron-run.sh late-alerts 2>&1 | systemd-cat -t smartboss-cron
 # * * * * * bash /opt/smartboss/deploy/cron-run.sh attendance-chat 2>&1 | systemd-cat -t smartboss-cron
+#   ⚠ performance เริ่มหักคะแนนใบงาน/PM/บันทึกค่าใช้จ่ายที่เลยกำหนดทันที (ไม่ย้อนเกิน 3 วัน)
 # 0 17 * * * bash /opt/smartboss/deploy/cron-run.sh performance 2>&1 | systemd-cat -t smartboss-cron
-#   ⚠ score-hourly เริ่มหักคะแนนใบงาน/PM ที่เลยกำหนดทันที (ไม่ย้อนเกิน 3 วัน)
 # 59 * * * * bash /opt/smartboss/deploy/cron-run.sh score-hourly 2>&1 | systemd-cat -t smartboss-cron
 # 5 0 * * * bash /opt/smartboss/deploy/cron-run.sh score-final 2>&1 | systemd-cat -t smartboss-cron

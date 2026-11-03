@@ -481,6 +481,22 @@ model PerformanceSetting {
   pmLeadDays Int @default(14) @map("pm_lead_days")
 
   /**
+   * กำหนดบันทึกค่าใช้จ่ายของใบงานที่ปิดแล้ว (ผู้ใช้ 3/11/2569) — null = ปิดอยู่ ไม่มีอะไรเปลี่ยน
+   * ดู apps/web/modules/maintenance/lib/expense-deadline.ts
+   */
+  expenseTrackFrom DateTime? @db.Date @map("expense_track_from")
+
+  /**
+   * ปิดงานแล้วมีเวลาบันทึกกี่วัน
+   */
+  expenseTrackDays Int @default(14) @map("expense_track_days")
+
+  /**
+   * ผู้บันทึกค่าใช้จ่าย — งานขึ้นบอร์ดของคนเหล่านี้ เลยกำหนดโดนหักทุกคน
+   */
+  expenseRecorderIds String[] @map("expense_recorder_ids")
+
+  /**
    * ย้อนดูผลลงเวลากี่วันในแต่ละรอบ cron
    */
   attendanceLookbackDays Int @default(45) @map("attendance_lookback_days")

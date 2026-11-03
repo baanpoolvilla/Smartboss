@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation";
+import { loadExpenseTracking } from "@/modules/maintenance/data/expense-tracking";
+import { expenseDueAt, trackingActive } from "@/modules/maintenance/lib/expense-deadline";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { prisma } from "@smartboss/database";
@@ -49,6 +51,8 @@ export default async function WorkOrdersPage({
   // ใช้ตัวเดียวกัน) ผู้ดูแลบ้านต้องรู้ก่อนว่าดูแลบ้านหลังไหนบ้าง จึงต้อง await
   // ก่อนจะ query ใบงาน
   const access = await workOrderAccess(session);
+  const tracking = await loadExpenseTracking(orgId);
+  const trackingOn = trackingActive(tracking);
 
   const [orders, properties, expenseSet, propCats] = await Promise.all([
     listWorkOrders(orgId, {
@@ -117,6 +121,10 @@ export default async function WorkOrdersPage({
       isPrivate: o.isPrivate,
       isPm: !!o.pmScheduleId || o.pmScheduleIds.length > 0,
       dueDateIso: o.dueDate?.toISOString() ?? null,
+      expenseDeadlineIso:
+        trackingOn && o.status === "completed" && o.requiresExpense && !o.isPrivate && !expenseSet.has(o.id)
+          ? expenseDueAt(o, tracking).toISOString()
+          : null,
       commentCount: commentsBy.get(o.id) ?? 0,
       photoCount: o.photoUrls.length + o.afterPhotoUrls.length,
       pendingDue: dueReqBy.get(o.id) ?? 0,
@@ -167,6 +175,7 @@ export default async function WorkOrdersPage({
           currentUserId={session.userId}
           // พนักงานทั่วไปเห็นเฉพาะใบงานของตัวเองอยู่แล้ว (work-order-access.ts) — ตัวกรองจึงมีแค่ "ของฉัน"
           canPickPeople={access.seeAll}
+          expenseFirst={!!access.expensePendingIds}
         />
       )}
     </AppScaffold>

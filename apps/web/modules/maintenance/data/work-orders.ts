@@ -247,7 +247,7 @@ export function createWorkOrder(orgId: string, data: WorkOrderInput) {
 export async function updateWorkOrder(
   orgId: string,
   id: string,
-  data: Partial<WorkOrderInput> & { completionNotes?: string | null }
+  data: Partial<WorkOrderInput> & { completionNotes?: string | null; expenseDueDate?: Date | null }
 ) {
   await prisma.workOrder.updateMany({ where: { orgId, id }, data });
 }

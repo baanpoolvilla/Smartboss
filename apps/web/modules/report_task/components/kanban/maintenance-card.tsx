@@ -103,6 +103,7 @@ export function MaintenanceCard({ item }: { item: MaintenanceBoardItem }) {
         status={status}
         doneLabel={done ? item.statusLabel : undefined}
         dueDate={item.dueDate}
+        expenseDeadline={item.expensePending ? item.dueDate : undefined}
         commentCount={item.commentCount ?? 0}
         photoCount={item.photoCount ?? 0}
         pendingDue={item.pendingDue ?? 0}

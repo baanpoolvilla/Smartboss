@@ -41,6 +41,7 @@ export const PERFORMANCE_CATEGORIES = {
   // ── งานซ่อมบำรุง (maintenance) ──
   workorder_overdue: "ใบงานเกินกำหนด",
   pm_missed: "ไม่ทำบำรุงรักษาตามรอบ",
+  expense_overdue: "บันทึกค่าใช้จ่ายเลยกำหนด",
 
   // ── ลงเวลา (workforce) ──
   attendance_late: "มาสาย",
@@ -57,6 +58,7 @@ export const DEFAULT_RULE_POINTS: Record<PerformanceCategory, number> = {
   report_late: -1,
   workorder_overdue: -3,
   pm_missed: -5,
+  expense_overdue: -3,
   attendance_late: -1,
   attendance_absent: -5,
 };

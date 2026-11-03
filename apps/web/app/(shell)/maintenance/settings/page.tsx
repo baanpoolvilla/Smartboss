@@ -1,18 +1,20 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ExternalLink, FileText, MessageSquare } from "lucide-react";
+import { ExternalLink, FileText, MessageSquare, ReceiptText } from "lucide-react";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { Card } from "@smartboss/ui/components/card";
 import { Button } from "@smartboss/ui/components/button";
 import { Input } from "@smartboss/ui/components/input";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { ADMIN_PERMS } from "@/modules/admin/permissions";
-import { getLineConfig } from "@/modules/maintenance/data/notify";
+import { getLineConfig, usersWithPermission } from "@/modules/maintenance/data/notify";
+import { userNameMap } from "@/modules/maintenance/data/users";
+import { loadExpenseTracking, pendingExpenseWorkOrders } from "@/modules/maintenance/data/expense-tracking";
 import {
   AppScaffold,
   AppBarLink,
 } from "@/modules/maintenance/components/app-scaffold";
-import { saveLineConfigAction } from "./actions";
+import { saveExpenseTrackingAction, saveLineConfigAction } from "./actions";
 
 export default async function MaintenanceSettingsPage() {
   const session = await requireOrg();
@@ -20,6 +22,10 @@ export default async function MaintenanceSettingsPage() {
 
   const lineCfg = await getLineConfig(session.orgId);
   const canSeeUsers = hasPermission(session, ADMIN_PERMS.userView);
+  const tracking = await loadExpenseTracking(session.orgId);
+  const expenseHolders = await usersWithPermission(session.orgId, MAINT_PERMS.expenseManage);
+  const holderNames = await userNameMap(session.orgId, expenseHolders);
+  const pendingCount = (await pendingExpenseWorkOrders(session.orgId)).length;
 
   return (
     <AppScaffold
@@ -31,6 +37,45 @@ export default async function MaintenanceSettingsPage() {
         </AppBarLink>
       }
     >
+      {/* ─── กำหนดบันทึกค่าใช้จ่าย ─── */}
+      <Card className="mb-4 p-5">
+        <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-(--ink)">
+          <ReceiptText className="h-4 w-4 text-(--brand-green)" /> กำหนดบันทึกค่าใช้จ่าย
+        </h2>
+        <p className="mb-3 text-xs text-(--ink-soft)">
+          ใบงานที่ปิดแล้วและยังไม่บันทึกค่าใช้จ่าย จะขึ้นเป็นงานของผู้บันทึกพร้อมวันครบกำหนด เลยกำหนดหักคะแนนผู้บันทึกทุกคน
+          ผู้บันทึกเห็นเฉพาะใบที่เกี่ยวกับตัวเองและใบที่รอบันทึก · ตอนนี้รอบันทึก {pendingCount} ใบ
+          · ใบที่ปิดก่อนวันเริ่มใช้นับเวลาจากวันเริ่มใช้และไม่หักคะแนน
+        </p>
+        <form action={saveExpenseTrackingAction} className="flex flex-col gap-3">
+          <div className="flex flex-wrap gap-3">
+            <label className="flex flex-col gap-1 text-sm">
+              วันเริ่มใช้ (เว้นว่าง = ปิด)
+              <Input type="date" name="from" defaultValue={tracking.from ? tracking.from.toISOString().slice(0, 10) : ""} className="w-48" />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              ปิดงานแล้วมีเวลาบันทึก (วัน)
+              <Input type="number" name="days" min={1} max={90} defaultValue={tracking.days} className="w-32" />
+            </label>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-sm">ผู้บันทึกค่าใช้จ่าย</span>
+            {expenseHolders.length === 0 ? (
+              <span className="text-xs text-(--ink-soft)">ยังไม่มีใครมีสิทธิ์บันทึก/แก้ไขค่าใช้จ่าย ให้สิทธิ์ที่หน้าบทบาทก่อน</span>
+            ) : (
+              expenseHolders.map((id) => (
+                <label key={id} className="flex w-fit items-center gap-2 text-sm text-(--ink)">
+                  <input type="checkbox" name="recorderIds" value={id} defaultChecked={tracking.recorderIds.includes(id)} className="h-4 w-4" />
+                  {holderNames[id] ?? id}
+                </label>
+              ))
+            )}
+            <span className="text-xs text-(--ink-soft)">รายชื่อคือคนที่มีสิทธิ์บันทึก/แก้ไขค่าใช้จ่าย · CEO ที่ติ๊กไว้ยังเห็นทุกใบตามเดิม</span>
+          </div>
+          <Button type="submit" className="w-fit">บันทึก</Button>
+        </form>
+      </Card>
+
       {/* ─── LINE config (ของโมดูลนี้โดยเฉพาะ) ─── */}
       <Card className="mb-4 p-5">
         <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-(--ink)">

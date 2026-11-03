@@ -23,6 +23,7 @@ import {
   type PerformanceEventInput,
   type PerformanceSettings,
 } from "@/lib/performance";
+import { expenseDaysLabel, expenseDaysLeft, expenseDueAt, isExpenseBacklog, trackingActive, type ExpenseTracking } from "@/modules/maintenance/lib/expense-deadline";
 import {
   addDays,
   isBacklog,
@@ -438,6 +439,39 @@ ${statusText}${notTaken}
  * เตือนใบงานที่ปิดแล้วแต่ยังไม่บันทึกค่าใช้จ่าย
  * (port จาก checkAndNotifyMissingExpenses — เดิมรันทุกวัน 17:00)
  */
+export async function notifyExpenseDeadlines(): Promise<{ expenseDeadlineNotified: number }> {
+  const rows = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.performanceSetting.findMany({
+      where: { expenseTrackFrom: { not: null } },
+      select: { orgId: true, expenseTrackFrom: true, expenseTrackDays: true, expenseRecorderIds: true },
+    }),
+  );
+  let notified = 0;
+  for (const row of rows) {
+    const tracking: ExpenseTracking = { from: row.expenseTrackFrom, days: row.expenseTrackDays, recorderIds: row.expenseRecorderIds };
+    if (!trackingActive(tracking) || tracking.recorderIds.length === 0) continue;
+    const orders = (await pendingExpenseOrdersForCron(row.orgId))
+      .map((wo) => ({ wo, left: expenseDaysLeft(expenseDueAt(wo, tracking)) }))
+      .sort((a, b) => a.left - b.left);
+    const late = orders.filter((o) => o.left < 0).length;
+    const near = orders.filter((o) => o.left >= 0 && o.left <= EXPENSE_NEAR_DAYS).length;
+    if (late + near === 0) continue;
+    const head = [late > 0 ? `เลยกำหนด ${late} ใบ` : null, near > 0 ? `ใกล้ครบ ${near} ใบ` : null].filter(Boolean).join(" · ");
+    const list = orders.slice(0, 5).map((o) => `${o.wo.code} ${o.wo.title} (${expenseDaysLabel(o.left)})`).join("\n");
+    for (const userId of tracking.recorderIds) {
+      await notifyUser(row.orgId, userId, {
+        title: `💰 รอบันทึกค่าใช้จ่าย ${orders.length} ใบ · ${head}`,
+        body: list,
+        type: "work_order",
+        referenceId: orders[0]!.wo.id,
+        line: `💰 รอบันทึกค่าใช้จ่าย ${orders.length} ใบ\n${head}\n${list}`,
+      });
+      notified++;
+    }
+  }
+  return { expenseDeadlineNotified: notified };
+}
+
 export async function notifyMissingExpenses(): Promise<{ reminded: number }> {
   const rows = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
     prisma.expense.findMany({
@@ -677,6 +711,42 @@ export async function dockOverdueMaintenance(): Promise<{
     });
   }
 
+  // ── ใบที่ปิดแล้วเลยกำหนดบันทึกค่าใช้จ่าย — หักผู้บันทึกทุกคน คนละแถว (refId มี userId เพราะ unique key ไม่มี) ──
+  // ใบค้างเก่า (ปิดก่อนวันเริ่มใช้) ไม่หัก · อนุมัติเลื่อนแล้วนับจากวันใหม่ · บันทึกแล้วหลุดจากรายการเอง
+  const trackingRows = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.performanceSetting.findMany({
+      where: { expenseTrackFrom: { not: null } },
+      select: { orgId: true, expenseTrackFrom: true, expenseTrackDays: true, expenseRecorderIds: true },
+    }),
+  );
+  for (const row of trackingRows) {
+    const st = settingsByOrg.get(row.orgId);
+    const tracking: ExpenseTracking = { from: row.expenseTrackFrom, days: row.expenseTrackDays, recorderIds: row.expenseRecorderIds };
+    if (!st?.enabled || !trackingActive(tracking, now) || tracking.recorderIds.length === 0) continue;
+    const orders = await pendingExpenseOrdersForCron(row.orgId);
+    const active = await prisma.user.findMany({ where: { orgId: row.orgId, id: { in: tracking.recorderIds }, isActive: true }, select: { id: true } });
+    for (const wo of orders) {
+      if (isExpenseBacklog(wo, tracking)) continue;
+      const lapse = expenseDueAt(wo, tracking);
+      if (lapse >= now) continue;
+      if (st.scoringStartDate && lapse < st.scoringStartDate) continue;
+      if (isBacklog(lapse, now)) continue;
+      woCodes.set(wo.id, wo.code);
+      for (const u of active) {
+        events.push({
+          orgId: row.orgId,
+          userId: u.id,
+          source: "maintenance",
+          category: "expense_overdue",
+          occurredAt: now,
+          refType: "work_order_expense",
+          refId: `${wo.id}:${u.id}`,
+          note: `${wo.code} ${wo.title} · ครบกำหนดบันทึก ${fmtThaiDate(lapse)}`,
+        });
+      }
+    }
+  }
+
   // แจ้งเฉพาะที่ "เพิ่งหักรอบนี้" — cron รันทุกนาทีและส่งเหตุการณ์เดิมซ้ำทุกรอบ (unique กันหักซ้ำ)
   // ต้องเทียบกับแถวที่มีอยู่ก่อนบันทึก ไม่งั้นแจ้งซ้ำทุกนาที · ที่หักไปก่อนมีแจ้งเตือนก็ไม่แจ้งย้อนหลัง
   const fresh = await newMaintenanceDocks(events);
@@ -697,7 +767,7 @@ async function newMaintenanceDocks(events: PerformanceEventInput[]): Promise<Per
     prisma.performanceEvent.findMany({
       where: {
         source: "maintenance",
-        category: { in: ["workorder_overdue", "pm_missed"] },
+        category: { in: ["workorder_overdue", "pm_missed", "expense_overdue"] },
         refId: { in: events.map((e) => e.refId!).filter(Boolean) },
       },
       select: { orgId: true, category: true, refType: true, refId: true },
@@ -721,6 +791,16 @@ async function notifyMaintenanceDocks(
   for (const e of fresh) {
     const pts = settingsByOrg.get(e.orgId)?.rulePoints[e.category];
     if (!pts) continue; // บริษัทตั้งหมวดนี้เป็น 0 = ไม่ได้หักจริง
+    if (e.category === "expense_overdue") {
+      const woId = e.refId?.split(":")[0] ?? null;
+      await notifyUser(e.orgId, e.userId, {
+        title: `ระบบหักคะแนน ${fmtPoints(pts)} · บันทึกค่าใช้จ่ายเลยกำหนด ใบงาน ${woCodes.get(woId ?? "") ?? ""}`.trim(),
+        body: e.note ?? null,
+        type: "work_order",
+        referenceId: woId,
+      });
+      continue;
+    }
     const isWo = e.category === "workorder_overdue";
     const roundWo = !isWo ? roundDockWorkOrderId(e.refId) : null;
     await notifyUser(e.orgId, e.userId, {
@@ -735,6 +815,19 @@ async function notifyMaintenanceDocks(
       referenceId: isWo ? (e.refId ?? null) : (roundWo ?? e.refId?.split(":")[0] ?? null),
     });
   }
+}
+
+/** เตือนผู้บันทึกเมื่อเหลือไม่เกินกี่วัน */
+const EXPENSE_NEAR_DAYS = 3;
+
+/** ใบรอบันทึกของบริษัท — เกณฑ์เดียวกับ pendingExpenseWorkOrders (ตัวนั้นใช้ cache ต่อคำขอ ใช้ใน cron ไม่ได้) */
+async function pendingExpenseOrdersForCron(orgId: string) {
+  const rows = await prisma.expense.findMany({ where: { orgId, workOrderId: { not: null } }, select: { workOrderId: true }, distinct: ["workOrderId"] });
+  const withExpense = rows.map((r) => r.workOrderId).filter((x): x is string => !!x);
+  return prisma.workOrder.findMany({
+    where: { orgId, status: "completed", requiresExpense: true, isPrivate: false, ...(withExpense.length > 0 ? { id: { notIn: withExpense } } : {}) },
+    select: { id: true, code: true, title: true, completedAt: true, expenseDueDate: true },
+  });
 }
 
 /** ใบงานที่สร้างห่างกันไม่เกินนี้ โดยคนเดียวกัน บ้านเดียวกัน หัวข้อเดียวกัน = กดบันทึกซ้ำ */

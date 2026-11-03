@@ -117,6 +117,8 @@ model WorkOrder {
   /// (งานอย่างล้างแอร์ตามรอบที่จ้างเหมารายปีไว้แล้ว ไม่มีค่าใช้จ่ายแยกต่อครั้ง
   ///  ถ้าบังคับให้กรอกทุกใบ คนจะกรอก 0 ไปเรื่อย ๆ จนตัวเลขรายงานเชื่อไม่ได้)
   requiresExpense       Boolean   @default(true) @map("requires_expense")
+  /// กำหนดบันทึกค่าใช้จ่ายที่ CEO อนุมัติเลื่อนให้ — null = วันปิดงาน + expense_track_days (ดู lib/expense-deadline.ts)
+  expenseDueDate        DateTime? @map("expense_due_date")
   createdAt             DateTime  @default(now()) @map("created_at")
 
   property       Property                 @relation(fields: [propertyId], references: [id], onDelete: Cascade)
@@ -450,6 +452,8 @@ model WorkOrderDueRequest {
   id           String    @id @default(uuid())
   orgId        String    @map("org_id")
   workOrderId  String    @map("work_order_id")
+  /// null = เลื่อนกำหนดส่งใบงาน · "expense" = เลื่อนกำหนดบันทึกค่าใช้จ่าย
+  kind         String?
   requestedBy  String    @map("requested_by") // core.users.id
   /// กำหนดส่งตอนขอ (เทียบตอนอนุมัติ — ถ้าวันเปลี่ยนไปแล้วก็ยังใช้วันใหม่ที่ขอ)
   previousDate DateTime? @map("previous_date")

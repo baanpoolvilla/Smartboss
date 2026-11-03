@@ -1,10 +1,12 @@
 import "server-only";
-import { prisma } from "@smartboss/database";
+import { prisma, type Prisma } from "@smartboss/database";
 import { hasPermission, isSuperAdmin, type OrgSession } from "@smartboss/auth";
 
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { workOrderAccess, workOrderVisibilityWhere, type WorkOrderAccess } from "@/modules/maintenance/data/work-order-access";
 import type { MaintenanceBoardItem, MaintenanceColumn, WoType, WorkOrderReaction } from "@/modules/report_task/lib/maintenance-board";
+import { loadExpenseTracking } from "@/modules/maintenance/data/expense-tracking";
+import { expenseDueAt } from "@/modules/maintenance/lib/expense-deadline";
 import { listWorkOrderReactions } from "./work-order-reactions";
 import type { TaskPriority } from "@/modules/report_task/types";
 
@@ -22,6 +24,9 @@ import type { TaskPriority } from "@/modules/report_task/types";
  * ADMIN (IT) ที่มีสิทธิ์เห็นทั้งบริษัทในแจ้งซ่อม ยังเห็นเฉพาะของตัวเองบนบอร์ดเหมือนเดิม
  *   ใบงาน: รับผิดชอบ/เปิดเอง/CC/ผู้ดูแลบ้านหลังนั้น (เกณฑ์เดียวกับแจ้งซ่อมสำหรับคนที่ไม่เห็นทั้งบริษัท)
  * ใบที่ซ่อมเสร็จแล้วแสดง 7 วันล่าสุด · ใบที่ยกเลิกไม่แสดง
+ *
+ * ผู้บันทึกค่าใช้จ่าย: ใบที่ปิดแล้วรอบันทึกทุกใบขึ้นเป็นงานของตัวเอง กำหนด = กำหนดบันทึก เรียงบนสุด ไม่จำกัด 7 วัน
+ * (ผู้ใช้ 3/11/2569 "สร้างให้เป็นงานของเค้า มี due date")
  */
 const DONE_DAYS = 7;
 const LIMIT = 300;
@@ -58,46 +63,56 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
             ).map((r) => r.id),
           }
         : full;
-    const vis = workOrderVisibilityWhere(access);
+    const select = {
+      id: true,
+      code: true,
+      title: true,
+      status: true,
+      priority: true,
+      dueDate: true,
+      createdAt: true,
+      completedAt: true,
+      expenseDueDate: true,
+      assignedTo: true,
+      createdBy: true,
+      ccUserIds: true,
+      pmScheduleId: true,
+      pmScheduleIds: true,
+      autoCreated: true,
+      isPrivate: true,
+      photoUrls: true,
+      afterPhotoUrls: true,
+      _count: {
+        select: {
+          purchaseOrders: { where: { status: { not: "cancelled" } } },
+          comments: { where: { OR: [{ kind: null }, { kind: { not: "log" } }] } },
+          dueRequests: { where: { status: "pending" } },
+        },
+      },
+      property: { select: { name: true } },
+    } satisfies Prisma.WorkOrderSelect;
+    // ใบรอบันทึกแยกดึงต่างหาก — เก่าแค่ไหนก็ต้องขึ้น ไม่อยู่ใต้เงื่อนไข 7 วันและเพดาน LIMIT
+    const pendingIds = access.expensePendingIds ?? [];
+    const pendingSet = new Set(pendingIds);
+    const vis = workOrderVisibilityWhere({ ...access, expensePendingIds: undefined });
     const rows = await prisma.workOrder.findMany({
       where: {
         orgId,
+        ...(pendingIds.length > 0 ? { id: { notIn: pendingIds } } : {}),
         AND: [
           vis ?? {},
           { OR: [{ status: { in: ["open", "in_progress"] } }, { status: "completed", completedAt: { gte: since } }] },
         ],
       },
-      select: {
-        id: true,
-        code: true,
-        title: true,
-        status: true,
-        priority: true,
-        dueDate: true,
-        createdAt: true,
-        assignedTo: true,
-        createdBy: true,
-        ccUserIds: true,
-        pmScheduleId: true,
-        pmScheduleIds: true,
-        autoCreated: true,
-        isPrivate: true,
-        photoUrls: true,
-        afterPhotoUrls: true,
-        _count: {
-          select: {
-            purchaseOrders: { where: { status: { not: "cancelled" } } },
-            comments: { where: { OR: [{ kind: null }, { kind: { not: "log" } }] } },
-            dueRequests: { where: { status: "pending" } },
-          },
-        },
-        property: { select: { name: true } },
-      },
+      select,
       orderBy: { createdAt: "desc" },
       take: LIMIT,
     });
-    for (const w of rows) {
-      const done = w.status === "completed";
+    const pendingRows = pendingIds.length > 0 ? await prisma.workOrder.findMany({ where: { orgId, id: { in: pendingIds } }, select }) : [];
+    const tracking = pendingRows.length > 0 ? await loadExpenseTracking(orgId) : null;
+    for (const w of [...pendingRows, ...rows]) {
+      const expensePending = pendingSet.has(w.id);
+      const done = w.status === "completed" && !expensePending;
       const isPm = !!w.pmScheduleId || (w.pmScheduleIds ?? []).length > 0;
       const woTypes: WoType[] = [
         ...(!isPm && !w.autoCreated ? (["normal"] as const) : []),
@@ -106,18 +121,19 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
         ...((w._count?.purchaseOrders ?? 0) > 0 ? (["po"] as const) : []),
       ];
       const column: MaintenanceColumn = done ? "done" : w.status === "in_progress" ? "in_progress" : "todo";
+      const expenseDue = expensePending && tracking ? expenseDueAt(w, tracking) : null;
       items.push({
         kind: "wo",
         id: w.id,
         code: w.code,
         title: w.title,
         column,
-        statusLabel: done ? "ซ่อมเสร็จแล้ว" : w.status === "in_progress" ? "กำลังซ่อม" : "รอดำเนินการ",
+        statusLabel: expensePending ? "รอบันทึกค่าใช้จ่าย" : done ? "ซ่อมเสร็จแล้ว" : w.status === "in_progress" ? "กำลังซ่อม" : "รอดำเนินการ",
         priority: WO_PRIORITY[w.priority] ?? "medium",
-        dueDate: w.dueDate?.toISOString() ?? null,
+        dueDate: (expenseDue ?? w.dueDate)?.toISOString() ?? null,
         createdAt: w.createdAt.toISOString(),
-        overdue: !done && !!w.dueDate && bangkokDay(w.dueDate) < today,
-        responsibleId: w.assignedTo ?? w.createdBy,
+        overdue: expenseDue ? bangkokDay(expenseDue) < today : !done && !!w.dueDate && bangkokDay(w.dueDate) < today,
+        responsibleId: expensePending ? session.userId : (w.assignedTo ?? w.createdBy),
         assigneeId: w.assignedTo,
         createdById: w.createdBy,
         involvedIds: [...new Set([w.assignedTo, w.createdBy, ...w.ccUserIds].filter((x): x is string => !!x))],
@@ -131,6 +147,7 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
         isPrivate: w.isPrivate,
         status: w.status,
         autoCreated: w.autoCreated,
+        expensePending,
       });
     }
   }

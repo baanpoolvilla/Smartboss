@@ -1,6 +1,8 @@
 import "server-only";
 import { prisma, Prisma } from "@smartboss/database";
-import { canViewAll, type OrgSession } from "@smartboss/auth";
+import { canViewAll, hasRole, isSuperAdmin, type OrgSession } from "@smartboss/auth";
+import { loadExpenseTracking, pendingExpenseWorkOrders } from "@/modules/maintenance/data/expense-tracking";
+import { trackingActive } from "@/modules/maintenance/lib/expense-deadline";
 
 /**
  * ใครเห็นใบงานใบไหนได้บ้าง — กติกาเดียวใช้ร่วมกันทุกหน้า
@@ -26,12 +28,20 @@ export interface WorkOrderAccess {
   userId: string;
   /** บ้านที่คนนี้เป็น "ผู้ดูแลบ้าน" อยู่ */
   caretakerPropertyIds: string[];
+  /**
+   * ผู้บันทึกค่าใช้จ่าย (lib/expense-deadline.ts) — เห็นเฉพาะใบที่เกี่ยวกับตัวเอง + ใบที่ปิดแล้วรอบันทึก
+   * แม้บทบาทจะเห็นทั้งบริษัท (ผู้ใช้ 3/11/2569) · CEO/ผู้ดูแลสูงสุดอยู่ในรายชื่อก็ยังเห็นทุกใบ
+   */
+  expensePendingIds?: string[];
 }
 
 export async function workOrderAccess(
   session: OrgSession
 ): Promise<WorkOrderAccess> {
-  if (canViewAll(session)) {
+  const tracking = await loadExpenseTracking(session.orgId);
+  const recorder =
+    trackingActive(tracking) && tracking.recorderIds.includes(session.userId) && !hasRole(session, "CEO") && !isSuperAdmin(session);
+  if (canViewAll(session) && !recorder) {
     return { seeAll: true, userId: session.userId, caretakerPropertyIds: [] };
   }
   const rows = await prisma.property.findMany({
@@ -42,6 +52,7 @@ export async function workOrderAccess(
     seeAll: false,
     userId: session.userId,
     caretakerPropertyIds: rows.map((r) => r.id),
+    ...(recorder ? { expensePendingIds: (await pendingExpenseWorkOrders(session.orgId)).map((w) => w.id) } : {}),
   };
 }
 
@@ -61,6 +72,7 @@ export function workOrderVisibilityWhere(
       { assignedTo: access.userId },
       { createdBy: access.userId },
       { ccUserIds: { has: access.userId } },
+      ...(access.expensePendingIds?.length ? [{ id: { in: access.expensePendingIds } }] : []),
       // ผู้ดูแลบ้านเห็นงานของบ้านตัวเองทุกใบ รวมบ้านที่ใบงานพ่วงมาเพิ่ม
       // (ใบเดียวครอบหลายหลัง) ไม่ใช่เฉพาะบ้านหลัก
       ...(props.length > 0
@@ -81,6 +93,7 @@ export function workOrderVisibilityWhere(
 export function canSeeWorkOrder(
   access: WorkOrderAccess,
   wo: {
+    id?: string;
     assignedTo: string | null;
     createdBy: string | null;
     ccUserIds: string[];
@@ -95,6 +108,7 @@ export function canSeeWorkOrder(
     return true;
   }
   if (wo.ccUserIds.includes(access.userId)) return true;
+  if (wo.id && access.expensePendingIds?.includes(wo.id)) return true;
   if (access.caretakerPropertyIds.length === 0) return false;
   return (
     access.caretakerPropertyIds.includes(wo.propertyId) ||
