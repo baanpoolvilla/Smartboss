@@ -6,8 +6,10 @@ import {
   ShieldCheck,
   ShieldAlert,
   CalendarClock,
+  ClipboardList,
 } from "lucide-react";
 import { requireOrg, hasPermission } from "@smartboss/auth";
+import { prisma } from "@smartboss/database";
 import { Card } from "@smartboss/ui/components/card";
 import { Button } from "@smartboss/ui/components/button";
 import { Input } from "@smartboss/ui/components/input";
@@ -63,6 +65,25 @@ export default async function AssetDetailPage({
     canManagePm ? listOrgUsers(orgId) : Promise.resolve([]),
   ]);
   const today = todayBangkok();
+  // ใบงานที่เปิดค้างของแต่ละแผน (เหมือนหน้าปฏิทิน PM) — รอบของแผนเดินต่อเมื่อปิดใบนี้ ไม่ใช่ตอนสร้างใบ
+  // เดิมหน้านี้ไม่บอก ⇒ สร้างใบแล้วยังขึ้น "เกินกำหนด" กับปุ่มสร้างใบงานเหมือนยังไม่มีใคร ("ทำไมสร้างใบงานไปแล้ว…")
+  const pmIds = schedules.map((s) => s.id);
+  const pendingWos = pmIds.length
+    ? await prisma.workOrder.findMany({
+        where: {
+          orgId,
+          status: { in: ["open", "in_progress"] },
+          OR: [{ pmScheduleId: { in: pmIds } }, { pmScheduleIds: { hasSome: pmIds } }],
+        },
+        select: { id: true, code: true, status: true, pmScheduleId: true, pmScheduleIds: true },
+        orderBy: { createdAt: "desc" },
+      })
+    : [];
+  const pending = new Map<string, (typeof pendingWos)[number]>();
+  for (const w of [...pendingWos].reverse()) {
+    if (w.pmScheduleId) pending.set(w.pmScheduleId, w);
+    for (const pid of w.pmScheduleIds) pending.set(pid, w);
+  }
   const warrantyExpired =
     asset.warrantyExpiry != null && asset.warrantyExpiry < new Date();
 
@@ -215,6 +236,7 @@ export default async function AssetDetailPage({
             const statusText = overdue
               ? `เกินกำหนด ${-left} วัน`
               : `${left} วัน`;
+            const openWo = pending.get(s.id);
             return (
               <Card key={s.id} className="p-3">
                 <div className="flex items-start gap-3">
@@ -238,9 +260,19 @@ export default async function AssetDetailPage({
                     {statusText}
                   </span>
                 </div>
+                {openWo && (
+                  <Link
+                    href={`/maintenance/work-orders/${openWo.id}`}
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-(--bg-soft) px-2.5 py-1 text-xs text-(--ink) hover:underline"
+                  >
+                    <ClipboardList className="h-3.5 w-3.5 text-(--ink-soft)" />
+                    เปิดใบงานแล้ว {openWo.code} · {openWo.status === "in_progress" ? "กำลังดำเนินการ" : "รอรับงาน"} — ปิดใบนี้แล้วรอบถัดไปจะเดินเอง
+                  </Link>
+                )}
                 {canManagePm && <PmEditForm s={s} users={users} today={today} />}
                 {canManagePm && (
                   <div className="mt-2 flex items-center gap-2">
+                    {!openWo && (
                     <Link
                       href={`/maintenance/work-orders/new?pmScheduleId=${s.id}&assetId=${id}&propertyId=${s.propertyId}&title=${encodeURIComponent(s.title)}`}
                     >
@@ -248,6 +280,7 @@ export default async function AssetDetailPage({
                         <Plus className="h-3.5 w-3.5" /> สร้างใบงาน
                       </Button>
                     </Link>
+                    )}
                     <form action={deletePmAction} className="ml-auto">
                       <input type="hidden" name="id" value={s.id} />
                       <Button
