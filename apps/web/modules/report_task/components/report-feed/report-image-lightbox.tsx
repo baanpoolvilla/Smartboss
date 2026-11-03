@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { THUMB_STRIP_EXPAND_MS, THUMB_STRIP_PILL, THUMB_STRIP_ROW } from "@/lib/lightbox-strip";
 import { Dialog, DialogContent } from "@/modules/report_task/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import type { ReportPostImage } from "@/modules/report_task/store/report-feed-store";
@@ -494,8 +495,7 @@ export function ReportImageLightbox({
           onPointerCancel={swipeUp}
           onClickCapture={swipeClickCapture}
           onWheel={swipeWheel}
-          // มีแถบรูปย่อ + เมาส์: กันที่ด้านล่างให้แถบ ไม่ให้บังรูป (ผู้ใช้ 3/11/2569 "มันบังรูป") · จอสัมผัสแตะรูปซ่อนแถบได้ ใช้เต็มจอเหมือนเดิม
-          className={`absolute inset-0 overflow-hidden ${hasMultiple ? "[@media(pointer:fine)]:bottom-[5.25rem]" : ""}`}
+          className="absolute inset-0 overflow-hidden"
         >
           <div ref={trackRef} className="absolute inset-0" style={trackStyle}>
             {slides.map((sl) => (
@@ -697,13 +697,14 @@ export function ReportImageLightbox({
           // to, same as Discord's own lightbox strip
           // ("ให้กดง่ายหน่อยได้ไหมใหญ่กว่านี้ หรือแสดงเป็นภาพ").
           <div
-            className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 flex items-center gap-2.5 max-w-[92vw] rounded-2xl bg-black/65 px-2.5 py-1 ring-1 ring-white/25 backdrop-blur-sm transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none"
+            className={`absolute bottom-4 left-1/2 z-10 -translate-x-1/2 flex items-center gap-2.5 max-w-[92vw] rounded-2xl bg-black/65 px-2.5 py-1 ring-1 ring-white/25 backdrop-blur-sm transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none ${THUMB_STRIP_PILL}`}
             onClick={(e) => e.stopPropagation()}
+            onMouseEnter={() => setTimeout(() => activeThumbRef.current?.scrollIntoView({ block: "nearest", inline: "center" }), THUMB_STRIP_EXPAND_MS)}
           >
             <span className="text-xs text-white tabular-nums shrink-0">
               {index + 1} / {images.length}
             </span>
-            <div className="flex items-center gap-1.5 overflow-x-auto py-1 px-0.5 max-w-[70vw] sm:max-w-[60vw]">
+            <div className={`flex items-center gap-1.5 overflow-x-auto py-1 px-0.5 max-w-[70vw] sm:max-w-[60vw] ${THUMB_STRIP_ROW}`}>
               {images.map((img, i) => {
                 const active = i === index;
                 const thumbIsVideo = img.mime?.startsWith("video/") ?? false;

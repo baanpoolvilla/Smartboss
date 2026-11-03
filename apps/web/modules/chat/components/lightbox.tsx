@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { BookImage, ChevronLeft, ChevronRight, Download, Loader2, Minus, MoreHorizontal, Pencil, Play, Plus, X } from "lucide-react";
 import { toast } from "sonner";
+import { THUMB_STRIP_EXPAND_MS, THUMB_STRIP_PILL, THUMB_STRIP_ROW } from "@/lib/lightbox-strip";
 import { saveToPhotosOnClick } from "@/lib/save-to-photos";
 import { fileForEditing, openAnnotator } from "@/lib/annotate/annotate";
 import type { ChatAttachment } from "../types";
@@ -226,13 +227,14 @@ export function Lightbox({
       {/* ล่างกลาง: ลำดับ + รูปย่อ กดข้ามไปรูปไหนก็ได้ (เดิมมีแค่ตัวเลข 2 / 5 ที่มุมบน) */}
       {items.length > 1 && (
         <div
-          className="absolute bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-10 flex max-w-[92vw] -translate-x-1/2 items-center gap-2.5 rounded-2xl bg-black/65 px-2.5 py-1 ring-1 ring-white/25 backdrop-blur-sm transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none"
+          className={`absolute bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-10 flex max-w-[92vw] -translate-x-1/2 items-center gap-2.5 rounded-2xl bg-black/65 px-2.5 py-1 ring-1 ring-white/25 backdrop-blur-sm transition-opacity duration-200 group-data-[dismissing]:opacity-0 group-data-[chrome-hidden]:opacity-0 group-data-[chrome-hidden]:pointer-events-none ${THUMB_STRIP_PILL}`}
           onClick={(e) => e.stopPropagation()}
+          onMouseEnter={() => setTimeout(() => activeThumbRef.current?.scrollIntoView({ block: "nearest", inline: "center" }), THUMB_STRIP_EXPAND_MS)}
         >
           <span className="shrink-0 text-xs tabular-nums text-white">
             {i + 1} / {items.length}
           </span>
-          <div className="flex max-w-[70vw] items-center gap-1.5 overflow-x-auto px-0.5 py-1 [scrollbar-width:none] sm:max-w-[60vw]">
+          <div className={`flex max-w-[70vw] items-center gap-1.5 overflow-x-auto px-0.5 py-1 [scrollbar-width:none] sm:max-w-[60vw] ${THUMB_STRIP_ROW}`}>
             {items.map((it, k) => (
               <button
                 key={`${it.url}-${k}`}
@@ -262,8 +264,7 @@ export function Lightbox({
         onPointerCancel={swipeUp}
         onClickCapture={swipeClickCapture}
         onWheel={swipeWheel}
-        // มีแถบรูปย่อ + เมาส์: กันที่ด้านล่างให้แถบ ไม่ให้บังรูป (แบบเดียวกับ report-image-lightbox.tsx) · จอสัมผัสแตะรูปซ่อนแถบได้ ใช้เต็มจอเหมือนเดิม
-        className={`relative min-h-0 flex-1 select-none overflow-hidden ${items.length > 1 ? "[@media(pointer:fine)]:mb-[5.25rem]" : ""}`}
+        className="relative min-h-0 flex-1 select-none overflow-hidden"
         style={{ touchAction: "none", cursor: items.length > 1 && !zoom.zoomed ? "grab" : undefined }}
       >
         <div ref={trackRef} className="absolute inset-0" style={trackStyle}>
