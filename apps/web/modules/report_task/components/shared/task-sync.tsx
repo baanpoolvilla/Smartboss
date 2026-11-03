@@ -286,6 +286,10 @@ export function TaskSync() {
     }
 
     function flushPending() {
+      // ตัวจับเวลาที่เรียกมาถึงนี่ทำงานไปแล้ว — ล้าง id ด้วย ไม่งั้น canPullNow เห็น id ค้างเป็น
+      // "ยังมีของรอบันทึก" ตลอดไป ⇒ หลังแก้อะไรครั้งเดียว ไม่ดึงของเพื่อน (ความคิดเห็นใหม่) อีกเลยจนรีเฟรช
+      // (แบบเดียวกับ server-store-sync.tsx flushPending)
+      timerRef.current = null;
       void flush(pendingRef.current);
     }
 

@@ -2,7 +2,7 @@
 
 import { useDismissKeyboardOnDrag } from "@/lib/dismiss-keyboard-on-drag";
 import { ReactionPicker } from "@/components/emoji-picker";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type SyntheticEvent, type UIEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { NewDivider } from "@/components/new-divider";
 import {
@@ -461,27 +461,44 @@ export function TaskDetailSheet({
     );
     return () => timers.forEach(clearTimeout);
   }, [taskId, taskLoaded]);
-  // เปิดงาน/กางแผงความคิดเห็น — เลื่อนไปที่เส้น "New" ถ้ามี ไม่งั้นไปล่าสุด (ล่างสุด) แบบแชท
-  // เปิดจากแจ้งเตือนที่ชี้คอมเมนต์ (?comment=) ใช้ effect ด้านบนแทน · ซ้ำอีกรอบหลังรูปโหลด (ความสูงเปลี่ยน)
+  // เปิดงาน/กางแผงความคิดเห็น — ไปข้อความล่าสุด (ล่างสุด) ทันทีแบบแชท ไม่ต้องเลื่อนเอง (ผู้ใช้ 3/11/2569
+  // "กดการ์ดแล้วแชทแสดงล่าสุดเลย") · เส้น "New" ยังอยู่ เลื่อนขึ้นไปดูได้ · เดิมหยุดที่เส้น New ซึ่งอาจอยู่กลาง ๆ
+  // เปิดจากแจ้งเตือนที่ชี้คอมเมนต์ (?comment=) ใช้ effect ด้านบนแทน
+  // "ติดล่าง" (stickToBottom) = ผู้ใช้อยู่ล่างสุด ⇒ รูปโหลดเสร็จ/ข้อความใหม่เข้ามา เลื่อนตามลงไปเอง
+  // ถ้าเลื่อนขึ้นไปอ่านของเก่า ไม่ดึงลงกลางคัน — ขึ้นปุ่ม "ข้อความใหม่ ↓" แทน
   const commentListRef = useRef<HTMLDivElement>(null);
+  const stickToBottom = useRef(true);
+  const [newBelow, setNewBelow] = useState(false);
+  const scrollCommentsToBottom = useCallback((smooth = false) => {
+    const el = commentListRef.current;
+    if (!el || el.clientHeight === 0) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+    stickToBottom.current = true;
+    setNewBelow(false);
+  }, []);
   useEffect(() => {
     if (!taskId || !taskLoaded) return;
     if (new URLSearchParams(window.location.search).get("comment")) return;
-    const jump = () => {
-      const el = commentListRef.current;
-      if (!el || el.clientHeight === 0) return;
-      const marker = el.querySelector<HTMLElement>("[data-unread-marker]");
-      if (marker) el.scrollTop += marker.getBoundingClientRect().top - el.getBoundingClientRect().top - 12;
-      else el.scrollTop = el.scrollHeight;
-    };
-    const raf = requestAnimationFrame(jump);
-    const t = setTimeout(jump, 400);
+    stickToBottom.current = true;
+    const raf = requestAnimationFrame(() => scrollCommentsToBottom());
+    const t = setTimeout(() => scrollCommentsToBottom(), 400);
     return () => {
       cancelAnimationFrame(raf);
       clearTimeout(t);
     };
-  }, [taskId, taskLoaded, mobileCommentsOpen, unreadMarkerId]);
-  // ส่งความคิดเห็นเอง — เลื่อนลงไปให้เห็นข้อความที่เพิ่งส่ง
+  }, [taskId, taskLoaded, mobileCommentsOpen, scrollCommentsToBottom]);
+  // ผูกเป็น prop บนกล่องรายการ (ไม่ใช่ addEventListener ใน effect — ตอน effect รัน กล่องอาจยังไม่ขึ้น ⇒ ไม่ได้ผูก)
+  const onCommentListScroll = useCallback((e: UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    stickToBottom.current = atBottom;
+    if (atBottom) setNewBelow(false);
+  }, []);
+  // รูปในความคิดเห็นโหลดเสร็จทีหลัง ความสูงเพิ่ม — ยังติดล่างอยู่ก็ตามลงไป
+  const onCommentListLoad = useCallback((e: SyntheticEvent<HTMLDivElement>) => {
+    if (stickToBottom.current) e.currentTarget.scrollTop = e.currentTarget.scrollHeight;
+  }, []);
+  // ข้อความใหม่เข้ามา (ของเราเอง หรือของคนอื่นแบบเรียลไทม์) — ติดล่างอยู่ = เลื่อนลงให้เห็นเลย · ของเราเองเลื่อนเสมอ
   const lastComment = task?.comments[task.comments.length - 1];
   const lastCommentId = lastComment?.id;
   const lastCommentMine = lastComment?.authorId === viewingAsUserId;
@@ -489,12 +506,10 @@ export function TaskDetailSheet({
   useEffect(() => {
     const prev = seenLastComment.current;
     seenLastComment.current = lastCommentId;
-    if (!prev || !lastCommentId || prev === lastCommentId || !lastCommentMine) return;
-    requestAnimationFrame(() => {
-      const el = commentListRef.current;
-      if (el) el.scrollTop = el.scrollHeight;
-    });
-  }, [lastCommentId, lastCommentMine]);
+    if (!prev || !lastCommentId || prev === lastCommentId) return;
+    if (lastCommentMine || stickToBottom.current) requestAnimationFrame(() => scrollCommentsToBottom(true));
+    else setNewBelow(true);
+  }, [lastCommentId, lastCommentMine, scrollCommentsToBottom]);
   const [commentUploading, setCommentUploading] = useState(false);
   const [taskAttachUploading, setTaskAttachUploading] = useState(false);
   const [newChecklistItem, setNewChecklistItem] = useState("");
@@ -2372,6 +2387,8 @@ export function TaskDetailSheet({
           </div>
           <div
             ref={commentListRef}
+            onScroll={onCommentListScroll}
+            onLoadCapture={onCommentListLoad}
             className={cn(
               "flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0",
               mobileCommentsOpen ? "block" : "hidden md:block",
@@ -2453,6 +2470,18 @@ export function TaskDetailSheet({
             })}
             {task.comments.length === 0 && (
               <p className="text-xs text-[var(--ink-soft)] text-center py-6">เริ่มการสนทนาเกี่ยวกับงานนี้</p>
+            )}
+            {/* เลื่อนขึ้นไปอ่านของเก่าอยู่ แล้วมีข้อความใหม่ — ปุ่มลอยพาลงไปล่าสุด (ไม่ดึงลงกลางคันขณะอ่าน) */}
+            {newBelow && (
+              <div className="sticky bottom-1 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => scrollCommentsToBottom(true)}
+                  className="rounded-full bg-[var(--brand-navy)] px-3 py-1 text-xs font-semibold text-white shadow-md"
+                >
+                  ข้อความใหม่ ↓
+                </button>
+              </div>
             )}
           </div>
 
