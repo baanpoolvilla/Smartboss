@@ -237,12 +237,15 @@ export default async function AssetDetailPage({
               ? `เกินกำหนด ${-left} วัน`
               : `${left} วัน`;
             const openWo = pending.get(s.id);
+            // มีใบงานแล้ว: ป้ายขวาบอก "สร้างใบงานแล้ว · รอปิดงาน" (กรมท่า) แทนป้ายนับวัน — ผู้ดูแลบ้านเห็นป้ายแดง
+            // "เกินกำหนด" ทั้งที่สร้างใบไปแล้วจะงง (ผู้ใช้ 3/11/2569) · ส่วนเลยกำหนดย้ายไปบอกในแถวใบงาน
+            const pillColor = openWo ? "var(--brand-navy)" : color;
             return (
               <Card key={s.id} className="p-3">
                 <div className="flex items-start gap-3">
                   <CalendarClock
                     className="mt-0.5 h-4 w-4 shrink-0"
-                    style={{ color }}
+                    style={{ color: pillColor }}
                   />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-(--ink)">
@@ -255,9 +258,13 @@ export default async function AssetDetailPage({
                   </div>
                   <span
                     className="shrink-0 rounded-lg px-2 py-1 text-xs font-bold"
-                    style={{ color, backgroundColor: `${color}1a` }}
+                    style={
+                      openWo
+                        ? { color: "var(--brand-navy)", backgroundColor: "color-mix(in srgb, var(--brand-navy) 10%, transparent)" }
+                        : { color, backgroundColor: `${color}1a` }
+                    }
                   >
-                    {statusText}
+                    {openWo ? "สร้างใบงานแล้ว · รอปิดงาน" : statusText}
                   </span>
                 </div>
                 {openWo && (
@@ -266,7 +273,9 @@ export default async function AssetDetailPage({
                     className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-(--bg-soft) px-2.5 py-1 text-xs text-(--ink) hover:underline"
                   >
                     <ClipboardList className="h-3.5 w-3.5 text-(--ink-soft)" />
-                    เปิดใบงานแล้ว {openWo.code} · {openWo.status === "in_progress" ? "กำลังดำเนินการ" : "รอรับงาน"} — ปิดใบนี้แล้วรอบถัดไปจะเดินเอง
+                    ใบงาน {openWo.code} · {openWo.status === "in_progress" ? "กำลังดำเนินการ" : "รอรับงาน"}
+                    {overdue && <span className="text-[#DC2626]">· เลยกำหนด {-left} วัน</span>}
+                    <span className="text-(--ink-soft)">· ดูใบงาน →</span>
                   </Link>
                 )}
                 {canManagePm && <PmEditForm s={s} users={users} today={today} />}
