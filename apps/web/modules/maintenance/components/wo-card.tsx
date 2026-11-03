@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { CalendarClock, CalendarDays, CalendarX2, Check, Circle, Clock, Lock, MapPin, MessageSquare, Paperclip } from "lucide-react";
 
-import { expenseDaysLabel, expenseDaysLeft } from "@/modules/maintenance/lib/expense-deadline";
+import { expenseDaysLeft } from "@/modules/maintenance/lib/expense-deadline";
 import { isCommentNotif, PendingBand, usePendingFor } from "@/modules/notifications/pending-for-you";
 import type { NotifCategory } from "@/modules/notifications/types";
 
@@ -79,7 +79,7 @@ function shortDate(d: Date): string {
   return `${day}/${m}/${y}`;
 }
 
-function DueBadge({ due, open }: { due: Date; open: boolean }) {
+function DueBadge({ due, open, showLeft = false }: { due: Date; open: boolean; showLeft?: boolean }) {
   const days = Math.round((bkkDay(due) - bkkDay(new Date())) / 86_400_000);
   const date = shortDate(due);
   if (!open || days > 2) {
@@ -87,6 +87,8 @@ function DueBadge({ due, open }: { due: Date; open: boolean }) {
       <span className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-medium text-(--ink-soft)" title={`ครบกำหนด ${date}`}>
         <CalendarDays className="h-3 w-3" />
         {date}
+        {/* กำหนดบันทึกค่าใช้จ่าย: บอกเหลือกี่วันเสมอ ที่นี่ที่เดียว (ไม่ซ้ำกับแถบบน) */}
+        {showLeft && <span className="opacity-70">· อีก {days} ว</span>}
       </span>
     );
   }
@@ -115,6 +117,17 @@ export function WoCard(p: WoCardProps) {
   const open = p.status === "open" || p.status === "in_progress";
   const expenseDue = p.expenseDeadline ? new Date(p.expenseDeadline) : null;
   const expenseLeft = expenseDue ? expenseDaysLeft(expenseDue) : 0;
+  // แถบสถานะค่าใช้จ่าย อยู่ชิดขวา แถวเดียวกับแถบ "ยังไม่ได้อ่าน" ที่อยู่ซ้าย (ผู้ใช้ 3/11/2569 ไม่ให้ทับกัน) · จำนวนวันอยู่ที่ป้ายล่าง
+  const recorded = p.expenseRecorded ?? null;
+  const expenseBand = expenseDue ? (
+    <span className={`flex shrink-0 items-center px-3 py-1 text-[11px] font-bold leading-4 ${expenseLeft < 0 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>
+      💰 รอบันทึกค่าใช้จ่าย
+    </span>
+  ) : recorded !== null ? (
+    <span className="flex shrink-0 items-center gap-1 bg-emerald-100 px-3 py-1 text-[11px] font-bold leading-4 text-emerald-800 tabular-nums">
+      ✅ บันทึกแล้ว {recorded > 0 ? `฿${recorded.toLocaleString()}` : "ไม่มีค่าใช้จ่าย"}
+    </span>
+  ) : null;
   // รอบันทึก = ยังเป็นงานที่ต้องทำ ไม่ขีดฆ่า/ไม่จาง
   const done = !expenseDue && (p.status === "completed" || p.status === "cancelled");
   const due = expenseDue ?? (p.dueDate ? new Date(p.dueDate) : null);
@@ -137,18 +150,13 @@ export function WoCard(p: WoCardProps) {
       } ${done ? "opacity-90" : ""}`}
       aria-label={`ใบงานซ่อม ${p.code} ${p.title}`}
     >
-      <PendingBand notifs={pending} soft />
-      {expenseDue && (
-        <div className={`flex items-center justify-between gap-2 px-3 py-1 text-[12px] font-bold sm:px-4 ${expenseLeft < 0 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>
-          <span className="truncate">💰 รอบันทึกค่าใช้จ่าย</span>
-          <span className="shrink-0 tabular-nums">{expenseDaysLabel(expenseLeft)}</span>
+      {expenseBand ? (
+        <div className={`flex items-stretch justify-end ${expenseDue ? (expenseLeft < 0 ? "bg-red-100" : "bg-amber-100") : "bg-emerald-100"}`} data-testid="wo-top-band">
+          <PendingBand notifs={pending} soft className="min-w-0 flex-1" />
+          {expenseBand}
         </div>
-      )}
-      {p.expenseRecorded !== undefined && p.expenseRecorded !== null && (
-        <div className="flex items-center justify-between gap-2 bg-emerald-100 px-3 py-1 text-[12px] font-bold text-emerald-800 sm:px-4">
-          <span className="truncate">✅ บันทึกค่าใช้จ่ายแล้ว</span>
-          <span className="shrink-0 tabular-nums">{p.expenseRecorded > 0 ? `฿${p.expenseRecorded.toLocaleString()}` : "ไม่มีค่าใช้จ่าย"}</span>
-        </div>
+      ) : (
+        <PendingBand notifs={pending} soft />
       )}
       {/* แถบหัวสีแจ้งซ่อม — มองไกลก็รู้ว่าเป็นใบของแจ้งซ่อม ไม่ใช่งาน */}
       <div className="flex items-center justify-between gap-2 bg-[#0d9488] px-3 py-0.5 text-[10.5px] font-semibold leading-4 text-white">
@@ -231,7 +239,7 @@ export function WoCard(p: WoCardProps) {
         <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-[var(--line)]/60 pt-2">
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5 text-(--ink)">
             {/* สถานะไม่ขึ้นบนการ์ด — คอลัมน์บอกอยู่แล้ว แบบการ์ดงาน (ใบที่ปิดแล้วมีป้ายด้านบนแทน) */}
-            {due && <DueBadge due={due} open={open || !!expenseDue} />}
+            {due && <DueBadge due={due} open={open || !!expenseDue} showLeft={!!expenseDue} />}
             {p.photoCount > 0 && (
               <span className="flex items-center gap-0.5 text-xs font-medium" title="รูปแนบ">
                 <Paperclip className="h-3.5 w-3.5" /> {p.photoCount}
