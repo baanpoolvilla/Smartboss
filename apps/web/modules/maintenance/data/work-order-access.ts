@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma, Prisma } from "@smartboss/database";
 import { canViewAll, hasRole, isSuperAdmin, type OrgSession } from "@smartboss/auth";
-import { loadExpenseTracking, pendingExpenseWorkOrders } from "@/modules/maintenance/data/expense-tracking";
+import { loadExpenseTracking, pendingExpenseWorkOrders, recordedExpenseWorkOrders } from "@/modules/maintenance/data/expense-tracking";
 import { trackingActive } from "@/modules/maintenance/lib/expense-deadline";
 
 /**
@@ -33,6 +33,8 @@ export interface WorkOrderAccess {
    * แม้บทบาทจะเห็นทั้งบริษัท (ผู้ใช้ 3/11/2569) · CEO/ผู้ดูแลสูงสุดอยู่ในรายชื่อก็ยังเห็นทุกใบ
    */
   expensePendingIds?: string[];
+  /** ผู้บันทึก: ใบที่บันทึกแล้วล่าสุด ให้กลับมาตรวจ/แก้ได้ — ดู recordedExpenseWorkOrders */
+  expenseRecordedIds?: string[];
 }
 
 export async function workOrderAccess(
@@ -52,7 +54,12 @@ export async function workOrderAccess(
     seeAll: false,
     userId: session.userId,
     caretakerPropertyIds: rows.map((r) => r.id),
-    ...(recorder ? { expensePendingIds: (await pendingExpenseWorkOrders(session.orgId)).map((w) => w.id) } : {}),
+    ...(recorder
+      ? {
+          expensePendingIds: (await pendingExpenseWorkOrders(session.orgId)).map((w) => w.id),
+          expenseRecordedIds: (await recordedExpenseWorkOrders(session.orgId)).map((w) => w.id),
+        }
+      : {}),
   };
 }
 
@@ -73,6 +80,7 @@ export function workOrderVisibilityWhere(
       { createdBy: access.userId },
       { ccUserIds: { has: access.userId } },
       ...(access.expensePendingIds?.length ? [{ id: { in: access.expensePendingIds } }] : []),
+      ...(access.expenseRecordedIds?.length ? [{ id: { in: access.expenseRecordedIds } }] : []),
       // ผู้ดูแลบ้านเห็นงานของบ้านตัวเองทุกใบ รวมบ้านที่ใบงานพ่วงมาเพิ่ม
       // (ใบเดียวครอบหลายหลัง) ไม่ใช่เฉพาะบ้านหลัก
       ...(props.length > 0
@@ -108,7 +116,7 @@ export function canSeeWorkOrder(
     return true;
   }
   if (wo.ccUserIds.includes(access.userId)) return true;
-  if (wo.id && access.expensePendingIds?.includes(wo.id)) return true;
+  if (wo.id && (access.expensePendingIds?.includes(wo.id) || access.expenseRecordedIds?.includes(wo.id))) return true;
   if (access.caretakerPropertyIds.length === 0) return false;
   return (
     access.caretakerPropertyIds.includes(wo.propertyId) ||

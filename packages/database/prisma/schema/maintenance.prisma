@@ -208,6 +208,18 @@ model Expense {
   description       String?
   category          String?
   receiptUrl        String?  @map("receipt_url")
+  /// เลขที่ใบเสร็จ / เลขอ้างอิงสลิป
+  receiptNo         String?  @map("receipt_no")
+  /// ร้านหรือผู้รับเงิน
+  payee             String?
+  /// ผู้จ่ายหรือผู้โอน
+  payer             String?
+  /// วันเวลาที่จ่ายตามเอกสาร
+  paidAt            DateTime? @map("paid_at")
+  /// cash|transfer|card|other
+  paymentMethod     String?  @map("payment_method")
+  /// ติ๊กว่าไม่มีใบเสร็จ
+  noReceipt         Boolean  @default(false) @map("no_receipt")
   billableToPartner Boolean  @default(false) @map("billable_to_partner")
   costType          String   @default("work_order") @map("cost_type") // work_order|pm
   paidBy            String   @default("company") @map("paid_by") // company|owner

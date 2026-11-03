@@ -89,6 +89,17 @@ export default async function WorkOrdersPage({
   const commentsBy = new Map(commentCounts.map((c) => [c.workOrderId, c._count._all]));
   const dueReqBy = new Map(dueReqCounts.map((c) => [c.workOrderId, c._count._all]));
   // ชื่อทั้งผู้เปิดและผู้ได้รับมอบหมาย — ใช้ตารางเดียวกัน (การ์ด + ตัวกรองผู้รับผิดชอบ)
+  const expenseTotals = trackingOn && orderIds.length
+    ? new Map(
+        (
+          await prisma.expense.groupBy({
+            by: ["workOrderId"],
+            where: { orgId, workOrderId: { in: orderIds } },
+            _sum: { amount: true },
+          })
+        ).map((r) => [r.workOrderId, Number(r._sum.amount ?? 0)] as const),
+      )
+    : new Map<string | null, number>();
   const creatorNames = await userNameMap(
     orgId,
     orders.flatMap((o) => [o.createdBy, o.assignedTo])
@@ -121,6 +132,7 @@ export default async function WorkOrdersPage({
       isPrivate: o.isPrivate,
       isPm: !!o.pmScheduleId || o.pmScheduleIds.length > 0,
       dueDateIso: o.dueDate?.toISOString() ?? null,
+      expenseRecordedTotal: o.status === "completed" ? (expenseTotals.get(o.id) ?? null) : null,
       expenseDeadlineIso:
         trackingOn && o.status === "completed" && o.requiresExpense && !o.isPrivate && !expenseSet.has(o.id)
           ? expenseDueAt(o, tracking).toISOString()

@@ -2,6 +2,8 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { loadExpenseTracking } from "@/modules/maintenance/data/expense-tracking";
+import { trackingActive } from "@/modules/maintenance/lib/expense-deadline";
 import { redirect } from "next/navigation";
 import { requireOrg, hasPermission, isSuperAdmin } from "@smartboss/auth";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
@@ -10,8 +12,9 @@ import {
   deleteExpense,
   getExpense,
 } from "@/modules/maintenance/data/expenses";
+import { updateExpenseBatch } from "@/modules/maintenance/data/expenses";
 import { logActivity } from "@/modules/maintenance/data/activity";
-import { findWorkOrderForPmExpense, getWorkOrder } from "@/modules/maintenance/data/work-orders";
+import { addWorkOrderComment, findWorkOrderForPmExpense, getWorkOrder } from "@/modules/maintenance/data/work-orders";
 import { getPmSchedule } from "@/modules/maintenance/data/pm";
 import { putFile, deleteFiles } from "@/modules/maintenance/lib/storage";
 
@@ -123,6 +126,11 @@ async function saveExpense(
 
   // แนบรูปใบเสร็จ (ข้ามเมื่อบันทึกว่า "ไม่มีค่าใช้จ่าย" เหมือนของเดิม)
   const file = formData.get("receipt");
+  const receipt = receiptFields(formData);
+  // เปิดใช้กำหนดบันทึกแล้ว ต้องแนบใบเสร็จ หรือติ๊กว่าไม่มี (ผู้ใช้ 3/11/2569)
+  if (!isNoExpense && !receipt.noReceipt && !(file instanceof File && file.size > 0) && trackingActive(await loadExpenseTracking(s.orgId))) {
+    return { error: "แนบรูปใบเสร็จ หรือติ๊ก \"ไม่มีใบเสร็จ\"" };
+  }
   const receiptUrl =
     !isNoExpense && file instanceof File && file.size > 0
       ? await putFile(`${s.orgId}/maintenance/receipts`, file)
@@ -136,6 +144,7 @@ async function saveExpense(
       ? d.description || "ไม่มีค่าใช้จ่าย"
       : (d.description ?? null),
     receiptUrl,
+    ...(isNoExpense ? {} : receipt),
     costType: d.costType,
     paidBy: d.paidBy,
     isNoExpense,
@@ -164,6 +173,66 @@ async function saveExpense(
     revalidatePath(`/maintenance/work-orders/${workOrderId}`);
   }
   // เปิดมาจากหน้าใบงาน → กลับไปใบงานนั้น ให้เห็นว่าบันทึกแล้ว · รับเฉพาะ path ใบงานของโมดูลนี้ (กันพาไปเว็บอื่น)
+  const returnTo = String(formData.get("returnTo") ?? "");
+  redirect(/^\/maintenance\/work-orders\/[\w-]+(\?from=tasks)?$/.test(returnTo) ? returnTo : "/maintenance/expenses");
+}
+
+/** ช่องข้อมูลใบเสร็จจากฟอร์ม — ไม่มีใบเสร็จ = เงินสด ถ้ายังไม่ได้เลือกวิธีจ่าย */
+function receiptFields(formData: FormData) {
+  const text = (k: string, max = 200) => String(formData.get(k) ?? "").trim().slice(0, max) || null;
+  const noReceipt = formData.get("noReceipt") === "1";
+  const rawAt = text("paidAt", 16);
+  const at = rawAt ? new Date(`${rawAt}:00+07:00`) : null;
+  return {
+    receiptNo: text("receiptNo", 100),
+    payee: text("payee"),
+    payer: text("payer"),
+    paidAt: at && !Number.isNaN(at.getTime()) ? at : null,
+    paymentMethod: text("paymentMethod", 20) ?? (noReceipt ? "cash" : null),
+    noReceipt,
+  };
+}
+
+/** แก้รายการที่บันทึกแล้ว — ไม่เลือกรูปใหม่ = ใช้รูปเดิม · ติ๊กไม่มีใบเสร็จ = เอารูปออก */
+export async function updateExpenseAction(_prev: ExpenseFormState, formData: FormData): Promise<ExpenseFormState> {
+  const s = await requireOrg();
+  if (!hasPermission(s, MAINT_PERMS.expenseManage)) return { error: "ไม่มีสิทธิ์แก้ค่าใช้จ่าย" };
+  const before = await getExpense(s.orgId, String(formData.get("expenseId") ?? ""));
+  if (!before) return { error: "ไม่พบรายการนี้ — อาจถูกลบไปแล้ว" };
+  const rawAmount = String(formData.get("amount") ?? "");
+  const amount = parseAmount(rawAmount);
+  if (!Number.isFinite(amount) || amount <= 0) return { error: "จำนวนเงินต้องเป็นตัวเลขมากกว่า 0" };
+  const paidBy = String(formData.get("paidBy") ?? "");
+  const receipt = receiptFields(formData);
+  const file = formData.get("receipt");
+  const newFile = !receipt.noReceipt && file instanceof File && file.size > 0;
+  if (!receipt.noReceipt && !newFile && !before.receiptUrl && trackingActive(await loadExpenseTracking(s.orgId))) {
+    return { error: "แนบรูปใบเสร็จ หรือติ๊ก \"ไม่มีใบเสร็จ\"" };
+  }
+  const receiptUrl = receipt.noReceipt ? null : newFile ? await putFile(`${s.orgId}/maintenance/receipts`, file) : before.receiptUrl;
+  await updateExpenseBatch(s.orgId, before.id, {
+    amount,
+    description: String(formData.get("description") ?? "").trim().slice(0, 1000) || null,
+    paidBy: paidBy === "owner" ? "owner" : paidBy === "company" ? "company" : before.paidBy,
+    receiptUrl,
+    ...receipt,
+  });
+  const wo = before.workOrderId ? await getWorkOrder(s.orgId, before.workOrderId) : null;
+  const was = Number(before.amount);
+  const change = was === amount ? `฿${amount.toLocaleString()}` : `฿${was.toLocaleString()} → ฿${amount.toLocaleString()}`;
+  if (wo) await addWorkOrderComment(s.orgId, wo.id, s.userId, `แก้ไขค่าใช้จ่าย ${change}`, null, { kind: "log" });
+  await logActivity(s.orgId, {
+    userId: s.userId,
+    entity: "expense",
+    entityId: before.workOrderId ?? before.pmScheduleId,
+    entityCode: wo ? `${wo.code} "${wo.title}"` : null,
+    action: "update",
+    summary: `แก้ไขค่าใช้จ่าย ${change}${wo ? ` ${wo.code} "${wo.title}"` : ""}`,
+    detail: { from: was, to: amount, ...receipt },
+  });
+  revalidatePath("/maintenance/expenses");
+  revalidatePath("/maintenance/work-orders");
+  if (wo) revalidatePath(`/maintenance/work-orders/${wo.id}`);
   const returnTo = String(formData.get("returnTo") ?? "");
   redirect(/^\/maintenance\/work-orders\/[\w-]+(\?from=tasks)?$/.test(returnTo) ? returnTo : "/maintenance/expenses");
 }

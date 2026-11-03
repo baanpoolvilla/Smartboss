@@ -2,8 +2,9 @@
 
 import { SubmitButton } from "./submit-button";
 
-import { useActionState, useState } from "react";
-import { Info, Receipt, MinusCircle } from "lucide-react";
+import { useActionState, useRef, useState } from "react";
+import { Info, Loader2, Receipt, MinusCircle, Sparkles } from "lucide-react";
+import { PAYMENT_METHODS, receiptHasData, type ReceiptData } from "@/modules/maintenance/lib/receipt-read";
 import type { ExpenseFormState } from "@/app/(shell)/maintenance/expenses/actions";
 import { Card } from "@smartboss/ui/components/card";
 import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
@@ -29,6 +30,7 @@ export function ExpenseForm({
   lockedWorkOrderId,
   lockedPmScheduleId,
   returnTo,
+  edit,
 }: {
   saveAction: ExpenseAction;
   noExpenseAction: ExpenseAction;
@@ -38,6 +40,20 @@ export function ExpenseForm({
   lockedPmScheduleId?: string;
   /** บันทึกเสร็จแล้วกลับไปหน้านี้ (หน้าใบงานที่กดเข้ามา) — ไม่ส่ง = หน้ารวมค่าใช้จ่าย */
   returnTo?: string;
+  /** แก้รายการที่บันทึกแล้ว */
+  edit?: {
+    id: string;
+    amount: string;
+    description: string;
+    paidBy: string;
+    receiptUrl: string | null;
+    receiptNo: string;
+    payee: string;
+    payer: string;
+    paidAt: string;
+    paymentMethod: string;
+    noReceipt: boolean;
+  };
 }) {
   const locked = Boolean(lockedWorkOrderId || lockedPmScheduleId);
   const [costType, setCostType] = useState(
@@ -45,6 +61,47 @@ export function ExpenseForm({
   );
   const [woId, setWoId] = useState(lockedWorkOrderId ?? "");
   const [receiptName, setReceiptName] = useState<string | null>(null);
+  const [amount, setAmount] = useState(edit?.amount ?? "");
+  const [description, setDescription] = useState(edit?.description ?? "");
+  const [receiptNo, setReceiptNo] = useState(edit?.receiptNo ?? "");
+  const [payee, setPayee] = useState(edit?.payee ?? "");
+  const [payer, setPayer] = useState(edit?.payer ?? "");
+  const [paidAt, setPaidAt] = useState(edit?.paidAt ?? "");
+  const [paymentMethod, setPaymentMethod] = useState(edit?.paymentMethod ?? "");
+  const [noReceipt, setNoReceipt] = useState(edit?.noReceipt ?? false);
+  // อ่านใบเสร็จ: เติมลงช่องให้ คนตรวจแล้วกดบันทึกเอง (lib/receipt-read.ts) · เลือกรูปใหม่ระหว่างรอ = ทิ้งผลของรูปเก่า
+  const [reading, setReading] = useState(false);
+  const [readNote, setReadNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const readSeq = useRef(0);
+  async function readReceipt(file: File) {
+    const seq = ++readSeq.current;
+    setReading(true);
+    setReadNote(null);
+    try {
+      const body = new FormData();
+      body.append("receipt", file);
+      const res = await fetch("/api/maintenance/receipt-read", { method: "POST", body });
+      const json = (await res.json().catch(() => null)) as { data?: ReceiptData; error?: string } | null;
+      if (seq !== readSeq.current) return;
+      const d = json?.data;
+      if (!d || !receiptHasData(d)) {
+        setReadNote({ ok: false, text: json?.error ?? "อ่านรูปนี้ไม่ได้ กรอกเองได้เลย" });
+        return;
+      }
+      if (d.amount !== null) setAmount(String(d.amount));
+      if (d.paidAt) setPaidAt(d.paidAt);
+      if (d.receiptNo) setReceiptNo(d.receiptNo);
+      if (d.payee) setPayee(d.payee);
+      if (d.payer) setPayer(d.payer);
+      if (d.paymentMethod) setPaymentMethod(d.paymentMethod);
+      if (d.summary) setDescription((cur) => cur || d.summary!);
+      setReadNote({ ok: true, text: "ระบบอ่านใบเสร็จให้แล้ว ตรวจให้ถูกก่อนกดบันทึก" });
+    } catch {
+      if (seq === readSeq.current) setReadNote({ ok: false, text: "อ่านใบเสร็จไม่สำเร็จ กรอกเองได้เลย" });
+    } finally {
+      if (seq === readSeq.current) setReading(false);
+    }
+  }
   // สองปุ่มเป็นคนละ action — ไม่ฝากค่าไว้กับตัวปุ่ม (formAction + name/value ค่าไม่ถูกส่งมา)
   const [saveState, save] = useActionState(saveAction, EMPTY);
   const [noExpState, saveNoExpense] = useActionState(noExpenseAction, EMPTY);
@@ -94,6 +151,7 @@ export function ExpenseForm({
         {/* เปิดจากหน้าใบงานที่อุปกรณ์มี PM = ประเภทเป็น PM แต่ต้องส่งใบงานไปด้วย ให้ค่าใช้จ่ายผูกกับใบงานนั้น
             (ช่องเลือกใบงานข้างล่างไม่ได้แสดงตอนเป็น PM — เดิมเลยไม่ได้ส่ง ใบงานค้าง "ยังไม่บันทึกค่าใช้จ่าย") */}
         {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
+        {edit && <input type="hidden" name="expenseId" value={edit.id} />}
 
         {costType === "pm" && lockedWorkOrderId && (
           <input type="hidden" name="workOrderId" value={lockedWorkOrderId} />
@@ -154,44 +212,116 @@ export function ExpenseForm({
           <span className="text-sm font-medium text-(--ink)">
             รับผิดชอบโดย *
           </span>
-          <select name="paidBy" defaultValue="company" className={inputClass}>
+          <select name="paidBy" defaultValue={edit?.paidBy ?? "company"} className={inputClass}>
             <option value="company">บริษัท</option>
             <option value="owner">เจ้าของบ้าน</option>
           </select>
         </label>
 
+        {/* ใบเสร็จอยู่ก่อนช่องกรอก — แนบแล้วระบบเติมช่องด้านล่างให้ */}
+        <div className="flex flex-col gap-2 rounded-(--radius) border border-(--line) p-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {!noReceipt && (
+              <label className="inline-flex w-fit cursor-pointer items-center gap-2 rounded-(--radius) border border-[#0D9488] px-3 py-2 text-sm text-[#0F766E]">
+                <Receipt className="h-4 w-4" />
+                {receiptName || edit?.receiptUrl ? "เปลี่ยนรูปใบเสร็จ" : "แนบรูปใบเสร็จ"}
+                <input
+                  type="file"
+                  name="receipt"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    setReceiptName(f?.name ?? null);
+                    if (f) void readReceipt(f);
+                  }}
+                />
+              </label>
+            )}
+            <label className="inline-flex items-center gap-2 text-sm text-(--ink)">
+              <input
+                type="checkbox"
+                name="noReceipt"
+                value="1"
+                checked={noReceipt}
+                onChange={(e) => {
+                  setNoReceipt(e.target.checked);
+                  if (e.target.checked) {
+                    readSeq.current++;
+                    setReading(false);
+                    setReadNote(null);
+                    setPaymentMethod((m) => m || "cash");
+                  }
+                }}
+                className="h-4 w-4"
+              />
+              ไม่มีใบเสร็จ (เช่น จ่ายเงินสด)
+            </label>
+          </div>
+          {!noReceipt && receiptName && <p className="truncate text-xs text-(--ink-soft)">{receiptName}</p>}
+          {!noReceipt && !receiptName && edit?.receiptUrl && (
+            <a href={edit.receiptUrl} target="_blank" rel="noreferrer" className="w-fit text-xs text-[#0F766E] underline">
+              ดูรูปใบเสร็จเดิม
+            </a>
+          )}
+          {reading && (
+            <p className="inline-flex items-center gap-1.5 text-xs text-(--ink-soft)">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> กำลังอ่านใบเสร็จ...
+            </p>
+          )}
+          {readNote && (
+            <p role="status" className={`inline-flex items-center gap-1.5 text-xs ${readNote.ok ? "text-[#0F766E]" : "text-(--ink-soft)"}`}>
+              {readNote.ok && <Sparkles className="h-3.5 w-3.5" />}
+              {readNote.text}
+            </p>
+          )}
+        </div>
+
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-medium text-(--ink)">
             จำนวนเงิน (บาท) *
           </span>
-          <input name="amount" inputMode="decimal" className={inputClass} />
+          <input name="amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} />
         </label>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-(--ink)">จ่ายให้ใคร (ร้าน/ผู้รับเงิน)</span>
+            <input name="payee" value={payee} onChange={(e) => setPayee(e.target.value)} maxLength={200} className={inputClass} />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-(--ink)">ผู้จ่าย/ผู้โอน</span>
+            <input name="payer" value={payer} onChange={(e) => setPayer(e.target.value)} maxLength={200} className={inputClass} />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-(--ink)">วันเวลาที่จ่าย</span>
+            <input type="datetime-local" name="paidAt" value={paidAt} onChange={(e) => setPaidAt(e.target.value)} className={inputClass} />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-(--ink)">เลขที่ใบเสร็จ/เลขอ้างอิง</span>
+            <input name="receiptNo" value={receiptNo} onChange={(e) => setReceiptNo(e.target.value)} maxLength={100} className={inputClass} />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-(--ink)">วิธีจ่าย</span>
+            <select name="paymentMethod" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className={inputClass}>
+              <option value="">— ไม่ระบุ —</option>
+              {PAYMENT_METHODS.map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+          </label>
+        </div>
 
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-medium text-(--ink)">รายละเอียด</span>
           <textarea
             name="description"
             rows={3}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
             className="w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 py-2 text-sm text-(--ink)"
           />
         </label>
-
-        <label className="inline-flex w-fit cursor-pointer items-center gap-2 rounded-(--radius) border border-[#0D9488] px-3 py-2 text-sm text-[#0F766E]">
-          <Receipt className="h-4 w-4" />
-          {receiptName ? "เปลี่ยนรูปใบเสร็จ" : "แนบรูปใบเสร็จ"}
-          <input
-            type="file"
-            name="receipt"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => setReceiptName(e.target.files?.[0]?.name ?? null)}
-          />
-        </label>
-        {receiptName && (
-          <p className="-mt-2 truncate text-xs text-(--ink-soft)">
-            {receiptName}
-          </p>
-        )}
 
         {error && (
           <p role="alert" className="rounded-(--radius) border border-(--danger) px-3 py-2 text-sm text-(--danger)">
@@ -200,21 +330,23 @@ export function ExpenseForm({
         )}
 
         <div className="flex gap-3">
-          <SubmitButton
-            variant="outline"
-            formAction={saveNoExpense}
-            formNoValidate
-            onClick={() => setLastPressed("none")}
-            className="flex-1"
-          >
-            <MinusCircle className="h-4 w-4" /> ไม่มีค่าใช้จ่าย
-          </SubmitButton>
+          {!edit && (
+            <SubmitButton
+              variant="outline"
+              formAction={saveNoExpense}
+              formNoValidate
+              onClick={() => setLastPressed("none")}
+              className="flex-1"
+            >
+              <MinusCircle className="h-4 w-4" /> ไม่มีค่าใช้จ่าย
+            </SubmitButton>
+          )}
           <SubmitButton
             formAction={save}
             onClick={() => setLastPressed("save")}
             className="flex-1"
           >
-            บันทึกค่าใช้จ่าย
+            {edit ? "บันทึกการแก้ไข" : "บันทึกค่าใช้จ่าย"}
           </SubmitButton>
         </div>
       </form>

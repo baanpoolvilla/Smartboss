@@ -29,6 +29,36 @@ export const pendingExpenseWorkOrders = cache(async (orgId: string) => {
   });
 });
 
+/** ผู้บันทึกกลับมาตรวจ/แก้ใบที่บันทึกแล้วได้กี่วัน นับจากวันบันทึก — เก่ากว่านี้ไปที่หน้าค่าใช้จ่าย */
+export const EXPENSE_RECORDED_VISIBLE_DAYS = 30;
+
+/**
+ * ใบที่ปิดแล้วและบันทึกค่าใช้จ่ายภายใน 30 วัน พร้อมยอดรวมและวันบันทึกล่าสุด
+ * (ผู้ใช้ 3/11/2569 "ต้องขึ้นบอกเราว่าใบไหนบันทึกเสร็จ เพื่อเค้ามาแก้")
+ */
+export const recordedExpenseWorkOrders = cache(async (orgId: string) => {
+  const since = new Date(Date.now() - EXPENSE_RECORDED_VISIBLE_DAYS * 86_400_000);
+  const rows = await prisma.expense.findMany({
+    where: { orgId, workOrderId: { not: null }, createdAt: { gte: since } },
+    select: { workOrderId: true, amount: true, createdAt: true },
+  });
+  const ids = [...new Set(rows.map((r) => r.workOrderId!))];
+  if (ids.length === 0) return [];
+  const open = await prisma.workOrder.findMany({
+    where: { orgId, id: { in: ids }, status: "completed", isPrivate: false },
+    select: { id: true },
+  });
+  const keep = new Set(open.map((w) => w.id));
+  const out = new Map<string, { id: string; total: number; at: Date }>();
+  for (const r of rows) {
+    const id = r.workOrderId!;
+    if (!keep.has(id)) continue;
+    const cur = out.get(id);
+    out.set(id, { id, total: (cur?.total ?? 0) + Number(r.amount), at: cur && cur.at > r.createdAt ? cur.at : r.createdAt });
+  }
+  return [...out.values()];
+});
+
 /** ผู้มีบทบาท CEO ที่ยังใช้งานอยู่ — คนอนุมัติขอเลื่อนบันทึกค่าใช้จ่าย */
 export async function ceoUserIds(orgId: string): Promise<string[]> {
   const rows = await prisma.user.findMany({

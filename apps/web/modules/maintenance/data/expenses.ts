@@ -50,6 +50,12 @@ export interface ExpenseInput {
   description?: string | null;
   category?: string | null;
   receiptUrl?: string | null;
+  receiptNo?: string | null;
+  payee?: string | null;
+  payer?: string | null;
+  paidAt?: Date | null;
+  paymentMethod?: string | null;
+  noReceipt?: boolean;
   costType: string; // work_order | pm
   paidBy: string; // company | owner
   isNoExpense?: boolean;
@@ -69,6 +75,12 @@ export function createExpense(orgId: string, data: ExpenseInput) {
       description: data.description ?? null,
       category: data.category ?? null,
       receiptUrl: data.receiptUrl ?? null,
+      receiptNo: data.receiptNo ?? null,
+      payee: data.payee ?? null,
+      payer: data.payer ?? null,
+      paidAt: data.paidAt ?? null,
+      paymentMethod: data.paymentMethod ?? null,
+      noReceipt: data.noReceipt ?? false,
       costType: data.costType,
       paidBy: data.paidBy,
       isNoExpense: data.isNoExpense ?? false,
@@ -120,6 +132,12 @@ export async function createExpensesForProperties(
           description: base.description ?? null,
           category: base.category ?? null,
           receiptUrl: base.receiptUrl ?? null,
+          receiptNo: base.receiptNo ?? null,
+          payee: base.payee ?? null,
+          payer: base.payer ?? null,
+          paidAt: base.paidAt ?? null,
+          paymentMethod: base.paymentMethod ?? null,
+          noReceipt: base.noReceipt ?? false,
           costType: base.costType,
           paidBy: base.paidBy,
           isNoExpense: base.isNoExpense ?? false,
@@ -130,6 +148,41 @@ export async function createExpensesForProperties(
     }
     return true;
   });
+}
+
+/**
+ * แก้รายการที่บันทึกแล้ว — ใบงานหลายบ้านบันทึกไว้บ้านละแถว (createExpensesForProperties) แก้พร้อมกันทุกแถวของชุดนั้น
+ * ชุดเดียวกัน = ใบงาน คนบันทึก ยอด คำอธิบายเดียวกัน บันทึกห่างกันไม่เกิน 10 วินาที
+ */
+export async function updateExpenseBatch(
+  orgId: string,
+  id: string,
+  data: {
+    amount: number;
+    description: string | null;
+    paidBy: string;
+    receiptUrl: string | null;
+    receiptNo: string | null;
+    payee: string | null;
+    payer: string | null;
+    paidAt: Date | null;
+    paymentMethod: string | null;
+    noReceipt: boolean;
+  },
+): Promise<void> {
+  const row = await prisma.expense.findFirst({ where: { orgId, id } });
+  if (!row) return;
+  const where = row.workOrderId
+    ? {
+        orgId,
+        workOrderId: row.workOrderId,
+        createdBy: row.createdBy,
+        amount: row.amount,
+        description: row.description,
+        createdAt: { gte: new Date(row.createdAt.getTime() - 10_000), lte: new Date(row.createdAt.getTime() + 10_000) },
+      }
+    : { orgId, id };
+  await prisma.expense.updateMany({ where, data: { ...data, isNoExpense: false } });
 }
 
 export async function deleteExpense(orgId: string, id: string) {

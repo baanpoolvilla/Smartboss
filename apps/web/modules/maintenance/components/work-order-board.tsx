@@ -43,6 +43,8 @@ export interface BoardOrder {
   dueDateIso?: string | null;
   /** กำหนดบันทึกค่าใช้จ่าย (เปิดใช้แล้ว + ใบรอบันทึก) — lib/expense-deadline.ts */
   expenseDeadlineIso?: string | null;
+  /** ยอดค่าใช้จ่ายที่บันทึกแล้ว (เปิดใช้กำหนดบันทึกแล้ว + ใบปิดแล้ว) */
+  expenseRecordedTotal?: number | null;
   commentCount?: number;
   photoCount?: number;
   pendingDue?: number;
@@ -115,6 +117,7 @@ function OrderCard({
       doneTone={wo.status === "cancelled" ? "gray" : settled ? "green" : "orange"}
       dueDate={wo.dueDateIso ?? null}
       expenseDeadline={settled ? null : wo.expenseDeadlineIso}
+      expenseRecorded={wo.expenseRecordedTotal}
       commentCount={wo.commentCount ?? 0}
       photoCount={wo.photoCount ?? 0}
       pendingDue={wo.pendingDue ?? 0}

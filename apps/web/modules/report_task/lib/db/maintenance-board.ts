@@ -5,7 +5,7 @@ import { hasPermission, isSuperAdmin, type OrgSession } from "@smartboss/auth";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { workOrderAccess, workOrderVisibilityWhere, type WorkOrderAccess } from "@/modules/maintenance/data/work-order-access";
 import type { MaintenanceBoardItem, MaintenanceColumn, WoType, WorkOrderReaction } from "@/modules/report_task/lib/maintenance-board";
-import { loadExpenseTracking } from "@/modules/maintenance/data/expense-tracking";
+import { loadExpenseTracking, recordedExpenseWorkOrders } from "@/modules/maintenance/data/expense-tracking";
 import { expenseDueAt } from "@/modules/maintenance/lib/expense-deadline";
 import { listWorkOrderReactions } from "./work-order-reactions";
 import type { TaskPriority } from "@/modules/report_task/types";
@@ -94,11 +94,18 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
     // ใบรอบันทึกแยกดึงต่างหาก — เก่าแค่ไหนก็ต้องขึ้น ไม่อยู่ใต้เงื่อนไข 7 วันและเพดาน LIMIT
     const pendingIds = access.expensePendingIds ?? [];
     const pendingSet = new Set(pendingIds);
-    const vis = workOrderVisibilityWhere({ ...access, expensePendingIds: undefined });
+    const vis = workOrderVisibilityWhere({ ...access, expensePendingIds: undefined, expenseRecordedIds: undefined });
+    // ผู้บันทึก: ใบที่เพิ่งบันทึกไป (7 วัน) ขึ้นคอลัมน์เสร็จพร้อมยอด ให้รู้ว่าเสร็จแล้วและกลับมาแก้ได้
+    const recordedMap = new Map(
+      access.expenseRecordedIds
+        ? (await recordedExpenseWorkOrders(orgId)).filter((r) => r.at >= since && !pendingSet.has(r.id)).map((r) => [r.id, r.total] as const)
+        : [],
+    );
+    const specialIds = [...pendingIds, ...recordedMap.keys()];
     const rows = await prisma.workOrder.findMany({
       where: {
         orgId,
-        ...(pendingIds.length > 0 ? { id: { notIn: pendingIds } } : {}),
+        ...(specialIds.length > 0 ? { id: { notIn: specialIds } } : {}),
         AND: [
           vis ?? {},
           { OR: [{ status: { in: ["open", "in_progress"] } }, { status: "completed", completedAt: { gte: since } }] },
@@ -108,10 +115,11 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
       orderBy: { createdAt: "desc" },
       take: LIMIT,
     });
-    const pendingRows = pendingIds.length > 0 ? await prisma.workOrder.findMany({ where: { orgId, id: { in: pendingIds } }, select }) : [];
-    const tracking = pendingRows.length > 0 ? await loadExpenseTracking(orgId) : null;
+    const pendingRows = specialIds.length > 0 ? await prisma.workOrder.findMany({ where: { orgId, id: { in: specialIds } }, select }) : [];
+    const tracking = pendingIds.length > 0 ? await loadExpenseTracking(orgId) : null;
     for (const w of [...pendingRows, ...rows]) {
       const expensePending = pendingSet.has(w.id);
+      const expenseRecordedTotal = recordedMap.get(w.id);
       const done = w.status === "completed" && !expensePending;
       const isPm = !!w.pmScheduleId || (w.pmScheduleIds ?? []).length > 0;
       const woTypes: WoType[] = [
@@ -133,7 +141,7 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
         dueDate: (expenseDue ?? w.dueDate)?.toISOString() ?? null,
         createdAt: w.createdAt.toISOString(),
         overdue: expenseDue ? bangkokDay(expenseDue) < today : !done && !!w.dueDate && bangkokDay(w.dueDate) < today,
-        responsibleId: expensePending ? session.userId : (w.assignedTo ?? w.createdBy),
+        responsibleId: expensePending || expenseRecordedTotal !== undefined ? session.userId : (w.assignedTo ?? w.createdBy),
         assigneeId: w.assignedTo,
         createdById: w.createdBy,
         involvedIds: [...new Set([w.assignedTo, w.createdBy, ...w.ccUserIds].filter((x): x is string => !!x))],
@@ -148,6 +156,7 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
         status: w.status,
         autoCreated: w.autoCreated,
         expensePending,
+        expenseRecordedTotal,
       });
     }
   }

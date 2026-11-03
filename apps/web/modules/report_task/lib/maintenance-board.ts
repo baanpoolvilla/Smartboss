@@ -83,6 +83,8 @@ export interface MaintenanceBoardItem {
    * อยู่คอลัมน์รอดำเนินการ เรียงบนสุด (ผู้ใช้ 3/11/2569 "ต้องขึ้นมาอยู่บนเลย") ดู lib/db/maintenance-board.ts
    */
   expensePending?: boolean;
+  /** ผู้บันทึก: ใบที่บันทึกแล้วภายใน 7 วัน อยู่คอลัมน์เสร็จ บอกยอดรวม ให้กลับมาแก้ได้ */
+  expenseRecordedTotal?: number;
 }
 
 /** สติกเกอร์ 1 ครั้งบนใบงานซ่อม — ชุดสติกเกอร์เดียวกับงาน คะแนนเข้า targetUserId (ผู้รับผิดชอบตอนที่ติด) */
@@ -104,7 +106,7 @@ export function maintenanceDate(item: MaintenanceBoardItem): string {
 export function matchesMaintenanceFilters(item: MaintenanceBoardItem, filters: TaskFilterState): boolean {
   // "งานของฉัน"/เลือกผู้รับผิดชอบ = ใบที่คนนั้น **ได้รับมอบหมาย** · "ที่ฉันมอบหมาย" = ใบที่คนนั้นเปิด
   // (ผู้ใช้ขอ 20/10/2569 — เดิม "งานของฉัน" จับทุกคนที่เกี่ยว รวมคนเปิดใบ/CC และ "ที่ฉันมอบหมาย" ไม่ขึ้นใบงานเลย)
-  if (filters.assigneeId !== "all" && item.assigneeId !== filters.assigneeId && !(item.expensePending && item.responsibleId === filters.assigneeId)) return false;
+  if (filters.assigneeId !== "all" && item.assigneeId !== filters.assigneeId && !((item.expensePending || item.expenseRecordedTotal !== undefined) && item.responsibleId === filters.assigneeId)) return false;
   if (filters.assignedById !== "all" && (item.createdById ?? null) !== filters.assignedById) return false;
   if (filters.departmentId !== "all") {
     const dept = item.responsibleId ? getUser(item.responsibleId)?.departmentId : undefined;

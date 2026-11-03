@@ -65,6 +65,8 @@ export interface WoCardProps {
   subline?: React.ReactNode;
   /** ใบปิดแล้วรอบันทึกค่าใช้จ่าย — แถบบอกเหลือกี่วัน + วันครบกำหนดใช้วันนี้แทน (lib/expense-deadline.ts) */
   expenseDeadline?: string | Date | null;
+  /** บันทึกค่าใช้จ่ายแล้ว ยอดรวม (0 = ไม่มีค่าใช้จ่าย) — แถบบอกว่าเสร็จแล้ว */
+  expenseRecorded?: number | null;
 }
 
 function bkkDay(d: Date): number {
@@ -140,6 +142,12 @@ export function WoCard(p: WoCardProps) {
         <div className={`flex items-center justify-between gap-2 px-3 py-1 text-[12px] font-bold sm:px-4 ${expenseLeft < 0 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>
           <span className="truncate">💰 รอบันทึกค่าใช้จ่าย</span>
           <span className="shrink-0 tabular-nums">{expenseDaysLabel(expenseLeft)}</span>
+        </div>
+      )}
+      {p.expenseRecorded !== undefined && p.expenseRecorded !== null && (
+        <div className="flex items-center justify-between gap-2 bg-emerald-100 px-3 py-1 text-[12px] font-bold text-emerald-800 sm:px-4">
+          <span className="truncate">✅ บันทึกค่าใช้จ่ายแล้ว</span>
+          <span className="shrink-0 tabular-nums">{p.expenseRecorded > 0 ? `฿${p.expenseRecorded.toLocaleString()}` : "ไม่มีค่าใช้จ่าย"}</span>
         </div>
       )}
       {/* แถบหัวสีแจ้งซ่อม — มองไกลก็รู้ว่าเป็นใบของแจ้งซ่อม ไม่ใช่งาน */}

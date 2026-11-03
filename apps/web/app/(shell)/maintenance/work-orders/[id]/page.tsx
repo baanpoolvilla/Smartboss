@@ -79,6 +79,7 @@ import { ScoreRequestCard } from "@/app/(shell)/hr/penalty-requests/score-reques
 import { listDueRequests } from "@/modules/maintenance/data/work-order-due-requests";
 import { listExpenseDueRequests, loadExpenseTracking } from "@/modules/maintenance/data/expense-tracking";
 import { expenseDaysLeft, expenseDueAt, isExpenseBacklog, trackingActive } from "@/modules/maintenance/lib/expense-deadline";
+import { paymentMethodLabel } from "@/modules/maintenance/lib/receipt-read";
 import { ExpenseDeadlineBox, type ExpenseRequestView } from "@/modules/maintenance/components/expense-deadline-box";
 import { canDecideDueRequest, canEditDueDate } from "@/modules/maintenance/lib/due-request-access";
 
@@ -245,6 +246,9 @@ export default async function WorkOrderDetailPage({
     decidedByName: r.decidedBy ? (expenseNames[r.decidedBy] ?? "-") : null,
     decisionNote: r.decisionNote,
   }));
+  const canSeeExpense = hasPermission(session, MAINT_PERMS.expenseView) || canExpense;
+  const expenseTotal = expenses.reduce((n, e) => n + Number(e.amount), 0);
+  const expenseRecorderNames = hasExpense && canSeeExpense ? await userNameMap(orgId, expenses.map((e) => e.createdBy)) : {};
   const recordExpenseHref = `/maintenance/expenses/new?workOrderId=${id}${pmForExpense ? `&pmScheduleId=${pmForExpense}` : ""}${fromTasks ? "&from=tasks" : ""}`;
   // ช่างนอกส่งข้อความเปล่าได้ (ไม่มีรูป) แถวแบบนั้น storagePath เป็นค่าว่าง
   const externalUrls = externalPhotos
@@ -521,6 +525,59 @@ export default async function WorkOrderDetailPage({
         )}
         </div>
       </Card>
+
+      {/* ─── ค่าใช้จ่ายที่บันทึกแล้ว: บอกว่าเสร็จแล้ว + กลับมาแก้ได้ ─── */}
+      {hasExpense && canSeeExpense && (
+        <Card className="mb-4 p-4 sm:p-5" data-testid="expense-recorded">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-bold text-emerald-800">✅ บันทึกค่าใช้จ่ายแล้ว ฿{expenseTotal.toLocaleString()}</h2>
+            {canExpense && wo.status === "completed" && (
+              <Link href={recordExpenseHref} className="text-sm text-[#0F766E] hover:underline">
+                + เพิ่มรายการ
+              </Link>
+            )}
+          </div>
+          <div className="flex flex-col divide-y divide-(--line)">
+            {expenses.map((e) => (
+              <div key={e.id} className="flex flex-wrap items-start justify-between gap-2 py-2 text-sm">
+                <div className="min-w-0">
+                  <p className="font-semibold text-(--ink)">
+                    {e.isNoExpense ? "ไม่มีค่าใช้จ่าย" : `฿${Number(e.amount).toLocaleString()}`}
+                    {e.description ? <span className="font-normal"> · {e.description}</span> : null}
+                  </p>
+                  <p className="text-xs text-(--ink-soft)">
+                    {[
+                      e.payee ? `จ่ายให้ ${e.payee}` : null,
+                      e.payer ? `โดย ${e.payer}` : null,
+                      paymentMethodLabel(e.paymentMethod),
+                      e.paidAt ? fmtThaiDateTime(e.paidAt) : null,
+                      e.receiptNo ? `เลขที่ ${e.receiptNo}` : null,
+                      e.noReceipt ? "ไม่มีใบเสร็จ" : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                  <p className="text-xs text-(--ink-soft)">
+                    บันทึกโดย {e.createdBy ? (expenseRecorderNames[e.createdBy] ?? "ผู้ใช้") : "-"} · {fmtThaiDateTime(e.createdAt)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-3 text-sm">
+                  {e.receiptUrl && (
+                    <a href={e.receiptUrl} target="_blank" rel="noreferrer" className="text-[#0F766E] hover:underline">
+                      ดูใบเสร็จ
+                    </a>
+                  )}
+                  {canExpense && (
+                    <Link href={`/maintenance/expenses/${e.id}/edit`} className="font-medium text-[#0F766E] hover:underline">
+                      แก้ไข
+                    </Link>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* ─── ลิงก์ส่งรูปสำหรับช่างภายนอก ─── */}
       {!isTechnicianOnly && isOpenOrRunning && (
