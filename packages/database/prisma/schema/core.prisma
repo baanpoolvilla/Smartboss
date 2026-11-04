@@ -443,7 +443,7 @@ model PerformanceSetting {
   /**
    * PM เลยกำหนดกี่วันถึงถือว่าปล่อยปละละเลย (เผื่อเวลาให้ทำก่อน)
    */
-  pmGraceDays Int @default(7) @map("pm_grace_days")
+  pmGraceDays Int @default(0) @map("pm_grace_days")
 
   /**
    * ใบงานเลยกำหนดกี่วันถึงถือว่าปล่อยปละละเลย (เผื่อเวลาให้ทำก่อน)

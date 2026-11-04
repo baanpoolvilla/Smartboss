@@ -23,6 +23,13 @@ export function addDays(d: Date, days: number): Date {
  */
 export const BACKLOG_DAYS = 3;
 
+/**
+ * ยกเลิกผ่อนผัน PM (ผู้ใช้ 4/11/2569) — คะแนน PM ที่หักก่อนวันนี้นับจากวันพ้นผ่อนผัน 7 วัน
+ * ตรวจย้อนหลังต้องบวกกลับ ไม่งั้นระยะห่างดูเกิน BACKLOG_DAYS แล้วคืนคะแนนที่หักถูกต้อง
+ */
+export const NO_GRACE_FROM = new Date("2026-11-04T00:00:00.000+07:00");
+const LEGACY_PM_GRACE_DAYS = 7;
+
 export function isBacklog(lapse: Date, detectedAt: Date): boolean {
   return detectedAt.getTime() - lapse.getTime() > BACKLOG_DAYS * 86_400_000;
 }
@@ -116,7 +123,7 @@ export function pmDockRevokeReason(
   if (!roundDate || Number.isNaN(roundDate.getTime())) return "รอบไม่ถูกต้อง";
   const lapse = addDays(roundDate, st.pmGraceDays);
   if (st.scoringStartDate && lapse < st.scoringStartDate) return "เลยกำหนดก่อนวันเริ่มนับคะแนน";
-  if (isBacklog(lapse, dock.occurredAt)) return "งานค้างเก่า (เลยกำหนดก่อนระบบคะแนนเห็น)";
+  if (isBacklog(dock.occurredAt < NO_GRACE_FROM ? addDays(lapse, LEGACY_PM_GRACE_DAYS) : lapse, dock.occurredAt)) return "งานค้างเก่า (เลยกำหนดก่อนระบบคะแนนเห็น)";
   const stillThisRound = pm.nextDueDate.toISOString().slice(0, 10) === round;
   if (stillThisRound && pm.awaitingSchedule) return "PM รอนัดรอบใหม่";
   const responsible = pm.assignedTo ?? pm.caretakerId;

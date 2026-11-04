@@ -198,44 +198,6 @@ export function PerformanceSettingsForm({ settings: s }: { settings: Performance
       {GROUPS.map((group) => (
         <SectionCard key={group.title} title={group.title} description={group.hint}>
           <div className="grid gap-3 sm:grid-cols-2">
-            {/*
-              ระยะผ่อนผันของ PM/ใบงานอยู่ด้วยกันกับคะแนนที่หักของสองอย่างนี้
-              แทนที่จะแยกไปอยู่การ์ด "เกณฑ์การนับ" กับตัวเลขของโมดูลอื่น
-              (สาย/ขาดงาน/ย้อนดูกี่วัน) — คนตั้งค่าเรื่องซ่อมบำรุงจะได้ดูจบ
-              ในการ์ดเดียว ไม่ต้องเลื่อนขึ้นไปหาอีกที่
-            */}
-            {group.title === "งานซ่อมบำรุง" && (
-              <>
-                <Field
-                  label="บำรุงรักษา (PM) เกินได้กี่วัน"
-                  hint="เลยกำหนดเกินกี่วันถึงถือว่าปล่อยปละละเลย — 0 = หักทันทีที่เลยกำหนด"
-                >
-                  <input
-                    type="number"
-                    name="pmGraceDays"
-                    defaultValue={s.pmGraceDays}
-                    min={0}
-                    max={365}
-                    required
-                    className={inputClass}
-                  />
-                </Field>
-                <Field
-                  label="ใบงานเกินได้กี่วัน"
-                  hint="เลยกำหนดเกินกี่วันถึงถือว่าปล่อยปละละเลย — 0 = หักทันทีที่เลยกำหนด"
-                >
-                  <input
-                    type="number"
-                    name="workOrderGraceDays"
-                    defaultValue={s.workOrderGraceDays}
-                    min={0}
-                    max={365}
-                    required
-                    className={inputClass}
-                  />
-                </Field>
-              </>
-            )}
             {group.keys.map((key) => (
               <Field
                 key={key}

@@ -116,7 +116,7 @@ const FALLBACK: PerformanceSettings = {
   enabled: true,
   baseScore: 100,
   lateThresholdMinutes: 0,
-  pmGraceDays: 7,
+  pmGraceDays: 0,
   workOrderGraceDays: 0,
   scoringStartDate: null,
   pmRoundsFrom: null,

@@ -95,3 +95,9 @@ test("หักภายใน 3 วันหลังเลยกำหนด �
   const onTime = { ...docked, occurredAt: new Date("2026-09-13T10:00:00Z") };
   assert.equal(workOrderDockRevokeReason(onTime, openWo, st), null);
 });
+
+test("ยกเลิกผ่อนผัน PM: คะแนนเก่าที่หักหลังพ้นผ่อนผัน 7 วันไม่ถูกคืน", () => {
+  const old = { ...pmDock, refId: "pm1:2026-09-10", occurredAt: new Date("2026-09-18T10:00:00Z") };
+  const same = { ...pm, nextDueDate: new Date("2026-09-10T00:00:00Z") };
+  assert.equal(pmDockRevokeReason(old, same, [], new Map(), { ...st, pmGraceDays: 0 }), null);
+});
