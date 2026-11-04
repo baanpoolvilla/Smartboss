@@ -96,7 +96,7 @@ export default async function WorkOrdersPage({
     ? await Promise.all([
         prisma.workOrderComment.groupBy({
           by: ["workOrderId"],
-          where: { workOrderId: { in: orderIds }, workOrder: { orgId }, OR: [{ kind: null }, { kind: { not: "log" } }] },
+          where: { orgId, workOrderId: { in: orderIds }, OR: [{ kind: null }, { kind: { not: "log" } }] },
           _count: { _all: true },
         }),
         prisma.workOrderDueRequest.groupBy({
