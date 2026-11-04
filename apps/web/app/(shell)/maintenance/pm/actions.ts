@@ -23,6 +23,8 @@ import { deleteNotificationsByReference } from "@/modules/maintenance/data/notif
 import { isPastDay } from "@/modules/maintenance/lib/no-past-date";
 import { openRoundsNow, openRoundsOfPm, pmIsRoundMode, roundsFromDate } from "@/modules/maintenance/data/pm-rounds";
 import { canEditDueDate } from "@/modules/maintenance/lib/due-request-access";
+import { canSeeWorkOrder, workOrderAccess } from "@/modules/maintenance/data/work-order-access";
+import { getWorkOrder } from "@/modules/maintenance/data/work-orders";
 import { fmtThaiDate } from "@/modules/maintenance/lib/format";
 import { editDueDateAction } from "@/app/(shell)/maintenance/work-orders/due-request-actions";
 
@@ -196,6 +198,12 @@ export async function updatePmAction(formData: FormData) {
   const openRounds = dueChanged && before ? await openRoundsOfPm(orgId, id) : [];
   if (openRounds.length > 0 && !canEditDueDate({ userId: actor.userId, viewAll: canViewAll(actor) || hasPermission(actor, MAINT_PERMS.pmMoveRounds) }, { createdBy: before?.createdBy ?? null })) {
     dueChanged = false;
+  }
+  // คนแก้ต้องเห็นใบที่จะเลื่อนครบทุกใบ ไม่งั้นวันในแผนเปลี่ยนแต่ใบไม่ตาม เกิดใบซ้ำในรอบเดียวกัน
+  if (dueChanged && openRounds.length > 0) {
+    const access = await workOrderAccess(actor);
+    const orders = await Promise.all(openRounds.map((w) => getWorkOrder(orgId, w.id)));
+    if (orders.some((w) => !w || !canSeeWorkOrder(access, w))) dueChanged = false;
   }
   const moveRounds = dueChanged && openRounds.length > 0;
 
