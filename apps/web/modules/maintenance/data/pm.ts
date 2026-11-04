@@ -150,7 +150,7 @@ export async function completePmSchedule(orgId: string, id: string) {
   }
 
   // continuous / yearlyRounds: เลื่อนวันกำหนดถัดไป
-  // กติกาการนับ (ปิดช้า = นับจากวันที่ทำจริง / ปิดก่อนกำหนด = นับจากวันกำหนด)
+  // กติกาการนับ (ยึดวันที่ตั้งไว้ ปิดวันไหนรอบไม่ขยับ)
   // อยู่ใน nextDueAfterCompletion พร้อมเหตุผลของแต่ละข้อ
   const { nextDue, anchor } = nextDueAfterCompletion(pm, now);
   await prisma.pmSchedule.update({

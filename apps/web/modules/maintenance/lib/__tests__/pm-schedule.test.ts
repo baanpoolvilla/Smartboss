@@ -55,18 +55,51 @@ test("จบงานก่อนกำหนด ต้องขยับไป�
  */
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
-test("ปิดช้ากว่ากำหนด: รอบ 1 เดือน ต้องได้เต็มเดือนนับจากวันที่ทำจริง", () => {
+test("ปิดช้า: รอบไม่ขยับ ยังเป็นวันที่ 22 ตามที่ตั้งไว้", () => {
   const { nextDue, anchor } = nextDueAfterCompletion(
     {
-      anchorDate: new Date(Date.UTC(2026, 7, 22)), // anchor ตกวันที่ 22
+      anchorDate: new Date(Date.UTC(2026, 7, 22)),
       nextDueDate: new Date(Date.UTC(2026, 7, 22)), // ครบกำหนด 22 ส.ค.
       frequency: "monthly",
       roundsPerYear: null,
     },
     new Date(Date.UTC(2026, 8, 14, 5)) // ปิดจริง 14 ก.ย.
   );
-  assert.equal(iso(nextDue), "2026-10-14"); // ไม่ใช่ 22 ก.ย. (อีกแค่ 8 วัน)
-  assert.equal(iso(anchor), "2026-09-14"); // ย้ายหลักมาที่วันที่ทำจริง
+  assert.equal(iso(nextDue), "2026-09-22"); // ผู้ใช้ 4/11/2569 "ปิดวันไหนนับต่อไม่เอาแล้ว"
+  assert.equal(iso(anchor), "2026-08-22");
+});
+
+const weekly = { anchorDate: new Date(Date.UTC(2026, 10, 2)), nextDueDate: new Date(Date.UTC(2026, 10, 9)), frequency: "weekly", roundsPerYear: null }; // จันทร์ 2 พ.ย. รอบนี้จันทร์ 9 พ.ย.
+
+test("ทุกวันจันทร์: ปิดวันพุธยังเป็นวันจันทร์", () => {
+  const { nextDue } = nextDueAfterCompletion(weekly, new Date(Date.UTC(2026, 10, 11, 3)));
+  assert.equal(iso(nextDue), "2026-11-16");
+});
+
+test("ทุกวันจันทร์: ปิดตรงวันจันทร์ถัดไปพอดี ข้ามไปจันทร์หน้า ไม่เกิดใบที่ครบกำหนดวันนั้น", () => {
+  const { nextDue } = nextDueAfterCompletion(weekly, new Date(Date.UTC(2026, 10, 16, 3)));
+  assert.equal(iso(nextDue), "2026-11-23");
+});
+
+test("ทุกวันจันทร์: ปิดช้าข้ามหลายรอบ ไปจันทร์แรกหลังวันปิด", () => {
+  const { nextDue } = nextDueAfterCompletion(weekly, new Date(Date.UTC(2026, 11, 3, 3))); // พฤหัส 3 ธ.ค.
+  assert.equal(iso(nextDue), "2026-12-07");
+});
+
+test("ปิดติดกันหลายรอบ: วันที่ 31 ไม่หดตามเดือนสั้น", () => {
+  const jan = nextDueAfterCompletion({ anchorDate: new Date(Date.UTC(2027, 0, 31)), nextDueDate: new Date(Date.UTC(2027, 0, 31)), frequency: "monthly", roundsPerYear: null }, new Date(Date.UTC(2027, 0, 31, 3)));
+  assert.equal(iso(jan.nextDue), "2027-02-28");
+  const feb = nextDueAfterCompletion({ anchorDate: jan.anchor, nextDueDate: jan.nextDue, frequency: "monthly", roundsPerYear: null }, new Date(Date.UTC(2027, 1, 28, 3)));
+  assert.equal(iso(feb.nextDue), "2027-03-31");
+});
+
+test("แผนเก่าที่วันไม่ตรงช่องของ anchor: เริ่มนับจากวันกำหนดปัจจุบัน", () => {
+  const { nextDue, anchor } = nextDueAfterCompletion(
+    { anchorDate: new Date(Date.UTC(2026, 0, 5)), nextDueDate: new Date(Date.UTC(2026, 10, 9)), frequency: "monthly", roundsPerYear: null },
+    new Date(Date.UTC(2026, 10, 12, 3))
+  );
+  assert.equal(iso(nextDue), "2026-12-09");
+  assert.equal(iso(anchor), "2026-11-09");
 });
 
 test("ปิดก่อนกำหนด: ยังนับจากวันกำหนดเดิม ไม่ให้รอบคืบเข้ามาทุกครั้ง", () => {
@@ -92,7 +125,7 @@ test("ความถี่แบบสัปดาห์นับเป็น�
     },
     new Date(Date.UTC(2026, 8, 5, 8)) // ปิดช้า 4 วัน
   );
-  assert.equal(iso(nextDue), "2026-09-19"); // 5 ก.ย. + 14 วัน
+  assert.equal(iso(nextDue), "2026-09-15"); // 1 ก.ย. + 14 วัน ไม่ขยับตามวันปิด
 });
 
 test("โหมดรอบต่อปี: ยังตรึงช่องเวลาไว้กับปฏิทินเหมือนเดิม ไม่ย้าย anchor", () => {
