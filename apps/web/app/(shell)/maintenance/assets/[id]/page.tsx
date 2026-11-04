@@ -78,7 +78,7 @@ export default async function AssetDetailPage({
           status: { in: ["open", "in_progress"] },
           OR: [{ pmScheduleId: { in: pmIds } }, { pmScheduleIds: { hasSome: pmIds } }],
         },
-        select: { id: true, code: true, status: true, pmScheduleId: true, pmScheduleIds: true },
+        select: { id: true, code: true, status: true, pmScheduleId: true, pmScheduleIds: true, pmRoundDate: true, dueDate: true },
         orderBy: { createdAt: "desc" },
       })
     : [];
@@ -87,6 +87,12 @@ export default async function AssetDetailPage({
     if (w.pmScheduleId) pending.set(w.pmScheduleId, w);
     for (const pid of w.pmScheduleIds) pending.set(pid, w);
   }
+  // ใบที่เปิดค้างทั้งหมดของแต่ละแผน เรียงตามวันครบกำหนด — แผนรอบสั้นมีได้หลายใบพร้อมกัน
+  // nextDueDate คือรอบถัดไปที่ยังไม่เปิดใบ ถ้าโชว์เป็น "ครบกำหนด" จะดูเหมือนวันที่เลือกเด้งไปไกล (ผู้ใช้ 4/11/2569)
+  const openWosOf = (pid: string) =>
+    pendingWos
+      .filter((w) => w.pmScheduleId === pid || w.pmScheduleIds.includes(pid))
+      .sort((a, b) => (a.dueDate?.getTime() ?? Infinity) - (b.dueDate?.getTime() ?? Infinity));
   const warrantyExpired =
     asset.warrantyExpiry != null && asset.warrantyExpiry < new Date();
 
@@ -241,6 +247,8 @@ export default async function AssetDetailPage({
               ? `เกินกำหนด ${-left} วัน`
               : `${left} วัน`;
             const openWo = pending.get(s.id);
+            const openWos = openWosOf(s.id);
+            const firstDue = openWos[0]?.dueDate ?? null;
             // มีใบงานแล้ว: ป้ายขวาบอก "สร้างใบงานแล้ว · รอปิดงาน" (กรมท่า) แทนป้ายนับวัน — ผู้ดูแลบ้านเห็นป้ายแดง
             // "เกินกำหนด" ทั้งที่สร้างใบไปแล้วจะงง (ผู้ใช้ 3/11/2569) · ส่วนเลยกำหนดย้ายไปบอกในแถวใบงาน
             const pillColor = openWo ? "var(--brand-navy)" : color;
@@ -257,7 +265,8 @@ export default async function AssetDetailPage({
                     </p>
                     <p className="truncate text-xs text-(--ink-soft)">
                       ทุก {freqLabel(s.frequency)} • ครบกำหนด{" "}
-                      {fmtDate(s.nextDueDate)}
+                      {fmtDate(firstDue ?? s.nextDueDate)}
+                      {firstDue && ` • รอบถัดไป ${fmtDate(s.nextDueDate)}`}
                     </p>
                   </div>
                   <span
@@ -271,18 +280,36 @@ export default async function AssetDetailPage({
                     {openWo ? "สร้างใบงานแล้ว · รอปิดงาน" : statusText}
                   </span>
                 </div>
-                {openWo && (
-                  <Link
-                    href={`/maintenance/work-orders/${openWo.id}`}
-                    className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-(--bg-soft) px-2.5 py-1 text-xs text-(--ink) hover:underline"
-                  >
-                    <ClipboardList className="h-3.5 w-3.5 text-(--ink-soft)" />
-                    ใบงาน {openWo.code} · {openWo.status === "in_progress" ? "กำลังดำเนินการ" : "รอรับงาน"}
-                    {overdue && <span className="text-[#DC2626]">· เลยกำหนด {-left} วัน</span>}
-                    <span className="text-(--ink-soft)">· ดูใบงาน →</span>
-                  </Link>
+                {openWos.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {openWos.map((w) => {
+                      const lateDays = w.dueDate
+                        ? Math.floor((Date.now() - w.dueDate.getTime()) / 86_400_000) + 1
+                        : overdue ? -left : 0;
+                      return (
+                        <Link
+                          key={w.id}
+                          href={`/maintenance/work-orders/${w.id}`}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-(--bg-soft) px-2.5 py-1 text-xs text-(--ink) hover:underline"
+                        >
+                          <ClipboardList className="h-3.5 w-3.5 text-(--ink-soft)" />
+                          ใบงาน {w.code}
+                          {w.dueDate && ` · ครบกำหนด ${fmtDate(w.dueDate)}`} · {w.status === "in_progress" ? "กำลังดำเนินการ" : "รอรับงาน"}
+                          {lateDays > 0 && <span className="text-[#DC2626]">· เลยกำหนด {lateDays} วัน</span>}
+                          <span className="text-(--ink-soft)">· ดูใบงาน →</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
                 )}
-                {canManagePm && <PmEditForm s={s} users={users} today={today} />}
+                {canManagePm && (
+                  <PmEditForm
+                    s={s}
+                    users={users}
+                    today={today}
+                    openRoundLabels={openWos.filter((w) => w.pmRoundDate).map((w) => fmtDate(w.pmRoundDate))}
+                  />
+                )}
                 {canManagePm && (
                   <div className="mt-2 flex items-center gap-2">
                     {!openWo && (
@@ -327,10 +354,12 @@ function PmEditForm({
   s,
   users,
   today,
+  openRoundLabels,
 }: {
   s: { id: string; title: string; frequency: string; nextDueDate: Date; assignedTo: string | null; requiresExpense: boolean; description: string | null };
   users: { id: string; name: string }[];
   today: string;
+  openRoundLabels: string[];
 }) {
   const due = toDateInput(s.nextDueDate);
   return (
@@ -354,8 +383,13 @@ function PmEditForm({
           </select>
         </label>
         <label className="flex flex-col gap-1 text-xs text-(--ink-soft)">
-          วันกำหนดถัดไป
+          {openRoundLabels.length > 0 ? "รอบถัดไปที่จะเปิดใบ" : "วันกำหนดถัดไป"}
           <input type="date" name="nextDueDate" defaultValue={due} min={due < today ? due : today} className={fieldClass} />
+          {openRoundLabels.length > 0 && (
+            <span data-testid="pm-open-rounds-hint">
+              รอบ {openRoundLabels.join(", ")} เปิดใบแล้ว ช่องนี้คือรอบถัดจากนั้น · ถ้าเลือกวันก่อนหน้านี้ ระบบจะนับรอบใหม่จากวันนั้นและเปิดใบเพิ่ม ใบเดิมไม่เปลี่ยนตาม
+            </span>
+          )}
         </label>
         <label className="flex flex-col gap-1 text-xs text-(--ink-soft) sm:col-span-2">
           ผู้รับผิดชอบ *

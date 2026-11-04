@@ -76,7 +76,7 @@ export default async function PmListPage({
   // PM ออกรอบใหม่ คนอ่านการ์ดจึงต้องกดไปหามันเจอ ไม่ใช่ไปไล่หาเองในบอร์ดใบงาน
   const pendingWos = await prisma.workOrder.findMany({
     where: { orgId, status: { in: ["open", "in_progress"] } },
-    select: { id: true, pmScheduleId: true, pmScheduleIds: true },
+    select: { id: true, pmScheduleId: true, pmScheduleIds: true, pmRoundDate: true },
     orderBy: { createdAt: "desc" },
   });
   const pending = new Map<string, string>();
@@ -110,6 +110,10 @@ export default async function PmListPage({
     requiresExpense: s.requiresExpense,
     hasPendingWorkOrder: pending.has(s.id),
     pendingWorkOrderId: pending.get(s.id) ?? null,
+    openRoundLabels: pendingWos
+      .filter((w) => w.pmRoundDate && (w.pmScheduleId === s.id || w.pmScheduleIds.includes(s.id)))
+      .sort((a, b) => a.pmRoundDate!.getTime() - b.pmRoundDate!.getTime())
+      .map((w) => fmtThaiDate(w.pmRoundDate)),
   }));
 
   // รายชื่อสำหรับกล่องแก้ไข PM (เปลี่ยนผู้รับผิดชอบ)

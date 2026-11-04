@@ -105,6 +105,8 @@ export interface PmRow {
   hasPendingWorkOrder: boolean;
   /** ใบงานที่ค้างอยู่ของ PM นี้ (ล่าสุด) — ตัวที่บล็อกไม่ให้ออกรอบใหม่ */
   pendingWorkOrderId: string | null;
+  /** รอบที่เปิดใบแล้วและยังไม่ปิด เรียงตามวัน — nextDueLabel คือรอบถัดจากนี้ ไม่ใช่วันครบกำหนดของใบที่เปิดอยู่ */
+  openRoundLabels: string[];
 }
 
 /** ลิงก์สร้างใบงานจาก PM — คัดลอกรูปแบบ description ของเดิมทั้งหมด */
@@ -642,7 +644,7 @@ export function PmCalendar({
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-(--ink)">
-                วันกำหนดถัดไป
+                {editing.openRoundLabels.length > 0 ? "รอบถัดไปที่จะเปิดใบ" : "วันกำหนดถัดไป"}
               </span>
               <input
                 type="date"
@@ -652,6 +654,11 @@ export function PmCalendar({
                 min={editing.nextDueInput < todayBangkok() ? editing.nextDueInput : todayBangkok()}
                 className="h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm text-(--ink)"
               />
+              {editing.openRoundLabels.length > 0 && (
+                <span className="text-xs text-(--ink-soft)" data-testid="pm-open-rounds-hint">
+                  รอบ {editing.openRoundLabels.join(", ")} เปิดใบแล้ว ช่องนี้คือรอบถัดจากนั้น · ถ้าเลือกวันก่อนหน้านี้ ระบบจะนับรอบใหม่จากวันนั้นและเปิดใบเพิ่ม ใบเดิมไม่เปลี่ยนตาม
+                </span>
+              )}
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-(--ink)">ผู้รับผิดชอบ *</span>
@@ -818,7 +825,7 @@ function PmDetailCard({
         {!s.awaitingSchedule && (
           <Chip
             icon={<CalendarCheck className="h-3.5 w-3.5" />}
-            label={s.nextDueLabel}
+            label={s.openRoundLabels.length > 0 ? `ครบกำหนด ${s.openRoundLabels[0]} · รอบถัดไป ${s.nextDueLabel}` : s.nextDueLabel}
           />
         )}
         <Chip
