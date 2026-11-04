@@ -183,6 +183,10 @@ export async function GET(req: NextRequest) {
       }
     }
   }
+  // เฉพาะใบงาน PM ค่าใช้จ่าย — ไม่แตะลงเวลา (ผู้ใช้ 4/11/2569 "ไม่ต้องยุ่งกับอันอื่น")
+  if (task === "maintenance-score") {
+    Object.assign(result, { performance: { maintenance: await dockOverdueMaintenance() } });
+  }
   if (task === "performance" || task === "all") {
     // สองแหล่ง: งานซ่อมบำรุงที่ปล่อยค้าง และผลลงเวลาจาก workforce
     Object.assign(result, {
