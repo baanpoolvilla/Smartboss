@@ -155,17 +155,38 @@ async function saveExpense(
   if (tracked && workOrderId && expected !== null && (await prisma.expense.count({ where: { orgId: s.orgId, workOrderId } })) !== Number(expected)) {
     return { error: "ระหว่างที่เปิดหน้านี้ มีการลงค่าใช้จ่ายของใบงานนี้แล้ว กลับไปดูที่ใบงานก่อน ไม่งั้นยอดจะเบิ้ล" };
   }
+  // ใบงานหลายบ้าน: ลงยอดจริงของแต่ละบ้าน (ผู้ใช้ 3/11/2569 "เอาให้ราคาตามจริง แจกแจงชัดเจน") ชื่อบ้านอยู่ในรายละเอียด
+  // เพื่อให้ยอดเท่ากันไม่ถูกรวมเป็นชุดเดียวกับรายการเก่าที่ลงยอดเต็มทุกบ้าน
+  let split: Map<string, { amount: number; description: string }> | null = null;
+  if (!isNoExpense && propertyIds.length > 1) {
+    const ids = formData.getAll("houseId").map(String);
+    const amounts = formData.getAll("houseAmount").map((x) => parseAmount(String(x || "0")));
+    if (ids.length !== propertyIds.length || ids.some((id) => !propertyIds.includes(id))) return { error: "ใบงานนี้มีหลายบ้าน กรอกยอดจริงของแต่ละบ้าน" };
+    if (amounts.some((x) => !Number.isFinite(x) || x < 0)) return { error: "ยอดของแต่ละบ้านต้องเป็นตัวเลข" };
+    const sum = amounts.reduce((n, x) => n + x, 0);
+    if (Math.abs(sum - amount) > 0.005) return { error: `ยอดแยกบ้านรวม ฿${sum.toLocaleString()} ไม่ตรงกับยอดรวม ฿${amount.toLocaleString()}` };
+    const homes = await prisma.property.findMany({ where: { orgId: s.orgId, id: { in: ids } }, select: { id: true, name: true } });
+    split = new Map(
+      ids.flatMap((id, i) => {
+        const name = homes.find((h) => h.id === id)?.name ?? "-";
+        return amounts[i]! > 0 ? [[id, { amount: amounts[i]!, description: d.description ? `${d.description} · ${name}` : name }] as const] : [];
+      }),
+    );
+  }
   const receiptUrl = newFile ? await putFile(`${s.orgId}/maintenance/receipts`, file) : draftUrl;
   const receiptSha256 = newFile ? createHash("sha256").update(Buffer.from(await file.arrayBuffer())).digest("hex") : draftUrl ? (draft?.receiptSha256 ?? null) : null;
   const receiptAi = isNoExpense ? null : (parseAi(formData.get("receiptAi")) ?? (draftUrl ? ((draft?.ai ?? null) as Prisma.InputJsonValue | null) : null));
 
-  const saved = await createExpensesForProperties(s.orgId, propertyIds, {
+  const firstSplit = split ? [...split.values()][0]! : null;
+  const saved = await createExpensesForProperties(s.orgId, split ? [...split.keys()] : propertyIds, {
     workOrderId,
     pmScheduleId,
-    amount,
-    description: isNoExpense
-      ? d.description || "ไม่มีค่าใช้จ่าย"
-      : (d.description ?? null),
+    amount: firstSplit ? firstSplit.amount : amount,
+    description: firstSplit
+      ? firstSplit.description
+      : isNoExpense
+        ? d.description || "ไม่มีค่าใช้จ่าย"
+        : (d.description ?? null),
     receiptUrl,
     ...(isNoExpense ? {} : receipt),
     receiptSha256,
@@ -176,7 +197,7 @@ async function saveExpense(
     paidBy: d.paidBy,
     isNoExpense,
     createdBy: s.userId,
-  });
+  }, split ?? undefined);
   // คำขอซ้ำ — รูปใบเสร็จที่เพิ่งอัปโหลดมากับคำขอนี้ไม่มีรายการไหนใช้
   if (!saved && newFile && receiptUrl) await deleteFiles([receiptUrl]).catch(() => 0);
   if (saved) {

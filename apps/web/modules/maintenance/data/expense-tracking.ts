@@ -5,6 +5,7 @@ import type { ExpenseTracking } from "@/modules/maintenance/lib/expense-deadline
 import { realExpenseTotal } from "@/modules/maintenance/lib/expense-batches";
 import { deleteActionNotifications, usersWithPermission } from "@/modules/maintenance/data/notify";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
+import { REQ_PERMS } from "@/modules/requests/permissions";
 import { withRequestsTenant } from "@/modules/requests/lib/db";
 
 /** การตั้งค่าของบริษัท — ดู lib/expense-deadline.ts */
@@ -140,6 +141,70 @@ export async function workingRecorders(orgId: string, recorderIds: string[]): Pr
   if (recorderIds.length === 0) return [];
   const can = new Set(await usersWithPermission(orgId, MAINT_PERMS.expenseManage));
   return recorderIds.filter((id) => can.has(id));
+}
+
+/** ต้นทางไม่ขยับกี่วันถึงเริ่มทวงคนที่ถืองาน */
+export const EXPENSE_STUCK_DAYS = 7;
+
+const PO_STUCK_LABEL: Record<string, string> = { pending: "รออนุมัติ", approved: "รอสั่งซื้อ", ordered: "รอรับของ" };
+
+export interface StuckExpenseSource {
+  kind: "po" | "request";
+  text: string;
+  days: number;
+  /** คนที่ต้องจัดการ · ceoFallback = ไม่มีคนอื่นแล้ว เลยถึง CEO */
+  holders: string[];
+  ceoFallback: boolean;
+  workOrderId: string;
+  since: Date;
+  /** มีคนรับผิดชอบชัดเจน — PR รออนุมัติอยู่ที่ผู้อนุมัติ ไม่หักคนอื่นแทน */
+  dockable: boolean;
+}
+
+/**
+ * ใบงานปิดแล้วที่รอ PR/PO หรือใบเบิกไม่ขยับเกินกำหนด — ใบพวกนี้ไม่ขึ้นงานผู้บันทึก จึงต้องทวงคนที่ถืออยู่ให้จบ
+ * ใบเบิกรออนุมัติไม่อยู่ในนี้ เพราะ remindRequests เตือนผู้อนุมัติทุกวันอยู่แล้ว
+ */
+export async function stuckExpenseSources(orgId: string, now = new Date()): Promise<StuckExpenseSource[]> {
+  const before = new Date(now.getTime() - EXPENSE_STUCK_DAYS * 86_400_000);
+  const age = (at: Date) => Math.floor((now.getTime() - at.getTime()) / 86_400_000);
+  const closed = { status: "completed", requiresExpense: true, isPrivate: false };
+  const pos = await prisma.purchaseOrder.findMany({
+    where: { orgId, status: { in: PO_OPEN }, updatedAt: { lt: before }, workOrder: closed },
+    select: { code: true, status: true, updatedAt: true, poAssignedTo: true, receiverAssignedTo: true, workOrderId: true },
+  });
+  const reqs = await withRequestsTenant(orgId, (tx) =>
+    tx.moneyRequest.findMany({
+      where: { orgId, status: "approved", kind: { in: REQUEST_POSTING_KINDS }, workOrderId: { not: null }, updatedAt: { lt: before } },
+      select: { code: true, updatedAt: true, workOrderId: true },
+    }),
+  );
+  const ids = [...new Set([...pos, ...reqs].map((x) => x.workOrderId!))];
+  if (ids.length === 0) return [];
+  const orders = await prisma.workOrder.findMany({ where: { orgId, id: { in: ids }, ...closed }, select: { id: true, code: true } });
+  const posted = new Set((await prisma.expense.findMany({ where: { orgId, workOrderId: { in: ids } }, select: { workOrderId: true }, distinct: ["workOrderId"] })).map((e) => e.workOrderId));
+  const codeOf = new Map(orders.filter((o) => !posted.has(o.id)).map((o) => [o.id, o.code]));
+  const ceos = await ceoUserIds(orgId);
+  const notCeo = (list: string[]) => list.filter((id) => !ceos.includes(id));
+  const approvers = notCeo(await usersWithPermission(orgId, MAINT_PERMS.poApprove));
+  const payers = notCeo(await usersWithPermission(orgId, REQ_PERMS.pay));
+  const assigned = [...new Set(pos.flatMap((p) => [p.poAssignedTo, p.receiverAssignedTo]).filter((x): x is string => !!x))];
+  const active = new Set((await prisma.user.findMany({ where: { orgId, id: { in: assigned }, isActive: true }, select: { id: true } })).map((u) => u.id));
+  const out: StuckExpenseSource[] = [];
+  const add = (kind: StuckExpenseSource["kind"], workOrderId: string, text: string, at: Date, holders: string[], dockable: boolean) =>
+    out.push({ kind, workOrderId, text, since: at, days: age(at), holders: holders.length > 0 ? holders : ceos, ceoFallback: holders.length === 0, dockable: dockable && holders.length > 0 });
+  for (const po of pos) {
+    const wo = codeOf.get(po.workOrderId!);
+    if (!wo) continue;
+    const owner = po.status === "pending" ? null : po.status === "ordered" ? (po.receiverAssignedTo ?? po.poAssignedTo) : po.poAssignedTo;
+    const named = !!owner && active.has(owner);
+    add("po", po.workOrderId!, `${wo} · ${po.code} ${PO_STUCK_LABEL[po.status]}`, po.updatedAt, named ? [owner] : approvers, named);
+  }
+  for (const r of reqs) {
+    const wo = codeOf.get(r.workOrderId!);
+    if (wo) add("request", r.workOrderId!, `${wo} · ${r.code} อนุมัติแล้ว รอจ่าย`, r.updatedAt, payers, true);
+  }
+  return out;
 }
 
 const EXPENSE_REQUEST_TITLE = "ขอเลื่อนบันทึกค่าใช้จ่าย รออนุมัติ";

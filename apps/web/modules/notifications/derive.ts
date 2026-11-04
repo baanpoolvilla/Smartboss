@@ -249,6 +249,8 @@ export function maintenanceHrefFor(type: string, referenceId: string | null): st
   if (type === "purchase_order" && referenceId) return `/maintenance/purchase-orders/${referenceId}`;
   if (type === "pm") return "/maintenance/pm";
   // สรุปงานรอบันทึกของผู้บันทึก (data/cron.ts notifyExpenseDeadlines) ไปรายการที่ต้องทำ · ของเดิมไปหน้าค่าใช้จ่าย
+  if (type === "expense" && referenceId === "stuck-po") return "/maintenance/purchase-orders";
+  if (type === "expense" && referenceId === "stuck-request") return "/requests";
   if (type === "expense") return referenceId === "pending-tasks" ? "/maintenance/work-orders?filter=no-expense" : "/maintenance/expenses";
   // เงินสดย่อย — คำขอเติมเงิน/ผลอนุมัติ (modules/requests/lib/notify.ts notifyPettyTopup*)
   if (type === "petty_topup") return "/requests/petty-cash";

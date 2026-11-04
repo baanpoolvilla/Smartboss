@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ASSIGNED_BY_ME, ASSIGNED_TO_ME, PersonFilter, UNASSIGNED } from "./person-filter";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 import { InitialAvatar, WoCard } from "./wo-card";
 import { RefreshCw, ReceiptText, Check, CheckCircle2, Clock, MessageCircle } from "lucide-react";
 import { useUnreadCommentCounts } from "@/modules/notifications/pending-for-you";
@@ -135,10 +136,15 @@ export function WorkOrderFilteredList({
   orders,
   propertyNames,
   creatorNames,
+  moreCount = 0,
+  moreHref,
 }: {
   orders: BoardOrder[];
   propertyNames: Record<string, string>;
   creatorNames: Record<string, string>;
+  /** ผู้บันทึก: ใบรอบันทึกที่ยังไม่ได้แสดง */
+  moreCount?: number;
+  moreHref?: string;
 }) {
   return (
     /*
@@ -157,8 +163,17 @@ export function WorkOrderFilteredList({
             assigneeName={wo.assignedTo ? creatorNames[wo.assignedTo] : undefined}
           />
         ))}
+        {moreCount > 0 && moreHref && <MoreExpenseLink href={moreHref} count={moreCount} />}
       </div>
     </div>
+  );
+}
+
+function MoreExpenseLink({ href, count }: { href: string; count: number }) {
+  return (
+    <Link href={href} data-testid="expense-more" className="block rounded-(--radius) border border-(--line) bg-white px-3 py-2.5 text-center text-sm font-semibold text-(--app-strong)">
+      ดูอีก {count} ใบ
+    </Link>
   );
 }
 
@@ -189,12 +204,15 @@ function ColumnHeader({
   col,
   orders,
   boardTotal,
+  extra = 0,
 }: {
   col: (typeof COLUMNS)[number];
   orders: BoardOrder[];
   boardTotal: number;
+  /** ใบในคอลัมน์นี้ที่ไม่ได้ส่งมาแสดง (นับรวมให้ตรงของจริง) */
+  extra?: number;
 }) {
-  const total = orders.length;
+  const total = orders.length + extra;
   const percent = boardTotal > 0 ? Math.round((total / boardTotal) * 100) : 0;
   const dueRequests = orders.filter((w) => (w.pendingDue ?? 0) > 0).length;
   // ความคิดเห็นที่ยังไม่อ่านในคอลัมน์นี้ — ป้ายแดงขวาสุด แบบบอร์ดงาน
@@ -396,6 +414,7 @@ export function WorkOrderBoard({
   currentUserId,
   canPickPeople = true,
   expenseFirst = false,
+  expenseMore = 0,
 }: {
   orders: BoardOrder[];
   propertyNames: Record<string, string>;
@@ -413,6 +432,8 @@ export function WorkOrderBoard({
   canPickPeople?: boolean;
   /** ผู้บันทึกค่าใช้จ่าย: คอลัมน์ "ยังไม่บันทึก" ขึ้นก่อน (ผู้ใช้ 3/11/2569 "ต้องขึ้นมาอยู่บนเลย") */
   expenseFirst?: boolean;
+  /** ผู้บันทึก: ใบรอบันทึกที่ไม่ได้แสดงบนบอร์ด */
+  expenseMore?: number;
 }) {
   // ช่องบนแถบหัว (หน้าใบงานส่ง leading = <div id="wo-board-toolbar">) — หาเจอหลังเมาท์ แล้ววางตัวกรองผ่าน portal
   // เซิร์ฟเวอร์ = null (วาดตัวกรองไว้ในบอร์ดก่อน ตรงกับ HTML ที่ส่งมา) · ฝั่งเครื่อง = ช่องจริง แล้วย้ายขึ้นแถบหัว
@@ -533,7 +554,11 @@ export function WorkOrderBoard({
     ),
   };
   const columns: (typeof COLUMNS)[number][] = expenseFirst ? [...COLUMNS.filter((c) => c.key === "no_expense"), ...COLUMNS.filter((c) => c.key !== "no_expense")] : [...COLUMNS];
-  const boardTotal = columns.reduce((n, c) => n + (buckets[c.key]?.length ?? 0), 0);
+  // กรองบ้าน/คนอยู่ ไม่รู้ว่าใบที่ไม่ได้แสดงเข้าเงื่อนไขกี่ใบ — ตัวเลขนับเฉพาะที่เห็น ลิงก์ดูต่อยังอยู่
+  const hiddenCount = visible.length === orders.length ? expenseMore : 0;
+  const boardTotal = columns.reduce((n, c) => n + (buckets[c.key]?.length ?? 0), 0) + hiddenCount;
+  const countOf = (key: string) => (buckets[key]?.length ?? 0) + (key === "no_expense" ? hiddenCount : 0);
+  const moreLink = expenseMore > 0 ? <div className="mt-2.5"><MoreExpenseLink href="/maintenance/work-orders?filter=no-expense" count={expenseMore} /></div> : null;
 
   // ช่องเลือกบ้านบนแถบหัว (จอใหญ่) — ทุกบ้าน / ทั้งหมวด / รายหลัง ในช่องเดียว แบบช่องผู้รับผิดชอบ (ผู้ใช้ 3/11/2569 แบบ B)
   // มือถือแถบหัวแคบ ไม่พอใส่ ⇒ ยังใช้แถวปุ่มบ้านใต้แถบหัวเหมือนเดิม (ซ่อนช่องนี้ใต้ lg)
@@ -682,12 +707,12 @@ export function WorkOrderBoard({
               }}
             >
               {c.short}
-              {buckets[c.key]!.length > 0 && (
+              {countOf(c.key) > 0 && (
                 <span
                   className="rounded-[10px] px-1.5 py-px text-[10px] font-bold text-white"
                   style={{ backgroundColor: c.color }}
                 >
-                  {buckets[c.key]!.length}
+                  {countOf(c.key)}
                 </span>
               )}
             </button>
@@ -703,6 +728,7 @@ export function WorkOrderBoard({
             gap="gap-3"
             emptyClass="py-10 text-center text-sm text-(--ink-soft)"
           />
+          {columns[tab]!.key === "no_expense" && moreLink}
         </div>
       </div>
 
@@ -714,7 +740,7 @@ export function WorkOrderBoard({
             // แบบบอร์ดงาน: คอลัมน์มีระยะห่างกัน หัวเป็นกล่องลอย (ไม่ใช่แถบเต็มความกว้างคั่นเส้นตั้ง)
             className={`flex min-w-0 flex-1 flex-col px-1.5 pt-2.5 ${i === 0 ? "pl-2.5" : ""} ${i === columns.length - 1 ? "pr-2.5" : ""}`}
           >
-            <ColumnHeader col={c} orders={buckets[c.key]!} boardTotal={boardTotal} />
+            <ColumnHeader col={c} orders={buckets[c.key]!} boardTotal={boardTotal} extra={c.key === "no_expense" ? hiddenCount : 0} />
 
             <div className="min-h-0 flex-1 overflow-y-auto pb-2.5">
               <ColumnList
@@ -725,6 +751,7 @@ export function WorkOrderBoard({
                 gap="gap-2.5"
                 emptyClass="px-2 py-8 text-center text-sm text-[#B0BEC5]"
               />
+              {c.key === "no_expense" && moreLink}
             </div>
           </div>
         ))}

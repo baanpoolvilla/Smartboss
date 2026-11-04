@@ -39,6 +39,7 @@ import {
   ReceiveButton,
   SelfReceiveButton,
   RejectButton,
+  CancelOrderedButton,
   ReturnLinkButton,
 } from "@/modules/maintenance/components/po-actions";
 import { AppScaffold } from "@/modules/maintenance/components/app-scaffold";
@@ -50,6 +51,7 @@ import {
   receiveAction,
   selfReceiveAction,
   rejectAction,
+  cancelOrderedAction,
   addPoCommentAction,
   deletePoCommentAction,
   deletePoAction,
@@ -413,6 +415,8 @@ export default async function PoDetailPage({
         {po.isSelfPurchase && po.status === "ordered" && (
           <SelfReceiveButton id={id} items={items} action={selfReceiveAction} />
         )}
+
+        {po.status === "ordered" && canManagePo && <CancelOrderedButton id={id} action={cancelOrderedAction} />}
 
         {(po.status === "ordered" || po.status === "received") &&
           (canManagePo || isAssignedUser) && <ReturnLinkButton poId={id} />}

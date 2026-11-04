@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { loadExpenseTracking, pendingExpenseWorkOrders } from "@/modules/maintenance/data/expense-tracking";
 import { realExpenseTotal } from "@/modules/maintenance/lib/expense-batches";
-import { expenseDueAt, trackingActive } from "@/modules/maintenance/lib/expense-deadline";
+import { expenseDueAt, isExpenseBacklog, trackingActive } from "@/modules/maintenance/lib/expense-deadline";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { prisma } from "@smartboss/database";
@@ -37,15 +37,19 @@ function titleFor(
   return "ใบงานทั้งหมด";
 }
 
+/** จำนวนใบรอบันทึกที่ผู้บันทึกเห็นบนบอร์ด / ทีละกี่ใบในรายการ */
+const RECORDER_BOARD_LIMIT = 30;
+const RECORDER_LIST_STEP = 50;
+
 export default async function WorkOrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ propertyId?: string; filter?: string }>;
+  searchParams: Promise<{ propertyId?: string; filter?: string; show?: string }>;
 }) {
   const session = await requireOrg();
   if (!hasPermission(session, MAINT_PERMS.workorderView)) redirect("/");
   const orgId = session.orgId;
-  const { propertyId, filter } = await searchParams;
+  const { propertyId, filter, show } = await searchParams;
 
   const canCreate = hasPermission(session, MAINT_PERMS.workorderManage);
   // ใครเห็นใบไหน — กติกากลางอยู่ที่ data/work-order-access.ts (หน้ารายละเอียด
@@ -55,7 +59,7 @@ export default async function WorkOrdersPage({
   const tracking = await loadExpenseTracking(orgId);
   const trackingOn = trackingActive(tracking);
 
-  const [orders, properties, expenseSet, propCats] = await Promise.all([
+  const [allOrders, properties, expenseSet, propCats] = await Promise.all([
     listWorkOrders(orgId, {
       propertyId,
       priority: filter === "urgent" ? "urgent" : undefined,
@@ -67,6 +71,21 @@ export default async function WorkOrdersPage({
     workOrderIdsWithExpenses(orgId),
     propertyCategoryMap(orgId),
   ]);
+
+  // ผู้บันทึกเห็นเฉพาะใบที่ต้องทำก่อน (ผู้ใช้ 3/11/2569 "เอาที่เราจำเป็นต้องเห็น") — ใบเสี่ยงโดนหักขึ้นก่อน
+  // ใบค้างเก่าที่ไม่โดนหักไปท้าย · ที่เหลือบอกจำนวนแล้วกดดูต่อ · คนอื่นเห็นเหมือนเดิม
+  const recorderLimit = filter === "no-expense" ? Math.max(Number(show) || 0, RECORDER_LIST_STEP) : RECORDER_BOARD_LIMIT;
+  const recorderPending = access.expensePendingIds && (!filter || filter === "no-expense") ? await pendingExpenseWorkOrders(orgId) : [];
+  const visibleIds = new Set(allOrders.map((o) => o.id));
+  const hiddenPending = new Set(
+    recorderPending
+      .filter((o) => visibleIds.has(o.id))
+      .map((o) => ({ id: o.id, old: isExpenseBacklog(o, tracking), due: expenseDueAt(o, tracking).getTime() }))
+      .sort((a, b) => Number(a.old) - Number(b.old) || a.due - b.due)
+      .slice(recorderLimit)
+      .map((o) => o.id),
+  );
+  const orders = allOrders.filter((o) => !hiddenPending.has(o.id));
 
   const propNames: Record<string, string> = Object.fromEntries(
     properties.map((p) => [p.id, p.name])
@@ -176,6 +195,8 @@ export default async function WorkOrdersPage({
           orders={rows}
           propertyNames={propNames}
           creatorNames={creatorNames}
+          moreCount={hiddenPending.size}
+          moreHref={`/maintenance/work-orders?${new URLSearchParams({ ...(propertyId ? { propertyId } : {}), filter: "no-expense", show: String(recorderLimit + RECORDER_LIST_STEP) })}`}
         />
       ) : (
         <WorkOrderBoard
@@ -187,6 +208,7 @@ export default async function WorkOrdersPage({
           // พนักงานทั่วไปเห็นเฉพาะใบงานของตัวเองอยู่แล้ว (work-order-access.ts) — ตัวกรองจึงมีแค่ "ของฉัน"
           canPickPeople={access.seeAll}
           expenseFirst={!!access.expensePendingIds}
+          expenseMore={hiddenPending.size}
         />
       )}
     </AppScaffold>

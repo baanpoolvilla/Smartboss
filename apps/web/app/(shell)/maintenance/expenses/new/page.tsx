@@ -63,6 +63,7 @@ export default async function NewExpensePage({
       id: o.id,
       title: `${o.code} · ${houseName.get(o.propertyId) ?? "-"} · ${o.title}${needsExpense(o) ? " (ยังไม่บันทึก)" : ""}`,
       propertyCount: 1 + o.additionalPropertyIds.length,
+      houses: o.additionalPropertyIds.length > 0 ? [o.propertyId, ...o.additionalPropertyIds].map((id) => ({ id, name: houseName.get(id) ?? "-" })) : undefined,
     }));
 
   // ที่ช่างกรอกตอนปิดงาน — เติมให้ผู้บันทึกตรวจ (completeWorkOrderAction)

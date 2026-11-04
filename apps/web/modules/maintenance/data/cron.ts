@@ -24,7 +24,7 @@ import {
   type PerformanceSettings,
 } from "@/lib/performance";
 import { expenseDaysLabel, expenseDaysLeft, expenseDueAt, isExpenseBacklog, trackingActive, type ExpenseTracking } from "@/modules/maintenance/lib/expense-deadline";
-import { closeStaleExpenseRequests, queryPendingExpenseOrders, workingRecorders } from "@/modules/maintenance/data/expense-tracking";
+import { closeStaleExpenseRequests, EXPENSE_STUCK_DAYS, queryPendingExpenseOrders, stuckExpenseSources, workingRecorders } from "@/modules/maintenance/data/expense-tracking";
 import {
   addDays,
   isBacklog,
@@ -440,7 +440,7 @@ ${statusText}${notTaken}
  * เตือนใบงานที่ปิดแล้วแต่ยังไม่บันทึกค่าใช้จ่าย
  * (port จาก checkAndNotifyMissingExpenses — เดิมรันทุกวัน 17:00)
  */
-export async function notifyExpenseDeadlines(): Promise<{ expenseDeadlineNotified: number; expenseRequestsClosed: number }> {
+export async function notifyExpenseDeadlines(): Promise<{ expenseDeadlineNotified: number; expenseRequestsClosed: number; expenseStuckNotified: number }> {
   const rows = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
     prisma.performanceSetting.findMany({
       where: { expenseTrackFrom: { not: null } },
@@ -450,12 +450,14 @@ export async function notifyExpenseDeadlines(): Promise<{ expenseDeadlineNotifie
   const now = Date.now();
   let notified = 0;
   let closed = 0;
+  let stuck = 0;
   for (const row of rows) {
     const tracking: ExpenseTracking = { from: row.expenseTrackFrom, days: row.expenseTrackDays, recorderIds: row.expenseRecorderIds };
     if (!trackingActive(tracking)) continue;
     const pending = await queryPendingExpenseOrders(row.orgId);
     // คำขอเลื่อนของใบที่ไม่รอบันทึกแล้ว (PR/PO หรือใบเบิกลงยอดให้ ใบถูกเปิดกลับ) — ไม่ให้ค้างที่ CEO ทั้งที่ไม่มีอะไรให้อนุมัติ
     closed += await closeStaleExpenseRequests(row.orgId, pending.map((o) => o.id));
+    stuck += await notifyStuckExpenseSources(row.orgId);
     if (tracking.recorderIds.length === 0) continue;
     const orders = pending
       .map((wo) => ({ wo, left: expenseDaysLeft(expenseDueAt(wo, tracking)) }))
@@ -481,7 +483,32 @@ export async function notifyExpenseDeadlines(): Promise<{ expenseDeadlineNotifie
       notified++;
     }
   }
-  return { expenseDeadlineNotified: notified, expenseRequestsClosed: closed };
+  return { expenseDeadlineNotified: notified, expenseRequestsClosed: closed, expenseStuckNotified: stuck };
+}
+
+/**
+ * ทวงคนที่ถือ PR/PO หรือใบเบิกค้าง สรุปคนละแถวต่อวัน แทนของเมื่อวาน
+ * ไม่ทวงทีละใบ และไม่ไป CEO ถ้ามีคนอื่นจัดการได้ · ไม่มีจริง ๆ ถึง CEO สัปดาห์ละครั้ง
+ */
+async function notifyStuckExpenseSources(orgId: string): Promise<number> {
+  const sources = await stuckExpenseSources(orgId);
+  let sent = 0;
+  for (const [kind, ref, label] of [["po", "stuck-po", "PR/PO"], ["request", "stuck-request", "ใบเบิก"]] as const) {
+    const mine = sources.filter((s) => s.kind === kind);
+    const everyone = [...new Set(mine.flatMap((s) => s.holders))];
+    // เคลียร์หมดแล้ว แถวทวงเดิมต้องหายด้วย
+    await prisma.notification.deleteMany({ where: { orgId, type: "expense", referenceId: ref, userId: { notIn: everyone } } });
+    for (const userId of everyone) {
+      const own = mine.filter((s) => s.holders.includes(userId));
+      if (own.every((s) => s.ceoFallback) && !own.some((s) => s.days % 7 === 0)) continue;
+      const list = own.sort((a, b) => b.days - a.days).slice(0, 5).map((s) => `${s.text} ${s.days} วัน`).join("\n");
+      const title = `⏳ ใบงานรอ ${label} ค้างเกิน ${EXPENSE_STUCK_DAYS} วัน ${own.length} ใบ`;
+      await prisma.notification.deleteMany({ where: { orgId, userId, type: "expense", referenceId: ref } });
+      await notifyUser(orgId, userId, { title, body: list, type: "expense", referenceId: ref, line: `${title}\n${list}` });
+      sent++;
+    }
+  }
+  return sent;
 }
 
 export async function notifyMissingExpenses(): Promise<{ reminded: number }> {
@@ -767,6 +794,26 @@ export async function dockOverdueMaintenance(): Promise<{
           refType: "work_order_expense",
           refId: `${wo.id}:${userId}`,
           note: `${wo.code} ${wo.title} · ครบกำหนดบันทึก ${fmtThaiDate(lapse)}`,
+        });
+      }
+    }
+    // PR/PO หรือใบเบิกที่ปล่อยค้างจนเลยกำหนด ใบงานไม่ขึ้นงานผู้บันทึก — คนที่ถือต้องจบให้ได้ (ผู้ใช้ 3/11/2569 "ไม่อยากให้ค้าง")
+    // หักครั้งเดียวต่อใบต่อคน · ไม่หัก CEO · ขอแก้ไขคะแนนได้เหมือนกัน
+    for (const src of await stuckExpenseSources(row.orgId, now)) {
+      if (!src.dockable) continue;
+      const lapse = new Date(src.since.getTime() + tracking.days * DAY_MS);
+      if (lapse >= now || isBacklog(lapse, now) || (st.scoringStartDate && lapse < st.scoringStartDate)) continue;
+      for (const userId of src.holders) {
+        events.push({
+          orgId: row.orgId,
+          userId,
+          source: "maintenance",
+          category: "expense_overdue",
+          points: st.rulePoints.workorder_overdue,
+          occurredAt: now,
+          refType: "work_order_expense",
+          refId: `${src.workOrderId}:${userId}`,
+          note: `${src.text} ค้างเกิน ${tracking.days} วัน ทำให้บันทึกค่าใช้จ่ายไม่ได้`,
         });
       }
     }

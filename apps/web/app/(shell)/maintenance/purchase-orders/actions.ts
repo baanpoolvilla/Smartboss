@@ -426,6 +426,36 @@ export async function rejectAction(formData: FormData) {
 }
 
 /**
+ * ยกเลิก PO ที่สั่งซื้อแล้วแต่ของไม่มา — เดิมสถานะนี้จบได้ทางเดียวคือรับของ ใบค้างตลอดไป และใบงานที่ผูกอยู่ไม่ขึ้นงานผู้บันทึก
+ * ต้องบอกเหตุผล · ลงยอดแล้วยกเลิกไม่ได้ · ถ้าจ่ายเงินไปแล้ว ผู้บันทึกจะลงยอดจริงจากใบงาน
+ */
+export async function cancelOrderedAction(formData: FormData) {
+  const s = await requireOrg();
+  if (!hasPermission(s, MAINT_PERMS.poApprove) && !hasPermission(s, MAINT_PERMS.admin)) throw new Error("ไม่มีสิทธิ์ยกเลิกใบสั่งซื้อ");
+  const id = String(formData.get("id") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim().slice(0, 300);
+  if (!id || !reason) throw new Error("ใส่เหตุผลที่ยกเลิก");
+  if ((await prisma.expense.count({ where: { orgId: s.orgId, purchaseOrderId: id } })) > 0) throw new Error("ใบนี้ลงค่าใช้จ่ายแล้ว ยกเลิกไม่ได้");
+  const po = await getPurchaseOrder(s.orgId, id);
+  const changed = await transitionPurchaseOrder(s.orgId, id, ["ordered"], { status: "cancelled" });
+  if (changed && po) {
+    await poLog(s, po, "status", `ยกเลิก: ${reason}`, { from: po.status });
+    await notifyPoParties(s.orgId, po, [po.createdBy, po.poAssignedTo, po.receiverAssignedTo], s.userId, {
+      emoji: "❌",
+      text: "PO ถูกยกเลิก",
+      body: reason,
+    });
+    await notifyWorkOrderOwner(s.orgId, po, [po.createdBy, po.poAssignedTo, po.receiverAssignedTo], s.userId, {
+      emoji: "❌",
+      text: "PO สำหรับใบงานของคุณถูกยกเลิก",
+    });
+    await resolveActionNotifications(id, "purchase_order", ["ได้รับมอบ PO", "รับของ"]);
+  }
+  revalidatePath(`/maintenance/purchase-orders/${id}`);
+  redirect("/maintenance/purchase-orders");
+}
+
+/**
  * ใครแตะใบนี้ได้บ้าง — CEO · คนเปิด PR · คนที่ถูกมอบให้ไปซื้อ · **คนที่ถูกมอบให้ไปรับของ**
  *
  * ⚠ ขาด receiverAssignedTo ไม่ได้ ไม่งั้นคนที่เราเพิ่งมอบหมายให้ไปรับของ

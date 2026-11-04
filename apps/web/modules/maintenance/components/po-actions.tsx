@@ -462,6 +462,49 @@ export function RejectButton({ id, action }: { id: string; action: Action }) {
   );
 }
 
+/** ยกเลิก PO ที่สั่งซื้อแล้วแต่ของไม่มา */
+export function CancelOrderedButton({ id, action }: { id: string; action: Action }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  return (
+    <>
+      <Button type="button" variant="ghost" className="w-full text-[#B91C1C]" onClick={() => setOpen(true)}>
+        <X className="h-4 w-4" /> ยกเลิก PO (ของไม่มา)
+      </Button>
+      {open && (
+        <Modal
+          title="ยกเลิก PO"
+          onClose={() => setOpen(false)}
+          actions={
+            <>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
+                ไม่ยกเลิก
+              </Button>
+              <Button type="submit" form="cancel-ordered-form" size="sm" disabled={!reason.trim()}>
+                ยืนยันยกเลิก PO
+              </Button>
+            </>
+          }
+        >
+          <form id="cancel-ordered-form" action={action} className="flex flex-col gap-3">
+            <input type="hidden" name="id" value={id} />
+            <textarea
+              name="reason"
+              rows={3}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              aria-label="เหตุผลที่ยกเลิก"
+              placeholder="เหตุผลที่ยกเลิก เช่น ร้านไม่มีของ"
+              className="rounded-(--radius) border border-(--line) bg-(--bg) px-3 py-2 text-sm text-(--ink)"
+            />
+            <p className="text-xs text-(--ink-soft)">ถ้าใบนี้ผูกใบงานที่ปิดแล้ว ใบงานจะกลับไปรอผู้บันทึกค่าใช้จ่าย</p>
+          </form>
+        </Modal>
+      )}
+    </>
+  );
+}
+
 /** จบเรื่องการคืนของ — ใส่สรุปผล */
 export function ResolveReturnButton({
   id,

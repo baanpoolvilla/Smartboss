@@ -103,7 +103,9 @@ export function createExpense(orgId: string, data: ExpenseInput) {
 export async function createExpensesForProperties(
   orgId: string,
   propertyIds: (string | null)[],
-  base: Omit<ExpenseInput, "propertyId">
+  base: Omit<ExpenseInput, "propertyId">,
+  /** ลงยอดจริงแยกบ้าน — ไม่ส่ง = ทุกบ้านยอดเต็มตามเดิม */
+  split?: Map<string, { amount: number; description: string }>,
 ): Promise<boolean> {
   const ids = propertyIds.length > 0 ? propertyIds : [null];
   return prisma.$transaction(async (tx) => {
@@ -132,8 +134,8 @@ export async function createExpensesForProperties(
           pmScheduleId: base.pmScheduleId ?? null,
           purchaseOrderId: base.purchaseOrderId ?? null,
           propertyId: pid,
-          amount: base.amount,
-          description: base.description ?? null,
+          amount: split?.get(pid ?? "")?.amount ?? base.amount,
+          description: split?.get(pid ?? "")?.description ?? base.description ?? null,
           category: base.category ?? null,
           receiptUrl: base.receiptUrl ?? null,
           receiptNo: base.receiptNo ?? null,

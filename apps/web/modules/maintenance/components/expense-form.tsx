@@ -16,6 +16,8 @@ export interface WoOption {
   id: string;
   title: string;
   propertyCount: number;
+  /** ใบหลายบ้าน: ให้กรอกยอดจริงทีละบ้าน */
+  houses?: { id: string; name: string }[];
 }
 
 /** ฟอร์มค่าใช้จ่าย — port ตรงจาก expense_form_screen.dart */
@@ -80,6 +82,7 @@ export function ExpenseForm({
   const [receiptName, setReceiptName] = useState<string | null>(null);
   const init = edit ?? prefill;
   const [amount, setAmount] = useState(init?.amount ?? "");
+  const [houseAmounts, setHouseAmounts] = useState<Record<string, string>>({});
   const [description, setDescription] = useState(init?.description ?? "");
   const [receiptNo, setReceiptNo] = useState(init?.receiptNo ?? "");
   const [payee, setPayee] = useState(init?.payee ?? "");
@@ -139,6 +142,9 @@ export function ExpenseForm({
 
   const propertyCount =
     workOrders.find((w) => w.id === woId)?.propertyCount ?? 0;
+  const splitHouses = !edit ? workOrders.find((w) => w.id === woId)?.houses : undefined;
+  const asNumber = (v: string) => Number(v.replace(/[\s,฿]/g, "")) || 0;
+  const splitSum = (splitHouses ?? []).reduce((n, h) => n + asNumber(houseAmounts[h.id] ?? ""), 0);
 
   return (
     <Card className="p-5">
@@ -146,7 +152,7 @@ export function ExpenseForm({
       {/* action คืน { error } แบบไม่โยน (ตอบ 200 ทั้งที่ไม่สำเร็จ) — ปิด toast กลาง แสดงผลเองข้างล่าง
           สำเร็จแล้วพาไปหน้ารายการค่าใช้จ่าย ซึ่งเห็นรายการที่เพิ่งบันทึก */}
       <form className="flex flex-col gap-4" data-save-toast="off">
-        {propertyCount > 1 && (
+        {propertyCount > 1 && !splitHouses && (
           <div
             className="flex items-start gap-2 rounded-[8px] p-3 text-[13px]"
             style={{ backgroundColor: "#EFF6FF", border: "1px solid #BFDBFE", color: "#1E40AF" }}
@@ -322,6 +328,30 @@ export function ExpenseForm({
           </span>
           <input name="amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} />
         </label>
+
+        {splitHouses && splitHouses.length > 1 && (
+          <div className="flex flex-col gap-2 rounded-(--radius) border border-(--line) p-3" data-testid="house-amounts">
+            <span className="text-sm font-medium text-(--ink)">ยอดจริงของแต่ละบ้าน *</span>
+            {splitHouses.map((h) => (
+              <label key={h.id} className="flex items-center justify-between gap-3 text-sm text-(--ink)">
+                <span className="min-w-0 truncate">{h.name}</span>
+                <input type="hidden" name="houseId" value={h.id} />
+                <input
+                  name="houseAmount"
+                  inputMode="decimal"
+                  aria-label={`ยอดของ ${h.name}`}
+                  placeholder="0"
+                  value={houseAmounts[h.id] ?? ""}
+                  onChange={(e) => setHouseAmounts((cur) => ({ ...cur, [h.id]: e.target.value }))}
+                  className={`${inputClass} w-32 shrink-0 text-right`}
+                />
+              </label>
+            ))}
+            <p className={`text-xs ${Math.abs(splitSum - asNumber(amount)) > 0.005 ? "text-amber-700" : "text-(--ink-soft)"}`} data-testid="house-sum">
+              รวมแยกบ้าน ฿{splitSum.toLocaleString()} จากยอดรวม ฿{asNumber(amount).toLocaleString()} · บ้านที่ไม่มีค่าใช้จ่ายเว้นว่างได้
+            </p>
+          </div>
+        )}
 
         <details className="rounded-(--radius) border border-(--line) p-3" data-testid="receipt-details">
           <summary className="cursor-pointer text-sm text-(--ink)">
