@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ExternalLink, FileText, MessageSquare, ReceiptText } from "lucide-react";
+import { CalendarClock, ExternalLink, FileText, MessageSquare, ReceiptText } from "lucide-react";
 import { requireOrg, hasPermission } from "@smartboss/auth";
+import { prisma } from "@smartboss/database";
 import { Card } from "@smartboss/ui/components/card";
 import { Button } from "@smartboss/ui/components/button";
 import { Input } from "@smartboss/ui/components/input";
@@ -10,11 +11,12 @@ import { ADMIN_PERMS } from "@/modules/admin/permissions";
 import { getLineConfig, usersWithPermission } from "@/modules/maintenance/data/notify";
 import { userNameMap } from "@/modules/maintenance/data/users";
 import { loadExpenseTracking, pendingExpenseWorkOrders } from "@/modules/maintenance/data/expense-tracking";
+import { DEFAULT_PM_LEAD_DAYS, todayBkkDate, ymd } from "@/modules/maintenance/lib/pm-rounds";
 import {
   AppScaffold,
   AppBarLink,
 } from "@/modules/maintenance/components/app-scaffold";
-import { saveExpenseTrackingAction, saveLineConfigAction } from "./actions";
+import { saveExpenseTrackingAction, saveLineConfigAction, savePmRoundsAction } from "./actions";
 
 export default async function MaintenanceSettingsPage() {
   const session = await requireOrg();
@@ -29,6 +31,9 @@ export default async function MaintenanceSettingsPage() {
   // ติ๊กไว้แต่ทำงานไม่ได้แล้ว (ปิดบัญชี/ถอนสิทธิ์) — ไม่มีใครรับงาน ไม่มีใครโดนหัก ต้องบอกให้รู้
   const lostRecorders = tracking.recorderIds.filter((id) => !expenseHolders.includes(id)).length;
   const noRecorder = !!tracking.from && tracking.recorderIds.length === lostRecorders;
+  const pmRounds = await prisma.performanceSetting.findUnique({ where: { orgId: session.orgId }, select: { pmRoundsFrom: true, pmLeadDays: true } });
+  const pmRoundsFrom = pmRounds?.pmRoundsFrom ? ymd(pmRounds.pmRoundsFrom) : "";
+  const todayYmd = ymd(todayBkkDate());
 
   return (
     <AppScaffold
@@ -80,6 +85,27 @@ export default async function MaintenanceSettingsPage() {
             )}
             <span className="text-xs text-(--ink-soft)">รายชื่อคือคนที่มีสิทธิ์บันทึก/แก้ไขค่าใช้จ่าย · CEO ที่ติ๊กไว้ยังเห็นทุกใบตามเดิม</span>
           </div>
+          <Button type="submit" className="w-fit">บันทึก</Button>
+        </form>
+      </Card>
+
+      {/* ─── PM แบบนับรอบ ─── */}
+      <Card className="mb-4 p-5" data-testid="pm-rounds-card">
+        <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-(--ink)">
+          <CalendarClock className="h-4 w-4 text-(--brand-green)" /> PM แบบนับรอบ
+        </h2>
+        <p className="mb-3 text-xs text-(--ink-soft)">
+          ใบงานเปิดก่อนครบกำหนด {pmRounds?.pmLeadDays ?? DEFAULT_PM_LEAD_DAYS} วัน รอบเดินตามวันที่ตั้งไว้ ปิดวันไหนไม่ขยับ เลยกำหนดหักคะแนนทันที
+          ค้างหลายรอบ CEO รวมและเลือกหักคะแนนได้ · ใช้กับทุกแผนยกเว้นแบบจำกัดจำนวนครั้ง
+        </p>
+        <form action={savePmRoundsAction} className="flex flex-col gap-3">
+          <label className="flex flex-col gap-1 text-sm">
+            วันเริ่มใช้ (เว้นว่าง = ปิด)
+            <Input type="date" name="from" defaultValue={pmRoundsFrom} min={pmRoundsFrom && pmRoundsFrom < todayYmd ? pmRoundsFrom : todayYmd} className="w-48" />
+          </label>
+          <p className="rounded-(--radius) bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            รอบที่ครบกำหนดก่อนวันเริ่มใช้จะไม่โดนหักคะแนน · ใบจะเปิดเองเมื่อ cron ทำงานแล้ว
+          </p>
           <Button type="submit" className="w-fit">บันทึก</Button>
         </form>
       </Card>

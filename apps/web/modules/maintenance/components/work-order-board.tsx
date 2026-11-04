@@ -281,6 +281,12 @@ function ColumnHeader({
 }
 
 /** รายการการ์ดในคอลัมน์เดียว — จัดกลุ่มหรือไม่ก็ได้ */
+/** ใบรอบ PM ที่เลยกำหนดขึ้นก่อน เก่าสุดอยู่บน คนทำจะได้เห็นงานเร่งก่อน · ใบอื่นคงลำดับเดิม */
+function lateRoundsFirst(orders: BoardOrder[]): BoardOrder[] {
+  const late = orders.filter((w) => w.pmRound?.late).sort((a, b) => (a.dueDateIso ?? "").localeCompare(b.dueDateIso ?? ""));
+  return [...late, ...orders.filter((w) => !w.pmRound?.late)];
+}
+
 function ColumnList({
   orders,
   propertyNames,
@@ -313,11 +319,11 @@ function ColumnList({
   const groups = byPriority ? groupByPriority(orders) : [];
   // กลุ่มเดียวไม่ต้องขึ้นหัวกลุ่ม — หัวข้อที่คลุมทั้งคอลัมน์ไม่ได้บอกอะไรเพิ่ม
   if (groups.length <= 1) {
-    return <div className={`flex flex-col ${gap}`}>{orders.map(card)}</div>;
+    return <div className={`flex flex-col ${gap}`}>{lateRoundsFirst(orders).map(card)}</div>;
   }
 
   // ไม่มีหัวกลุ่มความสำคัญแล้ว (ผู้ใช้ 3/11/2569 "เอาออกเลย") — ยังเรียงด่วนก่อน ความสำคัญดูจากจุดสีบนการ์ด แบบบอร์ดงาน
-  return <div className={`flex flex-col ${gap}`}>{groups.flatMap((g) => g.orders).map(card)}</div>;
+  return <div className={`flex flex-col ${gap}`}>{lateRoundsFirst(groups.flatMap((g) => g.orders)).map(card)}</div>;
 }
 
 function ColumnIcon({ col, color }: { col: string; color: string }) {
