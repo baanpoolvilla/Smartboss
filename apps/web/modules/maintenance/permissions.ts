@@ -8,6 +8,7 @@ export const MAINT_PERMS = {
   workorderView: "maintenance.workorder.view",
   workorderManage: "maintenance.workorder.manage",
   workorderComplete: "maintenance.workorder.complete",
+  workorderDelete: "maintenance.workorder.delete",
 
   propertyView: "maintenance.property.view",
   propertyManage: "maintenance.property.manage",
@@ -41,6 +42,7 @@ export const MAINT_PERM_LABELS: Record<string, string> = {
   [MAINT_PERMS.workorderView]: "ดูใบงาน",
   [MAINT_PERMS.workorderManage]: "สร้าง/แก้ไข/มอบหมายใบงาน",
   [MAINT_PERMS.workorderComplete]: "ปิดงาน (แจ้งว่าทำเสร็จ)",
+  [MAINT_PERMS.workorderDelete]: "ลบใบงานที่ยังไม่ปิดและยังไม่เลยกำหนด",
   [MAINT_PERMS.propertyView]: "ดูรายชื่อบ้าน",
   [MAINT_PERMS.propertyManage]: "เพิ่ม/แก้ไข/ลบบ้าน",
   [MAINT_PERMS.propertyArchive]: "เลิกใช้บ้าน / ใช้บ้านต่อ (ไม่ลบประวัติ)",

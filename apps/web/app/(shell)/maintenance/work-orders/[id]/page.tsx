@@ -85,6 +85,7 @@ import { expenseDaysLeft, expenseDueAt, isExpenseBacklog, trackingActive } from 
 import { paymentMethodLabel } from "@/modules/maintenance/lib/receipt-read";
 import { ExpenseDeadlineBox, type ExpenseRequestView } from "@/modules/maintenance/components/expense-deadline-box";
 import { canDecideDueRequest, canEditDueDate } from "@/modules/maintenance/lib/due-request-access";
+import { canDeleteWorkOrderWithPerm } from "@/modules/maintenance/lib/work-order-delete";
 
 const STATUS_COLOR: Record<string, string> = {
   open: "#2563EB",
@@ -905,7 +906,7 @@ export default async function WorkOrderDetailPage({
           </>
         )}
 
-        {isSuperAdmin && (
+        {(isSuperAdmin || (hasPermission(session, MAINT_PERMS.workorderDelete) && canDeleteWorkOrderWithPerm(wo))) && (
           <div className="mt-4 border-t border-(--line) pt-4">
             <DeleteButton
               id={id}

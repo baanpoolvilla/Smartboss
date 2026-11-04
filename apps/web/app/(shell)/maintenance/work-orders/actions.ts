@@ -15,6 +15,7 @@ import { requireOrg, hasPermission } from "@smartboss/auth";
 import { isWorkOrderSourceLink } from "@/modules/maintenance/lib/report-prefill";
 import { postWorkOrderCard } from "@/modules/chat/data/task-cards";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
+import { canDeleteWorkOrderWithPerm } from "@/modules/maintenance/lib/work-order-delete";
 import {
   createWorkOrder,
   getWorkOrder,
@@ -707,11 +708,17 @@ export async function generateUploadLinkAction(formData: FormData) {
 /** ลบใบงาน — Super Admin เท่านั้น (ตรงกับ isSuperAdmin ของเดิม) */
 export async function deleteWorkOrderAction(formData: FormData) {
   const s = await requireOrg();
-  if (!hasPermission(s, MAINT_PERMS.admin)) {
+  const isAdmin = hasPermission(s, MAINT_PERMS.admin);
+  if (!isAdmin && !hasPermission(s, MAINT_PERMS.workorderDelete)) {
     throw new Error("ไม่มีสิทธิ์ลบใบงาน");
   }
   const id = String(formData.get("id") ?? "");
   if (!id) return;
+  // สิทธิ์ลบแยก: ใบเลยกำหนดลบไม่ได้ ไม่งั้นลบเลี่ยงการหักคะแนนได้ ("กันคนเหลี่ยม" ผู้ใช้ 4/11/2569)
+  if (!isAdmin) {
+    const target = await getWorkOrder(s.orgId, id);
+    if (target && !canDeleteWorkOrderWithPerm(target)) throw new Error("ลบได้เฉพาะใบที่ยังไม่ปิดและยังไม่เลยกำหนด");
+  }
   // ลบใบงานที่ยังเปิดอยู่จาก PM = ข้ามรอบนั้นด้วย (เหตุผลเดียวกับยกเลิก)
   const wo = await getWorkOrder(s.orgId, id);
   if (wo && (wo.status === "open" || wo.status === "in_progress") && wo.completedAt === null) await skipLinkedPm(s.orgId, wo);
