@@ -104,7 +104,8 @@ const PAGE_SIZE = 10; // ผู้ใช้ขอ 17/10/2569: แต่ละค
 // <640px shows fewer cards up front — a full-width column already fills the
 // screen with just a few, so 6 was several screens of scrolling before
 // "แสดงเพิ่มเติม" ever showed up.
-const MOBILE_PAGE_SIZE = 3;
+// ผู้ใช้ 4/11/2569: มือถือให้เลื่อนสัก 3 จอก่อนค่อยกด "สัก 12 อัน" แล้วกดเพิ่มทีละ 12 (เหมือนบอร์ดแจ้งซ่อม)
+const MOBILE_PAGE_SIZE = 12;
 
 export function KanbanColumn({
   column,
@@ -252,7 +253,7 @@ export function KanbanColumn({
     const fresh = baseEntries.filter((e) => lastOf(e)).sort((a, b) => lastOf(b).localeCompare(lastOf(a)));
     return [...fresh, ...baseEntries.filter((e) => !lastOf(e))];
   }, [baseEntries, unreadLatest, unreadWoLatest]);
-  const { visible: visibleEntries, remaining, expanded, toggle } = useShowMore(entries, isMobile ? MOBILE_PAGE_SIZE : PAGE_SIZE);
+  const { visible: visibleEntries, remaining, expanded, toggle, reset } = useShowMore(entries, isMobile ? MOBILE_PAGE_SIZE : PAGE_SIZE, isMobile ? MOBILE_PAGE_SIZE : undefined);
 
   return (
     <div
@@ -434,7 +435,7 @@ export function KanbanColumn({
               )
             )}
 
-            <ShowMoreToggle expanded={expanded} remaining={remaining} onToggle={toggle} />
+            <ShowMoreToggle expanded={expanded} remaining={remaining} onToggle={toggle} step={isMobile ? MOBILE_PAGE_SIZE : undefined} onLess={reset} />
 
             {entries.length === 0 && (
               <div className="flex-1 flex items-center justify-center text-xs text-[var(--ink-soft)] border border-dashed border-[var(--line)] rounded-lg py-8 text-center px-3">

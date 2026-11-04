@@ -14,7 +14,7 @@ import type { Task } from "@/modules/report_task/types";
 // โชว์ก่อน แล้วกด "แสดงเพิ่มเติม" ทีละหน้า แทนที่จะปล่อยให้คอลัมน์ยาวเลื่อน
 // ในตัวเองไม่จำกัด ("ให้แสดงเท่าอันนี้ถ้ามีเยอะให้กดแสดงเพิ่มเติมสิ")
 const PAGE_SIZE = 6;
-const MOBILE_PAGE_SIZE = 3;
+const MOBILE_PAGE_SIZE = 12;
 
 export const statusBuckets = [
   { key: "todo" as const, label: statusMeta.todo.label, color: chartColors.gray },
@@ -65,7 +65,7 @@ export function TopicColumnCard({
     count: column.tasks.filter((t) => bucketOf(t) === b.key).length,
   }));
   const isMobile = useIsMobile();
-  const { visible: visibleTasks, remaining, expanded, toggle } = useShowMore(column.tasks, isMobile ? MOBILE_PAGE_SIZE : PAGE_SIZE);
+  const { visible: visibleTasks, remaining, expanded, toggle, reset } = useShowMore(column.tasks, isMobile ? MOBILE_PAGE_SIZE : PAGE_SIZE, isMobile ? MOBILE_PAGE_SIZE : undefined);
 
   return (
     <div className="flex h-full min-h-0 flex-col flex-1 basis-[86vw] sm:basis-[300px] min-w-[240px] sm:min-w-[280px] max-w-[400px] shrink-0 snap-center sm:snap-none">
@@ -118,7 +118,7 @@ export function TopicColumnCard({
         {visibleTasks.map((t) => (
           <TaskCard key={t.id} task={t} onOpen={onOpenTask} />
         ))}
-        <ShowMoreToggle expanded={expanded} remaining={remaining} onToggle={toggle} />
+        <ShowMoreToggle expanded={expanded} remaining={remaining} onToggle={toggle} step={isMobile ? MOBILE_PAGE_SIZE : undefined} onLess={reset} />
       </div>
     </div>
   );
