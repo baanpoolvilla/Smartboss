@@ -8,6 +8,8 @@ import {
 } from "@/modules/maintenance/data/work-order-access";
 
 export interface WorkOrderFilters {
+  /** เฉพาะใบเหล่านี้ */
+  ids?: string[];
   status?: string;
   statuses?: string[];
   propertyId?: string;
@@ -25,6 +27,7 @@ export interface WorkOrderFilters {
 function buildWhere(orgId: string, f: WorkOrderFilters): Prisma.WorkOrderWhereInput {
   const and: Prisma.WorkOrderWhereInput[] = [{ orgId }];
 
+  if (f.ids) and.push({ id: { in: f.ids } });
   if (f.status) and.push({ status: f.status });
   if (f.statuses) and.push({ status: { in: f.statuses } });
   if (f.priority) and.push({ priority: f.priority });
@@ -59,6 +62,23 @@ export function listWorkOrders(orgId: string, f: WorkOrderFilters = {}) {
   return prisma.workOrder.findMany({
     where: buildWhere(orgId, f),
     orderBy: { createdAt: "desc" },
+  });
+}
+
+/** แถวเบาของบอร์ด — พอสำหรับนับจำนวนและกรองคน/บ้าน โดยไม่ต้องโหลดข้อมูลการ์ดทุกใบ */
+export function listWorkOrderStubs(orgId: string, f: WorkOrderFilters = {}) {
+  return prisma.workOrder.findMany({
+    where: buildWhere(orgId, f),
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      status: true,
+      requiresExpense: true,
+      propertyId: true,
+      additionalPropertyIds: true,
+      assignedTo: true,
+      createdBy: true,
+    },
   });
 }
 

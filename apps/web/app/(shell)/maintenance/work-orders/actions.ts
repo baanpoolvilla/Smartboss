@@ -4,6 +4,9 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { Prisma } from "@smartboss/database";
 import { loadExpenseTracking } from "@/modules/maintenance/data/expense-tracking";
+import { buildBoardRows } from "@/modules/maintenance/data/work-order-board-rows";
+import { listWorkOrders, workOrderIdsWithExpenses } from "@/modules/maintenance/data/work-orders";
+import type { BoardOrder } from "@/modules/maintenance/components/work-order-board";
 import { trackingActive } from "@/modules/maintenance/lib/expense-deadline";
 import { receiptDataFromForm } from "@/modules/maintenance/lib/receipt-read";
 import { revalidatePath } from "next/cache";
@@ -769,4 +772,20 @@ export async function updateWorkOrderPropertiesAction(
   revalidatePath("/maintenance/work-orders");
   revalidatePath("/maintenance/purchase-orders");
   return {};
+}
+
+/** การ์ดคอลัมน์เสร็จแล้ว โหลดตอนกดแสดงเพิ่มเติม — ตรวจสิทธิ์เห็นใบเหมือนตอนเปิดหน้า */
+export async function loadDoneWorkOrderCardsAction(ids: string[]): Promise<BoardOrder[]> {
+  const session = await requireOrg();
+  if (!hasPermission(session, MAINT_PERMS.workorderView)) return [];
+  const want = z.array(z.string()).max(100).parse(ids);
+  if (want.length === 0) return [];
+  const orgId = session.orgId;
+  const access = await workOrderAccess(session);
+  const [orders, expenseSet, tracking] = await Promise.all([
+    listWorkOrders(orgId, { ids: want, access }),
+    workOrderIdsWithExpenses(orgId),
+    loadExpenseTracking(orgId),
+  ]);
+  return buildBoardRows(orgId, orders, expenseSet, tracking);
 }

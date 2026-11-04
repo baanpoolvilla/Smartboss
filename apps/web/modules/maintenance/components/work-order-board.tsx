@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useIsMobile } from "@/modules/report_task/hooks/use-is-mobile";
 import { ASSIGNED_BY_ME, ASSIGNED_TO_ME, PersonFilter, UNASSIGNED } from "./person-filter";
 import { createPortal } from "react-dom";
 import Link from "next/link";
@@ -51,6 +52,52 @@ export interface BoardOrder {
   commentCount?: number;
   photoCount?: number;
   pendingDue?: number;
+}
+
+/** แถวเบาของใบในคอลัมน์เสร็จแล้ว — พอสำหรับนับและกรอง ข้อมูลการ์ดโหลดตอนจะแสดง */
+export type BoardStub = Pick<BoardOrder, "id" | "propertyId" | "additionalPropertyIds" | "assignedTo" | "createdBy">;
+
+const NO_STUBS: BoardStub[] = [];
+const NO_CARDS: BoardOrder[] = [];
+/** จอคอมคอลัมน์ละ 10 ใบเท่าบอร์ดงาน กดเพิ่มทีละ 10 · มือถือ 12 ใบ กดเพิ่มทีละ 12 (ผู้ใช้ 4/11/2569 "กดเลื่อนสัก 3 รอบ" "สัก 12 อัน") */
+const PAGE_SIZE = 10;
+const MOBILE_PAGE_SIZE = 12;
+
+function useColumnPaging() {
+  const isMobile = useIsMobile();
+  const [clicks, setClicks] = useState(0);
+  const step = isMobile ? MOBILE_PAGE_SIZE : PAGE_SIZE;
+  return {
+    step,
+    shown: step + clicks * step,
+    canLess: clicks > 0,
+    more: () => setClicks((n) => n + 1),
+    less: () => setClicks(0),
+  };
+}
+
+/** ใบถูกตัดออกจากหน้าได้ แต่ใบที่มีความคิดเห็นยังไม่อ่านหรือคำขอเลื่อนรออนุมัติต้องเห็นเสมอ */
+function pageOf<T extends { id: string; pendingDue?: number }>(rows: T[], shown: number, unread: Map<string, number>): T[] {
+  return rows.filter((w, i) => i < shown || (unread.get(w.id) ?? 0) > 0 || (w.pendingDue ?? 0) > 0);
+}
+
+function ColumnMore({ remaining, step, canLess, onMore, onLess }: { remaining: number; step: number; canLess: boolean; onMore: () => void; onLess: () => void }) {
+  if (remaining <= 0 && !canLess) return null;
+  const pill = "inline-flex items-center rounded-full border border-(--line) bg-white px-3.5 py-1.5 text-xs font-medium text-(--ink-soft) hover:bg-(--bg-soft)";
+  return (
+    <div className="mt-2.5 flex flex-wrap justify-center gap-2">
+      {remaining > 0 && (
+        <button type="button" data-testid="wo-show-more" onClick={onMore} className={pill}>
+          แสดงเพิ่มเติม {Math.min(step, remaining)} รายการ (เหลือ {remaining})
+        </button>
+      )}
+      {canLess && (
+        <button type="button" data-testid="wo-show-less" onClick={onLess} className={pill}>
+          แสดงน้อยลง
+        </button>
+      )}
+    </div>
+  );
 }
 
 const noopSubscribe = () => () => {};
@@ -207,7 +254,7 @@ function ColumnHeader({
   extra = 0,
 }: {
   col: (typeof COLUMNS)[number];
-  orders: BoardOrder[];
+  orders: (BoardStub & Partial<BoardOrder>)[];
   boardTotal: number;
   /** ใบในคอลัมน์นี้ที่ไม่ได้ส่งมาแสดง (นับรวมให้ตรงของจริง) */
   extra?: number;
@@ -303,6 +350,8 @@ function ColumnList({
   gap: string;
   emptyClass: string;
 }) {
+  const paging = useColumnPaging();
+  const unread = useUnreadCommentCounts(WO_COMMENT_NOTIF);
   if (orders.length === 0) {
     return <p className={emptyClass}>ไม่มีใบงาน</p>;
   }
@@ -319,12 +368,78 @@ function ColumnList({
 
   const groups = byPriority ? groupByPriority(orders) : [];
   // กลุ่มเดียวไม่ต้องขึ้นหัวกลุ่ม — หัวข้อที่คลุมทั้งคอลัมน์ไม่ได้บอกอะไรเพิ่ม
-  if (groups.length <= 1) {
-    return <div className={`flex flex-col ${gap}`}>{byDueDate(orders).map(card)}</div>;
-  }
+  const sorted = groups.length <= 1 ? byDueDate(orders) : byDueDate(groups.flatMap((g) => g.orders));
+  const page = pageOf(sorted, paging.shown, unread);
+  return (
+    <>
+      <div className={`flex flex-col ${gap}`}>{page.map(card)}</div>
+      <ColumnMore remaining={sorted.length - page.length} step={paging.step} canLess={paging.canLess} onMore={paging.more} onLess={paging.less} />
+    </>
+  );
+}
 
-  // ไม่มีหัวกลุ่มความสำคัญแล้ว (ผู้ใช้ 3/11/2569 "เอาออกเลย") — ยังเรียงด่วนก่อน ความสำคัญดูจากจุดสีบนการ์ด แบบบอร์ดงาน
-  return <div className={`flex flex-col ${gap}`}>{byDueDate(groups.flatMap((g) => g.orders)).map(card)}</div>;
+/** คอลัมน์เสร็จแล้ว — มีแค่แถวเบา การ์ดของหน้าที่แสดงโหลดเมื่อถึงคิว */
+function DoneColumnList({
+  stubs,
+  cards,
+  failed,
+  onNeed,
+  propertyNames,
+  creatorNames,
+  gap,
+  emptyClass,
+}: {
+  stubs: BoardStub[];
+  /** null = เซิร์ฟเวอร์ไม่ส่งการ์ดนี้ให้ (เช่น ถูกลบ/ไม่มีสิทธิ์แล้ว) */
+  cards: Map<string, BoardOrder | null>;
+  failed: boolean;
+  onNeed: (ids: string[]) => void;
+  propertyNames: Record<string, string>;
+  creatorNames: Record<string, string>;
+  gap: string;
+  emptyClass: string;
+}) {
+  const paging = useColumnPaging();
+  const unread = useUnreadCommentCounts(WO_COMMENT_NOTIF);
+  const page = pageOf(stubs, paging.shown, unread);
+  const missing = page.filter((w) => !cards.has(w.id)).map((w) => w.id);
+  const missingKey = missing.join(",");
+  useEffect(() => {
+    if (missingKey) onNeed(missingKey.split(","));
+  }, [missingKey, onNeed]);
+
+  if (stubs.length === 0) return <p className={emptyClass}>ไม่มีใบงาน</p>;
+  return (
+    <>
+      <div className={`flex flex-col ${gap}`}>
+        {page.map((w) => {
+          if (!cards.has(w.id)) {
+            return failed ? null : <div key={w.id} data-testid="wo-card-loading" className="h-28 animate-pulse rounded-xl bg-(--bg-soft)" />;
+          }
+          const wo = cards.get(w.id);
+          return wo ? (
+            <OrderCard
+              key={w.id}
+              wo={wo}
+              propertyName={propertyNames[wo.propertyId] ?? ""}
+              creatorName={wo.createdBy ? creatorNames[wo.createdBy] : undefined}
+              assigneeName={wo.assignedTo ? creatorNames[wo.assignedTo] : undefined}
+            />
+          ) : null;
+        })}
+      </div>
+      {failed && missing.length > 0 && (
+        <div className="mt-2.5 text-center text-xs text-(--ink-soft)">
+          โหลดไม่สำเร็จ{" "}
+          <button type="button" className="underline" onClick={() => onNeed(missing)}>
+            ลองอีกครั้ง
+          </button>
+        </div>
+      )}
+      <ColumnMore remaining={stubs.length - page.length} step={paging.step} canLess={paging.canLess} onMore={paging.more} onLess={paging.less} />
+    </>
+  );
+
 }
 
 function ColumnIcon({ col, color }: { col: string; color: string }) {
@@ -415,6 +530,9 @@ function saveFilter(f: BoardFilter) {
 
 export function WorkOrderBoard({
   orders,
+  doneStubs = NO_STUBS,
+  doneFirst = NO_CARDS,
+  loadDoneCards,
   propertyNames,
   propertyCategories,
   creatorNames,
@@ -423,7 +541,12 @@ export function WorkOrderBoard({
   expenseFirst = false,
   expenseMore = 0,
 }: {
+  /** ใบในคอลัมน์ยังไม่ทำ/กำลังทำ/ยังไม่บันทึกค่าใช้จ่าย */
   orders: BoardOrder[];
+  /** คอลัมน์เสร็จแล้ว: แถวเบาของทุกใบ + การ์ดชุดแรก + ตัวโหลดการ์ดที่เหลือ */
+  doneStubs?: BoardStub[];
+  doneFirst?: BoardOrder[];
+  loadDoneCards?: (ids: string[]) => Promise<BoardOrder[]>;
   propertyNames: Record<string, string>;
   /**
    * propertyId → ชื่อหมวดที่ถูกจัดไว้ · ไม่มีคีย์ = ยังไม่จัดหมวด
@@ -454,19 +577,50 @@ export function WorkOrderBoard({
   const [tab, setTab] = useState(0);
   // กรองตามผู้ได้รับมอบหมาย — null = ทุกคน · UNASSIGNED = ใบที่ยังไม่มอบหมายให้ใคร
   const [assignee, setAssignee] = useState<string | null>(null);
+  const everyRow = useMemo<BoardStub[]>(() => [...orders, ...doneStubs], [orders, doneStubs]);
   const assigneeOptions = useMemo(() => {
-    const ids = new Set(orders.map((w) => w.assignedTo).filter((id): id is string => !!id));
+    const ids = new Set(everyRow.map((w) => w.assignedTo).filter((id): id is string => !!id));
     return [...ids]
       .map((id) => ({ id, name: creatorNames[id] ?? "ไม่ทราบชื่อ" }))
       .sort((a, b) => a.name.localeCompare(b.name, "th"));
-  }, [orders, creatorNames]);
-  const hasUnassigned = orders.some((w) => !w.assignedTo);
+  }, [everyRow, creatorNames]);
+  const hasUnassigned = everyRow.some((w) => !w.assignedTo);
+
+  // การ์ดคอลัมน์เสร็จแล้วที่โหลดมาแล้ว — หน้ารีเฟรชจากเซิร์ฟเวอร์ให้เริ่มใหม่ ข้อมูลจะได้ไม่ค้าง
+  const [seenFirst, setSeenFirst] = useState(doneFirst);
+  const [doneCards, setDoneCards] = useState(() => new Map<string, BoardOrder | null>(doneFirst.map((w) => [w.id, w])));
+  const [doneFailed, setDoneFailed] = useState(false);
+  if (seenFirst !== doneFirst) {
+    setSeenFirst(doneFirst);
+    setDoneCards(new Map(doneFirst.map((w) => [w.id, w])));
+  }
+  const inflight = useRef(new Set<string>());
+  const needDone = useCallback(
+    (ids: string[]) => {
+      const want = ids.filter((id) => !inflight.current.has(id));
+      if (!loadDoneCards || want.length === 0) return;
+      want.forEach((id) => inflight.current.add(id));
+      setDoneFailed(false);
+      loadDoneCards(want)
+        .then((rows) => {
+          const got = new Map(rows.map((w) => [w.id, w]));
+          setDoneCards((prev) => {
+            const next = new Map(prev);
+            for (const id of want) next.set(id, got.get(id) ?? null);
+            return next;
+          });
+        })
+        .catch(() => setDoneFailed(true))
+        .finally(() => want.forEach((id) => inflight.current.delete(id)));
+    },
+    [loadDoneCards],
+  );
   const restored = useRef(false);
 
   // เฉพาะบ้านที่มีใบงานจริง
   const { groups, housesInGroup } = useMemo(() => {
     const used = new Set<string>();
-    for (const w of orders) {
+    for (const w of everyRow) {
       used.add(w.propertyId);
       for (const p of w.additionalPropertyIds) used.add(p);
     }
@@ -490,7 +644,7 @@ export function WorkOrderBoard({
       groups: keys,
       housesInGroup: group ? (map.get(group) ?? []) : [],
     };
-  }, [orders, propertyNames, propertyCategories, group]);
+  }, [everyRow, propertyNames, propertyCategories, group]);
 
   // คืนค่าที่เลือกไว้ — อ่านได้หลังโหลดหน้าเท่านั้น (URL/sessionStorage ไม่มีฝั่ง server)
   // ข้ามหมวด/บ้านที่ไม่มีบนกระดานนี้แล้ว (เช่น เปิดจากแดชบอร์ดแบบกรอง) ไม่งั้นกระดานว่างเปล่า
@@ -513,11 +667,12 @@ export function WorkOrderBoard({
     if (restored.current) saveFilter({ group, house: houseId, tab, who: assignee });
   }, [group, houseId, tab, assignee]);
 
-  const visible = useMemo(() => {
+  const { visible, visibleDone } = useMemo(() => {
+    const pick = <T extends BoardStub,>(rows: T[]): T[] => {
     const byPerson =
       assignee === null
-        ? orders
-        : orders.filter((w) => {
+        ? rows
+        : rows.filter((w) => {
             if (assignee === UNASSIGNED) return !w.assignedTo;
             // ได้รับมอบหมาย = เป็นผู้รับผิดชอบ · ฉันมอบหมาย = เปิดใบงานแล้วให้คนอื่นรับผิดชอบ
             if (assignee === ASSIGNED_TO_ME) return !!currentUserId && w.assignedTo === currentUserId;
@@ -536,7 +691,9 @@ export function WorkOrderBoard({
         (id) => (propertyCategories[id] ?? NO_CATEGORY) === group
       )
     );
-  }, [orders, group, houseId, propertyCategories, assignee, currentUserId]);
+    };
+    return { visible: pick(orders), visibleDone: pick(doneStubs) };
+  }, [orders, doneStubs, group, houseId, propertyCategories, assignee, currentUserId]);
 
   const buckets: Record<string, BoardOrder[]> = {
     open: visible.filter((w) => w.status === "open"),
@@ -554,17 +711,38 @@ export function WorkOrderBoard({
       .filter((w) => w.status === "completed" && w.requiresExpense && !w.hasExpense)
       // ครบกำหนดบันทึกใกล้สุดขึ้นก่อน (ใบที่ไม่มีกำหนดคงลำดับเดิม)
       .sort((a, b) => (a.expenseDeadlineIso && b.expenseDeadlineIso ? a.expenseDeadlineIso.localeCompare(b.expenseDeadlineIso) : 0)),
-    done: visible.filter(
-      (w) =>
-        w.status === "cancelled" ||
-        (w.status === "completed" && (w.hasExpense || !w.requiresExpense))
-    ),
   };
   const columns: (typeof COLUMNS)[number][] = expenseFirst ? [...COLUMNS.filter((c) => c.key === "no_expense"), ...COLUMNS.filter((c) => c.key !== "no_expense")] : [...COLUMNS];
   // กรองบ้าน/คนอยู่ ไม่รู้ว่าใบที่ไม่ได้แสดงเข้าเงื่อนไขกี่ใบ — ตัวเลขนับเฉพาะที่เห็น ลิงก์ดูต่อยังอยู่
-  const hiddenCount = visible.length === orders.length ? expenseMore : 0;
-  const boardTotal = columns.reduce((n, c) => n + (buckets[c.key]?.length ?? 0), 0) + hiddenCount;
-  const countOf = (key: string) => (buckets[key]?.length ?? 0) + (key === "no_expense" ? hiddenCount : 0);
+  const hiddenCount = visible.length === orders.length && visibleDone.length === doneStubs.length ? expenseMore : 0;
+  const rowsOf = (key: string): (BoardStub & Partial<BoardOrder>)[] => (key === "done" ? visibleDone : (buckets[key] ?? []));
+  const boardTotal = columns.reduce((n, c) => n + rowsOf(c.key).length, 0) + hiddenCount;
+  const countOf = (key: string) => rowsOf(key).length + (key === "no_expense" ? hiddenCount : 0);
+  const pagingKey = `${group}|${houseId}|${assignee}`;
+  const listFor = (c: (typeof COLUMNS)[number], gap: string, emptyClass: string) =>
+    c.key === "done" ? (
+      <DoneColumnList
+        key={`done|${pagingKey}`}
+        stubs={visibleDone}
+        cards={doneCards}
+        failed={doneFailed}
+        onNeed={needDone}
+        propertyNames={propertyNames}
+        creatorNames={creatorNames}
+        gap={gap}
+        emptyClass={emptyClass}
+      />
+    ) : (
+      <ColumnList
+        key={`${c.key}|${pagingKey}`}
+        orders={buckets[c.key]!}
+        propertyNames={propertyNames}
+        creatorNames={creatorNames}
+        byPriority={c.byPriority}
+        gap={gap}
+        emptyClass={emptyClass}
+      />
+    );
   const moreLink = expenseMore > 0 ? <div className="mt-2.5"><MoreExpenseLink href="/maintenance/work-orders?filter=no-expense" count={expenseMore} /></div> : null;
 
   // ช่องเลือกบ้านบนแถบหัว (จอใหญ่) — ทุกบ้าน / ทั้งหมวด / รายหลัง ในช่องเดียว แบบช่องผู้รับผิดชอบ (ผู้ใช้ 3/11/2569 แบบ B)
@@ -727,14 +905,7 @@ export function WorkOrderBoard({
         </div>
         {/* แถบแท็บอยู่กับที่ เลื่อนเฉพาะรายการ — แบบเดียวกับคอลัมน์ฝั่งจอใหญ่ */}
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
-          <ColumnList
-            orders={buckets[columns[tab]!.key]!}
-            propertyNames={propertyNames}
-            creatorNames={creatorNames}
-            byPriority={columns[tab]!.byPriority}
-            gap="gap-3"
-            emptyClass="py-10 text-center text-sm text-(--ink-soft)"
-          />
+          {listFor(columns[tab]!, "gap-3", "py-10 text-center text-sm text-(--ink-soft)")}
           {columns[tab]!.key === "no_expense" && moreLink}
         </div>
       </div>
@@ -747,17 +918,10 @@ export function WorkOrderBoard({
             // แบบบอร์ดงาน: คอลัมน์มีระยะห่างกัน หัวเป็นกล่องลอย (ไม่ใช่แถบเต็มความกว้างคั่นเส้นตั้ง)
             className={`flex min-w-0 flex-1 flex-col px-1.5 pt-2.5 ${i === 0 ? "pl-2.5" : ""} ${i === columns.length - 1 ? "pr-2.5" : ""}`}
           >
-            <ColumnHeader col={c} orders={buckets[c.key]!} boardTotal={boardTotal} extra={c.key === "no_expense" ? hiddenCount : 0} />
+            <ColumnHeader col={c} orders={rowsOf(c.key)} boardTotal={boardTotal} extra={c.key === "no_expense" ? hiddenCount : 0} />
 
             <div className="min-h-0 flex-1 overflow-y-auto pb-2.5">
-              <ColumnList
-                orders={buckets[c.key]!}
-                propertyNames={propertyNames}
-                creatorNames={creatorNames}
-                byPriority={c.byPriority}
-                gap="gap-2.5"
-                emptyClass="px-2 py-8 text-center text-sm text-[#B0BEC5]"
-              />
+              {listFor(c, "gap-2.5", "px-2 py-8 text-center text-sm text-[#B0BEC5]")}
               {c.key === "no_expense" && moreLink}
             </div>
           </div>

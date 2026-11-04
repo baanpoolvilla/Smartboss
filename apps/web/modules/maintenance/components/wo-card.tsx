@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarClock, CalendarDays, CalendarX2, Check, Circle, Clock, Lock, MapPin, MessageSquare, Paperclip } from "lucide-react";
+import { CalendarClock, CalendarDays, CalendarX2, Check, Clock, Lock, MapPin, MessageSquare, Paperclip } from "lucide-react";
 
 import { expenseDaysLeft } from "@/modules/maintenance/lib/expense-deadline";
 import { isCommentNotif, PendingBand, usePendingFor } from "@/modules/notifications/pending-for-you";
@@ -182,16 +182,8 @@ export function WoCard(p: WoCardProps) {
           </div>
         )}
         <div className="flex items-start gap-2">
-          <span
-            className={`mt-0.5 flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full ${
-              done ? "bg-[var(--chart-green)] text-white" : "text-[var(--line)]"
-            }`}
-            aria-hidden="true"
-          >
-            {done ? <Check className="h-3 w-3" /> : <Circle className="h-4 w-4" />}
-          </span>
           <div className="min-w-0 flex-1">
-            <p className={`line-clamp-2 text-[14px] font-semibold leading-snug text-(--ink) ${done ? "font-medium line-through" : ""}`}>{p.title}</p>
+            <p className={`line-clamp-2 text-[14px] font-semibold leading-snug text-(--ink)`}>{p.title}</p>
             {p.place && (
               <p className="mt-0.5 inline-flex max-w-full items-center gap-0.5 truncate text-[11px] font-medium text-[#0f766e]">
                 <MapPin className="h-3 w-3 shrink-0" />
