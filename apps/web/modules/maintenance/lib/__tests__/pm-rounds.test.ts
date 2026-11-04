@@ -1,10 +1,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { dueRounds, overdueGraceDays, pmUsesRounds, roundBeforeStart, roundDueAt, shouldRemindRound, todayBkkDate } from "../pm-rounds";
+import { dueRounds, overdueGraceDays, pmRepeatLabel, pmUsesRounds, roundBeforeStart, roundDueAt, shouldRemindRound, todayBkkDate } from "../pm-rounds";
 import { workOrderDockRevokeReason } from "../dock-validity";
 
 const d = (s: string) => new Date(`${s}T00:00:00.000Z`);
+
+test("ข้อความใต้ช่องวัน", () => {
+  assert.equal(pmRepeatLabel("2026-11-09", "weekly", "continuous"), "ทุกวันจันทร์");
+  assert.equal(pmRepeatLabel("2026-11-09", "biweekly", "continuous"), "ทุก 2 สัปดาห์ วันจันทร์");
+  assert.equal(pmRepeatLabel("2026-12-03", "monthly", "continuous"), "ทุกวันที่ 3 ของเดือน");
+  assert.equal(pmRepeatLabel("2026-12-03", "quarterly", "continuous"), "ทุก 3 เดือน วันที่ 3");
+  assert.equal(pmRepeatLabel("2026-12-03", "monthly", "yearlyRounds"), null);
+  assert.equal(pmRepeatLabel("", "weekly", "continuous"), null);
+});
 
 test("เตือนใบรอบก่อน 14, 10, 7, 5, 3, 1 วัน วันครบกำหนด และทุกวันหลังเลยกำหนด", () => {
   const on = [...Array(16).keys()].filter((n) => shouldRemindRound(n, false));

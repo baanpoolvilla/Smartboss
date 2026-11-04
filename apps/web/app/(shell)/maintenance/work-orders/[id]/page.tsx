@@ -1,3 +1,4 @@
+import { loadPerformanceSettings } from "@/lib/performance";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect, notFound } from "next/navigation";
@@ -119,6 +120,7 @@ export default async function WorkOrderDetailPage({
   // เปิดมาจากการ์ดบนบอร์ดงาน (?from=tasks — maintenance-card.tsx) = ปุ่มย้อนกลับพากลับบอร์ดงาน
   const fromTasks = (await searchParams).from === "tasks";
   const session = await requireOrg();
+  const pmMissedPoints = Math.abs((await loadPerformanceSettings(session.orgId)).rulePoints.pm_missed);
   if (!hasPermission(session, MAINT_PERMS.workorderView)) redirect("/");
   const orgId = session.orgId;
 
@@ -447,7 +449,7 @@ export default async function WorkOrderDetailPage({
                 <span>ครบกำหนด {fmtThaiDate(wo.pmRoundDate)}</span>
                 {isOpenOrRunning && (
                   <span className="text-[12.5px] font-normal text-(--ink-soft)">
-                    เลยกำหนดส่งแล้วหักคะแนนทันที · ทำไม่ทันให้กด &quot;ขอเลื่อนกำหนดส่ง&quot; พร้อมเหตุผลก่อนถึงกำหนด
+                    {`เลยกำหนดส่งแล้วหัก ${pmMissedPoints} คะแนนทันที · ทำไม่ทันให้กด "ขอเลื่อนกำหนดส่ง" พร้อมเหตุผลก่อนถึงกำหนด`}
                   </span>
                 )}
               </span>

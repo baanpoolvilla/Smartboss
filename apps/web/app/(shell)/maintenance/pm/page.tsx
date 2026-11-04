@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { ListChecks } from "lucide-react";
 import { requireOrg, hasPermission } from "@smartboss/auth";
+import { loadPerformanceSettings } from "@/lib/performance";
+import { PmRulesNote } from "@/modules/maintenance/components/pm-rules-note";
 import { prisma } from "@smartboss/database";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { listPmSchedules } from "@/modules/maintenance/data/pm";
@@ -129,6 +131,8 @@ export default async function PmListPage({
   const isCaretaker =
     canManage && !hasPermission(session, MAINT_PERMS.propertyManage);
 
+  const perf = await loadPerformanceSettings(session.orgId);
+
   return (
     <AppScaffold
       title="ปฏิทิน PM"
@@ -143,6 +147,7 @@ export default async function PmListPage({
       }
       fab={canManage ? <Fab href="/maintenance/pm/new" label="เพิ่ม PM" /> : null}
     >
+      <PmRulesNote points={perf.rulePoints.pm_missed} leadDays={perf.pmLeadDays} className="mb-3" />
       <PmCalendar
         schedules={rows}
         canManage={canManage}

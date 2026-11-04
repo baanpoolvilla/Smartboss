@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireOrg, hasPermission } from "@smartboss/auth";
+import { loadPerformanceSettings } from "@/lib/performance";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { listProperties } from "@/modules/maintenance/data/properties";
 import { listAssets } from "@/modules/maintenance/data/assets";
@@ -22,10 +23,11 @@ export default async function NewPmPage({
   if (!hasPermission(session, MAINT_PERMS.pmManage)) redirect("/maintenance/pm");
   const sp = await searchParams;
 
-  const [properties, assets, users] = await Promise.all([
+  const [properties, assets, users, perf] = await Promise.all([
     listProperties(session.orgId),
     listAssets(session.orgId),
     listOrgUsers(session.orgId),
+    loadPerformanceSettings(session.orgId),
   ]);
   const propNames: Record<string, string> = Object.fromEntries(
     properties.map((p) => [p.id, p.name])
@@ -56,6 +58,8 @@ export default async function NewPmPage({
         )}
         defaultPropertyId={sp.propertyId}
         defaultAssetId={sp.assetId}
+        leadDays={perf.pmLeadDays}
+        missedPoints={perf.rulePoints.pm_missed}
       />
     </AppScaffold>
   );

@@ -1,6 +1,9 @@
 "use client";
 
 import { SubmitButton } from "./submit-button";
+import { PmRulesNote } from "./pm-rules-note";
+import { fmtThaiDate } from "@/modules/maintenance/lib/format";
+import { pmRepeatLabel, roundOpensOn, ymd } from "@/modules/maintenance/lib/pm-rounds";
 import { todayBangkok } from "@/modules/maintenance/lib/no-past-date";
 
 import { useState } from "react";
@@ -30,6 +33,8 @@ export function PmForm({
   roundOptions,
   defaultPropertyId,
   defaultAssetId,
+  leadDays,
+  missedPoints,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   properties: PickOption[];
@@ -43,17 +48,25 @@ export function PmForm({
   roundOptions: Record<string, number[]>;
   defaultPropertyId?: string;
   defaultAssetId?: string;
+  leadDays: number;
+  /** คะแนนต่อรอบที่เลยกำหนด จากการตั้งค่าของบริษัท */
+  missedPoints: number;
 }) {
   const [mode, setMode] = useState<
     "continuous" | "yearlyRounds" | "limitedCount"
   >("continuous");
   const [frequency, setFrequency] = useState("monthly");
+  const [due, setDue] = useState("");
   const [propertyId, setPropertyId] = useState(defaultPropertyId ?? "");
   const [assetIds, setAssetIds] = useState<string[]>(
     defaultAssetId ? [defaultAssetId] : []
   );
 
   const rounds = roundOptions[frequency] ?? [];
+  const repeat = pmRepeatLabel(due, frequency, mode);
+  const dueDate = due ? new Date(`${due}T00:00:00.000Z`) : null;
+  const opens = dueDate ? roundOpensOn(dueDate, leadDays) : null;
+  const opensNow = !!opens && ymd(opens) <= todayBangkok();
   const assetOptions: PickOption[] = assets.map((a) => ({
     id: a.id,
     label: a.name,
@@ -63,6 +76,7 @@ export function PmForm({
   return (
     <Card className="p-5">
       <form action={action} className="flex flex-col gap-4">
+        <PmRulesNote points={missedPoints} leadDays={leadDays} />
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-medium text-(--ink)">ชื่องาน PM *</span>
           <input
@@ -232,7 +246,14 @@ export function PmForm({
           <span className="text-sm font-medium text-(--ink)">
             วันกำหนดรอบแรก *
           </span>
-          <input name="nextDueDate" type="date" required min={todayBangkok()} className={inputClass} />
+          <input name="nextDueDate" type="date" required min={todayBangkok()} value={due} onChange={(e) => setDue(e.target.value)} className={inputClass} />
+          {dueDate && (
+            <span className="text-xs text-(--ink-soft)" data-testid="pm-due-hint">
+              ครบกำหนด {fmtThaiDate(dueDate)}
+              {repeat ? ` · ${repeat}` : ""}
+              {mode === "limitedCount" ? "" : opensNow ? " · ใบงานขึ้นทันทีหลังกดสร้าง" : ` · ใบงานขึ้นวันที่ ${fmtThaiDate(opens)}`}
+            </span>
+          )}
         </label>
 
         <label className="flex flex-col gap-1.5">

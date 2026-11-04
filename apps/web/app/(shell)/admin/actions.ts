@@ -1,5 +1,6 @@
 "use server";
 
+import { todayBkkDate } from "@/modules/maintenance/lib/pm-rounds";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -1005,6 +1006,8 @@ export async function createOrganizationAction(formData: FormData) {
         isActive: true,
       },
     });
+    // PM แบบนับรอบเป็นค่าพื้นฐาน — บริษัทใหม่เริ่มตั้งแต่วันสร้าง
+    await tx.performanceSetting.create({ data: { orgId: created.id, pmRoundsFrom: todayBkkDate() } });
 
     await tx.role.createMany({
       data: ORG_ROLES.map((r) => ({ ...r, orgId: created.id, isSystem: false })),

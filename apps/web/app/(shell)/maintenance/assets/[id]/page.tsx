@@ -1,3 +1,5 @@
+import { loadPerformanceSettings } from "@/lib/performance";
+import { PmRulesNote } from "@/modules/maintenance/components/pm-rules-note";
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import {
@@ -58,6 +60,7 @@ export default async function AssetDetailPage({
 
   const canManage = hasPermission(session, MAINT_PERMS.assetManage);
   const canManagePm = hasPermission(session, MAINT_PERMS.pmManage);
+  const perf = await loadPerformanceSettings(session.orgId);
   const [property, lastMap, schedules, users] = await Promise.all([
     getProperty(orgId, asset.propertyId),
     lastMaintenanceDates(orgId, [id]),
@@ -198,6 +201,7 @@ export default async function AssetDetailPage({
         </details>
       )}
 
+      <PmRulesNote points={perf.rulePoints.pm_missed} leadDays={perf.pmLeadDays} className="mb-3" />
       {/* แผน PM ของอุปกรณ์นี้ */}
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-base font-semibold text-(--ink)">

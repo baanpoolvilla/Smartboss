@@ -6,10 +6,11 @@
  *   รอบถัดไปนับตามแผน ไม่ใช่วันปิดงาน — ใบเก่ายังค้าง ใบรอบใหม่ก็เปิดซ้อนได้
  *   ค้างพร้อมกัน 2 รอบขึ้นไป → CEO ตัดสิน (ไม่ต้องทำ / หักหรือไม่หัก / รวบเป็นใบเดียว)
  *
- * เปิดใช้รายบริษัทด้วย performance_settings.pm_rounds_from — null = PM แบบเดิมทุกอย่าง
+ * เป็นค่าพื้นฐานของทุกบริษัท (ผู้ใช้ 4/11/2569 "ให้เลือกติ๊กทำไม") ไม่มีหน้าตั้งค่า · performance_settings.pm_rounds_from = วันเริ่มนับ
+ * ตั้งเป็น null ด้วย SQL = กลับไปแบบเดิม สำหรับกรณีฉุกเฉินเท่านั้น
  * แผนแบบ "นับครั้ง" (totalRounds) รอนัดวันทีละครั้ง ไม่มีรอบให้นับ ⇒ ใช้แบบเดิมเสมอ
  */
-import { nextDueAfterCompletion } from "@/modules/maintenance/lib/pm-schedule";
+import { freqMonths, freqWeekDays, nextDueAfterCompletion } from "@/modules/maintenance/lib/pm-schedule";
 
 export const DEFAULT_PM_LEAD_DAYS = 14;
 /** กันลูปไม่จบถ้าแผนมีวันครบกำหนดเก่ามาก ๆ — เกินนี้รอบถัดไปค่อยเปิดใน cron รอบหน้า */
@@ -82,6 +83,24 @@ export function dueRounds(
     cur = { ...cur, nextDueDate: n.nextDue, anchorDate: n.anchor };
   }
   return { rounds, nextDueDate: cur.nextDueDate, anchorDate: cur.anchorDate };
+}
+
+const WEEKDAY_TH = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
+
+/**
+ * ข้อความใต้ช่องวันของฟอร์มแผน PM — "ทุกวันจันทร์" / "ทุกวันที่ 3" กันเลือกวันผิด (ช่องวันแสดงตัวเลขตามเครื่อง อ่านสลับวัน/เดือนได้)
+ * รอบต่อปีกับจำกัดจำนวนครั้งไม่ได้ซ้ำแบบเดียวกันทุกรอบ จึงไม่บอกวันซ้ำ
+ */
+export function pmRepeatLabel(due: string, frequency: string, mode: string): string | null {
+  if (mode !== "continuous" || !/^\d{4}-\d{2}-\d{2}$/.test(due)) return null;
+  const d = new Date(`${due}T00:00:00.000Z`);
+  const weekDays = freqWeekDays(frequency);
+  if (weekDays != null) {
+    const name = `วัน${WEEKDAY_TH[d.getUTCDay()]}`;
+    return weekDays === 7 ? `ทุก${name}` : `ทุก ${weekDays / 7} สัปดาห์ ${name}`;
+  }
+  const months = freqMonths(frequency) ?? 1;
+  return months === 1 ? `ทุกวันที่ ${d.getUTCDate()} ของเดือน` : `ทุก ${months} เดือน วันที่ ${d.getUTCDate()}`;
 }
 
 /** เตือนใบรอบก่อนครบกำหนดกี่วัน (ผู้ใช้ 4/11/2569) */

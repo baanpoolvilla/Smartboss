@@ -6,8 +6,6 @@ import { requireOrg, hasPermission } from "@smartboss/auth";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { upsertLineConfig, usersWithPermission } from "@/modules/maintenance/data/notify";
 import { logActivity } from "@/modules/maintenance/data/activity";
-import { openRoundsNow } from "@/modules/maintenance/data/pm-rounds";
-import { todayBkkDate, ymd } from "@/modules/maintenance/lib/pm-rounds";
 
 /**
  * การจัดการผู้ใช้/บทบาท ย้ายไปหลังบ้านกลางที่ /admin/users แล้ว
@@ -43,27 +41,6 @@ export async function saveExpenseTrackingAction(formData: FormData) {
     action: "update",
     summary: fromRaw ? `ตั้งกำหนดบันทึกค่าใช้จ่าย เริ่ม ${fromRaw} · ${days} วัน · ผู้บันทึก ${recorderIds.length} คน` : "ปิดกำหนดบันทึกค่าใช้จ่าย",
   });
-  revalidatePath("/maintenance/settings");
-  revalidatePath("/maintenance/work-orders");
-}
-
-/** PM แบบนับรอบ (lib/pm-rounds.ts) — ไม่ใส่วันเริ่มใช้ = ปิด · วันเดิมคงไว้ได้ แต่ตั้งใหม่ย้อนหลังไม่ได้ รอบย้อนหลังจะเปิดซ้อนและนับคะแนนทีเดียวหลายใบ */
-export async function savePmRoundsAction(formData: FormData) {
-  const orgId = await requireAdmin();
-  const fromRaw = String(formData.get("from") ?? "").trim();
-  if (fromRaw && !/^\d{4}-\d{2}-\d{2}$/.test(fromRaw)) throw new Error("วันเริ่มใช้ไม่ถูกต้อง");
-  const current = (await prisma.performanceSetting.findUnique({ where: { orgId }, select: { pmRoundsFrom: true } }))?.pmRoundsFrom;
-  if (fromRaw && fromRaw < ymd(todayBkkDate()) && fromRaw !== (current ? ymd(current) : "")) throw new Error("วันเริ่มใช้ย้อนหลังไม่ได้");
-  const pmRoundsFrom = fromRaw ? new Date(`${fromRaw}T00:00:00.000Z`) : null;
-  await prisma.performanceSetting.upsert({ where: { orgId }, create: { orgId, pmRoundsFrom }, update: { pmRoundsFrom } });
-  await logActivity(orgId, {
-    userId: (await requireOrg()).userId,
-    entity: "settings",
-    action: "update",
-    summary: fromRaw ? `ตั้ง PM แบบนับรอบ เริ่ม ${fromRaw}` : "ปิด PM แบบนับรอบ",
-  });
-  // เริ่มวันนี้: เปิดใบที่ถึงเวลาเลย ไม่รอ 08:00 พรุ่งนี้ · วันในอนาคตยังไม่เปิด
-  await openRoundsNow(orgId);
   revalidatePath("/maintenance/settings");
   revalidatePath("/maintenance/work-orders");
 }
