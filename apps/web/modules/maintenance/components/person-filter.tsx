@@ -23,6 +23,7 @@ export function PersonFilter({
   showUnassigned = false,
   showMine = false,
   showPeople = true,
+  compact = false,
 }: {
   /** เช่น "ผู้รับผิดชอบ" */
   label: string;
@@ -38,11 +39,13 @@ export function PersonFilter({
    * เลือกดูงานของคนอื่นทีละคนเป็นมุมมองของหัวหน้า พนักงานต้องการแค่ "ของฉัน" กับ "ฉันมอบหมาย"
    */
   showPeople?: boolean;
+  /** มือถือ: แถบหัวแคบ ย่อช่องและตัดคำนำหน้า "ผู้รับผิดชอบ:" */
+  compact?: boolean;
 }) {
   const active = value !== null;
   return (
     <label
-      className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[10px] border px-2.5 text-[13px]"
+      className={`inline-flex h-8 items-center gap-1.5 rounded-[10px] border px-2.5 text-[13px] ${compact ? "min-w-0" : "shrink-0"}`}
       style={{
         backgroundColor: active ? "var(--app-soft)" : "var(--bg)",
         borderColor: "var(--line)",
@@ -55,9 +58,9 @@ export function PersonFilter({
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}
         aria-label={label}
-        className="max-w-[14rem] cursor-pointer bg-transparent outline-none"
+        className={`${compact ? "min-w-0 max-w-[5.5rem] truncate" : "max-w-[14rem]"} cursor-pointer bg-transparent outline-none`}
       >
-        <option value="">{label}: ทุกคน</option>
+        <option value="">{compact ? "ทุกคน" : `${label}: ทุกคน`}</option>
         {showMine && (
           <optgroup label="ของฉัน">
             <option value={ASSIGNED_TO_ME}>งานที่ฉันได้รับมอบหมาย</option>

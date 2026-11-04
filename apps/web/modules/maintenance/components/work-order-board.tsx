@@ -452,45 +452,6 @@ function ColumnIcon({ col, color }: { col: string; color: string }) {
 }
 
 /** FilterChip ของ Material — มุมโค้ง 10 ติ๊กถูกเมื่อเลือก */
-function FilterChip({
-  selected,
-  onClick,
-  children,
-}: {
-  selected: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex h-8 shrink-0 items-center gap-1 rounded-[10px] border px-3 text-[13px] transition-colors"
-      style={
-        selected
-          ? {
-              backgroundColor: "var(--app-soft)",
-              borderColor: "var(--line)",
-              color: "#365B55",
-            }
-          : {
-              backgroundColor: "var(--bg)",
-              borderColor: "var(--line)",
-              color: "#365B55",
-            }
-      }
-    >
-      {selected && (
-        <Check
-          className="h-3.5 w-3.5 shrink-0"
-          style={{ color: "var(--app-strong)" }}
-        />
-      )}
-      {children}
-    </button>
-  );
-}
-
 /*
  * บ้าน/หมวดที่เลือกไว้ต้องอยู่รอดตอนกดเข้าใบงานแล้วกดกลับ — เดิมเป็น useState ล้วน
  * กลับมาทีไรเด้งไป "ทุกบ้าน" ต้องเลือกใหม่ทุกครั้ง ปุ่มกลับของหน้ารายละเอียดเป็นลิงก์ตายตัว
@@ -567,6 +528,7 @@ export function WorkOrderBoard({
 }) {
   // ช่องบนแถบหัว (หน้าใบงานส่ง leading = <div id="wo-board-toolbar">) — หาเจอหลังเมาท์ แล้ววางตัวกรองผ่าน portal
   // เซิร์ฟเวอร์ = null (วาดตัวกรองไว้ในบอร์ดก่อน ตรงกับ HTML ที่ส่งมา) · ฝั่งเครื่อง = ช่องจริง แล้วย้ายขึ้นแถบหัว
+  const isMobile = useIsMobile();
   const toolbarSlot = useSyncExternalStore(
     noopSubscribe,
     () => document.getElementById("wo-board-toolbar"),
@@ -618,7 +580,7 @@ export function WorkOrderBoard({
   const restored = useRef(false);
 
   // เฉพาะบ้านที่มีใบงานจริง
-  const { groups, housesInGroup } = useMemo(() => {
+  const groups = useMemo(() => {
     const used = new Set<string>();
     for (const w of everyRow) {
       used.add(w.propertyId);
@@ -640,11 +602,8 @@ export function WorkOrderBoard({
       if (b === NO_CATEGORY) return -1;
       return a.localeCompare(b, "th");
     });
-    return {
-      groups: keys,
-      housesInGroup: group ? (map.get(group) ?? []) : [],
-    };
-  }, [everyRow, propertyNames, propertyCategories, group]);
+    return keys;
+  }, [everyRow, propertyNames, propertyCategories]);
 
   // คืนค่าที่เลือกไว้ — อ่านได้หลังโหลดหน้าเท่านั้น (URL/sessionStorage ไม่มีฝั่ง server)
   // ข้ามหมวด/บ้านที่ไม่มีบนกระดานนี้แล้ว (เช่น เปิดจากแดชบอร์ดแบบกรอง) ไม่งั้นกระดานว่างเปล่า
@@ -745,15 +704,15 @@ export function WorkOrderBoard({
     );
   const moreLink = expenseMore > 0 ? <div className="mt-2.5"><MoreExpenseLink href="/maintenance/work-orders?filter=no-expense" count={expenseMore} /></div> : null;
 
-  // ช่องเลือกบ้านบนแถบหัว (จอใหญ่) — ทุกบ้าน / ทั้งหมวด / รายหลัง ในช่องเดียว แบบช่องผู้รับผิดชอบ (ผู้ใช้ 3/11/2569 แบบ B)
-  // มือถือแถบหัวแคบ ไม่พอใส่ ⇒ ยังใช้แถวปุ่มบ้านใต้แถบหัวเหมือนเดิม (ซ่อนช่องนี้ใต้ lg)
+  // ช่องเลือกบ้านบนแถบหัว — ทุกบ้าน / ทั้งหมวด / รายหลัง ในช่องเดียว แบบช่องผู้รับผิดชอบ (ผู้ใช้ 3/11/2569 แบบ B)
+  // มือถือใช้ช่องนี้ด้วย แถวปุ่มบ้านเดิมกินที่ดูการ์ด (ผู้ใช้ 4/11/2569 "ลกเกินไป เอาไปไว้ข้างบน")
   const houseSelect =
     groups.length > 1 ? (
-      <label className="relative hidden h-9 shrink-0 items-center rounded-(--radius) border border-(--line) bg-(--bg) pl-3 pr-8 text-sm lg:inline-flex">
-        <span className="mr-1 text-(--ink-soft)">🏠 บ้าน:</span>
+      <label className="relative inline-flex h-8 min-w-0 items-center rounded-(--radius) border border-(--line) bg-(--bg) pl-2 pr-6 text-[13px] sm:shrink-0 lg:h-9 lg:pl-3 lg:pr-8 lg:text-sm">
+        <span className="mr-1 shrink-0 text-(--ink-soft)">🏠<span className="hidden sm:inline"> บ้าน:</span></span>
         <select
           aria-label="กรองตามบ้าน"
-          className="appearance-none bg-transparent pr-1 font-medium text-(--ink) outline-none"
+          className="min-w-0 max-w-[5.5rem] appearance-none truncate bg-transparent pr-1 font-medium text-(--ink) outline-none sm:max-w-none"
           value={houseId ? `h:${houseId}` : group ? `g:${group}` : ""}
           onChange={(e) => {
             const v = e.target.value;
@@ -785,7 +744,7 @@ export function WorkOrderBoard({
             </optgroup>
           ))}
         </select>
-        <span className="pointer-events-none absolute right-2.5 text-(--ink-soft)" aria-hidden="true">▾</span>
+        <span className="pointer-events-none absolute right-1.5 text-(--ink-soft) lg:right-2.5" aria-hidden="true">▾</span>
       </label>
     ) : null;
 
@@ -799,6 +758,7 @@ export function WorkOrderBoard({
         showUnassigned={hasUnassigned}
         showMine={!!currentUserId}
         showPeople={canPickPeople}
+        compact={isMobile}
       />
     ) : null;
 
@@ -821,61 +781,6 @@ export function WorkOrderBoard({
           </div>,
           toolbarSlot,
         )}
-      {/* ─── กรองตามบ้าน: แถวบน = หมวด, แถวล่าง = บ้านในหมวด ─── */}
-      {/* ตัวกรองผู้รับผิดชอบขึ้นแถบหัวแล้ว — แถวนี้เหลือแค่ปุ่มบ้าน ไม่มีบ้านให้เลือกก็ไม่ต้องมีแถวว่าง */}
-      {(groups.length > 1 || (!toolbarSlot && personFilter !== null)) && (
-        // มีช่องบนแถบหัวแล้ว: แถวปุ่มบ้านเหลือแค่มือถือ (จอใหญ่ใช้ช่องเลือกบ้านบนแถบหัว)
-        <div className={`shrink-0 ${toolbarSlot && groups.length > 1 ? "lg:hidden" : ""}`}>
-          <div className="flex gap-2 overflow-x-auto px-3 py-1.5">
-            {/* ตัวกรองผู้รับผิดชอบอยู่บนแถบหัวซ้าย แบบบอร์ดงาน (ผู้ใช้ 2/11/2569) — ไม่มีช่องบนแถบหัว ค่อยวางตรงนี้ */}
-            {!toolbarSlot && personFilter}
-            {groups.length > 1 && (
-            <FilterChip
-              selected={group === null && houseId === null}
-              onClick={() => {
-                setGroup(null);
-                setHouseId(null);
-              }}
-            >
-              ทุกบ้าน
-            </FilterChip>
-            )}
-            {groups.length > 1 && groups.map((g) => (
-              <FilterChip
-                key={g}
-                selected={group === g}
-                onClick={() => {
-                  setGroup(group === g ? null : g);
-                  setHouseId(null);
-                }}
-              >
-                {g}
-              </FilterChip>
-            ))}
-          </div>
-
-          {housesInGroup.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto px-3 py-1.5">
-              <FilterChip
-                selected={houseId === null}
-                onClick={() => setHouseId(null)}
-              >
-                ทุกหลังในหมวด
-              </FilterChip>
-              {housesInGroup.map(([id, name]) => (
-                <FilterChip
-                  key={id}
-                  selected={houseId === id}
-                  onClick={() => setHouseId(houseId === id ? null : id)}
-                >
-                  {name}
-                </FilterChip>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* ─── มือถือ: แท็บ 4 สถานะ ─── */}
       <div className="flex min-h-0 flex-1 flex-col lg:hidden">
         <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-(--line)">
