@@ -6,6 +6,7 @@ import { requireOrg, hasPermission } from "@smartboss/auth";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { upsertLineConfig, usersWithPermission } from "@/modules/maintenance/data/notify";
 import { logActivity } from "@/modules/maintenance/data/activity";
+import { openRoundsNow } from "@/modules/maintenance/data/pm-rounds";
 import { todayBkkDate, ymd } from "@/modules/maintenance/lib/pm-rounds";
 
 /**
@@ -61,6 +62,8 @@ export async function savePmRoundsAction(formData: FormData) {
     action: "update",
     summary: fromRaw ? `ตั้ง PM แบบนับรอบ เริ่ม ${fromRaw}` : "ปิด PM แบบนับรอบ",
   });
+  // เริ่มวันนี้: เปิดใบที่ถึงเวลาเลย ไม่รอ 08:00 พรุ่งนี้ · วันในอนาคตยังไม่เปิด
+  await openRoundsNow(orgId);
   revalidatePath("/maintenance/settings");
   revalidatePath("/maintenance/work-orders");
 }

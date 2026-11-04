@@ -56,11 +56,11 @@ const OPEN = ["open", "in_progress"];
  * ใบที่เปิดค้างอยู่แต่ยังไม่มีรอบ (ใบอัตโนมัติก่อนเปิดใช้ / คนเปิดเองจากหน้า PM) = ใบของรอบแรกที่ถึง
  * รอบที่ครบกำหนดก่อนวันเริ่มใช้ ไม่เปิดใบย้อนหลัง
  */
-export async function generateRoundWorkOrders(orgs: Map<string, RoundOrg>): Promise<{ created: number }> {
+export async function generateRoundWorkOrders(orgs: Map<string, RoundOrg>, pmIds?: string[]): Promise<{ created: number }> {
   if (orgs.size === 0) return { created: 0 };
   const pms = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
     prisma.pmSchedule.findMany({
-      where: { orgId: { in: [...orgs.keys()] }, isActive: true, awaitingSchedule: false, totalRounds: null },
+      where: { orgId: { in: [...orgs.keys()] }, ...(pmIds ? { id: { in: pmIds } } : {}), isActive: true, awaitingSchedule: false, totalRounds: null },
       include: { property: { select: { caretakerId: true } } },
     }),
   );
@@ -146,6 +146,21 @@ export async function generateRoundWorkOrders(orgs: Map<string, RoundOrg>): Prom
     });
   }
   return { created };
+}
+
+/**
+ * เปิดใบรอบทันทีตอนสร้าง/แก้แผน หรือตอนเปิดใช้โหมด ไม่รอ cron 08:00 (ผู้ใช้ 4/11/2569 "แจ้งมาตอนสร้างเลย")
+ * ไม่ส่ง pmIds = ทุกแผนของบริษัท · เปิดไม่สำเร็จไม่ทำให้การบันทึกแผนล้ม cron เก็บให้รอบถัดไป
+ */
+export async function openRoundsNow(orgId: string, pmIds?: string[]): Promise<number> {
+  try {
+    const st = await loadRoundOrg(orgId);
+    if (!st) return 0;
+    return (await generateRoundWorkOrders(new Map([[orgId, st]]), pmIds)).created;
+  } catch (error) {
+    console.error("[pm-rounds] open now", error);
+    return 0;
+  }
 }
 
 /**

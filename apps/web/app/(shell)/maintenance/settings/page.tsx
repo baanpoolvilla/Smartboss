@@ -104,7 +104,7 @@ export default async function MaintenanceSettingsPage() {
             <Input type="date" name="from" defaultValue={pmRoundsFrom} min={pmRoundsFrom && pmRoundsFrom < todayYmd ? pmRoundsFrom : todayYmd} className="w-48" />
           </label>
           <p className="rounded-(--radius) bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            รอบที่ครบกำหนดก่อนวันเริ่มใช้จะไม่โดนหักคะแนน · ใบจะเปิดเองเมื่อ cron ทำงานแล้ว
+            เริ่มวันนี้: กดบันทึกแล้วใบที่ครบกำหนดใน {pmRounds?.pmLeadDays ?? DEFAULT_PM_LEAD_DAYS} วันจะเปิดและแจ้งผู้รับผิดชอบทันที · รอบที่ครบกำหนดก่อนวันเริ่มใช้จะไม่โดนหักคะแนน · รอบต่อ ๆ ไปเปิดเองเมื่อ cron ทำงาน
           </p>
           <Button type="submit" className="w-fit">บันทึก</Button>
         </form>

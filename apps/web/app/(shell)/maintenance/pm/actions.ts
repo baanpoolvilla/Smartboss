@@ -21,7 +21,7 @@ import { getAsset } from "@/modules/maintenance/data/assets";
 import { roundsPerYearOptions } from "@/modules/maintenance/lib/pm-schedule";
 import { deleteNotificationsByReference } from "@/modules/maintenance/data/notify";
 import { isPastDay } from "@/modules/maintenance/lib/no-past-date";
-import { pmIsRoundMode } from "@/modules/maintenance/data/pm-rounds";
+import { openRoundsNow, pmIsRoundMode } from "@/modules/maintenance/data/pm-rounds";
 
 function parseDate(s: string): Date {
   return new Date(s + "T00:00:00.000Z");
@@ -129,30 +129,34 @@ export async function createPmAction(formData: FormData) {
     createdBy: session.userId,
   };
 
+  const createdIds: string[] = [];
   if (assetIds.length > 0) {
     // 1 แผนต่อ 1 อุปกรณ์ — บ้านยึดตามอุปกรณ์ที่เลือก
     for (const assetId of assetIds) {
       const asset = await getAsset(orgId, assetId);
       if (!asset) continue;
-      await createPmSchedule(orgId, {
+      const created = await createPmSchedule(orgId, {
         ...base,
         propertyId: asset.propertyId,
         assetId,
       });
+      createdIds.push(created.id);
       await pmLog(orgId, { id: null, title: `${d.title} · ${asset.name}`, propertyId: asset.propertyId }, "create", "สร้างแผน PM", {
         frequency, nextDueDate: d.nextDueDate, mode: d.mode, assignedTo: d.assignedTo || null,
       });
     }
   } else {
-    await createPmSchedule(orgId, {
+    const created = await createPmSchedule(orgId, {
       ...base,
       propertyId: d.propertyId,
       assetId: d.assetId || null,
     });
+    createdIds.push(created.id);
     await pmLog(orgId, { id: null, title: d.title, propertyId: d.propertyId }, "create", "สร้างแผน PM", {
       frequency, nextDueDate: d.nextDueDate, mode: d.mode, assignedTo: d.assignedTo || null,
     });
   }
+  await openRoundsNow(orgId, createdIds);
 
   revalidatePath("/maintenance/pm");
   redirect("/maintenance/pm");
@@ -220,6 +224,7 @@ export async function updatePmAction(formData: FormData) {
     assignedTo: (assignedTo || null) !== (before?.assignedTo ?? null) ? { from: before?.assignedTo ?? null, to: assignedTo || null } : undefined,
     title: title && before && title !== before.title ? { from: before.title, to: title } : undefined,
   });
+  if (dueChanged || (frequency && frequency !== before?.frequency)) await openRoundsNow(orgId, [id]);
 
   revalidatePath("/maintenance/pm");
   // แก้จากหน้าอุปกรณ์ด้วย (assets/[id]) — ให้หน้านั้นเห็นค่าใหม่ทันที
