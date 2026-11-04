@@ -17,7 +17,8 @@ import type { RoutineDayOffRule } from "@/modules/report_task/store/routine-dayo
 import { defaultReminderSettings, type ReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
 import type { CalendarEvent } from "@/modules/report_task/types";
 import { claimSweep, releaseSweep } from "@/modules/report_task/lib/server/sweep-throttle";
-import { acceptRetroPosts, carryLateRequestsToMissed, listPenaltyRequests, markRetroFulfilled } from "@/modules/report_task/lib/db/report-penalty-requests";
+import { acceptRetroPosts, carryLateRequestsToMissed, listPenaltyRequests, markRetroFulfilled, markRetroReminded, retroRemindersDue } from "@/modules/report_task/lib/db/report-penalty-requests";
+import { reportDayText } from "@/modules/report_task/lib/penalty-evidence";
 import { writeOwnNotificationsForUsers } from "@/modules/report_task/lib/server/retro-notify";
 
 /**
@@ -376,6 +377,33 @@ export async function runReportPenaltySweep(orgId: string, actorId: string | nul
         link: "/hr/my-score",
       }))
     );
+  }
+
+  // เตือนคนที่ CEO อนุมัติให้ส่งย้อนหลังแล้วแต่ยังไม่ส่ง — พลาดตรงนี้ต้องไม่ทำให้รอบหักคะแนนล้ม
+  if (!dryRun) {
+    try {
+      const reminded = await markRetroReminded(orgId, retroRemindersDue(await listPenaltyRequests(orgId), scorePeriod));
+      await writeOwnNotificationsForUsers(
+        orgId,
+        reminded.map(({ request: r, kind, daysLeft }) => {
+          const room = topics.find((t) => t.id === r.topicId)?.name ?? "รีพอต";
+          const what = `ยังไม่ได้ส่งรีพอตย้อนหลังของวันที่ ${reportDayText(r.day)} ห้อง ${room}`;
+          const points = Math.abs(r.points);
+          return {
+            id: `notif-retro-remind-${kind}-${r.id}`,
+            userId: r.userId,
+            byUserId: "system",
+            message:
+              kind === "last"
+                ? `วันสุดท้าย: ${what} — ส่งได้ถึง 23:59 วันนี้ ถ้าไม่ส่งจะยังโดนหัก ${points} คะแนน`
+                : `${what} — เหลือเวลาอีก ${daysLeft} วัน ถ้าไม่ส่งจะยังโดนหัก ${points} คะแนน`,
+            link: `/chat-report/report-feed?topic=${encodeURIComponent(r.topicId)}&retro=${encodeURIComponent(r.id)}`,
+          };
+        })
+      );
+    } catch (err) {
+      console.error("[report-penalty-sweep] retro reminders failed", err);
+    }
   }
 
   return Response.json({ ok: true, ...result });

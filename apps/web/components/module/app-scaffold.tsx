@@ -9,6 +9,7 @@
 import Link from "next/link";
 import { ArrowLeft, Plus } from "lucide-react";
 import { AppBarActions } from "./app-bar-actions";
+import { BackLink } from "./back-link";
 
 export function AppScaffold({
   title,
@@ -82,13 +83,9 @@ export function AppScaffold({
         <div className={`flex min-w-[44px] flex-1 items-center justify-start sm:min-w-[110px] ${noTitle ? "min-w-0" : ""}`}>
           {leading ??
             (backHref && (
-              <Link
-                href={backHref}
-                className="rounded-full p-2 text-(--app-strong) transition-colors hover:bg-(--bg-soft)"
-                aria-label="ย้อนกลับ"
-              >
+              <BackLink href={backHref} className="rounded-full p-2 text-(--app-strong) transition-colors hover:bg-(--bg-soft)">
                 <ArrowLeft className="h-5 w-5" />
-              </Link>
+              </BackLink>
             ))}
         </div>
 

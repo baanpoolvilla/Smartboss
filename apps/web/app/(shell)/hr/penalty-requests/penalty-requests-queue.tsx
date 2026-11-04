@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import type { PenaltyEvidence } from "@/modules/report_task/lib/penalty-evidence";
 
 interface PenaltyRequestItem {
   id: string;
@@ -23,6 +25,7 @@ interface PenaltyRequestItem {
   fulfilledAt?: string;
   retroDeadline?: string;
   userName: string;
+  evidence?: PenaltyEvidence | null;
 }
 
 const fmtShort = new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -123,6 +126,31 @@ export function PenaltyRequestsQueue() {
                   {CATEGORY_LABEL[item.category]} {item.points}
                 </span>
               </div>
+              {item.evidence && (
+                <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 rounded-lg border border-[var(--line)] px-3 py-2 text-[13px]">
+                  <dt className="text-[var(--ink-soft)]">ห้อง · รอบ</dt>
+                  <dd className="min-w-0">
+                    {item.evidence.roomName}
+                    {item.evidence.roundLabel ? ` · ${item.evidence.roundLabel}` : ""}
+                    {item.evidence.dueText ? ` · กำหนด ${item.evidence.dueText}` : ""}
+                  </dd>
+                  <dt className="text-[var(--ink-soft)]">โพสต์จริง</dt>
+                  <dd className="min-w-0">
+                    {item.evidence.post ? (
+                      <>
+                        <b>{item.evidence.post.text}</b>
+                        {item.evidence.post.lateText ? ` · ช้า ${item.evidence.post.lateText}` : ""}
+                        {" · "}
+                        <Link href={item.evidence.post.href} className="font-medium text-[var(--brand-navy)] underline">
+                          เปิดโพสต์
+                        </Link>
+                      </>
+                    ) : (
+                      "ไม่พบโพสต์ของรอบนี้ในห้องนี้"
+                    )}
+                  </dd>
+                </dl>
+              )}
               <div className="rounded-lg bg-[var(--bg-soft)] p-3 text-sm text-[var(--ink)]">{item.reason}</div>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-[var(--ink-soft)]">{TYPE_LABEL[item.type]}</span>

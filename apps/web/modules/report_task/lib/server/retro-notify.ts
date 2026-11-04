@@ -6,7 +6,8 @@ import type { AppNotification } from "@/modules/report_task/store/notification-s
 /** แจ้งเตือนจากระบบ (ไม่มีผู้กด) ลงกระดิ่งของแต่ละคน — id ซ้ำไม่เพิ่มซ้ำ */
 export async function writeOwnNotificationsForUsers(
   orgId: string,
-  items: { id: string; userId: string; message: string; link?: string }[]
+  /** byUserId: "system" = เด้ง/มีเสียงด้วย · ไม่ระบุ = ลงกระดิ่งเงียบ ๆ (ถือว่าตัวเองทำถึงตัวเอง) */
+  items: { id: string; userId: string; message: string; link?: string; byUserId?: string }[]
 ): Promise<void> {
   if (items.length === 0) return;
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -18,7 +19,7 @@ export async function writeOwnNotificationsForUsers(
       .map((i) => ({
         id: i.id,
         userId: i.userId,
-        byUserId: i.userId,
+        byUserId: i.byUserId ?? i.userId,
         message: i.message,
         link: i.link,
         createdAt: new Date().toISOString(),

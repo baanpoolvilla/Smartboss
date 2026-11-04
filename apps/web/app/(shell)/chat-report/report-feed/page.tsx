@@ -549,6 +549,8 @@ function ReportFeedPageInner() {
   // ที่ส่งเลย") ผ่าน selectView ตัวเดียวกับที่แถบสลับห้องใช้ ยิงครั้งเดียวตอน
   // mount/รายการเปลี่ยน ไม่ผูกกับห้องที่เปิดอยู่ตอนนั้น
   useEffect(() => {
+    // มาจากลิงก์ส่งย้อนหลัง (?retro=) — เตือนรอบวันนี้จะบังช่องส่งและคำว่า "ส่งย้อนหลัง = สาย" ทำให้เข้าใจผิด
+    if (searchParams.get("retro")) return;
     const today = localDateStr(new Date());
     for (const entry of myLatePendingToday) {
       const key = lateToastDismissKey(entry.topicId, today, entry.roundId);

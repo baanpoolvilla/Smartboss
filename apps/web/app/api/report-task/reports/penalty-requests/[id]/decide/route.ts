@@ -4,6 +4,9 @@ import { readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
 import { decidePenaltyRequest } from "@/modules/report_task/lib/db/report-penalty-requests";
 import type { AppNotification } from "@/modules/report_task/store/notification-store";
 import { retroSubmitDeadline } from "@/modules/report_task/lib/penalty-request-window";
+import { reportDayText } from "@/modules/report_task/lib/penalty-evidence";
+import { effectiveRoundsOf } from "@/modules/report_task/lib/submission-rounds";
+import type { ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { loadScorePeriodConfig } from "@/lib/score-period-config";
 
 /**
@@ -42,11 +45,16 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(deadline));
+  const topic = r.awaitingPost
+    ? (await readStore<{ topics?: ReportTopic[] }>(session.orgId, "report-feed")).data?.topics?.find((t) => t.id === r.topicId)
+    : undefined;
+  const round = topic ? effectiveRoundsOf(topic).find((x) => x.id === r.roundId) : undefined;
+  const where = `${topic ? ` ห้อง ${topic.name}` : ""}${round ? ` รอบ "${round.label}" (${round.time})` : ""}`;
   const message =
     body.decision !== "approved"
       ? `คำร้องขอแก้ไขคะแนนของคุณไม่ได้รับการอนุมัติ`
       : r.awaitingPost
-        ? `อนุมัติให้ส่งรีพอตย้อนหลังแล้ว (รีพอตวันที่ ${r.day}) — กดปุ่ม "ส่งย้อนหลัง" ในห้องรีพอต ภายใน ${deadlineText} ส่งแล้วถึงได้คะแนนคืน`
+        ? `อนุมัติให้ส่งรีพอตย้อนหลังแล้ว — รีพอตวันที่ ${reportDayText(r.day)}${where} กดเพื่อส่งเลย ส่งได้ถึง ${deadlineText} ส่งแล้วได้คืน ${Math.abs(r.points)} คะแนน`
         : `คำร้องขอแก้ไขคะแนนของคุณได้รับการอนุมัติแล้ว — คืนคะแนนให้แล้ว`;
   const fresh: AppNotification[] = [
     {
@@ -54,7 +62,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       userId: result.request.userId,
       byUserId: session.userId,
       message,
-      link: r.awaitingPost ? `/chat-report/report-feed?topic=${r.topicId}` : "/hr/employees?tab=score",
+      link: r.awaitingPost ? `/chat-report/report-feed?topic=${encodeURIComponent(r.topicId)}&retro=${encodeURIComponent(r.id)}` : "/hr/my-score",
       createdAt: new Date().toISOString(),
       read: false,
     },

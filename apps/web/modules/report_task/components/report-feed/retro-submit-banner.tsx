@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { History } from "lucide-react";
 
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
@@ -29,10 +30,22 @@ export function RetroSubmitBanner({ topic }: { topic: ReportTopic }) {
   const setTarget = useRetroSubmitStore((s) => s.setTarget);
   const load = useRetroSubmitStore((s) => s.load);
   const [openedAt] = useState(() => Date.now());
+  // มาจากแจ้งเตือน/หน้าคะแนน (?retro=คำร้อง) — เปิดช่องส่งย้อนหลังให้เลย ทีละลิงก์ครั้งเดียว ยกเลิกแล้วไม่เปิดซ้ำ
+  const searchParams = useSearchParams();
+  const retroParam = searchParams.get("retro");
+  const handledRetro = useRef<string | null>(null);
 
   useEffect(() => {
     void load();
-  }, [load, topic.id]);
+  }, [load, topic.id, retroParam]);
+
+  useEffect(() => {
+    if (!retroParam || handledRetro.current === retroParam) return;
+    const wanted = requests.find((r) => r.id === retroParam && r.topicId === topic.id && r.userId === viewingAsUserId);
+    if (!wanted || new Date(wanted.retroDeadline).getTime() <= Date.now() || posts.some((p) => p.retroFor?.requestId === wanted.id)) return;
+    handledRetro.current = retroParam;
+    setTarget(wanted);
+  }, [retroParam, requests, topic.id, viewingAsUserId, posts, setTarget]);
 
   const open = requests.filter(
     (r) =>

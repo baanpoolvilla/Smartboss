@@ -8,6 +8,12 @@ import { listScoreRequests, SCORE_REASON_TAGS, type ScoreRequest } from "@/lib/s
 import { wfTry, type AttendanceCorrection, type Me } from "@/modules/hr/lib/api";
 import { listPenaltyRequests, type PenaltyRequest } from "@/modules/report_task/lib/db/report-penalty-requests";
 import { penaltyRequestOpen, retroSubmitDeadline } from "@/modules/report_task/lib/penalty-request-window";
+import { penaltyEvidence } from "@/modules/report_task/lib/penalty-evidence";
+import { readStore } from "@/modules/report_task/lib/db/org-store";
+import { listDirectory } from "@/modules/report_task/lib/db/employee-directory";
+import { localDateStr } from "@/modules/report_task/lib/now";
+import { defaultReminderSettings, type ReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
+import type { ReportPost, ReportTopic, SubmitterGroup } from "@/modules/report_task/store/report-feed-store";
 import type { RowActionSpec } from "./score-row-action";
 
 /**
@@ -75,6 +81,16 @@ export async function buildRowActions(orgId: string, userId: string, events: Ev[
     needAttendance && me?.employment_id
       ? ((await wfTry<{ items: AttendanceCorrection[] }>("/me/attendance-correction-requests"))?.items ?? [])
       : [];
+  const [feed, reminderSettings, directory] = needReport
+    ? await Promise.all([
+        readStore<{ topics?: ReportTopic[]; posts?: ReportPost[]; submitterGroups?: SubmitterGroup[] }>(orgId, "report-feed").then((r) => r.data),
+        readStore<Partial<ReminderSettings>>(orgId, "reminder-settings").then((r) => r.data),
+        listDirectory(orgId),
+      ])
+    : [null, null, []];
+  const people = { users: directory, groups: feed?.submitterGroups ?? [] };
+  const lock = { ...defaultReminderSettings.submissionLock, ...reminderSettings?.submissionLock };
+  const today = localDateStr(new Date());
   const approverIds = [...new Set(scoreReqs.map((r) => r.approverId).filter((x): x is string => !!x))];
   const names = new Map(
     (approverIds.length
@@ -121,11 +137,35 @@ export async function buildRowActions(orgId: string, userId: string, events: Ev[
     if (e.refType === "report_round" && (e.category === "report_missed" || e.category === "report_late")) {
       const reqs = reportReqs.filter((x) => x.refId === e.refId && x.category === e.category);
       const r = latestBy(reqs);
-      const reportDay = e.refId!.split(":")[0] ?? day;
+      const [reportDay = day, topicId = "", roundId = ""] = e.refId!.split(":");
+      const roomLink = `/chat-report/report-feed?topic=${encodeURIComponent(topicId)}`;
+      const evidence = penaltyEvidence(feed?.topics ?? [], feed?.posts ?? [], { userId, topicId, roundId, day: reportDay }, lock, people);
+      const noPostToday =
+        e.category === "report_late" &&
+        reportDay === today &&
+        !evidence?.post &&
+        !(feed?.posts ?? []).some((p) => p.topicId === topicId && p.authorId === userId && !p.excludeFromSubmission && localDateStr(new Date(p.createdAt)) === reportDay);
       if (r?.status === "pending") {
         out.set(e.id, open ? { status: { tone: "wait", text: "⏳ รอพิจารณา", sub: `CEO · ต้องอนุมัติ${deadline.replace("ขอได้", "")}` } } : { status: lateLock });
       } else if (r?.status === "approved" && r.awaitingPost) {
-        out.set(e.id, { status: { tone: "wait", text: "อนุมัติให้ส่งย้อนหลัง", sub: `กด "ส่งย้อนหลัง" ในห้องรีพอต${deadline.replace("ขอได้", "")} ส่งแล้วได้คะแนนคืน` } });
+        const posted = (feed?.posts ?? []).some((p) => p.retroFor?.requestId === r.id);
+        if (posted) {
+          out.set(e.id, { status: { tone: "ok", text: "ส่งย้อนหลังแล้ว", sub: "ระบบกำลังคืนคะแนนให้ ภายในไม่กี่นาที" } });
+        } else if (!open) {
+          out.set(e.id, { status: { tone: "lock", text: "🔒 ไม่ส่งภายในกำหนด", sub: "คะแนนรอบนี้ไม่เปลี่ยน" } });
+        } else {
+          out.set(e.id, {
+            status: { tone: "wait", text: "อนุมัติให้ส่งย้อนหลัง", sub: `ส่งได้${deadline.replace("ขอได้", "")} · ส่งแล้วได้คืน ${Math.abs(points)} คะแนน` },
+            link: { href: `${roomLink}&retro=${encodeURIComponent(r.id)}`, label: "ไปส่งย้อนหลัง" },
+          });
+        }
+      } else if (open && noPostToday) {
+        // เลยเวลารอบแล้วแต่ยังไม่ได้โพสต์ ห้องยังรับอยู่ — สิ่งที่ต้องทำคือไปส่ง ไม่ใช่ขอแก้คะแนน
+        const close = evidence?.closeTime ? `ห้องปิดรับวันนี้ ${evidence.closeTime} น.` : "ส่งได้ถึงสิ้นวันนี้";
+        out.set(e.id, {
+          status: { tone: "wait", text: "ยังไม่ได้ส่ง", sub: `${close} ถ้าไม่ส่งจะเปลี่ยนเป็นไม่ส่งรายงาน` },
+          link: { href: roomLink, label: "ไปส่งรีพอต" },
+        });
       } else if (open) {
         out.set(e.id, {
           deadline,
@@ -139,10 +179,12 @@ export async function buildRowActions(orgId: string, userId: string, events: Ev[
               refId: e.refId!,
               points,
               day: reportDay,
-              topicName: e.note ?? label,
-              roundLabel: label,
+              topicName: e.note ?? evidence?.roomName ?? label,
+              roundLabel: evidence?.roundLabel ?? label,
               hasPendingRequest: false,
               requestOpen: true,
+              evidence,
+              retroDeadlineText: deadline.replace("ขอได้ถึง ", ""),
             },
           },
         });

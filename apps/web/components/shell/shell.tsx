@@ -16,6 +16,7 @@ import {
 } from "@smartboss/ui/components/dropdown-menu";
 import { Logo } from "@/components/logo";
 import { NavigationProgress } from "@/components/shell/navigation-progress";
+import { NavTracker } from "@/components/shell/nav-tracker";
 import { NavSkeleton } from "@/components/shell/nav-skeleton";
 import { ImageAnnotatorHost } from "@/components/annotate/image-annotator-host";
 import { Icon } from "@/components/icon";
@@ -98,6 +99,7 @@ export function Shell({
       {/* แถบโหลดด้านบนทันทีที่กดลิงก์ — ไม่งั้นจอนิ่งจนหน้าใหม่เสร็จ ดูเหมือนกดไม่ติด */}
       <Suspense fallback={null}>
         <NavigationProgress />
+        <NavTracker />
       </Suspense>
       {/* หน้าต่างวาด/เขียนบนรูปก่อนส่ง — เปิดจากปุ่มปากกาในทุกช่องพิมพ์ */}
       <ImageAnnotatorHost />

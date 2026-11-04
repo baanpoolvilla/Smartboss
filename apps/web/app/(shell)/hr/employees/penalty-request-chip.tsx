@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Button } from "@smartboss/ui/components/button";
 import { Modal } from "@/components/module/dialog";
+import type { PenaltyEvidence } from "@/modules/report_task/lib/penalty-evidence";
 
 /**
  * ชิป "ไม่ส่งรายงานประจำวัน -2 ×14" ที่กดได้ — แทนที่ span เดิมของหมวด
@@ -65,6 +67,10 @@ export interface PenaltyEventItem {
   requestStatus?: "pending" | "approved" | "rejected" | null;
   /** ยื่นคำร้องได้ไหม — ได้ถึงวันตัดรอบเกรดของรอบที่โดนหัก (penalty-request-window.ts) · ไม่มีค่า = ถือว่าได้ */
   requestOpen?: boolean;
+  /** ห้อง รอบ กำหนดส่ง และเวลาโพสต์จริง — มีเฉพาะปุ่มบนแถวในหน้า "คะแนนของฉัน" */
+  evidence?: PenaltyEvidence | null;
+  /** ส่งย้อนหลังได้ถึงเมื่อไหร่ เช่น "25 พ.ย. 23:59" */
+  retroDeadlineText?: string;
 }
 
 /**
@@ -169,7 +175,43 @@ export function PenaltyRequestDialog({
       }
     >
       <div className="flex flex-col gap-4">
-        {fixedItem ? (
+        {fixedItem?.evidence ? (
+          <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 rounded-(--radius) border border-(--line) bg-(--bg-soft) px-3 py-2 text-sm">
+            <dt className="text-(--ink-soft)">ห้อง</dt>
+            <dd className="m-0 min-w-0">
+              {fixedItem.evidence.roomName}
+              {fixedItem.evidence.roundLabel ? ` · รอบ ${fixedItem.evidence.roundLabel}` : ""}
+            </dd>
+            {fixedItem.evidence.dueText && (
+              <>
+                <dt className="text-(--ink-soft)">กำหนดส่ง</dt>
+                <dd className="m-0 min-w-0">
+                  {fixedItem.evidence.dueText}
+                  {!isLate && fixedItem.evidence.closeTime ? ` (ปิดรับ ${fixedItem.evidence.closeTime} น.)` : ""}
+                </dd>
+              </>
+            )}
+            <dt className="text-(--ink-soft)">โพสต์จริง</dt>
+            <dd className="m-0 min-w-0">
+              {fixedItem.evidence.post ? (
+                <>
+                  <b>{fixedItem.evidence.post.text}</b>
+                  {fixedItem.evidence.post.lateText ? ` · ช้า ${fixedItem.evidence.post.lateText}` : ""}
+                  {" · "}
+                  <Link href={fixedItem.evidence.post.href} className="font-medium text-(--brand-navy) underline">
+                    ดูโพสต์
+                  </Link>
+                </>
+              ) : (
+                "ไม่พบโพสต์ของรอบนี้ในห้องนี้"
+              )}
+            </dd>
+            <dt className="text-(--ink-soft)">คะแนน</dt>
+            <dd className="m-0 font-mono" style={{ color: "var(--danger)" }}>
+              {fixedItem.points}
+            </dd>
+          </dl>
+        ) : fixedItem ? (
           <div className="rounded-(--radius) border border-(--line) bg-(--bg-soft) px-3 py-2 text-sm">
             <span className="text-(--ink)">
               {fixedItem.topicName} · {fixedItem.roundLabel} · {fixedItem.day ?? "-"}
@@ -238,6 +280,19 @@ export function PenaltyRequestDialog({
             </label>
           </div>
         </div>
+
+        {!isLate && type === "retroactive" && fixedItem?.evidence && (
+          <div className="rounded-(--radius) bg-[#eef3ff] px-3 py-2 text-xs text-[#1e3a8a]">
+            <div className="font-semibold">ขั้นตอนถัดไป</div>
+            <ol className="m-0 list-decimal pl-4">
+              <li>CEO พิจารณาคำร้อง ระบบจะแจ้งผลให้ทราบ</li>
+              <li>ถ้าอนุมัติ กดแจ้งเตือนเพื่อไปส่งรีพอตในห้อง {fixedItem.evidence.roomName}</li>
+              <li>
+                ส่งได้ถึง {fixedItem.retroDeadlineText ?? "วันตัดรอบ"} ส่งแล้วได้คืน {Math.abs(fixedItem.points)} คะแนน
+              </li>
+            </ol>
+          </div>
+        )}
 
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-medium text-(--ink)">เหตุผล</span>

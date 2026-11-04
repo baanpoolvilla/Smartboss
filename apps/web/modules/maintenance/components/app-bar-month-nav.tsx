@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
+import { BackLink } from "@/components/module/back-link";
 
 const SHORT_MONTHS = ["", "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 
 /** ปุ่มย้อนกลับสำหรับหน้าที่ส่ง `leading` ให้ AppScaffold (leading ชนะ backHref) */
 export function AppBarBack({ href }: { href: string }) {
   return (
-    <Link href={href} className="shrink-0 rounded-full p-2 text-(--app-strong) transition-colors hover:bg-(--bg-soft)" aria-label="ย้อนกลับ">
+    <BackLink href={href} className="shrink-0 rounded-full p-2 text-(--app-strong) transition-colors hover:bg-(--bg-soft)">
       <ArrowLeft className="h-5 w-5" />
-    </Link>
+    </BackLink>
   );
 }
 

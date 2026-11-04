@@ -4,9 +4,9 @@ import { prisma } from "@smartboss/database";
 import { readStore, writeStore } from "./org-store";
 import { penaltyRequestOpen, retroSubmitDeadline } from "../penalty-request-window";
 import type { ScorePeriodConfig } from "@/lib/score-period";
-import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
-import { effectiveRoundsOf, postsOfRound, roundRunsOnDay } from "@/modules/report_task/lib/submission-rounds";
-import { localDateStr } from "@/modules/report_task/lib/now";
+import type { ReportPost, ReportTopic, SubmitterGroup } from "@/modules/report_task/store/report-feed-store";
+import { roundPostsOf } from "@/modules/report_task/lib/penalty-evidence";
+import { listDirectory } from "./employee-directory";
 import { loadScorePeriodConfig } from "@/lib/score-period-config";
 
 /**
@@ -58,6 +58,9 @@ export interface PenaltyRequest {
   /** ส่งรีพอตย้อนหลังแล้วเมื่อไหร่ / โพสต์ไหน — ตัวหักคะแนนบันทึกตอนเห็นโพสต์ */
   fulfilledAt?: string;
   fulfilledPostId?: string;
+  /** เตือนว่าใกล้หมดเวลาส่งย้อนหลังไปแล้วเมื่อไหร่ — กันเตือนซ้ำ แม้เจ้าตัวลบแจ้งเตือนทิ้ง */
+  retroRemindedSoonAt?: string;
+  retroRemindedLastAt?: string;
 }
 
 const KEY = "report-penalty-requests";
@@ -207,21 +210,12 @@ export async function decidePenaltyRequest(
 async function markLatePostOnTime(orgId: string, request: PenaltyRequest): Promise<void> {
   try {
     for (let attempt = 0; attempt < 4; attempt++) {
-      const { data, version } = await readStore<{ topics?: ReportTopic[]; posts?: ReportPost[] } & Record<string, unknown>>(orgId, "report-feed");
+      const { data, version } = await readStore<{ topics?: ReportTopic[]; posts?: ReportPost[]; submitterGroups?: SubmitterGroup[] } & Record<string, unknown>>(orgId, "report-feed");
       const topic = data?.topics?.find((t) => t.id === request.topicId);
       const posts = data?.posts ?? [];
       if (!data || !topic) return;
-      const mine = posts.filter((p) => p.topicId === topic.id && p.authorId === request.userId && !p.excludeFromSubmission);
-      const dayPosts = mine.filter((p) => localDateStr(new Date(p.createdAt)) === request.day);
-      const rounds = effectiveRoundsOf(topic).filter((r) => roundRunsOnDay(r, request.day));
-      let targets = rounds.length > 1 ? postsOfRound(dayPosts, rounds, request.roundId) : dayPosts;
-      // รายสัปดาห์/รายเดือนที่ส่งในช่วงเผื่อเวลา (หลังวันครบกำหนด) — โพสต์แรกของคนนั้นหลังวันนั้น
-      if (targets.length === 0) {
-        const after = mine
-          .filter((p) => localDateStr(new Date(p.createdAt)) > request.day)
-          .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-        targets = after.slice(0, 1);
-      }
+      const people = { users: await listDirectory(orgId), groups: data.submitterGroups ?? [] };
+      const targets = roundPostsOf(topic, posts, request.userId, request.day, request.roundId, people);
       const ids = new Set(targets.filter((p) => !p.lateBadgeHidden).map((p) => p.id));
       if (ids.size === 0) return;
       const next = { ...data, posts: posts.map((p) => (ids.has(p.id) ? { ...p, lateBadgeHidden: true } : p)) };
@@ -375,6 +369,58 @@ export function acceptRetroPosts(posts: ReportPost[], requests: PenaltyRequest[]
     return p;
   });
   return { posts: accepted, retroRefIds, newlyFulfilled };
+}
+
+export type RetroReminderKind = "soon" | "last";
+
+/**
+ * คำร้องที่อนุมัติให้ส่งย้อนหลังแล้วยังไม่ส่ง และถึงเวลาเตือน (ผู้ใช้ 4/11/2569 "กันลืมกันพลาด"):
+ * 09:00 ของ 3 วันก่อนวันสุดท้าย และ 09:00 ของวันสุดท้าย · ไม่มีใครเปิดเว็บตอนนั้น = เตือนรอบถัดไปที่ตัวหักคะแนนทำงาน
+ * อนุมัติหลังเวลาเตือนแล้ว ไม่เตือนครั้งนั้น (เพิ่งได้แจ้งตอนอนุมัติ)
+ */
+export function retroRemindersDue(
+  requests: PenaltyRequest[],
+  period: ScorePeriodConfig,
+  now: Date = new Date()
+): { request: PenaltyRequest; kind: RetroReminderKind; daysLeft: number }[] {
+  const DAY = 86_400_000;
+  const due: { request: PenaltyRequest; kind: RetroReminderKind; daysLeft: number }[] = [];
+  for (const r of requests) {
+    if (r.type !== "retroactive" || r.status !== "approved" || r.awaitingPost !== true || r.fulfilledAt) continue;
+    const close = retroSubmitDeadline(r.day, period).getTime();
+    const t = now.getTime();
+    if (t >= close) continue;
+    const lastMorning = close - 15 * 60 * 60 * 1000; // ปิด 00:00 ของวันถัดไป → 09:00 ของวันสุดท้าย
+    const soonAt = lastMorning - 3 * DAY;
+    const decided = r.decidedAt ? new Date(r.decidedAt).getTime() : 0;
+    if (t >= lastMorning) {
+      if (!r.retroRemindedLastAt && decided < lastMorning) due.push({ request: r, kind: "last", daysLeft: 0 });
+    } else if (t >= soonAt && !r.retroRemindedSoonAt && decided < soonAt) {
+      due.push({ request: r, kind: "soon", daysLeft: Math.ceil((lastMorning - t) / DAY) });
+    }
+  }
+  return due;
+}
+
+/** บันทึกว่าเตือนแล้ว — คืนรายการที่บันทึกสำเร็จ (บันทึกก่อนส่ง: พลาดดีกว่าเด้งซ้ำทุกนาที) */
+export async function markRetroReminded(
+  orgId: string,
+  items: { request: PenaltyRequest; kind: RetroReminderKind; daysLeft: number }[]
+): Promise<{ request: PenaltyRequest; kind: RetroReminderKind; daysLeft: number }[]> {
+  if (items.length === 0) return [];
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const { data: existing, version } = await readStore<PenaltyRequest[]>(orgId, KEY);
+    const at = new Date().toISOString();
+    const byId = new Map(items.map((i) => [i.request.id, i.kind] as const));
+    const next = (existing ?? []).map((r) => {
+      const kind = byId.get(r.id);
+      if (!kind) return r;
+      return kind === "last" ? { ...r, retroRemindedLastAt: at } : { ...r, retroRemindedSoonAt: at };
+    });
+    const result = await writeStore(orgId, KEY, next, version);
+    if (result.ok) return items;
+  }
+  return [];
 }
 
 /** บันทึกว่าคำร้องส่งย้อนหลังแล้ว (คิวคำร้องขึ้น "ส่งแล้ว") — คืนรายการที่บันทึกจริง */

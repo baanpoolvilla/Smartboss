@@ -7,6 +7,8 @@ import { readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
 import { listDirectory } from "@/modules/report_task/lib/db/employee-directory";
 import { carryLateRequestsToMissed, listCeoUserIds, createPenaltyRequest, listPenaltyRequests, settleApprovedLateRequests } from "@/modules/report_task/lib/db/report-penalty-requests";
 import type { AppNotification } from "@/modules/report_task/store/notification-store";
+import { penaltyEvidence } from "@/modules/report_task/lib/penalty-evidence";
+import type { ReportPost, ReportTopic, SubmitterGroup } from "@/modules/report_task/store/report-feed-store";
 
 /**
  * คำร้องขอแก้ไข/ขอส่งย้อนหลังของคะแนนรายงาน
@@ -40,10 +42,16 @@ export async function GET(request: Request) {
   const scoped = canSeeAll ? all : all.filter((r) => r.userId === session.userId || r.submittedBy === session.userId);
   const period = await loadScorePeriodConfig(session.orgId);
   // ส่งย้อนหลังได้ถึงเมื่อไหร่ (ปุ่ม "ส่งย้อนหลัง" ในห้องรีพอต — retro-submit-banner.tsx)
+  // คิวของ CEO: ห้อง รอบ และเวลาโพสต์จริงของคำร้องที่รอตัดสิน — ตรวจได้ก่อนกดอนุมัติ
+  const feed = canSeeAll && scoped.some((r) => r.status === "pending")
+    ? (await readStore<{ topics?: ReportTopic[]; posts?: ReportPost[]; submitterGroups?: SubmitterGroup[] }>(session.orgId, "report-feed")).data
+    : null;
+  const people = { users, groups: feed?.submitterGroups ?? [] };
   const items = scoped.map((r) => ({
     ...r,
     userName: nameById.get(r.userId) ?? r.userId,
     retroDeadline: retroSubmitDeadline(r.day, period).toISOString(),
+    evidence: feed && r.status === "pending" ? penaltyEvidence(feed.topics ?? [], feed.posts ?? [], r, undefined, people) : null,
   }));
   return Response.json({ items });
 }

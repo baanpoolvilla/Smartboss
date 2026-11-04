@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@smartboss/ui/components/button";
 
@@ -38,6 +39,8 @@ export interface RowActionSpec {
   open?: RowOpen;
   /** "ขอได้ถึง 25 ต.ค. 23:59" */
   deadline?: string;
+  /** ปุ่มพาไปทำต่อ เช่น ไปส่งรีพอตในห้อง */
+  link?: { href: string; label: string };
 }
 
 const TONE: Record<RowTone, string> = {
@@ -64,6 +67,14 @@ export function ScoreRowAction({ spec }: { spec: RowActionSpec }) {
         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${TONE[spec.status.tone]}`}>
           {spec.status.text}
         </span>
+      )}
+      {spec.link && (
+        <Link
+          href={spec.link.href}
+          className="inline-flex h-7 items-center rounded-full bg-(--brand-navy) px-3 text-xs font-semibold text-white transition-opacity hover:opacity-90 active:scale-[0.97]"
+        >
+          {spec.link.label}
+        </Link>
       )}
       {spec.status?.sub && <span className="text-[11.5px] text-(--ink-soft)">{spec.status.sub}</span>}
       {spec.open && (
