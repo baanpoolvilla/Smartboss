@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { currentUrl, recordPop, recordVisit } from "@/lib/nav-stack";
 
@@ -10,8 +10,14 @@ export function NavTracker() {
   const searchParams = useSearchParams();
   const query = searchParams.toString();
 
+  const first = useRef(true);
   useEffect(() => {
-    recordVisit(query ? `${pathname}?${query}` : pathname);
+    const url = query ? `${pathname}?${query}` : pathname;
+    // ถอยแล้วเบราว์เซอร์โหลดหน้าใหม่ทั้งหน้า ไม่มี popstate ให้ฟัง ต้องอ่านชนิดการเปิดหน้าแทน
+    const nav = first.current ? (performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined) : undefined;
+    first.current = false;
+    if (nav?.type === "back_forward") recordPop(url);
+    else recordVisit(url);
   }, [pathname, query]);
 
   useEffect(() => {

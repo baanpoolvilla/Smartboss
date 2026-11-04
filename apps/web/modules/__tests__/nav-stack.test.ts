@@ -43,8 +43,15 @@ test("เปลี่ยนตัวกรองในหน้าเดีย�
   assert.equal(back?.url, "/expenses?month=9");
 });
 
-test("หน้าเดิมซ้ำในเส้นทาง: ย้อนไปหน้าที่เพิ่งมาจริง", () => {
-  assert.equal(backTarget(walk("/board", "/wo/1", "/house/a", "/wo/1"))?.url, "/house/a");
+test("กลับมาหน้าก่อนหน้าพอดี: นับเป็นการถอย ไม่วนไปหน้าที่เพิ่งออกมา", () => {
+  const s = walk("/board", "/wo/1", "/house/a", "/wo/1");
+  assert.deepEqual(s.map((e) => e.u), ["/board", "/wo/1"]);
+  assert.equal(backTarget(s)?.url, "/board");
+  assert.equal(backTarget(s)?.direct, false);
+});
+
+test("กลับมาหน้าที่เคยผ่านแต่ไกลกว่าหน้าก่อนหน้า: นับเป็นหน้าใหม่", () => {
+  assert.equal(backTarget(walk("/a", "/b", "/c", "/a"))?.url, "/c");
 });
 
 test("กดย้อนของเบราว์เซอร์/มือถือ: เส้นทางตัดกลับตรงนั้น", () => {
@@ -55,4 +62,28 @@ test("กดย้อนของเบราว์เซอร์/มือถ�
 
 test("กดย้อนไปหน้าที่ไม่อยู่ในเส้นทาง: เริ่มต่อจากหน้านั้น", () => {
   assert.deepEqual(pop(walk("/a"), "/z").map((e) => e.u), ["/a", "/z"]);
+});
+
+test("กดกลับข้ามฟอร์มแล้ว กดกลับต่อ: ไปตามเส้นทาง ไม่ถอยประวัติเบราว์เซอร์ผิดหน้า", () => {
+  const s = walk("/home", "/list", "/d/1", "/d/1/edit", "/d/1");
+  const first = backTarget(s)!;
+  assert.equal(first.url, "/list");
+  assert.equal(first.direct, false);
+  const kept = s.slice(0, first.index + 1);
+  kept[kept.length - 1] = { ...kept[kept.length - 1]!, detached: true };
+  const second = backTarget(kept)!;
+  assert.equal(second.url, "/home");
+  assert.equal(second.direct, false);
+});
+
+test("เดินต่อจากหน้าที่ detached: ช่องใหม่ถอยตรง ๆ ได้", () => {
+  const t = backTarget(visit([{ u: "/a", n: 1 }, { u: "/b", n: 1, detached: true }], "/c"))!;
+  assert.equal(t.url, "/b");
+  assert.equal(t.direct, true);
+});
+
+test("กดย้อนของเครื่องแล้วกดลูกศรต่อ: ไปตามเส้นทาง", () => {
+  const t = backTarget(pop(walk("/a", "/b", "/c"), "/b"))!;
+  assert.equal(t.url, "/a");
+  assert.equal(t.direct, false);
 });

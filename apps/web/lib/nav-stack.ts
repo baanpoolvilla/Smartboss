@@ -6,6 +6,7 @@
  *
  * เก็บใน sessionStorage รีเฟรชแล้วไม่หาย แท็บใหม่เริ่มใหม่
  * n = ประวัติเบราว์เซอร์กี่ช่องที่อยู่บนหน้าเดียวกันนี้ (เปลี่ยนตัวกรอง/เดือน) — มากกว่า 1 ใช้ history ถอยตรง ๆ ไม่ได้
+ * detached = ช่องก่อนหน้าในประวัติเบราว์เซอร์ไม่ใช่รายการก่อนหน้าในเส้นทางนี้แล้ว ต้องเปิดหน้าตามเส้นทาง ห้ามถอยตรง ๆ
  */
 const KEY = "sb-nav-stack";
 const MAX = 50;
@@ -13,6 +14,7 @@ const MAX = 50;
 export interface NavEntry {
   u: string;
   n: number;
+  detached?: boolean;
 }
 
 function read(): NavEntry[] {
@@ -44,16 +46,21 @@ function isFormPage(url: string): boolean {
 export function visit(stack: NavEntry[], url: string): NavEntry[] {
   const top = stack[stack.length - 1];
   if (top?.u === url) return stack;
-  if (top && pathOf(top.u) === pathOf(url)) return [...stack.slice(0, -1), { u: url, n: top.n + 1 }];
+  if (top && pathOf(top.u) === pathOf(url)) return [...stack.slice(0, -1), { ...top, u: url, n: top.n + 1 }];
+  // กลับมาหน้าก่อนหน้าพอดี = ถอยกลับ ไม่ว่าจะถอยด้วยปุ่มเครื่องหรือกดลิงก์ — เบราว์เซอร์ไม่ได้แจ้ง popstate ให้เสมอ
+  const prev = stack[stack.length - 2];
+  if (prev && pathOf(prev.u) === pathOf(url)) return [...stack.slice(0, -2), { u: url, n: prev.n, detached: true }];
   return [...stack, { u: url, n: 1 }];
 }
 
 /** กฎล้วน: กดย้อน/ไปหน้าของเบราว์เซอร์หรือปุ่มมือถือ — เจอในเส้นทางก็ตัดกลับไปตรงนั้น ไม่เจอถือเป็นหน้าใหม่ */
 export function pop(stack: NavEntry[], url: string): NavEntry[] {
   for (let i = stack.length - 1; i >= 0; i--) {
-    if (pathOf(stack[i]!.u) === pathOf(url)) return [...stack.slice(0, i), { u: url, n: stack[i]!.n }];
+    // เบราว์เซอร์ถอยไปช่องไหนก็ได้ ยืนยันไม่ได้ว่าช่องก่อนหน้าตรงกับเส้นทาง จึงห้ามถอยตรง ๆ จากจุดนี้
+    if (pathOf(stack[i]!.u) === pathOf(url)) return [...stack.slice(0, i), { u: url, n: stack[i]!.n, detached: true }];
   }
-  return visit(stack, url);
+  const next = visit(stack, url);
+  return [...next.slice(0, -1), { ...next[next.length - 1]!, detached: true }];
 }
 
 /**
@@ -66,7 +73,7 @@ export function backTarget(stack: NavEntry[]): { index: number; url: string; dir
   for (let i = stack.length - 2; i >= 0; i--) {
     const e = stack[i]!;
     if (pathOf(e.u) === pathOf(top.u) || isFormPage(e.u)) continue;
-    return { index: i, url: e.u, direct: i === stack.length - 2 && top.n === 1 };
+    return { index: i, url: e.u, direct: i === stack.length - 2 && top.n === 1 && !top.detached };
   }
   return null;
 }
@@ -88,6 +95,9 @@ export function takeBackTarget(): { url: string; direct: boolean } | null {
   const stack = read();
   const target = backTarget(stack);
   if (!target) return null;
-  write(stack.slice(0, target.index + 1));
+  const kept = stack.slice(0, target.index + 1);
+  // เปิดหน้าใหม่ = ประวัติเบราว์เซอร์ยาวขึ้น ช่องก่อนหน้าจะไม่ตรงกับเส้นทางอีก
+  if (!target.direct) kept[kept.length - 1] = { ...kept[kept.length - 1]!, detached: true };
+  write(kept);
   return { url: target.url, direct: target.direct };
 }
