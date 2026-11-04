@@ -195,3 +195,8 @@ test("ระดับ สำคัญ/ปกติ ที่เคยเลื�
   const kept = normalizePrefs({ level: "important", overrides: { "pm.activity": true } });
   assert.equal(isTopicOn(kept, "pm.activity"), true);
 });
+
+test("คำร้องขอแก้คะแนนรออนุมัติ: เป็นเรื่องที่ต้องทำ ไม่ตกไปความเคลื่อนไหวงานที่หัวหน้าปิดไว้", async () => {
+  const { topicForReportNotification } = await import("../prefs");
+  assert.equal(topicForReportNotification({ message: "มีคำร้องขอแก้ไขคะแนนใหม่ — รอการอนุมัติ" }), "hr.correction_pending");
+});

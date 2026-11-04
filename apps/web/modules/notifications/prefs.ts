@@ -290,6 +290,8 @@ export function topicForReportNotification(n: { message: string; kind?: string |
   if (m.includes("ยังไม่ได้ส่งรีพอต") || m.includes("ยังไม่ส่งรายงาน") || m.includes("ครบกำหนดส่งรีพอต") || /^รีพอต.*ใกล้ถึงกำหนดส่ง/.test(m)) return "rp.remind_me";
   if (m.includes("รอบส่ง") || m.includes("ผู้ต้องส่งรอบ") || m.includes("เพิ่มคุณเข้าห้อง")) return "rp.membership";
 
+  // คำร้องรอ CEO อนุมัติ — ต้องมาก่อนกฎ "คะแนน" ข้างล่าง ไม่งั้นตกไป pm.activity ที่หัวหน้าปิดไว้ แล้วไม่เห็นคำร้องเลย
+  if (m.includes("คำร้องขอแก้ไขคะแนน")) return "hr.correction_pending";
   if (m.includes("แท็กคุณในงาน")) return "pm.mention";
   if (m.includes("แท็ก")) return "rp.mention";
   if (m.includes("ทำเครื่องหมาย") && (m.includes("ให้โพสต์") || m.includes("ให้ความคิดเห็น"))) return "rp.reaction";
