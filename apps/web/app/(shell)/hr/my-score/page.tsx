@@ -4,7 +4,7 @@ import { requireOrg } from "@smartboss/auth";
 import { HrPage } from "@/modules/hr/components/hr-page";
 import { HR_PERMS } from "@/modules/hr/permissions";
 import { EmptyState } from "@/modules/hr/components/ui";
-import { buildUserMonthlyScores, gradeColor, buildPeriodScorecards, listUserPeriodEvents } from "@/lib/performance";
+import { buildUserMonthlyScores, gradeColor, buildPeriodScorecards, listUserPeriodEvents, withoutSupersededLateReports } from "@/lib/performance";
 import { hasBreakdown, ScoreBreakdown } from "@/components/performance/score-breakdown";
 import { buildMyEventDetails } from "@/lib/performance-details";
 import { monthDisplay, shiftMonth } from "@/lib/performance-month";
@@ -146,7 +146,7 @@ export default async function MyScorePage({
         }
         // ช่วงเดียวกับที่คิดคะแนนเดือนนี้ — จำนวนในแต่ละหมวดกับรายการข้างในจึงตรงกัน
         // ดึงเสมอ (ไม่ใช่แค่ตอนมีหมวดที่ติดลบ) — หมวดที่ได้คืนคะแนนหมดแล้วยังต้องเห็นว่า "คืนแล้ว"
-        const events = await listUserPeriodEvents(session.orgId, session.userId, period, month);
+        const events = withoutSupersededLateReports(await listUserPeriodEvents(session.orgId, session.userId, period, month));
         const details = await buildMyEventDetails(session.orgId, events);
         // ปุ่ม "ขอแก้ไข"/สถานะคำขอใต้ทุกรายการที่โดนหัก — ทุกหมวดยื่นได้จากหน้านี้หน้าเดียว (ผู้ใช้ขอ 21/10/2569)
         const specs = await buildRowActions(session.orgId, session.userId, events, period);

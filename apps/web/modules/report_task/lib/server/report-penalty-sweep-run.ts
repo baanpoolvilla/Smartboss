@@ -17,7 +17,7 @@ import type { RoutineDayOffRule } from "@/modules/report_task/store/routine-dayo
 import { defaultReminderSettings, type ReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
 import type { CalendarEvent } from "@/modules/report_task/types";
 import { claimSweep, releaseSweep } from "@/modules/report_task/lib/server/sweep-throttle";
-import { acceptRetroPosts, listPenaltyRequests, markRetroFulfilled } from "@/modules/report_task/lib/db/report-penalty-requests";
+import { acceptRetroPosts, carryLateRequestsToMissed, listPenaltyRequests, markRetroFulfilled } from "@/modules/report_task/lib/db/report-penalty-requests";
 import { writeOwnNotificationsForUsers } from "@/modules/report_task/lib/server/retro-notify";
 
 /**
@@ -285,7 +285,9 @@ export async function runReportPenaltySweep(orgId: string, actorId: string | nul
             ? "คืนคะแนน: ส่งรีพอตย้อนหลังแล้ว (CEO อนุมัติคำร้อง)"
             : targetCategory === null
               ? "ยกเลิก: วันนั้นมีวันลา/หยุด/ไม่ต้องส่งแล้ว"
-              : "ยกเลิก: มีบันทึกคะแนนซ้ำสองสถานะสำหรับรอบเดียวกัน คืนคะแนนของฝั่งที่ไม่ตรงกับสถานะปัจจุบัน",
+              : targetCategory === "report_missed"
+                ? "เปลี่ยนเป็นไม่ส่งรายงาน: เลยเวลาปิดรับแล้วยังไม่ส่ง"
+                : "เปลี่ยนเป็นส่งรายงานสาย: ส่งแล้วแต่เลยเวลา",
         });
       }
 
@@ -356,6 +358,11 @@ export async function runReportPenaltySweep(orgId: string, actorId: string | nul
     const recorded = await tx.performanceEvent.createMany({ data: rows, skipDuplicates: true });
     return { changed: recorded.count > 0, performanceEvents: recorded.count };
   });
+
+  // คำร้องที่ยื่นตอนยัง "สาย" แล้วรอบเปลี่ยนเป็น "ไม่ส่ง" — ย้ายตาม (พลาดตรงนี้ต้องไม่ทำให้รอบหักคะแนนล้ม)
+  if (!dryRun) {
+    await carryLateRequestsToMissed(orgId).catch((err) => console.error("[report-penalty-sweep] carryLateRequestsToMissed failed", err));
+  }
 
   // คำร้องส่งย้อนหลังที่เพิ่งส่งรีพอต — บันทึกว่าส่งแล้ว (คิวคำร้อง) + แจ้งเจ้าตัวว่าได้คะแนนคืน
   if (!dryRun && newlyFulfilled.length > 0) {

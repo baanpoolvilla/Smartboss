@@ -250,11 +250,12 @@ export async function refundDeletedReportRoundEvents(
           refType: "report_round_undo",
           refId: { in: events.map((e) => e.refId!) },
         },
-        select: { refId: true },
+        select: { refId: true, category: true },
       })
-    ).map((u) => u.refId)
+    ).map((u) => `${u.category}|${u.refId}`)
   );
-  const toRefund = events.filter((e) => e.refId && !undone.has(e.refId));
+  // ดูทีละหมวด — รอบเดียวกันมีได้ทั้ง "สาย" (คืนแล้ว) และ "ไม่ส่ง" (ยังหักอยู่)
+  const toRefund = events.filter((e) => e.refId && !undone.has(`${e.category}|${e.refId}`));
   if (toRefund.length === 0) return;
 
   await prisma.performanceEvent.createMany({

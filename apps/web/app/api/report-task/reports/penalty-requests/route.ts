@@ -5,7 +5,7 @@ import { loadScorePeriodConfig } from "@/lib/score-period-config";
 import { ADMIN_PERMS } from "@/modules/admin/permissions";
 import { readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
 import { listDirectory } from "@/modules/report_task/lib/db/employee-directory";
-import { listCeoUserIds, createPenaltyRequest, listPenaltyRequests, settleApprovedLateRequests } from "@/modules/report_task/lib/db/report-penalty-requests";
+import { carryLateRequestsToMissed, listCeoUserIds, createPenaltyRequest, listPenaltyRequests, settleApprovedLateRequests } from "@/modules/report_task/lib/db/report-penalty-requests";
 import type { AppNotification } from "@/modules/report_task/store/notification-store";
 
 /**
@@ -34,6 +34,7 @@ export async function GET(request: Request) {
   }
 
   await settleApprovedLateRequests(session.orgId);
+  await carryLateRequestsToMissed(session.orgId);
   const [all, users] = await Promise.all([listPenaltyRequests(session.orgId), listDirectory(session.orgId)]);
   const nameById = new Map(users.map((u) => [u.id, u.name] as const));
   const scoped = canSeeAll ? all : all.filter((r) => r.userId === session.userId || r.submittedBy === session.userId);

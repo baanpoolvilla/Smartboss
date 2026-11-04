@@ -47,7 +47,7 @@ import { AssignShiftForm, type CurrentPattern } from "../../settings/assign-shif
 import { EmployeeDayOffCalendar } from "./employee-day-off-calendar";
 import { EnrollFingerprintForm } from "../../settings/devices/enroll-fingerprint-form";
 import { DayOffQuotaForm, LegacyStandingNotice } from "./day-off-quota-form";
-import { eventDay, listUserEvents, PERFORMANCE_CATEGORIES, buildPeriodScorecards, listUserPeriodEvents } from "@/lib/performance";
+import { eventDay, listUserEvents, PERFORMANCE_CATEGORIES, buildPeriodScorecards, listUserPeriodEvents, withoutSupersededLateReports } from "@/lib/performance";
 import { monthDisplay } from "@/lib/performance-month";
 import { formatSatang } from "@/modules/hr/lib/commission";
 import { loadCommissionMonth } from "@/modules/hr/lib/commission-data";
@@ -344,12 +344,12 @@ export default async function EmployeeDetailPage({
          */
         const scoreEvents =
           tab === "score" && scorecard !== null
-            ? await listUserEvents(session.orgId, scorecard.userId, { limit: 15 })
+            ? withoutSupersededLateReports(await listUserEvents(session.orgId, scorecard.userId, { limit: 15 }))
             : [];
         // ทุกเหตุการณ์ของเดือนนี้ — ให้กดขยายแต่ละหมวดใน "เสียคะแนนเพราะ" แล้วเห็นครบทุกวัน
         const monthEvents =
           tab === "score" && scorecard !== null
-            ? await listUserPeriodEvents(session.orgId, scorecard.userId, period, scorePeriodOf(period, now))
+            ? withoutSupersededLateReports(await listUserPeriodEvents(session.orgId, scorecard.userId, period, scorePeriodOf(period, now)))
             : [];
 
         // ค่าคอมเดือนนี้ของคนนี้ — คิดจากชุดเดียวกับแท็บค่าคอม ยอดจึงตรงกันเสมอ

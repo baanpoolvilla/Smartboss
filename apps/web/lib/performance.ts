@@ -378,6 +378,44 @@ export function reversedChecker(events: ReversibleEvent[]): (e: ReversibleEvent)
     Boolean(e.refType && e.refId && keys.has(`${e.userId}|${e.category}|${e.refType}|${e.refId}`));
 }
 
+/**
+ * "สาย" −1 ชั่วคราวที่กลายเป็น "ไม่ส่ง" −2 ของรอบเดียวกัน: เลยรอบส่งยังไม่ส่ง หัก −1 ไว้ก่อน พอเลยเวลาปิดรับ
+ * ระบบคืน +1 แล้วหัก −2 แทน — เป็นการเปลี่ยนสถานะ ไม่ใช่ "ได้คะแนนคืน" จึงไม่แสดงให้งง
+ * (ผู้ใช้ 4/11/2569 "สายต้องเปลี่ยนเป็นไม่ส่ง ทำไมมี 2 อัน") · คะแนนรวมไม่เปลี่ยน: −1 กับ +1 หักล้างกันอยู่แล้ว
+ * ประวัติยังอยู่ครบในฐานข้อมูล · ต้องเห็นครบทั้งสามรายการในชุดเดียวกันถึงซ่อน
+ */
+export function supersededLateReportIds(
+  events: { id: string; userId: string; category: string; refType: string | null; refId: string | null }[],
+): Set<string> {
+  const key = (e: { userId: string; refId: string | null }) => `${e.userId}|${e.refId}`;
+  const lateDock = new Map<string, string>();
+  const lateUndo = new Map<string, string>();
+  const missed = new Set<string>();
+  for (const e of events) {
+    if (!e.refId) continue;
+    if (e.category === "report_missed" && e.refType === "report_round") missed.add(key(e));
+    if (e.category === "report_late" && e.refType === "report_round") lateDock.set(key(e), e.id);
+    if (e.category === "report_late" && e.refType === "report_round_undo") lateUndo.set(key(e), e.id);
+  }
+  const out = new Set<string>();
+  for (const [k, dockId] of lateDock) {
+    const undoId = lateUndo.get(k);
+    if (undoId && missed.has(k)) {
+      out.add(dockId);
+      out.add(undoId);
+    }
+  }
+  return out;
+}
+
+/** ตัด "สาย" ที่กลายเป็น "ไม่ส่ง" ออกจากรายการที่แสดง (supersededLateReportIds) */
+export function withoutSupersededLateReports<
+  T extends { id: string; userId: string; category: string; refType: string | null; refId: string | null },
+>(events: T[]): T[] {
+  const hidden = supersededLateReportIds(events);
+  return hidden.size === 0 ? events : events.filter((e) => !hidden.has(e.id));
+}
+
 export interface UserScorecard {
   userId: string;
   name: string;
@@ -492,6 +530,7 @@ export async function buildScorecards(
   ]);
   const events = rawEvents;
   const isReversed = reversedChecker(events);
+  const superseded = supersededLateReportIds(events);
 
   const byUser = new Map<string, UserScorecard>();
   for (const u of users) {
@@ -529,7 +568,7 @@ export async function buildScorecards(
     const prev = cats.get(row) ?? { points: 0, count: 0 };
     cats.set(row, { points: prev.points + points, count: prev.count + (counts ? 1 : 0) });
 
-    if (!isReversalEvent(e) && isReversed(e)) {
+    if (!isReversalEvent(e) && isReversed(e) && !superseded.has(e.id)) {
       if (!refundTotals.has(e.userId)) refundTotals.set(e.userId, new Map());
       const r = refundTotals.get(e.userId)!;
       r.set(displayCategory(e), (r.get(displayCategory(e)) ?? 0) + 1);

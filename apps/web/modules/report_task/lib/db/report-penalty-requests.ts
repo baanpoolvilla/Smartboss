@@ -101,28 +101,30 @@ export async function createPenaltyRequest(
     return { error: "กรุณาระบุเหตุผล" };
   }
 
-  const event = await prisma.performanceEvent.findFirst({
+  // รอบเดียวกันมีได้ทั้ง "สาย" และ "ไม่ส่ง" ใต้ refId เดียวกัน: เลยรอบส่ง −1 ไว้ก่อน พอเลยเวลาปิดรับ
+  // ระบบคืน "สาย" แล้วหัก "ไม่ส่ง" −2 แทน ⇒ ต้องดูทีละหมวด ไม่งั้น −2 ที่ยังหักอยู่ถูกมองว่าคืนแล้ว ยื่นคำร้องไม่ได้
+  const rows = await prisma.performanceEvent.findMany({
     where: {
       orgId,
       userId: input.userId,
       source: "report_task",
-      refType: "report_round",
+      refType: { in: ["report_round", "report_round_undo"] },
       category: { in: ["report_missed", "report_late"] },
       refId: input.refId,
     },
-    select: { category: true, points: true, createdAt: true },
+    select: { category: true, points: true, refType: true },
   });
-  if (!event) return { error: "ไม่พบรายการหักคะแนนนี้" };
+  const originals = rows.filter((r) => r.refType === "report_round");
+  if (originals.length === 0) return { error: "ไม่พบรายการหักคะแนนนี้" };
   // รอบต่อรอบ — ยื่นได้ถึงวันตัดรอบเกรด (ปกติวันที่ 25) ของรอบที่โดนหัก (penalty-request-window.ts)
   if (!penaltyRequestOpen(parsed.day, await loadScorePeriodConfig(orgId))) {
     return { error: "ปิดรับคำร้องของรอบนั้นแล้ว — ขอแก้คะแนนได้ถึง 23:59 ของวันตัดรอบเกรดเท่านั้น" };
   }
 
-  const undone = await prisma.performanceEvent.findFirst({
-    where: { orgId, source: "report_task", refType: "report_round_undo", refId: input.refId },
-    select: { refId: true },
-  });
-  if (undone) return { error: "รายการนี้ถูกคืนคะแนนไปแล้ว ไม่ต้องยื่นคำร้องอีก" };
+  const undoneCategories = new Set(rows.filter((r) => r.refType === "report_round_undo").map((r) => r.category));
+  const active = originals.filter((r) => !undoneCategories.has(r.category));
+  const event = active.find((r) => r.category === "report_missed") ?? active[0];
+  if (!event) return { error: "รายการนี้ถูกคืนคะแนนไปแล้ว ไม่ต้องยื่นคำร้องอีก" };
 
   for (let attempt = 0; attempt < 4; attempt++) {
     const { data: existing, version } = await readStore<PenaltyRequest[]>(orgId, KEY);
@@ -161,6 +163,7 @@ export async function decidePenaltyRequest(
   decision: "approved" | "rejected",
   decidedBy: string
 ): Promise<{ error: string } | { error: null; request: PenaltyRequest }> {
+  await carryLateRequestsToMissed(orgId);
   for (let attempt = 0; attempt < 4; attempt++) {
     const { data: existing, version } = await readStore<PenaltyRequest[]>(orgId, KEY);
     const list = existing ?? [];
@@ -230,10 +233,52 @@ async function markLatePostOnTime(orgId: string, request: PenaltyRequest): Promi
   }
 }
 
-/** คืนคะแนนของคำร้องที่อนุมัติแล้ว — event ตรงข้าม "report_round_undo" · มีอยู่แล้วไม่ออกซ้ำ */
+/**
+ * คำร้องที่ยื่นตอนรอบนั้นยังเป็น "สาย" −1 แล้วระหว่างรอ CEO ระบบเปลี่ยนเป็น "ไม่ส่ง" −2 — ย้ายคำร้องตามไปที่ −2
+ * ไม่งั้นอนุมัติแล้วไม่มีอะไรให้คืน (สายคืนไปแล้ว) คะแนนยัง −2 ทั้งที่ขึ้นว่าอนุมัติ
+ * และแถว "ไม่ส่ง" ก็ยื่นใหม่ไม่ได้ ติด "มีคำร้องรออยู่แล้ว"
+ */
+export async function carryLateRequestsToMissed(orgId: string): Promise<void> {
+  const { data } = await readStore<PenaltyRequest[]>(orgId, KEY);
+  const candidates = (data ?? []).filter((r) => r.status === "pending" && r.category === "report_late");
+  if (candidates.length === 0) return;
+
+  const events = await prisma.performanceEvent.findMany({
+    where: {
+      orgId,
+      source: "report_task",
+      category: { in: ["report_missed", "report_late"] },
+      refType: { in: ["report_round", "report_round_undo"] },
+      refId: { in: candidates.map((r) => r.refId) },
+    },
+    select: { refId: true, category: true, refType: true, points: true },
+  });
+  const has = (refId: string, category: string, refType: string) =>
+    events.find((e) => e.refId === refId && e.category === category && e.refType === refType);
+  const missedPoints = new Map<string, number>();
+  for (const r of candidates) {
+    const missed = has(r.refId, "report_missed", "report_round");
+    if (missed && !has(r.refId, "report_missed", "report_round_undo") && has(r.refId, "report_late", "report_round_undo")) {
+      missedPoints.set(r.refId, Number(missed.points));
+    }
+  }
+  if (missedPoints.size === 0) return;
+
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const { data: existing, version } = await readStore<PenaltyRequest[]>(orgId, KEY);
+    const next = (existing ?? []).map((r) => {
+      const points = r.status === "pending" && r.category === "report_late" ? missedPoints.get(r.refId) : undefined;
+      return points === undefined ? r : { ...r, category: "report_missed" as const, points };
+    });
+    const result = await writeStore(orgId, KEY, next, version);
+    if (result.ok) return;
+  }
+}
+
+/** คืนคะแนนของคำร้องที่อนุมัติแล้ว — event ตรงข้าม "report_round_undo" · มีอยู่แล้วไม่ออกซ้ำ (ดูเฉพาะหมวดของคำร้อง) */
 async function refundRequest(orgId: string, request: PenaltyRequest, decidedBy: string | undefined) {
   const undone = await prisma.performanceEvent.findFirst({
-    where: { orgId, source: "report_task", refType: "report_round_undo", refId: request.refId },
+    where: { orgId, source: "report_task", category: request.category, refType: "report_round_undo", refId: request.refId },
     select: { refId: true },
   });
   if (undone) return;
