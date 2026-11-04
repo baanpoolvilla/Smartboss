@@ -9,6 +9,7 @@ import { notifyUser } from "@/modules/maintenance/data/notify";
 import { postWorkOrderCard } from "@/modules/chat/data/task-cards";
 import {
   dueRounds,
+  nextRound,
   PILEUP_MIN_ROUNDS,
   pmUsesRounds,
   roundDueAt,
@@ -146,6 +147,34 @@ export async function generateRoundWorkOrders(orgs: Map<string, RoundOrg>, pmIds
     });
   }
   return { created };
+}
+
+/** ใบรอบที่ยังไม่ปิดของแผนนี้ เรียงตามรอบ — ใบที่รวมหลายแผนไม่นับ เพราะเลื่อนตามแผนเดียวไม่ได้ */
+export function openRoundsOfPm(orgId: string, pmId: string) {
+  return prisma.workOrder.findMany({
+    where: { orgId, pmScheduleId: pmId, status: { in: OPEN }, pmRoundDate: { not: null } },
+    orderBy: { pmRoundDate: "asc" },
+    select: { id: true, description: true },
+  });
+}
+
+/**
+ * วันรอบใหม่ของใบที่เปิดอยู่เมื่อแก้วันที่ในแผน: ใบแรก = วันที่เลือก ใบถัดไปไล่ตามความถี่
+ * คืนรอบถัดไปให้แผนด้วย ใบที่เปิดแล้วจึงไม่ถูกเปิดซ้ำอีกรอบ
+ */
+export function roundsFromDate(
+  pm: { frequency: string; roundsPerYear: number | null },
+  start: Date,
+  count: number,
+): { rounds: Date[]; nextDueDate: Date; anchorDate: Date } {
+  const rounds: Date[] = [];
+  let cur = { nextDueDate: start, anchorDate: start as Date | null, frequency: pm.frequency, roundsPerYear: pm.roundsPerYear };
+  for (let i = 0; i < count; i++) {
+    rounds.push(cur.nextDueDate);
+    const n = nextRound(cur);
+    cur = { ...cur, nextDueDate: n.nextDue, anchorDate: n.anchor };
+  }
+  return { rounds, nextDueDate: cur.nextDueDate, anchorDate: cur.anchorDate ?? start };
 }
 
 /**

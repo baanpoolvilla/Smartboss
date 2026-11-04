@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { ListChecks } from "lucide-react";
-import { requireOrg, hasPermission } from "@smartboss/auth";
+import { requireOrg, hasPermission, canViewAll } from "@smartboss/auth";
 import { loadPerformanceSettings } from "@/lib/performance";
 import { PmRulesNote } from "@/modules/maintenance/components/pm-rules-note";
 import { prisma } from "@smartboss/database";
@@ -13,6 +13,7 @@ import {
 import { listAssets } from "@/modules/maintenance/data/assets";
 import { listOrgUsers, userNameMap } from "@/modules/maintenance/data/users";
 import { fmtThaiDate, fmtThaiDateTime, toDateInput } from "@/modules/maintenance/lib/format";
+import { canEditDueDate } from "@/modules/maintenance/lib/due-request-access";
 import {
   freqLabel,
   pmMode,
@@ -110,6 +111,13 @@ export default async function PmListPage({
     requiresExpense: s.requiresExpense,
     hasPendingWorkOrder: pending.has(s.id),
     pendingWorkOrderId: pending.get(s.id) ?? null,
+    firstOpenRoundInput: (() => {
+      const first = pendingWos
+        .filter((w) => w.pmRoundDate && w.pmScheduleId === s.id)
+        .sort((a, b) => a.pmRoundDate!.getTime() - b.pmRoundDate!.getTime())[0];
+      return first ? toDateInput(first.pmRoundDate!) : null;
+    })(),
+    canMoveRounds: canEditDueDate({ userId: session.userId, viewAll: canViewAll(session) }, { createdBy: s.createdBy }),
     openRoundLabels: pendingWos
       .filter((w) => w.pmRoundDate && (w.pmScheduleId === s.id || w.pmScheduleIds.includes(s.id)))
       .sort((a, b) => a.pmRoundDate!.getTime() - b.pmRoundDate!.getTime())

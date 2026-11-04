@@ -107,6 +107,10 @@ export interface PmRow {
   pendingWorkOrderId: string | null;
   /** รอบที่เปิดใบแล้วและยังไม่ปิด เรียงตามวัน — nextDueLabel คือรอบถัดจากนี้ ไม่ใช่วันครบกำหนดของใบที่เปิดอยู่ */
   openRoundLabels: string[];
+  /** YYYY-MM-DD ของใบที่เปิดอยู่ใบแรก — มีค่านี้ ช่องวันที่ในฟอร์มแก้คือวันครบกำหนดของใบนั้น */
+  firstOpenRoundInput: string | null;
+  /** คนสร้างแผนหรือผู้ดูแล — แก้วันแล้วใบที่เปิดอยู่เลื่อนตาม */
+  canMoveRounds: boolean;
 }
 
 /** ลิงก์สร้างใบงานจาก PM — คัดลอกรูปแบบ description ของเดิมทั้งหมด */
@@ -615,7 +619,7 @@ export function PmCalendar({
           <form id="pm-edit" action={updateAction} className="flex flex-col gap-3">
             <input type="hidden" name="id" value={editing.id} />
             {/* วันที่เห็นตอนเปิดฟอร์ม — เซิร์ฟเวอร์เปลี่ยนวันกำหนดเฉพาะเมื่อผู้ใช้แก้ช่องนี้จริง (ดู updatePmAction) */}
-            <input type="hidden" name="originalNextDueDate" value={editing.nextDueInput} />
+            <input type="hidden" name="originalNextDueDate" value={editing.firstOpenRoundInput ?? editing.nextDueInput} />
             <label className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-(--ink)">ชื่องาน PM</span>
               <input
@@ -644,20 +648,19 @@ export function PmCalendar({
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-(--ink)">
-                {editing.openRoundLabels.length > 0 ? "รอบถัดไปที่จะเปิดใบ" : "วันกำหนดถัดไป"}
+                {editing.firstOpenRoundInput ? "ครบกำหนดรอบนี้" : "วันกำหนดถัดไป"}
               </span>
               <input
                 type="date"
                 name="nextDueDate"
-                defaultValue={editing.nextDueInput}
+                defaultValue={editing.firstOpenRoundInput ?? editing.nextDueInput}
+                disabled={!!editing.firstOpenRoundInput && !editing.canMoveRounds}
                 // PM ที่เลยกำหนดอยู่แล้วต้องบันทึกวันเดิมได้ (แก้แค่ผู้รับผิดชอบ) — ห้ามแค่เลือกวันในอดีตใหม่
-                min={editing.nextDueInput < todayBangkok() ? editing.nextDueInput : todayBangkok()}
+                min={(editing.firstOpenRoundInput ?? editing.nextDueInput) < todayBangkok() ? (editing.firstOpenRoundInput ?? editing.nextDueInput) : todayBangkok()}
                 className="h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm text-(--ink)"
               />
               {editing.openRoundLabels.length > 0 && (
-                <span className="text-xs text-(--ink-soft)" data-testid="pm-open-rounds-hint">
-                  รอบ {editing.openRoundLabels.join(", ")} เปิดใบแล้ว ช่องนี้คือรอบถัดจากนั้น · ถ้าเลือกวันก่อนหน้านี้ ระบบจะนับรอบใหม่จากวันนั้นและเปิดใบเพิ่ม ใบเดิมไม่เปลี่ยนตาม
-                </span>
+                <span className="text-xs text-(--ink-soft)" data-testid="pm-open-rounds-hint">{editing.canMoveRounds ? `ใบรอบ ${editing.openRoundLabels.join(", ")} เปิดอยู่ เปลี่ยนวันแล้วใบเลื่อนตาม รอบต่อไปนับจากวันที่เลือก` : `ใบรอบ ${editing.openRoundLabels.join(", ")} เปิดอยู่ แก้วันที่ได้เฉพาะคนสร้างแผนหรือผู้ดูแล ถ้าทำไม่ทันให้กดขอเลื่อนในใบงาน`}</span>
               )}
             </label>
             <label className="flex flex-col gap-1.5">

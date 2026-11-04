@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireOrg, hasPermission, audit } from "@smartboss/auth";
+import { requireOrg, hasPermission, audit, canViewAll } from "@smartboss/auth";
 import { prisma } from "@smartboss/database";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import {
@@ -21,7 +21,10 @@ import { getAsset } from "@/modules/maintenance/data/assets";
 import { roundsPerYearOptions } from "@/modules/maintenance/lib/pm-schedule";
 import { deleteNotificationsByReference } from "@/modules/maintenance/data/notify";
 import { isPastDay } from "@/modules/maintenance/lib/no-past-date";
-import { openRoundsNow, pmIsRoundMode } from "@/modules/maintenance/data/pm-rounds";
+import { openRoundsNow, openRoundsOfPm, pmIsRoundMode, roundsFromDate } from "@/modules/maintenance/data/pm-rounds";
+import { canEditDueDate } from "@/modules/maintenance/lib/due-request-access";
+import { fmtThaiDate } from "@/modules/maintenance/lib/format";
+import { editDueDateAction } from "@/app/(shell)/maintenance/work-orders/due-request-actions";
 
 function parseDate(s: string): Date {
   return new Date(s + "T00:00:00.000Z");
@@ -174,7 +177,7 @@ export async function updatePmAction(formData: FormData) {
   // บนจอจะถูกบันทึกทับวันที่ระบบเพิ่งเลื่อนให้ ⇒ PM ถึงกำหนดอีกรอบ เช้าวันถัดไประบบเปิดใบงาน
   // ซ้ำ ("รอบ 14 วันแต่มาก่อน") จึงเปลี่ยนวันเฉพาะเมื่อช่องนี้ถูกแก้ต่างจากที่เห็นตอนเปิดฟอร์ม
   const originalNextDueDate = formData.get("originalNextDueDate");
-  const dueChanged =
+  let dueChanged =
     !!nextDueDate && (originalNextDueDate === null || nextDueDate !== String(originalNextDueDate).trim());
   // เลื่อนวันกำหนดไปอยู่ในอดีตไม่ได้ (วันเดิมที่เลยไปแล้วส่งกลับมาเหมือนเดิมได้ — dueChanged = false)
   if (dueChanged && isPastDay(nextDueDate)) throw new Error("วันกำหนดถัดไปย้อนหลังไม่ได้");
@@ -184,8 +187,17 @@ export async function updatePmAction(formData: FormData) {
   if (!assignedTo) throw new Error("เลือกผู้รับผิดชอบของแผน PM");
   const before = await prisma.pmSchedule.findFirst({
     where: { orgId, id },
-    select: { nextDueDate: true, frequency: true, assignedTo: true, title: true, propertyId: true },
+    select: { nextDueDate: true, frequency: true, roundsPerYear: true, assignedTo: true, title: true, propertyId: true, createdBy: true },
   });
+
+  // ใบเปิดอยู่: แก้วันที่แล้วใบเลื่อนตาม (ผู้ใช้ 4/11/2569) สิทธิ์เดียวกับปุ่มแก้กำหนดส่ง — คนทำงานต้องขอเลื่อนในใบงาน
+  // ไม่งั้นแก้แผนเลี่ยงการอนุมัติและการหักคะแนนได้ ("กันคนเหลี่ยม")
+  const actor = await requireOrg();
+  const openRounds = dueChanged && before ? await openRoundsOfPm(orgId, id) : [];
+  if (openRounds.length > 0 && !canEditDueDate({ userId: actor.userId, viewAll: canViewAll(actor) }, { createdBy: before?.createdBy ?? null })) {
+    dueChanged = false;
+  }
+  const moveRounds = dueChanged && openRounds.length > 0;
 
   await updatePmSchedule(orgId, id, {
     ...(title ? { title } : {}),
@@ -224,6 +236,28 @@ export async function updatePmAction(formData: FormData) {
     assignedTo: (assignedTo || null) !== (before?.assignedTo ?? null) ? { from: before?.assignedTo ?? null, to: assignedTo || null } : undefined,
     title: title && before && title !== before.title ? { from: before.title, to: title } : undefined,
   });
+  if (moveRounds) {
+    const plan = roundsFromDate(
+      { frequency: frequency || before!.frequency, roundsPerYear: before!.roundsPerYear },
+      parseDate(nextDueDate),
+      openRounds.length,
+    );
+    for (const [i, wo] of openRounds.entries()) {
+      const round = plan.rounds[i]!;
+      // แก้กำหนดส่งผ่านตัวเดียวกับปุ่มในใบงาน — มีบันทึกในใบ แจ้งผู้รับผิดชอบ และเคลียร์คำขอเลื่อนที่ค้าง
+      const r = await editDueDateAction(wo.id, round.toISOString().slice(0, 10), "ตามวันที่ในแผน PM");
+      if (r.error) throw new Error(r.error);
+      await prisma.workOrder.update({
+        where: { id: wo.id },
+        data: {
+          pmRoundDate: round,
+          description: wo.description?.replace(/รอบครบกำหนด .*/, `รอบครบกำหนด ${fmtThaiDate(round)}`) ?? wo.description,
+        },
+      });
+    }
+    await prisma.pmSchedule.update({ where: { id }, data: { nextDueDate: plan.nextDueDate, anchorDate: plan.anchorDate } });
+    revalidatePath("/maintenance/work-orders");
+  }
   if (dueChanged || (frequency && frequency !== before?.frequency)) await openRoundsNow(orgId, [id]);
 
   revalidatePath("/maintenance/pm");

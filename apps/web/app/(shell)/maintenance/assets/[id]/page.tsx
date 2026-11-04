@@ -10,7 +10,8 @@ import {
   CalendarClock,
   ClipboardList,
 } from "lucide-react";
-import { requireOrg, hasPermission } from "@smartboss/auth";
+import { requireOrg, hasPermission, canViewAll } from "@smartboss/auth";
+import { canEditDueDate } from "@/modules/maintenance/lib/due-request-access";
 import { prisma } from "@smartboss/database";
 import { Card } from "@smartboss/ui/components/card";
 import { Button } from "@smartboss/ui/components/button";
@@ -308,6 +309,8 @@ export default async function AssetDetailPage({
                     users={users}
                     today={today}
                     openRoundLabels={openWos.filter((w) => w.pmRoundDate).map((w) => fmtDate(w.pmRoundDate))}
+                    firstOpenRound={[...openWos].filter((w) => w.pmRoundDate).sort((a, b) => a.pmRoundDate!.getTime() - b.pmRoundDate!.getTime())[0]?.pmRoundDate ?? null}
+                    canMoveRounds={canEditDueDate({ userId: session.userId, viewAll: canViewAll(session) }, { createdBy: s.createdBy })}
                   />
                 )}
                 {canManagePm && (
@@ -355,13 +358,19 @@ function PmEditForm({
   users,
   today,
   openRoundLabels,
+  firstOpenRound,
+  canMoveRounds,
 }: {
   s: { id: string; title: string; frequency: string; nextDueDate: Date; assignedTo: string | null; requiresExpense: boolean; description: string | null };
   users: { id: string; name: string }[];
   today: string;
   openRoundLabels: string[];
+  firstOpenRound: Date | null;
+  canMoveRounds: boolean;
 }) {
-  const due = toDateInput(s.nextDueDate);
+  // มีใบเปิดอยู่ ช่องนี้คือวันครบกำหนดของใบนั้น ไม่ใช่รอบถัดไปที่ยังไม่เปิด
+  const due = toDateInput(firstOpenRound ?? s.nextDueDate);
+  const locked = !!firstOpenRound && !canMoveRounds;
   return (
     <details className="mt-2">
       <summary className="inline-flex cursor-pointer items-center gap-1 text-xs text-(--brand-green)">
@@ -383,12 +392,10 @@ function PmEditForm({
           </select>
         </label>
         <label className="flex flex-col gap-1 text-xs text-(--ink-soft)">
-          {openRoundLabels.length > 0 ? "รอบถัดไปที่จะเปิดใบ" : "วันกำหนดถัดไป"}
-          <input type="date" name="nextDueDate" defaultValue={due} min={due < today ? due : today} className={fieldClass} />
+          {firstOpenRound ? "ครบกำหนดรอบนี้" : "วันกำหนดถัดไป"}
+          <input type="date" name="nextDueDate" defaultValue={due} min={due < today ? due : today} disabled={locked} className={fieldClass} />
           {openRoundLabels.length > 0 && (
-            <span data-testid="pm-open-rounds-hint">
-              รอบ {openRoundLabels.join(", ")} เปิดใบแล้ว ช่องนี้คือรอบถัดจากนั้น · ถ้าเลือกวันก่อนหน้านี้ ระบบจะนับรอบใหม่จากวันนั้นและเปิดใบเพิ่ม ใบเดิมไม่เปลี่ยนตาม
-            </span>
+            <span data-testid="pm-open-rounds-hint">{locked ? `ใบรอบ ${openRoundLabels.join(", ")} เปิดอยู่ แก้วันที่ได้เฉพาะคนสร้างแผนหรือผู้ดูแล ถ้าทำไม่ทันให้กดขอเลื่อนในใบงาน` : `ใบรอบ ${openRoundLabels.join(", ")} เปิดอยู่ เปลี่ยนวันแล้วใบเลื่อนตาม รอบต่อไปนับจากวันที่เลือก`}</span>
           )}
         </label>
         <label className="flex flex-col gap-1 text-xs text-(--ink-soft) sm:col-span-2">
