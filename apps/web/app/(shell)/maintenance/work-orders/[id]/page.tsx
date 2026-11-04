@@ -449,7 +449,7 @@ export default async function WorkOrderDetailPage({
                 <span>ครบกำหนด {fmtThaiDate(wo.pmRoundDate)}</span>
                 {isOpenOrRunning && (
                   <span className="text-[12.5px] font-normal text-(--ink-soft)">
-                    {`เลยกำหนดส่งแล้วหัก ${pmMissedPoints} คะแนนทันที · ทำไม่ทันให้กด "ขอเลื่อนกำหนดส่ง" พร้อมเหตุผลก่อนถึงกำหนด`}
+                    {`ถ้ามีใบชื่อเดียวกันหลายใบ คือคนละรอบ ต้องปิดทุกใบ · เลยกำหนดส่งแล้วหัก ${pmMissedPoints} คะแนนทันที · ทำไม่ทันให้กด "ขอเลื่อนกำหนดส่ง" พร้อมเหตุผลก่อนถึงกำหนด`}
                   </span>
                 )}
               </span>
