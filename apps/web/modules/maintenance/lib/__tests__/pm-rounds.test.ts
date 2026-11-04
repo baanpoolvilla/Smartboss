@@ -1,10 +1,23 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { dueRounds, overdueGraceDays, pmUsesRounds, roundBeforeStart, roundDueAt, todayBkkDate } from "../pm-rounds";
+import { dueRounds, overdueGraceDays, pmUsesRounds, roundBeforeStart, roundDueAt, shouldRemindRound, todayBkkDate } from "../pm-rounds";
 import { workOrderDockRevokeReason } from "../dock-validity";
 
 const d = (s: string) => new Date(`${s}T00:00:00.000Z`);
+
+test("เตือนใบรอบก่อน 14, 10, 7, 5, 3, 1 วัน วันครบกำหนด และทุกวันหลังเลยกำหนด", () => {
+  const on = [...Array(16).keys()].filter((n) => shouldRemindRound(n, false));
+  assert.deepEqual(on, [0, 1, 3, 5, 7, 10, 14]);
+  assert.equal(shouldRemindRound(-1, false), true);
+  assert.equal(shouldRemindRound(-30, false), true);
+});
+
+test("ใบที่เปิดวันนี้แจ้งตอนเปิดแล้ว ไม่เตือนซ้ำวันเดียวกัน แต่เลยกำหนดยังเตือน", () => {
+  assert.equal(shouldRemindRound(14, true), false);
+  assert.equal(shouldRemindRound(7, true), false);
+  assert.equal(shouldRemindRound(-1, true), true);
+});
 const monthly = { nextDueDate: d("2026-12-01"), anchorDate: d("2026-12-01"), frequency: "monthly", roundsPerYear: null };
 
 test("ยังไม่ถึง 14 วันก่อนครบกำหนด — ยังไม่เปิดใบ", () => {

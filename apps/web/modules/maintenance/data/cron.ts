@@ -8,7 +8,7 @@ import { fmtThaiDate } from "@/modules/maintenance/lib/format";
 import { notifyUser, notifyUsers, propertyCaretaker } from "@/modules/maintenance/data/notify";
 import { logActivity } from "@/modules/maintenance/data/activity";
 import { generateRoundWorkOrders, loadRoundOrgs } from "@/modules/maintenance/data/pm-rounds";
-import {
+import { ROUND_REMIND_DAYS, shouldRemindRound,
   overdueGraceDays,
   pmUsesRounds,
   roundBeforeStart,
@@ -305,7 +305,7 @@ export async function notifyDuePmSchedules(): Promise<{ notified: number }> {
     notified++;
   }
 
-  notified += await notifyDueRoundWorkOrders([...roundOrgs.keys()], soon);
+  notified += await notifyDueRoundWorkOrders([...roundOrgs.keys()]);
   notified += await notifyDuePrivateWorkOrders(soon);
   notified += await notifyOverdueWorkOrders(soon);
   return { notified };
@@ -386,20 +386,21 @@ async function notifyDuePrivateWorkOrders(soon: Date): Promise<number> {
 }
 
 /** เตือนใบรอบ PM ตามกำหนดส่งของใบ (เลื่อนแล้วก็ตามวันใหม่) — เกณฑ์วันเดียวกับ PM แบบเดิม */
-async function notifyDueRoundWorkOrders(orgIds: string[], soon: Date): Promise<number> {
+async function notifyDueRoundWorkOrders(orgIds: string[]): Promise<number> {
   if (orgIds.length === 0) return 0;
+  const horizon = new Date(Date.now() + (Math.max(...ROUND_REMIND_DAYS) + 1) * DAY_MS);
   const wos = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
     prisma.workOrder.findMany({
       where: {
         orgId: { in: orgIds },
         status: { in: ["open", "in_progress"] },
         pmRoundDate: { not: null },
-        dueDate: { lte: soon },
+        dueDate: { lte: horizon },
         // ⚠ { not: "waived" } อย่างเดียวตัดแถว null ทิ้งด้วย (SQL <> กับ null) — ใบปกติจะไม่ถูกเตือนเลย
         OR: [{ overdueScore: null }, { overdueScore: { not: "waived" } }],
       },
       select: {
-        id: true, orgId: true, code: true, status: true, title: true, dueDate: true, pmRoundDate: true, assignedTo: true, ccUserIds: true,
+        id: true, orgId: true, code: true, status: true, title: true, dueDate: true, pmRoundDate: true, assignedTo: true, ccUserIds: true, createdAt: true,
         propertyId: true, property: { select: { name: true } },
       },
     })
@@ -409,7 +410,7 @@ async function notifyDueRoundWorkOrders(orgIds: string[], soon: Date): Promise<n
   for (const wo of wos) {
     const dueDay = new Date(wo.dueDate!.getTime() + 7 * 3600e3).toISOString().slice(0, 10);
     const days = Math.round((Date.parse(dueDay) - Date.parse(today)) / 86_400_000);
-    if (!shouldNotifyPmToday(days)) continue;
+    if (!shouldRemindRound(days, ymd(todayBkkDate(wo.createdAt)) === today)) continue;
     const statusText = days < 0 ? `⚠️ เกินกำหนด ${-days} วัน` : days === 0 ? "⏰ ถึงกำหนดวันนี้" : `⏰ อีก ${days} วัน`;
     const head = days <= 0 ? "🔴" : "🟡";
     const house = wo.property?.name ?? "-";

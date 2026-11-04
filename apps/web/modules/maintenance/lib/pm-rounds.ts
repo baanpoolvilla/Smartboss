@@ -84,6 +84,18 @@ export function dueRounds(
   return { rounds, nextDueDate: cur.nextDueDate, anchorDate: cur.anchorDate };
 }
 
+/** เตือนใบรอบก่อนครบกำหนดกี่วัน (ผู้ใช้ 4/11/2569) */
+export const ROUND_REMIND_DAYS = [14, 10, 7, 5, 3, 1, 0];
+
+/**
+ * วันนี้ต้องเตือนใบรอบนี้ไหม — เลยกำหนดเตือนทุกวันจนกว่าจะปิด
+ * ใบที่เพิ่งเปิดวันนี้ได้แจ้งตอนเปิดไปแล้ว ไม่เตือนซ้ำในวันเดียวกัน
+ */
+export function shouldRemindRound(daysUntilDue: number, openedToday: boolean): boolean {
+  if (daysUntilDue < 0) return true;
+  return !openedToday && ROUND_REMIND_DAYS.includes(daysUntilDue);
+}
+
 /** ผ่อนผันของใบงานเลยกำหนด — ใบรอบ PM ไม่มีผ่อนผัน ("เลยวันครบกำหนดหักเลย") */
 export function overdueGraceDays(wo: { pmRoundDate?: Date | null }, workOrderGraceDays: number): number {
   return wo.pmRoundDate ? 0 : workOrderGraceDays;
