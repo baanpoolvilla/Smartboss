@@ -78,7 +78,8 @@ export function workOrderDockRevokeReason(
   const lapse = addDays(wo.dueDate, overdueGraceDays(wo, st.workOrderGraceDays));
   // ทุกใบ (ผู้ใช้ 4/11/2569 "กันคนเหลี่ยม"): เลื่อนกำหนดส่งหลังโดนหักไปแล้ว (อนุมัติช้า/แก้วันทีหลัง) = หักคงไว้ แบบงานบนบอร์ด (ผู้ใช้ 2/11/2569
   // "โดนหักไปเลยแบบ task") — เลยกำหนดไปแล้วตอนนั้น ต้องขอเลื่อนให้ได้อนุมัติก่อนถึงกำหนด · ใบงานอื่นคืนเหมือนเดิม
-  if (lapse >= dock.occurredAt) return null;
+  // คะแนนใหม่ลงเวลา = เวลาหมดกำหนดเดิมพอดี ใช้ > ไม่ใช่ >= ไม่งั้นใบที่กำหนดไม่เปลี่ยนจะข้ามเงื่อนไขคืนคะแนนข้างล่างทั้งหมด
+  if (lapse > dock.occurredAt) return null;
   if (wo.completedAt && wo.completedAt <= lapse) return "ปิดงานทันกำหนด";
   if (st.scoringStartDate && lapse < st.scoringStartDate) return "เลยกำหนดก่อนวันเริ่มนับคะแนน";
   if (isBacklog(lapse, dock.occurredAt)) return "งานค้างเก่า (เลยกำหนดก่อนระบบคะแนนเห็น)";

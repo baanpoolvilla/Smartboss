@@ -101,3 +101,28 @@ test("ยกเลิกผ่อนผัน PM: คะแนนเก่าท
   const same = { ...pm, nextDueDate: new Date("2026-09-10T00:00:00Z") };
   assert.equal(pmDockRevokeReason(old, same, [], new Map(), { ...st, pmGraceDays: 0 }), null);
 });
+
+// คะแนนใหม่ลงเวลาตรงกับเวลาหมดกำหนด (23:59:59 ของวันครบกำหนด)
+const atLapse = { userId: "sujita", occurredAt: due };
+
+test("ลงเวลาตรงเวลาหมดกำหนด: ยังค้างกับคนเดิม ไม่คืน", () => {
+  assert.equal(workOrderDockRevokeReason(atLapse, openWo, st), null);
+});
+
+test("ลงเวลาตรงเวลาหมดกำหนด: ย้ายคนรับผิดชอบ คืนคนเดิม", () => {
+  assert.ok(workOrderDockRevokeReason(atLapse, { ...openWo, assignedTo: "other" }, st));
+});
+
+test("ลงเวลาตรงเวลาหมดกำหนด: ปิดทันกำหนด คืน", () => {
+  const wo = { ...openWo, status: "completed", completedAt: new Date("2026-09-10T10:00:00+07:00") };
+  assert.equal(workOrderDockRevokeReason(atLapse, wo, st), "ปิดงานทันกำหนด");
+});
+
+test("ลงเวลาตรงเวลาหมดกำหนด: เลื่อนกำหนดหลังโดนหัก ไม่คืน", () => {
+  const wo = { ...openWo, dueDate: new Date("2026-09-20T23:59:59.999+07:00") };
+  assert.equal(workOrderDockRevokeReason(atLapse, wo, st), null);
+});
+
+test("ลงเวลาตรงเวลาหมดกำหนด: ยกเลิกใบ คืน", () => {
+  assert.ok(workOrderDockRevokeReason(atLapse, { ...openWo, status: "cancelled" }, st));
+});

@@ -682,7 +682,9 @@ export async function dockOverdueMaintenance(): Promise<{
       userId: responsible,
       source: "maintenance",
       category: round ? "pm_missed" : "workorder_overdue",
-      occurredAt: now,
+      // ลงเวลาที่หมดกำหนด (23:59:59 ของวันครบกำหนด) ไม่ใช่เวลาที่งานรัน — ใบที่ครบกำหนดวันตัดรอบต้องนับในรอบนั้น
+      // ไม่งั้นงานรันหลังเที่ยงคืนแล้วคะแนนไปตกรอบถัดไป (ผู้ใช้ 4/11/2569)
+      occurredAt: lapse,
       refType: round ? "pm_schedule" : "work_order",
       refId: round ?? wo.id,
       note: `${wo.title}${wo.property?.name ? ` · ${wo.property.name}` : ""} · ${round ? `รอบ ${fmtThaiDate(wo.pmRoundDate!)} · ` : ""}ครบกำหนด ${fmtThaiDate(wo.dueDate)}`,
