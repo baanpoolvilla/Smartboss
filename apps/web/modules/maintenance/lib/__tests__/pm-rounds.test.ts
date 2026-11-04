@@ -110,7 +110,7 @@ test("ใบรอบ: เลื่อนแล้วปิดทันวัน
   assert.equal(workOrderDockRevokeReason(dock, wo, st), null);
 });
 
-test("ใบงานทั่วไป: เลื่อนหลังโดนหัก — คืนเหมือนเดิม", () => {
+test("ใบงานทั่วไป: เลื่อนหลังโดนหัก — ไม่คืน เหมือนใบรอบ", () => {
   const wo = { ...roundWo, pmRoundDate: null, dueDate: roundDueAt(d("2026-12-08")) };
-  assert.equal(workOrderDockRevokeReason({ ...dock, occurredAt: new Date("2026-12-09T03:00:00Z") }, { ...wo, dueDate: roundDueAt(d("2026-12-10")) }, { ...st, workOrderGraceDays: 0 }), "เลื่อนกำหนดส่งหลังโดนหัก");
+  assert.equal(workOrderDockRevokeReason({ ...dock, occurredAt: new Date("2026-12-09T03:00:00Z") }, { ...wo, dueDate: roundDueAt(d("2026-12-10")) }, { ...st, workOrderGraceDays: 0 }), null);
 });

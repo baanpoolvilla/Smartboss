@@ -22,9 +22,9 @@ test("ยกเลิก/ลบใบงาน — คืน", () => {
   assert.equal(workOrderDockRevokeReason(docked, undefined, st), "ใบงานถูกลบ");
 });
 
-test("เลื่อนกำหนดส่งไปหลังวันที่โดนหัก — คืน", () => {
+test("เลื่อนกำหนดส่งไปหลังวันที่โดนหัก — ไม่คืน กันขอเลื่อนย้อนหลัง", () => {
   const wo = { ...openWo, dueDate: new Date("2026-09-20T23:59:59.999+07:00") };
-  assert.equal(workOrderDockRevokeReason(docked, wo, st), "เลื่อนกำหนดส่งหลังโดนหัก");
+  assert.equal(workOrderDockRevokeReason(docked, wo, st), null);
 });
 
 test("ย้ายให้คนอื่นทั้งที่งานยังค้าง — คืนคนเดิม (cron หักคนใหม่แทน)", () => {

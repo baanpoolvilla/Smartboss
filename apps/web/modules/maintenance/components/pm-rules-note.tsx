@@ -15,7 +15,7 @@ export function PmRulesNote({ points, leadDays, className = "" }: { points: numb
       <ul className="list-disc space-y-0.5 pl-6">
         <li>ใบงานขึ้นก่อนครบกำหนด {leadDays} วัน เตือนตอนใบขึ้น ก่อนครบกำหนด {before} วัน และวันครบกำหนด</li>
         <li>ใบชื่อเดียวกันหลายใบคือคนละรอบ ต้องปิดทุกใบ ถึงรอบใหม่ใบใหม่ก็ขึ้นแม้ใบเก่ายังไม่ปิด</li>
-        <li>เลยกำหนดหัก {Math.abs(points)} คะแนนต่อรอบ ทำไม่ทันให้กด &quot;ขอเลื่อนกำหนดส่ง&quot; ก่อนถึงกำหนด</li>
+        <li>เลยกำหนดหัก {Math.abs(points)} คะแนนต่อรอบ ทำไม่ทันให้กด &quot;ขอเลื่อนกำหนดส่ง&quot; ล่วงหน้า ต้องได้รับอนุมัติก่อนโดนหัก อนุมัติทีหลังไม่คืนคะแนน</li>
       </ul>
       <details className="mt-1 pl-6">
         <summary className="cursor-pointer font-medium">ดูเพิ่ม</summary>
