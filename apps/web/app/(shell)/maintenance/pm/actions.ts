@@ -276,7 +276,13 @@ export async function deletePmAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   const pm = await getPmSchedule(orgId, id);
+  // ใบที่ถูกยกเลิกไปกับแผน แจ้งเตือนต้องหายด้วย ไม่งั้นกดแล้วไปเจอใบที่ไม่มีงานแล้ว
+  const cancelledWos = await prisma.workOrder.findMany({
+    where: { orgId, pmScheduleId: id, autoCreated: true, status: { in: ["open", "in_progress"] } },
+    select: { id: true },
+  });
   await closeAutoWorkOrdersOfPm(orgId, id, "cancelled");
+  await Promise.all(cancelledWos.map((w) => deleteNotificationsByReference(w.id, "work_order")));
   await deletePmSchedule(orgId, id);
   if (pm) await pmLog(orgId, pm, "delete", "ลบแผน PM");
   revalidatePath("/maintenance/work-orders");
