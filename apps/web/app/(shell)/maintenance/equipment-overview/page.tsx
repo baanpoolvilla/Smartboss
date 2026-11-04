@@ -9,6 +9,7 @@ import { fmtThaiDate } from "@/modules/maintenance/lib/format";
 import { freqLabel } from "@/modules/maintenance/lib/pm-schedule";
 import { ChipLink } from "@/modules/maintenance/components/ui";
 import { AppScaffold } from "@/modules/maintenance/components/app-scaffold";
+import { AppBarBack } from "@/modules/maintenance/components/app-bar-month-nav";
 
 /** 3 ประเภทอุปกรณ์ + คำค้น — ตรงกับ _EquipType เดิม */
 const TYPES = [
@@ -69,20 +70,24 @@ export default async function EquipmentOverviewPage({
     <AppScaffold
       title="สรุปอุปกรณ์ทุกหลัง"
       width="max-w-none"
-      backHref="/maintenance/pm"
+      hideTitle
+      leading={
+        <div className="flex min-w-0 items-center gap-1">
+          <AppBarBack href="/maintenance/pm" />
+          <div className="flex min-w-0 gap-2 overflow-x-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" data-testid="app-bar-chips">
+            {TYPES.map((t) => (
+              <ChipLink
+                key={t.key}
+                href={`/maintenance/equipment-overview?type=${t.key}`}
+                active={selected.key === t.key}
+              >
+                {t.label}
+              </ChipLink>
+            ))}
+          </div>
+        </div>
+      }
     >
-      <div className="mb-4 flex flex-wrap gap-2">
-        {TYPES.map((t) => (
-          <ChipLink
-            key={t.key}
-            href={`/maintenance/equipment-overview?type=${t.key}`}
-            active={selected.key === t.key}
-          >
-            {t.label}
-          </ChipLink>
-        ))}
-      </div>
-
       {filtered.length === 0 ? (
         <Card className="p-10 text-center text-sm text-(--ink-soft)">
           ไม่พบ PM ประเภทนี้

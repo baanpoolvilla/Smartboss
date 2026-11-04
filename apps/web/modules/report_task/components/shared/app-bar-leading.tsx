@@ -36,6 +36,11 @@ export function useAppBarLeading(): ReactNode {
  * calling page is mounted — clears itself on unmount so navigating to a page
  * without one doesn't leave a stale button behind. `node` may be rebuilt on
  * every render: only the AppBar re-renders when it changes, never the page. */
+export function AppBarLeadingNode({ node }: { node: ReactNode }) {
+  useSetAppBarLeading(node);
+  return null;
+}
+
 export function useSetAppBarLeading(node: ReactNode) {
   const setNode = useContext(SetLeadingContext);
   useEffect(() => {

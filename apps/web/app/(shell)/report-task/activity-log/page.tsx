@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ScrollText, X, Users, ListFilter, Building2 } from "lucide-react";
+import { ScrollText, X, Users, ListFilter, Building2, SlidersHorizontal } from "lucide-react";
+import { AppBarLeadingNode } from "@/modules/report_task/components/shared/app-bar-leading";
+import { useIsMobile } from "@/modules/report_task/hooks/use-is-mobile";
 import {
   Select,
   SelectContent,
@@ -27,6 +29,8 @@ import { ShieldAlert } from "lucide-react";
 
 export default function ActivityLogPage() {
   const entries = useActivityLogStore((s) => s.entries);
+  const isMobile = useIsMobile();
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [userId, setUserId] = useState<string>("all");
   const [departmentId, setDepartmentId] = useState<string>("all");
   const [action, setAction] = useState<string>("all");
@@ -102,6 +106,26 @@ export default function ActivityLogPage() {
 
   return (
     <div className="flex flex-col gap-4 lg:gap-6 pb-6">
+      {/* มือถือ: ปุ่มกรองอยู่บนแถบหัวแทนชื่อหน้า กดแล้วค่อยกางช่องกรอง (ผู้ใช้ 4/11/2569) */}
+      {isMobile && allowed && (
+        <AppBarLeadingNode
+          node={
+            <div className="flex min-w-0 items-center gap-2">
+              <button
+                type="button"
+                data-testid="activity-filter-toggle"
+                onClick={() => setFiltersOpen((v) => !v)}
+                className={filterFieldTriggerClass(hasFilters, "!h-9 !w-auto shrink-0")}
+              >
+                <SlidersHorizontal className="h-4 w-4 shrink-0" />
+                กรอง
+              </button>
+              <span className="truncate text-xs text-[var(--ink-soft)]">{filtered.length} รายการ</span>
+            </div>
+          }
+        />
+      )}
+      <div className={isMobile && !filtersOpen ? "hidden" : "contents"}>
       <StickyFilterBar>
         {allowed && (
           <div className="flex flex-wrap items-end gap-2">
@@ -191,6 +215,7 @@ export default function ActivityLogPage() {
           </div>
         )}
       </StickyFilterBar>
+      </div>
 
       {!allowed ? (
         <EmptyState

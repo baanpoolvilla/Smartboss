@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronLeft, ChevronRight, Wallet } from "lucide-react";
+import { Wallet } from "lucide-react";
+import { AppBarBack, AppBarMonthNav } from "@/modules/maintenance/components/app-bar-month-nav";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { Card } from "@smartboss/ui/components/card";
 import { Button } from "@smartboss/ui/components/button";
@@ -54,24 +55,20 @@ export default async function ExpenseReportPage({
     <AppScaffold
       title="รายงานค่าใช้จ่ายรายเดือน"
       width="max-w-none"
-      backHref="/maintenance/expenses"
+      hideTitle
+      leading={
+        <div className="flex min-w-0 items-center gap-1">
+          <AppBarBack href="/maintenance/expenses" />
+          <AppBarMonthNav
+            prevHref={`/maintenance/expenses/report?year=${prev.y}&month=${prev.m}`}
+            nextHref={`/maintenance/expenses/report?year=${next.y}&month=${next.m}`}
+            label={`${THAI_MONTHS[month]} ${year}`}
+            month={month}
+            year={year}
+          />
+        </div>
+      }
     >
-
-      <div className="mb-3 flex items-center justify-center gap-4">
-        <Link href={`/maintenance/expenses/report?year=${prev.y}&month=${prev.m}`}>
-          <Button variant="ghost" size="icon">
-            <ChevronLeft className="h-5 w-5" />
-          </Button>
-        </Link>
-        <span className="min-w-[160px] text-center text-base font-semibold text-(--ink)">
-          {THAI_MONTHS[month]} {year}
-        </span>
-        <Link href={`/maintenance/expenses/report?year=${next.y}&month=${next.m}`}>
-          <Button variant="ghost" size="icon">
-            <ChevronRight className="h-5 w-5" />
-          </Button>
-        </Link>
-      </div>
 
       <Card
         className="mb-4 flex items-center gap-3 p-5"

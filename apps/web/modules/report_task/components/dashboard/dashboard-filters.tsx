@@ -35,6 +35,8 @@ import { DateRangeSelectField } from "@/modules/report_task/components/shared/da
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { datePresetGroups, datePresetLabels } from "@/modules/report_task/lib/date-filter";
 import { cn } from "@/modules/report_task/lib/utils";
+import { AppBarLeadingNode } from "@/modules/report_task/components/shared/app-bar-leading";
+import { useIsMobile } from "@/modules/report_task/hooks/use-is-mobile";
 import { Building2, Users, User as UserIcon, CalendarDays, SlidersHorizontal, X } from "lucide-react";
 
 /**
@@ -45,6 +47,7 @@ import { Building2, Users, User as UserIcon, CalendarDays, SlidersHorizontal, X 
  * a department + "ทุกคนในแผนก..." reads as "everyone in that department."
  */
 export function DashboardFilters() {
+  const isMobile = useIsMobile();
   const personId = useDashboardFilterStore((s) => s.personId);
   const departmentId = useDashboardFilterStore((s) => s.departmentId);
   const preset = useDashboardFilterStore((s) => s.preset);
@@ -257,8 +260,7 @@ export function DashboardFilters() {
         space instead; the pill button stays a quiet secondary action next
         to it (no card, no border-radius-2xl frame, no shadow, no chevron —
         it's a button, not a row that opens somewhere). */}
-    <div className="flex sm:hidden items-center justify-between px-4 h-11 mb-3">
-      <span className="text-base font-semibold text-[var(--ink)]">ภาพรวม</span>
+    {isMobile && <AppBarLeadingNode node={(
       <button
         type="button"
         onClick={() => setMobileSheetOpen(true)}
@@ -272,7 +274,7 @@ export function DashboardFilters() {
         <SlidersHorizontal className="h-4 w-4 shrink-0" />
         {activeFilterCount > 0 ? `กรอง ${activeFilterCount}` : "กรอง"}
       </button>
-    </div>
+    )} />}
 
     {/* Chips only for a filter that's actually narrowed something — "all
         departments"/"everyone"/"all time" is the default, not a choice

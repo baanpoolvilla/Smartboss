@@ -142,6 +142,8 @@ export default async function PurchaseOrdersPage({
     <AppScaffold
       title="สั่งอุปกรณ์ (PR/PO)"
       width="max-w-none"
+      hideTitle
+      leading={<div id="po-board-toolbar" className="flex min-w-0 items-center" />}
       actions={
         <AppBarLink
           href="/maintenance/purchase-orders/returns/new"

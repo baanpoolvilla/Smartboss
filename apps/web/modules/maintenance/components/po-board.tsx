@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
+import { useIsMobile } from "@/modules/report_task/hooks/use-is-mobile";
 import { ASSIGNED_BY_ME, ASSIGNED_TO_ME, PersonFilter, UNASSIGNED } from "./person-filter";
 import Link from "next/link";
 import {
@@ -216,6 +218,8 @@ function returnsOf(returns: BoardReturn[], columnKey: string): BoardReturn[] {
   return [];
 }
 
+const noopSubscribe = () => () => {};
+
 export function PoBoard({
   orders: allOrders,
   returns: allReturns,
@@ -236,6 +240,13 @@ export function PoBoard({
   const [tab, setTab] = useState(initialTab === "returns" ? 2 : 0);
   // กรองตามผู้ได้รับมอบหมาย (ผู้ซื้อ หรือ ผู้รับของ) — null = ทุกคน · UNASSIGNED = ยังไม่มอบหมาย
   const [person, setPerson] = useState<string | null>(null);
+  const isMobile = useIsMobile();
+  // ตัวกรองอยู่บนแถบหัวแทนชื่อหน้า (ผู้ใช้ 4/11/2569 "จะได้ไม่รก")
+  const toolbarSlot = useSyncExternalStore(
+    noopSubscribe,
+    () => document.getElementById("po-board-toolbar"),
+    () => null,
+  );
   const people = useMemo(() => {
     const byId = new Map<string, string>();
     for (const o of allOrders) for (const p of o.assigneeIds) byId.set(p.id, p.name);
@@ -271,8 +282,9 @@ export function PoBoard({
 
   return (
     <div>
-      {((canPickPeople && people.length > 0) || !!currentUserId) && (
-        <div className="mb-3 flex gap-2 overflow-x-auto">
+      {toolbarSlot &&
+        ((canPickPeople && people.length > 0) || !!currentUserId) &&
+        createPortal(
           <PersonFilter
             label="ผู้รับผิดชอบ"
             value={person}
@@ -281,9 +293,10 @@ export function PoBoard({
             showUnassigned={allOrders.some((o) => o.assigneeIds.length === 0)}
             showMine={!!currentUserId}
             showPeople={canPickPeople}
-          />
-        </div>
-      )}
+            compact={isMobile}
+          />,
+          toolbarSlot,
+        )}
       {/* ─── มือถือ: 4 แท็บ ─── */}
       <div className="xl:hidden">
         <div className="mb-3 flex gap-1 overflow-x-auto border-b border-(--line)">

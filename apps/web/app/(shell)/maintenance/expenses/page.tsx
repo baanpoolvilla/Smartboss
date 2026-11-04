@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronLeft, ChevronRight, Wallet, Download } from "lucide-react";
+import { Wallet, Download, ReceiptText } from "lucide-react";
+import { AppBarMonthNav } from "@/modules/maintenance/components/app-bar-month-nav";
 import { requireOrg, hasPermission, isSuperAdmin } from "@smartboss/auth";
 import { Card } from "@smartboss/ui/components/card";
 import { Button } from "@smartboss/ui/components/button";
@@ -134,13 +135,26 @@ export default async function ExpensesReportPage({
   return (
     <AppScaffold
       title="ค่าใช้จ่าย"
+      hideTitle
+      leading={
+        <AppBarMonthNav
+          prevHref={`/maintenance/expenses?year=${prev.y}&month=${prev.m}${catQ}`}
+          nextHref={`/maintenance/expenses?year=${next.y}&month=${next.m}${catQ}`}
+          label={`${THAI_MONTHS[month]} ${year}`}
+          month={month}
+          year={year}
+        />
+      }
       actions={
         <>
           <a
             href={`/maintenance/expenses/receipts?year=${year}&month=${month}`}
-            className="rounded-(--radius) border border-(--line) px-3 py-1.5 text-sm font-medium text-(--ink) hover:bg-(--bg-soft)"
+            title="ใบเสร็จ"
+            aria-label="ใบเสร็จ"
+            className="inline-flex items-center gap-1.5 rounded-(--radius) p-2 text-sm font-medium text-(--app-strong) hover:bg-(--bg-soft) sm:border sm:border-(--line) sm:px-3 sm:py-1.5 sm:text-(--ink)"
           >
-            ใบเสร็จ
+            <ReceiptText className="h-5 w-5 sm:hidden" />
+            <span className="hidden sm:inline">ใบเสร็จ</span>
           </a>
           <a
             href={`/maintenance/expenses/export?year=${year}&month=${month}${catQ}`}
@@ -158,23 +172,6 @@ export default async function ExpensesReportPage({
         ) : null
       }
     >
-      {/* Month selector */}
-      <div className="mb-3 flex items-center justify-center gap-4">
-        <Link href={`/maintenance/expenses?year=${prev.y}&month=${prev.m}${catQ}`}>
-          <Button variant="ghost" size="icon">
-            <ChevronLeft className="h-5 w-5" />
-          </Button>
-        </Link>
-        <span className="min-w-[160px] text-center text-base font-semibold text-(--ink)">
-          {THAI_MONTHS[month]} {year}
-        </span>
-        <Link href={`/maintenance/expenses?year=${next.y}&month=${next.m}${catQ}`}>
-          <Button variant="ghost" size="icon">
-            <ChevronRight className="h-5 w-5" />
-          </Button>
-        </Link>
-      </div>
-
       {/* Category filter */}
       {categories.length > 0 && (
         <div className="mb-3 flex flex-wrap justify-center gap-2">

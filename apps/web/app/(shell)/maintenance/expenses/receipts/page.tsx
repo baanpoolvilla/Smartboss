@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { Download } from "lucide-react";
+import { AppBarBack, AppBarMonthNav } from "@/modules/maintenance/components/app-bar-month-nav";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { Card } from "@smartboss/ui/components/card";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
@@ -30,7 +31,19 @@ export default async function ReceiptsPage({ searchParams }: { searchParams: Pro
     <AppScaffold
       title="ใบเสร็จ"
       width="max-w-none"
-      backHref={`/maintenance/expenses?year=${year}&month=${month}`}
+      hideTitle
+      leading={
+        <div className="flex min-w-0 items-center gap-1">
+          <AppBarBack href={`/maintenance/expenses?year=${year}&month=${month}`} />
+          <AppBarMonthNav
+            prevHref={q(prev.y, prev.m, house)}
+            nextHref={q(next.y, next.m, house)}
+            label={`${MONTHS[month]} ${year + 543}`}
+            month={month}
+            year={year + 543}
+          />
+        </div>
+      }
       actions={
         <a
           href={`/maintenance/expenses/receipts/export?year=${year}&month=${month}${house ? `&house=${house}` : ""}`}
@@ -43,13 +56,6 @@ export default async function ReceiptsPage({ searchParams }: { searchParams: Pro
       }
     >
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <Link href={q(prev.y, prev.m, house)} aria-label="เดือนก่อน" className="rounded-(--radius) border border-(--line) p-2 hover:bg-(--bg-soft)">
-          <ChevronLeft className="h-4 w-4" />
-        </Link>
-        <span className="min-w-36 text-center text-sm font-semibold text-(--ink)">{MONTHS[month]} {year + 543}</span>
-        <Link href={q(next.y, next.m, house)} aria-label="เดือนถัดไป" className="rounded-(--radius) border border-(--line) p-2 hover:bg-(--bg-soft)">
-          <ChevronRight className="h-4 w-4" />
-        </Link>
         <form method="get" className="flex items-center gap-2">
           <input type="hidden" name="year" value={year} />
           <input type="hidden" name="month" value={month} />

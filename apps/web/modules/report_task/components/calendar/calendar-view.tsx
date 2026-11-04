@@ -44,6 +44,8 @@ import { getUser, canManage, canSeeTodoOf, isOwner } from "@/modules/report_task
 import { eventTypeLabels } from "@/modules/report_task/lib/calendar-colors";
 import { typeHex } from "@/lib/leave-type-hue";
 import { cn } from "@/modules/report_task/lib/utils";
+import { AppBarLeadingNode } from "@/modules/report_task/components/shared/app-bar-leading";
+import { useIsMobile } from "@/modules/report_task/hooks/use-is-mobile";
 import { Bell, CalendarOff, ChevronDown, PanelLeftClose, PanelLeftOpen, Plus, Settings2, User, Users, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { now } from "@/modules/report_task/lib/now";
@@ -197,6 +199,7 @@ function ScheduleToggle({
 }
 
 export function CalendarView() {
+  const isMobile = useIsMobile();
   const tasks = useTaskStore((s) => s.tasks);
   const updateTask = useTaskStore((s) => s.updateTask);
   const meetings = useMeetingStore((s) => s.meetings);
@@ -1021,11 +1024,12 @@ export function CalendarView() {
             to edge with the create button clipped on real phone widths.
             Still 2 rows like the original, just without the "เพิ่มปฏิทิน"
             globe button (desktop-only now) so there's room to breathe. */}
-        <div className="flex sm:hidden items-center gap-2">
+        {isMobile && <AppBarLeadingNode node={(
+        <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" data-testid="calendar-app-bar">
           <button
             type="button"
             onClick={() => setAddCalendarOpen(true)}
-            className={cn(filterFieldTriggerClass(hiddenUserIds.length > 0), "!h-10 !w-10 !px-0 justify-center shrink-0")}
+            className={cn(filterFieldTriggerClass(hiddenUserIds.length > 0), "!h-9 !w-9 !px-0 justify-center shrink-0")}
             aria-label="คนในองค์กร"
             title="คนในองค์กร"
           >
@@ -1035,7 +1039,7 @@ export function CalendarView() {
           <button
             type="button"
             onClick={() => setMobileSheetOpen(true)}
-            className={cn(filterFieldTriggerClass(mobileActiveFilterCount > 0), "!h-10")}
+            className={cn(filterFieldTriggerClass(mobileActiveFilterCount > 0), "!h-9 !w-auto shrink-0")}
           >
             <SlidersHorizontal className="h-4 w-4 shrink-0" />
             กรอง
@@ -1046,7 +1050,7 @@ export function CalendarView() {
           <label
             className={cn(
               filterFieldTriggerClass(showSchedule),
-              "!h-10 shrink-0 cursor-pointer gap-1.5"
+              "!h-9 !w-auto shrink-0 cursor-pointer gap-1.5"
             )}
           >
             <input
@@ -1070,14 +1074,15 @@ export function CalendarView() {
               "เพิ่มวันลา" removed here too, same reason as the desktop button
               above — ลา/Day-Off entry moved to /hr. */}
           <Button
-            className="ml-auto min-w-0 bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
+            className="!h-9 !w-9 shrink-0 !px-0 bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white"
             onClick={() => openTodoDialog({})}
             aria-label="เพิ่มสิ่งที่ต้องทำ"
           >
             <Plus className="h-4 w-4 shrink-0" />
-            <span className="truncate">เพิ่ม</span>
+            <span className="sr-only">เพิ่ม</span>
           </Button>
         </div>
+        )} />}
 
         {/* ≥640px: unchanged. <640px gets a button + bottom sheet below
             instead — this row's badges (a scope toggle + task/meeting/todo
