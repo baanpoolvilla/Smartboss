@@ -310,7 +310,7 @@ export default async function AssetDetailPage({
                     today={today}
                     openRoundLabels={openWos.filter((w) => w.pmRoundDate).map((w) => fmtDate(w.pmRoundDate))}
                     firstOpenRound={[...openWos].filter((w) => w.pmRoundDate).sort((a, b) => a.pmRoundDate!.getTime() - b.pmRoundDate!.getTime())[0]?.pmRoundDate ?? null}
-                    canMoveRounds={canEditDueDate({ userId: session.userId, viewAll: canViewAll(session) }, { createdBy: s.createdBy })}
+                    canMoveRounds={canEditDueDate({ userId: session.userId, viewAll: canViewAll(session) || hasPermission(session, MAINT_PERMS.pmMoveRounds) }, { createdBy: s.createdBy })}
                   />
                 )}
                 {canManagePm && (

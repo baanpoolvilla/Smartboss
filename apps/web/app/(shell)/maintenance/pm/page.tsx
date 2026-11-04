@@ -117,7 +117,7 @@ export default async function PmListPage({
         .sort((a, b) => a.pmRoundDate!.getTime() - b.pmRoundDate!.getTime())[0];
       return first ? toDateInput(first.pmRoundDate!) : null;
     })(),
-    canMoveRounds: canEditDueDate({ userId: session.userId, viewAll: canViewAll(session) }, { createdBy: s.createdBy }),
+    canMoveRounds: canEditDueDate({ userId: session.userId, viewAll: canViewAll(session) || hasPermission(session, MAINT_PERMS.pmMoveRounds) }, { createdBy: s.createdBy }),
     openRoundLabels: pendingWos
       .filter((w) => w.pmRoundDate && (w.pmScheduleId === s.id || w.pmScheduleIds.includes(s.id)))
       .sort((a, b) => a.pmRoundDate!.getTime() - b.pmRoundDate!.getTime())

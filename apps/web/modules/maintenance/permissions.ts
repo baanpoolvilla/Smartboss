@@ -20,6 +20,7 @@ export const MAINT_PERMS = {
 
   pmView: "maintenance.pm.view",
   pmManage: "maintenance.pm.manage",
+  pmMoveRounds: "maintenance.pm.move_rounds",
 
   expenseView: "maintenance.expense.view",
   expenseManage: "maintenance.expense.manage",
@@ -50,6 +51,7 @@ export const MAINT_PERM_LABELS: Record<string, string> = {
   [MAINT_PERMS.assetManage]: "เพิ่ม/แก้ไข/ลบอุปกรณ์",
   [MAINT_PERMS.pmView]: "ดูแผนบำรุงรักษา (PM)",
   [MAINT_PERMS.pmManage]: "สร้าง/แก้ไขแผน PM",
+  [MAINT_PERMS.pmMoveRounds]: "แก้วันที่แผน PM แล้วใบที่เปิดอยู่เลื่อนตาม (เปิดชั่วคราว ข้ามการขออนุมัติเลื่อน)",
   [MAINT_PERMS.expenseView]: "ดูค่าใช้จ่าย",
   [MAINT_PERMS.expenseManage]: "บันทึก/แก้ไขค่าใช้จ่าย",
   [MAINT_PERMS.contractorView]: "ดูรายชื่อผู้รับเหมา/Contact",

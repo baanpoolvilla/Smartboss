@@ -194,7 +194,7 @@ export async function updatePmAction(formData: FormData) {
   // ไม่งั้นแก้แผนเลี่ยงการอนุมัติและการหักคะแนนได้ ("กันคนเหลี่ยม")
   const actor = await requireOrg();
   const openRounds = dueChanged && before ? await openRoundsOfPm(orgId, id) : [];
-  if (openRounds.length > 0 && !canEditDueDate({ userId: actor.userId, viewAll: canViewAll(actor) }, { createdBy: before?.createdBy ?? null })) {
+  if (openRounds.length > 0 && !canEditDueDate({ userId: actor.userId, viewAll: canViewAll(actor) || hasPermission(actor, MAINT_PERMS.pmMoveRounds) }, { createdBy: before?.createdBy ?? null })) {
     dueChanged = false;
   }
   const moveRounds = dueChanged && openRounds.length > 0;

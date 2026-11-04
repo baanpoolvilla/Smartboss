@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@smartboss/database";
-import { canViewAll, requireOrg } from "@smartboss/auth";
+import { canViewAll, hasPermission, requireOrg } from "@smartboss/auth";
+import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { getWorkOrder, updateWorkOrder, addWorkOrderComment, workOrderOwnerId } from "@/modules/maintenance/data/work-orders";
 import { workOrderAccess, canSeeWorkOrder } from "@/modules/maintenance/data/work-order-access";
 import { deleteActionNotifications, notifyActorName, notifyUser, notifyUsers, resolveActionNotifications, usersWithPermission } from "@/modules/maintenance/data/notify";
@@ -156,7 +157,9 @@ export async function editDueDateAction(workOrderId: string, newDate: string, re
   const s = await requireOrg();
   const wo = await getWorkOrder(s.orgId, workOrderId);
   if (!wo || !canSeeWorkOrder(await workOrderAccess(s), wo)) return { error: "ไม่พบใบงาน" };
-  if (!canEditDueDate({ userId: s.userId, viewAll: canViewAll(s) }, { createdBy: await workOrderOwnerId(s.orgId, wo) })) return { error: "แก้กำหนดส่งได้เฉพาะ CEO หรือคนเปิดใบงาน" };
+  // สิทธิ์ชั่วคราวใช้กับใบ PM เท่านั้น ปุ่มในใบงานไม่ได้เปิดให้ ใช้ผ่านการแก้วันที่ในแผน
+  const movesPm = !!wo.pmScheduleId && hasPermission(s, MAINT_PERMS.pmMoveRounds);
+  if (!canEditDueDate({ userId: s.userId, viewAll: canViewAll(s) || movesPm }, { createdBy: await workOrderOwnerId(s.orgId, wo) })) return { error: "แก้กำหนดส่งได้เฉพาะ CEO หรือคนเปิดใบงาน" };
   if (wo.status === "completed" || wo.status === "cancelled") return { error: "ใบงานนี้ปิดแล้ว" };
   const d = endOfDayBkk(newDate);
   if (!d) return { error: "วันที่ไม่ถูกต้อง" };
