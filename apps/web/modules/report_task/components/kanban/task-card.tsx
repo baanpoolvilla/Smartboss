@@ -214,6 +214,26 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
     />
   );
 
+  // งานเสร็จแล้วไม่มีแถวจุดสี แต่มีแถวป้ายสถานะอยู่แล้ว — สติกเกอร์ไปอยู่ข้างป้ายนั้น ไม่เปิดแถวใหม่
+  const statusRowShown = isDone && !(reviewWaiting && unreadParts.length === 0);
+  const stickerChips = hasStickers ? (
+            <>{Object.entries(reactionTotals).map(([stickerId, count]) => {
+              const sticker = stickers.find((s) => s.id === stickerId);
+              if (!sticker) return null;
+              return (
+                <span
+                  key={stickerId}
+                  title={`${sticker.label} (${sticker.points > 0 ? `+${sticker.points}` : sticker.points})`}
+                  // ล็อกความสูงเท่าจุดสี อีโมจิมีบรรทัดสูงกว่าตัวอักษร ไม่งั้นการ์ดยาวขึ้น 6px
+                  className="-my-0.5 flex h-3.5 items-center gap-0.5 overflow-hidden rounded-full bg-[var(--bg-soft)] px-1 text-[10px] leading-none"
+                >
+                  <span className="leading-none">{sticker.emoji}</span>
+                  {count > 1 && <span className="text-[var(--ink-soft)]">{count}</span>}
+                </span>
+              );
+            })}</>
+  ) : null;
+
   return (
     <>
     <div
@@ -253,8 +273,8 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
       {/* การ์ดที่ขึ้นแถบแดง "รอคุณตรวจ · กด ผ่าน / ไม่ผ่าน" แล้ว ไม่ต้องมีป้าย "เสร็จ | รอตรวจสอบ" ซ้ำ (ผู้ใช้ขอ 20/10/2569
           "ให้มีแค่รอตรวจสอบข้างบน ... ไม่รกในการ์ด") · คนอื่นที่ไม่ใช่คนตรวจไม่มีแถบแดง ป้ายนี้ยังอยู่ให้รู้ว่ารอตรวจ */}
       {/* แถบแดงขึ้นข้อความ "ยังไม่ได้อ่าน" ก่อน "รอคุณตรวจ" — มีของยังไม่อ่านด้วย ป้ายยังต้องอยู่ ไม่งั้นไม่รู้ว่ารอตรวจ */}
-      {isDone && !(reviewWaiting && unreadParts.length === 0) && (
-      <div className="flex items-center gap-2 mb-1.5 sm:mb-2.5">
+      {statusRowShown && (
+      <div className="flex flex-wrap items-center gap-2 mb-1.5 sm:mb-2.5">
         {/* Dot + label badge, colored to match whichever attribute it's
             showing — priority's own accent (red/amber/green/gray) normally,
             or status's accent when the board is grouped by priority (see
@@ -314,6 +334,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
               <TooltipContent>ส่งงานแล้ว รอหัวหน้าตรวจสอบยืนยันว่าเสร็จจริง</TooltipContent>
             </Tooltip>
           )}
+        {stickerChips}
       </div>
       )}
 
@@ -455,26 +476,12 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
 
       {/* ขวาล่างเหนือรูปคน: แก้กำหนดส่ง + คอมเมนต์ ตัวเล็กสีเทา · คอมเมนต์ใหม่ = ป้ายแดง "N ใหม่" (ผู้ใช้ขอ 20/10/2569) */}
       {/* ป้ายความสำคัญ (งานไม่มี checklist) ซ้ายสุดแถวนี้ ชิดเส้นคั่น — ผู้ใช้ขอ 21/10/2569 ให้ลงมาอยู่ตรงนี้ ไม่กินแถวแยก */}
-      {(pillInFooterRow || hasStickers || suspicious || task.comments.length > 0 || (pendingDue.length > 0 && !dueWaitingMe)) && (
+      {(pillInFooterRow || (hasStickers && !statusRowShown) || suspicious || task.comments.length > 0 || (pendingDue.length > 0 && !dueWaitingMe)) && (
         <div className="-mb-1 mt-1.5 flex items-center justify-end gap-2 sm:-mb-1.5">
           {/* สติกเกอร์อยู่แถวเดียวกับจุดความสำคัญ ไม่กินแถวเพิ่ม การ์ดจะได้ไม่ยาวขึ้น (ผู้ใช้ 6/11/2569 "ประหยัดพื้นที่") */}
           <div className="mr-auto flex min-w-0 flex-wrap items-center gap-1" data-testid="card-meta-left">
             {pillInFooterRow && priorityPill}
-            {Object.entries(reactionTotals).map(([stickerId, count]) => {
-              const sticker = stickers.find((s) => s.id === stickerId);
-              if (!sticker) return null;
-              return (
-                <span
-                  key={stickerId}
-                  title={`${sticker.label} (${sticker.points > 0 ? `+${sticker.points}` : sticker.points})`}
-                  // ล็อกความสูงเท่าจุดสี อีโมจิมีบรรทัดสูงกว่าตัวอักษร ไม่งั้นการ์ดยาวขึ้น 6px
-                  className="-my-0.5 flex h-3.5 items-center gap-0.5 overflow-hidden rounded-full bg-[var(--bg-soft)] px-1 text-[10px] leading-none"
-                >
-                  <span className="leading-none">{sticker.emoji}</span>
-                  {count > 1 && <span className="text-[var(--ink-soft)]">{count}</span>}
-                </span>
-              );
-            })}
+            {!statusRowShown && stickerChips}
           </div>
           {suspicious && (
             <span
