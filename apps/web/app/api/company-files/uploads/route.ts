@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 
 import { putFile } from "@/lib/storage";
+import { storeDocThumbnail } from "@/modules/report_task/lib/thumbnail/store-doc-thumbnail";
 import { sniffCompanyFileMime } from "@/modules/company-files/lib/upload-sniff";
 import { COMPANY_FILES_PERMS } from "@/modules/company-files/permissions";
 import { MAX_FILE_MB } from "@/modules/company-files/constants";
@@ -87,6 +88,8 @@ export async function POST(request: Request) {
       new File([bytes], `${randomUUID()}.${ext}`, { type: sniffed }),
       { ext }
     );
+    // รูปหน้าแรก — หน้าเว็บหาเจอจาก URL ไฟล์เอง (lib/doc-thumb.ts)
+    await storeDocThumbnail(url, bytes, ext);
 
     return Response.json({
       url,

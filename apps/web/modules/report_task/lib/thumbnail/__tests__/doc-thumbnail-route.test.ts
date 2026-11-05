@@ -6,6 +6,15 @@ const h = vi.hoisted(() => ({
   bytes: new Uint8Array([1]) as Uint8Array | null,
   png: Buffer.from("PNG") as Buffer | null,
   put: [] as string[],
+  allowed: true,
+  checked: [] as string[],
+}));
+
+vi.mock("@/lib/file-access", () => ({
+  canServeOwnedFileKey: async (_s: unknown, key: string) => {
+    h.checked.push(key);
+    return h.allowed;
+  },
 }));
 
 vi.mock("@smartboss/auth", () => ({ getSession: async () => h.session }));
@@ -35,6 +44,8 @@ describe("GET /api/report-task/doc-thumbnail", () => {
     h.bytes = new Uint8Array([1]);
     h.png = Buffer.from("PNG");
     h.put = [];
+    h.allowed = true;
+    h.checked = [];
   });
 
   it("ไม่ login = 401", async () => {
@@ -44,7 +55,7 @@ describe("GET /api/report-task/doc-thumbnail", () => {
 
   it.each([
     ["ไฟล์ของบริษัทอื่น", "/api/files/org-b/report-task/1-a.pdf"],
-    ["ไฟล์โมดูลอื่น", "/api/files/org-a/requests/1-a.pdf"],
+    ["ไฟล์โมดูลอื่น", "/api/files/org-a/maintenance/1-a.pdf"],
     ["ไม่ใช่เอกสาร", "/api/files/org-a/report-task/1-a.zip"],
     ["ไต่ path", "/api/files/org-a/report-task/../../org-b/report-task/a.pdf"],
     ["ไม่ใช่ URL ไฟล์", "org-a/report-task/1-a.pdf"],
@@ -70,6 +81,21 @@ describe("GET /api/report-task/doc-thumbnail", () => {
     expect(h.put).toEqual([]);
     h.exists = true;
     expect((await call("/api/files/org-a/report-task/1-a.docx")).status).toBe(302);
+  });
+
+  it("ไม่มีสิทธิ์ไฟล์ต้นทาง = 403 และไม่สร้างรูป แม้รูปมีอยู่แล้ว", async () => {
+    h.allowed = false;
+    const file = "/api/files/org-a/company-files/1-a.pdf";
+    expect((await call(file)).status).toBe(403);
+    expect(h.checked).toEqual(["org-a/company-files/1-a.pdf"]);
+    expect(h.put).toEqual([]);
+    h.exists = true;
+    expect((await call("/api/files/org-a/requests/u1/1-a.pdf")).status).toBe(403);
+  });
+
+  it("คลังไฟล์บริษัทและเบิกจ่ายใช้ได้เมื่อมีสิทธิ์", async () => {
+    expect((await call("/api/files/org-a/company-files/1-a.pdf")).status).toBe(302);
+    expect((await call("/api/files/org-a/requests/u1/1-a.pdf")).status).toBe(302);
   });
 
   it("มีรูปอยู่แล้ว: ไม่สร้างซ้ำ", async () => {

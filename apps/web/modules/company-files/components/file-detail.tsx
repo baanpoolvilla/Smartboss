@@ -16,6 +16,7 @@ import {
 } from "@/modules/company-files/data/files";
 import { uploadCompanyFile } from "@/modules/company-files/lib/upload";
 import { formatFileSize, fileIconKind, isPreviewable, fileKindOf } from "@/modules/company-files/lib/file-meta";
+import { fileUrlWithName } from "@/lib/doc-thumb";
 import { SHARE_LINK_ROLE_LABELS, SHARE_LINK_SCOPE_LABELS, type ShareLinkRole, type ShareLinkScope } from "@/modules/company-files/types";
 import type { CompanyFile, CompanyFileVersion, CompanyFileShareLink } from "@prisma/client";
 import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
@@ -116,7 +117,8 @@ export function FileDetail({
             <h2 className="text-base font-semibold mt-0.5 break-words">{file.name}</h2>
           </div>
           <div className="flex items-center gap-2">
-            <a href={file.storageKey} download={file.name} className="inline-flex">
+            {/* ?download= ให้เซิร์ฟเวอร์ตั้งชื่อจริง — download attribute ใช้ไม่ได้เมื่อไฟล์อยู่คนละโดเมน */}
+            <a href={`${file.storageKey}?download=${encodeURIComponent(file.name)}`} download={file.name} className="inline-flex">
               <Button variant="outline" size="sm"><Download className="h-4 w-4" /> ดาวน์โหลด</Button>
             </a>
             <Button variant="outline" size="sm" disabled={isPending} onClick={() => fileInputRef.current?.click()}>
@@ -138,7 +140,7 @@ export function FileDetail({
               // eslint-disable-next-line @next/next/no-img-element
               <img src={file.storageKey} alt={file.name} className="max-h-[500px] w-full object-contain" />
             ) : (
-              <iframe src={file.storageKey} title={file.name} className="w-full h-[500px]" />
+              <iframe src={fileUrlWithName(file.storageKey, file.name)} title={file.name} className="w-full h-[500px]" />
             )}
           </div>
         )}

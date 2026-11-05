@@ -5,6 +5,8 @@ import { Camera, FileText, Loader2, Paperclip, X } from "lucide-react";
 
 import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 import { compressImage } from "@/modules/chat/lib/image-compress";
+import { fileUrlWithName } from "@/lib/doc-thumb";
+import { DocThumbMini } from "@/modules/report_task/components/report-feed/doc-attachment-card";
 import { uploadFilesAction, type UploadedFile } from "../actions";
 import { baht, receiptFlags, thaiDate, type AttachmentRole } from "../lib/types";
 
@@ -118,14 +120,20 @@ export function FilePicker({
               : receiptFlags(f, { claimDate: claimDate ?? today ?? "", today: today ?? "9999-12-31", maxAgeDays, duplicateOf: f.duplicateOf });
             return (
               <li key={f.sha256 + i} className="flex gap-3 rounded-(--radius) border border-(--line) bg-(--bg) p-2">
-                <a href={f.url} target="_blank" rel="noreferrer" className="shrink-0">
+                <a href={fileUrlWithName(f.url, f.name)} target="_blank" rel="noreferrer" className="shrink-0">
                   {f.mime.startsWith("image/") ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={f.url} alt={f.name} className="h-16 w-16 rounded-md object-cover" />
                   ) : (
-                    <span className="flex h-16 w-16 items-center justify-center rounded-md bg-(--bg-soft)">
-                      <FileText className="h-6 w-6 text-(--ink-soft)" aria-hidden="true" />
-                    </span>
+                    <DocThumbMini
+                      media={{ url: f.url, name: f.name }}
+                      className="h-16 w-12"
+                      fallback={
+                        <span className="flex h-16 w-16 items-center justify-center rounded-md bg-(--bg-soft)">
+                          <FileText className="h-6 w-6 text-(--ink-soft)" aria-hidden="true" />
+                        </span>
+                      }
+                    />
                   )}
                 </a>
                 <div className="min-w-0 flex-1 text-xs">

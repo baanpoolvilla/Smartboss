@@ -688,6 +688,8 @@ export async function listRoomFolders() {
 export interface AllFilesRow {
   id: string;
   name: string;
+  /** URL ไฟล์เวอร์ชันปัจจุบัน — หารูปหน้าแรกจากตรงนี้ (lib/doc-thumb.ts) */
+  storageKey: string;
   mimeType: string;
   size: number;
   currentVersion: number;
@@ -749,6 +751,7 @@ export async function listAllFiles(): Promise<AllFilesRow[]> {
     .map((file) => ({
       id: file.id,
       name: file.name,
+      storageKey: file.storageKey,
       mimeType: file.mimeType,
       size: file.size,
       currentVersion: file.currentVersion,

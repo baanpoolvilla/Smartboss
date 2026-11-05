@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@smartboss/auth";
-import { canServeCompanyFileKey } from "@/modules/company-files/lib/serve-access";
-import { canServeRequestFileKey } from "@/modules/requests/lib/serve-access";
-import { hasPermission } from "@smartboss/auth";
-import { MAINT_PERMS } from "@/modules/maintenance/permissions";
+import { canServeOwnedFileKey } from "@/lib/file-access";
 import {
   getSignedFileUrl,
   readStoredFile,
@@ -66,26 +63,9 @@ export async function GET(
     return new NextResponse("Forbidden", { status: 403 });
   }
 
-  /*
-   * ชั้นที่สอง — สิทธิ์ระดับห้อง: ไฟล์ในคลังกลาง (company-files) ที่อยู่ในโฟลเดอร์ผูกห้อง
-   * ต้องเป็นสมาชิกห้องนั้นถึงจะโหลดได้ ไม่ใช่แค่คนในบริษัทเดียวกัน (ดู serve-access.ts)
-   * โมดูลอื่นยังกันแค่ระดับบริษัท (ผ่าน ownedByOrg ด้านบน) พอสำหรับตอนนี้
-   */
-  if (ownedByOrg && session.orgId && joined.startsWith(`${session.orgId}/company-files/`)) {
-    const allowed = await canServeCompanyFileKey(session.orgId, session.userId, joined);
-    if (!allowed) return new NextResponse("Forbidden", { status: 403 });
-  }
-  // เบิกจ่าย & OT — ใบเสร็จ/สลิปเห็นเฉพาะคนที่เกี่ยวกับใบนั้น (modules/requests/lib/serve-access.ts)
-  if (ownedByOrg && session.orgId && joined.startsWith(`${session.orgId}/requests/`)) {
-    const allowed = await canServeRequestFileKey(session.orgId, session, joined);
-    if (!allowed) return new NextResponse("Forbidden", { status: 403 });
-  }
-
-  // ใบเสร็จค่าใช้จ่ายแจ้งซ่อม — มีชื่อคนและเลขบัญชี เปิดได้เฉพาะคนดูค่าใช้จ่ายได้ (ผู้ใช้ 3/11/2569)
-  if (ownedByOrg && session.orgId && joined.startsWith(`${session.orgId}/maintenance/receipts/`)) {
-    if (![MAINT_PERMS.expenseView, MAINT_PERMS.expenseManage].some((p) => hasPermission(session, p))) {
-      return new NextResponse("Forbidden", { status: 403 });
-    }
+  // ชั้นที่สอง — สิทธิ์ละเอียดกว่าระดับบริษัท (ห้อง / ใบเบิก / ใบเสร็จ) ดู lib/file-access.ts
+  if (ownedByOrg && !(await canServeOwnedFileKey(session, joined))) {
+    return new NextResponse("Forbidden", { status: 403 });
   }
 
   const signedUrl = await getSignedFileUrl(joined, { downloadFileName, inlineFileName });

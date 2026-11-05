@@ -9,6 +9,7 @@ import { Folder as FolderIcon, FileIcon, Upload, FolderPlus, ChevronRight, Home,
 import { createFolder, createFile, type FolderPathEntry } from "@/modules/company-files/data/files";
 import { uploadCompanyFile } from "@/modules/company-files/lib/upload";
 import { formatFileSize, fileIconKind } from "@/modules/company-files/lib/file-meta";
+import { DocThumbMini } from "@/modules/report_task/components/report-feed/doc-attachment-card";
 import type { CompanyFile, CompanyFolder } from "@prisma/client";
 import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 
@@ -177,9 +178,15 @@ export function FileBrowser({
           {sortedFiles.map((f) => (
             <Link key={f.id} href={`/company-files/file/${f.id}`} className="block min-w-0">
               <Card className="p-3 flex items-center gap-3 hover:bg-(--bg-soft) transition-colors">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-(--radius) bg-(--bg-soft)">
-                  <FileIcon className="h-4.5 w-4.5 text-(--ink-soft)" />
-                </span>
+                <DocThumbMini
+                  media={{ url: f.storageKey, name: f.name, thumbUrl: f.mimeType.startsWith("image/") ? f.storageKey : undefined }}
+                  className="h-14 w-11 shrink-0"
+                  fallback={
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-(--radius) bg-(--bg-soft)">
+                      <FileIcon className="h-4.5 w-4.5 text-(--ink-soft)" />
+                    </span>
+                  }
+                />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate">{f.name}</p>
                   <p className="truncate text-[11px] text-(--ink-soft)">

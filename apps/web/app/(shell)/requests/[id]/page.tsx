@@ -2,6 +2,8 @@ import Link from "next/link";
 import { canSeePay, hideBaht, maskRequest, payPrivacy, usesSalaryModule, HIDDEN_PAY_LABEL } from "@/modules/requests/lib/pay-privacy";
 import { notFound } from "next/navigation";
 import { FileText, Pencil } from "lucide-react";
+import { fileUrlWithName } from "@/lib/doc-thumb";
+import { DocThumbMini } from "@/modules/report_task/components/report-feed/doc-attachment-card";
 import { prisma } from "@smartboss/database";
 
 import { AppScaffold } from "@/components/module/app-scaffold";
@@ -70,18 +72,24 @@ function Files({ files, title, flagsFor }: { files: Attachment[]; title: string;
           const flags = flagsFor?.(f) ?? [];
           return (
             <li key={f.sha256 + i} className="flex gap-3 rounded-(--radius) border border-(--line) p-2">
-              <a href={f.url} target="_blank" rel="noreferrer" className="shrink-0">
+              <a href={fileUrlWithName(f.url, f.name)} target="_blank" rel="noreferrer" className="shrink-0">
                 {f.mime.startsWith("image/") ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={f.url} alt={f.name} className="h-20 w-20 rounded-md object-cover" />
                 ) : (
-                  <span className="flex h-20 w-20 items-center justify-center rounded-md bg-(--bg-soft)">
-                    <FileText className="h-7 w-7 text-(--ink-soft)" aria-hidden="true" />
-                  </span>
+                  <DocThumbMini
+                    media={{ url: f.url, name: f.name }}
+                    className="h-20 w-16"
+                    fallback={
+                      <span className="flex h-20 w-20 items-center justify-center rounded-md bg-(--bg-soft)">
+                        <FileText className="h-7 w-7 text-(--ink-soft)" aria-hidden="true" />
+                      </span>
+                    }
+                  />
                 )}
               </a>
               <div className="min-w-0 text-xs">
-                <a href={f.url} target="_blank" rel="noreferrer" className="block truncate font-medium text-(--ink) hover:underline">{f.name}</a>
+                <a href={fileUrlWithName(f.url, f.name)} target="_blank" rel="noreferrer" className="block truncate font-medium text-(--ink) hover:underline">{f.name}</a>
                 <div className="text-(--ink-soft)">{f.by} · {thaiDateTime(f.at)}</div>
                 {f.ai && (f.ai.amount || f.ai.date) && (
                   <div className="mt-0.5 text-(--ink-soft)">ระบบอ่านได้: {[f.ai.amount ? baht(f.ai.amount) : null, f.ai.date ? thaiDate(f.ai.date) : null, f.ai.vendor, f.ai.receiptNo ? `เลขที่ ${f.ai.receiptNo}` : null].filter(Boolean).join(" · ")}</div>

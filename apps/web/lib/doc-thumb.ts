@@ -1,17 +1,24 @@
 /**
- * รูปหน้าแรกของเอกสาร — กติกากลางของทั้งระบบ (ห้องรายงาน ความคิดเห็น งาน แชท แจ้งปัญหา)
+ * รูปหน้าแรกของเอกสาร — กติกากลางของทั้งระบบ (ห้องรายงาน ความคิดเห็น งาน แชท แจ้งปัญหา
+ * คลังไฟล์บริษัท เบิกจ่าย) · งานซ่อมบำรุงรับแต่รูปภาพ จึงไม่มีเอกสารให้แสดง
  *
  * รูปอยู่ที่ key ตายตัว `<ไฟล์>.thumb.png` เสมอ จึงหาเจอจาก URL ของไฟล์ได้เลย
  * ไม่ต้องเก็บฟิลด์เพิ่มในข้อมูลของแต่ละโมดูล และโพสต์/คอมเมนต์/ข้อความเก่าก็ใช้ได้ทันที
  *
  * ไฟล์นี้ไม่แตะเซิร์ฟเวอร์ — ฝั่งหน้าเว็บใช้ได้
  */
-const DOC_FILE_URL = /^\/api\/files\/[^?#]+\/(?:report-task|chat)\/[^/?#]+\.(?:pdf|docx?|xlsx?|pptx?)$/i;
+const DOC_FILE_URL = /^\/api\/files\/[^/?#]+\/(?:report-task|chat|company-files|requests)\/[^?#]+\.(?:pdf|docx?|xlsx?|pptx?)$/i;
+const THUMB_SUFFIX = ".thumb.png";
 const DOC_FILE_KEY = /\.(?:pdf|docx?|xlsx?|pptx?)$/i;
 
 /** key ของรูปหน้าแรกของไฟล์นี้ */
 export function docThumbKey(fileKey: string): string {
-  return `${fileKey}.thumb.png`;
+  return `${fileKey}${THUMB_SUFFIX}`;
+}
+
+/** key ของไฟล์ต้นทาง ถ้า key นี้เป็นรูปหน้าแรก · ไม่ใช่ก็คืนค่าเดิม — ใช้ตรวจสิทธิ์ */
+export function sourceKeyOfThumb(key: string): string {
+  return key.endsWith(THUMB_SUFFIX) ? key.slice(0, -THUMB_SUFFIX.length) : key;
 }
 
 /** key นี้เป็นเอกสารที่อาจมีรูปหน้าแรกไหม */

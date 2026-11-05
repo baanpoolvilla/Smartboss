@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { fileUrlWithName } from "@/lib/doc-thumb";
+import { DocThumbMini } from "@/modules/report_task/components/report-feed/doc-attachment-card";
 import { redirect } from "next/navigation";
 import { prisma } from "@smartboss/database";
 import { hasPermission } from "@smartboss/auth";
@@ -266,7 +268,18 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
                       <>
                         {" · "}
                         {e.attachments.map((a, i) => (
-                          <a key={i} href={a.url} target="_blank" rel="noreferrer" className="text-(--app-strong) hover:underline">หลักฐาน{e.attachments.length > 1 ? ` ${i + 1}` : ""} </a>
+                          <a key={i} href={fileUrlWithName(a.url, a.name)} target="_blank" rel="noreferrer" title={a.name} className="text-(--app-strong) hover:underline">
+                            {/* รูปถ่ายคงเป็นลิงก์ข้อความเหมือนเดิม — หน้านี้โหลดไว้ไม่ต้องดึงรูปทุกแถว */}
+                            {a.mime.startsWith("image/") ? (
+                              <>หลักฐาน{e.attachments.length > 1 ? ` ${i + 1}` : ""} </>
+                            ) : (
+                              <DocThumbMini
+                                media={{ url: a.url, name: a.name }}
+                                className="mr-1 inline-block h-14 w-11 align-middle"
+                                fallback={<>หลักฐาน{e.attachments.length > 1 ? ` ${i + 1}` : ""} </>}
+                              />
+                            )}
+                          </a>
                         ))}
                       </>
                     )}
