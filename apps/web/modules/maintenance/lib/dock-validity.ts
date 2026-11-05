@@ -125,7 +125,8 @@ export function pmDockRevokeReason(
 ): string | null {
   const round = dock.refId.split(":")[1];
   const roundDate = round ? new Date(`${round}T00:00:00.000Z`) : null;
-  if (!pm) return "แผน PM ถูกลบ";
+  // ลบแผนแล้วคะแนนที่หักไปยังอยู่ ถ้าไม่ควรโดนให้ขอแก้ไขคะแนน (ผู้ใช้ 5/11/2569) — กันลบแผนเพื่อล้างคะแนน
+  if (!pm) return null;
   if (!pm.isActive) return "แผน PM ถูกปิดใช้งาน";
   if (!roundDate || Number.isNaN(roundDate.getTime())) return "รอบไม่ถูกต้อง";
   const lapse = addDays(roundDate, st.pmGraceDays);

@@ -62,7 +62,7 @@ test("PM ทำรอบนั้นแล้ว (รอบเลื่อนไ
 });
 
 test("PM ถูกลบ/ปิดใช้งาน/รอนัดรอบใหม่ — คืน", () => {
-  assert.equal(pmDockRevokeReason(pmDock, undefined, [], new Map(), st), "แผน PM ถูกลบ");
+  assert.equal(pmDockRevokeReason(pmDock, undefined, [], new Map(), st), null); // deleted plan keeps its dock; use a score correction request
   assert.equal(pmDockRevokeReason(pmDock, { ...pm, isActive: false }, [], new Map(), st), "แผน PM ถูกปิดใช้งาน");
   assert.equal(pmDockRevokeReason(pmDock, { ...pm, awaitingSchedule: true }, [], new Map(), st), "PM รอนัดรอบใหม่");
 });

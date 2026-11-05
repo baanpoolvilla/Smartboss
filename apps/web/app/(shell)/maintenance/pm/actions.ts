@@ -355,8 +355,25 @@ export async function deletePmAction(formData: FormData) {
   // ใบที่ถูกยกเลิกไปกับแผน แจ้งเตือนต้องหายด้วย ไม่งั้นกดแล้วไปเจอใบที่ไม่มีงานแล้ว
   const cancelledWos = await prisma.workOrder.findMany({
     where: { orgId, pmScheduleId: id, autoCreated: true, status: { in: ["open", "in_progress"] } },
-    select: { id: true },
+    select: { id: true, overdueScore: true },
   });
+  // ใบที่โดนหักแล้ว: จดว่าเก็บคะแนน ไม่งั้นงานหักคะแนนเห็นใบถูกยกเลิกแล้วคืนให้เอง
+  // ถ้าไม่ควรโดนให้ขอแก้ไขคะแนน (ผู้ใช้ 5/11/2569) · ใบที่ CEO ยกเว้นไว้แล้วคงเดิม
+  const dockedRefs = cancelledWos.length
+    ? await prisma.performanceEvent.findMany({
+        where: {
+          orgId,
+          source: "maintenance",
+          category: { in: ["workorder_overdue", "pm_missed"] },
+          OR: [{ refId: { startsWith: `${id}:` } }, ...cancelledWos.flatMap((w) => [{ refId: w.id }, { refId: { startsWith: `${w.id}:` } }])],
+        },
+        select: { refId: true },
+      })
+    : [];
+  const keepIds = cancelledWos
+    .filter((w) => w.overdueScore === null && dockedRefs.some((d) => d.refId === w.id || d.refId?.startsWith(`${w.id}:`) || d.refId?.split(":")[2] === w.id))
+    .map((w) => w.id);
+  if (keepIds.length > 0) await prisma.workOrder.updateMany({ where: { orgId, id: { in: keepIds } }, data: { overdueScore: "kept" } });
   await closeAutoWorkOrdersOfPm(orgId, id, "cancelled");
   await Promise.all(cancelledWos.map((w) => deleteNotificationsByReference(w.id, "work_order")));
   await deletePmSchedule(orgId, id);

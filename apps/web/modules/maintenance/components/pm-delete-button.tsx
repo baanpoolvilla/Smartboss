@@ -50,9 +50,10 @@ export function PmDeleteButton({
               ต้องการลบแผน <span className="font-semibold">&quot;{title}&quot;</span> หรือไม่?
             </p>
             <ul className="list-disc space-y-1 pl-5 text-(--ink-soft)">
-              {openRounds > 0 && <li className="text-[#B91C1C]">{`ใบรอบที่เปิดอยู่ ${openRounds} ใบจะถูกยกเลิกไปด้วย ถ้าใบไหนโดนหักคะแนนแล้ว ระบบจะคืนคะแนนให้`}</li>}
+              {openRounds > 0 && <li className="text-[#B91C1C]">{`ใบรอบที่เปิดอยู่ ${openRounds} ใบจะถูกยกเลิกไปด้วย`}</li>}
               <li>ระบบจะไม่เปิดใบรอบใหม่ของแผนนี้อีก</li>
-              <li>ใบที่ปิดไปแล้วและคะแนนของใบนั้นยังอยู่</li>
+              <li>ใบที่ปิดไปแล้วยังอยู่</li>
+              <li>คะแนนที่โดนหักไปแล้วยังอยู่ ถ้าไม่ควรโดนให้กด &quot;ขอแก้ไข&quot; ที่หน้าคะแนน</li>
               <li>ลบแล้วย้อนกลับไม่ได้</li>
             </ul>
           </div>
