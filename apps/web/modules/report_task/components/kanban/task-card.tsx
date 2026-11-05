@@ -200,6 +200,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
 
   // ทุกการ์ด (มี/ไม่มี checklist) อยู่แถวเดียวกับคอมเมนต์เหนือเส้นคั่น — ผู้ใช้ขอ 21/10/2569 "เอาแค่สีพอ อยู่แถวเดียวกับคอมเมนต์"
   const pillInFooterRow = !isDone;
+  const hasStickers = Object.keys(reactionTotals).length > 0;
   const pillMeta = groupedByPriority ? statusMeta[task.status] : priorityMeta[task.priority];
   const pillKind = groupedByPriority ? "สถานะ" : "ความสำคัญ";
   // จุดสีอย่างเดียว ไม่มีคำ ("เอาเป็นแค่สีพอ") — ชี้ค้างเห็นชื่อระดับ
@@ -452,30 +453,29 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
         </div>
       )}
 
-      {Object.keys(reactionTotals).length > 0 && (
-        <div className="flex flex-wrap gap-1 mt-2">
-          {Object.entries(reactionTotals).map(([stickerId, count]) => {
-            const sticker = stickers.find((s) => s.id === stickerId);
-            if (!sticker) return null;
-            return (
-              <span
-                key={stickerId}
-                title={`${sticker.label} (${sticker.points > 0 ? `+${sticker.points}` : sticker.points})`}
-                className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--bg-soft)] flex items-center gap-0.5"
-              >
-                <span>{sticker.emoji}</span>
-                {count > 1 && <span className="text-[var(--ink-soft)]">{count}</span>}
-              </span>
-            );
-          })}
-        </div>
-      )}
-
       {/* ขวาล่างเหนือรูปคน: แก้กำหนดส่ง + คอมเมนต์ ตัวเล็กสีเทา · คอมเมนต์ใหม่ = ป้ายแดง "N ใหม่" (ผู้ใช้ขอ 20/10/2569) */}
       {/* ป้ายความสำคัญ (งานไม่มี checklist) ซ้ายสุดแถวนี้ ชิดเส้นคั่น — ผู้ใช้ขอ 21/10/2569 ให้ลงมาอยู่ตรงนี้ ไม่กินแถวแยก */}
-      {(pillInFooterRow || suspicious || task.comments.length > 0 || (pendingDue.length > 0 && !dueWaitingMe)) && (
+      {(pillInFooterRow || hasStickers || suspicious || task.comments.length > 0 || (pendingDue.length > 0 && !dueWaitingMe)) && (
         <div className="-mb-1 mt-1.5 flex items-center justify-end gap-2 sm:-mb-1.5">
-          {pillInFooterRow && <div className="mr-auto flex">{priorityPill}</div>}
+          {/* สติกเกอร์อยู่แถวเดียวกับจุดความสำคัญ ไม่กินแถวเพิ่ม การ์ดจะได้ไม่ยาวขึ้น (ผู้ใช้ 6/11/2569 "ประหยัดพื้นที่") */}
+          <div className="mr-auto flex min-w-0 flex-wrap items-center gap-1" data-testid="card-meta-left">
+            {pillInFooterRow && priorityPill}
+            {Object.entries(reactionTotals).map(([stickerId, count]) => {
+              const sticker = stickers.find((s) => s.id === stickerId);
+              if (!sticker) return null;
+              return (
+                <span
+                  key={stickerId}
+                  title={`${sticker.label} (${sticker.points > 0 ? `+${sticker.points}` : sticker.points})`}
+                  // ล็อกความสูงเท่าจุดสี อีโมจิมีบรรทัดสูงกว่าตัวอักษร ไม่งั้นการ์ดยาวขึ้น 6px
+                  className="-my-0.5 flex h-3.5 items-center gap-0.5 overflow-hidden rounded-full bg-[var(--bg-soft)] px-1 text-[10px] leading-none"
+                >
+                  <span className="leading-none">{sticker.emoji}</span>
+                  {count > 1 && <span className="text-[var(--ink-soft)]">{count}</span>}
+                </span>
+              );
+            })}
+          </div>
           {suspicious && (
             <span
               className="flex items-center gap-0.5 text-[10px] font-medium text-[var(--chart-gray)]"
