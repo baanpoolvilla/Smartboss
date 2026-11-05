@@ -111,6 +111,8 @@ export interface PmRow {
   firstOpenRoundInput: string | null;
   /** คนสร้างแผนหรือผู้ดูแล — แก้วันแล้วใบที่เปิดอยู่เลื่อนตาม */
   canMoveRounds: boolean;
+  /** มีใบรอบที่คนนี้มองไม่เห็น — แก้วันไม่ได้ (ดู pm-hidden-rounds.ts) */
+  roundsHidden?: boolean;
 }
 
 /** ลิงก์สร้างใบงานจาก PM — คัดลอกรูปแบบ description ของเดิมทั้งหมด */
@@ -660,7 +662,7 @@ export function PmCalendar({
                 className="h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm text-(--ink)"
               />
               {editing.openRoundLabels.length > 0 && (
-                <span className="text-xs text-(--ink-soft)" data-testid="pm-open-rounds-hint">{editing.canMoveRounds ? `ใบรอบ ${editing.openRoundLabels.join(", ")} เปิดอยู่ เปลี่ยนวันแล้วใบเลื่อนตาม รอบต่อไปนับจากวันที่เลือก` : `ใบรอบ ${editing.openRoundLabels.join(", ")} เปิดอยู่ แก้วันที่ได้เฉพาะคนสร้างแผนหรือผู้ดูแล ถ้าทำไม่ทันให้กดขอเลื่อนในใบงาน`}</span>
+                <span className="text-xs text-(--ink-soft)" data-testid="pm-open-rounds-hint">{editing.canMoveRounds ? `ใบรอบ ${editing.openRoundLabels.join(", ")} เปิดอยู่ เปลี่ยนวันแล้วใบเลื่อนตาม รอบต่อไปนับจากวันที่เลือก` : editing.roundsHidden ? `ใบรอบ ${editing.openRoundLabels.join(", ")} เปิดอยู่ และมีใบที่คุณไม่มีสิทธิ์เห็น จึงแก้วันที่ไม่ได้ — ให้คนสร้างแผนหรือผู้ดูแลแก้ หรือให้ผู้รับผิดชอบกดขอเลื่อนในใบงาน` : `ใบรอบ ${editing.openRoundLabels.join(", ")} เปิดอยู่ แก้วันที่ได้เฉพาะคนสร้างแผนหรือผู้ดูแล ถ้าทำไม่ทันให้กดขอเลื่อนในใบงาน`}</span>
               )}
             </label>
             <label className="flex flex-col gap-1.5">

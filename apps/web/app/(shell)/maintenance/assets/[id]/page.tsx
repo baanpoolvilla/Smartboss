@@ -26,6 +26,7 @@ import { toDateInput } from "@/modules/maintenance/lib/format";
 import { todayBangkok } from "@/modules/maintenance/lib/no-past-date";
 import { updateAssetAction, deleteAssetAction } from "../actions";
 import { deletePmAction, updatePmAction } from "../../pm/actions";
+import { pmIdsWithHiddenOpenRounds } from "@/modules/maintenance/data/pm-hidden-rounds";
 import { AppScaffold } from "@/modules/maintenance/components/app-scaffold";
 import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 
@@ -90,6 +91,8 @@ export default async function AssetDetailPage({
   }
   // ใบที่เปิดค้างทั้งหมดของแต่ละแผน เรียงตามวันครบกำหนด — แผนรอบสั้นมีได้หลายใบพร้อมกัน
   // nextDueDate คือรอบถัดไปที่ยังไม่เปิดใบ ถ้าโชว์เป็น "ครบกำหนด" จะดูเหมือนวันที่เลือกเด้งไปไกล (ผู้ใช้ 4/11/2569)
+  // แผนที่มีใบรอบซึ่งคนนี้มองไม่เห็น — แก้วันไม่ได้ (updatePmAction) ล็อกช่องพร้อมบอกเหตุผล
+  const hiddenRoundPms = canManagePm ? await pmIdsWithHiddenOpenRounds(session, pmIds) : new Set<string>();
   const openWosOf = (pid: string) =>
     pendingWos
       .filter((w) => w.pmScheduleId === pid || w.pmScheduleIds.includes(pid))
@@ -310,7 +313,8 @@ export default async function AssetDetailPage({
                     today={today}
                     openRoundLabels={openWos.filter((w) => w.pmRoundDate).map((w) => fmtDate(w.pmRoundDate))}
                     firstOpenRound={[...openWos].filter((w) => w.pmRoundDate).sort((a, b) => a.pmRoundDate!.getTime() - b.pmRoundDate!.getTime())[0]?.pmRoundDate ?? null}
-                    canMoveRounds={canEditDueDate({ userId: session.userId, viewAll: canViewAll(session) || hasPermission(session, MAINT_PERMS.pmMoveRounds) }, { createdBy: s.createdBy })}
+                    canMoveRounds={canEditDueDate({ userId: session.userId, viewAll: canViewAll(session) || hasPermission(session, MAINT_PERMS.pmMoveRounds) }, { createdBy: s.createdBy }) && !hiddenRoundPms.has(s.id)}
+                    roundsHidden={hiddenRoundPms.has(s.id)}
                   />
                 )}
                 {canManagePm && (
@@ -360,6 +364,7 @@ function PmEditForm({
   openRoundLabels,
   firstOpenRound,
   canMoveRounds,
+  roundsHidden = false,
 }: {
   s: { id: string; title: string; frequency: string; nextDueDate: Date; assignedTo: string | null; requiresExpense: boolean; description: string | null };
   users: { id: string; name: string }[];
@@ -367,6 +372,7 @@ function PmEditForm({
   openRoundLabels: string[];
   firstOpenRound: Date | null;
   canMoveRounds: boolean;
+  roundsHidden?: boolean;
 }) {
   // มีใบเปิดอยู่ ช่องนี้คือวันครบกำหนดของใบนั้น ไม่ใช่รอบถัดไปที่ยังไม่เปิด
   const due = toDateInput(firstOpenRound ?? s.nextDueDate);
@@ -395,7 +401,7 @@ function PmEditForm({
           {firstOpenRound ? "ครบกำหนดรอบนี้" : "วันกำหนดถัดไป"}
           <input type="date" name="nextDueDate" defaultValue={due} min={due < today ? due : today} disabled={locked} className={fieldClass} />
           {openRoundLabels.length > 0 && (
-            <span data-testid="pm-open-rounds-hint">{locked ? `ใบรอบ ${openRoundLabels.join(", ")} เปิดอยู่ แก้วันที่ได้เฉพาะคนสร้างแผนหรือผู้ดูแล ถ้าทำไม่ทันให้กดขอเลื่อนในใบงาน` : `ใบรอบ ${openRoundLabels.join(", ")} เปิดอยู่ เปลี่ยนวันแล้วใบเลื่อนตาม รอบต่อไปนับจากวันที่เลือก`}</span>
+            <span data-testid="pm-open-rounds-hint">{locked && roundsHidden ? `ใบรอบ ${openRoundLabels.join(", ")} เปิดอยู่ และมีใบที่คุณไม่มีสิทธิ์เห็น จึงแก้วันที่ไม่ได้ — ให้คนสร้างแผนหรือผู้ดูแลแก้ หรือให้ผู้รับผิดชอบกดขอเลื่อนในใบงาน` : locked ? `ใบรอบ ${openRoundLabels.join(", ")} เปิดอยู่ แก้วันที่ได้เฉพาะคนสร้างแผนหรือผู้ดูแล ถ้าทำไม่ทันให้กดขอเลื่อนในใบงาน` : `ใบรอบ ${openRoundLabels.join(", ")} เปิดอยู่ เปลี่ยนวันแล้วใบเลื่อนตาม รอบต่อไปนับจากวันที่เลือก`}</span>
           )}
         </label>
         <label className="flex flex-col gap-1 text-xs text-(--ink-soft) sm:col-span-2">

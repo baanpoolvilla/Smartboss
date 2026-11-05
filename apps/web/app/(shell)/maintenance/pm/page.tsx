@@ -14,6 +14,7 @@ import { listAssets } from "@/modules/maintenance/data/assets";
 import { listOrgUsers, userNameMap } from "@/modules/maintenance/data/users";
 import { fmtThaiDate, fmtThaiDateTime, toDateInput } from "@/modules/maintenance/lib/format";
 import { canEditDueDate } from "@/modules/maintenance/lib/due-request-access";
+import { pmIdsWithHiddenOpenRounds } from "@/modules/maintenance/data/pm-hidden-rounds";
 import {
   freqLabel,
   pmMode,
@@ -86,6 +87,9 @@ export default async function PmListPage({
     for (const id of w.pmScheduleIds) pending.set(id, w.id);
   }
 
+  // แผนที่มีใบรอบซึ่งคนนี้มองไม่เห็น — แก้วันไม่ได้ (updatePmAction) ล็อกช่องพร้อมบอกเหตุผลก่อนกดบันทึก
+  const hiddenRoundPms = await pmIdsWithHiddenOpenRounds(session, schedules.map((s) => s.id));
+
   const rows: PmRow[] = schedules.map((s) => ({
     id: s.id,
     title: s.title,
@@ -117,7 +121,8 @@ export default async function PmListPage({
         .sort((a, b) => a.pmRoundDate!.getTime() - b.pmRoundDate!.getTime())[0];
       return first ? toDateInput(first.pmRoundDate!) : null;
     })(),
-    canMoveRounds: canEditDueDate({ userId: session.userId, viewAll: canViewAll(session) || hasPermission(session, MAINT_PERMS.pmMoveRounds) }, { createdBy: s.createdBy }),
+    canMoveRounds: canEditDueDate({ userId: session.userId, viewAll: canViewAll(session) || hasPermission(session, MAINT_PERMS.pmMoveRounds) }, { createdBy: s.createdBy }) && !hiddenRoundPms.has(s.id),
+    roundsHidden: hiddenRoundPms.has(s.id),
     openRoundLabels: pendingWos
       .filter((w) => w.pmRoundDate && (w.pmScheduleId === s.id || w.pmScheduleIds.includes(s.id)))
       .sort((a, b) => a.pmRoundDate!.getTime() - b.pmRoundDate!.getTime())
