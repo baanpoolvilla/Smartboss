@@ -266,15 +266,18 @@ export function NotProvisioned({ what }: { what?: string }) {
 export function DataTable({
   head,
   children,
+  stackOnMobile = false,
 }: {
   head: React.ReactNode[];
   children: React.ReactNode;
+  /** มือถือ: ซ่อนหัวตาราง เรียงแต่ละแถวเป็นการ์ด ไม่ต้องปัดซ้ายขวา — แถวต้องจัดช่องเองด้วย max-sm:* */
+  stackOnMobile?: boolean;
 }) {
   return (
     <Card className="overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] border-collapse text-sm">
-          <thead>
+        <table className={`w-full border-collapse text-sm ${stackOnMobile ? "sm:min-w-[640px] max-sm:block" : "min-w-[640px]"}`}>
+          <thead className={stackOnMobile ? "max-sm:hidden" : undefined}>
             <tr className="border-b border-(--line) bg-(--bg-soft)">
               {head.map((cell, i) => (
                 <th
@@ -286,7 +289,7 @@ export function DataTable({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-(--line)">{children}</tbody>
+          <tbody className={`divide-y divide-(--line) ${stackOnMobile ? "max-sm:block" : ""}`}>{children}</tbody>
         </table>
       </div>
     </Card>

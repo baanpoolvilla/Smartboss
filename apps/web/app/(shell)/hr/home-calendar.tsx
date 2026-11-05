@@ -324,18 +324,19 @@ export async function renderCalendarTab(
           {pending.length === 0 ? (
             <EmptyState>ไม่มีคำขอค้าง</EmptyState>
           ) : (
-            <DataTable head={["พนักงาน", "ประเภท", "วันที่", "เหตุผล", "ดำเนินการ"]}>
+            <DataTable stackOnMobile head={["พนักงาน", "ประเภท", "วันที่", "เหตุผล", "ดำเนินการ"]}>
               {pending.map((r) => (
                 <tr
                   key={r.id}
                   id={`leave-request-${r.id}`}
-                  className={r.id === focusLeaveId ? "scroll-mt-24 bg-(--bg-soft) outline-2 outline-(--brand-navy)" : "hover:bg-(--bg-soft)"}
+                  data-testid="pending-leave-row"
+                  className={`max-sm:flex max-sm:flex-col max-sm:gap-1.5 max-sm:p-3 ${r.id === focusLeaveId ? "scroll-mt-24 bg-(--bg-soft) outline-2 outline-(--brand-navy)" : "hover:bg-(--bg-soft)"}`}
                 >
-                  <Td className="font-medium">
+                  <Td className="font-medium max-sm:p-0">
                     {nameOf.get(r.employment_id) ?? "—"}
                   </Td>
                   {/* ประเภทจากระบบ ไม่ใช่จากหมายเหตุที่พนักงานพิมพ์ — ยอดรายปีเห็นเฉพาะฝ่ายบุคคล/CEO (ผู้ใช้ 5/11/2569) */}
-                  <Td>
+                  <Td className="max-sm:p-0">
                     <span className="font-medium text-(--ink)">{typeNameOf.get(r.leave_type_id) ?? "ลา"}</span>
                     {(() => {
                       const bal = pendingYearly.get(`${r.employment_id}|${r.leave_type_id}|${r.starts_on.slice(0, 4)}`);
@@ -349,10 +350,16 @@ export async function renderCalendarTab(
                       );
                     })()}
                   </Td>
-                  <Td className="font-mono text-xs">
-                    {r.starts_on === r.ends_on
-                      ? r.starts_on
-                      : `${r.starts_on} → ${r.ends_on}`}
+                  <Td className="font-mono text-xs max-sm:p-0 max-sm:font-sans max-sm:text-sm">
+                    {/* มือถือเป็นการ์ด ไม่มีหัวคอลัมน์ — บอกเป็นวันที่แบบไทยให้อ่านได้ทันที */}
+                    <span className="sm:hidden">
+                      {r.starts_on === r.ends_on ? shortThaiDate(r.starts_on) : `${shortThaiDate(r.starts_on)} ถึง ${shortThaiDate(r.ends_on)}`}
+                    </span>
+                    <span className="max-sm:hidden">
+                      {r.starts_on === r.ends_on
+                        ? r.starts_on
+                        : `${r.starts_on} → ${r.ends_on}`}
+                    </span>
                     {/*
                       คำขอสลับต้องบอกให้ผู้อนุมัติเห็น — อนุมัติแล้ววันเดิมจะถูก
                       ยกเลิกให้อัตโนมัติ (leave.service decideRequest) ซึ่งเป็น
@@ -364,18 +371,21 @@ export async function renderCalendarTab(
                       </span>
                     )}
                   </Td>
-                  <Td className="text-(--ink-soft)">{r.reason || "—"}</Td>
-                  <Td>
+                  <Td className={`text-(--ink-soft) max-sm:p-0 ${r.reason ? "" : "max-sm:hidden"}`}>
+                    <span className="sm:hidden">เหตุผล: </span>
+                    {r.reason || "—"}
+                  </Td>
+                  <Td className="max-sm:p-0 max-sm:pt-1.5">
                     <div className="flex gap-2">
-                      <form action={decideLeaveAction}>
+                      <form action={decideLeaveAction} className="max-sm:flex-1">
                         <input type="hidden" name="requestId" value={r.id} />
                         <input type="hidden" name="outcome" value="APPROVED" />
-                        <Button type="submit" size="sm">อนุมัติ</Button>
+                        <Button type="submit" size="sm" className="max-sm:h-10 max-sm:w-full">อนุมัติ</Button>
                       </form>
-                      <form action={decideLeaveAction}>
+                      <form action={decideLeaveAction} className="max-sm:flex-1">
                         <input type="hidden" name="requestId" value={r.id} />
                         <input type="hidden" name="outcome" value="REJECTED" />
-                        <Button type="submit" size="sm" variant="danger">
+                        <Button type="submit" size="sm" variant="danger" className="max-sm:h-10 max-sm:w-full">
                           ไม่อนุมัติ
                         </Button>
                       </form>

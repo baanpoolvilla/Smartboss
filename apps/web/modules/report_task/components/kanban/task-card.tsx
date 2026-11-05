@@ -217,22 +217,33 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
   // งานเสร็จแล้วไม่มีแถวจุดสี แต่มีแถวป้ายสถานะอยู่แล้ว — สติกเกอร์ไปอยู่ข้างป้ายนั้น ไม่เปิดแถวใหม่
   const statusRowShown = isDone && !(reviewWaiting && unreadParts.length === 0);
   // แบบ ก (ผู้ใช้ 5/11/2569): ไม่มีพื้นหลัง ชิดขวา ไม่ดูเป็นป้ายเรียงติดกัน · ล็อกความสูงไม่ให้การ์ดยาวขึ้น (อีโมจิมีบรรทัดสูงกว่าตัวอักษร)
-  const stickerChips = hasStickers ? (
-    <span className="flex flex-wrap items-center justify-end gap-1.5" data-testid="card-stickers">
-      {Object.entries(reactionTotals).map(([stickerId, count]) => {
-        const sticker = stickers.find((s) => s.id === stickerId);
-        if (!sticker) return null;
-        return (
-          <span
-            key={stickerId}
-            title={`${sticker.label} (${sticker.points > 0 ? `+${sticker.points}` : sticker.points})`}
-            className="-my-0.5 flex h-3.5 items-center gap-0.5 text-[12px] leading-none"
-          >
-            <span className="leading-none">{sticker.emoji}</span>
-            {count > 1 && <span className="text-[10px] font-semibold text-[var(--ink-soft)]">{count}</span>}
-          </span>
-        );
-      })}
+  // แสดง 3 แบบแรก ที่เหลือรวมเป็น +N ให้อยู่บรรทัดเดียวเสมอ การ์ดจะไม่ยาวขึ้นและข้อความในแถบแดงไม่โดนตัด (ผู้ใช้ 5/11/2569)
+  const stickerEntries = Object.entries(reactionTotals).flatMap(([stickerId, count]) => {
+    const sticker = stickers.find((s) => s.id === stickerId);
+    return sticker ? [{ sticker, count }] : [];
+  });
+  const hiddenStickers = stickerEntries.slice(MAX_CARD_STICKERS);
+  const stickerChips = stickerEntries.length > 0 ? (
+    <span className="flex shrink-0 flex-nowrap items-center justify-end gap-1.5" data-testid="card-stickers">
+      {stickerEntries.slice(0, MAX_CARD_STICKERS).map(({ sticker, count }) => (
+        <span
+          key={sticker.id}
+          title={`${sticker.label} (${sticker.points > 0 ? `+${sticker.points}` : sticker.points})`}
+          className="-my-0.5 flex h-3.5 items-center gap-0.5 text-[12px] leading-none"
+        >
+          <span className="leading-none">{sticker.emoji}</span>
+          {count > 1 && <span className="text-[10px] font-semibold text-[var(--ink-soft)]">{count}</span>}
+        </span>
+      ))}
+      {hiddenStickers.length > 0 && (
+        <span
+          title={hiddenStickers.map(({ sticker, count }) => `${sticker.emoji} ${sticker.label}${count > 1 ? ` ×${count}` : ""}`).join(" · ")}
+          className="text-[10px] font-semibold leading-none text-[var(--ink-soft)]"
+          data-testid="card-stickers-more"
+        >
+          +{hiddenStickers.length}
+        </span>
+      )}
     </span>
   ) : null;
 
@@ -695,6 +706,9 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
     </>
   );
 }
+
+/** จำนวนแบบสติกเกอร์ที่แสดงบนการ์ด เกินนี้รวมเป็น +N */
+const MAX_CARD_STICKERS = 3;
 
 export const TaskCard = memo(function TaskCard({
   task,
