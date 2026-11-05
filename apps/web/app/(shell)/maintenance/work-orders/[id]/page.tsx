@@ -141,6 +141,7 @@ export default async function WorkOrderDetailPage({
     isWorkOrderMember(wo, session.userId) || wo.createdBy === session.userId;
 
   const waitingOnGroup = waitingOnMembers(wo, session.userId);
+  const groupAll = wo.groupMemberIds.length > 0 && (wo.completionRule ?? "all") === "all";
   // ใบกลุ่ม: สมาชิกเห็นและขอเลื่อนวันของตัวเอง · คนอื่นเห็นวันใกล้สุดของคนที่ยังไม่เสร็จ
   const viewerDue = isWorkOrderMember(wo, session.userId) ? (memberDueAt(wo, session.userId) ?? earliestPendingDue(wo)) : earliestPendingDue(wo);
   const canChangeStatus =
@@ -416,6 +417,35 @@ export default async function WorkOrderDetailPage({
               })
               .join(", ")}
           />
+        )}
+        {/* ใบกลุ่มแบบครบทุกคน: ปุ่มอยู่ใต้ชื่อผู้รับผิดชอบ เห็นโดยไม่ต้องเลื่อน (ผู้ใช้ 5/11/2569) */}
+        {groupAll && (wo.status === "open" || wo.status === "in_progress") && (
+          <div className="rounded-(--radius) border border-(--line) bg-(--bg-soft) p-3 text-sm sm:col-span-2" data-testid="group-progress">
+            <p className="font-semibold text-(--ink)">เสร็จแล้ว {wo.completedMemberIds.length}/{workOrderMemberIds(wo).length} คน</p>
+            <p className="mt-0.5 text-xs text-(--ink-soft)">
+              {waitingOnGroup.length > 0
+                ? `รอ ${waitingOnGroup.map((u) => names[u] ?? "-").join(", ")}`
+                : isWorkOrderMember(wo, session.userId)
+                  ? "ทุกคนเสร็จแล้ว เหลือคุณ ทำเสร็จแล้วกดปิดงานด้านล่าง"
+                  : "ทุกคนเสร็จแล้ว รอปิดงาน"}
+            </p>
+            {canChangeStatus && isWorkOrderMember(wo, session.userId) && waitingOnGroup.length > 0 && (
+              <form action={toggleMyGroupPartAction} className="mt-2">
+                <input type="hidden" name="id" value={id} />
+                <button
+                  type="submit"
+                  data-testid="group-part-toggle"
+                  className={
+                    wo.completedMemberIds.includes(session.userId)
+                      ? "h-10 w-full rounded-(--radius) border border-(--line) bg-(--bg) text-sm font-medium text-(--ink-soft) sm:w-auto sm:px-4"
+                      : "h-10 w-full rounded-(--radius) bg-(--app-strong) text-sm font-semibold text-white sm:w-auto sm:px-4"
+                  }
+                >
+                  {wo.completedMemberIds.includes(session.userId) ? "ยกเลิก เสร็จส่วนของฉัน" : "เสร็จส่วนของฉันแล้ว"}
+                </button>
+              </form>
+            )}
+          </div>
         )}
         {wo.ccUserIds.length > 0 && (
           <InfoRow
@@ -904,20 +934,6 @@ export default async function WorkOrderDetailPage({
             )}
             {canChangeStatus && wo.status === "open" && (
               <StartJobButton id={id} action={updateStatusAction} />
-            )}
-            {/* ใบกลุ่มแบบครบทุกคน: สมาชิกกดเสร็จส่วนของตัวเอง คนสุดท้ายถึงกดปิดงานได้ · ผู้จัดการใบงานปิดแทนได้ */}
-            {canChangeStatus && wo.status === "in_progress" && waitingOnGroup.length > 0 && (
-              <div className="rounded-(--radius) border border-(--line) p-3 text-sm" data-testid="group-progress">
-                <p className="text-(--ink)">รอ {waitingOnGroup.map((u) => names[u] ?? "-").join(", ")} ทำส่วนของตัวเองให้เสร็จ</p>
-                {isWorkOrderMember(wo, session.userId) && (
-                  <form action={toggleMyGroupPartAction} className="mt-2">
-                    <input type="hidden" name="id" value={id} />
-                    <button type="submit" data-testid="group-part-toggle" className="rounded-(--radius) border border-(--line) px-3 py-1.5 text-sm font-medium text-(--ink) hover:bg-(--bg-soft)">
-                      {wo.completedMemberIds.includes(session.userId) ? "ยกเลิกเสร็จส่วนของฉัน" : "เสร็จส่วนของฉันแล้ว"}
-                    </button>
-                  </form>
-                )}
-              </div>
             )}
             {canChangeStatus && wo.status === "in_progress" && (canManage || waitingOnGroup.length === 0) && (
               <CompleteJobButton

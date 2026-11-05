@@ -210,7 +210,7 @@ export function WoAdvancedOptions({
       {openPr && <input type="hidden" name="openPr" value="1" />}
 
       {/* พับด้วย class ไม่ถอดออก — รายชื่อ CC ที่เลือกต้องอยู่ในฟอร์มตลอด */}
-      <div className={open ? "flex flex-col gap-4 rounded-(--radius) border border-(--line) p-3" : "hidden"}>
+      <div className={open ? "flex flex-col gap-3 rounded-(--radius) border border-(--line) p-3" : "hidden"}>
           <MultiPicker
             name="ccUserIds"
             title="เพิ่ม CC (แจ้งสำเนา)"
@@ -240,17 +240,15 @@ export function WoAdvancedOptions({
                   onClick={() => setNoExpense(o.v)}
                   className={
                     noExpense === o.v
-                      ? "rounded-[calc(var(--radius)-2px)] bg-(--bg) px-3 py-1 text-sm font-semibold text-(--brand-navy) shadow-sm"
-                      : "rounded-[calc(var(--radius)-2px)] px-3 py-1 text-sm text-(--ink-soft)"
+                      ? "whitespace-nowrap rounded-[calc(var(--radius)-2px)] bg-(--bg) px-2.5 py-1 text-xs font-semibold text-(--brand-navy) shadow-sm sm:px-3 sm:text-sm"
+                      : "whitespace-nowrap rounded-[calc(var(--radius)-2px)] px-2.5 py-1 text-xs text-(--ink-soft) sm:px-3 sm:text-sm"
                   }
                 >
                   {o.label}
                 </button>
               ))}
             </div>
-            <span className="text-xs text-(--ink-soft)">
-              ไม่มีค่าใช้จ่าย เช่น งานที่จ้างเหมารายปีไว้แล้ว — ตอนปิดงานจะไม่ถามค่าใช้จ่าย และไม่ถูกทวงในรายงาน
-            </span>
+            <span className="text-[11px] text-(--ink-soft)">ไม่มีค่าใช้จ่าย = ปิดงานได้โดยไม่ต้องกรอกยอด</span>
           </div>
 
           {canOpenPr && (
@@ -258,7 +256,7 @@ export function WoAdvancedOptions({
               <input type="checkbox" checked={openPr} onChange={(e) => setOpenPr(e.target.checked)} className="mt-0.5 h-4 w-4" />
               <span>
                 <span className="block text-sm font-medium text-(--ink)">เปิด PR ขอซื้ออุปกรณ์ต่อเลย</span>
-                <span className="block text-xs text-(--ink-soft)">บันทึกใบงานเสร็จแล้ว พาไปหน้าเปิด PR ที่ผูกกับใบงานนี้ทันที</span>
+                <span className="block text-xs text-(--ink-soft)">บันทึกแล้วพาไปหน้าเปิด PR</span>
               </span>
             </label>
           )}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Check, ChevronDown, Plus, Search, UserPlus, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Plus, Search, UserPlus, X } from "lucide-react";
 import { Button } from "@smartboss/ui/components/button";
 import { Modal } from "./dialog";
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
@@ -294,8 +294,10 @@ export function AssigneeAndCc({
   const [group, setGroup] = useState(false);
   const [rule, setRule] = useState<"all" | "any" | "shared">("all");
   // กำหนดส่งแยกรายคน (เหมือนงานกลุ่ม) — ไม่ใส่ = ใช้กำหนดส่งของใบ
-  const [perPerson, setPerPerson] = useState(false);
   const [memberDue, setMemberDue] = useState<Record<string, string>>({});
+  const [dueDraft, setDueDraft] = useState<Record<string, string>>({});
+  const [dueOpen, setDueOpen] = useState(false);
+  const dueCount = picked.filter((id) => memberDue[id]).length;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const selectRef = useRef<HTMLSelectElement>(null);
@@ -381,7 +383,7 @@ export function AssigneeAndCc({
       {group && (
         <div className="flex flex-col gap-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="text-xs text-(--ink-soft)">ปิดงานเมื่อ</span>
+            <span className="text-xs text-(--ink-soft) max-[359px]:hidden">ปิดงานเมื่อ</span>
             <div className="inline-flex gap-0.5 rounded-md border border-(--line) bg-(--bg-soft) p-0.5">
               {([["all", "ครบทุกคน"], ["any", "คนใดคนหนึ่ง"], ["shared", "ช่วยกันทำ"]] as const).map(([v, text]) => (
                 <button
@@ -398,34 +400,86 @@ export function AssigneeAndCc({
           </div>
           <p className="text-[10px] leading-snug text-(--ink-soft)" data-testid="group-rule-hint">
             {rule === "all"
-              ? "ทุกคนกดเสร็จส่วนของตัวเอง คนสุดท้ายปิดงาน · เลยกำหนดหักคนที่ยังไม่เสร็จ"
+              ? "ทุกคนกดเสร็จ คนสุดท้ายปิดงาน · เลยกำหนดหักคนที่ยังไม่เสร็จ"
               : rule === "any"
-                ? "ใครทำเสร็จก่อนปิดงานได้เลย · เลยกำหนดแล้วยังไม่ปิด หักทุกคน"
-                : "ทำงานด้วยกัน ใครในกลุ่มปิดงานก็ได้ · เลยกำหนดแล้วยังไม่ปิด หักทุกคน"}
+                ? "ใครเสร็จก่อนปิดงานได้เลย · เลยกำหนดหักทุกคน"
+                : "ใครในกลุ่มปิดงานก็ได้ · เลยกำหนดหักทุกคน"}
           </p>
-          <label className="mt-1 flex w-fit cursor-pointer items-center gap-1.5 text-xs text-(--ink)">
-            <input type="checkbox" checked={perPerson} onChange={(e) => setPerPerson(e.target.checked)} className="h-3.5 w-3.5" data-testid="member-due-toggle" />
-            กำหนดส่งแยกรายคน
-          </label>
-          {perPerson && picked.length === 0 && <p className="text-[11px] text-(--ink-soft)">เลือกผู้รับผิดชอบก่อน</p>}
-          {perPerson && picked.map((id) => (
-            <div key={id} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] items-center gap-2" data-testid="member-due-row">
-              <span className="truncate text-xs text-(--ink)">{users.find((u) => u.id === id)?.label ?? id}</span>
-              <DatePickerField
-                value={memberDue[id] ?? ""}
-                minDate={todayBangkok()}
-                onChange={(v) => setMemberDue((m) => ({ ...m, [id]: v }))}
-                className="h-9 text-(--ink)"
-              />
-            </div>
-          ))}
-          {perPerson && picked.length > 0 && <p className="text-[10px] leading-snug text-(--ink-soft)">คนที่ไม่ใส่ ใช้กำหนดส่งด้านล่าง · เลยวันของใคร หักคนนั้น</p>}
+          {/* บรรทัดเดียว กดแล้วตั้งในหน้าต่าง ฟอร์มจะได้ไม่ยาวตามจำนวนคน (ผู้ใช้ 5/11/2569) */}
+          <button
+            type="button"
+            disabled={picked.length === 0}
+            onClick={() => {
+              setDueDraft(memberDue);
+              setDueOpen(true);
+            }}
+            data-testid="member-due-open"
+            className="mt-0.5 flex h-8 w-full items-center justify-between gap-2 rounded-lg border border-(--line) px-2.5 text-left text-xs text-(--ink) hover:bg-(--bg-soft) disabled:opacity-50"
+          >
+            <span className="truncate">กำหนดส่งแยกรายคน</span>
+            <span className="flex shrink-0 items-center gap-0.5 text-(--ink-soft)" data-testid="member-due-summary">
+              {dueCount > 0 ? `ตั้งแล้ว ${dueCount} คน` : "ไม่แยก"}
+              <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </span>
+          </button>
           <input
             type="hidden"
             name="memberDueDates"
-            value={perPerson ? JSON.stringify(Object.fromEntries(picked.filter((id) => memberDue[id]).map((id) => [id, memberDue[id]]))) : ""}
+            value={dueCount > 0 ? JSON.stringify(Object.fromEntries(picked.filter((id) => memberDue[id]).map((id) => [id, memberDue[id]]))) : ""}
           />
         </div>
+      )}
+
+      {dueOpen && (
+        <Modal
+          title="กำหนดส่งแยกรายคน"
+          onClose={() => setDueOpen(false)}
+          actions={
+            <>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setDueOpen(false)}>
+                ยกเลิก
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  setMemberDue(dueDraft);
+                  setDueOpen(false);
+                }}
+              >
+                ตกลง
+              </Button>
+            </>
+          }
+        >
+          <p className="mb-2 text-xs text-(--ink-soft)">คนที่ไม่ใส่ใช้กำหนดส่งของใบ · เลยวันของใคร หักคนนั้น</p>
+          <div className="flex flex-col gap-2">
+            {picked.map((id) => (
+              <div key={id} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] items-center gap-2" data-testid="member-due-row">
+                <span className="truncate text-sm text-(--ink)">{users.find((u) => u.id === id)?.label ?? id}</span>
+                <div className="flex min-w-0 items-center gap-1">
+                  <DatePickerField
+                    aboveModal
+                    value={dueDraft[id] ?? ""}
+                    minDate={todayBangkok()}
+                    onChange={(v) => setDueDraft((m) => ({ ...m, [id]: v }))}
+                    className="h-9 min-w-0 flex-1 text-(--ink)"
+                  />
+                  {dueDraft[id] && (
+                    <button
+                      type="button"
+                      aria-label="ล้างวันที่"
+                      onClick={() => setDueDraft((m) => ({ ...m, [id]: "" }))}
+                      className="shrink-0 text-(--ink-soft)"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Modal>
       )}
 
       {open && (

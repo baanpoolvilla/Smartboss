@@ -36,12 +36,15 @@ export function DatePickerField({
   onChange,
   className,
   minDate,
+  aboveModal = false,
 }: {
   value: string;
   onChange: (ymd: string) => void;
   className?: string;
   /** YYYY-MM-DD — dates before this are greyed out and unpickable. */
   minDate?: string;
+  /** ใช้ใน Modal (z-90): ปฏิทินต้องลอยเหนือหน้าต่าง ไม่งั้นเปิดอยู่ข้างหลังแล้วกดไม่ได้ */
+  aboveModal?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const date = value ? new Date(`${value}T00:00:00`) : undefined;
@@ -72,7 +75,7 @@ export function DatePickerField({
           </button>
         }
       />
-      <PopoverContent align="start" className="w-auto p-0">
+      <PopoverContent align="start" className="w-auto p-0" positionerClassName={aboveModal ? "isolate z-95" : undefined}>
         <Calendar
           mode="single"
           locale={thDateFns}

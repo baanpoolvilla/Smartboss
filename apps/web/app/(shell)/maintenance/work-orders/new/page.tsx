@@ -203,15 +203,15 @@ export default async function NewWorkOrderPage({
             <FilePreviewInput name="photos" label="รูปภาพ" attachStyle />
           </Row>
 
-          <div className="-mx-5 -mb-5 mt-1 flex flex-wrap items-center justify-between gap-3 border-t border-(--line) px-5 py-3">
+          <div className="-mx-5 -mb-5 mt-1 flex items-center justify-between gap-2 border-t border-(--line) px-5 py-3">
             <span className="flex min-w-0 items-center gap-1.5 text-[11.5px] text-(--ink-soft)">
               <InitialAvatar name={users.find((u) => u.id === session.userId)?.name ?? "คุณ"} />
-              <span className="truncate">
+              <span className="truncate max-[359px]:hidden">
                 <span className="hidden sm:inline">เปิดโดย </span>
                 <span className="font-medium text-(--ink)">{users.find((u) => u.id === session.userId)?.name ?? "คุณ"}</span>
               </span>
             </span>
-            <div className="flex gap-2">
+            <div className="flex shrink-0 gap-2">
               <Link
                 href="/maintenance/work-orders"
                 className="inline-flex h-10 items-center rounded-(--radius) border border-(--line) px-4 text-sm font-medium text-(--ink) hover:bg-(--bg-soft)"
