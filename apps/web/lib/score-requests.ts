@@ -1,3 +1,4 @@
+import { workOrderIdOfDockRef } from "@/modules/maintenance/lib/work-order-members";
 import "server-only";
 import { randomUUID } from "node:crypto";
 
@@ -89,9 +90,10 @@ async function resolveTarget(
     };
   }
   if (category === "workorder_overdue") {
-    const wo = await prisma.workOrder.findFirst({ where: { orgId, id: refId }, select: { code: true, title: true, createdBy: true } });
+    const woId = workOrderIdOfDockRef(refId);
+    const wo = await prisma.workOrder.findFirst({ where: { orgId, id: woId }, select: { code: true, title: true, createdBy: true } });
     return {
-      target: { kind: "work_order", id: refId, code: wo?.code ?? null },
+      target: { kind: "work_order", id: woId, code: wo?.code ?? null },
       approverId: await activeUserId(orgId, wo?.createdBy, exclude),
       title: wo ? `${wo.code ? `${wo.code} · ` : ""}${wo.title}` : null,
     };

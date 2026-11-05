@@ -66,6 +66,7 @@ import { MarkReadOnView } from "@/modules/notifications/mark-read-on-view";
 import {
   updateStatusAction,
   completeWorkOrderAction,
+  toggleMyGroupPartAction,
   addCommentAction,
   editCommentAction,
   deleteCommentAction,
@@ -86,6 +87,7 @@ import { paymentMethodLabel } from "@/modules/maintenance/lib/receipt-read";
 import { ExpenseDeadlineBox, type ExpenseRequestView } from "@/modules/maintenance/components/expense-deadline-box";
 import { canDecideDueRequest, canEditDueDate } from "@/modules/maintenance/lib/due-request-access";
 import { canDeleteWorkOrderWithPerm } from "@/modules/maintenance/lib/work-order-delete";
+import { COMPLETION_RULE_LABEL, isWorkOrderMember, waitingOnMembers, workOrderMemberIds } from "@/modules/maintenance/lib/work-order-members";
 
 const STATUS_COLOR: Record<string, string> = {
   open: "#2563EB",
@@ -136,8 +138,9 @@ export default async function WorkOrderDetailPage({
 
   const canManage = hasPermission(session, MAINT_PERMS.workorderManage);
   const isOwnJob =
-    wo.assignedTo === session.userId || wo.createdBy === session.userId;
+    isWorkOrderMember(wo, session.userId) || wo.createdBy === session.userId;
 
+  const waitingOnGroup = waitingOnMembers(wo, session.userId);
   const canChangeStatus =
     canManage ||
     (hasPermission(session, MAINT_PERMS.workorderComplete) && isOwnJob);
@@ -145,7 +148,7 @@ export default async function WorkOrderDetailPage({
   const canSeePo = hasPermission(session, MAINT_PERMS.poView);
   // ผู้รับผิดชอบใบงานที่ไม่มีสิทธิ์ดู PR/PO ยังเห็น "PR ของใบงานตัวเองถึงไหนแล้ว" (ชื่อ + สถานะ ไม่มีราคา ไม่มีลิงก์)
   // ผู้ใช้ 2/11/2569 — เดิมไม่เห็นอะไรเลย ต้องรอแจ้งเตือนอย่างเดียว
-  const seeOwnPoStatus = !canSeePo && wo.assignedTo === session.userId;
+  const seeOwnPoStatus = !canSeePo && isWorkOrderMember(wo, session.userId);
   const canCreatePo = hasPermission(session, MAINT_PERMS.poCreate);
   // ใบงานที่ยกเลิกไปแล้ว / ใบส่วนตัว (กันลืม ไม่นับเป็นงานบริษัท — ค่าใช้จ่ายจาก PR จะไปนับ) ไม่เปิดใบสั่งซื้อ
   const canOpenPoHere = canCreatePo && wo.status !== "cancelled" && !wo.isPrivate;
@@ -183,6 +186,7 @@ export default async function WorkOrderDetailPage({
   );
   const names = await userNameMap(orgId, [
     wo.assignedTo,
+    ...wo.groupMemberIds,
     wo.createdBy,
     ...wo.ccUserIds,
     ...comments.map((c) => c.userId),
@@ -402,8 +406,8 @@ export default async function WorkOrderDetailPage({
           <InfoRow
             stacked
             icon={<HardHat className="h-5 w-5" />}
-            label="รับผิดชอบโดย"
-            value={names[wo.assignedTo] ?? "-"}
+            label={wo.groupMemberIds.length > 0 ? `รับผิดชอบโดย (กลุ่ม · ปิดงานเมื่อ${COMPLETION_RULE_LABEL[wo.completionRule ?? "all"]})` : "รับผิดชอบโดย"}
+            value={workOrderMemberIds(wo).map((id) => `${names[id] ?? "-"}${wo.completedMemberIds.includes(id) ? " ✓" : ""}`).join(", ")}
           />
         )}
         {wo.ccUserIds.length > 0 && (
@@ -492,7 +496,7 @@ export default async function WorkOrderDetailPage({
                   dueDate={ymdBkk(wo.dueDate)}
                   // คนที่แก้กำหนดส่งเองได้ (คนเปิดใบ / CEO) ไม่ต้องขอเลื่อน — กดแก้ได้เลย (ผู้ใช้ 2/11/2569
                   // "เราเป็นคนสั่ง") · เดิมมอบงานให้ตัวเองแล้วกดขอเลื่อน คำขอวิ่งไปหา CEO โดยไม่จำเป็น
-                  canRequest={isOpenOrRunning && wo.assignedTo === session.userId && !canEditDueDate({ userId: session.userId, viewAll }, { createdBy: ownerId })}
+                  canRequest={isOpenOrRunning && isWorkOrderMember(wo, session.userId) && !canEditDueDate({ userId: session.userId, viewAll }, { createdBy: ownerId })}
                   canEdit={isOpenOrRunning && canEditDueDate({ userId: session.userId, viewAll }, { createdBy: ownerId })}
                   myId={session.userId}
                   requests={dueRequestViews}
@@ -894,7 +898,21 @@ export default async function WorkOrderDetailPage({
             {canChangeStatus && wo.status === "open" && (
               <StartJobButton id={id} action={updateStatusAction} />
             )}
-            {canChangeStatus && wo.status === "in_progress" && (
+            {/* ใบกลุ่มแบบครบทุกคน: สมาชิกกดเสร็จส่วนของตัวเอง คนสุดท้ายถึงกดปิดงานได้ · ผู้จัดการใบงานปิดแทนได้ */}
+            {canChangeStatus && wo.status === "in_progress" && waitingOnGroup.length > 0 && (
+              <div className="rounded-(--radius) border border-(--line) p-3 text-sm" data-testid="group-progress">
+                <p className="text-(--ink)">รอ {waitingOnGroup.map((u) => names[u] ?? "-").join(", ")} ทำส่วนของตัวเองให้เสร็จ</p>
+                {isWorkOrderMember(wo, session.userId) && (
+                  <form action={toggleMyGroupPartAction} className="mt-2">
+                    <input type="hidden" name="id" value={id} />
+                    <button type="submit" data-testid="group-part-toggle" className="rounded-(--radius) border border-(--line) px-3 py-1.5 text-sm font-medium text-(--ink) hover:bg-(--bg-soft)">
+                      {wo.completedMemberIds.includes(session.userId) ? "ยกเลิกเสร็จส่วนของฉัน" : "เสร็จส่วนของฉันแล้ว"}
+                    </button>
+                  </form>
+                )}
+              </div>
+            )}
+            {canChangeStatus && wo.status === "in_progress" && (canManage || waitingOnGroup.length === 0) && (
               <CompleteJobButton
                 id={id}
                 action={completeWorkOrderAction}

@@ -278,35 +278,72 @@ export function MultiPicker({
 export function AssigneeAndCc({
   users,
   defaultAssignee = "",
+  allowGroup = true,
 }: {
   /** ผู้ที่มอบหมายงานได้ */
   users: PickOption[];
   defaultAssignee?: string;
+  /** ใบจากแผน PM เป็นกลุ่มไม่ได้ */
+  allowGroup?: boolean;
 }) {
-  const [assignee, setAssignee] = useState(defaultAssignee);
+  // ลำดับที่เลือก: คนแรกคือ assignedTo คนที่เหลือคือสมาชิกกลุ่ม · ใบเดี่ยวมีคนเดียว
+  const [picked, setPicked] = useState<string[]>(defaultAssignee ? [defaultAssignee] : []);
+  const [draft, setDraft] = useState<string[]>([]);
+  const [group, setGroup] = useState(false);
+  const [rule, setRule] = useState<"all" | "any" | "shared">("all");
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const selectRef = useRef<HTMLSelectElement>(null);
+  const assignee = picked[0] ?? "";
   const q = query.trim().toLowerCase();
   const current = users.find((u) => u.id === assignee);
   const matches = users
     .filter((u) => !q || `${u.label} ${u.sub ?? ""}`.toLowerCase().includes(q))
-    .sort((a, b) => Number(b.id === assignee) - Number(a.id === assignee));
+    .sort((a, b) => Number(picked.includes(b.id)) - Number(picked.includes(a.id)));
+
+  const announce = () => requestAnimationFrame(() => selectRef.current?.dispatchEvent(new Event("change", { bubbles: true })));
   const openPicker = () => {
+    setDraft(picked);
     setQuery("");
     setOpen(true);
   };
 
   return (
-    <div className="flex min-w-0 flex-col gap-1" data-wo-field="assignee">
-      <span className="text-xs text-(--ink-soft)">ผู้รับผิดชอบ *</span>
+    <div className="flex min-w-0 flex-col gap-1.5" data-wo-field="assignee">
+    {/* ประเภท + ผู้รับผิดชอบ + ปิดงานเมื่อ วางแบบหน้าสร้างงาน (ผู้ใช้ 5/11/2569 "ใช้แบบของ task เลย") */}
+    <div className="flex min-w-0 items-start gap-2">
+      {allowGroup && (
+        <div className="flex shrink-0 flex-col gap-1">
+          <span className="text-xs text-(--ink-soft)">ประเภท</span>
+          <div className="inline-flex h-10 items-center gap-0.5 rounded-lg border border-(--line) bg-(--bg-soft) p-0.5">
+            {([[false, "เดี่ยว"], [true, "กลุ่ม"]] as const).map(([v, text]) => (
+              <button
+                key={text}
+                type="button"
+                aria-pressed={group === v}
+                onClick={() => {
+                  setGroup(v);
+                  if (!v) setPicked((p) => p.slice(0, 1));
+                }}
+                className={`h-full rounded-md px-2.5 text-xs font-medium ${group === v ? "bg-white text-(--brand-navy) shadow-sm" : "text-(--ink-soft)"}`}
+              >
+                {text}
+              </button>
+            ))}
+          </div>
+          <input type="hidden" name="woMode" value={group ? "group" : "single"} />
+          <input type="hidden" name="completionRule" value={rule} />
+        </div>
+      )}
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+      <span className="truncate text-xs text-(--ink-soft)">{group ? `ผู้รับผิดชอบ (หลายคน)${picked.length > 0 ? ` · ${picked.length} คน` : ""} *` : "ผู้รับผิดชอบ (1 คน) *"}</span>
       {/* select ตัวจริงยังอยู่ในฟอร์ม ตัวตรวจช่องบังคับ ใบส่วนตัว และ CC อ่านค่าจากตัวนี้ */}
       <select
         ref={selectRef}
         name="assignedTo"
         required
         value={assignee}
-        onChange={(e) => setAssignee(e.target.value)}
+        onChange={(e) => setPicked(e.target.value ? [e.target.value, ...picked.slice(1).filter((x) => x !== e.target.value)] : [])}
         aria-hidden="true"
         tabIndex={-1}
         className="sr-only"
@@ -318,29 +355,79 @@ export function AssigneeAndCc({
           </option>
         ))}
       </select>
+      {picked.slice(1).map((id) => (
+        <input key={id} type="hidden" name="groupMemberIds" value={id} />
+      ))}
       <button
         type="button"
         onClick={openPicker}
         data-testid="assignee-field"
-        title={current?.label}
+        title={picked.map((id) => users.find((u) => u.id === id)?.label).filter(Boolean).join(", ") || undefined}
         className="flex h-10 w-full items-center justify-between gap-1 rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-left text-sm hover:bg-(--bg-soft)"
       >
-        <span className={`truncate ${current ? "text-(--ink)" : "text-(--ink-soft)"}`}>{current?.label ?? "เลือกคน"}</span>
-        <ChevronDown className="h-4 w-4 shrink-0 text-(--ink-soft)" aria-hidden="true" />
+        <span className={`truncate ${current ? "text-(--ink)" : "text-(--ink-soft)"}`}>{current?.label ?? (group ? "เลือกหลายคน" : "เลือกคน")}</span>
+        <span className="flex shrink-0 items-center gap-1">
+          {picked.length > 1 && <span className="text-xs font-semibold text-(--ink-soft)" data-testid="assignee-more">+{picked.length - 1}</span>}
+          <ChevronDown className="h-4 w-4 text-(--ink-soft)" aria-hidden="true" />
+        </span>
       </button>
+      </div>
+    </div>
+      {group && (
+        <div className="flex flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-xs text-(--ink-soft)">ปิดงานเมื่อ</span>
+            <div className="inline-flex gap-0.5 rounded-md border border-(--line) bg-(--bg-soft) p-0.5">
+              {([["all", "ครบทุกคน"], ["any", "คนใดคนหนึ่ง"], ["shared", "ช่วยกันทำ"]] as const).map(([v, text]) => (
+                <button
+                  key={v}
+                  type="button"
+                  aria-pressed={rule === v}
+                  onClick={() => setRule(v)}
+                  className={`rounded px-2 py-0.5 text-[11px] font-medium ${rule === v ? "bg-white text-(--brand-navy) shadow-sm" : "text-(--ink-soft)"}`}
+                >
+                  {text}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="text-[10px] leading-snug text-(--ink-soft)" data-testid="group-rule-hint">
+            {rule === "all"
+              ? "ทุกคนกดเสร็จส่วนของตัวเอง คนสุดท้ายปิดงาน · เลยกำหนดหักคนที่ยังไม่เสร็จ"
+              : rule === "any"
+                ? "ใครทำเสร็จก่อนปิดงานได้เลย · เลยกำหนดแล้วยังไม่ปิด หักทุกคน"
+                : "ทำงานด้วยกัน ใครในกลุ่มปิดงานก็ได้ · เลยกำหนดแล้วยังไม่ปิด หักทุกคน"}
+          </p>
+        </div>
+      )}
 
       {open && (
         <Modal
-          title="เลือกผู้รับผิดชอบ"
+          title={group ? "เลือกผู้รับผิดชอบหลายคน" : "เลือกผู้รับผิดชอบ"}
           onClose={() => setOpen(false)}
           actions={
-            <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
-              ยกเลิก
-            </Button>
+            <>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
+                ยกเลิก
+              </Button>
+              {group && (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    setPicked(draft);
+                    setOpen(false);
+                    announce();
+                  }}
+                >
+                  ตกลง
+                </Button>
+              )}
+            </>
           }
         >
-          {users.length > SEARCH_FROM && (
-            <div className="sticky -top-4 z-10 -mx-1 mb-1 bg-(--bg) px-1 pb-1.5 pt-1">
+          <div className="sticky -top-4 z-10 -mx-1 mb-1 flex flex-col gap-1.5 bg-(--bg) px-1 pb-1.5 pt-1">
+            {users.length > SEARCH_FROM && (
               <label className="relative block">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-(--ink-soft)" aria-hidden="true" />
                 <input
@@ -356,28 +443,44 @@ export function AssigneeAndCc({
                   className="h-10 w-full rounded-(--radius) border border-(--line) bg-(--bg) pl-9 pr-3 text-base text-(--ink) outline-none focus:border-(--app) sm:text-sm"
                 />
               </label>
-            </div>
-          )}
+            )}
+            {group && <p className="text-xs font-semibold text-(--ink)" data-testid="assignee-count">เลือกแล้ว {draft.length}</p>}
+          </div>
           <div className="flex flex-col">
-            {matches.map((u) => (
-              <button
-                key={u.id}
-                type="button"
-                onClick={() => {
-                  setAssignee(u.id);
-                  setOpen(false);
-                  // CC ในตัวเลือกขั้นสูงฟังค่าจากฟอร์ม — ตั้งค่าด้วย state ไม่เกิด change เอง
-                  requestAnimationFrame(() => selectRef.current?.dispatchEvent(new Event("change", { bubbles: true })));
-                }}
-                className="flex items-center justify-between gap-3 border-b border-(--line) py-2.5 text-left text-sm last:border-0"
-              >
-                <span className="min-w-0">
-                  <span className="block text-(--ink)">{u.label}</span>
-                  {u.sub && <span className="block text-xs text-(--ink-soft)">{u.sub}</span>}
-                </span>
-                {u.id === assignee && <Check className="h-4 w-4 shrink-0 text-(--brand-navy)" aria-label="เลือกอยู่" />}
-              </button>
-            ))}
+            {matches.map((u) =>
+              group ? (
+                <label key={u.id} className="flex items-center gap-3 border-b border-(--line) py-2.5 text-sm last:border-0">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4"
+                    checked={draft.includes(u.id)}
+                    onChange={(e) => setDraft(e.target.checked ? [...draft, u.id] : draft.filter((x) => x !== u.id))}
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-(--ink)">{u.label}</span>
+                    {u.sub && <span className="block text-xs text-(--ink-soft)">{u.sub}</span>}
+                  </span>
+                </label>
+              ) : (
+                <button
+                  key={u.id}
+                  type="button"
+                  onClick={() => {
+                    setPicked([u.id]);
+                    setOpen(false);
+                    // CC ในตัวเลือกขั้นสูงฟังค่าจากฟอร์ม — ตั้งค่าด้วย state ไม่เกิด change เอง
+                    announce();
+                  }}
+                  className="flex items-center justify-between gap-3 border-b border-(--line) py-2.5 text-left text-sm last:border-0"
+                >
+                  <span className="min-w-0">
+                    <span className="block text-(--ink)">{u.label}</span>
+                    {u.sub && <span className="block text-xs text-(--ink-soft)">{u.sub}</span>}
+                  </span>
+                  {u.id === assignee && <Check className="h-4 w-4 shrink-0 text-(--brand-navy)" aria-label="เลือกอยู่" />}
+                </button>
+              ),
+            )}
             {matches.length === 0 && <p className="py-6 text-center text-sm text-(--ink-soft)">ไม่พบ &quot;{query.trim()}&quot;</p>}
           </div>
         </Modal>

@@ -31,7 +31,7 @@ function buildWhere(orgId: string, f: WorkOrderFilters): Prisma.WorkOrderWhereIn
   if (f.status) and.push({ status: f.status });
   if (f.statuses) and.push({ status: { in: f.statuses } });
   if (f.priority) and.push({ priority: f.priority });
-  if (f.assignedTo) and.push({ assignedTo: f.assignedTo });
+  if (f.assignedTo) and.push({ OR: [{ assignedTo: f.assignedTo }, { groupMemberIds: { has: f.assignedTo } }] });
 
   if (f.propertyId) {
     and.push({
@@ -77,6 +77,7 @@ export function listWorkOrderStubs(orgId: string, f: WorkOrderFilters = {}) {
       propertyId: true,
       additionalPropertyIds: true,
       assignedTo: true,
+      groupMemberIds: true,
       createdBy: true,
     },
   });
@@ -169,6 +170,8 @@ export interface WorkOrderInput {
   priority?: string;
   dueDate?: Date | null;
   ccUserIds?: string[];
+  groupMemberIds?: string[];
+  completionRule?: string | null;
   additionalPropertyIds?: string[];
   pmScheduleId?: string | null;
   pmScheduleIds?: string[];
@@ -252,6 +255,8 @@ export function createWorkOrder(orgId: string, data: WorkOrderInput) {
         priority: data.priority ?? "medium",
         dueDate: data.dueDate ?? null,
         ccUserIds: data.ccUserIds ?? [],
+        groupMemberIds: data.groupMemberIds ?? [],
+        completionRule: data.completionRule ?? null,
         additionalPropertyIds: data.additionalPropertyIds ?? [],
         pmScheduleId: data.pmScheduleId ?? null,
         pmScheduleIds: data.pmScheduleIds ?? [],

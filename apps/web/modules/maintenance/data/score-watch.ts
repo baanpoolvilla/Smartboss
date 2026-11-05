@@ -1,3 +1,4 @@
+import { workOrderIdOfDockRef, workOrderMemberIds } from "@/modules/maintenance/lib/work-order-members";
 import "server-only";
 import { prisma } from "@smartboss/database";
 
@@ -71,6 +72,7 @@ export async function maintenanceScoreWatch(
     title: true,
     dueDate: true,
     assignedTo: true,
+    groupMemberIds: true,
     property: { select: { name: true, caretakerId: true } },
   } as const;
 
@@ -117,7 +119,7 @@ export async function maintenanceScoreWatch(
   });
   const rows = [...overdueRows, ...soonRows];
   const responsibleIds = [
-    ...new Set(rows.map((r) => r.assignedTo ?? r.property?.caretakerId).filter((x): x is string => !!x)),
+    ...new Set(rows.flatMap((r) => [r.assignedTo ?? r.property?.caretakerId, ...r.groupMemberIds]).filter((x): x is string => !!x)),
   ];
   const [users, docks] = await Promise.all([
     responsibleIds.length
@@ -129,7 +131,8 @@ export async function maintenanceScoreWatch(
             orgId,
             source: "maintenance",
             category: "workorder_overdue",
-            refId: { in: overdueRows.map((r) => r.id) },
+            // ใบกลุ่มแยกแถวรายคน refId = ใบ:คน
+            refId: { in: overdueRows.flatMap((r) => [r.id, ...workOrderMemberIds(r).map((u) => `${r.id}:${u}`)]) },
           },
           select: { refId: true, points: true, refType: true },
         })
@@ -137,8 +140,13 @@ export async function maintenanceScoreWatch(
   ]);
   const nameOf = new Map(users.map((u) => [u.id, u.name]));
   // event คืนคะแนน (work_order_undo) อยู่ใต้ refId เดียวกัน — แยกออก ไม่งั้นทับค่าที่หักจนขึ้น +3
-  const dockOf = new Map(docks.filter((d) => d.refType === "work_order").map((d) => [d.refId, Number(d.points)]));
-  const waivedIds = new Set(docks.filter((d) => d.refType === "work_order_undo").map((d) => d.refId));
+  const dockOf = new Map<string, number>();
+  for (const d of docks) {
+    if (d.refType !== "work_order" || !d.refId) continue;
+    const id = workOrderIdOfDockRef(d.refId);
+    dockOf.set(id, (dockOf.get(id) ?? 0) + Number(d.points));
+  }
+  const waivedIds = new Set(docks.filter((d) => d.refType === "work_order_undo" && d.refId).map((d) => workOrderIdOfDockRef(d.refId!)));
 
   const toItem = (r: (typeof rows)[number]): ScoreWatchItem => {
     const who = r.assignedTo ?? r.property?.caretakerId ?? null;
@@ -148,7 +156,7 @@ export async function maintenanceScoreWatch(
       title: r.title,
       place: r.property?.name ?? null,
       dueDate: r.dueDate!,
-      responsibleName: who ? (nameOf.get(who) ?? null) : null,
+      responsibleName: who ? [who, ...r.groupMemberIds].map((u) => nameOf.get(u)).filter(Boolean).join(", ") || null : null,
       docked: dockOf.get(r.id) ?? null,
       waived: waivedIds.has(r.id),
     };

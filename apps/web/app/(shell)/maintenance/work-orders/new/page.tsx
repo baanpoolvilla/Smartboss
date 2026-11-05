@@ -164,8 +164,8 @@ export default async function NewWorkOrderPage({
           {/* บ้าน · ผู้รับผิดชอบ แถวเดียวทุกขนาดจอ ไม่กินที่ (ผู้ใช้ 5/11/2569) · CC อยู่ในตัวเลือกขั้นสูง
               ใบส่วนตัว: ผู้รับผิดชอบคือคนเปิดเอง — ซ่อนช่องนั้น บ้านขยายเต็มแถว */}
           <Row icon={House}>
-            <div className="grid grid-cols-2 gap-2 sm:gap-3">
-              <div data-wo-field="house" className="min-w-0 group-data-[private=1]/wo:col-span-2">
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)] sm:gap-3">
+              <div data-wo-field="house" className="min-w-0 sm:group-data-[private=1]/wo:col-span-2">
               <MultiPicker
               name="propertyIds"
               title="เลือกบ้าน"
@@ -185,6 +185,7 @@ export default async function NewWorkOrderPage({
                   sub: roleLabel(u.roleCodes),
                 }))}
                 defaultAssignee={sp.technicianId ?? ""}
+                allowGroup={!sp.pmScheduleId && !sp.pmScheduleIds}
               />
               </div>
             </div>

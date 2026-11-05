@@ -52,6 +52,8 @@ export interface WorkOrderState {
   dueDate: Date | null;
   completedAt: Date | null;
   assignedTo: string | null;
+  /** ใบกลุ่ม: สมาชิกที่เหลือ */
+  groupMemberIds?: string[];
   caretakerId: string | null;
   /** ใบรอบ PM (แบบนับรอบ) — ไม่มีผ่อนผัน */
   pmRoundDate?: Date | null;
@@ -85,7 +87,7 @@ export function workOrderDockRevokeReason(
   if (isBacklog(lapse, dock.occurredAt)) return "งานค้างเก่า (เลยกำหนดก่อนระบบคะแนนเห็น)";
   const stillOpen = wo.status === "open" || wo.status === "in_progress";
   const responsible = wo.assignedTo ?? wo.caretakerId;
-  if (stillOpen && responsible !== dock.userId) return "ย้ายผู้รับผิดชอบแล้ว";
+  if (stillOpen && responsible !== dock.userId && !wo.groupMemberIds?.includes(dock.userId)) return "ย้ายผู้รับผิดชอบแล้ว";
   return null;
 }
 

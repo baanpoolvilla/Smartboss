@@ -10,9 +10,9 @@ import { propertyCaretaker } from "@/modules/maintenance/data/notify";
  */
 export async function workOrderMentionPeople(
   orgId: string,
-  wo: { assignedTo: string | null; createdBy: string | null; ccUserIds: string[]; propertyId: string | null }
+  wo: { assignedTo: string | null; groupMemberIds?: string[]; createdBy: string | null; ccUserIds: string[]; propertyId: string | null }
 ): Promise<{ id: string; name: string }[]> {
-  const involved = [wo.assignedTo, wo.createdBy, ...wo.ccUserIds, ...(await propertyCaretaker(orgId, wo.propertyId))].filter(
+  const involved = [wo.assignedTo, ...(wo.groupMemberIds ?? []), wo.createdBy, ...wo.ccUserIds, ...(await propertyCaretaker(orgId, wo.propertyId))].filter(
     (x): x is string => !!x
   );
   const rows = await prisma.user.findMany({

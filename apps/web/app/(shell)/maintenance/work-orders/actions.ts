@@ -2,6 +2,7 @@
 
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { prisma } from "@smartboss/database";
 import type { Prisma } from "@smartboss/database";
 import { loadExpenseTracking } from "@/modules/maintenance/data/expense-tracking";
 import { buildBoardRows } from "@/modules/maintenance/data/work-order-board-rows";
@@ -16,6 +17,7 @@ import { isWorkOrderSourceLink } from "@/modules/maintenance/lib/report-prefill"
 import { postWorkOrderCard } from "@/modules/chat/data/task-cards";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { canDeleteWorkOrderWithPerm } from "@/modules/maintenance/lib/work-order-delete";
+import { isWorkOrderMember, pendingMemberIds, waitingOnMembers, workOrderMemberIds } from "@/modules/maintenance/lib/work-order-members";
 import {
   createWorkOrder,
   getWorkOrder,
@@ -138,7 +140,15 @@ export async function createWorkOrderAction(formData: FormData) {
   const assignedTo = isPrivate ? s.userId : d.assignedTo || null;
   // ทุกใบต้องมีผู้รับผิดชอบ (ผู้ใช้ 2/11/2569) — ฟอร์มบังคับเลือกแล้ว ตรงนี้กันคำขอที่ยิงตรงมา
   if (!assignedTo) throw new Error("เลือกผู้รับผิดชอบก่อนสร้างใบแจ้งซ่อม");
-  const cc = isPrivate ? [] : (d.ccUserIds ?? []).filter((id) => id !== assignedTo);
+  // ใบกลุ่ม: ใบส่วนตัวและใบจากแผน PM เป็นกลุ่มไม่ได้ · รับเฉพาะคนในบริษัทที่ยังใช้งาน
+  const pickedMembers = formData.getAll("groupMemberIds").map(String).filter((id) => id && id !== assignedTo);
+  const groupAllowed = !isPrivate && !d.pmScheduleId && pmScheduleIds.length === 0 && formData.get("woMode") === "group";
+  const groupMemberIds = groupAllowed && pickedMembers.length > 0
+    ? (await prisma.user.findMany({ where: { orgId: s.orgId, isActive: true, id: { in: [...new Set(pickedMembers)] } }, select: { id: true } })).map((u) => u.id)
+    : [];
+  const pickedRule = String(formData.get("completionRule") ?? "all");
+  const completionRule = groupMemberIds.length > 0 ? (["all", "any", "shared"].includes(pickedRule) ? pickedRule : "all") : null;
+  const cc = isPrivate ? [] : (d.ccUserIds ?? []).filter((id) => id !== assignedTo && !groupMemberIds.includes(id));
   const [primary, ...additional] = d.propertyIds;
 
   if (d.dueDate && isPastDay(d.dueDate)) {
@@ -159,6 +169,8 @@ export async function createWorkOrderAction(formData: FormData) {
     priority: d.priority,
     dueDate,
     assignedTo,
+    groupMemberIds,
+    completionRule,
     createdBy: s.userId,
     ccUserIds: cc,
     assetId: d.assetId || null,
@@ -188,10 +200,10 @@ export async function createWorkOrderAction(formData: FormData) {
     wo.id,
   );
 
-  await woLog(s, wo, "create", "สร้างใบงาน", { propertyIds: d.propertyIds, assignedTo, cc, priority: d.priority, photos: photoUrls.length });
+  await woLog(s, wo, "create", "สร้างใบงาน", { propertyIds: d.propertyIds, assignedTo, groupMemberIds, cc, priority: d.priority, photos: photoUrls.length });
 
   // แจ้งเตือนผู้รับผิดชอบ + CC (in-app + LINE) · ใบส่วนตัวไม่แจ้งใคร (คนเปิดเป็นคนรับเอง)
-  const notifyTargets = new Set<string>(isPrivate ? [] : [...(assignedTo ? [assignedTo] : []), ...cc]);
+  const notifyTargets = new Set<string>(isPrivate ? [] : [...(assignedTo ? [assignedTo] : []), ...groupMemberIds, ...cc]);
   for (const uid of notifyTargets) {
     await notifyUser(s.orgId, uid, {
       title: `📋 ได้รับมอบหมายงานใหม่: ${d.title}`,
@@ -208,8 +220,8 @@ export async function createWorkOrderAction(formData: FormData) {
   }
 
   // การ์ดในแชทส่วนตัว คนสร้าง ↔ ผู้รับผิดชอบ แบบเดียวกับงาน (CC ไม่ได้การ์ด — ได้แค่แจ้งเตือนด้านบน)
-  if (assignedTo) {
-    await postWorkOrderCard(s.orgId, { assignerId: s.userId, assigneeId: assignedTo, workOrderId: wo.id, title: d.title, dueDate });
+  for (const assigneeId of [...(assignedTo ? [assignedTo] : []), ...groupMemberIds]) {
+    await postWorkOrderCard(s.orgId, { assignerId: s.userId, assigneeId, workOrderId: wo.id, title: d.title, dueDate });
   }
 
   revalidatePath("/maintenance/work-orders");
@@ -241,7 +253,7 @@ export async function updateStatusAction(formData: FormData) {
     throw new Error("ไม่มีสิทธิ์เปลี่ยนสถานะใบงานนี้");
   }
   const canManage = hasPermission(s, MAINT_PERMS.workorderManage);
-  const isOwnJob = wo.assignedTo === s.userId || wo.createdBy === s.userId;
+  const isOwnJob = isWorkOrderMember(wo, s.userId) || wo.createdBy === s.userId;
   const canCompleteOwn =
     hasPermission(s, MAINT_PERMS.workorderComplete) && isOwnJob;
   if (!canManage && !canCompleteOwn) {
@@ -249,6 +261,10 @@ export async function updateStatusAction(formData: FormData) {
   }
 
   // changed = คำขอนี้เป็นคนเปลี่ยนสถานะจริง — กดซ้ำ/กดพร้อมกันได้ false (ดู updateWorkOrderStatus)
+  // ใบกลุ่มแบบครบทุกคน: ปิดได้เมื่อทุกคนทำส่วนตัวเองเสร็จ · ผู้จัดการใบงานปิดแทนได้
+  if (status === "completed" && !canManage && waitingOnMembers(wo, s.userId).length > 0) {
+    throw new Error("ยังปิดไม่ได้ รอสมาชิกในกลุ่มทำส่วนของตัวเองให้เสร็จก่อน");
+  }
   const changed = await updateWorkOrderStatus(s.orgId, id, status);
   // ปิดงาน = เดิน PM ที่ผูกไว้ไปรอบถัดไป (batch → single → fallback ตามอุปกรณ์)
   // ใบที่ปิดไปแล้วถูกกดปิดซ้ำ ต้องไม่เดิน PM ซ้ำ ไม่งั้นรอบกระโดดข้ามไปอีกช่วง
@@ -283,7 +299,7 @@ const STATUS_TEXT: Record<string, { emoji: string; label: string }> = {
  * propertyCaretaker) ยกเว้นคนที่เพิ่งกดเปลี่ยนสถานะเอง ไม่ต้องแจ้งตัวเอง */
 async function notifyStatusChanged(
   orgId: string,
-  wo: { id: string; title: string; propertyId: string; assignedTo: string | null; createdBy: string | null; ccUserIds: string[]; pmRoundDate?: Date | null; isPrivate?: boolean },
+  wo: { id: string; title: string; propertyId: string; assignedTo: string | null; groupMemberIds?: string[]; createdBy: string | null; ccUserIds: string[]; pmRoundDate?: Date | null; isPrivate?: boolean },
   status: string,
   actorId: string
 ) {
@@ -301,7 +317,7 @@ async function notifyStatusChanged(
   const property = await getProperty(orgId, wo.propertyId);
   const propertyName = property?.name ?? "-";
   const targets = new Set<string>([
-    ...(wo.assignedTo ? [wo.assignedTo] : []),
+    ...workOrderMemberIds(wo),
     ...(wo.createdBy ? [wo.createdBy] : []),
     ...wo.ccUserIds,
     ...(await propertyCaretaker(orgId, wo.propertyId)),
@@ -367,6 +383,35 @@ async function skipLinkedPm(
  * ยืนยันงานเสร็จ: บังคับประมาณการค่าใช้จ่าย + รูปหลังแก้ไข
  * (port จาก _showCompletionDialog + _completeWithPhotos)
  */
+/** ใบกลุ่มแบบครบทุกคน: กดเสร็จส่วนของตัวเอง กดอีกครั้งเพื่อยกเลิก · คนสุดท้ายปิดงานจริงด้วยปุ่มปิดงาน */
+export async function toggleMyGroupPartAction(formData: FormData) {
+  const s = await requireOrg();
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const wo = await getWorkOrder(s.orgId, id);
+  if (!wo || !canSeeWorkOrder(await workOrderAccess(s), wo)) return;
+  if (!isWorkOrderMember(wo, s.userId) || wo.groupMemberIds.length === 0 || (wo.completionRule ?? "all") !== "all") return;
+  if (wo.status !== "open" && wo.status !== "in_progress") return;
+  if (!hasPermission(s, MAINT_PERMS.workorderComplete) && !hasPermission(s, MAINT_PERMS.workorderManage)) return;
+  const done = !wo.completedMemberIds.includes(s.userId);
+  const next = done ? [...wo.completedMemberIds, s.userId] : wo.completedMemberIds.filter((x) => x !== s.userId);
+  await prisma.workOrder.update({ where: { id: wo.id }, data: { completedMemberIds: next } });
+  await addWorkOrderComment(s.orgId, wo.id, s.userId, done ? "ทำส่วนของตัวเองเสร็จแล้ว" : "ยกเลิกเสร็จส่วนของตัวเอง", null, { kind: "log" });
+  await woLog(s, wo, "update", done ? "เสร็จส่วนของตัวเอง" : "ยกเลิกเสร็จส่วนของตัวเอง");
+  // เหลือคนเดียวที่ยังไม่เสร็จ ⇒ บอกคนนั้นให้ปิดงาน
+  const left = pendingMemberIds({ ...wo, completedMemberIds: next });
+  if (done && left.length === 1 && left[0] !== s.userId) {
+    await notifyUser(s.orgId, left[0]!, {
+      title: `✅ ทุกคนเสร็จแล้ว เหลือคุณคนเดียว: ${wo.title}`,
+      body: `${wo.code} · ทำส่วนของคุณให้เสร็จแล้วกดปิดงาน`,
+      type: "work_order",
+      referenceId: wo.id,
+    });
+  }
+  revalidatePath(`/maintenance/work-orders/${id}`);
+  revalidatePath("/maintenance/work-orders");
+}
+
 export async function completeWorkOrderAction(formData: FormData) {
   const s = await requireOrg();
   const id = String(formData.get("id") ?? "");
@@ -379,11 +424,14 @@ export async function completeWorkOrderAction(formData: FormData) {
     throw new Error("ไม่มีสิทธิ์ปิดใบงานนี้");
   }
   const canManage = hasPermission(s, MAINT_PERMS.workorderManage);
-  const isOwnJob = wo.assignedTo === s.userId || wo.createdBy === s.userId;
+  const isOwnJob = isWorkOrderMember(wo, s.userId) || wo.createdBy === s.userId;
   const canCompleteOwn =
     hasPermission(s, MAINT_PERMS.workorderComplete) && isOwnJob;
   if (!canManage && !canCompleteOwn) {
     throw new Error("ไม่มีสิทธิ์ปิดใบงานนี้");
+  }
+  if (!canManage && waitingOnMembers(wo, s.userId).length > 0) {
+    throw new Error("ยังปิดไม่ได้ รอสมาชิกในกลุ่มทำส่วนของตัวเองให้เสร็จก่อน");
   }
 
   // ประมาณการค่าใช้จ่าย → completion_notes (รูปแบบข้อความเดียวกับของเดิม)
@@ -583,7 +631,7 @@ export async function addCommentAction(workOrderId: string, formData: FormData) 
   // แจ้งผู้เกี่ยวข้องเมื่อมีความคิดเห็นใหม่ (ยกเว้นคนที่พิมพ์เอง)
   else {
     const targets = new Set<string>([
-      ...(wo.assignedTo ? [wo.assignedTo] : []),
+      ...workOrderMemberIds(wo),
       ...(wo.createdBy ? [wo.createdBy] : []),
       ...wo.ccUserIds,
     ]);
@@ -681,7 +729,7 @@ export async function updateCompletionNotesAction(
   if (!wo) return;
   if (!canSeeWorkOrder(await workOrderAccess(s), wo)) return;
   const canManage = hasPermission(s, MAINT_PERMS.workorderManage);
-  const isOwnJob = wo.assignedTo === s.userId || wo.createdBy === s.userId;
+  const isOwnJob = isWorkOrderMember(wo, s.userId) || wo.createdBy === s.userId;
   if (!canManage && !isOwnJob) return;
   const notes = String(formData.get("completionNotes") ?? "").trim();
   await updateWorkOrder(s.orgId, workOrderId, { completionNotes: notes || null });

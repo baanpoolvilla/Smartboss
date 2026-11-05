@@ -263,16 +263,19 @@ async function notifyWorkOrderOwner(
   if (!po.workOrderId) return;
   const wo = await prisma.workOrder.findFirst({
     where: { orgId, id: po.workOrderId, status: { in: ["open", "in_progress", "completed"] } },
-    select: { id: true, code: true, title: true, assignedTo: true },
+    select: { id: true, code: true, title: true, assignedTo: true, groupMemberIds: true },
   });
-  if (!wo?.assignedTo || wo.assignedTo === actorId || alreadyTold.includes(wo.assignedTo)) return;
-  await notifyUser(orgId, wo.assignedTo, {
+  if (!wo) return;
+  for (const memberId of [...(wo.assignedTo ? [wo.assignedTo] : []), ...wo.groupMemberIds]) {
+    if (memberId === actorId || alreadyTold.includes(memberId)) continue;
+    await notifyUser(orgId, memberId, {
     title: `${msg.emoji} ${msg.text} · ใบงาน ${wo.code}`,
     body: [`${wo.title} · ${po.title}`, msg.body].filter(Boolean).join("\n"),
     type: "work_order",
     referenceId: wo.id,
     line: `${msg.emoji} ${msg.text}\n🔧 ใบงาน ${wo.code} ${wo.title}\n📦 ${po.title}${msg.body ? `\n${msg.body}` : ""}`,
   });
+  }
 }
 
 async function ceoOnly() {

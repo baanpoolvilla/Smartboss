@@ -95,7 +95,7 @@ export default async function PerformanceUserDetailPage({
             // pm_schedule, task) ยังไม่มีหน้ารายละเอียดที่ลิงก์ตรงได้ปลอดภัย แต่
             // note ที่บันทึกไว้ตอนหักคะแนนมีรายละเอียดพอที่จะตอบว่า "ทำไม" อยู่แล้ว
             const workOrderHref =
-              ev.refType === "work_order" && ev.refId ? `/maintenance/work-orders/${ev.refId}` : null;
+              ev.refType === "work_order" && ev.refId ? `/maintenance/work-orders/${ev.refId.split(":")[0]}` : null;
 
             return (
               <Card key={ev.id} className="flex items-center gap-3 p-3">

@@ -11,6 +11,7 @@ import { createDueRequest, decideDueRequest, getDueRequest, listDueRequests, pen
 import { logActivity } from "@/modules/maintenance/data/activity";
 import { fmtThaiDate } from "@/modules/maintenance/lib/format";
 import { canDecideDueRequest, canEditDueDate } from "@/modules/maintenance/lib/due-request-access";
+import { isWorkOrderMember, workOrderMemberIds } from "@/modules/maintenance/lib/work-order-members";
 import { isPastDay } from "@/modules/maintenance/lib/no-past-date";
 
 /**
@@ -55,7 +56,7 @@ export async function requestDueDateAction(workOrderId: string, newDate: string,
   const s = await requireOrg();
   const wo = await getWorkOrder(s.orgId, workOrderId);
   if (!wo || !canSeeWorkOrder(await workOrderAccess(s), wo)) return { error: "ไม่พบใบงาน" };
-  if (wo.assignedTo !== s.userId) return { error: "ขอเลื่อนได้เฉพาะผู้รับผิดชอบใบงาน" };
+  if (!isWorkOrderMember(wo, s.userId)) return { error: "ขอเลื่อนได้เฉพาะผู้รับผิดชอบใบงาน" };
   // คนเปิดใบ (ใบ PM อัตโนมัติ = คนสร้างแผน) — ใช้ทั้งตรวจสิทธิ์และหาคนอนุมัติ
   const ownerId = await workOrderOwnerId(s.orgId, wo);
   if (canEditDueDate({ userId: s.userId, viewAll: canViewAll(s) }, { createdBy: ownerId })) return { error: "คุณแก้กำหนดส่งเองได้เลย ไม่ต้องขอเลื่อน" };
@@ -180,7 +181,7 @@ export async function editDueDateAction(workOrderId: string, newDate: string, re
   await log(s, wo, `แก้กำหนดส่ง ${range} ของ`, why ? { reason: why } : undefined);
 
   // แจ้งผู้รับผิดชอบ + CC (ไม่รวมคนเปิดใบงาน และคนที่แก้เอง) — ผู้ใช้ขอ 19/10/2569
-  const recipients = [...new Set([wo.assignedTo, ...wo.ccUserIds])].filter(
+  const recipients = [...new Set([...workOrderMemberIds(wo), ...wo.ccUserIds])].filter(
     (u): u is string => !!u && u !== s.userId && u !== wo.createdBy
   );
   if (recipients.length > 0) {

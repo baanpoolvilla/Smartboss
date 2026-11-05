@@ -57,6 +57,7 @@ export async function buildBoardRows(
       additionalPropertyIds: o.additionalPropertyIds,
       createdBy: o.createdBy,
       assignedTo: o.assignedTo,
+      groupMemberIds: o.groupMemberIds,
       autoCreated: o.autoCreated,
       createdAtLabel: fmtThaiDate(o.createdAt),
       hasExpense: expenseSet.has(o.id),

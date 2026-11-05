@@ -25,6 +25,8 @@ export interface BoardOrder {
   createdBy: string | null;
   /** ผู้ได้รับมอบหมาย (core.users.id) · null = ยังไม่มอบหมาย */
   assignedTo: string | null;
+  /** ใบกลุ่ม: คนที่เหลือ */
+  groupMemberIds?: string[];
   autoCreated: boolean;
   createdAtLabel: string;
   hasExpense: boolean;
@@ -55,7 +57,14 @@ export interface BoardOrder {
 }
 
 /** แถวเบาของใบในคอลัมน์เสร็จแล้ว — พอสำหรับนับและกรอง ข้อมูลการ์ดโหลดตอนจะแสดง */
-export type BoardStub = Pick<BoardOrder, "id" | "propertyId" | "additionalPropertyIds" | "assignedTo" | "createdBy">;
+export type BoardStub = Pick<BoardOrder, "id" | "propertyId" | "additionalPropertyIds" | "assignedTo" | "groupMemberIds" | "createdBy">;
+
+/** ชื่อบนการ์ด — ใบกลุ่มต่อท้ายจำนวนคนที่เหลือ */
+function groupLabel(wo: { assignedTo: string | null; groupMemberIds?: string[] }, names: Record<string, string>): string | undefined {
+  const lead = wo.assignedTo ? names[wo.assignedTo] : undefined;
+  const more = wo.groupMemberIds?.length ?? 0;
+  return lead && more > 0 ? `${lead} +${more}` : lead;
+}
 
 const NO_STUBS: BoardStub[] = [];
 const NO_CARDS: BoardOrder[] = [];
@@ -207,7 +216,7 @@ export function WorkOrderFilteredList({
             wo={wo}
             propertyName={propertyNames[wo.propertyId] ?? ""}
             creatorName={wo.createdBy ? creatorNames[wo.createdBy] : undefined}
-            assigneeName={wo.assignedTo ? creatorNames[wo.assignedTo] : undefined}
+            assigneeName={wo.assignedTo ? groupLabel(wo, creatorNames) : undefined}
           />
         ))}
         {moreCount > 0 && moreHref && <MoreExpenseLink href={moreHref} count={moreCount} />}
@@ -362,7 +371,7 @@ function ColumnList({
       wo={wo}
       propertyName={propertyNames[wo.propertyId] ?? ""}
       creatorName={wo.createdBy ? creatorNames[wo.createdBy] : undefined}
-      assigneeName={wo.assignedTo ? creatorNames[wo.assignedTo] : undefined}
+      assigneeName={wo.assignedTo ? groupLabel(wo, creatorNames) : undefined}
     />
   );
 
@@ -423,7 +432,7 @@ function DoneColumnList({
               wo={wo}
               propertyName={propertyNames[wo.propertyId] ?? ""}
               creatorName={wo.createdBy ? creatorNames[wo.createdBy] : undefined}
-              assigneeName={wo.assignedTo ? creatorNames[wo.assignedTo] : undefined}
+              assigneeName={wo.assignedTo ? groupLabel(wo, creatorNames) : undefined}
             />
           ) : null;
         })}
@@ -541,7 +550,7 @@ export function WorkOrderBoard({
   const [assignee, setAssignee] = useState<string | null>(null);
   const everyRow = useMemo<BoardStub[]>(() => [...orders, ...doneStubs], [orders, doneStubs]);
   const assigneeOptions = useMemo(() => {
-    const ids = new Set(everyRow.map((w) => w.assignedTo).filter((id): id is string => !!id));
+    const ids = new Set(everyRow.flatMap((w) => [w.assignedTo, ...(w.groupMemberIds ?? [])]).filter((id): id is string => !!id));
     return [...ids]
       .map((id) => ({ id, name: creatorNames[id] ?? "ไม่ทราบชื่อ" }))
       .sort((a, b) => a.name.localeCompare(b.name, "th"));
@@ -634,10 +643,10 @@ export function WorkOrderBoard({
         : rows.filter((w) => {
             if (assignee === UNASSIGNED) return !w.assignedTo;
             // ได้รับมอบหมาย = เป็นผู้รับผิดชอบ · ฉันมอบหมาย = เปิดใบงานแล้วให้คนอื่นรับผิดชอบ
-            if (assignee === ASSIGNED_TO_ME) return !!currentUserId && w.assignedTo === currentUserId;
+            if (assignee === ASSIGNED_TO_ME) return !!currentUserId && (w.assignedTo === currentUserId || !!w.groupMemberIds?.includes(currentUserId));
             if (assignee === ASSIGNED_BY_ME)
               return !!currentUserId && w.createdBy === currentUserId && !!w.assignedTo && w.assignedTo !== currentUserId;
-            return w.assignedTo === assignee;
+            return w.assignedTo === assignee || !!w.groupMemberIds?.includes(assignee);
           });
     if (houseId) {
       return byPerson.filter(

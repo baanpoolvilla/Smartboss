@@ -78,6 +78,7 @@ export function workOrderVisibilityWhere(
     AND: [{ OR: [{ isPrivate: false }, { createdBy: access.userId }] }],
     OR: [
       { assignedTo: access.userId },
+      { groupMemberIds: { has: access.userId } },
       { createdBy: access.userId },
       { ccUserIds: { has: access.userId } },
       ...(access.expensePendingIds?.length ? [{ id: { in: access.expensePendingIds } }] : []),
@@ -104,6 +105,7 @@ export function canSeeWorkOrder(
   wo: {
     id?: string;
     assignedTo: string | null;
+    groupMemberIds?: string[];
     createdBy: string | null;
     ccUserIds: string[];
     propertyId: string;
@@ -113,7 +115,7 @@ export function canSeeWorkOrder(
 ): boolean {
   if (access.seeAll) return true;
   if (wo.isPrivate) return wo.createdBy === access.userId;
-  if (wo.assignedTo === access.userId || wo.createdBy === access.userId) {
+  if (wo.assignedTo === access.userId || wo.groupMemberIds?.includes(access.userId) || wo.createdBy === access.userId) {
     return true;
   }
   if (wo.ccUserIds.includes(access.userId)) return true;

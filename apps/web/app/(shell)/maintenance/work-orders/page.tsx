@@ -104,7 +104,7 @@ export default async function WorkOrdersPage({
   );
   const creatorNames = await userNameMap(
     orgId,
-    [...orders, ...doneStubRows].flatMap((o) => [o.createdBy, o.assignedTo])
+    [...orders, ...doneStubRows].flatMap((o) => [o.createdBy, o.assignedTo, ...o.groupMemberIds])
   );
 
   const builtRows = await buildBoardRows(
@@ -127,6 +127,7 @@ export default async function WorkOrdersPage({
     propertyId: o.propertyId,
     additionalPropertyIds: o.additionalPropertyIds,
     assignedTo: o.assignedTo,
+    groupMemberIds: o.groupMemberIds,
     createdBy: o.createdBy,
   }));
   const hasRows = rows.length + doneStubs.length > 0;

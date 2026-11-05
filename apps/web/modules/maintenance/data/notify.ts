@@ -134,7 +134,7 @@ export async function propertyCaretaker(
 export async function withoutUninvolvedCeos(
   orgId: string,
   targets: Iterable<string>,
-  wo: { createdBy: string | null; assignedTo: string | null }
+  wo: { createdBy: string | null; assignedTo: string | null; groupMemberIds?: string[] }
 ): Promise<string[]> {
   const list = [...targets];
   if (list.length === 0) return list;
@@ -143,7 +143,7 @@ export async function withoutUninvolvedCeos(
       where: { orgId, id: { in: list }, roles: { some: { role: { code: "CEO" } } } },
       select: { id: true },
     });
-    const drop = new Set(ceos.map((u) => u.id).filter((id) => id !== wo.createdBy && id !== wo.assignedTo));
+    const drop = new Set(ceos.map((u) => u.id).filter((id) => id !== wo.createdBy && id !== wo.assignedTo && !wo.groupMemberIds?.includes(id)));
     return list.filter((id) => !drop.has(id));
   } catch (err) {
     console.error("[notify] withoutUninvolvedCeos failed", err);

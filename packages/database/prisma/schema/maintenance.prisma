@@ -97,6 +97,12 @@ model WorkOrder {
   photoUrls             String[]  @map("photo_urls")
   afterPhotoUrls        String[]  @map("after_photo_urls")
   ccUserIds             String[]  @map("cc_user_ids")
+  /// ใบกลุ่ม: คนที่เหลือนอกจาก assignedTo · ว่าง = ใบเดี่ยว
+  groupMemberIds        String[]  @default([]) @map("group_member_ids")
+  /// ใบกลุ่ม: ปิดงานเมื่อ all = ครบทุกคน · any = คนใดคนหนึ่ง · shared = ช่วยกันทำ (เหมือนงานกลุ่ม)
+  completionRule        String?   @map("completion_rule")
+  /// ใบกลุ่มแบบครบทุกคน: คนที่ทำส่วนของตัวเองเสร็จแล้ว ไม่โดนหักถ้าเลยกำหนด
+  completedMemberIds    String[]  @default([]) @map("completed_member_ids")
   additionalPropertyIds String[]  @map("additional_property_ids")
   /// เปิดจากรีพอต: ข้อความบอกที่มา + ลิงก์กลับไปข้อความต้นทาง (ใบงานอื่นเป็น null)
   sourceLabel           String?   @map("source_label")
