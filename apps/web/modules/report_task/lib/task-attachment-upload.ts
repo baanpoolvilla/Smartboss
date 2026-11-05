@@ -5,7 +5,7 @@ import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachme
 import type { Attachment } from "@/modules/report_task/types";
 import { uuid } from "@/modules/report_task/lib/uuid";
 
-import { fileTooLargeMessage } from "@/lib/file-limits";
+import { fileTooLargeMessage, REQUEST_MAX_BYTES } from "@/lib/file-limits";
 import { rememberOriginal } from "@/lib/annotate/annotate";
 /** Short Thai label for the attachment list — shown next to the size, e.g. "PDF · 1.2 MB". */
 function labelFor(mime: string): string {
@@ -52,7 +52,7 @@ export async function uploadTaskAttachment(file: File, uploadedBy: string): Prom
     const res = await fetch("/api/report-task/uploads", { method: "POST", body: form });
     if (!res.ok) {
       const data = await res.json().catch(() => null);
-      throw new Error(data?.error ?? "อัปโหลดไฟล์ไม่สำเร็จ");
+      throw new Error(data?.error ?? (res.status === 413 ? fileTooLargeMessage(file, REQUEST_MAX_BYTES) : "อัปโหลดไฟล์ไม่สำเร็จ"));
     }
     const data = (await res.json()) as { url: string; mime: string; size: number };
     url = data.url;

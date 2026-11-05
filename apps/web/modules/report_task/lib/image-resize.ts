@@ -1,7 +1,7 @@
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { isPhotoFile } from "@/lib/upload-file-kind";
 
-import { fileTooLargeMessage } from "@/lib/file-limits";
+import { fileTooLargeMessage, REQUEST_MAX_BYTES } from "@/lib/file-limits";
 import { rememberOriginal } from "@/lib/annotate/annotate";
 /** Shared canvas downscale step — draws `file` onto a canvas at most
  * `maxWidth` wide, used by both the upload path and the legacy inline path.
@@ -126,7 +126,7 @@ async function uploadRaw(file: File, failureMessage: string): Promise<UploadedRe
   const res = await fetch("/api/report-task/uploads", { method: "POST", body: form });
   if (!res.ok) {
     const data = await res.json().catch(() => null);
-    throw new Error(data?.error ?? failureMessage);
+    throw new Error(data?.error ?? (res.status === 413 ? fileTooLargeMessage(file, REQUEST_MAX_BYTES) : failureMessage));
   }
   const data = (await res.json()) as { url: string; mime: string; size: number; thumbUrl?: string | null };
   return { url: data.url, mime: data.mime, name: file.name, size: data.size, thumbUrl: data.thumbUrl };

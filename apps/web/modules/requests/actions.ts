@@ -169,7 +169,7 @@ export async function uploadFilesAction(formData: FormData): Promise<Result<{ fi
     for (const file of files) {
       const mime = file.type || "application/octet-stream";
       if (!EXT[mime]) return { error: `${file.name}: รับเฉพาะรูป (JPG/PNG/WEBP/HEIC) หรือ PDF` };
-      if (file.size > MAX_FILE) return { error: `${file.name}: ไฟล์ใหญ่เกิน 12MB` };
+      if (file.size > MAX_FILE) return { error: `${file.name}: ไฟล์ใหญ่เกิน 12MB — ลองย่อไฟล์ PDF หรือถ่ายรูปใหม่` };
       const buf = Buffer.from(await file.arrayBuffer());
       prepared.push({ file, buf, mime, sha: createHash("sha256").update(buf).digest("hex") });
     }

@@ -12,6 +12,7 @@ import {
 } from "@/modules/report_task/store/attachment-settings-store";
 
 import { fileTooLargeMessage } from "@/lib/file-limits";
+import { programFileError } from "@/lib/upload-file-kind";
 /**
  * อัปโหลดไฟล์แนบของโมดูลรายงานและงาน
  *
@@ -98,6 +99,9 @@ export async function POST(request: Request) {
     if (!(file instanceof File)) {
       return Response.json({ error: "ต้องแนบไฟล์" }, { status: 400 });
     }
+    // โปรแกรม/สคริปต์ไม่รับ เหมือนแชทและคลังไฟล์ (ผู้ใช้ 5/11/2569) · .html ยังรับตามเดิม
+    const programError = programFileError(file.name);
+    if (programError) return Response.json({ error: programError }, { status: 415 });
 
     // Anything not in ALLOWED_TYPES — including .html — is still accepted,
     // just capped at the generic "file" size limit up front (no per-kind

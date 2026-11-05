@@ -8,6 +8,9 @@
 
 export const MB = 1024 * 1024;
 
+/** เพดานของเซิร์ฟเวอร์ต่อคำขอ (deploy/Caddyfile) — เกินนี้โดนตัดก่อนถึงแอป ตอบ 413 ที่ไม่ใช่ JSON */
+export const REQUEST_MAX_BYTES = 25 * MB;
+
 /**
  * เพดานของฟอร์มที่ส่งไฟล์ไปกับการกดบันทึก (server action) — ทั้งคำขอต้องไม่เกิน 25MB
  * (next.config serverActions.bodySizeLimit + Caddy request_body) เผื่อข้อมูลฟอร์มอื่นไว้ 1MB
@@ -22,10 +25,22 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * MB)).toFixed(2)} GB`;
 }
 
+/**
+ * ทางออกต่อท้ายข้อความ ("หากไฟล์เกิน อยากให้แจ้งเตือนว่าให้บีบอัดมาก่อน" ผู้ใช้ 5/11/2569)
+ * ไฟล์ที่บีบอัดแล้วไม่เล็กลง (รูป วิดีโอ zip) ไม่บอกให้บีบอัด เพราะทำตามแล้วก็ไม่ผ่าน
+ */
+function tooLargeHint(name?: string | null): string {
+  if (!name) return "";
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  if (["jpg", "jpeg", "png", "webp", "gif", "heic"].includes(ext)) return " — ลองย่อรูปให้เล็กลงก่อน";
+  if (["zip", "rar", "7z", "gz", "mp4", "webm", "mov"].includes(ext)) return " — ไฟล์นี้บีบอัดเพิ่มไม่ได้ ให้แยกไฟล์ หรือส่งเป็นลิงก์ Google Drive แทน";
+  return " — ลองบีบอัดเป็น .zip ก่อน ถ้ายังเกินให้ส่งเป็นลิงก์ Google Drive แทน";
+}
+
 /** ไฟล์ "x.jpg" ใหญ่เกินไป — ไฟล์นี้ 32.4 MB แต่ใส่ได้ไม่เกิน 25 MB */
 export function fileTooLargeMessage(file: { name?: string | null; size: number }, maxBytes: number): string {
   const name = file.name ? `"${file.name}" ` : "";
-  return `ไฟล์ ${name}ใหญ่เกินไป — ไฟล์นี้ ${formatBytes(file.size)} แต่ใส่ได้ไม่เกิน ${formatBytes(maxBytes)}`;
+  return `ไฟล์ ${name}ใหญ่เกินไป — ไฟล์นี้ ${formatBytes(file.size)} แต่ใส่ได้ไม่เกิน ${formatBytes(maxBytes)}${tooLargeHint(file.name)}`;
 }
 
 /** ไฟล์ที่แนบรวมกันใหญ่เกินไป — รวม 31 MB แต่ส่งได้ไม่เกิน 24 MB ต่อครั้ง */

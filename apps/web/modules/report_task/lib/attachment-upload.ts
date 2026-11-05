@@ -3,7 +3,7 @@ import { isPhotoFile } from "@/lib/upload-file-kind";
 import type { IssueAttachment } from "@/modules/report_task/types/issue";
 import { uuid } from "@/modules/report_task/lib/uuid";
 
-import { fileTooLargeMessage } from "@/lib/file-limits";
+import { fileTooLargeMessage, REQUEST_MAX_BYTES } from "@/lib/file-limits";
 /** Client-side quota mirrored from the server's per-request limits (see
  * /api/uploads) — checked before the request fires so the user gets an
  * instant, specific error instead of a generic 413 after a slow upload. */
@@ -43,7 +43,7 @@ export async function uploadIssueAttachment(file: File, uploadedBy: string): Pro
     const res = await fetch("/api/report-task/uploads", { method: "POST", body: form });
     if (!res.ok) {
       const data = await res.json().catch(() => null);
-      throw new Error(data?.error ?? "อัปโหลดไฟล์ไม่สำเร็จ");
+      throw new Error(data?.error ?? (res.status === 413 ? fileTooLargeMessage(file, REQUEST_MAX_BYTES) : "อัปโหลดไฟล์ไม่สำเร็จ"));
     }
     const data = (await res.json()) as { url: string; mime: string; size: number };
     url = data.url;

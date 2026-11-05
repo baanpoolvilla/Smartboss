@@ -27,6 +27,8 @@ const MAX_BYTES = 25 * 1024 * 1024;
 const ACCEPT_FILES = "";
 
 interface PendingFile {
+  /** เซิร์ฟเวอร์ไม่รับไฟล์นี้ (ชนิด/ขนาด) — ไม่มีปุ่มลองใหม่ */
+  rejected?: boolean;
   id: string;
   file: File;
   kind: ChatAttachment["kind"];
@@ -197,7 +199,14 @@ export const Composer = forwardRef<
     update({ status: "uploading", progress: 0, error: undefined });
     uploadChatMedia(item.file, item.kind, (f) => update({ progress: f }))
       .then((result) => update({ status: "done", progress: 1, result }))
-      .catch((err) => update({ status: "error", error: err instanceof Error ? err.message : "อัปโหลดไม่สำเร็จ" }));
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : "อัปโหลดไม่สำเร็จ";
+        // ขึ้นข้อความให้เห็นเลย — เดิมสาเหตุอยู่แค่ใน tooltip บนมือถือไม่เห็นเลย
+        toast.error(message);
+        // ชนิดไฟล์/ขนาดไม่ผ่าน ลองกี่ครั้งก็ไม่ผ่าน
+        const status = (err as { status?: number })?.status;
+        update({ status: "error", error: message, rejected: status === 413 || status === 415 });
+      });
   }, []);
 
   const addFiles = useCallback(
@@ -528,7 +537,12 @@ export const Composer = forwardRef<
                   <div className="h-full rounded-full bg-(--chat-accent) transition-[width]" style={{ width: `${Math.max(8, p.progress * 100)}%` }} />
                 </div>
               )}
-              {p.status === "error" && (
+              {p.status === "error" && p.rejected && (
+                <div title={p.error} className="absolute inset-0 flex items-center justify-center bg-black/55 px-1 text-center text-[10px] font-medium text-white">
+                  ส่งไม่ได้
+                </div>
+              )}
+              {p.status === "error" && !p.rejected && (
                 <button
                   type="button"
                   onClick={() => startUpload(p)}
