@@ -532,7 +532,7 @@ export function CommentComposer({ action, mentionPeople }: { action: Action; men
         </label>
         <div className="flex-1">
           <CommentTextarea
-            placeholder={mentionPeople?.length ? "เพิ่มความคิดเห็น... พิมพ์ @ เพื่อแท็กคน (Shift+Enter ขึ้นบรรทัดใหม่)" : "เพิ่มความคิดเห็น... (Shift+Enter ขึ้นบรรทัดใหม่)"}
+            placeholder="ความคิดเห็น…"
             ariaLabel="เพิ่มความคิดเห็น"
             mentionPeople={mentionPeople}
           />
@@ -541,6 +541,11 @@ export function CommentComposer({ action, mentionPeople }: { action: Action; men
           <Send className="h-4 w-4" />
         </SubmitButton>
       </div>
+      {/* ช่องพิมพ์แคบมาก (ข้างปุ่มรูป/กล้อง เหลือ 84px บนจอ 320) ข้อความยาวล้นช่อง — คำแนะนำจึงอยู่ใต้ช่องแทน · Shift+Enter ใช้ได้เฉพาะคีย์บอร์ด */}
+      <p className="mt-1 text-[11px] leading-4 text-(--ink-soft)" data-testid="comment-hint">
+        {mentionPeople?.length ? "พิมพ์ @ เพื่อแท็กคน" : null}
+        <span className="hidden sm:inline">{mentionPeople?.length ? " · " : ""}Shift+Enter ขึ้นบรรทัดใหม่</span>
+      </p>
     </form>
     </PasteDropFiles>
   );
