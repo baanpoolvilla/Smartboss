@@ -15,7 +15,7 @@ import { taskDepartmentIdsForBoard, OTHER_DEPARTMENT_ID } from "@/modules/report
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
 import { cn } from "@/modules/report_task/lib/utils";
 import { pendingDueRequestsOf } from "@/modules/report_task/lib/pending-due-request";
-import { KanbanColumn, sumUnread, type BoardColumn, useUnreadCommentMap } from "./kanban-column";
+import { KanbanColumn, sumColumnUnread, type BoardColumn, useUnreadCommentMap, useUnreadMxCommentMap } from "./kanban-column";
 import { buildStatusColumns } from "./status-columns";
 import { TaskDetailSheet } from "./task-detail-sheet";
 import { PersonTopicsBoard } from "./person-topics-board";
@@ -46,6 +46,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const projectTopics = useProjectTopicStore((s) => s.topics);
   const unreadMap = useUnreadCommentMap();
+  const unreadMxMap = useUnreadMxCommentMap();
   // A department head sees the whole board; everyone else only sees tasks
   // they're assigned to or created — a coworker's task no longer appears.
   const allTasks = useMemo(
@@ -559,9 +560,9 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
                   </span>
                 )}
                 {/* คอมเมนต์ที่ยังไม่อ่านในคอลัมน์ (มือถือไม่มีหัวคอลัมน์ บอกตรงแท็บแทน) */}
-                {sumUnread(column.tasks, unreadMap) > 0 && (
+                {sumColumnUnread(column, unreadMap, unreadMxMap) > 0 && (
                   <span className="flex h-5 items-center gap-0.5 rounded-full bg-[var(--chart-red)] px-1.5 text-[11px] font-bold text-white" title="คอมเมนต์ที่ยังไม่ได้อ่าน">
-                    💬{sumUnread(column.tasks, unreadMap)}
+                    💬{sumColumnUnread(column, unreadMap, unreadMxMap)}
                   </span>
                 )}
               </button>

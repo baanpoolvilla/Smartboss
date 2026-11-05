@@ -18,7 +18,8 @@ import { useNotificationStore } from "@/modules/report_task/store/notification-s
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { unreadTaskCommentCounts } from "@/modules/report_task/lib/task-comment-activity";
 import { useMaintenanceNotifStore } from "@/modules/notifications/use-maintenance-notifications";
-import { splitNotifTitle } from "@/modules/notifications/pending-for-you";
+import { splitNotifTitle, useUnreadCommentCounts } from "@/modules/notifications/pending-for-you";
+import type { NotifCategory } from "@/modules/notifications/types";
 
 /** คอมเมนต์ที่ยังไม่ได้อ่าน แยกตามงาน (ของคนที่ดูอยู่) — ใช้ร่วมกับแท็บคอลัมน์บนมือถือใน kanban-board.tsx */
 export function useUnreadCommentMap(): Map<string, number> {
@@ -27,6 +28,18 @@ export function useUnreadCommentMap(): Map<string, number> {
   return useMemo(() => unreadTaskCommentCounts(notifications, me), [notifications, me]);
 }
 export const sumUnread = (tasks: Task[], map: Map<string, number>) => tasks.reduce((n, t) => n + (map.get(t.id) ?? 0), 0);
+
+/** หมวดเดียวกับการ์ดใบงาน (wo-card) ตัวเลขหัวคอลัมน์จะได้ตรงกับแถบแดงบนการ์ด */
+const MX_NOTIF: NotifCategory[] = ["work_order", "purchase_order"];
+/** ความคิดเห็นใหม่ของใบงานซ่อม/PO แยกตามใบ — หัวคอลัมน์ต้องนับเหมือนงาน (ผู้ใช้ 5/11/2569) */
+export function useUnreadMxCommentMap(): Map<string, number> {
+  return useUnreadCommentCounts(MX_NOTIF);
+}
+/** งาน + ใบงานซ่อมในคอลัมน์นี้ */
+export function sumColumnUnread(column: BoardColumn, taskMap: Map<string, number>, mxMap: Map<string, number>): number {
+  const mx = (column.entries ?? []).reduce((n, e) => (e.type === "mx" ? n + (mxMap.get(e.item.id) ?? 0) : n), 0);
+  return sumUnread(column.tasks, taskMap) + mx;
+}
 
 /** เหมือน useUnreadCommentLatest แต่ของใบงานซ่อม — แจ้งเตือน "💬 ความคิดเห็นใหม่" ที่ยังไม่อ่าน แยกตาม id ใบงาน (ผู้ใช้ขอ 20/10/2569) */
 function useUnreadWoCommentLatest(): Map<string, string> {
@@ -152,7 +165,8 @@ export function KanbanColumn({
   const accent = column.accent;
   // คอมเมนต์ที่ยังไม่อ่านในคอลัมน์นี้ — ขึ้นแทนป้ายจำนวนงานทางขวา (จำนวนงานย้ายไปไว้หน้าชื่อแทนไอคอน)
   const unreadMap = useUnreadCommentMap();
-  const unreadComments = sumUnread(column.tasks, unreadMap);
+  const unreadMxMap = useUnreadMxCommentMap();
+  const unreadComments = sumColumnUnread(column, unreadMap, unreadMxMap);
   // งานที่มีคนขอเลื่อนกำหนดส่งรออนุมัติ — ป้ายแดงแบบเดียวกับคอมเมนต์ใหม่ (ผู้ใช้ขอ 29/10/2569)
   const dueRequestTasks = column.tasks.filter((t) => pendingDueRequestsOf(t).length > 0).length;
   const percent = boardTotal > 0 ? Math.round((column.tasks.length / boardTotal) * 100) : 0;
