@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { AlarmClock, CalendarClock, TrendingDown } from "lucide-react";
+import { AlarmClock, CalendarClock } from "lucide-react";
 import { Card } from "@smartboss/ui/components/card";
 
 import type { ScoreWatch, ScoreWatchItem } from "@/modules/maintenance/data/score-watch";
+import { ScoreWatchDonut } from "@/modules/maintenance/components/score-watch-donut";
 import { fmtThaiDate } from "@/modules/maintenance/lib/format";
 
 /**
@@ -103,77 +104,6 @@ function ListCard({
   );
 }
 
-/** โดนัทใบงานที่ยังไม่ปิด แยกตามกำหนดส่ง — หน้าตาเดียวกับโดนัทค่าใช้จ่าย (วงหนา ตัวเลขรวมตรงกลาง) */
-function DueDonut({ data }: { data: ScoreWatch }) {
-  const parts = [
-    { label: "เลยกำหนด", value: data.overdueCount, color: "#DC2626" },
-    { label: "ใกล้ครบกำหนด (≤ 3 วัน)", value: data.dueSoonCount, color: "#F59E0B" },
-    { label: "ยังไม่ถึงกำหนด", value: data.laterCount, color: "#16A34A" },
-    { label: "ไม่ได้ตั้งวันครบกำหนด", value: data.noDueCount, color: "#94A3B8" },
-  ];
-  const total = parts.reduce((s, p) => s + p.value, 0);
-  const R = 52;
-  const C = 2 * Math.PI * R;
-  let offset = 0;
-
-  return (
-    <div className="flex flex-col items-center gap-5 sm:flex-row sm:justify-center sm:gap-10">
-      <svg viewBox="0 0 140 140" className="h-44 w-44 shrink-0" role="img" aria-label={`ใบงานที่ยังไม่ปิด ${total} ใบ`}>
-        <circle cx="70" cy="70" r={R} fill="none" stroke="var(--line)" strokeWidth="22" />
-        {total > 0 &&
-          parts.map((p) => {
-            if (!p.value) return null;
-            const len = (p.value / total) * C;
-            const el = (
-              <circle
-                key={p.label}
-                cx="70"
-                cy="70"
-                r={R}
-                fill="none"
-                stroke={p.color}
-                strokeWidth="22"
-                strokeDasharray={`${len} ${C - len}`}
-                strokeDashoffset={-offset}
-                transform="rotate(-90 70 70)"
-              />
-            );
-            offset += len;
-            return el;
-          })}
-        <text x="70" y="68" textAnchor="middle" fontSize="22" fontWeight="700" fill="var(--ink)">
-          {total}
-        </text>
-        <text x="70" y="86" textAnchor="middle" fontSize="10" fill="var(--ink-soft)">
-          ใบงานที่ยังไม่ปิด
-        </text>
-      </svg>
-      <div className="grid gap-2 text-sm">
-        {parts.map((p) => (
-          <div key={p.label} className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: p.color }} />
-            <span className="text-(--ink)">{p.label}</span>
-            <span className="ml-auto pl-4 font-semibold tabular-nums text-(--ink)">{p.value}</span>
-            <span className="w-10 text-right text-xs tabular-nums text-(--ink-soft)">
-              {total ? `${Math.round((p.value / total) * 100)}%` : "–"}
-            </span>
-          </div>
-        ))}
-        <div className="mt-1 flex items-center gap-2 border-t border-(--line) pt-2">
-          <TrendingDown className="h-4 w-4 shrink-0 text-[#DC2626]" />
-          <span className="text-(--ink)">
-            คะแนนที่โดนหักเดือนนี้ {data.orgWide ? "(ทั้งบริษัท)" : "(ของฉัน)"}
-          </span>
-          <span className="ml-auto pl-4 font-semibold tabular-nums text-[#DC2626]">
-            {data.monthPoints < 0 ? `−${Math.abs(data.monthPoints)}` : data.monthPoints}
-          </span>
-          <span className="w-10 text-right text-xs tabular-nums text-(--ink-soft)">{data.monthDocks} ครั้ง</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function ScoreWatchSection({ data }: { data: ScoreWatch }) {
   return (
     <>
@@ -184,7 +114,7 @@ export function ScoreWatchSection({ data }: { data: ScoreWatch }) {
         </Link>
       </div>
       <Card className="mb-3 p-4">
-        <DueDonut data={data} />
+        <ScoreWatchDonut data={data} />
         <p className="mt-4 text-center text-xs text-(--ink-soft)">
           ใบงานที่เลยกำหนดแล้วยังไม่ปิด ระบบหักคะแนนผู้รับผิดชอบ และแจ้งเตือนคนนั้นทันที · ปิดงานก่อนครบกำหนดเพื่อไม่ให้โดนหัก
         </p>
