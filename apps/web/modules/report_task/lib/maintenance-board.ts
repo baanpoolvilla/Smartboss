@@ -78,6 +78,12 @@ export interface MaintenanceBoardItem {
   commentCount?: number;
   photoCount?: number;
   pendingDue?: number;
+  /** ขอเลื่อนล่าสุดเมื่อไหร่ (ISO) — การ์ดเด้งขึ้นบนเหมือนงาน */
+  pendingDueAt?: string | null;
+  /** ขอเลื่อนเป็นวันไหน (YYYY-MM-DD) เมื่อมีคำขอเดียว */
+  pendingDueTo?: string | null;
+  /** คนที่ดูอยู่คือคนเปิดใบที่ต้องอนุมัติ — แถบแดงค้างจนกว่าจะตัดสิน (กติกาเดียวกับ dueRequestWaitsFor ของงาน) */
+  pendingDueWaitsMe?: boolean;
   isPrivate?: boolean;
   /** สถานะจริง open | in_progress | completed */
   status?: string;

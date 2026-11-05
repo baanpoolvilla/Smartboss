@@ -108,6 +108,8 @@ export function MaintenanceCard({ item }: { item: MaintenanceBoardItem }) {
         commentCount={item.commentCount ?? 0}
         photoCount={item.photoCount ?? 0}
         pendingDue={item.pendingDue ?? 0}
+        pendingDueTo={item.pendingDueTo}
+        pendingDueWaitsMe={item.pendingDueWaitsMe}
         isPrivate={item.isPrivate}
         // ปุ่มสติกเกอร์วางทับนอกลิงก์ (ด้านล่าง) — เว้นที่ไว้ข้างรูปคน
         footerSlot={canSticker ? <span className="inline-block h-6 w-6" aria-hidden="true" /> : undefined}

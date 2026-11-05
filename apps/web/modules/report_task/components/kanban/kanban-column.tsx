@@ -35,6 +35,11 @@ const MX_NOTIF: NotifCategory[] = ["work_order", "purchase_order"];
 export function useUnreadMxCommentMap(): Map<string, number> {
   return useUnreadCommentCounts(MX_NOTIF);
 }
+/** งาน + ใบงานซ่อมที่มีคำขอเลื่อนรออนุมัติในคอลัมน์นี้ (ผู้ใช้ 5/11/2569 "ขึ้นแบบของ task เลย") */
+export function columnDueRequests(column: BoardColumn): number {
+  const mx = (column.entries ?? []).filter((e) => e.type === "mx" && (e.item.pendingDue ?? 0) > 0).length;
+  return column.tasks.filter((t) => pendingDueRequestsOf(t).length > 0).length + mx;
+}
 /** งาน + ใบงานซ่อมในคอลัมน์นี้ */
 export function sumColumnUnread(column: BoardColumn, taskMap: Map<string, number>, mxMap: Map<string, number>): number {
   const mx = (column.entries ?? []).reduce((n, e) => (e.type === "mx" ? n + (mxMap.get(e.item.id) ?? 0) : n), 0);
@@ -168,7 +173,7 @@ export function KanbanColumn({
   const unreadMxMap = useUnreadMxCommentMap();
   const unreadComments = sumColumnUnread(column, unreadMap, unreadMxMap);
   // งานที่มีคนขอเลื่อนกำหนดส่งรออนุมัติ — ป้ายแดงแบบเดียวกับคอมเมนต์ใหม่ (ผู้ใช้ขอ 29/10/2569)
-  const dueRequestTasks = column.tasks.filter((t) => pendingDueRequestsOf(t).length > 0).length;
+  const dueRequestTasks = columnDueRequests(column);
   const percent = boardTotal > 0 ? Math.round((column.tasks.length / boardTotal) * 100) : 0;
   // The header's icon chip/count/% text used to just be `accent` itself —
   // fine for a saturated color like the amber/red/gray accents, but the
@@ -258,7 +263,12 @@ export function KanbanColumn({
     // งานที่มีคนขอเลื่อนกำหนดส่งรออนุมัติก็เด้งขึ้นบนเหมือนคอมเมนต์ใหม่ (เรียงตามเวลาที่ขอ) — อนุมัติ/ไม่อนุมัติแล้วกลับที่เดิมเอง (ผู้ใช้ขอ 29/10/2569)
     const dueAskedAt = (t: Task) => pendingDueRequestsOf(t).reduce((m, r) => (r.requestedAt > m ? r.requestedAt : m), "");
     const lastOf = (e: BoardEntry) => {
-      if (e.type !== "task") return unreadWoLatest.get(e.item.id) ?? "";
+      if (e.type !== "task") {
+        // เปรียบเทียบเป็นข้อความ ISO เหมือนฝั่งงาน
+        const w = unreadWoLatest.get(e.item.id) ?? "";
+        const asked = e.item.pendingDueAt ?? "";
+        return asked > w ? asked : w;
+      }
       const c = unreadLatest.get(e.task.id) ?? "";
       const d = dueAskedAt(e.task);
       return d > c ? d : c;

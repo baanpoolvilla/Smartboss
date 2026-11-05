@@ -93,6 +93,11 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
           dueRequests: { where: { status: "pending" } },
         },
       },
+      dueRequests: {
+        where: { status: "pending" },
+        select: { createdAt: true, newDate: true, requestedBy: true, kind: true },
+        orderBy: { createdAt: "desc" },
+      },
       property: { select: { name: true } },
     } satisfies Prisma.WorkOrderSelect;
     // ใบรอบันทึกแยกดึงต่างหาก — เก่าแค่ไหนก็ต้องขึ้น ไม่อยู่ใต้เงื่อนไข 7 วันและเพดาน LIMIT
@@ -122,7 +127,15 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
     const pendingRows = specialIds.length > 0 ? await prisma.workOrder.findMany({ where: { orgId, id: { in: specialIds } }, select }) : [];
     const tracking = pendingIds.length > 0 ? await loadExpenseTracking(orgId) : null;
     const clockFrom = new Map(tracking ? (await pendingExpenseWorkOrders(orgId)).map((o) => [o.id, o.clockFrom] as const) : []);
+    // ใบ PM อัตโนมัติไม่มีคนเปิด เจ้าของคำขอคือคนสร้างแผน (เหมือน workOrderOwnerId)
+    const planIds = [...new Set([...pendingRows, ...rows].filter((w) => w.dueRequests.length > 0 && !w.createdBy && w.autoCreated && w.pmScheduleId).map((w) => w.pmScheduleId!))];
+    const planOwner = new Map(
+      planIds.length > 0
+        ? (await prisma.pmSchedule.findMany({ where: { orgId, id: { in: planIds } }, select: { id: true, createdBy: true } })).map((p) => [p.id, p.createdBy] as const)
+        : [],
+    );
     for (const w of [...pendingRows, ...rows]) {
+      const dueOwner = w.createdBy ?? (w.autoCreated && w.pmScheduleId ? (planOwner.get(w.pmScheduleId) ?? null) : null);
       const expensePending = pendingSet.has(w.id);
       const expenseRecordedTotal = recordedMap.get(w.id);
       const done = w.status === "completed" && !expensePending;
@@ -159,6 +172,10 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
         commentCount: w._count?.comments ?? 0,
         photoCount: w.photoUrls.length + w.afterPhotoUrls.length,
         pendingDue: w._count?.dueRequests ?? 0,
+        pendingDueAt: w.dueRequests[0]?.createdAt.toISOString() ?? null,
+        pendingDueTo: w.dueRequests.length === 1 ? bangkokDay(w.dueRequests[0]!.newDate) : null,
+        // ขอเลื่อนกำหนดส่ง (ไม่นับขอเลื่อนบันทึกค่าใช้จ่ายที่ CEO ตัดสิน) · คนขอเองอนุมัติของตัวเองไม่ได้
+        pendingDueWaitsMe: dueOwner === session.userId && w.dueRequests.some((r) => r.kind === null && r.requestedBy !== session.userId),
         isPrivate: w.isPrivate,
         status: w.status,
         autoCreated: w.autoCreated,

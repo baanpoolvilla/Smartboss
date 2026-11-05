@@ -4,7 +4,7 @@ import Link from "next/link";
 import { CalendarClock, CalendarDays, CalendarX2, Check, Clock, Lock, MapPin, MessageSquare, Paperclip } from "lucide-react";
 
 import { expenseDaysLeft } from "@/modules/maintenance/lib/expense-deadline";
-import { isCommentNotif, PendingBand, usePendingFor } from "@/modules/notifications/pending-for-you";
+import { isCommentNotif, PendingBand, splitNotifTitle, usePendingFor } from "@/modules/notifications/pending-for-you";
 import type { NotifCategory } from "@/modules/notifications/types";
 
 /**
@@ -54,6 +54,10 @@ export interface WoCardProps {
   photoCount: number;
   /** คำขอเลื่อนที่รออนุมัติ */
   pendingDue: number;
+  /** ขอเลื่อนเป็นวันไหน (YYYY-MM-DD) เมื่อมีคำขอเดียว — บอร์ดงานส่งมา */
+  pendingDueTo?: string | null;
+  /** คนที่ดูอยู่ต้องอนุมัติ: แถบแดงค้างจนกว่าจะตัดสิน เปิดอ่านแล้วไม่หาย (เหมือนการ์ดงาน) */
+  pendingDueWaitsMe?: boolean;
   isPrivate?: boolean;
   /** รูปผู้รับผิดชอบ (แต่ละบอร์ดวาดเอง) */
   avatar?: React.ReactNode;
@@ -110,8 +114,28 @@ function DueBadge({ due, open, showLeft = false }: { due: Date; open: boolean; s
   );
 }
 
+/** มีแถบค่าใช้จ่ายอยู่แถวเดียวกัน แถบบนต้องยอมหด */
+function expenseBandClass(p: WoCardProps): string {
+  return p.expenseDeadline || (p.expenseRecorded ?? null) !== null ? "min-w-0 flex-1" : "";
+}
+
 export function WoCard(p: WoCardProps) {
-  const pending = usePendingFor(p.id, WO_NOTIF);
+  const allPending = usePendingFor(p.id, WO_NOTIF);
+  // คนอนุมัติเห็นแถบ "รอคุณอนุมัติ" แทน ไม่ต้องขึ้น "ยังไม่ได้อ่าน · ขอเลื่อน" ซ้ำ
+  const pending = p.pendingDueWaitsMe ? allPending.filter((n) => !splitNotifTitle(n.title).kind.includes("ขอเลื่อน")) : allPending;
+  const dueTo = p.pendingDueTo ? `${Number(p.pendingDueTo.slice(8, 10))}/${Number(p.pendingDueTo.slice(5, 7))}` : null;
+  const dueWaitBand = p.pendingDueWaitsMe && pending.length === 0;
+  const topBand = dueWaitBand ? (
+    <div
+      className={`flex items-center gap-1 bg-[#fde3e3] px-3 py-1 text-[11px] font-bold leading-4 text-[#b91c1c] ${expenseBandClass(p)}`}
+      title="มีคนขอเลื่อนกำหนดส่ง · เปิดใบงานแล้วกด อนุมัติ / ไม่อนุมัติ"
+      data-testid="wo-due-wait"
+    >
+      <span className="truncate">⏰ {p.pendingDue > 1 ? `ขอเลื่อนกำหนดส่ง ${p.pendingDue} คำขอ` : dueTo ? `ขอเลื่อนกำหนดส่งเป็น ${dueTo}` : "ขอเลื่อนกำหนดส่ง"} · รอคุณอนุมัติ</span>
+    </div>
+  ) : (
+    <PendingBand notifs={pending} soft className={expenseBandClass(p)} />
+  );
   // ความคิดเห็นใหม่ที่ยังไม่อ่าน = ป้ายแดง "N ใหม่" แทนจำนวน (แบบการ์ดงาน) — เปิดอ่านแล้วกลับเป็นตัวเลขเทา
   const unreadComments = pending.filter(isCommentNotif).length;
   const open = p.status === "open" || p.status === "in_progress";
@@ -146,17 +170,17 @@ export function WoCard(p: WoCardProps) {
       href={p.href}
       prefetch={false}
       className={`group block overflow-hidden rounded-xl border shadow-[0_4px_14px_rgba(16,24,40,0.13),0_1px_3px_rgba(16,24,40,0.10)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_-10px_rgba(16,24,40,0.22)] sm:rounded-2xl ${
-        pending.length > 0 ? "border-[#f3a4a4] bg-[#fdecec]" : "border-[#b7e3dd] bg-white"
+        pending.length > 0 || dueWaitBand ? "border-[#f3a4a4] bg-[#fdecec]" : "border-[#b7e3dd] bg-white"
       } ${done ? "opacity-90" : ""}`}
       aria-label={`ใบงานซ่อม ${p.code} ${p.title}`}
     >
       {expenseBand ? (
         <div className={`flex items-stretch justify-end ${expenseDue ? (expenseLeft < 0 ? "bg-red-100" : "bg-amber-100") : "bg-emerald-100"}`} data-testid="wo-top-band">
-          <PendingBand notifs={pending} soft className="min-w-0 flex-1" />
+          {topBand}
           {expenseBand}
         </div>
       ) : (
-        <PendingBand notifs={pending} soft />
+        topBand
       )}
       {/* แถบหัวสีแจ้งซ่อม — มองไกลก็รู้ว่าเป็นใบของแจ้งซ่อม ไม่ใช่งาน */}
       <div className="flex items-center justify-between gap-2 bg-[#0d9488] px-3 py-0.5 text-[10.5px] font-semibold leading-4 text-white">
@@ -208,9 +232,9 @@ export function WoCard(p: WoCardProps) {
                 style={{ backgroundColor: dot.color }}
               />
             )}
-            {p.pendingDue > 0 && (
+            {p.pendingDue > 0 && !p.pendingDueWaitsMe && (
               <span className="flex h-4 items-center gap-1 rounded-full bg-(--danger) px-1.5 text-[10px] font-bold text-white" title="มีคำขอเลื่อนกำหนดส่งรออนุมัติ">
-                <Clock className="h-2.5 w-2.5" /> ขอเลื่อน · รออนุมัติ
+                <Clock className="h-2.5 w-2.5" /> {p.pendingDue > 1 ? `ขอเลื่อน ${p.pendingDue}` : dueTo ? `ขอเลื่อน ${dueTo}` : "ขอเลื่อน"} · รออนุมัติ
               </span>
             )}
             {(p.commentCount > 0 || unreadComments > 0) && (

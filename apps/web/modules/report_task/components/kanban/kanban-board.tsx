@@ -15,7 +15,7 @@ import { taskDepartmentIdsForBoard, OTHER_DEPARTMENT_ID } from "@/modules/report
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
 import { cn } from "@/modules/report_task/lib/utils";
 import { pendingDueRequestsOf } from "@/modules/report_task/lib/pending-due-request";
-import { KanbanColumn, sumColumnUnread, type BoardColumn, useUnreadCommentMap, useUnreadMxCommentMap } from "./kanban-column";
+import { KanbanColumn, columnDueRequests, sumColumnUnread, type BoardColumn, useUnreadCommentMap, useUnreadMxCommentMap } from "./kanban-column";
 import { buildStatusColumns } from "./status-columns";
 import { TaskDetailSheet } from "./task-detail-sheet";
 import { PersonTopicsBoard } from "./person-topics-board";
@@ -554,9 +554,9 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
                 </span>
                 <span className="max-w-[140px] truncate">{column.label}</span>
                 {/* งานที่ขอเลื่อนกำหนดส่งรออนุมัติ — เหมือนป้าย ⏰ ที่หัวคอลัมน์บนจอคอม */}
-                {column.tasks.some((t) => pendingDueRequestsOf(t).length > 0) && (
+                {columnDueRequests(column) > 0 && (
                   <span className="flex h-5 items-center gap-0.5 rounded-full bg-[var(--chart-red)] px-1.5 text-[11px] font-bold text-white" title="งานที่ขอเลื่อนกำหนดส่ง รออนุมัติ">
-                    ⏰{column.tasks.filter((t) => pendingDueRequestsOf(t).length > 0).length}
+                    ⏰{columnDueRequests(column)}
                   </span>
                 )}
                 {/* คอมเมนต์ที่ยังไม่อ่านในคอลัมน์ (มือถือไม่มีหัวคอลัมน์ บอกตรงแท็บแทน) */}
