@@ -21,7 +21,7 @@ import { ReportPrefill } from "@/modules/maintenance/components/report-prefill";
 import { WoAdvancedOptions, WoDueDateField, WoPriorityField, WoPrivateToggle, WoRequiredGuard } from "@/modules/maintenance/components/wo-form-fields";
 import Link from "next/link";
 import { InitialAvatar } from "@/modules/maintenance/components/wo-card";
-import { AlignLeft, CalendarDays, House, Paperclip, Type, User, type LucideIcon } from "lucide-react";
+import { AlignLeft, CalendarDays, House, Paperclip, Type, type LucideIcon } from "lucide-react";
 
 /** แถวของฟอร์ม: ไอคอนซ้าย + เนื้อหา — จัดวางแบบหน้าสร้างงาน (ผู้ใช้ 2/11/2569 "ให้เหมือนรูปแบบของ task") */
 function Row({ icon: Icon, children, className = "" }: { icon: LucideIcon; children: React.ReactNode; className?: string }) {
@@ -161,9 +161,12 @@ export default async function NewWorkOrderPage({
             </label>
           </Row>
 
+          {/* บ้าน · ผู้รับผิดชอบ · CC แถวเดียวบนจอคอม ไม่กินที่ (ผู้ใช้ 5/11/2569) · มือถือแคบเกิน บ้านเต็มแถว
+              ใบส่วนตัว: ผู้รับผิดชอบคือคนเปิดเอง ไม่มี CC — ซ่อนสองช่องนั้น บ้านขยายเต็มแถว */}
           <Row icon={House}>
-            <div data-wo-field="house">
-            <MultiPicker
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
+              <div data-wo-field="house" className="col-span-2 min-w-0 group-data-[private=1]/wo:col-span-2 sm:col-span-1 sm:group-data-[private=1]/wo:col-span-3">
+              <MultiPicker
               name="propertyIds"
               title="เลือกบ้าน"
               heading="บ้าน *"
@@ -173,13 +176,8 @@ export default async function NewWorkOrderPage({
               options={properties.filter((p) => !p.archivedAt).map((p) => ({ id: p.id, label: p.name }))}
               defaultSelected={prefillProps}
             />
-            </div>
-          </Row>
-
-          {/* ใบส่วนตัว: ผู้รับผิดชอบคือคนเปิดเอง ไม่มี CC — ซ่อนช่องนี้ */}
-          <Row icon={User} className="group-data-[private=1]/wo:hidden">
-            {/* คู่กันทุกขนาดจอ มือถือจะได้ไม่กินที่ (ผู้ใช้ 5/11/2569) */}
-            <div className="grid grid-cols-2 gap-2 sm:gap-4">
+              </div>
+              <div className="contents group-data-[private=1]/wo:hidden">
               <AssigneeAndCc
                 users={assignable.map((u) => ({
                   id: u.id,
@@ -189,6 +187,7 @@ export default async function NewWorkOrderPage({
                 ccOptions={userOptions}
                 defaultAssignee={sp.technicianId ?? ""}
               />
+              </div>
             </div>
           </Row>
 
