@@ -19,17 +19,19 @@ export function getDueRequest(orgId: string, id: string) {
   return prisma.workOrderDueRequest.findFirst({ where: { orgId, id, kind: null } });
 }
 
-export function pendingDueRequest(orgId: string, workOrderId: string) {
-  return prisma.workOrderDueRequest.findFirst({ where: { orgId, workOrderId, kind: null, status: "pending" }, orderBy: { createdAt: "desc" } });
+export function pendingDueRequest(orgId: string, workOrderId: string, requestedBy?: string) {
+  return prisma.workOrderDueRequest.findFirst({ where: { orgId, workOrderId, kind: null, status: "pending", ...(requestedBy ? { requestedBy } : {}) }, orderBy: { createdAt: "desc" } });
 }
 
 export async function createDueRequest(
   orgId: string,
-  input: { workOrderId: string; requestedBy: string; previousDate: Date | null; newDate: Date; reason: string }
+  input: { workOrderId: string; requestedBy: string; previousDate: Date | null; newDate: Date; reason: string },
+  /** ใบกลุ่ม: แทนเฉพาะคำขอของคนนี้ คำขอของคนอื่นยังอยู่ */
+  ownOnly = false
 ) {
   // ขอใหม่ = แทนคำขอที่ค้างอยู่ของใบงานนี้ (ใบงานมีผู้รับผิดชอบคนเดียว — ค้างได้ทีละคำขอ)
   await prisma.workOrderDueRequest.updateMany({
-    where: { orgId, workOrderId: input.workOrderId, kind: null, status: "pending" },
+    where: { orgId, workOrderId: input.workOrderId, kind: null, status: "pending", ...(ownOnly ? { requestedBy: input.requestedBy } : {}) },
     data: { status: "cancelled", decidedBy: input.requestedBy, decidedAt: new Date(), decisionNote: "ขอใหม่แทน" },
   });
   return prisma.workOrderDueRequest.create({ data: { orgId, ...input } });

@@ -148,6 +148,22 @@ export async function createWorkOrderAction(formData: FormData) {
     : [];
   const pickedRule = String(formData.get("completionRule") ?? "all");
   const completionRule = groupMemberIds.length > 0 ? (["all", "any", "shared"].includes(pickedRule) ? pickedRule : "all") : null;
+  // กำหนดส่งแยกรายคน: รับเฉพาะคนในกลุ่ม วันที่ถูกรูปแบบและไม่ย้อนหลัง
+  const memberDueDates: Record<string, string> = {};
+  if (groupMemberIds.length > 0) {
+    let raw: unknown = null;
+    try {
+      raw = JSON.parse(String(formData.get("memberDueDates") ?? "null"));
+    } catch {
+      raw = null;
+    }
+    for (const [id, day] of Object.entries((raw ?? {}) as Record<string, unknown>)) {
+      if (id !== assignedTo && !groupMemberIds.includes(id)) continue;
+      if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day)) continue;
+      if (isPastDay(day)) throw new Error("กำหนดส่งรายคนย้อนหลังไม่ได้");
+      memberDueDates[id] = day;
+    }
+  }
   const cc = isPrivate ? [] : (d.ccUserIds ?? []).filter((id) => id !== assignedTo && !groupMemberIds.includes(id));
   const [primary, ...additional] = d.propertyIds;
 
@@ -171,6 +187,7 @@ export async function createWorkOrderAction(formData: FormData) {
     assignedTo,
     groupMemberIds,
     completionRule,
+    memberDueDates,
     createdBy: s.userId,
     ccUserIds: cc,
     assetId: d.assetId || null,

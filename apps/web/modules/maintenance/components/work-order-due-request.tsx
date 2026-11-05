@@ -67,7 +67,10 @@ export function WorkOrderDueRequest({
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [pending, start] = useTransition();
-  const pendingReq = requests.find((r) => r.status === "pending");
+  // ใบกลุ่มมีคำขอค้างพร้อมกันได้หลายคน · ใบเดี่ยวมีได้ใบเดียว
+  const pendingReqs = requests.filter((r) => r.status === "pending");
+  const hasPending = pendingReqs.length > 0;
+  const myPending = pendingReqs.some((r) => r.requestedBy === myId);
   const history = requests.filter((r) => r.status === "approved" || r.status === "rejected").slice(0, 3);
 
   const run = (fn: () => Promise<{ error?: string }>, ok: string) =>
@@ -98,7 +101,7 @@ export function WorkOrderDueRequest({
             <textarea value={editReason} onChange={(e) => setEditReason(e.target.value)} rows={2}
               className="w-full rounded-lg border border-(--line) bg-white px-2.5 py-1.5 text-base text-(--ink) sm:text-sm" />
           </label>
-          {pendingReq && <p className="m-0 text-[12px] text-amber-800">คำขอเลื่อนที่รออนุมัติอยู่จะถูกปิดไปด้วย</p>}
+          {hasPending && <p className="m-0 text-[12px] text-amber-800">คำขอเลื่อนที่รออนุมัติอยู่จะถูกปิดไปด้วย</p>}
           <div className="flex flex-wrap justify-end gap-2">
             <button type="button" className="rounded-lg px-3 py-1.5 text-[13px] text-(--ink-soft)" onClick={() => setEditing(false)}>ยกเลิก</button>
             <button type="button" disabled={pending || editDate < today || editDate === dueDate}
@@ -110,7 +113,7 @@ export function WorkOrderDueRequest({
         </div>
       )}
 
-      {canRequest && !canEdit && !pendingReq && !open && (
+      {canRequest && !canEdit && !myPending && !open && (
         <button type="button" onClick={() => setOpen(true)}
           className="inline-flex w-max items-center gap-1.5 rounded-lg border border-(--line) bg-white px-3 py-1.5 text-[13px] font-semibold text-(--ink) hover:bg-(--bg-soft)">
           <CalendarClock className="h-4 w-4" /> ขอเลื่อนกำหนดส่ง
@@ -140,8 +143,8 @@ export function WorkOrderDueRequest({
         </div>
       )}
 
-      {pendingReq && (
-        <div className="grid gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-[13px]">
+      {pendingReqs.map((pendingReq) => (
+        <div key={pendingReq.id} className="grid gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-[13px]">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[11.5px] font-bold text-amber-900">รออนุมัติ</span>
             <span><b>{pendingReq.requestedByName}</b> ขอเลื่อน {th(pendingReq.previousDate)} → <b>{th(pendingReq.newDate)}</b></span>
@@ -172,7 +175,7 @@ export function WorkOrderDueRequest({
           )}
           {!pendingReq.canDecide && pendingReq.requestedBy !== myId && <span className="text-[12px] text-(--ink-soft)">รอ CEO หรือคนเปิดใบงานอนุมัติ</span>}
         </div>
-      )}
+      ))}
 
       {history.map((r) => (
         <div key={r.id} className="flex flex-wrap items-center gap-2 text-[12.5px] text-(--ink-soft)">

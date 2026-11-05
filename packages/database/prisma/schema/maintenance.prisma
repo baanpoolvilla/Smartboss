@@ -103,6 +103,8 @@ model WorkOrder {
   completionRule        String?   @map("completion_rule")
   /// ใบกลุ่มแบบครบทุกคน: คนที่ทำส่วนของตัวเองเสร็จแล้ว ไม่โดนหักถ้าเลยกำหนด
   completedMemberIds    String[]  @default([]) @map("completed_member_ids")
+  /// ใบกลุ่ม: กำหนดส่งแยกรายคน { userId: "YYYY-MM-DD" } เฉพาะคนที่ต่างจาก dueDate
+  memberDueDates        Json?     @map("member_due_dates")
   additionalPropertyIds String[]  @map("additional_property_ids")
   /// เปิดจากรีพอต: ข้อความบอกที่มา + ลิงก์กลับไปข้อความต้นทาง (ใบงานอื่นเป็น null)
   sourceLabel           String?   @map("source_label")

@@ -44,3 +44,18 @@ export function waitingOnMembers(wo: GroupState, actorId: string): string[] {
   if ((wo.groupMemberIds ?? []).length === 0 || (wo.completionRule ?? "all") !== "all") return [];
   return pendingMemberIds(wo).filter((id) => id !== actorId);
 }
+
+type DueState = GroupState & { dueDate: Date | null; memberDueDates?: unknown };
+
+/** กำหนดส่งของคนนี้ — ตั้งแยกไว้ใช้วันนั้น ไม่งั้นใช้กำหนดส่งของใบ (เหมือนงานกลุ่ม) */
+export function memberDueAt(wo: DueState, userId: string): Date | null {
+  const own = (wo.memberDueDates as Record<string, string> | null | undefined)?.[userId];
+  return own ? new Date(`${own}T23:59:59.999+07:00`) : wo.dueDate;
+}
+
+/** กำหนดส่งที่เร็วที่สุดของคนที่ยังไม่เสร็จ — ใช้แสดงและเรียงบนบอร์ด · ใบเดี่ยวคือกำหนดส่งของใบ */
+export function earliestPendingDue(wo: DueState): Date | null {
+  if ((wo.groupMemberIds ?? []).length === 0) return wo.dueDate;
+  const dues = pendingMemberIds(wo).map((id) => memberDueAt(wo, id)).filter((d): d is Date => !!d);
+  return dues.length > 0 ? new Date(Math.min(...dues.map((d) => d.getTime()))) : wo.dueDate;
+}

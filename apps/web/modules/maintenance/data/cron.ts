@@ -1,4 +1,4 @@
-import { pendingMemberIds, workOrderDockRefId, workOrderIdOfDockRef } from "@/modules/maintenance/lib/work-order-members";
+import { memberDueAt, pendingMemberIds, workOrderDockRefId, workOrderIdOfDockRef } from "@/modules/maintenance/lib/work-order-members";
 import "server-only";
 import { prisma } from "@smartboss/database";
 import { crossOrg } from "@smartboss/database/cross-org";
@@ -323,31 +323,43 @@ async function notifyOverdueWorkOrders(soon: Date): Promise<number> {
       where: {
         status: { in: ["open", "in_progress"] },
         // ก่อนครบกำหนดด้วย (ผู้ใช้ 3/11/2569 "เตือนด้วย") — เกณฑ์วันเดียวกับ PM: 7/3/1 วันก่อน + วันครบกำหนด + เลยแล้วทุกวัน
-        dueDate: { lte: soon },
+        OR: [{ dueDate: { lte: soon } }, { groupMemberIds: { isEmpty: false } }],
         isPrivate: false,
         pmRoundDate: null,
         assignedTo: { not: null },
       },
-      select: { id: true, orgId: true, code: true, title: true, dueDate: true, assignedTo: true, groupMemberIds: true, completedMemberIds: true, status: true, property: { select: { name: true } } },
+      select: { id: true, orgId: true, code: true, title: true, dueDate: true, assignedTo: true, groupMemberIds: true, completedMemberIds: true, memberDueDates: true, status: true, property: { select: { name: true } } },
     })
   );
   const today = ymd(todayBkkDate());
   let notified = 0;
-  for (const wo of wos) {
-    const dueDay = new Date(wo.dueDate!.getTime() + 7 * 3600e3).toISOString().slice(0, 10);
+  // ใบกลุ่มเตือนตามกำหนดส่งของแต่ละคน · ใบเดี่ยวได้ชุดเดียวเหมือนเดิม
+  const batches = wos.flatMap((wo) => {
+    const byDay = new Map<string, { wo: typeof wo; due: Date; users: string[] }>();
+    for (const userId of pendingMemberIds(wo)) {
+      const due = memberDueAt(wo, userId);
+      if (!due || due > soon) continue;
+      const entry = byDay.get(due.toISOString()) ?? { wo, due, users: [] };
+      entry.users.push(userId);
+      byDay.set(due.toISOString(), entry);
+    }
+    return [...byDay.values()];
+  });
+  for (const { wo, due, users } of batches) {
+    const dueDay = new Date(due.getTime() + 7 * 3600e3).toISOString().slice(0, 10);
     const days = Math.round((Date.parse(dueDay) - Date.parse(today)) / 86_400_000);
     if (!shouldNotifyPmToday(days)) continue;
     const head = days < 0 ? "🔴 ใบงานเลยกำหนด " + -days + " วัน" : days === 0 ? "🔴 ใบงานครบกำหนดวันนี้" : `🟡 ใบงานครบกำหนดอีก ${days} วัน`;
     const notTaken = wo.status === "open" ? " · ยังไม่ได้กดรับงาน" : "";
-    await notifyUsers(wo.orgId, pendingMemberIds(wo), {
+    await notifyUsers(wo.orgId, users, {
       title: `${head}: ${wo.title}${notTaken}`,
-      body: `${wo.code} · บ้าน ${wo.property?.name ?? "-"} · กำหนด ${fmtThaiDate(wo.dueDate!)}${days >= 0 ? " · ทำไม่ทันกด \"ขอเลื่อนกำหนดส่ง\"" : ""}`,
+      body: `${wo.code} · บ้าน ${wo.property?.name ?? "-"} · กำหนด ${fmtThaiDate(due)}${days >= 0 ? " · ทำไม่ทันกด \"ขอเลื่อนกำหนดส่ง\"" : ""}`,
       type: "work_order",
       referenceId: wo.id,
       line: `${head}${notTaken}
 📝 ${wo.title} (${wo.code})
 🏠 บ้าน: ${wo.property?.name ?? "-"}
-📅 กำหนด ${fmtThaiDate(wo.dueDate!)}`,
+📅 กำหนด ${fmtThaiDate(due)}`,
     });
     notified++;
   }
@@ -637,7 +649,7 @@ export async function dockOverdueMaintenance(): Promise<{
     prisma.workOrder.findMany({
       where: {
         status: { in: ["open", "in_progress"] },
-        dueDate: { lt: workOrderGraceDate },
+        OR: [{ dueDate: { lt: workOrderGraceDate } }, { groupMemberIds: { isEmpty: false } }],
         isPrivate: false, // ใบส่วนตัวไม่หักคะแนน
       },
       select: {
@@ -649,6 +661,7 @@ export async function dockOverdueMaintenance(): Promise<{
         assignedTo: true,
         groupMemberIds: true,
         completedMemberIds: true,
+        memberDueDates: true,
         pmRoundDate: true,
         pmScheduleId: true,
         overdueScore: true,
@@ -662,12 +675,34 @@ export async function dockOverdueMaintenance(): Promise<{
     const woSt = settingsByOrg.get(wo.orgId);
     if (!woSt || !woSt.enabled) continue;
 
-    if (wo.dueDate === null) continue; // where: { lt: ... } กันไว้แล้วจริง ๆ ไม่มีทางเข้า แต่ TS ไม่รู้
 
     // กรองอีกชั้นด้วยระยะผ่อนผันของบริษัทนั้นจริง ๆ (ข้างบนดึงมาด้วยระยะสั้นสุดก่อน)
     // CEO ยกเว้นคะแนนใบนี้แล้ว (หน้า PM ค้างหลายรอบ) · ใบรอบที่ครบกำหนดก่อนเปิดใช้แบบนับรอบ ไม่หักย้อนหลัง
     if (wo.overdueScore === "waived") continue;
     if (roundBeforeStart(wo, woSt.pmRoundsFrom)) continue;
+    // ใบกลุ่ม: แต่ละคนตัดสินตามกำหนดส่งของตัวเอง หักคนที่ยังไม่เสร็จ แถวละคน (เหมือนงานกลุ่ม)
+    if (wo.groupMemberIds.length > 0 && !wo.pmRoundDate) {
+      for (const userId of pendingMemberIds(wo)) {
+        const due = memberDueAt(wo, userId);
+        if (!due) continue;
+        const memberLapse = addDays(due, overdueGraceDays(wo, woSt.workOrderGraceDays));
+        if (memberLapse >= now) continue;
+        if (woSt.scoringStartDate && memberLapse < woSt.scoringStartDate) continue;
+        if (isBacklog(memberLapse, now)) continue;
+        events.push({
+          orgId: wo.orgId,
+          userId,
+          source: "maintenance",
+          category: "workorder_overdue",
+          occurredAt: memberLapse,
+          refType: "work_order",
+          refId: workOrderDockRefId(wo, userId),
+          note: `${wo.title}${wo.property?.name ? ` · ${wo.property.name}` : ""} · ครบกำหนด ${fmtThaiDate(due)}`,
+        });
+      }
+      continue;
+    }
+    if (wo.dueDate === null) continue;
     const lapse = addDays(wo.dueDate, overdueGraceDays(wo, woSt.workOrderGraceDays));
     if (lapse >= now) continue;
     // เลยกำหนดไปตั้งแต่ก่อนวันเริ่มนับคะแนน = งานค้างเก่า ไม่ใช่การปล่อยปละในช่วงที่นับ —
@@ -680,17 +715,16 @@ export async function dockOverdueMaintenance(): Promise<{
     // ใบรอบ PM หักในหัวข้อ "ไม่ทำบำรุงรักษาตามรอบ" (คะแนนตั้งแยกจากใบงานทั่วไป · ขอแก้คะแนนไปหาคนสร้างแผน PM)
     // refId = แผน:รอบ:ใบงาน — ส่วนแรกคือแผน (lib/score-requests.ts ใช้หาคนอนุมัติ) ส่วนท้ายชี้ใบงานที่ค้าง
     const round = wo.pmRoundDate && wo.pmScheduleId ? roundDockRefId(wo.pmScheduleId, wo.pmRoundDate, wo.id) : null;
-    // ใบกลุ่ม: หักคนที่ยังไม่เสร็จ แถวละคน (เหมือนงานกลุ่ม) · ใบเดี่ยวได้แถวเดียวเหมือนเดิม
-    for (const userId of wo.groupMemberIds.length > 0 && !round ? pendingMemberIds(wo) : [responsible]) events.push({
+    events.push({
       orgId: wo.orgId,
-      userId,
+      userId: responsible,
       source: "maintenance",
       category: round ? "pm_missed" : "workorder_overdue",
       // ลงเวลาที่หมดกำหนด (23:59:59 ของวันครบกำหนด) ไม่ใช่เวลาที่งานรัน — ใบที่ครบกำหนดวันตัดรอบต้องนับในรอบนั้น
       // ไม่งั้นงานรันหลังเที่ยงคืนแล้วคะแนนไปตกรอบถัดไป (ผู้ใช้ 4/11/2569)
       occurredAt: lapse,
       refType: round ? "pm_schedule" : "work_order",
-      refId: round ?? workOrderDockRefId(wo, userId),
+      refId: round ?? workOrderDockRefId(wo, responsible),
       note: `${wo.title}${wo.property?.name ? ` · ${wo.property.name}` : ""} · ${round ? `รอบ ${fmtThaiDate(wo.pmRoundDate!)} · ` : ""}ครบกำหนด ${fmtThaiDate(wo.dueDate)}`,
     });
   }
@@ -1006,7 +1040,7 @@ async function revokeInvalidMaintenanceDocks(
       prisma.workOrder.findMany({
         where: { id: { in: woIds } },
         select: {
-          id: true, status: true, dueDate: true, completedAt: true, assignedTo: true, groupMemberIds: true, pmRoundDate: true, pmScheduleId: true, overdueScore: true, isPrivate: true,
+          id: true, status: true, dueDate: true, completedAt: true, assignedTo: true, groupMemberIds: true, memberDueDates: true, pmRoundDate: true, pmScheduleId: true, overdueScore: true, isPrivate: true,
           property: { select: { caretakerId: true } },
         },
       }),
@@ -1048,7 +1082,7 @@ async function revokeInvalidMaintenanceDocks(
         ? "ใบรอบ PM หักในหัวข้อไม่ทำบำรุงรักษาตามรอบแทน"
         : workOrderDockRevokeReason(
             d,
-            wo && { ...wo, caretakerId: wo.property?.caretakerId ?? null },
+            wo && { ...wo, dueDate: memberDueAt(wo, d.userId), caretakerId: wo.property?.caretakerId ?? null },
             st,
           );
     } else if (roundWoId) {

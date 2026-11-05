@@ -172,6 +172,7 @@ export interface WorkOrderInput {
   ccUserIds?: string[];
   groupMemberIds?: string[];
   completionRule?: string | null;
+  memberDueDates?: Record<string, string>;
   additionalPropertyIds?: string[];
   pmScheduleId?: string | null;
   pmScheduleIds?: string[];
@@ -257,6 +258,7 @@ export function createWorkOrder(orgId: string, data: WorkOrderInput) {
         ccUserIds: data.ccUserIds ?? [],
         groupMemberIds: data.groupMemberIds ?? [],
         completionRule: data.completionRule ?? null,
+        ...(data.memberDueDates && Object.keys(data.memberDueDates).length > 0 ? { memberDueDates: data.memberDueDates } : {}),
         additionalPropertyIds: data.additionalPropertyIds ?? [],
         pmScheduleId: data.pmScheduleId ?? null,
         pmScheduleIds: data.pmScheduleIds ?? [],

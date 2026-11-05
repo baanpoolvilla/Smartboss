@@ -87,7 +87,7 @@ import { paymentMethodLabel } from "@/modules/maintenance/lib/receipt-read";
 import { ExpenseDeadlineBox, type ExpenseRequestView } from "@/modules/maintenance/components/expense-deadline-box";
 import { canDecideDueRequest, canEditDueDate } from "@/modules/maintenance/lib/due-request-access";
 import { canDeleteWorkOrderWithPerm } from "@/modules/maintenance/lib/work-order-delete";
-import { COMPLETION_RULE_LABEL, isWorkOrderMember, waitingOnMembers, workOrderMemberIds } from "@/modules/maintenance/lib/work-order-members";
+import { COMPLETION_RULE_LABEL, earliestPendingDue, isWorkOrderMember, memberDueAt, waitingOnMembers, workOrderMemberIds } from "@/modules/maintenance/lib/work-order-members";
 
 const STATUS_COLOR: Record<string, string> = {
   open: "#2563EB",
@@ -141,6 +141,8 @@ export default async function WorkOrderDetailPage({
     isWorkOrderMember(wo, session.userId) || wo.createdBy === session.userId;
 
   const waitingOnGroup = waitingOnMembers(wo, session.userId);
+  // ใบกลุ่ม: สมาชิกเห็นและขอเลื่อนวันของตัวเอง · คนอื่นเห็นวันใกล้สุดของคนที่ยังไม่เสร็จ
+  const viewerDue = isWorkOrderMember(wo, session.userId) ? (memberDueAt(wo, session.userId) ?? earliestPendingDue(wo)) : earliestPendingDue(wo);
   const canChangeStatus =
     canManage ||
     (hasPermission(session, MAINT_PERMS.workorderComplete) && isOwnJob);
@@ -407,7 +409,12 @@ export default async function WorkOrderDetailPage({
             stacked
             icon={<HardHat className="h-5 w-5" />}
             label={wo.groupMemberIds.length > 0 ? `รับผิดชอบโดย (กลุ่ม · ปิดงานเมื่อ${COMPLETION_RULE_LABEL[wo.completionRule ?? "all"]})` : "รับผิดชอบโดย"}
-            value={workOrderMemberIds(wo).map((id) => `${names[id] ?? "-"}${wo.completedMemberIds.includes(id) ? " ✓" : ""}`).join(", ")}
+            value={workOrderMemberIds(wo)
+              .map((id) => {
+                const own = (wo.memberDueDates as Record<string, string> | null)?.[id];
+                return `${names[id] ?? "-"}${own ? ` (ครบ ${fmtThaiDate(memberDueAt(wo, id))})` : ""}${wo.completedMemberIds.includes(id) ? " ✓" : ""}`;
+              })
+              .join(", ")}
           />
         )}
         {wo.ccUserIds.length > 0 && (
@@ -474,7 +481,7 @@ export default async function WorkOrderDetailPage({
             }
           />
         )}
-        {wo.dueDate && (
+        {earliestPendingDue(wo) && (
           <InfoRow
             stacked
             icon={<CalendarClock className="h-5 w-5" />}
@@ -482,7 +489,7 @@ export default async function WorkOrderDetailPage({
             className="sm:col-span-2"
             value={
               <div className="grid gap-2">
-                <span style={overdue ? { color: "#DC2626" } : undefined}>{fmtThaiDate(wo.dueDate)}</span>
+                <span style={overdue ? { color: "#DC2626" } : undefined}>{fmtThaiDate(viewerDue)}{viewerDue?.getTime() !== wo.dueDate?.getTime() ? " (กำหนดส่งของคุณ)" : ""}</span>
                 {lastDueChange && (
                   <span className="text-[12.5px] font-normal leading-snug text-(--ink-soft)">
                     {lastDueChange.content}
@@ -493,7 +500,7 @@ export default async function WorkOrderDetailPage({
                 {/* ขอเลื่อนกำหนดส่ง (ผู้รับผิดชอบ) · อนุมัติ/ไม่อนุมัติ + แก้ตรง ๆ (CEO / คนเปิดใบงาน) */}
                 <WorkOrderDueRequest
                   workOrderId={wo.id}
-                  dueDate={ymdBkk(wo.dueDate)}
+                  dueDate={ymdBkk(viewerDue!)}
                   // คนที่แก้กำหนดส่งเองได้ (คนเปิดใบ / CEO) ไม่ต้องขอเลื่อน — กดแก้ได้เลย (ผู้ใช้ 2/11/2569
                   // "เราเป็นคนสั่ง") · เดิมมอบงานให้ตัวเองแล้วกดขอเลื่อน คำขอวิ่งไปหา CEO โดยไม่จำเป็น
                   canRequest={isOpenOrRunning && isWorkOrderMember(wo, session.userId) && !canEditDueDate({ userId: session.userId, viewAll }, { createdBy: ownerId })}

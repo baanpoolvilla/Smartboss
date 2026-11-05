@@ -11,7 +11,7 @@ import { createDueRequest, decideDueRequest, getDueRequest, listDueRequests, pen
 import { logActivity } from "@/modules/maintenance/data/activity";
 import { fmtThaiDate } from "@/modules/maintenance/lib/format";
 import { canDecideDueRequest, canEditDueDate } from "@/modules/maintenance/lib/due-request-access";
-import { isWorkOrderMember, workOrderMemberIds } from "@/modules/maintenance/lib/work-order-members";
+import { isWorkOrderMember, memberDueAt, workOrderMemberIds } from "@/modules/maintenance/lib/work-order-members";
 import { isPastDay } from "@/modules/maintenance/lib/no-past-date";
 
 /**
@@ -61,19 +61,23 @@ export async function requestDueDateAction(workOrderId: string, newDate: string,
   const ownerId = await workOrderOwnerId(s.orgId, wo);
   if (canEditDueDate({ userId: s.userId, viewAll: canViewAll(s) }, { createdBy: ownerId })) return { error: "คุณแก้กำหนดส่งเองได้เลย ไม่ต้องขอเลื่อน" };
   if (wo.status === "completed" || wo.status === "cancelled") return { error: "ใบงานนี้ปิดแล้ว" };
-  if (!wo.dueDate) return { error: "ใบงานนี้ไม่มีกำหนดส่ง" };
+  // ใบกลุ่ม: ขอเลื่อนวันของตัวเอง คนอื่นในกลุ่มไม่เกี่ยว (ผู้ใช้ 5/11/2569 "กลุ่มเช็คให้รอบคอบ")
+  const ownDue = memberDueAt(wo, s.userId);
+  if (!ownDue) return { error: "ใบงานนี้ไม่มีกำหนดส่ง" };
+  const isGroup = wo.groupMemberIds.length > 0;
   const d = endOfDayBkk(newDate);
   if (!d) return { error: "วันที่ไม่ถูกต้อง" };
-  if (ymdBkk(d) <= ymdBkk(wo.dueDate)) return { error: "วันใหม่ต้องหลังกำหนดส่งเดิม" };
+  if (ymdBkk(d) <= ymdBkk(ownDue)) return { error: "วันใหม่ต้องหลังกำหนดส่งเดิม" };
   const why = reason.trim();
   if (!why) return { error: "ใส่เหตุผลที่ต้องเลื่อน" };
 
   // ขอใหม่แทนคำขอที่ค้างอยู่ ⇒ ลบ "รออนุมัติ" ของคำขอเก่าออกก่อน ไม่งั้นผู้อนุมัติเห็นสองอัน
-  const replaced = await pendingDueRequest(s.orgId, workOrderId);
-  await createDueRequest(s.orgId, { workOrderId, requestedBy: s.userId, previousDate: wo.dueDate, newDate: d, reason: why });
-  if (replaced) await deleteActionNotifications(wo.id, "work_order", [PENDING_TITLE], replaced.createdAt);
-  await addWorkOrderComment(s.orgId, workOrderId, s.userId, `ขอเลื่อนกำหนดส่ง ${fmtThaiDate(wo.dueDate)} → ${fmtThaiDate(d)} · ${why}`, null, { kind: "log" });
-  await log(s, wo, `ขอเลื่อนกำหนดส่ง ${fmtThaiDate(wo.dueDate)} → ${fmtThaiDate(d)} ของ`, { reason: why });
+  const replaced = await pendingDueRequest(s.orgId, workOrderId, isGroup ? s.userId : undefined);
+  await createDueRequest(s.orgId, { workOrderId, requestedBy: s.userId, previousDate: ownDue, newDate: d, reason: why }, isGroup);
+  // ใบกลุ่มอาจมีคำขอของคนอื่นค้าง แจ้งเตือนแยกต่อคำขอไม่ได้ จึงปล่อยไว้จนไม่เหลือคำขอ
+  if (replaced && !isGroup) await deleteActionNotifications(wo.id, "work_order", [PENDING_TITLE], replaced.createdAt);
+  await addWorkOrderComment(s.orgId, workOrderId, s.userId, `ขอเลื่อนกำหนดส่ง ${fmtThaiDate(ownDue)} → ${fmtThaiDate(d)} · ${why}`, null, { kind: "log" });
+  await log(s, wo, `ขอเลื่อนกำหนดส่ง ${fmtThaiDate(ownDue)} → ${fmtThaiDate(d)} ของ`, { reason: why });
 
   // แจ้งคนเปิดใบงาน (อนุมัติเองได้) — CEO/ผู้ดูทั้งบริษัทได้แจ้งเตือนเฉพาะเมื่อไม่มีคนอื่นอนุมัติ: คนเปิดใบคือคนขอเอง
   // ใบไม่มีคนเปิด หรือคนเปิดปิดบัญชีไปแล้ว (เดิมแจ้ง CEO ทุกใบ ผู้ใช้ขอตัด 21/10/2569 "ไม่เกี่ยวกับ CEO ทำไมยังแจ้ง")
@@ -88,10 +92,10 @@ export async function requestDueDateAction(workOrderId: string, newDate: string,
   const who = (await notifyActorName(s.userId)) ?? "ผู้รับผิดชอบ";
   await notifyUsers(s.orgId, [...approvers], {
     title: `${who} · ⏰ ขอเลื่อนกำหนดส่งใบงาน รออนุมัติ`,
-    body: `${wo.title} · ${fmtThaiDate(wo.dueDate)} → ${fmtThaiDate(d)} · ${why}`,
+    body: `${wo.title} · ${fmtThaiDate(ownDue)} → ${fmtThaiDate(d)} · ${why}`,
     type: "work_order",
     referenceId: wo.id,
-    line: `⏰ ขอเลื่อนกำหนดส่งใบงาน (รออนุมัติ)\n📝 ${wo.title}\n📅 ${fmtThaiDate(wo.dueDate)} → ${fmtThaiDate(d)}\n💬 ${why}\n👤 ${who}`,
+    line: `⏰ ขอเลื่อนกำหนดส่งใบงาน (รออนุมัติ)\n📝 ${wo.title}\n📅 ${fmtThaiDate(ownDue)} → ${fmtThaiDate(d)}\n💬 ${why}\n👤 ${who}`,
   });
   refresh(workOrderId);
   return {};
@@ -106,7 +110,9 @@ export async function cancelDueRequestAction(requestId: string): Promise<{ error
   if (!wo) return { error: "ไม่พบใบงาน" };
   await decideDueRequest(s.orgId, requestId, { status: "cancelled", decidedBy: s.userId });
   // คนขอถอนคำขอเอง ⇒ ลบแจ้งเตือน "รออนุมัติ" ของคำขอนี้ออกจากกระดิ่งผู้อนุมัติทุกคน (ไม่ใช่แค่ทำว่าอ่านแล้ว)
-  await deleteActionNotifications(wo.id, "work_order", [PENDING_TITLE], r.createdAt);
+  if (wo.groupMemberIds.length === 0 || !(await pendingDueRequest(s.orgId, wo.id))) {
+    await deleteActionNotifications(wo.id, "work_order", [PENDING_TITLE], r.createdAt);
+  }
   await addWorkOrderComment(s.orgId, wo.id, s.userId, "ยกเลิกคำขอเลื่อนกำหนดส่ง", null, { kind: "log" });
   await log(s, wo, "ยกเลิกคำขอเลื่อนกำหนดส่งของ");
   refresh(wo.id);
@@ -127,11 +133,19 @@ export async function decideDueRequestAction(requestId: string, approve: boolean
   const ok = await decideDueRequest(s.orgId, requestId, { status: approve ? "approved" : "rejected", decidedBy: s.userId, decisionNote: memo });
   if (!ok) return { error: "คำขอนี้ถูกตัดสินไปแล้ว" };
   // คนหนึ่งอนุมัติ/ไม่อนุมัติแล้ว ⇒ "รออนุมัติ" ที่ผู้อนุมัติคนอื่นจะไม่ขึ้นแล้ว (ผู้ใช้ขอ 18/10/2569)
-  await resolveActionNotifications(wo.id, "work_order", [PENDING_TITLE]);
-  if (approve) await updateWorkOrder(s.orgId, wo.id, { dueDate: r.newDate });
+  const isGroup = wo.groupMemberIds.length > 0;
+  if (!isGroup || !(await pendingDueRequest(s.orgId, wo.id))) await resolveActionNotifications(wo.id, "work_order", [PENDING_TITLE]);
+  // ใบกลุ่ม: อนุมัติแล้วเลื่อนเฉพาะคนที่ขอ คนอื่นยังใช้วันเดิม ไม่งั้นคนไม่ได้ขอรอดหักไปด้วย
+  const requesterDue = memberDueAt(wo, r.requestedBy);
+  if (approve && isGroup) {
+    const ownDues = (wo.memberDueDates ?? {}) as Record<string, string>;
+    await prisma.workOrder.update({ where: { id: wo.id }, data: { memberDueDates: { ...ownDues, [r.requestedBy]: ymdBkk(r.newDate) } } });
+  } else if (approve) {
+    await updateWorkOrder(s.orgId, wo.id, { dueDate: r.newDate });
+  }
 
   const text = approve
-    ? `อนุมัติเลื่อนกำหนดส่ง ${fmtThaiDate(wo.dueDate)} → ${fmtThaiDate(r.newDate)}${memo ? ` · ${memo}` : ""}`
+    ? `อนุมัติเลื่อนกำหนดส่ง${isGroup ? ` ของ ${(await notifyActorName(r.requestedBy)) ?? ""}` : ""} ${fmtThaiDate(requesterDue)} → ${fmtThaiDate(r.newDate)}${memo ? ` · ${memo}` : ""}`
     : `ไม่อนุมัติเลื่อนกำหนดส่ง (ขอ ${fmtThaiDate(r.newDate)})${memo ? ` · ${memo}` : ""}`;
   await addWorkOrderComment(s.orgId, wo.id, s.userId, text, null, { kind: "log" });
   await log(s, wo, `${text} ของ`);
@@ -139,10 +153,10 @@ export async function decideDueRequestAction(requestId: string, approve: boolean
   const who = (await notifyActorName(s.userId)) ?? "ผู้อนุมัติ";
   await notifyUser(s.orgId, r.requestedBy, {
     title: approve ? `${who} · ✅ อนุมัติเลื่อนกำหนดส่งใบงาน` : `${who} · ❌ ไม่อนุมัติเลื่อนกำหนดส่งใบงาน`,
-    body: `${wo.title} · ${approve ? `กำหนดส่งใหม่ ${fmtThaiDate(r.newDate)}` : `ยังเป็น ${fmtThaiDate(wo.dueDate)}`}${memo ? ` · ${memo}` : ""}`,
+    body: `${wo.title} · ${approve ? `กำหนดส่งใหม่ ${fmtThaiDate(r.newDate)}` : `ยังเป็น ${fmtThaiDate(requesterDue)}`}${memo ? ` · ${memo}` : ""}`,
     type: "work_order",
     referenceId: wo.id,
-    line: `${approve ? "✅ อนุมัติ" : "❌ ไม่อนุมัติ"}เลื่อนกำหนดส่งใบงาน\n📝 ${wo.title}\n📅 ${approve ? `กำหนดส่งใหม่ ${fmtThaiDate(r.newDate)}` : `ยังเป็น ${fmtThaiDate(wo.dueDate)}`}${memo ? `\n💬 ${memo}` : ""}`,
+    line: `${approve ? "✅ อนุมัติ" : "❌ ไม่อนุมัติ"}เลื่อนกำหนดส่งใบงาน\n📝 ${wo.title}\n📅 ${approve ? `กำหนดส่งใหม่ ${fmtThaiDate(r.newDate)}` : `ยังเป็น ${fmtThaiDate(requesterDue)}`}${memo ? `\n💬 ${memo}` : ""}`,
   });
   refresh(wo.id);
   return {};

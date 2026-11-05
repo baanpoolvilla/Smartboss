@@ -4,6 +4,8 @@ import { useRef, useState } from "react";
 import { Check, ChevronDown, Plus, Search, UserPlus, X } from "lucide-react";
 import { Button } from "@smartboss/ui/components/button";
 import { Modal } from "./dialog";
+import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
+import { todayBangkok } from "@/modules/maintenance/lib/no-past-date";
 
 /** รายการเกินเท่านี้ถึงมีช่องค้นหา */
 const SEARCH_FROM = 8;
@@ -291,6 +293,9 @@ export function AssigneeAndCc({
   const [draft, setDraft] = useState<string[]>([]);
   const [group, setGroup] = useState(false);
   const [rule, setRule] = useState<"all" | "any" | "shared">("all");
+  // กำหนดส่งแยกรายคน (เหมือนงานกลุ่ม) — ไม่ใส่ = ใช้กำหนดส่งของใบ
+  const [perPerson, setPerPerson] = useState(false);
+  const [memberDue, setMemberDue] = useState<Record<string, string>>({});
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const selectRef = useRef<HTMLSelectElement>(null);
@@ -398,6 +403,28 @@ export function AssigneeAndCc({
                 ? "ใครทำเสร็จก่อนปิดงานได้เลย · เลยกำหนดแล้วยังไม่ปิด หักทุกคน"
                 : "ทำงานด้วยกัน ใครในกลุ่มปิดงานก็ได้ · เลยกำหนดแล้วยังไม่ปิด หักทุกคน"}
           </p>
+          <label className="mt-1 flex w-fit cursor-pointer items-center gap-1.5 text-xs text-(--ink)">
+            <input type="checkbox" checked={perPerson} onChange={(e) => setPerPerson(e.target.checked)} className="h-3.5 w-3.5" data-testid="member-due-toggle" />
+            กำหนดส่งแยกรายคน
+          </label>
+          {perPerson && picked.length === 0 && <p className="text-[11px] text-(--ink-soft)">เลือกผู้รับผิดชอบก่อน</p>}
+          {perPerson && picked.map((id) => (
+            <div key={id} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] items-center gap-2" data-testid="member-due-row">
+              <span className="truncate text-xs text-(--ink)">{users.find((u) => u.id === id)?.label ?? id}</span>
+              <DatePickerField
+                value={memberDue[id] ?? ""}
+                minDate={todayBangkok()}
+                onChange={(v) => setMemberDue((m) => ({ ...m, [id]: v }))}
+                className="h-9 text-(--ink)"
+              />
+            </div>
+          ))}
+          {perPerson && picked.length > 0 && <p className="text-[10px] leading-snug text-(--ink-soft)">คนที่ไม่ใส่ ใช้กำหนดส่งด้านล่าง · เลยวันของใคร หักคนนั้น</p>}
+          <input
+            type="hidden"
+            name="memberDueDates"
+            value={perPerson ? JSON.stringify(Object.fromEntries(picked.filter((id) => memberDue[id]).map((id) => [id, memberDue[id]]))) : ""}
+          />
         </div>
       )}
 

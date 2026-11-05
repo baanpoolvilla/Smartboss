@@ -1,3 +1,4 @@
+import { earliestPendingDue } from "@/modules/maintenance/lib/work-order-members";
 import "server-only";
 import { prisma, type Prisma } from "@smartboss/database";
 import { hasPermission, isSuperAdmin, type OrgSession } from "@smartboss/auth";
@@ -75,6 +76,8 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
       expenseDueDate: true,
       assignedTo: true,
       groupMemberIds: true,
+      completedMemberIds: true,
+      memberDueDates: true,
       createdBy: true,
       ccUserIds: true,
       pmScheduleId: true,
@@ -140,9 +143,9 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
         column,
         statusLabel: expensePending ? "รอบันทึกค่าใช้จ่าย" : done ? "ซ่อมเสร็จแล้ว" : w.status === "in_progress" ? "กำลังซ่อม" : "รอดำเนินการ",
         priority: WO_PRIORITY[w.priority] ?? "medium",
-        dueDate: (expenseDue ?? w.dueDate)?.toISOString() ?? null,
+        dueDate: (expenseDue ?? earliestPendingDue(w))?.toISOString() ?? null,
         createdAt: w.createdAt.toISOString(),
-        overdue: expenseDue ? bangkokDay(expenseDue) < today : !done && !!w.dueDate && bangkokDay(w.dueDate) < today,
+        overdue: expenseDue ? bangkokDay(expenseDue) < today : !done && !!earliestPendingDue(w) && bangkokDay(earliestPendingDue(w)!) < today,
         responsibleId: expensePending || expenseRecordedTotal !== undefined ? session.userId : (w.assignedTo ?? w.createdBy),
         assigneeId: w.assignedTo,
         createdById: w.createdBy,

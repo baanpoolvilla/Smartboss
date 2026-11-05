@@ -1,3 +1,4 @@
+import { earliestPendingDue } from "@/modules/maintenance/lib/work-order-members";
 import "server-only";
 import { prisma } from "@smartboss/database";
 import type { BoardOrder } from "@/modules/maintenance/components/work-order-board";
@@ -65,14 +66,14 @@ export async function buildBoardRows(
       pmRound: o.pmRoundDate ? pmRoundTag(o.pmRoundDate, o.dueDate, o.status) : null,
       isPrivate: o.isPrivate,
       isPm: !!o.pmScheduleId || o.pmScheduleIds.length > 0,
-      dueDateIso: o.dueDate?.toISOString() ?? null,
+      dueDateIso: earliestPendingDue(o)?.toISOString() ?? null,
       expenseRecordedTotal: o.status === "completed" ? (expenseTotals.get(o.id) ?? null) : null,
       expenseDeadlineIso: pendingClock.has(o.id) ? expenseDueAt({ ...o, clockFrom: pendingClock.get(o.id) }, tracking).toISOString() : null,
       expenseHeld: trackingOn && o.status === "completed" && o.requiresExpense && !o.isPrivate && !expenseSet.has(o.id) && !pendingClock.has(o.id),
       commentCount: commentsBy.get(o.id) ?? 0,
       photoCount: o.photoUrls.length + o.afterPhotoUrls.length,
       pendingDue: dueReqBy.get(o.id) ?? 0,
-      due: dueTag(o.dueDate, o.status),
+      due: dueTag(earliestPendingDue(o), o.status),
     }));
 }
 
