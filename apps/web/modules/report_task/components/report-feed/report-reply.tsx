@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { REACTION_CHIP_CLASS, ReactionPicker } from "@/components/emoji-picker";
+import { ReactionPicker } from "@/components/emoji-picker";
 import { StickerImage } from "@/components/sticker-panel";
 import { activeReactionList } from "@/lib/emoji";
 import { Check, ClipboardList, CornerUpLeft, Link2, MoreHorizontal, Pencil, Reply as ReplyIcon, SmilePlus, Trash2, Wrench } from "lucide-react";
@@ -13,6 +13,7 @@ import { cn } from "@/modules/report_task/lib/utils";
 import { isCoarsePointer } from "@/modules/report_task/lib/device";
 import { formatDateTimeFull, formatDateTimeShort } from "@/modules/report_task/lib/format";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
+import { ReactionChips } from "@/modules/report_task/components/report-feed/reaction-chips";
 import { DocAttachmentCard } from "@/modules/report_task/components/report-feed/doc-attachment-card";
 import { attachmentKind } from "@/modules/report_task/lib/report-attachment-kind";
 import { MentionEditBox } from "@/modules/report_task/components/report-feed/mention-edit-box";
@@ -422,20 +423,8 @@ export function ReportReply({
                 ))}
               </div>
             )}
-            {activeReactions.length > 0 && (
-              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                {activeReactions.map(({ emoji, users }) => (
-                  <button
-                    key={emoji}
-                    onClick={() => onToggleReaction(emoji)}
-                    className={cn(REACTION_CHIP_CLASS, viewerId && users.includes(viewerId) ? "bg-[var(--accent)] text-[var(--brand-green-dark)] ring-1 ring-[var(--brand-green)]/40" : "bg-[var(--bg-soft)] text-[var(--ink-soft)] ring-1 ring-[var(--line)]")}
-                  >
-                    <span className="text-[20px] leading-none">{emoji}</span>
-                    {users.length > 1 && <span className="tabular-nums">{users.length}</span>}
-                  </button>
-                ))}
-              </div>
-            )}
+            {/* แบบเดียวกับป้ายของโพสต์หลัก: กดดูว่าใครกด · "+" กดตาม (reaction-chips.tsx) */}
+            <ReactionChips reactions={activeReactions} viewerId={viewerId} onToggle={pickReaction} className="mt-1.5" />
           </>
         )}
       </div>
