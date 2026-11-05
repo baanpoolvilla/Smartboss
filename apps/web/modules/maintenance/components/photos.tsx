@@ -107,7 +107,7 @@ export function FilePreviewInput({
           className={attachStyle ? "sr-only" : "text-sm text-(--ink) file:mr-3 file:rounded-(--radius) file:border file:border-(--line) file:bg-(--bg-soft) file:px-3 file:py-1.5 file:text-sm"}
         />
       </label>
-      {attachStyle && <p className="text-[11px] text-(--ink-soft)">หรือแคปหน้าจอ/คัดลอกรูปแล้วกด Ctrl+V วางในฟอร์มนี้ได้เลย</p>}
+      {attachStyle && <p className="hidden text-[11px] text-(--ink-soft) sm:block">หรือแคปหน้าจอ/คัดลอกรูปแล้วกด Ctrl+V วางในฟอร์มนี้ได้เลย</p>}
     </div>
   );
 }

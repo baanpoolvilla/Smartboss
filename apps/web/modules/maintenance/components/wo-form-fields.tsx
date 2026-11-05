@@ -156,7 +156,7 @@ export function WoDueDateField({ defaultValue, minDate }: { defaultValue?: strin
         </div>
       </div>
       <input type="hidden" name="dueDate" value={value} />
-      <span className="text-xs text-(--ink-soft)">กำหนดส่งไม่ใส่ก็ได้ · เลยกำหนดแล้วยังไม่ปิด ใบจะขึ้นแดงและหักคะแนนผู้รับผิดชอบ</span>
+      <span className="text-[11px] text-(--ink-soft)" data-testid="wo-due-hint">ไม่ใส่ก็ได้ · เลยกำหนดหักคะแนน</span>
     </div>
   );
 }
