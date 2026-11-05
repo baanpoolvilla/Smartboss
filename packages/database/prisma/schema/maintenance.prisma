@@ -105,6 +105,10 @@ model WorkOrder {
   completedMemberIds    String[]  @default([]) @map("completed_member_ids")
   /// ใบกลุ่ม: กำหนดส่งแยกรายคน { userId: "YYYY-MM-DD" } เฉพาะคนที่ต่างจาก dueDate
   memberDueDates        Json?     @map("member_due_dates")
+  /// คนที่ถูกถอดออกจากใบหลังสร้าง — คะแนนที่หักไปแล้วคงไว้ ไม่คืนอัตโนมัติ
+  removedMemberIds      String[]  @default([]) @map("removed_member_ids")
+  /// เช็กลิสต์แบบงาน [{ id, text, done, ownerId, doneBy, doneAt }] · null = ไม่มี ปิดงานแบบเดิม
+  checklist             Json?
   additionalPropertyIds String[]  @map("additional_property_ids")
   /// เปิดจากรีพอต: ข้อความบอกที่มา + ลิงก์กลับไปข้อความต้นทาง (ใบงานอื่นเป็น null)
   sourceLabel           String?   @map("source_label")
@@ -268,6 +272,11 @@ model PmSchedule {
   isActive          Boolean   @default(true) @map("is_active")
   assignedTo        String?   @map("assigned_to")
   ccUserIds         String[]  @map("cc_user_ids")
+  /// แผนแบบกลุ่ม: คนที่เหลือนอกจาก assignedTo · ว่าง = เดี่ยว · ใบทุกรอบได้ทีมนี้
+  groupMemberIds    String[]  @default([]) @map("group_member_ids")
+  completionRule    String?   @map("completion_rule")
+  /// แม่แบบเช็กลิสต์ [{ text, ownerId }] คัดลอกไปทุกใบรอบ
+  checklist         Json?
   /// แผนนี้มีค่าใช้จ่ายไหม — ใบงานที่ระบบสร้างตามรอบจะรับค่านี้ไปด้วย
   requiresExpense   Boolean   @default(true) @map("requires_expense")
   createdBy         String?   @map("created_by")

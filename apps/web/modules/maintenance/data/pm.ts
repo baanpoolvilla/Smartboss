@@ -1,5 +1,5 @@
 import "server-only";
-import { prisma } from "@smartboss/database";
+import { prisma, Prisma } from "@smartboss/database";
 import {
   nextDueAfterCompletion,
   toDateOnly,
@@ -17,6 +17,11 @@ export interface PmInput {
   roundsPerYear?: number | null;
   totalRounds?: number | null;
   assignedTo?: string | null;
+  /** แผนแบบกลุ่ม: คนที่เหลือนอกจาก assignedTo · ว่าง = เดี่ยว */
+  groupMemberIds?: string[];
+  completionRule?: string | null;
+  /** แม่แบบเช็กลิสต์ [{ text, ownerId }] — null = ไม่มี */
+  checklist?: { text: string; ownerId: string | null }[] | null;
   ccUserIds?: string[];
   /** false = แผนนี้ไม่มีค่าใช้จ่าย — ใบงานที่สร้างตามรอบจะรับค่านี้ไปด้วย */
   requiresExpense?: boolean;
@@ -56,6 +61,9 @@ export async function createPmSchedule(orgId: string, data: PmInput) {
         roundsPerYear: data.roundsPerYear ?? null,
         totalRounds: data.totalRounds ?? null,
         assignedTo: data.assignedTo ?? null,
+        groupMemberIds: data.groupMemberIds ?? [],
+        completionRule: data.completionRule ?? null,
+        ...(data.checklist && data.checklist.length > 0 ? { checklist: data.checklist } : {}),
         ccUserIds: data.ccUserIds ?? [],
         requiresExpense: data.requiresExpense ?? true,
         createdBy: data.createdBy ?? null,
@@ -69,7 +77,11 @@ export async function updatePmSchedule(
   id: string,
   data: Partial<PmInput>
 ) {
-  await prisma.pmSchedule.updateMany({ where: { orgId, id }, data });
+  const { checklist, ...rest } = data;
+  await prisma.pmSchedule.updateMany({
+    where: { orgId, id },
+    data: { ...rest, ...(checklist === undefined ? {} : { checklist: checklist && checklist.length > 0 ? checklist : Prisma.DbNull }) },
+  });
 }
 
 /**

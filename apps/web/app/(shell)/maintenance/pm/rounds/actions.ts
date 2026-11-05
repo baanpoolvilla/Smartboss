@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { roundOrderTeam } from "@/modules/maintenance/lib/pm-team";
 import { prisma } from "@smartboss/database";
 import { canViewAll, requireOrg } from "@smartboss/auth";
 
@@ -102,7 +103,7 @@ export async function mergePileupAction(input: {
     prisma.workOrder.findMany({
       where: { orgId: s.orgId, pmScheduleId: input.pmId, pmRoundDate: { not: null }, status: { in: OPEN }, id: { in: input.woIds } },
       orderBy: { pmRoundDate: "asc" },
-      select: { id: true, code: true, pmRoundDate: true, assignedTo: true },
+      select: { id: true, code: true, pmRoundDate: true, assignedTo: true, groupMemberIds: true, completionRule: true },
     }),
   ]);
   if (!pm) return { error: "ไม่พบแผน PM" };
@@ -124,6 +125,8 @@ export async function mergePileupAction(input: {
         propertyId: pm.propertyId,
         assetId: pm.assetId,
         assignedTo: assignee,
+        // ทีมตามใบรอบล่าสุด (แก้ทีมในใบแล้วก็ตามนั้น) · เช็กลิสต์จากแผน
+        ...roundOrderTeam({ ...pm, groupMemberIds: latest.assignedTo ? latest.groupMemberIds : pm.groupMemberIds, completionRule: latest.assignedTo ? latest.completionRule : pm.completionRule }, assignee),
         // CEO เป็นคนเปิดใบรวม ⇒ อนุมัติคำขอเลื่อนของใบนี้ได้ (กติกาเดิม: CEO หรือคนเปิดใบ)
         createdBy: s.userId,
         title: `${pm.title} (รวม ${wos.length} รอบ)`,

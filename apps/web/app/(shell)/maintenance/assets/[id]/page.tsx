@@ -1,3 +1,5 @@
+import { AssigneeAndCc } from "@/modules/maintenance/components/multi-picker";
+import { readChecklistTemplate } from "@/modules/maintenance/lib/work-order-checklist";
 import { loadPerformanceSettings } from "@/lib/performance";
 import { PmRulesNote } from "@/modules/maintenance/components/pm-rules-note";
 import Link from "next/link";
@@ -366,7 +368,7 @@ function PmEditForm({
   canMoveRounds,
   roundsHidden = false,
 }: {
-  s: { id: string; title: string; frequency: string; nextDueDate: Date; assignedTo: string | null; requiresExpense: boolean; description: string | null };
+  s: { id: string; title: string; frequency: string; nextDueDate: Date; assignedTo: string | null; groupMemberIds: string[]; completionRule: string | null; checklist: unknown; requiresExpense: boolean; description: string | null };
   users: { id: string; name: string }[];
   today: string;
   openRoundLabels: string[];
@@ -404,15 +406,18 @@ function PmEditForm({
             <span data-testid="pm-open-rounds-hint">{locked && roundsHidden ? `ใบรอบ ${openRoundLabels.join(", ")} เปิดอยู่ และมีใบที่คุณไม่มีสิทธิ์เห็น จึงแก้วันที่ไม่ได้ — ให้คนสร้างแผนหรือผู้ดูแลแก้ หรือให้ผู้รับผิดชอบกดขอเลื่อนในใบงาน` : locked ? `ใบรอบ ${openRoundLabels.join(", ")} เปิดอยู่ แก้วันที่ได้เฉพาะคนสร้างแผนหรือผู้ดูแล ถ้าทำไม่ทันให้กดขอเลื่อนในใบงาน` : `ใบรอบ ${openRoundLabels.join(", ")} เปิดอยู่ เปลี่ยนวันแล้วใบเลื่อนตาม รอบต่อไปนับจากวันที่เลือก`}</span>
           )}
         </label>
-        <label className="flex flex-col gap-1 text-xs text-(--ink-soft) sm:col-span-2">
-          ผู้รับผิดชอบ *
-          <select name="assignedTo" required defaultValue={s.assignedTo ?? ""} className={fieldClass}>
-            <option value="" disabled>— เลือกผู้รับผิดชอบ —</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>{u.name}</option>
-            ))}
-          </select>
-        </label>
+        <div className="flex flex-col gap-1 sm:col-span-2" data-testid="pm-team">
+          <AssigneeAndCc
+            users={users.map((u) => ({ id: u.id, label: u.name }))}
+            defaultAssignee={s.assignedTo ?? ""}
+            defaultMembers={s.groupMemberIds}
+            defaultRule={s.completionRule ?? "all"}
+            defaultChecklist={readChecklistTemplate(s.checklist)}
+            withMemberDue={false}
+            withChecklist
+          />
+          <span className="text-[11px] text-(--ink-soft)">มีผลกับใบรอบถัดไป · ใบที่เปิดอยู่แก้ทีมในใบเอง</span>
+        </div>
         <label className="flex items-start gap-2.5 rounded-(--radius) border border-(--line) p-2.5 sm:col-span-2">
           <input type="checkbox" name="noExpense" value="1" defaultChecked={!s.requiresExpense} className="mt-0.5 h-4 w-4" />
           <span>

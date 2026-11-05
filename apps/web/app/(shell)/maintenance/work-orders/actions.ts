@@ -1,6 +1,7 @@
 "use server";
 
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { checklistAllowsClose, checklistFromTemplate, itemsOf, readChecklist, readChecklistTemplate, remainingCount } from "@/modules/maintenance/lib/work-order-checklist";
 import { z } from "zod";
 import { prisma } from "@smartboss/database";
 import type { Prisma } from "@smartboss/database";
@@ -142,7 +143,8 @@ export async function createWorkOrderAction(formData: FormData) {
   if (!assignedTo) throw new Error("เลือกผู้รับผิดชอบก่อนสร้างใบแจ้งซ่อม");
   // ใบกลุ่ม: ใบส่วนตัวและใบจากแผน PM เป็นกลุ่มไม่ได้ · รับเฉพาะคนในบริษัทที่ยังใช้งาน
   const pickedMembers = formData.getAll("groupMemberIds").map(String).filter((id) => id && id !== assignedTo);
-  const groupAllowed = !isPrivate && !d.pmScheduleId && pmScheduleIds.length === 0 && formData.get("woMode") === "group";
+  // ใบจาก PM เป็นกลุ่มได้แล้ว (แผนแบบกลุ่ม 5/11/2569) · ใบส่วนตัวยังเป็นกลุ่มไม่ได้
+  const groupAllowed = !isPrivate && formData.get("woMode") === "group";
   const groupMemberIds = groupAllowed && pickedMembers.length > 0
     ? (await prisma.user.findMany({ where: { orgId: s.orgId, isActive: true, id: { in: [...new Set(pickedMembers)] } }, select: { id: true } })).map((u) => u.id)
     : [];
@@ -165,6 +167,18 @@ export async function createWorkOrderAction(formData: FormData) {
     }
   }
   const cc = isPrivate ? [] : (d.ccUserIds ?? []).filter((id) => id !== assignedTo && !groupMemberIds.includes(id));
+  // เช็กลิสต์ (ไม่บังคับ) — เจ้าของข้อปรับให้ตรงกับทีมจริง (lib/work-order-checklist.ts)
+  let rawChecklist: unknown = null;
+  try {
+    rawChecklist = JSON.parse(String(formData.get("checklist") || "null"));
+  } catch {
+    rawChecklist = null;
+  }
+  const checklist = checklistFromTemplate(
+    readChecklistTemplate(rawChecklist),
+    { assignedTo, groupMemberIds, completionRule },
+    () => randomUUID(),
+  );
   const [primary, ...additional] = d.propertyIds;
 
   if (d.dueDate && isPastDay(d.dueDate)) {
@@ -188,6 +202,7 @@ export async function createWorkOrderAction(formData: FormData) {
     groupMemberIds,
     completionRule,
     memberDueDates,
+    checklist,
     createdBy: s.userId,
     ccUserIds: cc,
     assetId: d.assetId || null,
@@ -410,6 +425,8 @@ export async function toggleMyGroupPartAction(formData: FormData) {
   if (!isWorkOrderMember(wo, s.userId) || wo.groupMemberIds.length === 0 || (wo.completionRule ?? "all") !== "all") return;
   if (wo.status !== "open" && wo.status !== "in_progress") return;
   if (!hasPermission(s, MAINT_PERMS.workorderComplete) && !hasPermission(s, MAINT_PERMS.workorderManage)) return;
+  // คนที่มีข้อในเช็กลิสต์: เสร็จเมื่อติ๊กครบเอง ไม่ใช้ปุ่มนี้
+  if (itemsOf(readChecklist(wo.checklist), s.userId, wo).length > 0) return;
   const done = !wo.completedMemberIds.includes(s.userId);
   const next = done ? [...wo.completedMemberIds, s.userId] : wo.completedMemberIds.filter((x) => x !== s.userId);
   await prisma.workOrder.update({ where: { id: wo.id }, data: { completedMemberIds: next } });
@@ -449,6 +466,11 @@ export async function completeWorkOrderAction(formData: FormData) {
   }
   if (!canManage && waitingOnMembers(wo, s.userId).length > 0) {
     throw new Error("ยังปิดไม่ได้ รอสมาชิกในกลุ่มทำส่วนของตัวเองให้เสร็จก่อน");
+  }
+  // เช็กลิสต์ต้องครบตามวิธีปิดงานก่อน (เหมือนงาน) · ผู้จัดการปิดแทนได้เหมือนรอกลุ่ม
+  const checkItems = readChecklist(wo.checklist);
+  if (!canManage && !checklistAllowsClose(wo, checkItems)) {
+    throw new Error(`ยังปิดไม่ได้ เช็กลิสต์ยังไม่ครบ ${remainingCount(checkItems)} ข้อ`);
   }
 
   // ประมาณการค่าใช้จ่าย → completion_notes (รูปแบบข้อความเดียวกับของเดิม)

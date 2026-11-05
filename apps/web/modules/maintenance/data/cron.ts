@@ -1,4 +1,5 @@
 import { memberDueAt, pendingMemberIds, workOrderDockRefId, workOrderIdOfDockRef } from "@/modules/maintenance/lib/work-order-members";
+import { roundOrderTeam } from "@/modules/maintenance/lib/pm-team";
 import "server-only";
 import { prisma } from "@smartboss/database";
 import { crossOrg } from "@smartboss/database/cross-org";
@@ -109,6 +110,8 @@ export async function generateWorkOrdersForDuePms(): Promise<{
           // เดิมใช้แค่ของแผน PM — แผนที่ไม่ได้ตั้ง (ส่วนใหญ่ย้ายมาจากระบบเก่า ไม่มีข้อมูลคนสร้างด้วย) ได้ใบงาน
           // ไม่มีเจ้าของ ไม่มีใครเห็นบนบอร์ดงาน ไม่มีใครได้แจ้งเตือน และหักคะแนนตอนเลยกำหนดไม่ได้
           assignedTo: pm.assignedTo ?? pm.createdBy ?? pm.property?.caretakerId ?? null,
+          // แผนแบบกลุ่ม: ใบรอบได้ทีม วิธีปิดงาน และเช็กลิสต์จากแผน · แผนเดี่ยวได้ใบเดี่ยวเหมือนเดิม
+          ...roundOrderTeam(pm, pm.assignedTo ?? pm.createdBy ?? pm.property?.caretakerId ?? null),
           title: pm.title,
           description: `PM: ${pm.title}\nครบกำหนด ${fmtThaiDate(pm.nextDueDate)}`,
           status: "open",
@@ -414,14 +417,29 @@ async function notifyDueRoundWorkOrders(orgIds: string[]): Promise<number> {
       },
       select: {
         id: true, orgId: true, code: true, status: true, title: true, dueDate: true, pmRoundDate: true, assignedTo: true, ccUserIds: true, createdAt: true,
+        groupMemberIds: true, completedMemberIds: true, memberDueDates: true,
         propertyId: true, property: { select: { name: true } },
       },
     })
   );
   const today = ymd(todayBkkDate());
   let notified = 0;
+  // แผนแบบกลุ่ม: เตือนคนที่ยังไม่เสร็จ ตามกำหนดส่งของแต่ละคน · ใบเดี่ยวชุดเดียวเหมือนเดิม
+  const sets: { wo: (typeof wos)[number]; due: Date; users: string[] | null }[] = [];
   for (const wo of wos) {
-    const dueDay = new Date(wo.dueDate!.getTime() + 7 * 3600e3).toISOString().slice(0, 10);
+    if (wo.groupMemberIds.length === 0) {
+      sets.push({ wo, due: wo.dueDate!, users: null });
+      continue;
+    }
+    const byDay = new Map<number, string[]>();
+    for (const userId of pendingMemberIds(wo)) {
+      const due = memberDueAt(wo, userId) ?? wo.dueDate!;
+      byDay.set(due.getTime(), [...(byDay.get(due.getTime()) ?? []), userId]);
+    }
+    for (const [t, users] of byDay) sets.push({ wo, due: new Date(t), users });
+  }
+  for (const { wo, due, users } of sets) {
+    const dueDay = new Date(due.getTime() + 7 * 3600e3).toISOString().slice(0, 10);
     const days = Math.round((Date.parse(dueDay) - Date.parse(today)) / 86_400_000);
     if (!shouldRemindRound(days, ymd(todayBkkDate(wo.createdAt)) === today)) continue;
     const statusText = days < 0 ? `⚠️ เกินกำหนด ${-days} วัน` : days === 0 ? "⏰ ถึงกำหนดวันนี้" : `⏰ อีก ${days} วัน`;
@@ -430,17 +448,17 @@ async function notifyDueRoundWorkOrders(orgIds: string[]): Promise<number> {
     // ยังไม่กด "รับงาน" (สถานะยังเปิด) — ย้ำในแจ้งเตือนว่ายังไม่มีใครรับเรื่อง
     const notTaken = wo.status === "open" ? " · ยังไม่ได้กดรับงาน" : "";
     // เฉพาะคนที่จะโดนหัก — ผู้รับผิดชอบ ไม่มีค่อยเป็นผู้ดูแลบ้าน (ไม่แจ้ง CC/ผู้ดูแลบ้านซ้อน)
-    const responsible = wo.assignedTo ? [wo.assignedTo] : (await propertyCaretaker(wo.orgId, wo.propertyId)).slice(0, 1);
+    const responsible = users ?? (wo.assignedTo ? [wo.assignedTo] : (await propertyCaretaker(wo.orgId, wo.propertyId)).slice(0, 1));
     await notifyUsers(wo.orgId, responsible, {
       title: `${head} PM ${statusText}: ${wo.title}${notTaken}`,
-      body: `${wo.code} • บ้าน: ${house} • กำหนด ${fmtThaiDate(wo.dueDate!)} • ทำไม่ทันกด "ขอเลื่อนกำหนดส่ง"`,
+      body: `${wo.code} • บ้าน: ${house} • กำหนด ${fmtThaiDate(due)} • ทำไม่ทันกด "ขอเลื่อนกำหนดส่ง"`,
       type: "work_order",
       referenceId: wo.id,
       line:
         `${head} แจ้งเตือน PM
 📋 ${wo.title} (${wo.code})
 🏠 บ้าน: ${house}
-📅 กำหนด: ${fmtThaiDate(wo.dueDate!)}
+📅 กำหนด: ${fmtThaiDate(due)}
 ${statusText}${notTaken}
 ` +
         `ทำไม่ทันให้กด "ขอเลื่อนกำหนดส่ง" ในใบงาน พร้อมเหตุผล`,
@@ -681,7 +699,9 @@ export async function dockOverdueMaintenance(): Promise<{
     if (wo.overdueScore === "waived") continue;
     if (roundBeforeStart(wo, woSt.pmRoundsFrom)) continue;
     // ใบกลุ่ม: แต่ละคนตัดสินตามกำหนดส่งของตัวเอง หักคนที่ยังไม่เสร็จ แถวละคน (เหมือนงานกลุ่ม)
-    if (wo.groupMemberIds.length > 0 && !wo.pmRoundDate) {
+    if (wo.groupMemberIds.length > 0) {
+      // ใบรอบ PM แบบกลุ่ม: หัวข้อ "ไม่ทำบำรุงรักษาตามรอบ" แยกคน (แผน:รอบ:ใบ:คน)
+      const roundRef = wo.pmRoundDate && wo.pmScheduleId ? roundDockRefId(wo.pmScheduleId, wo.pmRoundDate, wo.id) : null;
       for (const userId of pendingMemberIds(wo)) {
         const due = memberDueAt(wo, userId);
         if (!due) continue;
@@ -693,11 +713,11 @@ export async function dockOverdueMaintenance(): Promise<{
           orgId: wo.orgId,
           userId,
           source: "maintenance",
-          category: "workorder_overdue",
+          category: roundRef ? "pm_missed" : "workorder_overdue",
           occurredAt: memberLapse,
-          refType: "work_order",
-          refId: workOrderDockRefId(wo, userId),
-          note: `${wo.title}${wo.property?.name ? ` · ${wo.property.name}` : ""} · ครบกำหนด ${fmtThaiDate(due)}`,
+          refType: roundRef ? "pm_schedule" : "work_order",
+          refId: roundRef ? `${roundRef}:${userId}` : workOrderDockRefId(wo, userId),
+          note: `${wo.title}${wo.property?.name ? ` · ${wo.property.name}` : ""} · ${roundRef ? `รอบ ${fmtThaiDate(wo.pmRoundDate!)} · ` : ""}ครบกำหนด ${fmtThaiDate(due)}`,
         });
       }
       continue;
@@ -1040,7 +1060,7 @@ async function revokeInvalidMaintenanceDocks(
       prisma.workOrder.findMany({
         where: { id: { in: woIds } },
         select: {
-          id: true, status: true, dueDate: true, completedAt: true, assignedTo: true, groupMemberIds: true, memberDueDates: true, pmRoundDate: true, pmScheduleId: true, overdueScore: true, isPrivate: true,
+          id: true, status: true, dueDate: true, completedAt: true, assignedTo: true, groupMemberIds: true, memberDueDates: true, removedMemberIds: true, pmRoundDate: true, pmScheduleId: true, overdueScore: true, isPrivate: true,
           property: { select: { caretakerId: true } },
         },
       }),
@@ -1075,7 +1095,7 @@ async function revokeInvalidMaintenanceDocks(
       const wo = woById.get(workOrderIdOfDockRef(d.refId));
       // ใบรอบ PM หักในหัวข้อ "ไม่ทำบำรุงรักษาตามรอบ" แล้ว — "ใบงานเกินกำหนด" ของใบเดียวกัน (ถ้ามีจากก่อนเปลี่ยน) ต้องคืน
       // รูปแบบ refId ต้องตรงกับใบตอนนี้ (ใบ:คน = กลุ่ม) ไม่งั้นรอบถัดไปหักซ้ำด้วยรูปแบบใหม่ — คืนแล้วให้หักใหม่แถวเดียว
-      const groupRefMismatch = !!wo && d.refId.includes(":") !== wo.groupMemberIds.length > 0;
+      const groupRefMismatch = !!wo && d.refId.includes(":") !== wo.groupMemberIds.length > 0 && !wo.removedMemberIds.includes(d.userId);
       reason = groupRefMismatch
         ? "เปลี่ยนสมาชิกกลุ่มของใบงาน"
         : wo?.pmRoundDate && wo.pmScheduleId
@@ -1088,11 +1108,15 @@ async function revokeInvalidMaintenanceDocks(
     } else if (roundWoId) {
       // ใบรอบ PM — กติกาเดียวกับใบงานเกินกำหนด (ไม่มีผ่อนผัน · CEO ยกเว้น/หักไว้ · เลื่อน/ปิดทัน/ย้ายคน)
       const wo = woById.get(roundWoId);
-      reason = workOrderDockRevokeReason(
-        d,
-        wo && { ...wo, caretakerId: wo.property?.caretakerId ?? null },
-        st,
-      );
+      // รูปแบบต้องตรงกับใบตอนนี้ (…:คน = กลุ่ม) ไม่งั้นแก้ทีมแล้วหักซ้ำอีกรูปแบบ
+      const groupRefMismatch = !!wo && (d.refId.split(":").length === 4) !== wo.groupMemberIds.length > 0 && !wo.removedMemberIds.includes(d.userId);
+      reason = groupRefMismatch
+        ? "เปลี่ยนสมาชิกกลุ่มของใบงาน"
+        : workOrderDockRevokeReason(
+            d,
+            wo && { ...wo, dueDate: memberDueAt(wo, d.userId), caretakerId: wo.property?.caretakerId ?? null },
+            st,
+          );
     } else {
       const pm = pmById.get(d.refId.split(":")[0]!);
       reason = pmDockRevokeReason(

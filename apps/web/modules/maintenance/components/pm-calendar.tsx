@@ -1,5 +1,6 @@
 "use client";
 
+import { AssigneeAndCc } from "./multi-picker";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { todayBangkok } from "@/modules/maintenance/lib/no-past-date";
@@ -101,6 +102,10 @@ export interface PmRow {
   createdByName: string | null;
   assignedTo: string | null;
   assignedToName: string | null;
+  /** แผนแบบกลุ่ม */
+  groupMemberIds: string[];
+  completionRule: string | null;
+  checklist: { text: string; ownerId: string | null }[];
   requiresExpense: boolean;
   hasPendingWorkOrder: boolean;
   /** ใบงานที่ค้างอยู่ของ PM นี้ (ล่าสุด) — ตัวที่บล็อกไม่ให้ออกรอบใหม่ */
@@ -665,22 +670,18 @@ export function PmCalendar({
                 <span className="text-xs text-(--ink-soft)" data-testid="pm-open-rounds-hint">{editing.canMoveRounds ? `ใบรอบ ${editing.openRoundLabels.join(", ")} เปิดอยู่ เปลี่ยนวันแล้วใบเลื่อนตาม รอบต่อไปนับจากวันที่เลือก` : editing.roundsHidden ? `ใบรอบ ${editing.openRoundLabels.join(", ")} เปิดอยู่ และมีใบที่คุณไม่มีสิทธิ์เห็น จึงแก้วันที่ไม่ได้ — ให้คนสร้างแผนหรือผู้ดูแลแก้ หรือให้ผู้รับผิดชอบกดขอเลื่อนในใบงาน` : `ใบรอบ ${editing.openRoundLabels.join(", ")} เปิดอยู่ แก้วันที่ได้เฉพาะคนสร้างแผนหรือผู้ดูแล ถ้าทำไม่ทันให้กดขอเลื่อนในใบงาน`}</span>
               )}
             </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-(--ink)">ผู้รับผิดชอบ *</span>
-              <select
-                name="assignedTo"
-                required
-                defaultValue={editing.assignedTo ?? ""}
-                className="h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm text-(--ink)"
-              >
-                <option value="" disabled>— เลือกผู้รับผิดชอบ —</option>
-                {userOptions.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="flex flex-col gap-1" data-testid="pm-team">
+              <AssigneeAndCc
+                users={userOptions}
+                defaultAssignee={editing.assignedTo ?? ""}
+                defaultMembers={editing.groupMemberIds}
+                defaultRule={editing.completionRule ?? "all"}
+                defaultChecklist={editing.checklist}
+                withMemberDue={false}
+                withChecklist
+              />
+              <span className="text-[11px] text-(--ink-soft)">มีผลกับใบรอบถัดไป · ใบที่เปิดอยู่แก้ทีมในใบเอง</span>
+            </div>
             <label className="flex items-start gap-2.5 rounded-(--radius) border border-(--line) p-2.5">
               <input
                 type="checkbox"
@@ -838,7 +839,7 @@ function PmDetailCard({
           label={`สร้างเมื่อ ${s.createdAtLabel}`}
         />
         {s.assignedToName && (
-          <Chip icon={<User className="h-3.5 w-3.5" />} label={s.assignedToName} />
+          <Chip icon={<User className="h-3.5 w-3.5" />} label={s.groupMemberIds.length > 0 ? `${s.assignedToName} +${s.groupMemberIds.length}` : s.assignedToName} />
         )}
         {s.assetName && (
           <Chip icon={<Wrench className="h-3.5 w-3.5" />} label={s.assetName} />

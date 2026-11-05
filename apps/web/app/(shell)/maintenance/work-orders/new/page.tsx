@@ -1,3 +1,6 @@
+import { readChecklistTemplate } from "@/modules/maintenance/lib/work-order-checklist";
+import { prisma } from "@smartboss/database";
+import { roleLabel } from "@/modules/maintenance/lib/role-label";
 import { redirect } from "next/navigation";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { Card } from "@smartboss/ui/components/card";
@@ -33,19 +36,6 @@ function Row({ icon: Icon, children, className = "" }: { icon: LucideIcon; child
   );
 }
 
-const ROLE_LABEL: Record<string, string> = {
-  SUPER_ADMIN: "ผู้ดูแลระบบ",
-  CEO: "เจ้าของ",
-  MANAGER: "ผู้จัดการ",
-  CARETAKER: "ผู้ดูแลบ้าน",
-  TECHNICIAN: "ช่าง",
-  STAFF: "พนักงาน",
-};
-function roleLabel(codes: string[]): string {
-  const c = codes.find((x) => ROLE_LABEL[x]);
-  return c ? ROLE_LABEL[c]! : "";
-}
-
 export default async function NewWorkOrderPage({
   searchParams,
 }: {
@@ -74,6 +64,13 @@ export default async function NewWorkOrderPage({
     listOrgUsers(session.orgId),
     pmPlansSkipExpense(session.orgId, pmIds),
   ]);
+  // เปิดใบจากแผน PM: ทีม วิธีปิดงาน และเช็กลิสต์ตามแผน (แก้ในฟอร์มได้)
+  const plan = sp.pmScheduleId
+    ? await prisma.pmSchedule.findFirst({
+        where: { orgId: session.orgId, id: sp.pmScheduleId },
+        select: { assignedTo: true, groupMemberIds: true, completionRule: true, checklist: true },
+      })
+    : null;
 
   // ผู้ดูแลบ้านมอบหมายได้เฉพาะช่าง/ผู้ดูแลบ้าน (เหมือนของเดิม)
   const isCaretaker =
@@ -184,8 +181,11 @@ export default async function NewWorkOrderPage({
                   label: u.name,
                   sub: roleLabel(u.roleCodes),
                 }))}
-                defaultAssignee={sp.technicianId ?? ""}
-                allowGroup={!sp.pmScheduleId && !sp.pmScheduleIds}
+                defaultAssignee={sp.technicianId ?? plan?.assignedTo ?? ""}
+                defaultMembers={plan?.groupMemberIds ?? []}
+                defaultRule={plan?.completionRule ?? "all"}
+                defaultChecklist={readChecklistTemplate(plan?.checklist)}
+                withChecklist
               />
               </div>
             </div>

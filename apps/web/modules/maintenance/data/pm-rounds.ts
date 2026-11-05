@@ -1,4 +1,6 @@
+import { workOrderMemberIds } from "@/modules/maintenance/lib/work-order-members";
 import "server-only";
+import { roundOrderTeam } from "@/modules/maintenance/lib/pm-team";
 import { prisma } from "@smartboss/database";
 import { crossOrg } from "@smartboss/database/cross-org";
 
@@ -112,6 +114,8 @@ export async function generateRoundWorkOrders(orgs: Map<string, RoundOrg>, pmIds
             assetId: pm.assetId,
             // เหมือนตัวเปิดใบแบบเดิม (data/cron.ts generateWorkOrdersForDuePms)
             assignedTo: pm.assignedTo ?? pm.createdBy ?? pm.property?.caretakerId ?? null,
+            // แผนแบบกลุ่ม: ใบรอบได้ทีม วิธีปิดงาน และเช็กลิสต์จากแผน · แผนเดี่ยวได้ใบเดี่ยวเหมือนเดิม
+            ...roundOrderTeam(pm, pm.assignedTo ?? pm.createdBy ?? pm.property?.caretakerId ?? null),
             title: pm.title,
             description: `PM: ${pm.title}\nรอบครบกำหนด ${fmtThaiDate(round)}`,
             status: "open",
@@ -200,6 +204,15 @@ export async function openRoundsNow(orgId: string, pmIds?: string[]): Promise<nu
  */
 async function announceRound(
   pm: { orgId: string; title: string; createdBy: string | null; ccUserIds: string[] },
+  wo: { id: string; code: string; title: string; assignedTo: string | null; groupMemberIds?: string[]; dueDate: Date | null },
+  round: Date,
+): Promise<void> {
+  // แผนแบบกลุ่ม: ทุกคนในทีมได้แจ้ง + การ์ดในแชท
+  for (const member of workOrderMemberIds(wo)) await announceTo(pm, { ...wo, assignedTo: member }, round);
+}
+
+async function announceTo(
+  pm: { orgId: string; title: string; createdBy: string | null; ccUserIds: string[] },
   wo: { id: string; code: string; title: string; assignedTo: string | null; dueDate: Date | null },
   round: Date,
 ): Promise<void> {
@@ -269,7 +282,8 @@ export async function listPileups(orgId: string): Promise<Pileup[]> {
         orgId,
         category: "pm_missed",
         refType: "pm_schedule",
-        refId: { in: pmIds.flatMap((id) => byPm.get(id)!.map((w) => roundDockRefId(id, w.pmRoundDate!, w.id))) },
+        // ใบรอบแบบกลุ่มหักแยกคน (…:คน) — นับรวมทั้งใบ
+        OR: pmIds.flatMap((id) => byPm.get(id)!.map((w) => ({ refId: { startsWith: roundDockRefId(id, w.pmRoundDate!, w.id) } }))),
       },
       select: { refId: true, points: true },
     }),

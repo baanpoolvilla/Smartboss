@@ -173,6 +173,8 @@ export interface WorkOrderInput {
   groupMemberIds?: string[];
   completionRule?: string | null;
   memberDueDates?: Record<string, string>;
+  /** เช็กลิสต์ (ไม่บังคับ) — ว่าง = ไม่มี */
+  checklist?: { id: string; text: string; done: boolean; ownerId: string | null }[];
   additionalPropertyIds?: string[];
   pmScheduleId?: string | null;
   pmScheduleIds?: string[];
@@ -259,6 +261,7 @@ export function createWorkOrder(orgId: string, data: WorkOrderInput) {
         groupMemberIds: data.groupMemberIds ?? [],
         completionRule: data.completionRule ?? null,
         ...(data.memberDueDates && Object.keys(data.memberDueDates).length > 0 ? { memberDueDates: data.memberDueDates } : {}),
+        ...(data.checklist && data.checklist.length > 0 ? { checklist: data.checklist } : {}),
         additionalPropertyIds: data.additionalPropertyIds ?? [],
         pmScheduleId: data.pmScheduleId ?? null,
         pmScheduleIds: data.pmScheduleIds ?? [],

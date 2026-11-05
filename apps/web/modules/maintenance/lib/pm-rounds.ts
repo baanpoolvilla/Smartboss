@@ -137,7 +137,8 @@ export function roundDockRefId(pmId: string, round: Date, workOrderId: string): 
 /** ใบงานของคะแนนใบรอบ — null = คะแนน "ไม่ทำตามรอบ" แบบเดิม (แผน:รอบ) */
 export function roundDockWorkOrderId(refId: string | null | undefined): string | null {
   const parts = (refId ?? "").split(":");
-  return parts.length === 3 && parts[2] ? parts[2] : null;
+  // ใบรอบแบบกลุ่มต่อท้ายด้วยคน (แผน:รอบ:ใบ:คน)
+  return parts.length >= 3 && parts[2] ? parts[2] : null;
 }
 
 /** ค้างพร้อมกันกี่รอบถึงส่งให้ CEO ตัดสิน */

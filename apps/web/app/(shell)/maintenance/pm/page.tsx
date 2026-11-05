@@ -1,3 +1,4 @@
+import { readChecklistTemplate } from "@/modules/maintenance/lib/work-order-checklist";
 import { redirect } from "next/navigation";
 import { ListChecks } from "lucide-react";
 import { requireOrg, hasPermission, canViewAll } from "@smartboss/auth";
@@ -112,6 +113,9 @@ export default async function PmListPage({
     createdByName: s.createdBy ? (names[s.createdBy] ?? null) : null,
     assignedTo: s.assignedTo,
     assignedToName: s.assignedTo ? (names[s.assignedTo] ?? null) : null,
+    groupMemberIds: s.groupMemberIds,
+    completionRule: s.completionRule,
+    checklist: readChecklistTemplate(s.checklist),
     requiresExpense: s.requiresExpense,
     hasPendingWorkOrder: pending.has(s.id),
     pendingWorkOrderId: pending.get(s.id) ?? null,

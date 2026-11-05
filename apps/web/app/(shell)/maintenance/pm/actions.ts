@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { readChecklistTemplate } from "@/modules/maintenance/lib/work-order-checklist";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireOrg, hasPermission, audit, canViewAll } from "@smartboss/auth";
@@ -81,6 +82,36 @@ const createSchema = z.object({
  * สร้าง PM — เลือกอุปกรณ์ได้หลายชิ้นพร้อมกัน (1 อุปกรณ์ = 1 แผน)
  * ตรงกับ _showCreatePmDialog + createPmSchedulesBatch ของเดิม
  */
+/**
+ * ทีมของแผน (เดี่ยว/กลุ่ม + วิธีปิดงาน) และแม่แบบเช็กลิสต์จากฟอร์ม — ใบทุกรอบได้ค่าเหล่านี้ (lib/pm-team.ts)
+ * ฟอร์มที่ไม่ได้ส่งช่องมา = ไม่แตะของเดิม
+ */
+async function teamFromForm(orgId: string, formData: FormData, assignedTo: string | null) {
+  const out: { groupMemberIds?: string[]; completionRule?: string | null; checklist?: { text: string; ownerId: string | null }[] | null } = {};
+  if (formData.has("woMode")) {
+    const picked = formData.get("woMode") === "group"
+      ? [...new Set(formData.getAll("groupMemberIds").map(String).filter((x) => x && x !== assignedTo))]
+      : [];
+    const ok = picked.length
+      ? (await prisma.user.findMany({ where: { orgId, isActive: true, id: { in: picked } }, select: { id: true } })).map((u) => u.id)
+      : [];
+    out.groupMemberIds = picked.filter((x) => ok.includes(x));
+    const rule = String(formData.get("completionRule") ?? "all");
+    out.completionRule = out.groupMemberIds.length > 0 ? (["all", "any", "shared"].includes(rule) ? rule : "all") : null;
+  }
+  if (formData.has("checklist")) {
+    let raw: unknown = null;
+    try {
+      raw = JSON.parse(String(formData.get("checklist") || "null"));
+    } catch {
+      raw = null;
+    }
+    const items = readChecklistTemplate(raw);
+    out.checklist = items.length > 0 ? items : null;
+  }
+  return out;
+}
+
 export async function createPmAction(formData: FormData) {
   const orgId = await requirePmManage();
   const assetIds = formData.getAll("assetIds").map(String).filter(Boolean);
@@ -130,6 +161,7 @@ export async function createPmAction(formData: FormData) {
     roundsPerYear,
     totalRounds,
     assignedTo: d.assignedTo || null,
+    ...(await teamFromForm(orgId, formData, d.assignedTo || null)),
     ccUserIds,
     createdBy: session.userId,
   };
@@ -214,6 +246,8 @@ export async function updatePmAction(formData: FormData) {
       ? { nextDueDate: parseDate(nextDueDate), anchorDate: parseDate(nextDueDate) }
       : {}),
     assignedTo,
+    // ทีม + เช็กลิสต์: มีผลกับใบรอบถัดไป ใบที่เปิดอยู่แก้ในใบเอง (ปุ่ม "แก้" ข้างผู้รับผิดชอบ)
+    ...(await teamFromForm(orgId, formData, assignedTo)),
     // มีผลกับใบงานที่ระบบสร้างหลังจากนี้เท่านั้น — ใบที่เปิดค้างอยู่เก็บค่าของตัวเองไว้แล้ว
     requiresExpense: formData.get("noExpense") !== "1",
     description: description || null,

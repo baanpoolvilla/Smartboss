@@ -75,6 +75,10 @@ import {
   updateWorkOrderPropertiesAction,
 } from "../actions";
 import { EditWorkOrderProperties } from "@/modules/maintenance/components/edit-work-order-properties";
+import { WoChecklist, WoTeamEditButton, type ChecklistView } from "@/modules/maintenance/components/work-order-team";
+import { canTickItem, checklistAllowsClose, itemsOf, readChecklist, remainingCount } from "@/modules/maintenance/lib/work-order-checklist";
+import { listOrgUsers } from "@/modules/maintenance/data/users";
+import { roleLabel } from "@/modules/maintenance/lib/role-label";
 import { WorkOrderDueRequest, type DueRequestView } from "@/modules/maintenance/components/work-order-due-request";
 import { buildScoreQueue } from "@/lib/score-request-views";
 import { ScoreRequestCard } from "@/app/(shell)/hr/penalty-requests/score-requests-queue";
@@ -194,6 +198,7 @@ export default async function WorkOrderDetailPage({
     ...wo.ccUserIds,
     ...comments.map((c) => c.userId),
     ...dueRequests.flatMap((r) => [r.requestedBy, r.decidedBy]),
+    ...readChecklist(wo.checklist).flatMap((c) => [c.ownerId, c.doneBy]),
   ]);
 
   const uploadLink = canManage ? await getActiveUploadLink(orgId, id) : null;
@@ -229,6 +234,44 @@ export default async function WorkOrderDetailPage({
   const viewAll = canViewAll(session);
   // คนเปิดใบ — ใบ PM อัตโนมัติ = คนสร้างแผน PM (อนุมัติ/แก้กำหนดส่งได้แทน CEO)
   const ownerId = await workOrderOwnerId(orgId, wo);
+
+  // แก้ผู้รับผิดชอบ + เช็กลิสต์ (team-actions.ts) — คนแก้ทีม = คนแก้กำหนดส่งได้
+  const isOpenNow = wo.status === "open" || wo.status === "in_progress";
+  const canEditTeam = isOpenNow && !wo.isPrivate && canEditDueDate({ userId: session.userId, viewAll }, { createdBy: ownerId });
+  const teamUsers = canEditTeam
+    ? (await listOrgUsers(orgId))
+        .filter((u) => hasPermission(session, MAINT_PERMS.propertyManage) || u.roleCodes.includes("TECHNICIAN") || u.roleCodes.includes("CARETAKER") || workOrderMemberIds(wo).includes(u.id))
+        .map((u) => ({ id: u.id, label: u.name, sub: roleLabel(u.roleCodes) }))
+    : [];
+  const checkItems = readChecklist(wo.checklist);
+  const isGroupWo = wo.groupMemberIds.length > 0;
+  const sharedWo = isGroupWo && (wo.completionRule ?? "all") === "shared";
+  const myItems = itemsOf(checkItems, session.userId, wo);
+  const checklistReady = checklistAllowsClose(wo, checkItems);
+  const checklistViews: ChecklistView[] = checkItems.map((c) => ({
+    id: c.id,
+    text: c.text,
+    done: c.done,
+    ownerName: isGroupWo && !sharedWo && c.ownerId ? (names[c.ownerId] ?? "-") : null,
+    doneByName: c.done && c.doneBy && (isGroupWo || c.doneBy !== c.ownerId) ? (names[c.doneBy] ?? "-") : null,
+    mine: c.ownerId === session.userId && isGroupWo && !sharedWo,
+    canTick: canTickItem(c, session.userId, wo, viewAll),
+    canRemove: canEditTeam || (c.ownerId === session.userId && !c.done),
+  }));
+  const checklistHint =
+    checkItems.length === 0
+      ? "ไม่บังคับ · ใส่ขั้นตอนที่ต้องทำ ติ๊กครบแล้วถึงปิดงานได้"
+      : checklistReady
+        ? "ติ๊กครบแล้ว ปิดงานได้"
+        : !isGroupWo
+          ? `เหลือ ${remainingCount(checkItems)} ข้อ · ติ๊กครบถึงปิดงานได้`
+          : sharedWo
+            ? `ช่วยกันทำ: ใครในกลุ่มติ๊กข้อไหนก็ได้ · เหลือ ${remainingCount(checkItems)} ข้อ`
+            : myItems.length > 0
+              ? `ข้อของคุณเหลือ ${myItems.filter((c) => !c.done).length} ข้อ · ติ๊กครบ = ส่วนของคุณเสร็จ`
+              : (wo.completionRule ?? "all") === "any"
+                ? "ใครติ๊กข้อของตัวเองครบก่อน ปิดงานได้"
+                : "แต่ละคนติ๊กข้อของตัวเองให้ครบ";
   const dueRequestViews: DueRequestView[] = dueRequests.map((r) => ({
     id: r.id,
     requestedBy: r.requestedBy,
@@ -410,12 +453,30 @@ export default async function WorkOrderDetailPage({
             stacked
             icon={<HardHat className="h-5 w-5" />}
             label={wo.groupMemberIds.length > 0 ? `รับผิดชอบโดย (กลุ่ม · ปิดงานเมื่อ${COMPLETION_RULE_LABEL[wo.completionRule ?? "all"]})` : "รับผิดชอบโดย"}
-            value={workOrderMemberIds(wo)
-              .map((id) => {
-                const own = (wo.memberDueDates as Record<string, string> | null)?.[id];
-                return `${names[id] ?? "-"}${own ? ` (ครบ ${fmtThaiDate(memberDueAt(wo, id))})` : ""}${wo.completedMemberIds.includes(id) ? " ✓" : ""}`;
-              })
-              .join(", ")}
+            value={
+              <span data-testid="team-names">
+                {workOrderMemberIds(wo)
+                  .map((id) => {
+                    const own = (wo.memberDueDates as Record<string, string> | null)?.[id];
+                    return `${names[id] ?? "-"}${own ? ` (ครบ ${fmtThaiDate(memberDueAt(wo, id))})` : ""}${wo.completedMemberIds.includes(id) ? " ✓" : ""}`;
+                  })
+                  .join(", ")}
+                {canEditTeam && (
+                  <>
+                    {" "}
+                    <WoTeamEditButton
+                      id={id}
+                      users={teamUsers}
+                      assignedTo={wo.assignedTo}
+                      members={wo.groupMemberIds}
+                      rule={wo.completionRule ?? "all"}
+                      memberDue={(wo.memberDueDates ?? {}) as Record<string, string>}
+                      lockMode={wo.completedMemberIds.length > 0}
+                    />
+                  </>
+                )}
+              </span>
+            }
           />
         )}
         {/* ใบกลุ่มแบบครบทุกคน: ปุ่มอยู่ใต้ชื่อผู้รับผิดชอบ เห็นโดยไม่ต้องเลื่อน (ผู้ใช้ 5/11/2569) */}
@@ -429,7 +490,10 @@ export default async function WorkOrderDetailPage({
                   ? "ทุกคนเสร็จแล้ว เหลือคุณ ทำเสร็จแล้วกดปิดงานด้านล่าง"
                   : "ทุกคนเสร็จแล้ว รอปิดงาน"}
             </p>
-            {canChangeStatus && isWorkOrderMember(wo, session.userId) && waitingOnGroup.length > 0 && (
+            {canChangeStatus && isWorkOrderMember(wo, session.userId) && waitingOnGroup.length > 0 && myItems.length > 0 && (
+              <p className="mt-2 text-xs font-medium text-(--brand-navy)">ติ๊กเช็กลิสต์ของคุณด้านล่างให้ครบ = ส่วนของคุณเสร็จ</p>
+            )}
+            {canChangeStatus && isWorkOrderMember(wo, session.userId) && waitingOnGroup.length > 0 && myItems.length === 0 && (
               <form action={toggleMyGroupPartAction} className="mt-2">
                 <input type="hidden" name="id" value={id} />
                 <button
@@ -447,6 +511,15 @@ export default async function WorkOrderDetailPage({
             )}
           </div>
         )}
+        <WoChecklist
+          workOrderId={id}
+          items={checklistViews}
+          hint={checklistHint}
+          canAdd={!wo.isPrivate || wo.createdBy === session.userId ? canEditTeam || isWorkOrderMember(wo, session.userId) : false}
+          ownerOptions={canEditTeam && isGroupWo && !sharedWo ? workOrderMemberIds(wo).map((u) => ({ id: u, label: names[u] ?? "-" })) : []}
+          defaultOwner={canEditTeam && isGroupWo && !sharedWo ? wo.assignedTo : null}
+          open={isOpenNow}
+        />
         {wo.ccUserIds.length > 0 && (
           <InfoRow
             stacked
@@ -935,7 +1008,12 @@ export default async function WorkOrderDetailPage({
             {canChangeStatus && wo.status === "open" && (
               <StartJobButton id={id} action={updateStatusAction} />
             )}
-            {canChangeStatus && wo.status === "in_progress" && (canManage || waitingOnGroup.length === 0) && (
+            {canChangeStatus && wo.status === "in_progress" && !canManage && waitingOnGroup.length === 0 && !checklistReady && (
+              <p className="rounded-(--radius) border border-dashed border-(--line) px-3 py-2.5 text-center text-sm text-(--ink-soft)" data-testid="close-blocked">
+                ติ๊กเช็กลิสต์ให้ครบก่อนถึงปิดงานได้ (เหลือ {remainingCount(checkItems)} ข้อ)
+              </p>
+            )}
+            {canChangeStatus && wo.status === "in_progress" && (canManage || (waitingOnGroup.length === 0 && checklistReady)) && (
               <CompleteJobButton
                 id={id}
                 action={completeWorkOrderAction}

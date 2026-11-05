@@ -8,7 +8,7 @@ import { todayBangkok } from "@/modules/maintenance/lib/no-past-date";
 
 import { useState } from "react";
 import { Card } from "@smartboss/ui/components/card";
-import { MultiPicker, type PickOption } from "./multi-picker";
+import { AssigneeAndCc, MultiPicker, type PickOption } from "./multi-picker";
 
 const inputClass =
   "h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm text-(--ink) focus-visible:border-(--brand-green) focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-(--brand-green)/30";
@@ -256,18 +256,10 @@ export function PmForm({
           )}
         </label>
 
-        <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-(--ink)">มอบหมายช่าง *</span>
-          {/* ทุกแผนต้องมีผู้รับผิดชอบ — ใบรอบที่ระบบเปิดเองไปหาคนนี้ และคนนี้คือคนที่โดนหักคะแนนถ้าเลยกำหนด */}
-          <select name="assignedTo" defaultValue="" required className={inputClass}>
-            <option value="" disabled>— เลือกผู้รับผิดชอบ —</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.sub ? `${u.label} (${u.sub})` : u.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="flex flex-col gap-1" data-testid="pm-team">
+          <AssigneeAndCc users={users} withMemberDue={false} withChecklist />
+          <span className="text-[11px] text-(--ink-soft)">แผนแบบกลุ่ม: ใบทุกรอบเปิดให้ทุกคนในทีม · เช็กลิสต์คัดลอกไปทุกใบรอบ</span>
+        </div>
 
         <MultiPicker
           name="ccUserIds"

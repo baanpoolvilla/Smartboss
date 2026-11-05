@@ -61,6 +61,8 @@ export interface WorkOrderState {
   overdueScore?: string | null;
   /** ใบส่วนตัว — ไม่หักคะแนน */
   isPrivate?: boolean;
+  /** removed from the order after creation: their existing dock stays */
+  removedMemberIds?: string[];
 }
 
 /** "ใบงานเกินกำหนด" ที่หักไปแล้ว — คืนเหตุผลถ้าควรคืน */
@@ -75,6 +77,8 @@ export function workOrderDockRevokeReason(
   // CEO สั่ง "ไม่ต้องทำ แต่หักไว้" (ยกเลิกใบ/รวบเข้าใบอื่น) — คะแนนที่หักไปแล้วคงไว้
   if (wo.status === "cancelled" && wo.overdueScore === "kept") return null;
   if (wo.status === "cancelled") return "ใบงานถูกยกเลิก";
+  // Taken off the order after being docked: keep it, otherwise removing a late person would wipe their dock
+  if (wo.removedMemberIds?.includes(dock.userId)) return null;
   if (!wo.dueDate) return "ใบงานไม่มีกำหนดส่งแล้ว";
   if (roundBeforeStart(wo, st.pmRoundsFrom)) return "รอบ PM ก่อนเริ่มนับแบบรอบ";
   const lapse = addDays(wo.dueDate, overdueGraceDays(wo, st.workOrderGraceDays));

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Check, ChevronDown, ChevronRight, Plus, Search, UserPlus, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, ListChecks, Plus, Search, UserPlus, X } from "lucide-react";
 import { Button } from "@smartboss/ui/components/button";
 import { Modal } from "./dialog";
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
@@ -277,24 +277,49 @@ export function MultiPicker({
 }
 
 /** ฟอร์มสร้างใบงาน: ผู้รับผิดชอบหลัก + CC ที่ตัดคนซ้ำกันออกให้ (เหมือนของเดิม) */
+/** ข้อในเช็กลิสต์ระหว่างกรอกฟอร์ม — ownerId null = ช่วยกันทำ / ยังไม่เลือก */
+export type DraftItem = { text: string; ownerId: string | null };
+
 export function AssigneeAndCc({
   users,
   defaultAssignee = "",
   allowGroup = true,
+  defaultMembers = [],
+  defaultRule = "all",
+  defaultMemberDue = {},
+  lockMode = false,
+  withMemberDue = true,
+  withChecklist = false,
+  defaultChecklist = [],
 }: {
   /** ผู้ที่มอบหมายงานได้ */
   users: PickOption[];
   defaultAssignee?: string;
-  /** ใบจากแผน PM เป็นกลุ่มไม่ได้ */
   allowGroup?: boolean;
+  /** แก้ทีมหลังสร้าง / แผน PM: คนในกลุ่มเดิม (ไม่รวม defaultAssignee) */
+  defaultMembers?: string[];
+  defaultRule?: string;
+  defaultMemberDue?: Record<string, string>;
+  /** มีคนกดเสร็จแล้ว: เปลี่ยนเดี่ยว/กลุ่มและวิธีปิดงานไม่ได้ */
+  lockMode?: boolean;
+  /** แผน PM ไม่มีวันส่งรายคน (วันตามรอบ) */
+  withMemberDue?: boolean;
+  /** แถวเช็กลิสต์ (ไม่บังคับ) ส่งค่าในช่อง checklist เป็น JSON [{ text, ownerId }] */
+  withChecklist?: boolean;
+  defaultChecklist?: DraftItem[];
 }) {
   // ลำดับที่เลือก: คนแรกคือ assignedTo คนที่เหลือคือสมาชิกกลุ่ม · ใบเดี่ยวมีคนเดียว
-  const [picked, setPicked] = useState<string[]>(defaultAssignee ? [defaultAssignee] : []);
+  const [picked, setPicked] = useState<string[]>(defaultAssignee ? [defaultAssignee, ...defaultMembers.filter((x) => x !== defaultAssignee)] : []);
   const [draft, setDraft] = useState<string[]>([]);
-  const [group, setGroup] = useState(false);
-  const [rule, setRule] = useState<"all" | "any" | "shared">("all");
+  const [group, setGroup] = useState(defaultMembers.length > 0);
+  const [rule, setRule] = useState<"all" | "any" | "shared">(defaultRule === "any" || defaultRule === "shared" ? defaultRule : "all");
+  const [checklist, setChecklist] = useState<DraftItem[]>(defaultChecklist);
+  const [checkDraft, setCheckDraft] = useState<DraftItem[]>([]);
+  const [checkOpen, setCheckOpen] = useState(false);
+  const [newItem, setNewItem] = useState("");
+  const perOwner = group && rule !== "shared";
   // กำหนดส่งแยกรายคน (เหมือนงานกลุ่ม) — ไม่ใส่ = ใช้กำหนดส่งของใบ
-  const [memberDue, setMemberDue] = useState<Record<string, string>>({});
+  const [memberDue, setMemberDue] = useState<Record<string, string>>(defaultMemberDue);
   const [dueDraft, setDueDraft] = useState<Record<string, string>>({});
   const [dueOpen, setDueOpen] = useState(false);
   const dueCount = picked.filter((id) => memberDue[id]).length;
@@ -328,11 +353,12 @@ export function AssigneeAndCc({
                 key={text}
                 type="button"
                 aria-pressed={group === v}
+                disabled={lockMode && group !== v}
                 onClick={() => {
                   setGroup(v);
                   if (!v) setPicked((p) => p.slice(0, 1));
                 }}
-                className={`h-full rounded-md px-2.5 text-xs font-medium ${group === v ? "bg-white text-(--brand-navy) shadow-sm" : "text-(--ink-soft)"}`}
+                className={`h-full rounded-md px-2.5 text-xs font-medium disabled:opacity-40 ${group === v ? "bg-white text-(--brand-navy) shadow-sm" : "text-(--ink-soft)"}`}
               >
                 {text}
               </button>
@@ -390,8 +416,9 @@ export function AssigneeAndCc({
                   key={v}
                   type="button"
                   aria-pressed={rule === v}
+                  disabled={lockMode && rule !== v}
                   onClick={() => setRule(v)}
-                  className={`rounded px-2 py-0.5 text-[11px] font-medium ${rule === v ? "bg-white text-(--brand-navy) shadow-sm" : "text-(--ink-soft)"}`}
+                  className={`rounded px-2 py-0.5 text-[11px] font-medium disabled:opacity-40 ${rule === v ? "bg-white text-(--brand-navy) shadow-sm" : "text-(--ink-soft)"}`}
                 >
                   {text}
                 </button>
@@ -404,8 +431,10 @@ export function AssigneeAndCc({
               : rule === "any"
                 ? "ใครเสร็จก่อนปิดงานได้เลย · เลยกำหนดหักทุกคน"
                 : "ใครในกลุ่มปิดงานก็ได้ · เลยกำหนดหักทุกคน"}
+            {lockMode && " · มีคนกดเสร็จแล้ว เปลี่ยนวิธีปิดงานไม่ได้"}
           </p>
           {/* บรรทัดเดียว กดแล้วตั้งในหน้าต่าง ฟอร์มจะได้ไม่ยาวตามจำนวนคน (ผู้ใช้ 5/11/2569) */}
+          {withMemberDue && (<>
           <button
             type="button"
             disabled={picked.length === 0}
@@ -427,7 +456,143 @@ export function AssigneeAndCc({
             name="memberDueDates"
             value={dueCount > 0 ? JSON.stringify(Object.fromEntries(picked.filter((id) => memberDue[id]).map((id) => [id, memberDue[id]]))) : ""}
           />
+          </>)}
         </div>
+      )}
+
+      {/* เช็กลิสต์ (ไม่บังคับ) — แถวเดียวแบบวันรายคน กดแล้วแก้ในหน้าต่าง */}
+      {withChecklist && (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              setCheckDraft(checklist);
+              setNewItem("");
+              setCheckOpen(true);
+            }}
+            data-testid="checklist-open"
+            className="mt-0.5 flex h-8 w-full items-center justify-between gap-2 rounded-lg border border-(--line) px-2.5 text-left text-xs text-(--ink) hover:bg-(--bg-soft)"
+          >
+            <span className="flex min-w-0 items-center gap-1.5 truncate">
+              <ListChecks className="h-3.5 w-3.5 shrink-0 text-(--ink-soft)" aria-hidden="true" />
+              เช็กลิสต์
+            </span>
+            <span className="flex shrink-0 items-center gap-0.5 text-(--ink-soft)" data-testid="checklist-summary">
+              {checklist.length > 0 ? `${checklist.length} ข้อ` : "ไม่บังคับ"}
+              <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </span>
+          </button>
+          <input
+            type="hidden"
+            name="checklist"
+            value={checklist.length > 0 ? JSON.stringify(checklist.map((c) => ({ text: c.text, ownerId: perOwner ? (picked.includes(c.ownerId ?? "") ? c.ownerId : picked[0] ?? null) : null }))) : ""}
+          />
+        </>
+      )}
+
+      {checkOpen && (
+        <Modal
+          title="เช็กลิสต์"
+          onClose={() => setCheckOpen(false)}
+          actions={
+            <>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setCheckOpen(false)}>
+                ยกเลิก
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                data-testid="checklist-ok"
+                onClick={() => {
+                  const extra = newItem.trim() ? [{ text: newItem.trim(), ownerId: picked[0] ?? null }] : [];
+                  setChecklist([...checkDraft.filter((c) => c.text.trim()), ...extra].slice(0, 40));
+                  setCheckOpen(false);
+                }}
+              >
+                ตกลง
+              </Button>
+            </>
+          }
+        >
+          <p className="mb-2 text-xs text-(--ink-soft)" data-testid="checklist-rule-hint">
+            {!group
+              ? "ติ๊กครบทุกข้อถึงปิดงานได้"
+              : rule === "shared"
+                ? "ช่วยกันทำ: ใครในกลุ่มติ๊กข้อไหนก็ได้ ครบทุกข้อถึงปิดงานได้"
+                : rule === "any"
+                  ? "แต่ละข้อมีเจ้าของ · คนที่ติ๊กข้อของตัวเองครบก่อน ปิดงานได้"
+                  : "แต่ละข้อมีเจ้าของ · ติ๊กข้อของตัวเองครบ = ส่วนของคนนั้นเสร็จ"}
+          </p>
+          <div className="flex flex-col gap-2">
+            {checkDraft.map((c, i) => (
+              <div key={i} className="flex min-w-0 items-center gap-1.5" data-testid="checklist-row">
+                <input
+                  value={c.text}
+                  maxLength={200}
+                  aria-label={`ข้อที่ ${i + 1}`}
+                  onChange={(e) => setCheckDraft((d) => d.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
+                  className="h-9 min-w-0 flex-1 rounded-lg border border-(--line) bg-(--bg) px-2.5 text-base text-(--ink) sm:text-sm"
+                />
+                {perOwner && (
+                  <select
+                    value={picked.includes(c.ownerId ?? "") ? (c.ownerId ?? "") : (picked[0] ?? "")}
+                    onChange={(e) => setCheckDraft((d) => d.map((x, j) => (j === i ? { ...x, ownerId: e.target.value } : x)))}
+                    aria-label="เจ้าของข้อนี้"
+                    data-testid="checklist-owner"
+                    className="h-9 w-[38%] min-w-0 shrink-0 rounded-lg border border-(--line) bg-(--bg) px-1.5 text-xs text-(--ink)"
+                  >
+                    {picked.map((id) => (
+                      <option key={id} value={id}>
+                        {users.find((u) => u.id === id)?.label ?? id}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <button
+                  type="button"
+                  aria-label="ลบข้อนี้"
+                  onClick={() => setCheckDraft((d) => d.filter((_, j) => j !== i))}
+                  className="shrink-0 p-1 text-(--ink-soft)"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+            <div className="flex min-w-0 items-center gap-1.5">
+              <input
+                value={newItem}
+                maxLength={200}
+                placeholder="พิมพ์ข้อใหม่ เช่น ล้างแผ่นกรอง"
+                data-testid="checklist-new"
+                onChange={(e) => setNewItem(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  e.preventDefault();
+                  if (!newItem.trim() || checkDraft.length >= 40) return;
+                  setCheckDraft((d) => [...d, { text: newItem.trim(), ownerId: picked[0] ?? null }]);
+                  setNewItem("");
+                }}
+                className="h-9 min-w-0 flex-1 rounded-lg border border-dashed border-(--line) bg-(--bg) px-2.5 text-base text-(--ink) sm:text-sm"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                data-testid="checklist-add"
+                disabled={!newItem.trim() || checkDraft.length >= 40}
+                onClick={() => {
+                  setCheckDraft((d) => [...d, { text: newItem.trim(), ownerId: picked[0] ?? null }]);
+                  setNewItem("");
+                }}
+              >
+                <Plus className="h-4 w-4" /> เพิ่ม
+              </Button>
+            </div>
+            {perOwner && checkDraft.length > 0 && (
+              <p className="text-[11px] text-(--ink-soft)">คนที่ไม่มีข้อของตัวเอง กด &quot;เสร็จส่วนของฉันแล้ว&quot; ในใบงานแทน</p>
+            )}
+          </div>
+        </Modal>
       )}
 
       {dueOpen && (
