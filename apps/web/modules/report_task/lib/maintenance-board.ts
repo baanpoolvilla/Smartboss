@@ -58,6 +58,10 @@ export interface MaintenanceBoardItem {
   responsibleId: string | null;
   /** ผู้รับผิดชอบจริงของใบงาน (ยังไม่มอบหมาย = null) — คนที่ได้/โดนคะแนนจากสติกเกอร์ */
   assigneeId: string | null;
+  /** ใบกลุ่ม: จำนวนคนที่เหลือ */
+  assigneeMore?: number;
+  /** ใบกลุ่ม: สมาชิกที่เหลือ — ตัวกรองคนบนบอร์ดงานต้องเจอใบนี้ด้วย */
+  groupMemberIds?: string[];
   /** ทุกคนที่เกี่ยวกับใบนี้ (รับผิดชอบ/เปิดใบ/CC) */
   involvedIds: string[];
   /** คนเปิดใบ — ตัวกรอง "ที่ฉันมอบหมาย" จับคนนี้ (ใบงานไม่ได้เก็บว่าใครกดมอบหมาย คนเปิดใบคือคนสั่งงาน) */
@@ -106,7 +110,7 @@ export function maintenanceDate(item: MaintenanceBoardItem): string {
 export function matchesMaintenanceFilters(item: MaintenanceBoardItem, filters: TaskFilterState): boolean {
   // "งานของฉัน"/เลือกผู้รับผิดชอบ = ใบที่คนนั้น **ได้รับมอบหมาย** · "ที่ฉันมอบหมาย" = ใบที่คนนั้นเปิด
   // (ผู้ใช้ขอ 20/10/2569 — เดิม "งานของฉัน" จับทุกคนที่เกี่ยว รวมคนเปิดใบ/CC และ "ที่ฉันมอบหมาย" ไม่ขึ้นใบงานเลย)
-  if (filters.assigneeId !== "all" && item.assigneeId !== filters.assigneeId && !((item.expensePending || item.expenseRecordedTotal !== undefined) && item.responsibleId === filters.assigneeId)) return false;
+  if (filters.assigneeId !== "all" && item.assigneeId !== filters.assigneeId && !item.groupMemberIds?.includes(filters.assigneeId) && !((item.expensePending || item.expenseRecordedTotal !== undefined) && item.responsibleId === filters.assigneeId)) return false;
   if (filters.assignedById !== "all" && (item.createdById ?? null) !== filters.assignedById) return false;
   if (filters.departmentId !== "all") {
     const dept = item.responsibleId ? getUser(item.responsibleId)?.departmentId : undefined;

@@ -91,7 +91,7 @@ export function AppScaffold({
 
         {/* flushMobile (บอร์ดงาน): ไม่มีชื่อหน้าทุกขนาดจอ — แท็บมุมมอง + ปุ่มตัวกรองใน `leading` ใช้แถบนี้แทน
             แบบหน้ารายงาน ("เคลีย space ของ task ... อยากได้แบบของ report") */}
-        <h1 className={`truncate px-1 text-center font-bold text-(--ink) ${noTitle ? "hidden" : "text-lg sm:text-xl"}`}>
+        <h1 className={`min-w-0 truncate px-1 text-center font-bold text-(--ink) ${noTitle ? "hidden" : "text-lg sm:text-xl"}`}>
           {title}
         </h1>
 

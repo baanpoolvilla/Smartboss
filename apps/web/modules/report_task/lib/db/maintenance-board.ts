@@ -148,6 +148,8 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
         overdue: expenseDue ? bangkokDay(expenseDue) < today : !done && !!earliestPendingDue(w) && bangkokDay(earliestPendingDue(w)!) < today,
         responsibleId: expensePending || expenseRecordedTotal !== undefined ? session.userId : (w.assignedTo ?? w.createdBy),
         assigneeId: w.assignedTo,
+        assigneeMore: w.groupMemberIds.length,
+        groupMemberIds: w.groupMemberIds,
         createdById: w.createdBy,
         involvedIds: [...new Set([w.assignedTo, ...w.groupMemberIds, w.createdBy, ...w.ccUserIds].filter((x): x is string => !!x))],
         place: w.property?.name ?? null,

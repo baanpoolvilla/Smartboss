@@ -133,10 +133,13 @@ export function MaintenanceCard({ item }: { item: MaintenanceBoardItem }) {
         }
         avatar={
           person ? (
+            <span className="flex items-center gap-1">
             <Avatar className="h-6 w-6 shrink-0" title={person.name}>
               <AvatarImage src={person.avatarUrl ?? undefined} alt={person.name} />
               <AvatarFallback className="text-[9px] bg-[var(--bg-soft)]">{person.avatar}</AvatarFallback>
             </Avatar>
+            {person.id === item.assigneeId && (item.assigneeMore ?? 0) > 0 && <span className="text-[11px] font-semibold text-[var(--ink-soft)]" data-testid="card-more">+{item.assigneeMore}</span>}
+            </span>
           ) : undefined
         }
       />

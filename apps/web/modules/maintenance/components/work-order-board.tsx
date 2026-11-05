@@ -59,12 +59,6 @@ export interface BoardOrder {
 /** แถวเบาของใบในคอลัมน์เสร็จแล้ว — พอสำหรับนับและกรอง ข้อมูลการ์ดโหลดตอนจะแสดง */
 export type BoardStub = Pick<BoardOrder, "id" | "propertyId" | "additionalPropertyIds" | "assignedTo" | "groupMemberIds" | "createdBy">;
 
-/** ชื่อบนการ์ด — ใบกลุ่มต่อท้ายจำนวนคนที่เหลือ */
-function groupLabel(wo: { assignedTo: string | null; groupMemberIds?: string[] }, names: Record<string, string>): string | undefined {
-  const lead = wo.assignedTo ? names[wo.assignedTo] : undefined;
-  const more = wo.groupMemberIds?.length ?? 0;
-  return lead && more > 0 ? `${lead} +${more}` : lead;
-}
 
 const NO_STUBS: BoardStub[] = [];
 const NO_CARDS: BoardOrder[] = [];
@@ -147,11 +141,14 @@ function OrderCard({
   wo,
   propertyName,
   assigneeName,
+  assigneeMore = 0,
 }: {
   wo: BoardOrder;
   propertyName: string;
   creatorName?: string;
   assigneeName?: string;
+  /** ใบกลุ่ม: จำนวนคนที่เหลือ */
+  assigneeMore?: number;
 }) {
   // การ์ดแบบการ์ดงาน ตัวเดียวกับบอร์ดงาน (ผู้ใช้ 3/11/2569) — wo-card.tsx
   const settled = wo.hasExpense || !wo.requiresExpense;
@@ -182,7 +179,14 @@ function OrderCard({
       pendingDue={wo.pendingDue ?? 0}
       isPrivate={wo.isPrivate}
       subline={wo.pmRound ? <>รอบ {wo.pmRound.label}</> : undefined}
-      avatar={assigneeName ? <InitialAvatar name={assigneeName} /> : undefined}
+      avatar={
+        assigneeName ? (
+          <span className="flex items-center gap-1">
+            <InitialAvatar name={assigneeName} />
+            {assigneeMore > 0 && <span className="text-[11px] font-semibold text-(--ink-soft)" data-testid="card-more">+{assigneeMore}</span>}
+          </span>
+        ) : undefined
+      }
     />
   );
 }
@@ -216,7 +220,8 @@ export function WorkOrderFilteredList({
             wo={wo}
             propertyName={propertyNames[wo.propertyId] ?? ""}
             creatorName={wo.createdBy ? creatorNames[wo.createdBy] : undefined}
-            assigneeName={wo.assignedTo ? groupLabel(wo, creatorNames) : undefined}
+            assigneeName={wo.assignedTo ? creatorNames[wo.assignedTo] : undefined}
+              assigneeMore={wo.groupMemberIds?.length ?? 0}
           />
         ))}
         {moreCount > 0 && moreHref && <MoreExpenseLink href={moreHref} count={moreCount} />}
@@ -371,7 +376,8 @@ function ColumnList({
       wo={wo}
       propertyName={propertyNames[wo.propertyId] ?? ""}
       creatorName={wo.createdBy ? creatorNames[wo.createdBy] : undefined}
-      assigneeName={wo.assignedTo ? groupLabel(wo, creatorNames) : undefined}
+      assigneeName={wo.assignedTo ? creatorNames[wo.assignedTo] : undefined}
+              assigneeMore={wo.groupMemberIds?.length ?? 0}
     />
   );
 
@@ -432,7 +438,8 @@ function DoneColumnList({
               wo={wo}
               propertyName={propertyNames[wo.propertyId] ?? ""}
               creatorName={wo.createdBy ? creatorNames[wo.createdBy] : undefined}
-              assigneeName={wo.assignedTo ? groupLabel(wo, creatorNames) : undefined}
+              assigneeName={wo.assignedTo ? creatorNames[wo.assignedTo] : undefined}
+              assigneeMore={wo.groupMemberIds?.length ?? 0}
             />
           ) : null;
         })}

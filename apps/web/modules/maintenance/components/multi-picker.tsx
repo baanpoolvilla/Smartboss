@@ -341,7 +341,7 @@ export function AssigneeAndCc({
         </div>
       )}
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-      <span className="truncate text-xs text-(--ink-soft)">{group ? `ผู้รับผิดชอบ (หลายคน)${picked.length > 0 ? ` · ${picked.length} คน` : ""} *` : "ผู้รับผิดชอบ (1 คน) *"}</span>
+      <span className="truncate text-xs text-(--ink-soft)">{group && picked.length > 0 ? `ผู้รับผิดชอบ · ${picked.length} คน *` : "ผู้รับผิดชอบ *"}</span>
       {/* select ตัวจริงยังอยู่ในฟอร์ม ตัวตรวจช่องบังคับ ใบส่วนตัว และ CC อ่านค่าจากตัวนี้ */}
       <select
         ref={selectRef}

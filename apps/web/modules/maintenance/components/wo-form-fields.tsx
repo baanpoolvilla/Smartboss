@@ -141,7 +141,7 @@ export function WoDueDateField({ defaultValue, minDate }: { defaultValue?: strin
         <div className="flex min-w-0 flex-col gap-1">
           <span className="text-xs text-(--ink-soft)">วันที่เปิด</span>
           <div inert className="opacity-70" data-testid="wo-open-date">
-            <DatePickerField value={minDate} onChange={() => {}} className="h-10 text-(--ink)" />
+            <DatePickerField value={minDate} onChange={() => {}} className="h-10 px-2 text-[13px] text-(--ink) max-[359px]:[&>svg]:hidden sm:px-3 sm:text-sm" />
           </div>
         </div>
         <div className="flex min-w-0 flex-col gap-1">
@@ -153,7 +153,7 @@ export function WoDueDateField({ defaultValue, minDate }: { defaultValue?: strin
               </button>
             )}
           </span>
-          <DatePickerField value={value} minDate={minDate} onChange={setValue} className="h-10 text-(--ink)" />
+          <DatePickerField value={value} minDate={minDate} onChange={setValue} className="h-10 px-2 text-[13px] text-(--ink) max-[359px]:[&>svg]:hidden sm:px-3 sm:text-sm" />
         </div>
       </div>
       <input type="hidden" name="dueDate" value={value} />
