@@ -1,6 +1,7 @@
 "use client";
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { isPhotoFile } from "@/lib/upload-file-kind";
 import { Camera, ChevronRight, ClipboardList, FileText, Image as ImageIcon, Loader2, Mic, NotebookPen, Paperclip, Pencil, Plus, RotateCw, SendHorizontal, Smile, Square, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
@@ -22,8 +23,8 @@ import { EmojiStickerPicker } from "@/components/sticker-panel";
 import type { Sticker } from "@/lib/stickers-client";
 const MAX_FILES = 20;
 const MAX_BYTES = 25 * 1024 * 1024;
-const ACCEPT_FILES =
-  ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm";
+/** ไม่กรองในหน้าต่างเลือกไฟล์ — เซิร์ฟเวอร์เป็นคนตัดสิน (ไฟล์ CAD ฯลฯ รับได้ ดู lib/upload-file-kind.ts) */
+const ACCEPT_FILES = "";
 
 interface PendingFile {
   id: string;
@@ -40,7 +41,7 @@ interface PendingFile {
 const drafts = new Map<string, string>();
 
 function kindOf(file: File): ChatAttachment["kind"] {
-  if (file.type.startsWith("image/")) return "image";
+  if (isPhotoFile(file.type)) return "image";
   if (file.type.startsWith("video/")) return "video";
   if (file.type.startsWith("audio/")) return "audio";
   return "file";

@@ -1,4 +1,5 @@
 import { uploadCompressedImage } from "@/modules/report_task/lib/image-resize";
+import { isPhotoFile } from "@/lib/upload-file-kind";
 import type { IssueAttachment } from "@/modules/report_task/types/issue";
 import { uuid } from "@/modules/report_task/lib/uuid";
 
@@ -7,7 +8,7 @@ import { fileTooLargeMessage } from "@/lib/file-limits";
  * /api/uploads) — checked before the request fires so the user gets an
  * instant, specific error instead of a generic 413 after a slow upload. */
 const MAX_BYTES_BY_KIND: { test: (mime: string) => boolean; maxBytes: number }[] = [
-  { test: (m) => m.startsWith("image/"), maxBytes: 8 * 1024 * 1024 },
+  { test: isPhotoFile, maxBytes: 8 * 1024 * 1024 },
   { test: (m) => m.startsWith("video/"), maxBytes: 25 * 1024 * 1024 },
   { test: () => true, maxBytes: 8 * 1024 * 1024 },
 ];
@@ -22,7 +23,7 @@ function maxBytesFor(mime: string): number {
  * through the same /api/uploads endpoint (see that route for the allowed
  * type list + server-side magic-byte check). */
 export async function uploadIssueAttachment(file: File, uploadedBy: string): Promise<IssueAttachment> {
-  const isImage = file.type.startsWith("image/");
+  const isImage = isPhotoFile(file.type);
   const maxBytes = maxBytesFor(file.type);
   if (!isImage && file.size > maxBytes) {
     throw new Error(fileTooLargeMessage(file, maxBytes));

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { genericUploadExt } from "@/lib/upload-file-kind";
 
 import { requireOrg, hasPermission } from "@smartboss/auth";
 
@@ -55,18 +56,28 @@ export async function POST(request: Request) {
     if (!(file instanceof File)) {
       return Response.json({ error: "ต้องแนบไฟล์" }, { status: 400 });
     }
-    if (!MIME_TO_EXT[file.type]) {
-      return Response.json({ error: `ไม่รองรับชนิดไฟล์นี้ (${file.type || "ไม่ทราบชนิด"})` }, { status: 400 });
-    }
     if (file.size > MAX_BYTES) {
       return Response.json({ error: fileTooLargeMessage({ name: originalName ?? file.name, size: file.size }, MAX_BYTES) }, { status: 413 });
     }
 
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const sniffed = sniffCompanyFileMime(bytes, file.type);
-    const ext = sniffed ? MIME_TO_EXT[sniffed] : null;
-    if (!sniffed || !ext) {
+    // ชนิดที่รู้จัก: เนื้อไฟล์ต้องตรงกับที่แจ้ง · ชนิดอื่น (CAD, Photoshop ฯลฯ) รับได้แบบดาวน์โหลดอย่างเดียว
+    const claimedKnown = !!MIME_TO_EXT[file.type];
+    const detected = sniffCompanyFileMime(bytes, file.type);
+    const detectedExt = detected ? MIME_TO_EXT[detected] : null;
+    if (claimedKnown && !detectedExt) {
       return Response.json({ error: "เนื้อไฟล์ไม่ตรงกับชนิดที่แจ้ง" }, { status: 400 });
+    }
+    let sniffed: string;
+    let ext: string;
+    if (detected && detectedExt) {
+      sniffed = detected;
+      ext = detectedExt;
+    } else {
+      const generic = genericUploadExt(originalName ?? file.name);
+      if ("error" in generic) return Response.json({ error: generic.error }, { status: 415 });
+      sniffed = "application/octet-stream";
+      ext = generic.ext;
     }
     if (bytes.byteLength > MAX_BYTES) {
       return Response.json({ error: fileTooLargeMessage({ name: originalName ?? file.name, size: bytes.byteLength }, MAX_BYTES) }, { status: 413 });

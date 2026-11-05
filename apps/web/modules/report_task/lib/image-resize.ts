@@ -1,4 +1,5 @@
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
+import { isPhotoFile } from "@/lib/upload-file-kind";
 
 import { fileTooLargeMessage } from "@/lib/file-limits";
 import { rememberOriginal } from "@/lib/annotate/annotate";
@@ -144,7 +145,7 @@ export async function uploadReportMedia(file: File): Promise<UploadedReportMedia
   // (the same value the server re-reads from the DB on every upload) so an
   // oversized document fails immediately with a specific message instead of
   // a slow upload ending in a generic 413 — same treatment videos get below.
-  if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
+  if (!isPhotoFile(file.type) && !file.type.startsWith("video/")) {
     const maxFileMB = useAttachmentSettingsStore.getState().settings.maxFileMB;
     if (file.size > maxFileMB * 1024 * 1024) {
       throw new Error(fileTooLargeMessage(file, maxFileMB * 1024 * 1024));

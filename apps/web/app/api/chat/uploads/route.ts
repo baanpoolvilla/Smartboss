@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { genericUploadExt } from "@/lib/upload-file-kind";
 
 import { prisma } from "@smartboss/database";
 import { rateLimit } from "@smartboss/auth/ratelimit";
@@ -81,15 +82,16 @@ export async function POST(request: Request) {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const claimedAudio = file.type.startsWith("audio/");
     const sniffed = sniffMime(bytes, file.type);
-    if (!sniffed) return Response.json({ error: `ไม่รองรับชนิดไฟล์นี้ (${file.type || "ไม่ทราบชนิด"})` }, { status: 400 });
-
     let meta: { ext: string; kind: ChatAttachmentKind; max: number; mime: string };
-    if (claimedAudio && AUDIO_CONTAINER[sniffed]) {
+    if (claimedAudio && sniffed && AUDIO_CONTAINER[sniffed]) {
       meta = { ...AUDIO_CONTAINER[sniffed]!, kind: "audio", max: MAX_AUDIO };
+    } else if (sniffed && ALLOWED[sniffed]) {
+      meta = { ...ALLOWED[sniffed]!, mime: sniffed };
     } else {
-      const allowed = ALLOWED[sniffed];
-      if (!allowed) return Response.json({ error: `ไม่รองรับชนิดไฟล์นี้ (${file.type || sniffed})` }, { status: 400 });
-      meta = { ...allowed, mime: sniffed };
+      // ไฟล์ชนิดอื่น (CAD, Photoshop, rar ฯลฯ) รับได้แบบดาวน์โหลดอย่างเดียว — ดู lib/upload-file-kind.ts
+      const generic = genericUploadExt(file.name);
+      if ("error" in generic) return Response.json({ error: generic.error }, { status: 415 });
+      meta = { ext: generic.ext, kind: "file", max: 25 * MB, mime: "application/octet-stream" };
     }
     if (bytes.byteLength > meta.max) {
       return Response.json({ error: fileTooLargeMessage({ name: file.name, size: bytes.byteLength }, meta.max) }, { status: 413 });

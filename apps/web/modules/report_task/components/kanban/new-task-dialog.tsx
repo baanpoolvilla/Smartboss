@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { isPhotoFile } from "@/lib/upload-file-kind";
 import { useReminderSettingsStore } from "@/modules/report_task/store/reminder-settings-store";
 import { MeetingReminderPicker, defaultMeetingReminder } from "@/modules/report_task/components/calendar/meeting-reminder-picker";
 import { meetingLink } from "@/modules/report_task/lib/meeting-link";
@@ -1453,7 +1454,7 @@ export function NewTaskDialog({
                       {taskFiles.length > 0 && (
                         <div className="space-y-1.5">
                           {taskFiles.map((f, i) => {
-                            const isImage = f.type.startsWith("image/");
+                            const isImage = isPhotoFile(f.type);
                             return (
                               <div key={`${f.name}-${i}`} className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-white px-2.5 py-1.5 text-xs">
                                 {isImage ? (
@@ -1587,7 +1588,7 @@ export function NewTaskDialog({
                   {meetFiles.length > 0 && (
                     <div className="space-y-1.5">
                       {meetFiles.map((f, i) => {
-                        const isImage = f.type.startsWith("image/");
+                        const isImage = isPhotoFile(f.type);
                         return (
                           <div key={`${f.name}-${i}`} className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-white px-2.5 py-1.5 text-xs">
                             {isImage ? (

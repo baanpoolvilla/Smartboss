@@ -1,4 +1,5 @@
 import { uploadCompressedImage } from "@/modules/report_task/lib/image-resize";
+import { isPhotoFile } from "@/lib/upload-file-kind";
 import { formatFileSize } from "@/modules/report_task/lib/format";
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import type { Attachment } from "@/modules/report_task/types";
@@ -29,7 +30,7 @@ function labelFor(mime: string): string {
  */
 export async function uploadTaskAttachment(file: File, uploadedBy: string): Promise<Attachment> {
   const settings = useAttachmentSettingsStore.getState().settings;
-  const isImage = file.type.startsWith("image/");
+  const isImage = isPhotoFile(file.type);
   const isVideo = file.type.startsWith("video/");
   const maxMB = isImage ? settings.maxImageMB : isVideo ? settings.maxVideoMB : settings.maxFileMB;
   const maxBytes = maxMB * 1024 * 1024;
