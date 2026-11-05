@@ -1,3 +1,4 @@
+import { PmDeleteButton } from "@/modules/maintenance/components/pm-delete-button";
 import { AssigneeAndCc } from "@/modules/maintenance/components/multi-picker";
 import { readChecklistTemplate } from "@/modules/maintenance/lib/work-order-checklist";
 import { loadPerformanceSettings } from "@/lib/performance";
@@ -330,17 +331,9 @@ export default async function AssetDetailPage({
                       </Button>
                     </Link>
                     )}
-                    <form action={deletePmAction} className="ml-auto">
-                      <input type="hidden" name="id" value={s.id} />
-                      <Button
-                        type="submit"
-                        size="sm"
-                        variant="ghost"
-                        className="text-[#DC2626]"
-                      >
-                        ลบ
-                      </Button>
-                    </form>
+                    <div className="ml-auto">
+                      <PmDeleteButton id={s.id} title={s.title} openRounds={openWos.length} action={deletePmAction} />
+                    </div>
                   </div>
                 )}
               </Card>

@@ -1,5 +1,6 @@
 "use client";
 
+import { PmDeleteButton } from "./pm-delete-button";
 import { AssigneeAndCc } from "./multi-picker";
 import { useMemo, useState } from "react";
 import Link from "next/link";
@@ -548,7 +549,8 @@ export function PmCalendar({
           {panel.empty}
         </Card>
       ) : (
-        <div className="flex flex-col gap-2">
+        // มือถือ: เว้นท้ายรายการให้การ์ดสุดท้ายเลื่อนพ้นปุ่ม "เพิ่ม PM" ที่ลอยอยู่ (ปุ่มลบเคยโดนบัง)
+        <div className="flex flex-col gap-2 pb-20 lg:pb-0">
           {panel.rows.map((s) => (
             <PmDetailCard
               key={s.id}
@@ -907,12 +909,9 @@ function PmDetailCard({
       )}
 
       {canManage && (
-        <form action={deleteAction} className="mt-2 text-right">
-          <input type="hidden" name="id" value={s.id} />
-          <Button type="submit" size="sm" variant="ghost" className="text-[#DC2626]">
-            ลบ
-          </Button>
-        </form>
+        <div className="mt-2 text-right">
+          <PmDeleteButton id={s.id} title={s.title} openRounds={s.openRoundLabels.length || (s.hasPendingWorkOrder ? 1 : 0)} action={deleteAction} />
+        </div>
       )}
     </Card>
   );
