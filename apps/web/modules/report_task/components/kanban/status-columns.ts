@@ -1,4 +1,5 @@
 import { AlarmClockOff, Hourglass } from "lucide-react";
+import { isAwaitingReview } from "@/modules/report_task/lib/personal-task";
 import { statusMeta, statusIcon } from "@/modules/report_task/lib/task-meta";
 import { statusColors, chartColors } from "@/modules/report_task/lib/chart-colors";
 import { sortTasksByDueForBoard } from "@/modules/report_task/lib/task-flags";
@@ -51,7 +52,7 @@ export function buildStatusColumns(tasks: Task[], overdueOnly = false): BoardCol
       label: "รอตรวจสอบ",
       accent: chartColors.greenPale,
       icon: Hourglass,
-      tasks: sortTasksByDueForBoard(tasks.filter((t) => t.status === "done" && !t.reviewedBy)),
+      tasks: sortTasksByDueForBoard(tasks.filter((t) => isAwaitingReview(t))),
       derived: true,
       emptyMessage: "ไม่มีงานรอตรวจสอบ 🎉",
     },
@@ -60,7 +61,7 @@ export function buildStatusColumns(tasks: Task[], overdueOnly = false): BoardCol
       label: statusMeta.done.label,
       accent: chartColors.greenDeep,
       icon: statusIcon.done,
-      tasks: sortTasksByDueForBoard(tasks.filter((t) => t.status === "done" && !!t.reviewedBy)),
+      tasks: sortTasksByDueForBoard(tasks.filter((t) => t.status === "done" && !isAwaitingReview(t))),
     },
   ];
 }

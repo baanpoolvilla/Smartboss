@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { isAwaitingReview } from "@/modules/report_task/lib/personal-task";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { useDepartmentStore } from "@/modules/report_task/store/department-store";
@@ -91,8 +92,7 @@ export function AppTileReviewBadge({
 
         const reviewCount = tasks.filter(
           (t) =>
-            t.status === "done" &&
-            !t.reviewedBy &&
+            isAwaitingReview(t) &&
             canReviewTaskRecord(t, viewingAsUserId, reviewSettings ?? undefined)
         ).length;
 

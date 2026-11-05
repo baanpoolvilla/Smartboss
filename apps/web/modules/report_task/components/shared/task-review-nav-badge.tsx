@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { isAwaitingReview } from "@/modules/report_task/lib/personal-task";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useNotificationStore, type AppNotification } from "@/modules/report_task/store/notification-store";
@@ -25,7 +26,7 @@ export function taskNavBadgeCount(
   include: (taskId: string) => boolean
 ): number {
   const reviewCount = tasks.filter(
-    (t) => include(t.id) && t.status === "done" && !t.reviewedBy && canReviewTaskRecord(t, userId, reviewSettings)
+    (t) => include(t.id) && isAwaitingReview(t) && canReviewTaskRecord(t, userId, reviewSettings)
   ).length;
   let unreadActivityCount = 0;
   for (const counts of [

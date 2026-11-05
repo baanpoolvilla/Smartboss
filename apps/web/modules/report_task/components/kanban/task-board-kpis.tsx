@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { isAwaitingReview } from "@/modules/report_task/lib/personal-task";
 import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import { useTaskStore, type QuickView } from "@/modules/report_task/store/task-store";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -35,8 +36,8 @@ export function TaskBoardKpis({ tasks }: { tasks: Task[] }) {
       todo: tasks.filter((t) => t.status === "todo").length,
       inProgress: tasks.filter((t) => t.status === "in_progress").length,
       overdue: tasks.filter((t) => t.status !== "done" && dueUrgency(t) === "overdue").length,
-      review: tasks.filter((t) => t.status === "done" && !t.reviewedBy).length,
-      doneAll: tasks.filter((t) => t.status === "done" && !!t.reviewedBy).length,
+      review: tasks.filter((t) => isAwaitingReview(t)).length,
+      doneAll: tasks.filter((t) => t.status === "done" && !isAwaitingReview(t)).length,
     }),
     [tasks]
   );

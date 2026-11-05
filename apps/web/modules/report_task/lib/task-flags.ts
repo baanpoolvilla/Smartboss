@@ -1,4 +1,5 @@
 import type { Task } from "@/modules/report_task/types";
+import { isAwaitingReview } from "@/modules/report_task/lib/personal-task";
 import { daysUntil } from "@/modules/report_task/lib/format";
 import { taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
 
@@ -79,8 +80,8 @@ export function sortTasksByDueForBoard(tasks: Task[]): Task[] {
     const bOverdue = b.status !== "done" && dueUrgency(b) === "overdue" ? 0 : 1;
     if (aOverdue !== bOverdue) return aOverdue - bOverdue;
     if (aDone === 1) {
-      const aReviewed = a.reviewedBy ? 1 : 0;
-      const bReviewed = b.reviewedBy ? 1 : 0;
+      const aReviewed = isAwaitingReview(a) ? 0 : 1;
+      const bReviewed = isAwaitingReview(b) ? 0 : 1;
       if (aReviewed !== bReviewed) return aReviewed - bReviewed;
     }
     const aDue = new Date(effectiveDueDate(a)).getTime();
@@ -102,8 +103,8 @@ export function sortTasksForDisplay(tasks: Task[]): Task[] {
     const bOverdue = b.status !== "done" && dueUrgency(b) === "overdue" ? 0 : 1;
     if (aOverdue !== bOverdue) return aOverdue - bOverdue;
     if (aDone === 1) {
-      const aReviewed = a.reviewedBy ? 1 : 0;
-      const bReviewed = b.reviewedBy ? 1 : 0;
+      const aReviewed = isAwaitingReview(a) ? 0 : 1;
+      const bReviewed = isAwaitingReview(b) ? 0 : 1;
       if (aReviewed !== bReviewed) return aReviewed - bReviewed;
     }
     const aPriority = taskPriorityOrder.indexOf(a.priority);

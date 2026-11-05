@@ -1,4 +1,5 @@
 import { dueUrgency } from "@/modules/report_task/lib/task-flags";
+import { isAwaitingReview } from "@/modules/report_task/lib/personal-task";
 import { presetRange, type DatePreset } from "@/modules/report_task/lib/date-filter";
 import type { Task } from "@/modules/report_task/types";
 import { getUser } from "@/modules/report_task/lib/directory";
@@ -65,8 +66,8 @@ export function matchesTaskFilters(task: Task, filters: TaskFilterState): boolea
     // review/done columns — a done task that hasn't been signed off yet is
     // "รอตรวจสอบ", not "สำเร็จ" (see markReviewed/rejectReview) — so the two
     // quick-views stay mutually exclusive instead of double-counting it.
-    if (filters.quickView === "review" && !(task.status === "done" && !task.reviewedBy)) return false;
-    if (filters.quickView === "done" && !(task.status === "done" && !!task.reviewedBy)) return false;
+    if (filters.quickView === "review" && !(isAwaitingReview(task))) return false;
+    if (filters.quickView === "done" && !(task.status === "done" && !isAwaitingReview(task))) return false;
   }
   return true;
 }

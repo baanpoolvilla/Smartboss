@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useMemo, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { isAwaitingReview } from "@/modules/report_task/lib/personal-task";
 import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import { Progress } from "@/modules/report_task/components/ui/progress";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
@@ -99,11 +100,11 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
   // Strikethrough specifically means "confirmed finished" — a done-but-
   // unreviewed card ("รอตรวจสอบ") still needs someone to actually check it,
   // so crossing the title out already read as more final than it really is.
-  const isReviewedDone = isDone && !!task.reviewedBy;
+  const isReviewedDone = isDone && !isAwaitingReview(task);
   // Same "รอตรวจสอบ" state the pill above renders for — reused to recolor
   // this card's own checklist-progress bar (below) to the same greenPale so
   // it doesn't clash with the pill sitting right above it.
-  const isPendingReview = isDone && !task.reviewedBy;
+  const isPendingReview = isAwaitingReview(task);
   // การ์ดที่มีเรื่องรอเรา (นับแบบเดียวกับเลขแดงที่เมนู — task-review-nav-badge.tsx) = พื้นแดงอ่อน + ป้ายบอกเรื่อง
   // แทนกล่อง "แจ้งเตือนที่รอคุณ" ด้านบนบอร์ด (ผู้ใช้ขอ 18/10/2569 "พื้นการ์ดพวกนี้ให้เป็นสีแดง")
   const reviewSettings = useTaskReviewSettingsStore((s) => s.settings);
@@ -266,7 +267,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
             task-store.ts — same review the "รอตรวจสอบ" board column tracks),
             switching to the darker "เสร็จสิ้น" only once someone's actually
             checked it. */}
-        {task.reviewedBy ? (
+        {isReviewedDone ? (
             <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-[color-mix(in_srgb,var(--brand-green)_14%,white)] text-[var(--brand-green-dark)]">
               <Check className="h-2.5 w-2.5" strokeWidth={3} />
               เสร็จสิ้น

@@ -20,3 +20,13 @@ export function isPersonalTask(task: Pick<Task, "assignedById" | "assigneeIds"> 
 export function isOthersPersonalTask(task: Pick<Task, "assignedById" | "assigneeIds"> & { project?: Task["project"] }, userId: string): boolean {
   return isPersonalTask(task) && task.assignedById !== userId;
 }
+
+/**
+ * งานเสร็จแล้วแต่ยังรอคนตรวจ (คอลัมน์ "รอตรวจสอบ") — งานส่วนตัวไม่มีใครต้องตรวจ เสร็จ = เสร็จสิ้นเลย
+ * (ผู้ใช้ 5/11/2569 "งานส่วนตัว...ต้องกดแล้วเสร็จเลยไหม เพราะไม่ต้องให้ใครตรวจ") · ไม่แตะข้อมูล งานเก่าที่ค้างก็หายเอง
+ */
+export function isAwaitingReview(
+  task: Pick<Task, "status" | "reviewedBy" | "assignedById" | "assigneeIds"> & { project?: Task["project"] },
+): boolean {
+  return task.status === "done" && !task.reviewedBy && !isPersonalTask(task);
+}
