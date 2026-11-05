@@ -239,13 +239,10 @@ export function MultiPicker({
 /** ฟอร์มสร้างใบงาน: ผู้รับผิดชอบหลัก + CC ที่ตัดคนซ้ำกันออกให้ (เหมือนของเดิม) */
 export function AssigneeAndCc({
   users,
-  ccOptions,
   defaultAssignee = "",
 }: {
   /** ผู้ที่มอบหมายงานได้ (ผู้ดูแลบ้านเห็นเฉพาะช่าง/ผู้ดูแลบ้าน) */
   users: PickOption[];
-  /** ผู้รับสำเนา — ทุกคนในบริษัท */
-  ccOptions: PickOption[];
   defaultAssignee?: string;
 }) {
   const [assignee, setAssignee] = useState(defaultAssignee);
@@ -273,19 +270,7 @@ export function AssigneeAndCc({
         </select>
       </label>
 
-      <MultiPicker
-        name="ccUserIds"
-        title="เพิ่ม CC (แจ้งสำเนา)"
-        heading="CC (ไม่บังคับ)"
-        boxed
-        hint="เลือกผู้รับสำเนาการแจ้งเตือน (LINE + in-app)"
-        emptyText="เลือก CC"
-        addLabel="เพิ่ม CC"
-        options={ccOptions}
-        exclude={assignee ? [assignee] : []}
-        chipBg="#FFF7ED"
-        icon="user"
-      />
+      
     </>
   );
 }

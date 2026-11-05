@@ -161,17 +161,17 @@ export default async function NewWorkOrderPage({
             </label>
           </Row>
 
-          {/* บ้าน · ผู้รับผิดชอบ · CC แถวเดียวบนจอคอม ไม่กินที่ (ผู้ใช้ 5/11/2569) · มือถือแคบเกิน บ้านเต็มแถว
-              ใบส่วนตัว: ผู้รับผิดชอบคือคนเปิดเอง ไม่มี CC — ซ่อนสองช่องนั้น บ้านขยายเต็มแถว */}
+          {/* บ้าน · ผู้รับผิดชอบ แถวเดียวทุกขนาดจอ ไม่กินที่ (ผู้ใช้ 5/11/2569) · CC อยู่ในตัวเลือกขั้นสูง
+              ใบส่วนตัว: ผู้รับผิดชอบคือคนเปิดเอง — ซ่อนช่องนั้น บ้านขยายเต็มแถว */}
           <Row icon={House}>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
-              <div data-wo-field="house" className="col-span-2 min-w-0 group-data-[private=1]/wo:col-span-2 sm:col-span-1 sm:group-data-[private=1]/wo:col-span-3">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
+              <div data-wo-field="house" className="min-w-0 group-data-[private=1]/wo:col-span-2">
               <MultiPicker
               name="propertyIds"
               title="เลือกบ้าน"
               heading="บ้าน *"
               boxed
-              emptyText="เลือกบ้าน (อย่างน้อย 1 หลัง)"
+              emptyText="เลือกบ้าน"
               addLabel="เลือกบ้าน"
               options={properties.filter((p) => !p.archivedAt).map((p) => ({ id: p.id, label: p.name }))}
               defaultSelected={prefillProps}
@@ -184,7 +184,6 @@ export default async function NewWorkOrderPage({
                   label: u.name,
                   sub: roleLabel(u.roleCodes),
                 }))}
-                ccOptions={userOptions}
                 defaultAssignee={sp.technicianId ?? ""}
               />
               </div>
@@ -196,7 +195,7 @@ export default async function NewWorkOrderPage({
           </Row>
 
           <div className="pl-8 group-data-[private=1]/wo:hidden">
-            <WoAdvancedOptions canOpenPr={canOpenPr} defaultNoExpense={defaultNoExpense} />
+            <WoAdvancedOptions canOpenPr={canOpenPr} defaultNoExpense={defaultNoExpense} ccOptions={userOptions} />
           </div>
 
           <Row icon={Paperclip}>

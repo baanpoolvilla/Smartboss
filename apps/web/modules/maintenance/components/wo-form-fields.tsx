@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ChevronDown, Flag, Lock, SlidersHorizontal } from "lucide-react";
 
+import { MultiPicker, type PickOption } from "@/modules/maintenance/components/multi-picker";
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
 
@@ -162,15 +163,36 @@ export function WoDueDateField({ defaultValue, minDate }: { defaultValue?: strin
 }
 
 /** ตัวเลือกเพิ่มเติม (พับไว้): ค่าใช้จ่าย + เปิด PR ต่อ — เลือก "ไม่มีค่าใช้จ่าย" แล้วหัวข้อบอกไว้ให้เห็นตอนพับ */
-export function WoAdvancedOptions({ canOpenPr, defaultNoExpense = false }: { canOpenPr: boolean; defaultNoExpense?: boolean }) {
+export function WoAdvancedOptions({
+  canOpenPr,
+  defaultNoExpense = false,
+  ccOptions,
+}: {
+  canOpenPr: boolean;
+  defaultNoExpense?: boolean;
+  /** ผู้รับสำเนา — ย้ายมาจากแถวผู้รับผิดชอบ ให้แถวหลักไม่กินที่ (ผู้ใช้ 5/11/2569) */
+  ccOptions: PickOption[];
+}) {
   const [open, setOpen] = useState(false);
+  const [ccCount, setCcCount] = useState(0);
+  // คนที่เป็นผู้รับผิดชอบอยู่แล้วไม่ต้องอยู่ใน CC — ช่องอยู่คนละส่วนของฟอร์ม อ่านค่าจาก select
+  const [assignee, setAssignee] = useState("");
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const form = rootRef.current?.closest("form");
+    if (!form) return;
+    const read = () => setAssignee(form.querySelector<HTMLSelectElement>('select[name="assignedTo"]')?.value ?? "");
+    read();
+    form.addEventListener("change", read);
+    return () => form.removeEventListener("change", read);
+  }, []);
   // สร้างจากแผน PM ที่ตั้ง "ไม่มีค่าใช้จ่าย" ⇒ เลือกไว้ให้ก่อน (เปลี่ยนเองได้) — ดู pmPlansSkipExpense
   const [noExpense, setNoExpense] = useState(defaultNoExpense);
   const [openPr, setOpenPr] = useState(false);
-  const summary = [noExpense ? "ไม่มีค่าใช้จ่าย" : null, openPr ? "เปิด PR ต่อ" : null].filter(Boolean).join(" · ");
+  const summary = [ccCount > 0 ? `CC ${ccCount} คน` : null, noExpense ? "ไม่มีค่าใช้จ่าย" : null, openPr ? "เปิด PR ต่อ" : null].filter(Boolean).join(" · ");
 
   return (
-    <div className="flex flex-col gap-2">
+    <div ref={rootRef} className="flex flex-col gap-2">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -187,8 +209,22 @@ export function WoAdvancedOptions({ canOpenPr, defaultNoExpense = false }: { can
       {noExpense && <input type="hidden" name="noExpense" value="1" />}
       {openPr && <input type="hidden" name="openPr" value="1" />}
 
-      {open && (
-        <div className="flex flex-col gap-4 rounded-(--radius) border border-(--line) p-3">
+      {/* พับด้วย class ไม่ถอดออก — รายชื่อ CC ที่เลือกต้องอยู่ในฟอร์มตลอด */}
+      <div className={open ? "flex flex-col gap-4 rounded-(--radius) border border-(--line) p-3" : "hidden"}>
+          <MultiPicker
+            name="ccUserIds"
+            title="เพิ่ม CC (แจ้งสำเนา)"
+            heading="CC (แจ้งสำเนา)"
+            boxed
+            hint="เลือกผู้รับสำเนาการแจ้งเตือน (LINE + in-app)"
+            emptyText="เลือก CC (ไม่บังคับ)"
+            addLabel="เพิ่ม CC"
+            options={ccOptions}
+            exclude={assignee ? [assignee] : []}
+            chipBg="#FFF7ED"
+            icon="user"
+            onChange={(ids) => setCcCount(ids.length)}
+          />
           <div className="flex flex-col gap-1.5">
             <span className="text-xs text-(--ink-soft)">ค่าใช้จ่าย</span>
             <div role="radiogroup" aria-label="ค่าใช้จ่าย" className="inline-flex w-fit gap-0.5 rounded-(--radius) border border-(--line) bg-(--bg-soft) p-0.5">
@@ -226,8 +262,7 @@ export function WoAdvancedOptions({ canOpenPr, defaultNoExpense = false }: { can
               </span>
             </label>
           )}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
