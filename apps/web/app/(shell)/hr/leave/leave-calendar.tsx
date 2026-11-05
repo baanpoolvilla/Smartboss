@@ -1097,7 +1097,9 @@ function DayDialog({
         — ยังส่งได้แม้ JS ยังโหลดไม่เสร็จ และ useActionState คุม pending ให้อยู่แล้ว
         ปุ่มยืนยันอยู่นอก <form> จึงผูกด้วย form="day-off-form"
       */}
-      <form id="day-off-form" action={formAction} data-save-toast="off" className="flex flex-col gap-4">
+      {/* React ล้างฟอร์มหลังส่งเสมอ แต่ค่าใน state ไม่ล้างตาม — ลงไม่ผ่านแล้วช่องประเภทเด้งกลับตัวแรกทั้งที่ปุ่มยังเป็นประเภทเดิม
+          กดซ้ำจะลงผิดประเภท จึงกันไว้ให้ค่าที่กรอกอยู่ครบ (ลงผ่านแล้วกล่องนี้ปิดอยู่แล้ว) */}
+      <form id="day-off-form" action={formAction} onReset={(e) => e.preventDefault()} data-save-toast="off" className="flex flex-col gap-4">
         <input type="hidden" name="employment_id" value={employmentId ?? ""} />
         {dates.map((d) => (
           <input key={d} type="hidden" name="day" value={d} />
