@@ -216,22 +216,24 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
 
   // งานเสร็จแล้วไม่มีแถวจุดสี แต่มีแถวป้ายสถานะอยู่แล้ว — สติกเกอร์ไปอยู่ข้างป้ายนั้น ไม่เปิดแถวใหม่
   const statusRowShown = isDone && !(reviewWaiting && unreadParts.length === 0);
+  // แบบ ก (ผู้ใช้ 5/11/2569): ไม่มีพื้นหลัง ชิดขวา ไม่ดูเป็นป้ายเรียงติดกัน · ล็อกความสูงไม่ให้การ์ดยาวขึ้น (อีโมจิมีบรรทัดสูงกว่าตัวอักษร)
   const stickerChips = hasStickers ? (
-            <>{Object.entries(reactionTotals).map(([stickerId, count]) => {
-              const sticker = stickers.find((s) => s.id === stickerId);
-              if (!sticker) return null;
-              return (
-                <span
-                  key={stickerId}
-                  title={`${sticker.label} (${sticker.points > 0 ? `+${sticker.points}` : sticker.points})`}
-                  // ล็อกความสูงเท่าจุดสี อีโมจิมีบรรทัดสูงกว่าตัวอักษร ไม่งั้นการ์ดยาวขึ้น 6px
-                  className="-my-0.5 flex h-3.5 items-center gap-0.5 overflow-hidden rounded-full bg-[var(--bg-soft)] px-1 text-[10px] leading-none"
-                >
-                  <span className="leading-none">{sticker.emoji}</span>
-                  {count > 1 && <span className="text-[var(--ink-soft)]">{count}</span>}
-                </span>
-              );
-            })}</>
+    <span className="flex flex-wrap items-center justify-end gap-1.5" data-testid="card-stickers">
+      {Object.entries(reactionTotals).map(([stickerId, count]) => {
+        const sticker = stickers.find((s) => s.id === stickerId);
+        if (!sticker) return null;
+        return (
+          <span
+            key={stickerId}
+            title={`${sticker.label} (${sticker.points > 0 ? `+${sticker.points}` : sticker.points})`}
+            className="-my-0.5 flex h-3.5 items-center gap-0.5 text-[12px] leading-none"
+          >
+            <span className="leading-none">{sticker.emoji}</span>
+            {count > 1 && <span className="text-[10px] font-semibold text-[var(--ink-soft)]">{count}</span>}
+          </span>
+        );
+      })}
+    </span>
   ) : null;
 
   return (
@@ -265,7 +267,9 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
           title={pendingHint}
         >
           <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#dc2626]" aria-hidden />
-          <span className="truncate">{pendingBand}</span>
+          <span className="min-w-0 truncate">{pendingBand}</span>
+          {/* งานเสร็จที่รอคนนี้ตรวจไม่มีแถวป้ายสถานะ — สติกเกอร์อยู่ขวาของแถบนี้แทน ไม่เปิดแถวใหม่ */}
+          {isDone && !statusRowShown && hasStickers && <span className="ml-auto shrink-0 font-normal">{stickerChips}</span>}
         </div>
       )}
       {/* แถวบนเหลือเฉพาะป้ายสถานะของงานที่เสร็จแล้ว (เสร็จสิ้น / เสร็จ·รอตรวจสอบ) — ความสำคัญย้ายไปเป็นจุดสีหน้าชื่องาน
@@ -334,7 +338,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
               <TooltipContent>ส่งงานแล้ว รอหัวหน้าตรวจสอบยืนยันว่าเสร็จจริง</TooltipContent>
             </Tooltip>
           )}
-        {stickerChips}
+        {hasStickers && <span className="ml-auto">{stickerChips}</span>}
       </div>
       )}
 
@@ -476,13 +480,11 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
 
       {/* ขวาล่างเหนือรูปคน: แก้กำหนดส่ง + คอมเมนต์ ตัวเล็กสีเทา · คอมเมนต์ใหม่ = ป้ายแดง "N ใหม่" (ผู้ใช้ขอ 20/10/2569) */}
       {/* ป้ายความสำคัญ (งานไม่มี checklist) ซ้ายสุดแถวนี้ ชิดเส้นคั่น — ผู้ใช้ขอ 21/10/2569 ให้ลงมาอยู่ตรงนี้ ไม่กินแถวแยก */}
-      {(pillInFooterRow || (hasStickers && !statusRowShown) || suspicious || task.comments.length > 0 || (pendingDue.length > 0 && !dueWaitingMe)) && (
+      {(pillInFooterRow || (hasStickers && !isDone) || suspicious || task.comments.length > 0 || (pendingDue.length > 0 && !dueWaitingMe)) && (
         <div className="-mb-1 mt-1.5 flex items-center justify-end gap-2 sm:-mb-1.5">
-          {/* สติกเกอร์อยู่แถวเดียวกับจุดความสำคัญ ไม่กินแถวเพิ่ม การ์ดจะได้ไม่ยาวขึ้น (ผู้ใช้ 6/11/2569 "ประหยัดพื้นที่") */}
-          <div className="mr-auto flex min-w-0 flex-wrap items-center gap-1" data-testid="card-meta-left">
-            {pillInFooterRow && priorityPill}
-            {!statusRowShown && stickerChips}
-          </div>
+          {pillInFooterRow && <div className="mr-auto flex">{priorityPill}</div>}
+          {/* ไม่กินแถวเพิ่ม การ์ดจะได้ไม่ยาวขึ้น (ผู้ใช้ "ประหยัดพื้นที่") · การ์ดที่มีแถวป้ายสถานะ สติกเกอร์อยู่แถวนั้นแทน */}
+          {!isDone && stickerChips}
           {suspicious && (
             <span
               className="flex items-center gap-0.5 text-[10px] font-medium text-[var(--chart-gray)]"
