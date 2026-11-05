@@ -27,6 +27,7 @@ import {
   Td,
 } from "@/modules/hr/components/ui";
 import { decideLeaveAction } from "./actions";
+import { RejectLeaveButton } from "./reject-leave-button";
 import { canSeeYearlyEntitlements } from "@/modules/hr/lib/yearly-entitlement-access";
 import { fmtDays, yearlyText } from "@/modules/hr/lib/leave-type-choice";
 import { loadOtMarks } from "./calendar-ot";
@@ -382,13 +383,14 @@ export async function renderCalendarTab(
                         <input type="hidden" name="outcome" value="APPROVED" />
                         <Button type="submit" size="sm" className="max-sm:h-10 max-sm:w-full">อนุมัติ</Button>
                       </form>
-                      <form action={decideLeaveAction} className="max-sm:flex-1">
-                        <input type="hidden" name="requestId" value={r.id} />
-                        <input type="hidden" name="outcome" value="REJECTED" />
-                        <Button type="submit" size="sm" variant="danger" className="max-sm:h-10 max-sm:w-full">
-                          ไม่อนุมัติ
-                        </Button>
-                      </form>
+                      <div className="max-sm:flex-1">
+                        <RejectLeaveButton
+                          requestId={r.id}
+                          name={nameOf.get(r.employment_id) ?? "พนักงาน"}
+                          typeName={typeNameOf.get(r.leave_type_id) ?? "ลา"}
+                          dateLabel={r.starts_on === r.ends_on ? shortThaiDate(r.starts_on) : `${shortThaiDate(r.starts_on)} ถึง ${shortThaiDate(r.ends_on)}`}
+                        />
+                      </div>
                     </div>
                   </Td>
                 </tr>
