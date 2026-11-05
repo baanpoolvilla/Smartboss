@@ -115,7 +115,7 @@ export default async function NewWorkOrderPage({
         {/* noValidate: ให้ WoRequiredGuard บอกเป็นภาษาไทยทีเดียวว่าขาดอะไรบ้าง — ไม่งั้นเบราว์เซอร์เด้ง
             "Please select an item in the list." (อังกฤษ ทีละช่อง) ก่อน แล้วข้อความไทยไม่ขึ้นเลย (ทดสอบ 3/11/2569)
             ช่องที่ต้องกรอกถูกตรวจซ้ำที่เซิร์ฟเวอร์อยู่แล้ว (createWorkOrderAction) */}
-        <form action={createWorkOrderAction} noValidate className="group/wo flex flex-col gap-4">
+        <form action={createWorkOrderAction} noValidate className="group/wo flex flex-col gap-3 sm:gap-4">
           {sp.fromReport && <ReportPrefill />}
           {sp.assetId && <input type="hidden" name="assetId" value={sp.assetId} />}
           {sp.pmScheduleId && (
@@ -178,7 +178,8 @@ export default async function NewWorkOrderPage({
 
           {/* ใบส่วนตัว: ผู้รับผิดชอบคือคนเปิดเอง ไม่มี CC — ซ่อนช่องนี้ */}
           <Row icon={User} className="group-data-[private=1]/wo:hidden">
-            <div className="grid gap-4 sm:grid-cols-2">
+            {/* คู่กันทุกขนาดจอ มือถือจะได้ไม่กินที่ (ผู้ใช้ 5/11/2569) */}
+            <div className="grid grid-cols-2 gap-2 sm:gap-4">
               <AssigneeAndCc
                 users={assignable.map((u) => ({
                   id: u.id,

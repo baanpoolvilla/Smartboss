@@ -63,7 +63,7 @@ export function MultiPicker({
   };
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex min-w-0 flex-col gap-1">
       {boxed ? (
         <>
           <span className="text-xs text-(--ink-soft)">{heading}</span>
@@ -247,7 +247,7 @@ export function AssigneeAndCc({
 
   return (
     <>
-      <label className="flex flex-col gap-1">
+      <label className="flex min-w-0 flex-col gap-1">
         <span className="text-xs text-(--ink-soft)">
           ผู้รับผิดชอบ *
         </span>
@@ -259,7 +259,7 @@ export function AssigneeAndCc({
           onChange={(e) => setAssignee(e.target.value)}
           className="flex h-10 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 py-2 text-sm text-(--ink) focus-visible:border-(--brand-green) focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-(--brand-green)/30"
         >
-          <option value="" disabled>— เลือกผู้รับผิดชอบ —</option>
+          <option value="" disabled>เลือกคน</option>
           {users.map((u) => (
             <option key={u.id} value={u.id}>
               {u.sub ? `${u.label} (${u.sub})` : u.label}
@@ -271,10 +271,10 @@ export function AssigneeAndCc({
       <MultiPicker
         name="ccUserIds"
         title="เพิ่ม CC (แจ้งสำเนา)"
-        heading="CC (แจ้งสำเนา)"
+        heading="CC (ไม่บังคับ)"
         boxed
         hint="เลือกผู้รับสำเนาการแจ้งเตือน (LINE + in-app)"
-        emptyText="เลือก CC (ไม่บังคับ)"
+        emptyText="เลือก CC"
         addLabel="เพิ่ม CC"
         options={ccOptions}
         exclude={assignee ? [assignee] : []}
