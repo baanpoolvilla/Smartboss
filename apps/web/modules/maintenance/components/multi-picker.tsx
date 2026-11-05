@@ -199,9 +199,14 @@ export function MultiPicker({
           {hint && (
             <p className="mb-2 text-xs text-(--ink-soft)">{hint}</p>
           )}
+          {boxed && (
+            <p className="mb-1 text-xs font-semibold text-(--ink)" data-testid="picker-count">เลือกแล้ว {draft.length}</p>
+          )}
           <div className="flex flex-col">
             {options
               .filter((o) => !exclude.includes(o.id))
+              // คนที่เลือกไว้ขึ้นบนสุด กด +2 แล้วเห็นเลย (ผู้ใช้ 5/11/2569) · เรียงจากค่าตอนเปิด ติ๊กออกระหว่างดูแถวจะได้ไม่กระโดด
+              .sort((a, b) => (boxed ? Number(selected.includes(b.id)) - Number(selected.includes(a.id)) : 0))
               .map((o) => (
                 <label
                   key={o.id}
