@@ -52,6 +52,19 @@ export const setHolidayAccrualSchema = z.object({
   enabled: z.boolean(),
 });
 
+/** เปิด/ปิดสิทธิ์รายคนรายปีของประเภทลา (เช่น ลาพักร้อน) */
+export const setYearlyEntitlementModeSchema = z.object({
+  enabled: z.boolean(),
+});
+
+/** HR ตั้งจำนวนวันลาของคนหนึ่งในปีหนึ่ง (ปีปฏิทิน) — ตั้งเป็นยอด ไม่ใช่บวกเพิ่ม · ครึ่งวันได้ */
+export const setYearlyEntitlementSchema = z.object({
+  employment_id: uuidSchema,
+  year: z.number().int().min(2000).max(2100),
+  days: z.number().min(0).max(366).multipleOf(0.5),
+  reason: z.string().trim().max(300).default(''),
+});
+
 /** จำนวนวัน Holiday ของเดือนหนึ่งที่ HR กำหนดทับ — days = null คือกลับไปนับจากปฏิทินวันหยุดบริษัท */
 /** HR เพิ่มวัน Holiday ให้คนหนึ่ง เป็นสิทธิ์ของเดือนหนึ่ง (YYYY-MM) */
 export const addPersonGrantSchema = z.object({

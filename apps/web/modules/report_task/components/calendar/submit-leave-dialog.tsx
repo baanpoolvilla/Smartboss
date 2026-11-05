@@ -17,7 +17,7 @@ import { DatePickerField } from "@/modules/report_task/components/shared/date-pi
 import { X } from "lucide-react";
 import { toast } from "sonner";
 import { submitLeaveAction, type LeaveState } from "@/app/(shell)/hr/actions";
-import { leaveTypeHint, usableLeaveTypes } from "@/modules/hr/lib/leave-type-choice";
+import { leaveTypeDisabled, leaveTypeHint, usableLeaveTypes, type YearlyEntitlement } from "@/modules/hr/lib/leave-type-choice";
 
 interface LeaveTypeChoice {
   id: string;
@@ -26,6 +26,8 @@ interface LeaveTypeChoice {
   monthlyQuotaDays: number;
   /** Holiday ที่ทบยอดได้: ยอดที่ยังลงได้รายเดือน (คีย์ YYYY-MM) — ไม่มี = ไม่ได้คุมด้วยยอดสะสม */
   availableByMonth?: Record<string, number>;
+  /** สิทธิ์รายปีของตัวเอง ต่อปี ค.ศ. — มีเฉพาะประเภทที่เปิดสิทธิ์รายคนรายปี (ลาพักร้อน) */
+  yearlyByYear?: Record<string, YearlyEntitlement>;
 }
 
 interface LeaveContext {
@@ -139,6 +141,8 @@ export function SubmitLeaveDialog({
         (ctx?.leaveTypes ?? []).map((t) => ({
           ...t,
           availableDays: t.availableByMonth ? (t.availableByMonth[startDate.slice(0, 7)] ?? 0) : null,
+          // สิทธิ์รายปี (ลาพักร้อน) ของปีที่เลือก — ปีที่ไม่มีข้อมูล = ยังไม่มีสิทธิ์
+          yearly: t.yearlyByYear ? (t.yearlyByYear[startDate.slice(0, 4)] ?? { entitled: 0, used: 0, available: 0 }) : null,
         }))
       ),
     [ctx, startDate]
@@ -207,7 +211,7 @@ export function SubmitLeaveDialog({
                 </SelectTrigger>
                 <SelectContent>
                   {leaveTypes.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
+                    <SelectItem key={t.id} value={t.id} disabled={leaveTypeDisabled(t)}>
                       {t.label}
                       {leaveTypeHint(t)}
                     </SelectItem>

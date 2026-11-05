@@ -13,6 +13,7 @@ import {
   type Me,
   type MonthAllowance,
   type Paged,
+  type YearlyLeaveBalance,
 } from "@/modules/hr/lib/api";
 import { Field, NotProvisioned, Pill, SectionCard, inputClass } from "@/modules/hr/components/ui";
 import {
@@ -21,8 +22,11 @@ import {
   seedLeaveTypesAction,
   setHolidayModeAction,
   setLeaveTypeMonthlyQuotaAction,
+  setYearlyEntitlementModeAction,
 } from "../../actions";
 import { HolidayAllowances } from "./holiday-allowances";
+import { YearlyEntitlements } from "./yearly-entitlements";
+import { canSeeYearlyEntitlements } from "@/modules/hr/lib/yearly-entitlement-access";
 import { HolidayModeForm } from "./holiday-mode-form";
 import { HolidayBalances } from "./holiday-balances";
 import { Button } from "@smartboss/ui/components/button";
@@ -71,7 +75,8 @@ export default async function LeaveTypesSettingsPage({
         // ประเภทที่นับสิทธิ์จากวันหยุดบริษัท (Holiday) — แต่ละอันมีตารางสิทธิ์รายเดือนให้ HR แก้
         const accruing = (leaveTypes?.items ?? []).filter((t) => t.accrues_from_holidays);
         // ยอดคงเหลือรายคนของประเภทที่สะสม — ชื่อพนักงานจับคู่จากทะเบียน (API คืนแค่ employment_id)
-        const workerIds = await workerEmploymentIds((await requireOrg()).orgId);
+        const session = await requireOrg();
+        const workerIds = await workerEmploymentIds(session.orgId);
         const [balances, employments] = accruing[0]
           ? await Promise.all([
               wfTry<{ items: HolidayBalanceRow[] }>(`/leave-types/${accruing[0].id}/holiday-balances?month=${balanceMonth}`),
@@ -86,6 +91,17 @@ export default async function LeaveTypesSettingsPage({
           })),
         );
         const activeChoices = (leaveTypes?.items ?? []).map((o) => ({ id: o.id, name: o.name }));
+        // สิทธิ์ลารายคนรายปี (ลาพักร้อน) — จำนวนวันของแต่ละคนเห็นเฉพาะฝ่ายบุคคลและ CEO แม้จะเข้าหน้านี้ได้
+        const canSeeYearly = canSeeYearlyEntitlements(session);
+        const yearlyTypes = canSeeYearly ? (leaveTypes?.items ?? []).filter((t) => t.yearly_entitlement) : [];
+        const yearlyPeople = yearlyTypes.length > 0 ? (employments ?? (await wfTry<Paged<Employment>>("/employments"))) : null;
+        const yearlyPersonOf = new Map((yearlyPeople?.items ?? []).map((e) => [e.id, e]));
+        const yearlyTables = await Promise.all(
+          yearlyTypes.map(async (t) => ({
+            type: t,
+            rows: (await wfTry<{ items: YearlyLeaveBalance[] }>(`/leave-types/${t.id}/yearly-entitlements?year=${year}`))?.items ?? [],
+          })),
+        );
 
         /*
          * สิทธิ์ของ workforce ไม่ใช่ชุดเดียวกับของ Smartboss — คนที่เข้าหน้านี้ได้
@@ -132,7 +148,9 @@ export default async function LeaveTypesSettingsPage({
                             {t.accrues_from_holidays
                               ? " · Holiday สะสม ใช้ได้ภายใน 3 เดือน"
                               : !t.auto_approve
-                                ? " · การลา ต้องอนุมัติ"
+                                ? t.yearly_entitlement
+                                  ? " · การลา ต้องอนุมัติ · สิทธิ์รายคนรายปี"
+                                  : " · การลา ต้องอนุมัติ"
                                 : t.requires_reports
                                   ? " · ทำงานนอกสถานที่ ยังส่งรายงาน"
                                   : ` · วันหยุดตามสิทธิ์ ${t.monthly_quota_days > 0 ? `${t.monthly_quota_days} วัน/เดือน` : "ไม่จำกัด"}`}
@@ -170,6 +188,22 @@ export default async function LeaveTypesSettingsPage({
                               />
                               <Button type="submit" size="sm" variant="outline" className="h-7 px-2 text-xs">
                                 บันทึก วัน/เดือน
+                              </Button>
+                            </form>
+                          )}
+                          {/* สิทธิ์รายคนรายปี — เฉพาะการลาที่ต้องอนุมัติ (Day-Off/Holiday มีตัวคุมของมันเอง) */}
+                          {canSeeYearly && !t.auto_approve && !t.accrues_from_holidays && (
+                            <form action={setYearlyEntitlementModeAction}>
+                              <input type="hidden" name="leave_type_id" value={t.id} />
+                              <input type="hidden" name="enabled" value={t.yearly_entitlement ? "0" : "1"} />
+                              <Button
+                                type="submit"
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2 text-xs"
+                                title={t.yearly_entitlement ? "ปิดแล้วลงได้ไม่จำกัดจำนวนวันเหมือนเดิม จำนวนวันที่กรอกไว้ไม่หาย" : "เปิดแล้วคนที่ยังไม่ได้กรอกจำนวนวันจะลงประเภทนี้ไม่ได้ — กรอกให้ครบในตารางที่จะขึ้นด้านล่าง"}
+                              >
+                                {t.yearly_entitlement ? "ปิดสิทธิ์รายปี" : "เปิดสิทธิ์รายคนรายปี"}
                               </Button>
                             </form>
                           )}
@@ -275,6 +309,29 @@ export default async function LeaveTypesSettingsPage({
                   </div>
                 </SectionCard>
               )}
+              {yearlyTables.map(({ type, rows }) => (
+                <YearlyEntitlements
+                  key={type.id}
+                  leaveTypeId={type.id}
+                  leaveTypeName={type.name}
+                  year={year}
+                  // คนงานรายวัน (WORKER) ไม่มีวันลาพักร้อน — ผู้ดูแลลงวันหยุดให้ที่โมดูลคนงานรายวัน
+                  rows={rows
+                    .filter((r) => r.employment_id && !workerIds.has(r.employment_id) && yearlyPersonOf.has(r.employment_id))
+                    .map((r) => {
+                      const person = yearlyPersonOf.get(r.employment_id!);
+                      return {
+                        employmentId: r.employment_id!,
+                        name: person?.display_name || person?.full_name || "ไม่ทราบชื่อ",
+                        code: person?.employee_code ?? "",
+                        entitled: r.entitled_days,
+                        used: r.used_days,
+                        pending: r.pending_days,
+                        available: r.available_days,
+                      };
+                    })}
+                />
+              ))}
               {canManage && activeChoices.length > 0 && (
                 <HolidayModeForm
                   action={setHolidayModeAction}

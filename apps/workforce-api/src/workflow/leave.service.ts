@@ -15,6 +15,12 @@ import {
   type HolidayLedgerInput,
 } from './holiday-accrual';
 
+interface YearlyLeaveSummary {
+  entitled_minutes: number;
+  pending_minutes: number;
+  used_minutes: number;
+}
+
 export interface LeaveBalance {
   leave_type_id: string;
   period_year: number;
@@ -393,6 +399,201 @@ export class LeaveService {
       });
 
       return { id: leaveTypeId, accrues_from_holidays: enabled };
+    });
+  }
+
+  /**
+   * สิทธิ์รายคนรายปี (ลาพักร้อน) — เปิดแล้วลงเกินจำนวนวันที่ HR ตั้งให้คนนั้นในปีนั้นไม่ได้
+   * ปีปฏิทิน ม.ค.–ธ.ค. หมดปีแล้วทิ้ง (period_year ของ ledger) · ผู้ใช้ 5/11/2569
+   */
+  async setYearlyEntitlementMode(leaveTypeId: string, enabled: boolean): Promise<Record<string, unknown>> {
+    return this.uow.run(async (uow) => {
+      const types = await uow.tx.select().from(schema.leaveTypes).where(eq(schema.leaveTypes.id, leaveTypeId)).limit(1);
+      const type = types[0];
+      if (type === undefined) throw AppError.notFound('leave type');
+      if (enabled && type.archivedAt !== null) throw AppError.validation('this leave type is no longer available');
+      if (enabled && (type.autoApprove || type.accruesFromHolidays)) {
+        throw AppError.validation('yearly entitlement is only for leave types that need approval');
+      }
+      await uow.tx.update(schema.leaveTypes).set({ yearlyEntitlement: enabled }).where(eq(schema.leaveTypes.id, leaveTypeId));
+      await uow.audit({
+        action: 'leave.type.yearly_entitlement',
+        resourceType: 'leave_type',
+        resourceId: leaveTypeId,
+        outcome: 'SUCCESS',
+        companyId: type.companyId,
+        before: { yearly_entitlement: type.yearlyEntitlement },
+        after: { yearly_entitlement: enabled },
+      });
+      return { id: leaveTypeId, yearly_entitlement: enabled };
+    });
+  }
+
+  /** ได้/ใช้/รออนุมัติ ของปีหนึ่งต่อ (คน, ประเภท) จาก ledger */
+  private async yearlySummaries(
+    tx: Tx,
+    leaveTypeIds: string[],
+    year: number,
+    employmentIds?: string[],
+  ): Promise<Map<string, YearlyLeaveSummary>> {
+    const out = new Map<string, YearlyLeaveSummary>();
+    if (leaveTypeIds.length === 0 || (employmentIds !== undefined && employmentIds.length === 0)) return out;
+    const conditions = [
+      inArray(schema.leaveBalanceLedger.leaveTypeId, leaveTypeIds),
+      eq(schema.leaveBalanceLedger.periodYear, year),
+    ];
+    if (employmentIds !== undefined) conditions.push(inArray(schema.leaveBalanceLedger.employmentId, employmentIds));
+    const entries = await tx.select().from(schema.leaveBalanceLedger).where(and(...conditions));
+    for (const entry of entries) {
+      const key = `${entry.employmentId}:${entry.leaveTypeId}`;
+      const row = out.get(key) ?? { entitled_minutes: 0, pending_minutes: 0, used_minutes: 0 };
+      switch (entry.entryType) {
+        case 'OPENING':
+        case 'ACCRUAL':
+        case 'ADJUST':
+        case 'EXPIRE':
+          row.entitled_minutes += entry.minutes;
+          break;
+        case 'RESERVE':
+          row.pending_minutes += -entry.minutes;
+          break;
+        case 'RELEASE':
+          row.pending_minutes -= entry.minutes;
+          break;
+        case 'CONSUME':
+          row.used_minutes += -entry.minutes;
+          break;
+        case 'REVERSAL':
+          // ยกเลิกใบที่อนุมัติแล้ว = คืนวันที่ใช้
+          row.used_minutes -= entry.minutes;
+          break;
+      }
+      out.set(key, row);
+    }
+    return out;
+  }
+
+  private static yearlyView(row: YearlyLeaveSummary | undefined): {
+    entitled_days: number;
+    used_days: number;
+    pending_days: number;
+    available_days: number;
+  } {
+    const r = row ?? { entitled_minutes: 0, pending_minutes: 0, used_minutes: 0 };
+    const days = (minutes: number): number => Math.round((minutes / 480) * 100) / 100;
+    return {
+      entitled_days: days(r.entitled_minutes),
+      used_days: days(r.used_minutes),
+      pending_days: days(r.pending_minutes),
+      available_days: days(r.entitled_minutes - r.used_minutes - r.pending_minutes),
+    };
+  }
+
+  async listYearlyEntitlements(leaveTypeId: string, year: number): Promise<{ items: Record<string, unknown>[] }> {
+    return this.uow.run(async (uow) => {
+      const types = await uow.tx.select().from(schema.leaveTypes).where(eq(schema.leaveTypes.id, leaveTypeId)).limit(1);
+      const type = types[0];
+      if (type === undefined) throw AppError.notFound('leave type');
+      const employments = await uow.tx
+        .select({ id: schema.employments.id })
+        .from(schema.employments)
+        .where(and(eq(schema.employments.companyId, type.companyId), eq(schema.employments.status, 'ACTIVE')));
+      const summaries = await this.yearlySummaries(uow.tx, [leaveTypeId], year);
+      return {
+        items: employments.map((e) => ({
+          employment_id: e.id,
+          year,
+          ...LeaveService.yearlyView(summaries.get(`${e.id}:${leaveTypeId}`)),
+        })),
+      };
+    });
+  }
+
+  /** ตั้งเป็นยอด: บันทึก ADJUST ส่วนต่างจากยอดเดิม (ledger แก้/ลบไม่ได้ ประวัติครบ) */
+  async setYearlyEntitlement(
+    leaveTypeId: string,
+    input: { employment_id: string; year: number; days: number; reason: string },
+  ): Promise<Record<string, unknown>> {
+    return this.uow.run(async (uow) => {
+      const types = await uow.tx.select().from(schema.leaveTypes).where(eq(schema.leaveTypes.id, leaveTypeId)).limit(1);
+      const type = types[0];
+      if (type === undefined) throw AppError.notFound('leave type');
+      const employments = await uow.tx
+        .select({ id: schema.employments.id, companyId: schema.employments.companyId })
+        .from(schema.employments)
+        .where(eq(schema.employments.id, input.employment_id))
+        .limit(1);
+      if (employments[0] === undefined || employments[0].companyId !== type.companyId) throw AppError.notFound('employment');
+
+      const before = LeaveService.yearlyView(
+        (await this.yearlySummaries(uow.tx, [leaveTypeId], input.year, [input.employment_id])).get(
+          `${input.employment_id}:${leaveTypeId}`,
+        ),
+      );
+      const delta = Math.round(input.days * 480) - Math.round(before.entitled_days * 480);
+      if (delta === 0) return { employment_id: input.employment_id, year: input.year, ...before };
+
+      const id = uuidv7();
+      await uow.tx.insert(schema.leaveBalanceLedger).values({
+        id,
+        tenantId: uow.tenantId,
+        employmentId: input.employment_id,
+        leaveTypeId,
+        entryType: 'ADJUST',
+        minutes: delta,
+        effectiveOn: `${String(input.year)}-01-01`,
+        periodYear: input.year,
+        reason: input.reason || `ตั้งสิทธิ์ปี ${String(input.year)} เป็น ${String(input.days)} วัน`,
+        createdBy: this.requestContext.requirePrincipal().principalId,
+      });
+      await uow.audit({
+        action: 'leave.balance.set_yearly',
+        resourceType: 'leave_balance_ledger',
+        resourceId: id,
+        outcome: 'SUCCESS',
+        companyId: type.companyId,
+        before: { entitled_days: before.entitled_days },
+        after: { entitled_days: input.days, year: input.year, employment_id: input.employment_id },
+      });
+      return {
+        employment_id: input.employment_id,
+        year: input.year,
+        ...before,
+        entitled_days: input.days,
+        available_days: Math.round((before.available_days + delta / 480) * 100) / 100,
+      };
+    });
+  }
+
+  /** สิทธิ์รายปีของตัวเอง ทุกประเภทที่เปิดสิทธิ์รายคน */
+  async myYearlyBalances(year: number): Promise<{ items: Record<string, unknown>[] }> {
+    return this.uow.run(async (uow) => {
+      const employmentId = this.requestContext.requirePrincipal().employmentId;
+      if (employmentId === null) return { items: [] };
+      const employments = await uow.tx
+        .select({ companyId: schema.employments.companyId })
+        .from(schema.employments)
+        .where(eq(schema.employments.id, employmentId))
+        .limit(1);
+      if (employments[0] === undefined) return { items: [] };
+      const types = await uow.tx
+        .select({ id: schema.leaveTypes.id })
+        .from(schema.leaveTypes)
+        .where(
+          and(
+            eq(schema.leaveTypes.companyId, employments[0].companyId),
+            eq(schema.leaveTypes.yearlyEntitlement, true),
+            isNull(schema.leaveTypes.archivedAt),
+          ),
+        );
+      const summaries = await this.yearlySummaries(uow.tx, types.map((t) => t.id), year, [employmentId]);
+      return {
+        items: types.map((t) => ({
+          leave_type_id: t.id,
+          year,
+          ...LeaveService.yearlyView(summaries.get(`${employmentId}:${t.id}`)),
+        })),
+      };
     });
   }
 
@@ -934,7 +1135,8 @@ export class LeaveService {
       }
 
       const periodYear = startsOn.year;
-      if (!leaveType.allowNegative) {
+      // ประเภทที่เปิดสิทธิ์รายปีใช้ตัวตรวจของมันเองด้านล่าง (ข้อความชัดกว่า และไม่บล็อกการสลับวัน)
+      if (!leaveType.allowNegative && !leaveType.yearlyEntitlement) {
         const balances = await this.aggregateBalance(
           uow.tx,
           input.employment_id,
@@ -945,6 +1147,27 @@ export class LeaveService {
         if (available < input.total_minutes) {
           throw AppError.validation('insufficient leave balance', {
             meta: { available_minutes: available, requested_minutes: input.total_minutes },
+          });
+        }
+      }
+
+      /*
+       * สิทธิ์รายคนรายปี (ลาพักร้อน) — ลงได้ไม่เกินจำนวนวันที่ HR ตั้งให้คนนั้นในปีนั้น
+       * นับใบที่รออนุมัติด้วย (กันไว้แล้ว) · ใบสลับวันไม่ใช้วันเพิ่ม จึงไม่ตรวจ
+       */
+      if (leaveType.yearlyEntitlement && swapFromRequest === undefined) {
+        const summary = LeaveService.yearlyView(
+          (await this.yearlySummaries(uow.tx, [input.leave_type_id], periodYear, [input.employment_id])).get(
+            `${input.employment_id}:${input.leave_type_id}`,
+          ),
+        );
+        if (input.total_minutes / 480 > summary.available_days) {
+          throw AppError.validation('yearly leave entitlement exceeded', {
+            meta: {
+              entitled_days: summary.entitled_days,
+              used_days: summary.used_days + summary.pending_days,
+              available_days: summary.available_days,
+            },
           });
         }
       }
@@ -1512,6 +1735,7 @@ export class LeaveService {
           auto_approve: row.autoApprove,
           monthly_quota_days: row.monthlyQuotaDays,
           accrues_from_holidays: row.accruesFromHolidays,
+          yearly_entitlement: row.yearlyEntitlement,
           accrual_starts_on: row.accrualStartsOn,
           show_on_calendar: row.showOnCalendar,
           requires_reports: row.requiresReports,

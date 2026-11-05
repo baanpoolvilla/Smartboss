@@ -16,6 +16,7 @@ import {
   type LeaveType,
   type Me,
   type Paged,
+  type YearlyLeaveBalance,
 } from "@/modules/hr/lib/api";
 import {
   DataTable,
@@ -26,6 +27,8 @@ import {
   Td,
 } from "@/modules/hr/components/ui";
 import { decideLeaveAction } from "./actions";
+import { canSeeYearlyEntitlements } from "@/modules/hr/lib/yearly-entitlement-access";
+import { fmtDays, yearlyText } from "@/modules/hr/lib/leave-type-choice";
 import { loadOtMarks } from "./calendar-ot";
 import { loadLeaveHistory, type LeaveHistoryRow } from "@/modules/hr/lib/leave-history";
 import { ScrollToElement } from "./scroll-to-element";
@@ -77,7 +80,7 @@ export async function renderCalendarTab(
   const from = `${month}-01`;
   const to = `${month}-${String(daysInMonth).padStart(2, "0")}`;
 
-  const [me, employments, types, calendar, requests, mine, everyone, allowances] = await Promise.all([
+  const [me, employments, types, calendar, requests, mine, everyone, allowances, myYearly] = await Promise.all([
     wfFetch<Me>("/me"),
     // พนักงานทั่วไปอ่าน /employments ไม่ได้ (ต้องมี people.read) — ปฏิทิน
     // จึงพึ่งชื่อจาก /leave-calendar แทน อันนี้ใช้แค่ตารางอนุมัติ
@@ -94,7 +97,15 @@ export async function renderCalendarTab(
     wfTry<Paged<LeaveRequest>>(`/leave-requests?from=${from}&to=${to}`),
     // ยอด Holiday ที่ตัวเองยังลงได้ในเดือนนี้ (เฉพาะประเภทที่ทบยอด) — หมดแล้วไม่ขึ้นให้เลือก
     wfTry<{ items: HolidayAllowance[] }>(`/me/holiday-allowances?from=${month}&to=${month}`),
+    // สิทธิ์รายปี (ลาพักร้อน) ของตัวเอง — เห็นแค่ของตัวเอง
+    wfTry<{ items: YearlyLeaveBalance[] }>(`/me/yearly-leave-balances?year=${month.slice(0, 4)}`),
   ]);
+  const myYearlyByType = new Map(
+    (myYearly?.items ?? []).map((r) => [
+      r.leave_type_id,
+      { entitled: r.entitled_days, used: r.used_days + r.pending_days, available: r.available_days },
+    ]),
+  );
   const availableByType = new Map(
     (allowances?.items ?? []).map((a) => [a.leave_type_id, a.months[0]?.available_days ?? 0]),
   );
@@ -220,6 +231,20 @@ export async function renderCalendarTab(
   );
 
   const pending = requests?.items ?? [];
+  const typeNameOf = new Map((types?.items ?? []).map((t) => [t.id, t.name]));
+  // ฝ่ายบุคคล/CEO: เห็นยอดสิทธิ์รายปีของคนที่ยื่นตอนอนุมัติ — ผู้อนุมัติคนอื่นเห็นแค่ประเภท ไม่รู้ว่าใครได้กี่วัน
+  const yearlyTypeIds = new Set((types?.items ?? []).filter((t) => t.yearly_entitlement).map((t) => t.id));
+  const yearlyLookups = canSeeYearlyEntitlements(session)
+    ? [...new Set(pending.filter((r) => yearlyTypeIds.has(r.leave_type_id)).map((r) => `${r.leave_type_id}|${r.starts_on.slice(0, 4)}`))]
+    : [];
+  const pendingYearly = new Map<string, YearlyLeaveBalance>();
+  await Promise.all(
+    yearlyLookups.map(async (key) => {
+      const [typeId, year] = key.split("|");
+      const rows = await wfTry<{ items: YearlyLeaveBalance[] }>(`/leave-types/${typeId}/yearly-entitlements?year=${year}`);
+      for (const row of rows?.items ?? []) pendingYearly.set(`${row.employment_id}|${key}`, row);
+    }),
+  );
   const [y, m] = month.split("-").map(Number);
 
   return (
@@ -237,6 +262,7 @@ export async function renderCalendarTab(
             autoApprove: t.auto_approve,
             monthlyQuotaDays: quotaDaysOf(t),
             availableDays: t.accrues_from_holidays ? (availableByType.get(t.id) ?? 0) : null,
+            yearly: t.yearly_entitlement ? (myYearlyByType.get(t.id) ?? { entitled: 0, used: 0, available: 0 }) : null,
             usedDays: me.employment_id ? (usedDaysByType.get(t.id) ?? 0) : null,
           }))}
           entriesByDate={entriesByDate}
@@ -275,6 +301,16 @@ export async function renderCalendarTab(
                   {b.expiring > 0 ? ` · ${b.expiring} วันต้องใช้ในเดือนนี้` : ""}
                 </Pill>
               ))}
+              {(types?.items ?? [])
+                .filter((t) => t.yearly_entitlement && me.employment_id)
+                .map((t) => {
+                  const mineYearly = myYearlyByType.get(t.id) ?? { entitled: 0, used: 0, available: 0 };
+                  return (
+                    <Pill key={t.id} tone={mineYearly.available > 0 ? "var(--app-strong)" : "var(--tone-muted)"}>
+                      {t.name} ของฉัน ปี {y! + 543}: {yearlyText(mineYearly)}
+                    </Pill>
+                  );
+                })}
             </div>
           }
         />
@@ -288,7 +324,7 @@ export async function renderCalendarTab(
           {pending.length === 0 ? (
             <EmptyState>ไม่มีคำขอค้าง</EmptyState>
           ) : (
-            <DataTable head={["พนักงาน", "วันที่", "เหตุผล", "ดำเนินการ"]}>
+            <DataTable head={["พนักงาน", "ประเภท", "วันที่", "เหตุผล", "ดำเนินการ"]}>
               {pending.map((r) => (
                 <tr
                   key={r.id}
@@ -297,6 +333,21 @@ export async function renderCalendarTab(
                 >
                   <Td className="font-medium">
                     {nameOf.get(r.employment_id) ?? "—"}
+                  </Td>
+                  {/* ประเภทจากระบบ ไม่ใช่จากหมายเหตุที่พนักงานพิมพ์ — ยอดรายปีเห็นเฉพาะฝ่ายบุคคล/CEO (ผู้ใช้ 5/11/2569) */}
+                  <Td>
+                    <span className="font-medium text-(--ink)">{typeNameOf.get(r.leave_type_id) ?? "ลา"}</span>
+                    {(() => {
+                      const bal = pendingYearly.get(`${r.employment_id}|${r.leave_type_id}|${r.starts_on.slice(0, 4)}`);
+                      if (!bal) return null;
+                      if (bal.entitled_days <= 0) return <span className="block text-[11px] text-(--danger)">ยังไม่ได้กำหนดสิทธิ์ปีนี้</span>;
+                      const total = bal.used_days + bal.pending_days;
+                      return (
+                        <span className={`block text-[11px] ${bal.available_days < 0 ? "text-(--danger)" : "text-(--ink-soft)"}`} data-testid="pending-leave-yearly">
+                          ใช้รวมที่รออนุมัติ {fmtDays(total)}/{fmtDays(bal.entitled_days)} วัน · {bal.available_days < 0 ? `เกินสิทธิ์ ${fmtDays(-bal.available_days)} วัน` : `เหลือ ${fmtDays(bal.available_days)}`}
+                        </span>
+                      );
+                    })()}
                   </Td>
                   <Td className="font-mono text-xs">
                     {r.starts_on === r.ends_on

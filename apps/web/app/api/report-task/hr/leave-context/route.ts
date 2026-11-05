@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { requireOrg } from "@smartboss/auth";
 import { loadDayOffOverrides, overrideDaysFor } from "@/lib/day-off-quota";
-import { wfFetch, wfTry, type HolidayAllowance, type Me, type LeaveType, type LeaveRequest, type Paged } from "@/modules/hr/lib/api";
+import { wfFetch, wfTry, type HolidayAllowance, type Me, type LeaveType, type LeaveRequest, type Paged, type YearlyLeaveBalance } from "@/modules/hr/lib/api";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +43,18 @@ export async function GET(request: NextRequest) {
       ),
       wfTry<{ items: HolidayAllowance[] }>(`/me/holiday-allowances?from=${monthFrom}&to=${monthTo}`),
     ]);
+    // สิทธิ์รายปี (ลาพักร้อน) ของตัวเอง ทุกปีที่อยู่ในช่วงที่ยื่นได้ — เห็นแค่ของตัวเอง
+    const years = [...new Set([monthFrom.slice(0, 4), monthTo.slice(0, 4)])];
+    const yearlyRows = (
+      await Promise.all(years.map((y) => wfTry<{ items: YearlyLeaveBalance[] }>(`/me/yearly-leave-balances?year=${y}`)))
+    ).flatMap((r) => r?.items ?? []);
+    const yearlyByType = new Map<string, Record<string, { entitled: number; used: number; available: number }>>();
+    for (const r of yearlyRows) {
+      if (!r.leave_type_id) continue;
+      const byYear = yearlyByType.get(r.leave_type_id) ?? {};
+      byYear[String(r.year)] = { entitled: r.entitled_days, used: r.used_days + r.pending_days, available: r.available_days };
+      yearlyByType.set(r.leave_type_id, byYear);
+    }
     const availableByType = new Map(
       (allowances?.items ?? []).map((a) => [
         a.leave_type_id,
@@ -67,6 +79,7 @@ export async function GET(request: NextRequest) {
             : null) ?? t.monthly_quota_days,
         // มีเฉพาะ Holiday ที่ทบยอด — เดือนที่ไม่มีในนี้ = ลงไม่ได้
         ...(t.accrues_from_holidays ? { availableByMonth: availableByType.get(t.id) ?? {} } : {}),
+        ...(t.yearly_entitlement ? { yearlyByYear: yearlyByType.get(t.id) ?? {} } : {}),
       })),
       myRequests: (myRequests?.items ?? [])
         .filter((r) => r.status === "SUBMITTED" || r.status === "APPROVED")

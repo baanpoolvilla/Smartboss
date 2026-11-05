@@ -34,6 +34,8 @@ export const leaveTypes = workforce.table('leave_types', {
    * ไม่ใช้ monthlyQuotaDays (ดู migration 0019 และ LeaveService.holidayLedger)
    */
   accruesFromHolidays: boolean('accrues_from_holidays').notNull().default(false),
+  /** มีสิทธิ์รายคนรายปี (ลาพักร้อน) — จำนวนวันอยู่ใน leave_balance_ledger (migration 0021) */
+  yearlyEntitlement: boolean('yearly_entitlement').notNull().default(false),
   /** เดือนแรกที่เริ่มนับสิทธิ์สะสม (วันแรกของเดือน) — ตั้งตอนเปิดใช้ครั้งแรก ก่อนหน้านี้ไม่นับย้อนหลัง */
   accrualStartsOn: date('accrual_starts_on'),
   /** ลบออกจากรายการแล้ว (ดู migration 0018) — NULL = ยังใช้งาน · ใบเก่ายังอ้างประเภทนี้ได้ */

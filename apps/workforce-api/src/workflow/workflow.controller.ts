@@ -14,6 +14,8 @@ import {
   setLeaveTypeMonthlyQuotaSchema,
   archiveLeaveTypeSchema,
   setHolidayAccrualSchema,
+  setYearlyEntitlementModeSchema,
+  setYearlyEntitlementSchema,
   setMonthAllowanceSchema,
   addPersonGrantSchema,
   reopenTimesheetPeriodSchema,
@@ -136,6 +138,47 @@ export class LeaveController {
     @Body(zodPipe(setHolidayAccrualSchema)) body: z.infer<typeof setHolidayAccrualSchema>,
   ): Promise<Record<string, unknown>> {
     return this.service.setHolidayAccrual(requireUuid(leaveTypeId, 'leaveTypeId'), body.enabled);
+  }
+
+  /** เปิด/ปิดสิทธิ์รายคนรายปีของประเภทลา (ลาพักร้อน) — เปิดแล้วลงเกินจำนวนวันที่ HR ตั้งไม่ได้ */
+  @Post('leave-types/:leaveTypeId/yearly-entitlement-mode')
+  @HttpCode(200)
+  @RequirePermissions('workforce.leave.manage')
+  @Idempotent()
+  async setYearlyEntitlementMode(
+    @Param('leaveTypeId') leaveTypeId: string,
+    @Body(zodPipe(setYearlyEntitlementModeSchema)) body: z.infer<typeof setYearlyEntitlementModeSchema>,
+  ): Promise<Record<string, unknown>> {
+    return this.service.setYearlyEntitlementMode(requireUuid(leaveTypeId, 'leaveTypeId'), body.enabled);
+  }
+
+  /** สิทธิ์รายปีของพนักงานทุกคน (ได้/ใช้/เหลือ) — สำหรับ HR */
+  @Get('leave-types/:leaveTypeId/yearly-entitlements')
+  @RequirePermissions('workforce.leave.manage')
+  async listYearlyEntitlements(
+    @Param('leaveTypeId') leaveTypeId: string,
+    @Query('year') year: string,
+  ): Promise<{ items: Record<string, unknown>[] }> {
+    return this.service.listYearlyEntitlements(requireUuid(leaveTypeId, 'leaveTypeId'), requireYear(year));
+  }
+
+  /** HR ตั้งจำนวนวันของคนหนึ่งในปีหนึ่ง (ตั้งเป็นยอด ระบบบันทึกส่วนต่างลง ledger) */
+  @Post('leave-types/:leaveTypeId/yearly-entitlements')
+  @HttpCode(200)
+  @RequirePermissions('workforce.leave.manage')
+  @Idempotent()
+  async setYearlyEntitlement(
+    @Param('leaveTypeId') leaveTypeId: string,
+    @Body(zodPipe(setYearlyEntitlementSchema)) body: z.infer<typeof setYearlyEntitlementSchema>,
+  ): Promise<Record<string, unknown>> {
+    return this.service.setYearlyEntitlement(requireUuid(leaveTypeId, 'leaveTypeId'), body);
+  }
+
+  /** สิทธิ์รายปีของตัวเอง — เห็นแค่ของตัวเอง */
+  @Get('me/yearly-leave-balances')
+  @RequirePermissions('workforce.leave.request')
+  async myYearlyLeaveBalances(@Query('year') year: string): Promise<{ items: Record<string, unknown>[] }> {
+    return this.service.myYearlyBalances(requireYear(year));
   }
 
   /** ตารางสิทธิ์ Holiday รายเดือนของปีหนึ่ง — วันหยุดบริษัทของแต่ละเดือน และจำนวนที่ HR กำหนดทับ */

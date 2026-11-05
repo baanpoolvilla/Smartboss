@@ -5,7 +5,7 @@ import { Printer, SlidersHorizontal } from "lucide-react";
 import { Button } from "@smartboss/ui/components/button";
 import { Modal } from "@/components/module/dialog";
 import { typeHue } from "@/lib/leave-type-hue";
-import { leaveTypeHint, usableLeaveTypes, type LeaveTypeChoice } from "@/modules/hr/lib/leave-type-choice";
+import { leaveTypeDisabled, leaveTypeHint, usableLeaveTypes, type LeaveTypeChoice } from "@/modules/hr/lib/leave-type-choice";
 import {
   cancelLeaveAction,
   cancelLeaveForAction,
@@ -1114,7 +1114,7 @@ function DayDialog({
             className={fieldClass}
           >
             {leaveTypes.map((t) => (
-              <option key={t.id} value={t.id}>
+              <option key={t.id} value={t.id} disabled={leaveTypeDisabled(t)}>
                 {t.label}
                 {leaveTypeHint(t)}
               </option>

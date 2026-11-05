@@ -4,11 +4,14 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { HR_PERMS } from "@/modules/hr/permissions";
+import { canSeeYearlyEntitlements } from "@/modules/hr/lib/yearly-entitlement-access";
 import {
   wfFetch,
+  wfTry,
   WorkforceError,
   WorkforceUnavailableError,
   type Company,
+  type LeaveType,
   type Me,
   type Paged,
   type Person,
@@ -100,6 +103,12 @@ function leaveErrorMessage(raw: string): string {
       "⇒ ขอไม่ผ่านทุกใบ — ให้ฝ่ายบุคคลกด “สร้างชุดมาตรฐาน” ที่หน้านี้ " +
       "แล้วเลือกประเภทที่สร้างใหม่แทน"
     );
+  }
+  if (raw.includes("yearly leave entitlement exceeded")) {
+    return "สิทธิ์ลาของปีนี้ไม่พอ (นับรวมใบที่รออนุมัติแล้ว) — ลดจำนวนวัน หรือติดต่อ HR ถ้าคิดว่าจำนวนวันไม่ถูก";
+  }
+  if (raw.includes("yearly entitlement is only for leave types that need approval")) {
+    return "สิทธิ์รายคนรายปีใช้ได้เฉพาะประเภท \"การลา ต้องอนุมัติ\" (เช่น ลาพักร้อน)";
   }
   if (raw.includes("holiday balance exceeded")) {
     return "สิทธิ์ Holiday ของเดือนนี้ไม่พอ (รวมที่ทบมาแล้ว) — ลดจำนวนวัน หรือใช้ประเภทการลาอื่น";
@@ -1327,8 +1336,11 @@ export async function submitLeaveAction(
   // ครั้งเดียวต่อการยื่นทั้งชุด ไม่ใช่ต่อวัน — ลาทีเดียว 5 วันไม่ควรได้ 5
   // แจ้งเตือนแยกกันในกระดิ่งของผู้อนุมัติ · referenceId = id ทุกใบ ไว้ลบออกตอนตัดสินแล้ว
   if (pendingIds.length > 0) {
+    // บอกประเภทในหัวข้อเลย ผู้อนุมัติไม่ต้องเดาจากหมายเหตุที่พนักงานพิมพ์ (ผู้ใช้ 5/11/2569)
+    const typeName = (await wfTry<Paged<LeaveType>>("/leave-types"))?.items.find((t) => t.id === leaveTypeId)?.name;
+    const what = typeName && typeName.startsWith("ลา") ? `คำขอ${typeName}` : typeName ? `คำขอลา (${typeName})` : "คำขอลา";
     void notifyApprovers(session.orgId, "workforce.leave.approve", session.userId, {
-      title: pendingIds.length > 1 ? `มีคำขอลาใหม่ ${pendingIds.length} วันรออนุมัติ` : "มีคำขอลาใหม่รออนุมัติ",
+      title: pendingIds.length > 1 ? `มี${what}ใหม่ ${pendingIds.length} วันรออนุมัติ` : `มี${what}ใหม่รออนุมัติ`,
       body: reason || undefined,
       type: "hr_leave_submitted",
       referenceId: pendingIds.join(","),
@@ -1634,6 +1646,62 @@ export async function setHolidayModeAction(formData: FormData) {
  * HR กำหนดจำนวนวัน Holiday ของเดือนหนึ่งทับจำนวนวันหยุดบริษัท (บริษัทให้ไม่ตรงกับปฏิทิน)
  * ช่องว่าง = ลบค่าทับ กลับไปนับจากปฏิทินวันหยุดบริษัท
  */
+/**
+ * เปิด/ปิดสิทธิ์รายคนรายปีของประเภทลา (ลาพักร้อน) — เปิดแล้วพนักงานลงเกินจำนวนวันที่ HR ตั้งไม่ได้
+ * ผู้ใช้ 5/11/2569: ลาพักร้อนแต่ละคนได้ไม่เท่ากัน ปีปฏิทิน หมดปีแล้วทิ้ง
+ */
+export async function setYearlyEntitlementModeAction(formData: FormData) {
+  await guardYearlyEntitlements();
+  const leaveTypeId = String(formData.get("leave_type_id") ?? "");
+  const enabled = formData.get("enabled") === "1";
+  if (!leaveTypeId) throw new Error("ไม่พบประเภทการลา");
+  try {
+    await wfFetch(`/leave-types/${leaveTypeId}/yearly-entitlement-mode`, { method: "POST", body: { enabled } });
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+  revalidatePath("/hr");
+  revalidatePath("/hr/settings/leave-types");
+}
+
+/**
+ * จำนวนวันลารายปีของแต่ละคน — เห็น/แก้ได้เฉพาะ HR (สิทธิ์จัดการพนักงาน) และ CEO
+ * workforce ให้สิทธิ์ระดับ HR กับผู้ดูแลคนงานด้วย (smartboss-mapping.ts) จึงต้องคุมด้วยสิทธิ์ของ Smartboss อีกชั้น
+ * ผู้ใช้ 5/11/2569 "ห้ามให้คนอื่นเห็นนอกจากเจ้าตัวเอง" (+ HR ที่กรอก และ CEO)
+ */
+async function guardYearlyEntitlements() {
+  const session = await requireOrg();
+  if (!canSeeYearlyEntitlements(session)) throw new Error("เฉพาะฝ่ายบุคคลและ CEO เท่านั้น");
+}
+
+export async function setYearlyEntitlementAction(formData: FormData): Promise<{ error?: string; ok?: boolean }> {
+  try {
+    await guardYearlyEntitlements();
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "ไม่มีสิทธิ์ดำเนินการนี้" };
+  }
+  const leaveTypeId = String(formData.get("leave_type_id") ?? "");
+  const employmentId = String(formData.get("employment_id") ?? "");
+  const year = Number(formData.get("year") ?? 0);
+  const raw = String(formData.get("days") ?? "").trim();
+  const days = Number(raw);
+  if (!leaveTypeId || !employmentId || !Number.isInteger(year)) return { error: "ข้อมูลไม่ครบ" };
+  if (raw === "" || !Number.isFinite(days) || days < 0 || days > 366 || Math.round(days * 2) !== days * 2) {
+    return { error: "จำนวนวันต้องเป็น 0–366 (ครึ่งวันได้ เช่น 6.5)" };
+  }
+  try {
+    await wfFetch(`/leave-types/${leaveTypeId}/yearly-entitlements`, {
+      method: "POST",
+      body: { employment_id: employmentId, year, days, reason: "" },
+    });
+  } catch (error) {
+    return { error: toMessage(error) };
+  }
+  revalidatePath("/hr");
+  revalidatePath("/hr/settings/leave-types");
+  return { ok: true };
+}
+
 /** HR เพิ่มวัน Holiday ให้คนหนึ่ง เป็นสิทธิ์ของเดือนที่เลือก — ต้องมีเหตุผล (audit ฝั่งระบบบุคคล) */
 export async function addHolidayPersonGrantAction(formData: FormData): Promise<{ error?: string }> {
   try {

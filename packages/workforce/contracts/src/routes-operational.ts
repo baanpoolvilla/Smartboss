@@ -1081,6 +1081,46 @@ export const OPERATIONAL_ROUTES: readonly Omit<RouteDefinition, 'response'>[] = 
     successStatus: 200,
   },
   {
+    operationId: 'setYearlyEntitlementMode_post',
+    method: 'post',
+    path: '/leave-types/{leaveTypeId}/yearly-entitlement-mode',
+    summary: 'POST /leave-types/{leaveTypeId}/yearly-entitlement-mode',
+    tag: 'workflow',
+    // เปิด/ปิดสิทธิ์รายคนรายปี (ลาพักร้อน)
+    permissions: ['workforce.leave.manage'] as Permission[],
+    idempotent: true,
+    successStatus: 200,
+  },
+  {
+    operationId: 'listYearlyEntitlements_get',
+    method: 'get',
+    path: '/leave-types/{leaveTypeId}/yearly-entitlements',
+    summary: 'GET /leave-types/{leaveTypeId}/yearly-entitlements',
+    tag: 'workflow',
+    // สิทธิ์รายปีของทุกคน — HR เท่านั้น (หน้าเว็บคุมอีกชั้นด้วยสิทธิ์จัดการพนักงาน)
+    permissions: ['workforce.leave.manage'] as Permission[],
+  },
+  {
+    operationId: 'setYearlyEntitlement_post',
+    method: 'post',
+    path: '/leave-types/{leaveTypeId}/yearly-entitlements',
+    summary: 'POST /leave-types/{leaveTypeId}/yearly-entitlements',
+    tag: 'workflow',
+    // HR ตั้งจำนวนวันของคนหนึ่งในปีหนึ่ง
+    permissions: ['workforce.leave.manage'] as Permission[],
+    idempotent: true,
+    successStatus: 200,
+  },
+  {
+    operationId: 'myYearlyLeaveBalances_get',
+    method: 'get',
+    path: '/me/yearly-leave-balances',
+    summary: 'GET /me/yearly-leave-balances',
+    tag: 'workflow',
+    // สิทธิ์รายปีของตัวเองเท่านั้น
+    permissions: ['workforce.leave.request'] as Permission[],
+  },
+  {
     operationId: 'setHolidayAccrual_post',
     method: 'post',
     path: '/leave-types/{leaveTypeId}/holiday-accrual',

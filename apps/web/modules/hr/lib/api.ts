@@ -138,6 +138,20 @@ export interface Me {
   roles: { code: string; company_id: string | null }[];
 }
 
+/**
+ * สิทธิ์รายคนรายปีของประเภทลา (GET /me/yearly-leave-balances, /leave-types/:id/yearly-entitlements)
+ * used = อนุมัติแล้ว · pending = รออนุมัติ (กันไว้แล้ว) · available = entitled − used − pending
+ */
+export interface YearlyLeaveBalance {
+  leave_type_id?: string;
+  employment_id?: string;
+  year: number;
+  entitled_days: number;
+  used_days: number;
+  pending_days: number;
+  available_days: number;
+}
+
 /** ยอด Holiday ที่ตัวเองยังลงได้ รายเดือน (GET /me/holiday-allowances) — มีเฉพาะประเภทที่นับสิทธิ์จากวันหยุดบริษัท */
 export interface HolidayAllowance {
   leave_type_id: string;
@@ -192,6 +206,8 @@ export interface LeaveType {
   monthly_quota_days: number;
   /** true = สิทธิ์ต่อเดือนนับจากวันหยุดบริษัท (HR แก้ทับได้) ใช้ได้ภายใน 3 เดือน — ไม่ใช้ monthly_quota_days */
   accrues_from_holidays?: boolean;
+  /** true = มีสิทธิ์รายคนรายปี (ลาพักร้อน) — HR ตั้งจำนวนวันของแต่ละคน ลงเกินไม่ได้ · ระบบบุคคลรุ่นเก่าไม่มี */
+  yearly_entitlement?: boolean;
   /** เดือนแรกที่เริ่มนับสิทธิ์สะสม (YYYY-MM-01) — ก่อนหน้านี้ไม่นับย้อนหลัง · null = ยังไม่เคยเปิดใช้ */
   accrual_starts_on?: string | null;
   /**
