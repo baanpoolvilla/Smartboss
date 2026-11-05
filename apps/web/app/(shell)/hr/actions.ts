@@ -16,6 +16,7 @@ import {
   type Paged,
   type Person,
   type TimeEventOrigin,
+  type YearlyLeaveBalance,
 } from "@/modules/hr/lib/api";
 import { isDisplayNameFormat } from "@workforce/domain";
 import { todayIso } from "@/modules/hr/lib/date";
@@ -1287,6 +1288,10 @@ export async function submitLeaveAction(
   if (!leaveTypeId) return { error: "กรุณาเลือกประเภทการลา" };
   if (dates.length === 0) return { error: "คลิกเลือกวันที่จะหยุดก่อน" };
 
+  // สิทธิ์รายปี: เช็กทั้งชุดก่อนยื่น ระบบบุคคลตรวจทีละใบ ถ้าปล่อยไปจะลงได้บางวันแล้วเหลือวันที่ไม่ผ่าน
+  const overYearly = await yearlyOverError(leaveTypeId, employmentId, dates);
+  if (overYearly) return { error: overYearly };
+
   /*
    * ส่งทีละใบต่อหนึ่งวัน ไม่รวบเป็นช่วงเดียว — วันที่เลือกอาจไม่ติดกัน
    * (เช่นหยุดจันทร์กับศุกร์) ถ้ารวบเป็น starts_on..ends_on จะกินวันกลางไปด้วย
@@ -1662,6 +1667,30 @@ export async function setYearlyEntitlementModeAction(formData: FormData) {
   }
   revalidatePath("/hr");
   revalidatePath("/hr/settings/leave-types");
+}
+
+/**
+ * ชุดวันที่เลือกเกินสิทธิ์รายปีที่เหลือไหม — คืนข้อความบอกตัวเลข · อ่านยอดไม่ได้ = ปล่อยให้ระบบบุคคลตรวจทีละใบตามเดิม
+ * ลงให้ตัวเองอ่านจาก /me · ลงแทนคนอื่นอ่านจากตารางของ HR (คนที่ไม่มีสิทธิ์อ่านไม่ได้ ก็ไม่ได้ข้อความนี้)
+ */
+async function yearlyOverError(leaveTypeId: string, employmentId: string, dates: string[]): Promise<string | null> {
+  const type = (await wfTry<Paged<LeaveType>>("/leave-types"))?.items.find((t) => t.id === leaveTypeId);
+  if (!type?.yearly_entitlement) return null;
+  const me = await wfTry<Me>("/me");
+  const byYear = new Map<string, number>();
+  for (const d of dates) byYear.set(d.slice(0, 4), (byYear.get(d.slice(0, 4)) ?? 0) + 1);
+  for (const [year, days] of byYear) {
+    const rows = await wfTry<{ items: YearlyLeaveBalance[] }>(
+      me?.employment_id === employmentId
+        ? `/me/yearly-leave-balances?year=${year}`
+        : `/leave-types/${leaveTypeId}/yearly-entitlements?year=${year}`,
+    );
+    const row = rows?.items.find((r) => (r.leave_type_id ?? leaveTypeId) === leaveTypeId && (r.employment_id ?? employmentId) === employmentId);
+    if (row && days > row.available_days) {
+      return `${type.name}ปี ${Number(year) + 543} เหลือ ${Math.max(0, row.available_days)} วัน แต่เลือกไว้ ${days} วัน — ลดจำนวนวัน หรือติดต่อ HR (ยังไม่ได้บันทึกวันไหนเลย)`;
+    }
+  }
+  return null;
 }
 
 /**

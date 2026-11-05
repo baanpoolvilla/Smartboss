@@ -17,7 +17,7 @@ import { DatePickerField } from "@/modules/report_task/components/shared/date-pi
 import { X } from "lucide-react";
 import { toast } from "sonner";
 import { submitLeaveAction, type LeaveState } from "@/app/(shell)/hr/actions";
-import { leaveTypeDisabled, leaveTypeHint, usableLeaveTypes, type YearlyEntitlement } from "@/modules/hr/lib/leave-type-choice";
+import { leaveTypeDisabled, leaveTypeHint, usableLeaveTypes, yearlyOverMessage, type YearlyEntitlement } from "@/modules/hr/lib/leave-type-choice";
 
 interface LeaveTypeChoice {
   id: string;
@@ -151,7 +151,8 @@ export function SubmitLeaveDialog({
   const activeType = leaveTypes.find((t) => t.id === typeId) ?? leaveTypes[0];
   const activeTypeId = activeType?.id ?? "";
   const shownLabel = labelTouched || !ctx ? label : firstWord(ctx.myName) + "-" + (activeType?.label ?? "หยุด");
-  const canSubmit = !!ctx?.employmentId && leaveTypes.length > 0;
+  const yearlyOver = yearlyOverMessage(activeType, dates.length);
+  const canSubmit = !!ctx?.employmentId && leaveTypes.length > 0 && !yearlyOver && !(activeType && leaveTypeDisabled(activeType));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -218,6 +219,7 @@ export function SubmitLeaveDialog({
                   ))}
                 </SelectContent>
               </Select>
+              {yearlyOver && <p className="text-xs font-medium text-[var(--chart-red)]" data-testid="yearly-over">{yearlyOver}</p>}
             </div>
 
             <div className="flex flex-col gap-1.5">

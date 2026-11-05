@@ -5,7 +5,7 @@ import { Printer, SlidersHorizontal } from "lucide-react";
 import { Button } from "@smartboss/ui/components/button";
 import { Modal } from "@/components/module/dialog";
 import { typeHue } from "@/lib/leave-type-hue";
-import { leaveTypeDisabled, leaveTypeHint, usableLeaveTypes, type LeaveTypeChoice } from "@/modules/hr/lib/leave-type-choice";
+import { leaveTypeDisabled, leaveTypeHint, usableLeaveTypes, yearlyOverMessage, type LeaveTypeChoice } from "@/modules/hr/lib/leave-type-choice";
 import {
   cancelLeaveAction,
   cancelLeaveForAction,
@@ -972,6 +972,11 @@ function DayDialog({
   const [editLabel, setEditLabel] = useState(mine?.displayLabel ?? "");
 
   const dates = datesInclusive(date, endDate < date ? date : endDate);
+  // เลือกเกินสิทธิ์รายปีที่เหลือ — บอกก่อนกด ไม่ปล่อยให้ลงได้บางวัน (ผู้ใช้ 5/11/2569 ทดสอบ: เหลือ 2 เลือก 3 แล้วลงให้ 2 เงียบ ๆ)
+  const selectedType = leaveTypes.find((t) => t.id === typeId);
+  const yearlyOver = yearlyOverMessage(selectedType, dates.length);
+  // ลาพักร้อนไม่ใช่ "วันหยุด" — ปุ่มเรียกตามประเภทจริง เฉพาะประเภทที่เปิดสิทธิ์รายปี ประเภทอื่นคงคำเดิม
+  const yearlyType = selectedType?.yearly ? selectedType : null;
   const fieldClass =
     "h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm";
 
@@ -1120,6 +1125,7 @@ function DayDialog({
               </option>
             ))}
           </select>
+          {yearlyOver && <span className="text-xs font-medium text-(--danger)" data-testid="yearly-over">{yearlyOver}</span>}
         </label>
 
         <label className="flex flex-col gap-1">
@@ -1169,12 +1175,16 @@ function DayDialog({
       <ModalActions
         onClose={onClose}
         confirm={
-          <Button type="submit" form="day-off-form" disabled={submitting}>
+          <Button type="submit" form="day-off-form" disabled={submitting || !!yearlyOver}>
             {submitting
               ? "กำลังบันทึก…"
               : dates.length === 1
-                ? "ลงวันหยุด"
-                : `ลงวันหยุด ${dates.length} วัน`}
+                ? yearlyType
+                  ? `ขอ${yearlyType.label}`
+                  : "ลงวันหยุด"
+                : yearlyType
+                  ? `ขอ${yearlyType.label} ${dates.length} วัน`
+                  : `ลงวันหยุด ${dates.length} วัน`}
           </Button>
         }
       />

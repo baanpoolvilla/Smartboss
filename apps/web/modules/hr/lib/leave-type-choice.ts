@@ -34,6 +34,12 @@ export function leaveTypeDisabled(t: { yearly?: YearlyEntitlement | null }): boo
   return !!t.yearly && t.yearly.available <= 0;
 }
 
+/** เลือกวันเกินสิทธิ์รายปีที่เหลือ — คืนข้อความเตือน · ไม่เกิน/ไม่ได้คุมด้วยสิทธิ์รายปี = null */
+export function yearlyOverMessage(t: { yearly?: YearlyEntitlement | null } | undefined, days: number): string | null {
+  if (!t?.yearly || t.yearly.available <= 0 || days <= t.yearly.available) return null;
+  return `เลือกไว้ ${days} วัน แต่สิทธิ์เหลือ ${fmtDays(t.yearly.available)} วัน — ลดจำนวนวันก่อน`;
+}
+
 /** ข้อความสิทธิ์รายปีของตัวเอง เช่น "ใช้ 3/10 วัน · เหลือ 7" — ใช้ทั้งในช่องเลือกและป้ายข้างชื่อเดือน */
 export function yearlyText(y: YearlyEntitlement): string {
   if (y.entitled <= 0 && y.used <= 0) return "ยังไม่มีสิทธิ์ — ติดต่อ HR";

@@ -54,14 +54,14 @@ export function YearlyEntitlements({
         <p className="text-sm text-(--ink-soft)">ยังไม่มีพนักงาน</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[560px] text-sm">
+          <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-(--line) text-left text-xs text-(--ink-soft)">
                 <th className="py-2 pr-2 font-medium">พนักงาน</th>
                 <th className="py-2 pr-2 font-medium">ได้ (วัน/ปี)</th>
-                <th className="py-2 pr-2 text-right font-medium">อนุมัติแล้ว</th>
-                <th className="py-2 pr-2 text-right font-medium">รออนุมัติ</th>
-                <th className="py-2 text-right font-medium">เหลือ</th>
+                <th className="hidden py-2 pr-2 text-right font-medium sm:table-cell">อนุมัติแล้ว</th>
+                <th className="hidden py-2 pr-2 text-right font-medium sm:table-cell">รออนุมัติ</th>
+                <th className="hidden py-2 text-right font-medium sm:table-cell">เหลือ</th>
               </tr>
             </thead>
             <tbody>
@@ -100,6 +100,10 @@ function Row({ row, leaveTypeId, year }: { row: YearlyRow; leaveTypeId: string; 
       <td className="py-2 pr-2 font-medium">
         {row.name}
         {row.code && <span className="ml-1 text-xs font-normal text-(--ink-soft)">{row.code}</span>}
+        {/* มือถือไม่มีที่พอสำหรับ 3 ช่องตัวเลข — รวมไว้ใต้ชื่อ */}
+        <span className={`block text-xs font-normal sm:hidden ${row.available < 0 ? "text-(--danger)" : "text-(--ink-soft)"}`} data-testid="yearly-row-summary">
+          อนุมัติ {fmtDays(row.used)} · รอ {fmtDays(row.pending)} · เหลือ {fmtDays(row.available)}
+        </span>
       </td>
       <td className="py-2 pr-2">
         <div className="flex items-center gap-1.5">
@@ -121,9 +125,9 @@ function Row({ row, leaveTypeId, year }: { row: YearlyRow; leaveTypeId: string; 
         </div>
         {error && <p className="mt-1 text-xs text-(--danger)">{error}</p>}
       </td>
-      <td className="py-2 pr-2 text-right tabular-nums">{fmtDays(row.used)}</td>
-      <td className="py-2 pr-2 text-right tabular-nums">{fmtDays(row.pending)}</td>
-      <td className={`py-2 text-right font-semibold tabular-nums ${row.available < 0 ? "text-(--danger)" : ""}`}>{fmtDays(row.available)}</td>
+      <td className="hidden py-2 pr-2 text-right tabular-nums sm:table-cell">{fmtDays(row.used)}</td>
+      <td className="hidden py-2 pr-2 text-right tabular-nums sm:table-cell">{fmtDays(row.pending)}</td>
+      <td className={`hidden py-2 text-right font-semibold tabular-nums sm:table-cell ${row.available < 0 ? "text-(--danger)" : ""}`}>{fmtDays(row.available)}</td>
     </tr>
   );
 }
