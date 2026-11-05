@@ -28,7 +28,7 @@ export function MultiPicker({
   chipBg = "#EFF6FF",
   icon = "home",
   onChange,
-  quietHeading = false,
+  boxed = false,
 }: {
   name: string;
   title: string;
@@ -42,8 +42,8 @@ export function MultiPicker({
   chipBg?: string;
   icon?: "home" | "user";
   onChange?: (ids: string[]) => void;
-  /** ป้ายเล็กสีอ่อนแบบหน้าสร้างงาน — ไม่ส่ง = แบบเดิม */
-  quietHeading?: boolean;
+  /** ทั้งช่องกดเลือกได้ ไม่มีปุ่มแยก แบบช่องผู้รับผิดชอบของหน้าสร้างงาน (ผู้ใช้ 5/11/2569) — ไม่ส่ง = แบบเดิม */
+  boxed?: boolean;
 }) {
   const [selected, setSelected] = useState<string[]>(defaultSelected);
   const [open, setOpen] = useState(false);
@@ -57,10 +57,55 @@ export function MultiPicker({
   const labelOf = (id: string) =>
     options.find((o) => o.id === id)?.label ?? id;
 
+  const openPicker = () => {
+    setDraft(selected);
+    setOpen(true);
+  };
+
   return (
     <div className="flex flex-col gap-1">
+      {boxed ? (
+        <>
+          <span className="text-xs text-(--ink-soft)">{heading}</span>
+          {/* div ไม่ใช่ button — ข้างในมีปุ่มลบของแต่ละชิป ซ้อน button ไม่ได้ */}
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={openPicker}
+            onKeyDown={(e) => {
+              if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
+              e.preventDefault();
+              openPicker();
+            }}
+            className="flex min-h-10 w-full cursor-pointer flex-wrap items-center gap-1.5 rounded-(--radius) border border-(--line) bg-(--bg) px-3 py-1.5 text-sm hover:bg-(--bg-soft) focus-visible:outline-2 focus-visible:outline-(--app)"
+          >
+            {selected.length === 0 && <span className="text-(--ink-soft)">{emptyText}</span>}
+            {selected.map((id) => (
+              <span
+                key={id}
+                className="inline-flex items-center gap-1 rounded-[10px] border border-(--line) px-2 py-0.5 text-xs text-(--ink)"
+                style={{ backgroundColor: chipBg }}
+              >
+                {labelOf(id)}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    set(selected.filter((x) => x !== id));
+                  }}
+                  aria-label={`เอา ${labelOf(id)} ออก`}
+                  className="text-[#EF5350]"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </span>
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
       <div className="flex items-center gap-2">
-        <span className={quietHeading ? "text-xs text-(--ink-soft)" : "text-sm font-medium text-(--ink)"}>{heading}</span>
+        <span className="text-sm font-medium text-(--ink)">{heading}</span>
         <button
           type="button"
           onClick={() => {
@@ -111,11 +156,13 @@ export function MultiPicker({
         </div>
       )}
 
+      <div className="border-b border-(--line) pt-1" />
+        </>
+      )}
+
       {selected.map((id) => (
         <input key={id} type="hidden" name={name} value={id} />
       ))}
-
-      <div className="border-b border-(--line) pt-1" />
 
       {open && (
         <Modal
@@ -225,9 +272,9 @@ export function AssigneeAndCc({
         name="ccUserIds"
         title="เพิ่ม CC (แจ้งสำเนา)"
         heading="CC (แจ้งสำเนา)"
-        quietHeading
+        boxed
         hint="เลือกผู้รับสำเนาการแจ้งเตือน (LINE + in-app)"
-        emptyText="ไม่มี (ไม่บังคับ)"
+        emptyText="เลือก CC (ไม่บังคับ)"
         addLabel="เพิ่ม CC"
         options={ccOptions}
         exclude={assignee ? [assignee] : []}

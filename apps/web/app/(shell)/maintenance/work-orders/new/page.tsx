@@ -167,8 +167,8 @@ export default async function NewWorkOrderPage({
               name="propertyIds"
               title="เลือกบ้าน"
               heading="บ้าน *"
-              quietHeading
-              emptyText="กรุณาเลือกอย่างน้อย 1 บ้าน"
+              boxed
+              emptyText="เลือกบ้าน (อย่างน้อย 1 หลัง)"
               addLabel="เลือกบ้าน"
               options={properties.filter((p) => !p.archivedAt).map((p) => ({ id: p.id, label: p.name }))}
               defaultSelected={prefillProps}
