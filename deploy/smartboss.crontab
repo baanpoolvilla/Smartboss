@@ -18,13 +18,17 @@ SHELL=/bin/bash
 # หักคะแนนใบงาน PM และค่าใช้จ่ายทันทีที่หมดวันครบกำหนด ทุกวัน 00:05 (ผู้ใช้ 4/11/2569 "ทำไมต้องรอ 5 โมง") — ลงเวลา รายงาน งานบนบอร์ดไม่อยู่ในงานนี้ ยังหักตามเดิม (ผู้ใช้ 4/11/2569)
 5 0 * * * bash /opt/smartboss/deploy/cron-run.sh maintenance-score 2>&1 | systemd-cat -t smartboss-cron
 
+# เด้งเวลาเข้า/ออกงานเข้าห้อง "🕐 ระบบลงเวลา" ของแต่ละคน + กระดิ่ง/แจ้งเตือน — ทุกนาที (ไม่มีอะไรใหม่ = จบเร็ว)
+# รอบเดียวกันเช็กเตือนใกล้ถึงกำหนด งาน/ประชุม/รีพอต · ไม่หักคะแนนใด ๆ (ผู้ใช้ 5/11/2569 "ระบบลงเวลาไม่ขึ้นและไม่แจ้งเตือน")
+# ย้อนดูแค่ 3 ชม. ⇒ เปิดแล้วไม่เทรายการเก่าที่ตกหล่นเข้าแชท
+* * * * * bash /opt/smartboss/deploy/cron-run.sh attendance-chat 2>&1 | systemd-cat -t smartboss-cron
+
 # ── รอบถัดไป: ยังไม่เปิด (3/11/2569 คุยกันก่อน) — ลบ # หน้าบรรทัดแล้ว deploy เพื่อเปิด ──
 # งานประจำวันที่เหลือ (เตือนค่าใช้จ่าย, แจ้งมาสาย, วันหยุด, OT รออนุมัติ, เตือนโปรเจกต์ ฯลฯ)
 #   ⚠ "all" รวมการลบรูป/วิดีโอในแชทที่หมดอายุด้วย — ลองดูก่อน: bash deploy/cron-run.sh "chat-media&dryRun=1"
 #   ⚠ "all" รวม work-orders กับ pm-notify ด้วย — เปิดบรรทัดนี้แล้วให้ปิดสองบรรทัดบน ไม่งั้นรันซ้ำ
 # 0 8 * * * bash /opt/smartboss/deploy/cron-run.sh all 2>&1 | systemd-cat -t smartboss-cron
 # */5 7-12 * * * bash /opt/smartboss/deploy/cron-run.sh late-alerts 2>&1 | systemd-cat -t smartboss-cron
-# * * * * * bash /opt/smartboss/deploy/cron-run.sh attendance-chat 2>&1 | systemd-cat -t smartboss-cron
 # 0 17 * * * bash /opt/smartboss/deploy/cron-run.sh performance 2>&1 | systemd-cat -t smartboss-cron
 # 59 * * * * bash /opt/smartboss/deploy/cron-run.sh score-hourly 2>&1 | systemd-cat -t smartboss-cron
 # 5 0 * * * bash /opt/smartboss/deploy/cron-run.sh score-final 2>&1 | systemd-cat -t smartboss-cron
