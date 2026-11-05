@@ -28,6 +28,7 @@ export function MultiPicker({
   chipBg = "#EFF6FF",
   icon = "home",
   onChange,
+  quietHeading = false,
 }: {
   name: string;
   title: string;
@@ -41,6 +42,8 @@ export function MultiPicker({
   chipBg?: string;
   icon?: "home" | "user";
   onChange?: (ids: string[]) => void;
+  /** ป้ายเล็กสีอ่อนแบบหน้าสร้างงาน — ไม่ส่ง = แบบเดิม */
+  quietHeading?: boolean;
 }) {
   const [selected, setSelected] = useState<string[]>(defaultSelected);
   const [open, setOpen] = useState(false);
@@ -57,7 +60,7 @@ export function MultiPicker({
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-2">
-        <span className="text-sm font-medium text-(--ink)">{heading}</span>
+        <span className={quietHeading ? "text-xs text-(--ink-soft)" : "text-sm font-medium text-(--ink)"}>{heading}</span>
         <button
           type="button"
           onClick={() => {
@@ -197,8 +200,8 @@ export function AssigneeAndCc({
 
   return (
     <>
-      <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-(--ink)">
+      <label className="flex flex-col gap-1">
+        <span className="text-xs text-(--ink-soft)">
           ผู้รับผิดชอบ *
         </span>
         {/* ต้องมีผู้รับผิดชอบทุกใบ (ผู้ใช้ 2/11/2569 "ไม่มีผู้รับผิดชอบจะรู้ได้ไงว่าของใคร") */}
@@ -207,7 +210,7 @@ export function AssigneeAndCc({
           required
           value={assignee}
           onChange={(e) => setAssignee(e.target.value)}
-          className="flex h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 py-2 text-sm text-(--ink) focus-visible:border-(--brand-green) focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-(--brand-green)/30"
+          className="flex h-10 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 py-2 text-sm text-(--ink) focus-visible:border-(--brand-green) focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-(--brand-green)/30"
         >
           <option value="" disabled>— เลือกผู้รับผิดชอบ —</option>
           {users.map((u) => (
@@ -222,6 +225,7 @@ export function AssigneeAndCc({
         name="ccUserIds"
         title="เพิ่ม CC (แจ้งสำเนา)"
         heading="CC (แจ้งสำเนา)"
+        quietHeading
         hint="เลือกผู้รับสำเนาการแจ้งเตือน (LINE + in-app)"
         emptyText="ไม่มี (ไม่บังคับ)"
         addLabel="เพิ่ม CC"

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Paperclip } from "lucide-react";
 import { Lightbox } from "@/modules/chat/components/lightbox";
 
 /**
@@ -57,11 +58,14 @@ export function FilePreviewInput({
   label = "แนบรูปภาพ",
   accept = "image/*",
   multiple = true,
+  attachStyle = false,
 }: {
   name: string;
   label?: string;
   accept?: string;
   multiple?: boolean;
+  /** ปุ่มเส้นประแบบหน้าสร้างงาน แทนช่องเลือกไฟล์ของเบราว์เซอร์ — ไม่ส่ง = แบบเดิม */
+  attachStyle?: boolean;
 }) {
   const [previews, setPreviews] = useState<string[]>([]);
 
@@ -81,10 +85,16 @@ export function FilePreviewInput({
         </div>
       )}
       <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-(--ink)">
+        <span className={attachStyle ? "text-xs text-(--ink-soft)" : "text-sm font-medium text-(--ink)"}>
           {label}
           {previews.length > 0 && ` (${previews.length})`}
         </span>
+        {attachStyle && (
+          <span className="inline-flex w-fit cursor-pointer items-center gap-1.5 rounded-lg border border-dashed border-(--line) px-3 py-1.5 text-sm text-(--ink-soft) hover:border-(--app) hover:text-(--ink)">
+            <Paperclip className="h-4 w-4" aria-hidden="true" />
+            แนบรูปภาพ
+          </span>
+        )}
         <input
           type="file"
           name={name}
@@ -94,9 +104,10 @@ export function FilePreviewInput({
             const files = Array.from(e.target.files ?? []);
             setPreviews(files.map((f) => URL.createObjectURL(f)));
           }}
-          className="text-sm text-(--ink) file:mr-3 file:rounded-(--radius) file:border file:border-(--line) file:bg-(--bg-soft) file:px-3 file:py-1.5 file:text-sm"
+          className={attachStyle ? "sr-only" : "text-sm text-(--ink) file:mr-3 file:rounded-(--radius) file:border file:border-(--line) file:bg-(--bg-soft) file:px-3 file:py-1.5 file:text-sm"}
         />
       </label>
+      {attachStyle && <p className="text-[11px] text-(--ink-soft)">หรือแคปหน้าจอ/คัดลอกรูปแล้วกด Ctrl+V วางในฟอร์มนี้ได้เลย</p>}
     </div>
   );
 }

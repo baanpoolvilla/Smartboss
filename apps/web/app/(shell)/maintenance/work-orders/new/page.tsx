@@ -20,7 +20,8 @@ import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 import { ReportPrefill } from "@/modules/maintenance/components/report-prefill";
 import { WoAdvancedOptions, WoDueDateField, WoPriorityField, WoPrivateToggle, WoRequiredGuard } from "@/modules/maintenance/components/wo-form-fields";
 import Link from "next/link";
-import { AlignLeft, CalendarDays, House, ImageIcon, Type, User, type LucideIcon } from "lucide-react";
+import { InitialAvatar } from "@/modules/maintenance/components/wo-card";
+import { AlignLeft, CalendarDays, House, Paperclip, Type, User, type LucideIcon } from "lucide-react";
 
 /** แถวของฟอร์ม: ไอคอนซ้าย + เนื้อหา — จัดวางแบบหน้าสร้างงาน (ผู้ใช้ 2/11/2569 "ให้เหมือนรูปแบบของ task") */
 function Row({ icon: Icon, children, className = "" }: { icon: LucideIcon; children: React.ReactNode; className?: string }) {
@@ -108,7 +109,8 @@ export default async function NewWorkOrderPage({
       width="max-w-none"
       backHref="/maintenance/work-orders"
     >
-      <Card className="p-5">
+      {/* กว้างเท่าหน้าต่างสร้างงาน (ผู้ใช้ 5/11/2569) */}
+      <Card className="mx-auto w-full max-w-[640px] p-5">
         <PasteDropFiles label="ปล่อยเพื่อแนบรูป">
         {/* noValidate: ให้ WoRequiredGuard บอกเป็นภาษาไทยทีเดียวว่าขาดอะไรบ้าง — ไม่งั้นเบราว์เซอร์เด้ง
             "Please select an item in the list." (อังกฤษ ทีละช่อง) ก่อน แล้วข้อความไทยไม่ขึ้นเลย (ทดสอบ 3/11/2569)
@@ -165,6 +167,7 @@ export default async function NewWorkOrderPage({
               name="propertyIds"
               title="เลือกบ้าน"
               heading="บ้าน *"
+              quietHeading
               emptyText="กรุณาเลือกอย่างน้อย 1 บ้าน"
               addLabel="เลือกบ้าน"
               options={properties.filter((p) => !p.archivedAt).map((p) => ({ id: p.id, label: p.name }))}
@@ -192,17 +195,21 @@ export default async function NewWorkOrderPage({
             <WoDueDateField defaultValue={sp.dueDate} minDate={todayBangkok()} />
           </Row>
 
-          <Row icon={ImageIcon}>
-            <FilePreviewInput name="photos" label="รูปภาพ" />
-          </Row>
-
           <div className="pl-8 group-data-[private=1]/wo:hidden">
             <WoAdvancedOptions canOpenPr={canOpenPr} defaultNoExpense={defaultNoExpense} />
           </div>
 
+          <Row icon={Paperclip}>
+            <FilePreviewInput name="photos" label="รูปภาพ" attachStyle />
+          </Row>
+
           <div className="-mx-5 -mb-5 mt-1 flex flex-wrap items-center justify-between gap-3 border-t border-(--line) px-5 py-3">
-            <span className="text-xs text-(--ink-soft)">
-              เปิดโดย {users.find((u) => u.id === session.userId)?.name ?? "คุณ"}
+            <span className="flex min-w-0 items-center gap-1.5 text-[11.5px] text-(--ink-soft)">
+              <InitialAvatar name={users.find((u) => u.id === session.userId)?.name ?? "คุณ"} />
+              <span className="truncate">
+                <span className="hidden sm:inline">เปิดโดย </span>
+                <span className="font-medium text-(--ink)">{users.find((u) => u.id === session.userId)?.name ?? "คุณ"}</span>
+              </span>
             </span>
             <div className="flex gap-2">
               <Link

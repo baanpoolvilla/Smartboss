@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ChevronDown, Flag, Lock, Settings2 } from "lucide-react";
+import { ChevronDown, Flag, Lock, SlidersHorizontal } from "lucide-react";
 
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
@@ -134,20 +134,29 @@ export function WoPriorityField({ defaultValue }: { defaultValue?: string }) {
 export function WoDueDateField({ defaultValue, minDate }: { defaultValue?: string; minDate: string }) {
   const [value, setValue] = useState(defaultValue ?? "");
   return (
-    <div className="flex flex-col gap-1">
-      <span className="text-xs text-(--ink-soft)">วันครบกำหนด (ไม่ใส่ก็ได้)</span>
-      <div className="flex items-center gap-2">
-        <DatePickerField value={value} minDate={minDate} onChange={setValue} className="h-10 max-w-56 text-(--ink)" />
-        {value && (
-          <button type="button" onClick={() => setValue("")} className="text-xs text-(--ink-soft) hover:underline">
-            ล้างวันที่
-          </button>
-        )}
+    // เรียงแบบหน้าสร้างงาน: วันเริ่มซ้าย กำหนดส่งขวา (ผู้ใช้ 5/11/2569) · ใบงานไม่มีวันเริ่มให้ตั้ง ช่องซ้ายคือวันที่เปิดใบ แก้ไม่ได้
+    <div className="flex flex-col gap-1.5">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3">
+        <div className="flex min-w-0 flex-col gap-1">
+          <span className="text-xs text-(--ink-soft)">วันที่เปิด</span>
+          <div inert className="opacity-70" data-testid="wo-open-date">
+            <DatePickerField value={minDate} onChange={() => {}} className="h-10 text-(--ink)" />
+          </div>
+        </div>
+        <div className="flex min-w-0 flex-col gap-1">
+          <span className="flex items-center justify-between gap-2 text-xs text-(--ink-soft)">
+            กำหนดส่ง
+            {value && (
+              <button type="button" onClick={() => setValue("")} className="hover:underline">
+                ล้าง
+              </button>
+            )}
+          </span>
+          <DatePickerField value={value} minDate={minDate} onChange={setValue} className="h-10 text-(--ink)" />
+        </div>
       </div>
       <input type="hidden" name="dueDate" value={value} />
-      <span className="text-xs text-(--ink-soft)">
-        เลยวันนี้แล้วยังไม่ปิดงาน ใบงานจะขึ้นแดงว่าเลยกำหนด และนับเป็นงานค้างของผู้รับผิดชอบ
-      </span>
+      <span className="text-xs text-(--ink-soft)">กำหนดส่งไม่ใส่ก็ได้ · เลยกำหนดแล้วยังไม่ปิด ใบจะขึ้นแดงและหักคะแนนผู้รับผิดชอบ</span>
     </div>
   );
 }
@@ -166,10 +175,10 @@ export function WoAdvancedOptions({ canOpenPr, defaultNoExpense = false }: { can
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="inline-flex w-fit items-center gap-1.5 rounded-(--radius) border border-(--line) px-3 py-1.5 text-sm font-semibold text-(--ink) hover:bg-(--bg-soft)"
+        className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-(--line) bg-white px-3 py-1.5 text-[13px] font-semibold text-(--ink) hover:bg-(--bg-soft)"
       >
-        <Settings2 className="h-4 w-4" aria-hidden="true" />
-        ตัวเลือกเพิ่มเติม
+        <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+        {open ? "ซ่อนตัวเลือกขั้นสูง" : "ตัวเลือกขั้นสูง"}
         {summary && <span className="font-normal text-(--ink-soft)">· {summary}</span>}
         <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} aria-hidden="true" />
       </button>
