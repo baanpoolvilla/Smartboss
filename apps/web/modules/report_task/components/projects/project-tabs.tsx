@@ -4,6 +4,9 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Lock, LockOpen, MessageSquare, Pencil, Trash2 } from "lucide-react";
+import { docThumbSrc, fileUrlWithName } from "@/lib/doc-thumb";
+import { DocAttachmentCard } from "@/modules/report_task/components/report-feed/doc-attachment-card";
+import { mimeFromLegacyTaskLabel } from "@/modules/report_task/lib/report-attachment-kind";
 
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { TaskCard } from "@/modules/report_task/components/kanban/task-card";
@@ -404,10 +407,12 @@ export function FilesTab({ items, onOpen }: { items: TimelineItem[]; onOpen: (id
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
           {shown.map(({ a, taskId, taskName }) => (
             <div key={`${taskId}-${a.id}`} className="grid gap-1 overflow-hidden rounded-xl border border-[var(--line)]">
-              <a href={a.url ?? a.dataUrl} target="_blank" rel="noreferrer" className="block aspect-square bg-[var(--bg-soft)]">
+              <a href={a.url ? fileUrlWithName(a.url, a.name) : a.dataUrl} target="_blank" rel="noreferrer" className="block aspect-square bg-[var(--bg-soft)]">
                 {isImg(a) ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={a.url ?? a.dataUrl} alt={a.name} className="h-full w-full object-cover" loading="lazy" />
+                ) : docThumbSrc({ url: a.url }) ? (
+                  <DocAttachmentCard media={{ url: a.url, name: a.name, mime: a.mime ?? mimeFromLegacyTaskLabel(a.type) }} className="aspect-auto h-full w-full rounded-none border-0" />
                 ) : <span className="grid h-full place-items-center p-2 text-center text-xs text-[var(--ink-soft)]">📄<br />{a.name}</span>}
               </a>
               <button type="button" onClick={() => onOpen(taskId)} className="truncate px-2 pb-1.5 text-left text-[11px] text-[var(--ink-soft)] hover:text-[var(--ink)]" title={taskName}>จาก: {taskName}</button>

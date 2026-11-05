@@ -35,6 +35,8 @@ import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
 import { dropZoneProps, hasClipboardText } from "@/lib/annotate/annotate";
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
+import { DocAttachmentCard } from "@/modules/report_task/components/report-feed/doc-attachment-card";
+import { attachmentKind } from "@/modules/report_task/lib/report-attachment-kind";
 import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
 import { DRAG_MENTION_TOPIC_MIME } from "@/modules/report_task/components/report-feed/report-post-fields";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -617,7 +619,11 @@ export function OpenchatFeed({
                                   onClick={() => setLightbox({ images: m.images!, index: i, authorId: m.authorId, createdAt: m.createdAt })}
                                   className="rounded-md overflow-hidden border border-[var(--line)] hover:opacity-90 transition-opacity"
                                 >
-                                  <ReportMediaThumb media={img} className="h-32 w-32 object-cover" />
+                                  {attachmentKind(img.mime) === "doc" ? (
+                                    <DocAttachmentCard media={img} className="w-36 rounded-none border-0" />
+                                  ) : (
+                                    <ReportMediaThumb media={img} className="h-32 w-32 object-cover" />
+                                  )}
                                 </button>
                               ))}
                             </div>

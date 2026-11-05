@@ -5,6 +5,7 @@ import { rateLimit } from "@smartboss/auth/ratelimit";
 
 import { putFile } from "@/lib/storage";
 import { sniffMime } from "@/modules/report_task/lib/upload-sniff";
+import { storeDocThumbnail } from "@/modules/report_task/lib/thumbnail/store-doc-thumbnail";
 import { checkOrgQuota, toGB } from "@/modules/company-files/lib/quota";
 import { chatActor, chatErrorResponse } from "@/modules/chat/data/route-helpers";
 import type { ChatAttachmentKind } from "@/modules/chat/types";
@@ -100,6 +101,8 @@ export async function POST(request: Request) {
     await prisma.chatFile.create({
       data: { orgId: actor.orgId, uploadedById: actor.userId, url, size: bytes.byteLength, mime: meta.mime, kind: meta.kind },
     });
+    // รูปหน้าแรกของเอกสาร — หน้าแชทหาเจอจาก URL ไฟล์เอง (lib/doc-thumb.ts) ไม่ต้องส่งกลับ
+    if (meta.kind === "file") await storeDocThumbnail(url, bytes, meta.ext);
 
     return Response.json({
       url,

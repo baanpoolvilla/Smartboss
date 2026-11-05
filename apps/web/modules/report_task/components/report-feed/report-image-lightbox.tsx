@@ -5,6 +5,7 @@ import { THUMB_STRIP_EXPAND_MS, THUMB_STRIP_PILL, THUMB_STRIP_ROW } from "@/lib/
 import { Dialog, DialogContent } from "@/modules/report_task/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
 import type { ReportPostImage } from "@/modules/report_task/store/report-feed-store";
+import { fileUrlWithName } from "@/lib/doc-thumb";
 import { ReportFileChip } from "@/modules/report_task/components/report-feed/report-file-chip";
 import { fileKindOf, isDocAttachment, isVideoAttachment } from "@/modules/report_task/lib/report-attachment-kind";
 import { getUser } from "@/modules/report_task/lib/directory";
@@ -552,7 +553,12 @@ export function ReportImageLightbox({
                       ตัว viewer ในตัวรองรับ (มาตรฐานเดิมของ Adobe Acrobat) สั่งให้
                       เปิดมาแล้วพอดีความกว้างเลย ไม่ต้องมาไล่ซูมเองทุกครั้งที่เปิด
                       ("ให้เวลาเปิดมาเริ่มมาแบบจอประมาณนี้เลย อ่านง่าย ไม่ต้องขยาย") */}
-                  <iframe src={src ? `${src}#zoom=page-width` : src} title={image.name} className="min-h-0 flex-1" />
+                  <iframe
+                    // ?name= ให้ตัวดู PDF รู้ชื่อจริง — กดบันทึกจากตัวดูจะได้ชื่อเดิม ไม่ใช่ชื่อสุ่มของที่เก็บ
+                    src={image.url ? `${fileUrlWithName(image.url, image.name)}#zoom=page-width` : src ? `${src}#zoom=page-width` : src}
+                    title={image.name}
+                    className="min-h-0 flex-1"
+                  />
                 </div>
               ) : isDoc && image.thumbUrl ? (
                 /* word/excel/ppt ไม่มีตัวเรนเดอร์ live ในตัว browser แต่มี thumbUrl

@@ -1,5 +1,9 @@
+"use client";
+
+import { useState } from "react";
 import { Play } from "lucide-react";
 import { ReportFileChip, type FileChipVariant } from "@/modules/report_task/components/report-feed/report-file-chip";
+import { docThumbSrc } from "@/lib/doc-thumb";
 import { attachmentKind } from "@/modules/report_task/lib/report-attachment-kind";
 import { cn } from "@/modules/report_task/lib/utils";
 
@@ -31,15 +35,27 @@ export function ReportMediaThumb({
    * a server-generated `thumbUrl` (renders like a photo instead — see below). */
   fileChipVariant?: FileChipVariant;
 }) {
+  const [failedThumb, setFailedThumb] = useState<string | null>(null);
   const src = media.url ?? media.dataUrl;
   const kind = attachmentKind(media.mime);
   if (kind === "doc") {
     // มี thumbUrl (server สร้างภาพหน้าแรกให้ตอนอัปโหลด — ดู
     // generate-doc-thumbnail.ts) ก็โชว์เหมือนรูปถ่ายไปเลย ไม่มีค่อย fallback
     // เป็นการ์ดไอคอน
-    if (media.thumbUrl) {
-      // eslint-disable-next-line @next/next/no-img-element
-      return <img src={media.thumbUrl} alt={alt ?? media.name} className={className} loading="lazy" decoding="async" />;
+    const thumb = docThumbSrc(media);
+    if (thumb && thumb !== failedThumb) {
+      return (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={thumb}
+          alt={alt ?? media.name}
+          title={media.name}
+          className={className}
+          loading="lazy"
+          decoding="async"
+          onError={() => setFailedThumb(thumb)}
+        />
+      );
     }
     return <ReportFileChip media={media} variant={fileChipVariant} className={className} />;
   }

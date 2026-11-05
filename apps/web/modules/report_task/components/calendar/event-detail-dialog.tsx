@@ -43,6 +43,9 @@ import { useActivityLogStore } from "@/modules/report_task/store/activity-log-st
 import { formatDate, addDays, formatDateTimeShort } from "@/modules/report_task/lib/format";
 import type { CalendarEvent } from "@/modules/report_task/types";
 import { Calendar, MapPin, User, Trash2, Pencil, Clock, Building2, Paperclip, FileText } from "lucide-react";
+import { fileUrlWithName } from "@/lib/doc-thumb";
+import { DocAttachmentCard } from "@/modules/report_task/components/report-feed/doc-attachment-card";
+import { attachmentKind, mimeFromLegacyTaskLabel } from "@/modules/report_task/lib/report-attachment-kind";
 import { toast } from "sonner";
 
 export function EventDetailDialog({
@@ -296,22 +299,29 @@ export function EventDetailDialog({
                       a.url ?? a.dataUrl ? (
                         // Images are the only attachments actually stored (see
                         // buildAttachments in new-task-dialog.tsx) — the image
-                        // src doubles as a download link.
+                        // src doubles as a download link. เอกสารมีจริงแล้ว — แสดงรูปหน้าแรก + ชื่อ
                         <a
                           key={a.id}
-                          href={a.url ?? a.dataUrl}
+                          href={a.url ? fileUrlWithName(a.url, a.name) : a.dataUrl}
                           download={a.name}
                           target="_blank"
                           rel="noreferrer"
                           title={`${a.name} · ${a.size} · คลิกเพื่อดู/ดาวน์โหลด`}
                           className="block"
                         >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={a.url ?? a.dataUrl}
-                            alt={a.name}
-                            className="h-20 w-full object-cover rounded-lg border border-[var(--line)] cursor-pointer hover:opacity-90 transition-opacity"
-                          />
+                          {attachmentKind(a.mime ?? mimeFromLegacyTaskLabel(a.type)) === "doc" ? (
+                            <DocAttachmentCard
+                              media={{ url: a.url, name: a.name, mime: a.mime ?? mimeFromLegacyTaskLabel(a.type) }}
+                              className="aspect-auto h-20 w-full"
+                            />
+                          ) : (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={a.url ?? a.dataUrl}
+                              alt={a.name}
+                              className="h-20 w-full object-cover rounded-lg border border-[var(--line)] cursor-pointer hover:opacity-90 transition-opacity"
+                            />
+                          )}
                         </a>
                       ) : (
                         // Non-image attachments have no real file behind them —

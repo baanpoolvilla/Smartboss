@@ -93,6 +93,8 @@ import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
 import { StickerConfirmDialog } from "@/modules/report_task/components/shared/sticker-confirm-dialog";
 import { reactionTargetLabel } from "@/modules/report_task/lib/sticker-target";
 import { ReportImageLightbox } from "@/modules/report_task/components/report-feed/report-image-lightbox";
+import { DocAttachmentCard, DocThumbMini } from "@/modules/report_task/components/report-feed/doc-attachment-card";
+import { docThumbSrc } from "@/lib/doc-thumb";
 import type { ReportPostImage } from "@/modules/report_task/store/report-feed-store";
 import { mimeFromLegacyTaskLabel } from "@/modules/report_task/lib/report-attachment-kind";
 import { uploadTaskAttachment } from "@/modules/report_task/lib/task-attachment-upload";
@@ -2261,6 +2263,14 @@ export function TaskDetailSheet({
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={src} alt={a.name} className="h-8 w-8 rounded object-cover" />
                     </button>
+                  ) : src ? (
+                    <button type="button" onClick={openViewer} className="shrink-0 cursor-pointer" aria-label={`เปิดไฟล์ ${a.name}`}>
+                      <DocThumbMini
+                        media={{ url: a.url, name: a.name }}
+                        className="h-14 w-11"
+                        fallback={<FileText className="h-4 w-4 text-[var(--ink-soft)]" />}
+                      />
+                    </button>
                   ) : (
                     <FileText className="h-4 w-4 text-[var(--ink-soft)] shrink-0" />
                   )}
@@ -2440,6 +2450,10 @@ export function TaskDetailSheet({
                             <button key={a.id} type="button" onClick={openViewer} className="block cursor-pointer">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={src} alt={a.name} className="max-h-32 rounded-lg border border-[var(--line)]" />
+                            </button>
+                          ) : docThumbSrc({ url: a.url }) ? (
+                            <button key={a.id} type="button" onClick={openViewer} className="block cursor-pointer" aria-label={`เปิดไฟล์ ${a.name}`}>
+                              <DocAttachmentCard media={{ url: a.url, name: a.name, mime: a.mime ?? mimeFromLegacyTaskLabel(a.type) }} />
                             </button>
                           ) : (
                             <button

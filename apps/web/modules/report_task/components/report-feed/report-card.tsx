@@ -76,7 +76,10 @@ import { uploadReportMedia } from "@/modules/report_task/lib/image-resize";
 import { dropZoneProps, hasClipboardText } from "@/lib/annotate/annotate";
 import { useAttachmentSettingsStore } from "@/modules/report_task/store/attachment-settings-store";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
-import { REPORT_ATTACHMENT_ACCEPT, attachmentKind, fileKindOf } from "@/modules/report_task/lib/report-attachment-kind";
+import { ReportFileChip } from "@/modules/report_task/components/report-feed/report-file-chip";
+import { docThumbSrc } from "@/lib/doc-thumb";
+import { DocNameBar } from "@/modules/report_task/components/report-feed/doc-attachment-card";
+import { REPORT_ATTACHMENT_ACCEPT, attachmentKind } from "@/modules/report_task/lib/report-attachment-kind";
 import { photoCount } from "@/modules/report_task/lib/report-attachment-kind";
 import { NewMessagesDivider } from "@/modules/report_task/components/report-feed/report-new-divider";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
@@ -2454,17 +2457,14 @@ function PostImageCollage({
   onOpen: (index: number) => void;
 }) {
   if (images.length === 1) {
-    // การ์ดไฟล์ (ReportFileChip variant="full", ตอนไม่มี thumbUrl) มีขอบ/
-    // พื้นหลังของตัวเองอยู่แล้ว — ถ้าห่อด้วยกรอบนี้ซ้ำจะกลายเป็นขอบซ้อนขอบ
-    // ต่างจากรูปถ่ายจริงและ thumbnail เอกสาร (มี thumbUrl) ที่ไม่มีกรอบของ
-    // ตัวเอง จึงต้องพึ่งกรอบนี้แทนเหมือนกันทั้งคู่
-    const isBareChip = attachmentKind(images[0]!.mime) === "doc" && !images[0]!.thumbUrl;
+    // กรอบนี้เป็นของทุกชนิด — การ์ดไฟล์ใน PostImageThumb ตอนเป็นชิ้นเดียว (fitToImage)
+    // ถอดขอบตัวเองออก ไม่งั้นจะเป็นขอบซ้อนขอบ
     return (
       // max-w กันไม่ให้แนบไฟล์/รูปแค่ชิ้นเดียวยืดเต็มความกว้างการ์ดโพสต์ —
       // เดิมไม่มีเพดานเลยตอนโพสต์กว้าง (จอ desktop) ทำให้ทั้งการ์ดไฟล์ (กล่อง
       // ว่างเปล่าใหญ่โต) และรูปถ่ายเดี่ยวยืดยาวเกินจำเป็นทั้งที่กดเข้าไปดู
       // เต็มจอได้อยู่แล้วใน lightbox ("อยากให้แสดงเล็กๆพอ")
-      <div className={cn("max-w-[280px]", !isBareChip && "rounded-lg border border-[var(--line)] overflow-hidden")}>
+      <div className="max-w-[280px] rounded-lg border border-[var(--line)] overflow-hidden">
         <PostImageThumb img={images[0]!} onClick={() => onOpen(0)} className="w-full" fitToImage />
       </div>
     );
@@ -2528,6 +2528,7 @@ function PostImageThumb({
   fitToImage?: boolean;
 }) {
   const [ratio, setRatio] = useState<number | null>(null);
+  const [failedThumb, setFailedThumb] = useState<string | null>(null);
 
   // เอกสาร (pdf/word/excel/…) ไม่มีภาพให้ครอป — ตอนก่อนแก้จะหลุดมาที่
   // <img src="…file.pdf"> เฉยๆ ด้านล่าง กลายเป็นไอคอนภาพพังเต็มความกว้าง
@@ -2537,14 +2538,17 @@ function PostImageThumb({
   // thumbUrl (แปลงไม่สำเร็จ/ยังไม่ติดตั้ง soffice บนเซิร์ฟเวอร์/ไฟล์ที่ดูเป็น
   // ภาพไม่ได้จริงเช่น zip) ค่อย fallback เป็นการ์ดไอคอน (ReportFileChip)
   const isDoc = attachmentKind(img.mime) === "doc";
-  if (isDoc && !img.thumbUrl) {
+  const docThumb = isDoc ? docThumbSrc(img) : undefined;
+  if (isDoc && (!docThumb || docThumb === failedThumb)) {
     return (
       <button
         onClick={onClick}
         className={cn("block hover:opacity-90 transition-opacity", className)}
         aria-label={`เปิดไฟล์ ${img.name}`}
       >
-        <ReportMediaThumb media={img} fileChipVariant={fitToImage ? "full" : "compact"} className="w-full" />
+        {/* ReportFileChip ตรง ๆ — ถึงตรงนี้คือไม่มีรูปแล้ว ไม่ต้องลองขอรูปซ้ำ
+            ใช้ "full" ในกริดด้วย ("ไม่แสดงชื่อหากอัปพร้อมกัน 2 ไฟล์") ช่องแคบสุดยังกว้างพอ */}
+        <ReportFileChip media={img} variant="full" className={cn("w-full", fitToImage ? "border-0" : "h-full")} />
       </button>
     );
   }
@@ -2561,6 +2565,10 @@ function PostImageThumb({
         // cap above — still a little roomier since it's the only photo in
         // the post, not competing with a grid of others.
         fitToImage && ratio && "max-h-[200px] sm:max-h-[280px]",
+        // ระหว่างรอรูปหน้าแรก (อาจกำลังสร้างอยู่) กันแถบชื่อไฟล์ไม่ให้ยุบหาย
+        isDoc && !ratio && "min-h-[120px]",
+        // หน้าเอกสารพื้นขาวกลืนกับการ์ดโพสต์ — กริดไม่มีกรอบให้ (ชิ้นเดียวมีกรอบจาก PostImageCollage)
+        isDoc && !fitToImage && "overflow-hidden rounded-lg border border-[var(--line)]",
         className
       )}
       style={fitToImage && ratio ? { aspectRatio: ratio, height: "auto" } : undefined}
@@ -2587,7 +2595,7 @@ function PostImageThumb({
         <div className="relative h-full w-full">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={isDoc ? img.thumbUrl : (img.url ?? img.dataUrl)}
+            src={isDoc ? docThumb : (img.url ?? img.dataUrl)}
             alt={img.name}
             // Only fetch once it's near the viewport — without this every
             // image of every post in the feed downloaded at once on open,
@@ -2597,39 +2605,14 @@ function PostImageThumb({
             onLoad={(e) => {
               if (fitToImage) setRatio(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight);
             }}
+            onError={isDoc ? () => setFailedThumb(docThumb ?? null) : undefined}
             className="h-full w-full object-cover"
           />
-          {isDoc && (
-            <span
-              className={cn(
-                "absolute bottom-1.5 left-1.5 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow",
-                docBadgeTone(img.mime)
-              )}
-            >
-              {fileKindOf(img.mime ?? "")}
-            </span>
-          )}
+          {isDoc && <DocNameBar name={img.name} mime={img.mime} />}
         </div>
       )}
     </button>
   );
-}
-
-/** สีป้ายมุมภาพ thumbnail เอกสาร — โทนเดียวกับ ReportFileChip เพื่อให้ผู้ใช้
- * จำสีต่อชนิดไฟล์ได้เหมือนกันทั้งแอป ไม่ว่าจะเจอแบบไอคอนหรือแบบภาพจริง */
-function docBadgeTone(mime?: string) {
-  switch (fileKindOf(mime ?? "")) {
-    case "pdf":
-      return "bg-[var(--chart-red)]";
-    case "word":
-      return "bg-[var(--chart-blue)]";
-    case "excel":
-      return "bg-[var(--chart-green)]";
-    case "powerpoint":
-      return "bg-[var(--chart-orange)]";
-    default:
-      return "bg-[var(--ink-soft)]";
-  }
 }
 
 function MenuButton({

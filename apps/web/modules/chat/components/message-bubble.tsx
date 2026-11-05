@@ -14,6 +14,7 @@ import { keepMessage } from "../lib/api";
 import { attachmentLabel, firstName, formatClock, formatDuration, formatFileSize } from "../lib/format";
 import { ChatAvatar } from "./chat-avatar";
 import { downloadUrl } from "./lightbox";
+import { docThumbSrc, fileUrlWithName } from "@/lib/doc-thumb";
 import { daysUntilExpiry } from "../lib/retention";
 import { NoteCard } from "./notes";
 import { AlbumCard } from "./album-card";
@@ -232,10 +233,28 @@ const FILE_COLORS: Record<string, string> = {
 function FileCard({ a }: { a: ChatAttachment }) {
   const ext = a.name.split(".").pop()?.toLowerCase() ?? "";
   const color = FILE_COLORS[ext] ?? "#64748b";
+  // รูปหน้าแรกของเอกสาร — แบบเดียวกับห้องรายงาน โหลดไม่ขึ้นก็เหลือแถวชื่อไฟล์เหมือนเดิม
+  const [thumbFailed, setThumbFailed] = useState(false);
+  const thumb = docThumbSrc({ url: a.url });
+  const openHref = fileUrlWithName(a.url, a.name);
   return (
-    <div className="flex w-64 max-w-full items-center gap-1 rounded-2xl border border-(--line) bg-(--bg) py-1.5 pl-1.5 pr-2 hover:bg-(--bg-soft)">
+    <div className="flex w-64 max-w-full flex-col overflow-hidden rounded-2xl border border-(--line) bg-(--bg) hover:bg-(--bg-soft)">
+      {thumb && !thumbFailed && (
+        <a href={openHref} target="_blank" rel="noreferrer" className="block h-44 border-b border-(--line) bg-white" title="เปิดไฟล์">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={thumb}
+            alt={a.name}
+            loading="lazy"
+            decoding="async"
+            onError={() => setThumbFailed(true)}
+            className="h-full w-full object-cover object-top"
+          />
+        </a>
+      )}
+      <div className="flex items-center gap-1 py-1.5 pl-1.5 pr-2">
       <a
-        href={a.url}
+        href={openHref}
         target="_blank"
         rel="noreferrer"
         className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-1.5 py-1"
@@ -259,6 +278,7 @@ function FileCard({ a }: { a: ChatAttachment }) {
       >
         <Download className="h-4 w-4" />
       </a>
+      </div>
     </div>
   );
 }

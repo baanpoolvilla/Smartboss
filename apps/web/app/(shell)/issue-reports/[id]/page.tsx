@@ -20,6 +20,8 @@ import { Avatar, AvatarFallback } from "@/modules/report_task/components/ui/avat
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/modules/report_task/components/ui/tooltip";
 import { AttachmentPicker } from "@/modules/report_task/components/issue-report/attachment-picker";
+import { DocAttachmentCard } from "@/modules/report_task/components/report-feed/doc-attachment-card";
+import { docThumbSrc, fileUrlWithName } from "@/lib/doc-thumb";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useIssueReportStore } from "@/modules/report_task/store/issue-report-store";
 import { useIssueDeskConfigStore } from "@/modules/report_task/store/issue-desk-config-store";
@@ -264,6 +266,10 @@ function MessageBubble({ message, mine }: { message: IssueMessage; mine: boolean
           {message.attachments.map((a: IssueAttachment) =>
             a.isPreviewable ? (
               <img key={a.id} src={a.url} alt={a.name} className="h-28 w-28 rounded-lg object-cover border border-[var(--line)]" />
+            ) : docThumbSrc({ url: a.url }) ? (
+              <a key={a.id} href={fileUrlWithName(a.url, a.name)} target="_blank" rel="noreferrer" className="block">
+                <DocAttachmentCard media={{ url: a.url, name: a.name, mime: a.mime, size: a.size }} />
+              </a>
             ) : (
               <a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 rounded-md border border-[var(--line)] bg-white px-2 py-1 text-xs">
                 <Paperclip className="h-3 w-3" /> {a.name}

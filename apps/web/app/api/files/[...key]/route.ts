@@ -42,6 +42,9 @@ export async function GET(
   // เปิดดูเฉย ๆ ที่อยากให้ browser render ในหน้าเลย (PDF ทำได้) ไม่ใช่บังคับ
   // save-as ทุกครั้ง ชื่อไฟล์มาจาก client เพราะฝั่งนี้เก็บแต่ key สุ่ม ไม่รู้ชื่อจริง
   const downloadFileName = url.searchParams.get("download") || undefined;
+  // เปิดดูในหน้า (ตัวดู PDF ใน lightbox) แต่บอกชื่อจริงไปด้วย — กดบันทึกจากตัวดูจะได้ชื่อไฟล์
+  // เดิมของคนอัปโหลด ไม่ใช่ชื่อสุ่มของที่เก็บ
+  const inlineFileName = url.searchParams.get("name") || undefined;
 
   // กัน path traversal และ key ว่าง
   if (!joined || joined.includes("..")) {
@@ -85,7 +88,7 @@ export async function GET(
     }
   }
 
-  const signedUrl = await getSignedFileUrl(joined, { downloadFileName });
+  const signedUrl = await getSignedFileUrl(joined, { downloadFileName, inlineFileName });
 
   /*
    * ?proxy=1 — ส่งไฟล์รูปผ่านเซิร์ฟเวอร์นี้เอง แทนการเด้งไปโดเมนไฟล์ ใช้ตอนกด "แก้ไข/วาด"
@@ -122,7 +125,9 @@ export async function GET(
       "Cache-Control": "private, max-age=31536000, immutable",
       ...(downloadFileName
         ? { "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(downloadFileName)}` }
-        : {}),
+        : inlineFileName
+          ? { "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(inlineFileName)}` }
+          : {}),
     },
   });
 }

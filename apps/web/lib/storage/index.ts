@@ -1,9 +1,11 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
+import { docThumbKey, isDocFileKey } from "@/lib/doc-thumb";
 import {
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   DeleteObjectCommand,
   ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
@@ -210,7 +212,7 @@ export async function putFiles(prefix: string, files: File[]): Promise<string[]>
  */
 export async function getSignedFileUrl(
   key: string,
-  opts?: { downloadFileName?: string }
+  opts?: { downloadFileName?: string; inlineFileName?: string }
 ): Promise<string | null> {
   if (!isRemoteStorage()) return null;
   return getSignedUrl(
@@ -222,7 +224,11 @@ export async function getSignedFileUrl(
       // บังคับ save-as ทุกครั้งที่กดดูไฟล์ แม้แต่ PDF ที่โชว์แบบฝังในหน้าได้เลย
       ...(opts?.downloadFileName
         ? { ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(opts.downloadFileName)}` }
-        : {}),
+        : opts?.inlineFileName
+          ? // เปิดดูในหน้าเหมือนเดิม แค่บอกชื่อจริง — key ในที่เก็บเป็นชื่อสุ่ม ตัวดู PDF
+            // ของเบราว์เซอร์จะเอาชื่อสุ่มนั้นไปตั้งตอนกดบันทึกถ้าไม่บอก
+            { ResponseContentDisposition: `inline; filename*=UTF-8''${encodeURIComponent(opts.inlineFileName)}` }
+          : {}),
     }),
     {
       signingDate: new Date(signedUrlWindowStart()),
@@ -243,6 +249,10 @@ export async function getSignedFileUrl(
 export async function deleteFile(urlOrKey: string): Promise<boolean> {
   const key = urlOrKey.replace(/^\/api\/files\//, "");
   if (!key || key.includes("..")) return false;
+
+  // รูปหน้าแรกของเอกสาร (lib/doc-thumb.ts) ต้องหายตามไฟล์ — ไฟล์หมดอายุ/ถูกลบแล้ว
+  // เนื้อหาหน้าแรกต้องไม่ค้างอยู่ · ลบไม่ได้ไม่กระทบผลของไฟล์หลัก
+  if (isDocFileKey(key)) await deleteFile(docThumbKey(key)).catch(() => false);
 
   try {
     if (isRemoteStorage()) {
@@ -275,6 +285,44 @@ export async function readStoredFile(
   } catch {
     return null;
   }
+}
+
+/** มีไฟล์ key นี้ในที่เก็บไหม (ทั้ง S3 และดิสก์) */
+export async function storedFileExists(key: string): Promise<boolean> {
+  if (isRemoteStorage()) {
+    try {
+      await getS3().send(new HeadObjectCommand({ Bucket: S3_BUCKET, Key: key }));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return (await readStoredFile(key)) !== null;
+}
+
+/** อ่านเนื้อไฟล์ฝั่งเซิร์ฟเวอร์ (ทั้ง S3 และดิสก์) — ไม่มีไฟล์/อ่านไม่ได้ = null */
+export async function readStoredBytes(key: string): Promise<Uint8Array | null> {
+  if (!isRemoteStorage()) {
+    const local = await readStoredFile(key);
+    return local ? new Uint8Array(local.data) : null;
+  }
+  try {
+    const res = await getS3().send(new GetObjectCommand({ Bucket: S3_BUCKET, Key: key }));
+    return (await res.Body?.transformToByteArray()) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** เขียนไฟล์ลง key ที่ผู้เรียกกำหนดเอง (ต่างจาก putFile ที่สุ่ม key ให้) */
+export async function putStoredFileAtKey(key: string, data: Buffer): Promise<void> {
+  if (isRemoteStorage()) {
+    await getS3().send(
+      new PutObjectCommand({ Bucket: S3_BUCKET, Key: key, Body: data, ContentType: contentTypeFor(key) })
+    );
+    return;
+  }
+  await (await localDisk()).writeLocal(key, data);
 }
 
 export interface StoredObject {

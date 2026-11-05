@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { requireOrg } from "@smartboss/auth";
 
 import { putFile } from "@/modules/maintenance/lib/storage";
-import { generateDocThumbnail } from "@/modules/report_task/lib/thumbnail/generate-doc-thumbnail";
+import { storeDocThumbnail } from "@/modules/report_task/lib/thumbnail/store-doc-thumbnail";
 import { sniffMime } from "@/modules/report_task/lib/upload-sniff";
 import { readStore } from "@/modules/report_task/lib/db/org-store";
 import {
@@ -144,14 +144,7 @@ export async function POST(request: Request) {
     // จริงข้างบนพังตามไปด้วย แค่ไม่มี thumbUrl ในคำตอบ ฝั่ง client เจอ
     // thumbUrl ว่างก็ fallback ไปการ์ดไอคอนเดิมเอง — ข้ามไปเลยสำหรับชนิดที่ไม่รู้จัก
     // (generateDocThumbnail รู้จักแต่นามสกุลใน ALLOWED_TYPES)
-    const thumbBuf = meta ? await generateDocThumbnail(bytes, ext) : null;
-    const thumbUrl = thumbBuf
-      ? await putFile(
-          `${session.orgId}/report-task`,
-          new File([new Uint8Array(thumbBuf)], `${randomUUID()}-thumb.png`, { type: "image/png" }),
-          { ext: "png" }
-        )
-      : null;
+    const thumbUrl = meta ? await storeDocThumbnail(url, bytes, ext) : null;
 
     return Response.json({ url, mime, size: bytes.byteLength, thumbUrl });
   } catch (err) {

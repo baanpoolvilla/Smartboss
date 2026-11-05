@@ -13,6 +13,8 @@ import { cn } from "@/modules/report_task/lib/utils";
 import { isCoarsePointer } from "@/modules/report_task/lib/device";
 import { formatDateTimeFull, formatDateTimeShort } from "@/modules/report_task/lib/format";
 import { ReportMediaThumb } from "@/modules/report_task/components/report-feed/report-media-thumb";
+import { DocAttachmentCard } from "@/modules/report_task/components/report-feed/doc-attachment-card";
+import { attachmentKind } from "@/modules/report_task/lib/report-attachment-kind";
 import { MentionEditBox } from "@/modules/report_task/components/report-feed/mention-edit-box";
 import type { MentionItem } from "@/modules/report_task/components/report-feed/mention-utils";
 import { sortByUsage, useStickerUsageStore } from "@/modules/report_task/store/sticker-usage-store";
@@ -411,7 +413,11 @@ export function ReportReply({
                     className="rounded-md border border-[var(--line)] overflow-hidden hover:opacity-90 transition-opacity"
                     aria-label={`ดูรูป ${img.name} เต็มจอ`}
                   >
-                    <ReportMediaThumb media={img} className="h-16 w-16 object-cover" />
+                    {attachmentKind(img.mime) === "doc" ? (
+                      <DocAttachmentCard media={img} className="w-36 rounded-none border-0" />
+                    ) : (
+                      <ReportMediaThumb media={img} className="h-16 w-16 object-cover" />
+                    )}
                   </button>
                 ))}
               </div>

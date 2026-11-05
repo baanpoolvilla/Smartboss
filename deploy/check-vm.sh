@@ -119,6 +119,11 @@ else
   warn "อ่าน IP จาก metadata ไม่ได้ — เครื่องนี้อาจไม่ใช่ GCE"
 fi
 
+# รูปหน้าแรกของ PDF/Word/Excel ในไฟล์แนบ — ไม่มีจะกลายเป็นการ์ดไอคอนทั้งระบบโดยหน้าเว็บไม่ฟ้อง
+for cmd in pdftoppm soffice; do
+  command -v "$cmd" >/dev/null 2>&1 || warn "ไม่มี $cmd — ไฟล์แนบจะไม่มีรูปหน้าแรก (sudo apt-get install -y poppler-utils libreoffice)"
+done
+
 printf '\n'
 if [ "$FAIL" -gt 0 ]; then
   printf '\033[1;31m✗ ยังไม่พร้อม: ต้องแก้ %d ข้อ (เตือนอีก %d ข้อ)\033[0m\n' "$FAIL" "$WARN"
