@@ -77,16 +77,18 @@ export function MultiPicker({
               e.preventDefault();
               openPicker();
             }}
-            className="flex min-h-10 w-full cursor-pointer flex-wrap items-center gap-1.5 rounded-(--radius) border border-(--line) bg-(--bg) px-3 py-1.5 text-sm hover:bg-(--bg-soft) focus-visible:outline-2 focus-visible:outline-(--app)"
+            title={selected.map(labelOf).join(", ") || undefined}
+            className="flex h-10 w-full cursor-pointer items-center gap-1.5 overflow-hidden rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm hover:bg-(--bg-soft) focus-visible:outline-2 focus-visible:outline-(--app)"
           >
             {selected.length === 0 && <span className="text-(--ink-soft)">{emptyText}</span>}
-            {selected.map((id) => (
+            {/* สูงเท่าเดิมเสมอ (ผู้ใช้ 5/11/2569 "มันไม่รกเลยหรอ") — ชื่อแรก + จำนวนที่เหลือ กดช่องเพื่อดูครบ */}
+            {selected.slice(0, 1).map((id) => (
               <span
                 key={id}
-                className="inline-flex items-center gap-1 rounded-[10px] border border-(--line) px-2 py-0.5 text-xs text-(--ink)"
+                className="inline-flex min-w-0 items-center gap-1 rounded-[10px] border border-(--line) px-2 py-0.5 text-xs text-(--ink)"
                 style={{ backgroundColor: chipBg }}
               >
-                {labelOf(id)}
+                <span className="truncate">{labelOf(id)}</span>
                 <button
                   type="button"
                   onClick={(e) => {
@@ -94,12 +96,15 @@ export function MultiPicker({
                     set(selected.filter((x) => x !== id));
                   }}
                   aria-label={`เอา ${labelOf(id)} ออก`}
-                  className="text-[#EF5350]"
+                  className="shrink-0 text-[#EF5350]"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
               </span>
             ))}
+            {selected.length > 1 && (
+              <span className="shrink-0 text-xs font-semibold text-(--ink-soft)" data-testid="picker-more">+{selected.length - 1}</span>
+            )}
           </div>
         </>
       ) : (
