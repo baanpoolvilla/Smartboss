@@ -32,18 +32,28 @@ export function StickyFilterBar({
   subtitle,
   actions,
   children,
+  tight = false,
+  hideBelowSm = false,
 }: {
   title?: ReactNode;
   subtitle?: ReactNode;
   actions?: ReactNode;
   children?: ReactNode;
+  /**
+   * หน้าที่ตัดขอบของ AppScaffold ออกแล้วเว้นเอง px-1 pt-1 / sm:px-1.5 sm:pt-1.5 (ปฏิทิน) — ดึงออกเท่าที่หน้าเว้นไว้
+   * เดิมดึง -mx-4 เท่าหน้าปกติ แถบเลยกว้างเกินจอข้างละ 12px มือถือเลื่อนซ้ายขวาได้ (ผู้ใช้ 5/11/2569)
+   */
+  tight?: boolean;
+  /** มือถือ: ตัวกรองย้ายไปอยู่แถบบนหมดแล้ว แถบนี้ว่าง — ซ่อนไม่ให้เป็นแถบเปล่ากินที่ใต้แถบบน */
+  hideBelowSm?: boolean;
 }) {
+  const bleed = tight ? "-mx-1 px-1 -mt-1 sm:-mx-1.5 sm:px-1.5 sm:-mt-1.5" : "-mx-4 px-4 -mt-4 sm:-mx-6 sm:px-6 sm:-mt-5";
   return (
     // -mt-4 sm:-mt-5 cancels AppScaffold's own top padding (py-4 sm:py-5),
     // same full-bleed trick as -mx-4/-mx-6 already does horizontally —
     // without it this bar sits a visible 16-20px below the app header
     // instead of flush against it (screenshot: an empty gap above the tabs).
-    <div className="sticky top-0 z-30 -mx-4 px-4 -mt-4 sm:-mx-6 sm:px-6 sm:-mt-5 bg-[var(--bg-soft)]/95 backdrop-blur-sm border-b border-[var(--line)] shadow-[0_4px_12px_-6px_rgba(0,0,0,0.15)] py-3 flex flex-col gap-3">
+    <div className={`sticky top-0 z-30 ${bleed} ${hideBelowSm ? "max-sm:hidden" : ""} bg-[var(--bg-soft)]/95 backdrop-blur-sm border-b border-[var(--line)] shadow-[0_4px_12px_-6px_rgba(0,0,0,0.15)] py-3 flex flex-col gap-3`}>
       {(title || actions) && (
         <div className="flex flex-wrap items-start justify-between gap-3">
           {title && (

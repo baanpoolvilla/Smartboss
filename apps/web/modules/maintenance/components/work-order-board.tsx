@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import type { ReactNode } from "react";
 import { useIsMobile } from "@/modules/report_task/hooks/use-is-mobile";
 import { ASSIGNED_BY_ME, ASSIGNED_TO_ME, PersonFilter, UNASSIGNED } from "./person-filter";
 import { createPortal } from "react-dom";
@@ -66,17 +67,113 @@ const NO_CARDS: BoardOrder[] = [];
 const PAGE_SIZE = 10;
 const MOBILE_PAGE_SIZE = 12;
 
-function useColumnPaging() {
+/*
+ * กดเข้าใบงานแล้วกดกลับ ต้องเห็นจำนวนใบที่กด "แสดงเพิ่มเติม" ไว้ และอยู่ตำแหน่งเลื่อนเดิม
+ * (เดิมกลับมาทีไรเหลือ 10 ใบแรก เด้งขึ้นบนสุด ต้องไล่กดหาใบเดิมใหม่) — จำไว้ใน sessionStorage ของแท็บ
+ * ผูกกับตัวกรองที่ใช้อยู่ (pagingKey) เปลี่ยนตัวกรองแล้วเริ่มใหม่จากบนสุดตามเดิม
+ */
+const VIEW_KEY = "sb-wo-board-view";
+type SavedView = { k: string; clicks: Record<string, number>; scroll: Record<string, number> };
+
+function readView(pagingKey: string): SavedView | null {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(VIEW_KEY) ?? "null") as SavedView | null;
+    return v && v.k === pagingKey ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function patchView(pagingKey: string, patch: (v: SavedView) => void) {
+  const v = readView(pagingKey) ?? { k: pagingKey, clicks: {}, scroll: {} };
+  patch(v);
+  try {
+    sessionStorage.setItem(VIEW_KEY, JSON.stringify(v));
+  } catch {
+    // โหมดส่วนตัว — ไม่จำ
+  }
+}
+
+function useColumnPaging(col: string, pagingKey: string) {
   const isMobile = useIsMobile();
   const [clicks, setClicks] = useState(0);
   const step = isMobile ? MOBILE_PAGE_SIZE : PAGE_SIZE;
+  // คืนค่าหลังโหลดหน้า (sessionStorage ไม่มีฝั่ง server) · คอมโพเนนต์นี้ถูก key ด้วยตัวกรอง จึงอ่านครั้งเดียวพอ
+  useEffect(() => {
+    const saved = readView(pagingKey)?.clicks[col] ?? 0;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (saved > 0) setClicks(saved);
+  }, [col, pagingKey]);
+  const set = (n: number) => {
+    setClicks(n);
+    patchView(pagingKey, (v) => {
+      v.clicks[col] = n;
+    });
+  };
   return {
     step,
     shown: step + clicks * step,
     canLess: clicks > 0,
-    more: () => setClicks((n) => n + 1),
-    less: () => setClicks(0),
+    more: () => set(clicks + 1),
+    less: () => set(0),
   };
+}
+
+/**
+ * ตำแหน่งเลื่อนของกล่องรายการ — คืนตำแหน่งเดิมเมื่อกลับเข้าหน้า (รอการ์ดที่ต้องโหลดเพิ่มได้ไม่เกิน ~3 วิ)
+ * บันทึกเฉพาะการเลื่อนที่ผู้ใช้ทำเอง การ์ดโหลดเข้ามา/ตัวกรองเปลี่ยนแล้วกล่องขยับเองไม่นับ ไม่งั้นทับค่าที่จำไว้
+ */
+function useRememberedScroll(slot: string, pagingKey: string) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let touched = false;
+    let raf = 0;
+    const target = readView(pagingKey)?.scroll[slot] ?? 0;
+    const until = Date.now() + 3000;
+    const tick = () => {
+      if (touched) return;
+      el.scrollTop = target;
+      if (Math.abs(el.scrollTop - target) < 2 || Date.now() > until) return;
+      raf = requestAnimationFrame(tick);
+    };
+    if (target > 0) tick();
+    const mark = () => {
+      touched = true;
+      cancelAnimationFrame(raf);
+    };
+    let pending = 0;
+    const onScroll = () => {
+      if (!touched || pending) return;
+      pending = requestAnimationFrame(() => {
+        pending = 0;
+        patchView(pagingKey, (v) => {
+          v.scroll[slot] = Math.round(el.scrollTop);
+        });
+      });
+    };
+    const gestures = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
+    gestures.forEach((g) => el.addEventListener(g, mark, { passive: true }));
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      cancelAnimationFrame(pending);
+      gestures.forEach((g) => el.removeEventListener(g, mark));
+      el.removeEventListener("scroll", onScroll);
+    };
+  }, [slot, pagingKey]);
+  return ref;
+}
+
+/** กล่องเลื่อนของแต่ละคอลัมน์/แท็บ — ใช้ hook ได้ต่อกล่อง (คอลัมน์จอใหญ่วนลูปอยู่) */
+function RememberedScroll({ slot, pagingKey, className, children }: { slot: string; pagingKey: string; className: string; children: ReactNode }) {
+  const ref = useRememberedScroll(slot, pagingKey);
+  return (
+    <div ref={ref} className={className} data-testid={`wo-scroll-${slot}`}>
+      {children}
+    </div>
+  );
 }
 
 /** ใบถูกตัดออกจากหน้าได้ แต่ใบที่มีความคิดเห็นยังไม่อ่านหรือคำขอเลื่อนรออนุมัติต้องเห็นเสมอ */
@@ -356,6 +453,8 @@ function ColumnList({
   byPriority,
   gap,
   emptyClass,
+  col,
+  pagingKey,
 }: {
   orders: BoardOrder[];
   propertyNames: Record<string, string>;
@@ -363,8 +462,10 @@ function ColumnList({
   byPriority: boolean;
   gap: string;
   emptyClass: string;
+  col: string;
+  pagingKey: string;
 }) {
-  const paging = useColumnPaging();
+  const paging = useColumnPaging(col, pagingKey);
   const unread = useUnreadCommentCounts(WO_COMMENT_NOTIF);
   if (orders.length === 0) {
     return <p className={emptyClass}>ไม่มีใบงาน</p>;
@@ -403,6 +504,7 @@ function DoneColumnList({
   creatorNames,
   gap,
   emptyClass,
+  pagingKey,
 }: {
   stubs: BoardStub[];
   /** null = เซิร์ฟเวอร์ไม่ส่งการ์ดนี้ให้ (เช่น ถูกลบ/ไม่มีสิทธิ์แล้ว) */
@@ -413,8 +515,9 @@ function DoneColumnList({
   creatorNames: Record<string, string>;
   gap: string;
   emptyClass: string;
+  pagingKey: string;
 }) {
-  const paging = useColumnPaging();
+  const paging = useColumnPaging("done", pagingKey);
   const unread = useUnreadCommentCounts(WO_COMMENT_NOTIF);
   const page = pageOf(stubs, paging.shown, unread);
   const missing = page.filter((w) => !cards.has(w.id)).map((w) => w.id);
@@ -706,6 +809,7 @@ export function WorkOrderBoard({
         creatorNames={creatorNames}
         gap={gap}
         emptyClass={emptyClass}
+        pagingKey={pagingKey}
       />
     ) : (
       <ColumnList
@@ -716,6 +820,8 @@ export function WorkOrderBoard({
         byPriority={c.byPriority}
         gap={gap}
         emptyClass={emptyClass}
+        col={c.key}
+        pagingKey={pagingKey}
       />
     );
   const moreLink = expenseMore > 0 ? <div className="mt-2.5"><MoreExpenseLink href="/maintenance/work-orders?filter=no-expense" count={expenseMore} /></div> : null;
@@ -825,10 +931,10 @@ export function WorkOrderBoard({
           ))}
         </div>
         {/* แถบแท็บอยู่กับที่ เลื่อนเฉพาะรายการ — แบบเดียวกับคอลัมน์ฝั่งจอใหญ่ */}
-        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        <RememberedScroll slot={`m-${columns[tab]!.key}`} pagingKey={pagingKey} className="min-h-0 flex-1 overflow-y-auto p-3">
           {listFor(columns[tab]!, "gap-3", "py-10 text-center text-sm text-(--ink-soft)")}
           {columns[tab]!.key === "no_expense" && moreLink}
-        </div>
+        </RememberedScroll>
       </div>
 
       {/* ─── จอใหญ่: Kanban 4 คอลัมน์ คั่นด้วยเส้นตั้ง แต่ละคอลัมน์เลื่อนแยกกัน ─── */}
@@ -841,10 +947,10 @@ export function WorkOrderBoard({
           >
             <ColumnHeader col={c} orders={rowsOf(c.key)} boardTotal={boardTotal} extra={c.key === "no_expense" ? hiddenCount : 0} />
 
-            <div className="min-h-0 flex-1 overflow-y-auto pb-2.5">
+            <RememberedScroll slot={`d-${c.key}`} pagingKey={pagingKey} className="min-h-0 flex-1 overflow-y-auto pb-2.5">
               {listFor(c, "gap-2.5", "px-2 py-8 text-center text-sm text-[#B0BEC5]")}
               {c.key === "no_expense" && moreLink}
-            </div>
+            </RememberedScroll>
           </div>
         ))}
       </div>

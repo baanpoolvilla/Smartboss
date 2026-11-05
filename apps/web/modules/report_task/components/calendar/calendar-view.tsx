@@ -978,7 +978,7 @@ export function CalendarView() {
     // ระยะห่างระหว่างแถบกรอง / แถบรายชื่อ / ปฏิทิน แคบลง (เดิม 16–24px) — ให้ปฏิทินกินพื้นที่จอมากที่สุด
     // ("แสดงให้เต็ม...จะได้มองวันหยุดง่าย ๆ")
     <div className="flex flex-col gap-2 lg:gap-2.5">
-      <StickyFilterBar>
+      <StickyFilterBar tight hideBelowSm>
         {/* ≥640px: unchanged, one wrapping row (tabs + add-calendar + create).
             <640px gets its own 2-row layout below instead — tabs alone here
             already ran 3 buttons wide, plus 2 more action buttons, so on a
