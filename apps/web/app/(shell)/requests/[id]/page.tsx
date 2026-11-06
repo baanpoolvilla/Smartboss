@@ -11,7 +11,7 @@ import { withWorkforceTenant } from "@/modules/report_task/lib/db/workforce-cale
 import { loadScorePeriodConfig } from "@/lib/score-period-config";
 import { scorePeriodOf } from "@/lib/score-period";
 import { REQ_PERMS } from "@/modules/requests/permissions";
-import { canDecide, canSee, isUnlinkedOt, listPeople, workerCompanyOtPercent } from "@/modules/requests/lib/data";
+import { canDecide, canSee, isUnlinkedOt, listPeople } from "@/modules/requests/lib/data";
 import { LinkWorkerPanel } from "@/modules/requests/components/link-worker";
 import { SetOtAmountPanel } from "@/modules/requests/components/set-ot-amount";
 import { loadRequests, pettyBalances, readSettings, withRequestsTenant, type RequestView } from "@/modules/requests/lib/db";
@@ -226,9 +226,8 @@ export default async function RequestDetailPage({ params, searchParams }: { para
     : [];
   // HR ใส่เงินค่า OT ในใบ (คนลงใบใส่แค่ชื่อ+เวลา) — HR/CEO ที่ไม่ใช่คนลงใบ
   const canSetAmount = unlinked && !r.firstDecidedAt && (viewer.canApprove || viewer.canApproveCeo) && r.createdBy !== session.userId;
-  const companyPct = canSetAmount ? await workerCompanyOtPercent(orgId) : 150;
   if (unlinked && r.netAmount <= 0) {
-    steps.splice(1, 0, { title: "HR ใส่เงินค่า OT", sub: "เลือกคิดจากค่าแรงรายวัน หรือกรอกยอดเอง · หรือผูกชื่อกับคนงานในระบบ", state: "now" });
+    steps.splice(1, 0, { title: "HR ใส่เงินค่า OT", sub: "กรอกยอด OT ในใบ · หรือผูกชื่อกับคนงานในระบบ", state: "now" });
     for (const x of steps.slice(2)) if (x.state === "now") x.state = "todo";
   } else if (unlinked) {
     steps.splice(1, 0, { title: `(ไม่บังคับ) ผูกชื่อ "${r.beneficiaryName}" กับคนงาน`, sub: "ผูกก่อนอนุมัติ = เข้าบัญชีค่าแรง · ไม่ผูก = อนุมัติแล้ว HR จ่ายเงินสด/โอนเอง", state: "todo" });
@@ -321,7 +320,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
                     <MoneyRow strong label="ค่า OT" value={r.netAmount} />
                   </>
                 ) : (
-                  <div className="text-sm text-amber-700">ยังไม่คิดเงิน — รอ HR ใส่เงินค่า OT (คิดจากค่าแรงรายวัน หรือกรอกยอดเอง) · {hoursText(r.otMinutes ?? 0)}</div>
+                  <div className="text-sm text-amber-700">ยังไม่คิดเงิน — รอ HR กรอกยอด OT · {hoursText(r.otMinutes ?? 0)}</div>
                 )
               )}
               {r.kind === "ot" && !payHidden && !unlinked && (
@@ -432,13 +431,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
           {/* ───────── ขวา: ขั้นตอน + ปุ่ม ───────── */}
           <aside className="order-2 flex min-w-0 flex-col gap-3 lg:sticky lg:top-4 lg:col-start-2 lg:row-start-1">
             {canSetAmount && (
-              <SetOtAmountPanel
-                id={r.id}
-                name={r.beneficiaryName}
-                minutes={r.otMinutes ?? 0}
-                companyPct={companyPct}
-                current={r.netAmount > 0 ? { amount: r.netAmount, base: r.otBase, manual: r.otBaseKind === "manual" } : null}
-              />
+              <SetOtAmountPanel id={r.id} minutes={r.otMinutes ?? 0} current={r.netAmount > 0 ? r.netAmount : null} />
             )}
             {canLink && <LinkWorkerPanel id={r.id} typedName={r.beneficiaryName} workers={linkWorkers} optional />}
             {noAccount && r.status === "pending" && r.netAmount > 0 && canDecide(r, viewer) && (
@@ -453,7 +446,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
               <PayPanel id={r.id} outstanding={outstanding} methods={methods} holders={payHolders} myUserId={session.userId} today={today} payrollPeriod={period} title={r.kind === "cash_advance" && r.clearedAt ? "จ่ายส่วนต่างที่ใช้เกิน" : "บันทึกการจ่ายเงิน"} />
             )}
             {r.kind === "cash_advance" && r.status === "paid" && !r.clearStatus && (isBeneficiary || r.createdBy === session.userId) && (
-              <ClearingSubmit id={r.id} paid={r.paidTotal} dueDate={r.clearDueDate ? thaiDate(r.clearDueDate) : null} today={today} maxAgeDays={settings.receiptMaxAgeDays} />
+              <ClearingSubmit id={r.id} paid={r.paidTotal} dueDate={r.clearDueDate ?? null} today={today} maxAgeDays={settings.receiptMaxAgeDays} />
             )}
             {r.kind === "cash_advance" && r.clearStatus === "submitted" && viewer.canPay && !isBeneficiary && (
               <ClearingConfirm id={r.id} paid={r.paidTotal} spent={r.clearSpent ?? 0} returned={r.clearReturned ?? 0} holders={holders} worker={r.beneficiaryKind === "worker"} />
