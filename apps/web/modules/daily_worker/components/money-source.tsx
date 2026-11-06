@@ -71,11 +71,20 @@ export function MoneySource({
             )}
             {cell.ot && (
               <>
-                + OT <b>{cell.ot.start}–{cell.ot.end}</b> × {cell.rate.otPercent}% = <b>{baht(cell.pay.ot)}</b>{" "}
-                <span className="text-(--ink-soft)">
-                  ← ลงโดย {cell.ot.byName}
-                  {cell.rate.otFromCompany ? " · % กลางของบริษัท" : " · % เฉพาะคนนี้"}
-                </span>
+                {cell.ot.amount !== undefined ? (
+                  <>
+                    + OT <b>{cell.ot.start}–{cell.ot.end}</b> = <b>{baht(cell.pay.ot)}</b>{" "}
+                    <span className="text-(--ink-soft)">← ยอดกรอกเองในใบ OT · อนุมัติโดย {cell.ot.amountByName ?? cell.ot.byName} · {cell.ot.note}</span>
+                  </>
+                ) : (
+                  <>
+                    + OT <b>{cell.ot.start}–{cell.ot.end}</b> × {cell.rate.otPercent}% = <b>{baht(cell.pay.ot)}</b>{" "}
+                    <span className="text-(--ink-soft)">
+                      ← ลงโดย {cell.ot.byName}
+                      {cell.rate.otFromCompany ? " · % กลางของบริษัท" : " · % เฉพาะคนนี้"}
+                    </span>
+                  </>
+                )}
                 <br />
               </>
             )}

@@ -11,9 +11,10 @@ import { withWorkforceTenant } from "@/modules/report_task/lib/db/workforce-cale
 import { loadScorePeriodConfig } from "@/lib/score-period-config";
 import { scorePeriodOf } from "@/lib/score-period";
 import { REQ_PERMS } from "@/modules/requests/permissions";
-import { canDecide, canSee, isUnlinkedOt, listPeople } from "@/modules/requests/lib/data";
+import { canDecide, canSee, isUnlinkedOt, listPeople, workerRateOn } from "@/modules/requests/lib/data";
 import { LinkWorkerPanel } from "@/modules/requests/components/link-worker";
 import { SetOtAmountPanel } from "@/modules/requests/components/set-ot-amount";
+import { WorkerOtAmountPanel } from "@/modules/requests/components/worker-ot-amount";
 import { loadRequests, pettyBalances, readSettings, withRequestsTenant, type RequestView } from "@/modules/requests/lib/db";
 import { listPettyHolders } from "@/modules/requests/lib/holders";
 import { beneficiaryLabel, requestsPage, statusOf } from "@/modules/requests/lib/page";
@@ -32,6 +33,7 @@ import {
   timesOverlap,
   type Attachment,
   type PaymentMethod,
+  otCalc,
 } from "@/modules/requests/lib/types";
 import { readSettings as readSalarySettings, withSalaryTenant } from "@/modules/salary/lib/db";
 import { PERIOD_RE, periodDates, periodLabel as salaryPeriodLabel, periodOfDate, thaiDate as salaryThaiDate } from "@/modules/salary/lib/types";
@@ -226,6 +228,17 @@ export default async function RequestDetailPage({ params, searchParams }: { para
     : [];
   // HR ใส่เงินค่า OT ในใบ (คนลงใบใส่แค่ชื่อ+เวลา) — HR/CEO ที่ไม่ใช่คนลงใบ
   const canSetAmount = unlinked && !r.firstDecidedAt && (viewer.canApprove || viewer.canApproveCeo) && r.createdBy !== session.userId;
+  // คนงานที่มีในระบบ: HR เลือกคิดจากค่าแรง หรือกรอกยอดเอง (ก่อนอนุมัติ)
+  const canSetWorker =
+    r.kind === "ot" && r.status === "pending" && !r.firstDecidedAt && r.beneficiaryKind === "worker" && !!r.beneficiaryUserId && !!r.employmentId &&
+    (viewer.canApprove || viewer.canApproveCeo) && r.createdBy !== session.userId && r.beneficiaryUserId !== session.userId;
+  const workerSystem = canSetWorker
+    ? await workerRateOn(orgId, r.employmentId!, r.workDate).then((rate) => {
+        if (!rate.wage) return null;
+        const c = otCalc("daily", rate.wage, rate.otPercent, r.otMinutes ?? 0);
+        return { amount: c.amount, how: `คิดจาก ${c.formula}` };
+      })
+    : null;
   if (unlinked && r.netAmount <= 0) {
     steps.splice(1, 0, { title: "HR ใส่เงินค่า OT", sub: "กรอกยอด OT ในใบ · หรือผูกชื่อกับคนงานในระบบ", state: "now" });
     for (const x of steps.slice(2)) if (x.state === "now") x.state = "todo";
@@ -433,6 +446,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
             {canSetAmount && (
               <SetOtAmountPanel id={r.id} minutes={r.otMinutes ?? 0} current={r.netAmount > 0 ? r.netAmount : null} />
             )}
+            {canSetWorker && <WorkerOtAmountPanel id={r.id} system={workerSystem} current={{ manual: r.otBaseKind === "manual", amount: r.netAmount }} />}
             {canLink && <LinkWorkerPanel id={r.id} typedName={r.beneficiaryName} workers={linkWorkers} optional />}
             {noAccount && r.status === "pending" && r.netAmount > 0 && canDecide(r, viewer) && (
               <Notice tone="warn">

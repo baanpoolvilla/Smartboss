@@ -359,6 +359,7 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
             shiftStart: dayStart,
             shiftEnd: dayEnd,
             otMinutes: otEntry?.minutes ?? null,
+            otAmount: otEntry?.amount ?? null,
             legacyOverride: !!ov,
             wage: wageOn(emp.employment_id, date),
             otPercent: otPercentOn(emp.employment_id, date),
@@ -386,7 +387,7 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
           cell.override = { reason: ov.reason, byName: ov.byName, at: ov.at };
           const wage = wageOn(emp.employment_id, date);
           if (wage !== null) {
-            cell.pay = dayPay(wage, 0, otEntry?.minutes ?? 0, otPercentOn(emp.employment_id, date));
+            cell.pay = dayPay(wage, 0, otEntry?.minutes ?? 0, otPercentOn(emp.employment_id, date), otEntry?.amount ?? null);
             cell.rate = rateSourceOn(emp.employment_id, date);
           }
         } else if (date < today) {
@@ -396,7 +397,7 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
         if (leave) {
           cell.leave = { id: leave.id, name: leave.type_name, dayOff: leave.is_day_off, byName: leave.by_name, at: new Date(leave.created_at).toISOString() };
         }
-        if (otEntry) cell.ot = { id: otEntry.id, start: otEntry.start, end: otEntry.end, minutes: otEntry.minutes, note: otEntry.note, byName: otEntry.byName };
+        if (otEntry) cell.ot = { id: otEntry.id, start: otEntry.start, end: otEntry.end, minutes: otEntry.minutes, note: otEntry.note, byName: otEntry.byName, ...(otEntry.amount !== undefined ? { amount: otEntry.amount, amountByName: otEntry.amountByName } : {}) };
         if (cell.s || cell.leave || cell.ot) cells[d] = cell;
       }
     }

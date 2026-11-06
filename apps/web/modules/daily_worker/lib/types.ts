@@ -34,7 +34,7 @@ export interface DayCell {
   shift?: { start: number; end: number };
   /** ผู้ดูแลแก้เวลาเข้า/ออก (ไปหน้างานมา สแกนไม่ทัน ฯลฯ) — เก็บเวลาที่สแกนจริงไว้ด้วย */
   edit?: { inAt: string | null; outAt: string | null; scannedIn: string | null; scannedOut: string | null; reason: string; byName: string; at: string };
-  ot?: { id: string; start: string; end: string; minutes: number; note: string; byName: string };
+  ot?: { id: string; start: string; end: string; minutes: number; note: string; byName: string; amount?: number; amountByName?: string };
   override?: { reason: string; byName: string; at: string };
   leave?: { id: string; name: string; dayOff: boolean; byName: string | null; at: string };
 }
@@ -145,9 +145,10 @@ export function judgeTimes(shiftStart: number, shiftEnd: number, inMin: number, 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /** ค่าแรงของวัน: หักนาทีละ ค่าแรง÷480 (ไม่เกินค่าแรงวัน) + OT = ชม. × (ค่าแรง÷8) × % */
-export function dayPay(wage: number, deductMin: number, otMin: number, otPercent: number): DayPay {
+/** otFixed: ยอด OT ที่ HR กรอกเองในใบ OT (ผู้ใช้ 6/11/2569) — มี = ใช้ยอดนี้แทนสูตรชั่วโมง · ไม่มี = คิดแบบเดิม */
+export function dayPay(wage: number, deductMin: number, otMin: number, otPercent: number, otFixed?: number | null): DayPay {
   const deduct = round2(Math.min(wage, (deductMin * wage) / WORK_DAY_MINUTES));
-  const ot = round2((otMin / 60) * (wage / 8) * (otPercent / 100));
+  const ot = otFixed !== undefined && otFixed !== null && otFixed >= 0 ? round2(otFixed) : round2((otMin / 60) * (wage / 8) * (otPercent / 100));
   return { wage, deduct, ot, total: round2(wage - deduct + ot) };
 }
 
@@ -166,6 +167,9 @@ export interface OtEntry {
   byUserId: string;
   byName: string;
   at: string;
+  /** ยอด OT ที่ HR กรอกเอง (เหมาจ่าย) จากใบ OT — มี = ใช้แทนสูตรชั่วโมง */
+  amount?: number;
+  amountByName?: string;
 }
 
 export interface OverrideEntry {
@@ -281,6 +285,8 @@ export interface DayInput {
   shiftEnd: number | null;
   /** OT ที่ผู้ดูแลลงไว้วันนั้น (นาที) — มี = ไม่ดูเวลาออก */
   otMinutes: number | null;
+  /** ยอด OT ที่ HR กรอกเอง — มี = ใช้แทนสูตร */
+  otAmount?: number | null;
   /** "แก้เป็นมา" แบบเดิม = ไม่นับสาย */
   legacyOverride: boolean;
   wage: number | null;
@@ -311,7 +317,7 @@ export function judgeDay(d: DayInput & { inAt: string }): DayJudgement {
   const lateMin = d.legacyOverride ? 0 : t.lateMin;
   const workedMin = Math.max(0, t.scheduledMin - lateMin - t.earlyMin);
   if (!noOut && workedMin === 0 && !hasOt) return { s: "x", lateMin: 0, earlyMin: 0, workedMin: 0, pay: null };
-  const pay = d.wage !== null && !noOut ? dayPay(d.wage, lateMin + t.earlyMin, d.otMinutes ?? 0, d.otPercent) : null;
+  const pay = d.wage !== null && !noOut ? dayPay(d.wage, lateMin + t.earlyMin, d.otMinutes ?? 0, d.otPercent, d.otAmount) : null;
   return { s: lateMin > 0 ? "s" : "m", lateMin, earlyMin: t.earlyMin, workedMin, pay };
 }
 

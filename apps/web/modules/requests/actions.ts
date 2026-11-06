@@ -954,6 +954,57 @@ export async function setUnlinkedOtAmountAction(input: { id: string; mode: "dail
 }
 
 /**
+ * HR เลือกวิธีคิดค่า OT ของคนงานที่มีในระบบ (ผู้ใช้ 6/11/2569): "system" = คิดจากค่าแรงในระบบ (ปกติ) · "manual" = กรอกยอดเอง (เหมาจ่าย)
+ * อนุมัติแล้วยอดที่กรอกไปอยู่ในบัญชีค่าแรงแทนสูตรชั่วโมง (OtEntry.amount) · พนักงานประจำไม่มีตัวเลือกนี้ · แก้ได้จนกว่าจะอนุมัติ
+ */
+export async function setWorkerOtAmountAction(input: { id: string; mode: "system" | "manual"; value?: number; note?: string }): Promise<Result> {
+  try {
+    const session = await guard();
+    const orgId = session.orgId;
+    const viewer = await viewerOf(session);
+    if (!(viewer.canApprove || viewer.canApproveCeo)) return { error: "เปลี่ยนยอด OT ได้เฉพาะ HR / CEO" };
+    const r = await withRequestsTenant(orgId, (tx) => loadOne(tx, orgId, input.id));
+    if (!r || !canSee(r, viewer)) return { error: "ไม่พบคำขอ" };
+    if (!(r.kind === "ot" && r.status === "pending" && !r.firstDecidedAt && r.beneficiaryKind === "worker" && r.beneficiaryUserId && r.employmentId)) return { error: "ใบนี้เปลี่ยนยอดไม่ได้ (ไม่ใช่ OT คนงานที่รออนุมัติ)" };
+    if (r.createdBy === session.userId || r.beneficiaryUserId === session.userId) return { error: "เปลี่ยนยอดใบที่ตัวเองลง/ของตัวเองไม่ได้" };
+    const minutes = r.otMinutes ?? 0;
+    if (minutes <= 0) return { error: "ข้อมูลเวลา OT ไม่ครบ" };
+    const note = String(input.note ?? "").trim().slice(0, 200);
+    let data: { amount: number; netAmount: number; otBase: number | null; otBaseKind: string; otPercent: number | null; otRateLabel: string };
+    if (input.mode === "manual") {
+      const v = round2(Number(input.value));
+      if (!Number.isFinite(v) || v <= 0 || v > 100_000) return { error: "ใส่ยอด OT" };
+      data = { amount: v, netAmount: v, otBase: null, otBaseKind: "manual", otPercent: null, otRateLabel: `HR กรอกยอดเอง${note ? ` · ${note}` : ""}` };
+    } else {
+      const rate = await workerRateOn(orgId, r.employmentId, r.workDate);
+      const c = rate.wage ? otCalc("daily", rate.wage, rate.otPercent, minutes) : null;
+      data = { amount: c?.amount ?? 0, netAmount: c?.amount ?? 0, otBase: rate.wage, otBaseKind: "daily", otPercent: rate.otPercent, otRateLabel: `% OT ของคนงาน (${rate.otPercent}%)` };
+    }
+    const settings = await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId));
+    const route = await approverLevelFor(orgId, "ot", r.createdBy, r.beneficiaryUserId, data.netAmount, settings.approvalRoutes);
+    const byName = await nameOf(session.userId);
+    const saved = await withRequestsTenant(orgId, async (tx) => {
+      const res = await tx.moneyRequest.updateMany({
+        where: { orgId, id: r.id, status: "pending", firstDecidedAt: null },
+        data: { ...data, approverLevel: route.level, needCeo: route.needCeo },
+      });
+      if (res.count === 0) return false;
+      const what = input.mode === "manual" ? `กรอกยอดเอง${note ? ` (${note})` : ""}` : "คิดจากค่าแรงในระบบ";
+      await insertEvent(tx, orgId, { requestId: r.id, byUserId: session.userId, byName, action: "edit", summary: `เปลี่ยนค่า OT เป็น${what}: ${baht(r.netAmount)} → ${baht(data.netAmount)}` });
+      return true;
+    });
+    if (!saved) return { error: "ใบนี้เพิ่งเปลี่ยน — รีเฟรช" };
+    if (route.level === "ceo" || route.needCeo) {
+      void notifyApprovers(orgId, { id: r.id, code: r.code, kind: "ot", title: r.title, netAmount: data.netAmount, beneficiaryName: r.beneficiaryName }, route.level, [session.userId, r.createdBy, r.beneficiaryUserId]);
+    }
+    refresh(r.id);
+    return { ok: true };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/**
  * แก้ไขใบที่ยังรออนุมัติ — เฉพาะคนยื่น และยังไม่มีใครตัดสิน (รวมถึงขั้นแรกของ HR ในใบสองขั้น)
  * ตรวจใหม่ทุกข้อเหมือนตอนยื่น (ไม่นับใบตัวเองเป็นของซ้ำ) · เส้นทางอนุมัติคิดใหม่จากยอดใหม่
  * ใบที่อนุมัติแล้วแก้ไม่ได้ (ผู้ใช้ตกลง 21/10/2569) — จ่ายน้อยกว่าทำตอนบันทึกจ่าย มากกว่าต้องยื่นใหม่
@@ -1079,6 +1130,8 @@ export async function decideRequestAction(input: { id: string; outcome: "approve
         byUserId: session.userId,
         byName,
         at: new Date().toISOString(),
+        // HR กรอกยอดเองในใบ → บัญชีค่าแรงใช้ยอดนี้แทนสูตรชั่วโมง
+        ...(r.otBaseKind === "manual" ? { amount: r.netAmount, amountByName: byName } : {}),
       };
       let clash = false;
       await updateStoreList<OtEntry>(orgId, OT_KEY, session.userId, (list) => {
