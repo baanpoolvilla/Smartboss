@@ -1,3 +1,4 @@
+import { workOrderScoreChips } from "@/modules/maintenance/data/work-order-score-chips";
 import { loadPerformanceSettings } from "@/lib/performance";
 import Link from "next/link";
 import { headers } from "next/headers";
@@ -237,6 +238,9 @@ export default async function WorkOrderDetailPage({
 
   // แก้ผู้รับผิดชอบ + เช็กลิสต์ (team-actions.ts) — คนแก้ทีม = คนแก้กำหนดส่งได้
   const isOpenNow = wo.status === "open" || wo.status === "in_progress";
+  // ใบที่โดนหักคะแนนแล้ว: ลบต้องใส่เหตุผล คนที่โดนหักได้รู้ (ผู้ใช้ 6/11/2569)
+  const scoreChip = (await workOrderScoreChips(orgId, [wo])).get(wo.id);
+  const deleteDocked = scoreChip?.kind === "docked" ? scoreChip.points : 0;
   const canEditTeam = isOpenNow && !wo.isPrivate && canEditDueDate({ userId: session.userId, viewAll }, { createdBy: ownerId });
   const teamUsers = canEditTeam
     ? (await listOrgUsers(orgId))
@@ -1032,6 +1036,11 @@ export default async function WorkOrderDetailPage({
               action={deleteWorkOrderAction}
               title={wo.title}
               label="ลบใบงาน"
+              reasonHint={
+                deleteDocked
+                  ? `ใบนี้โดนหักคะแนนแล้ว ${deleteDocked} คะแนน · ลบแล้วคนที่โดนหักได้คะแนนคืนทันที และได้แจ้งเตือนพร้อมเหตุผลนี้`
+                  : undefined
+              }
               message={`ต้องการลบใบงาน "${wo.title}" หรือไม่? การดำเนินการนี้ไม่สามารถย้อนกลับได้`}
             />
           </div>

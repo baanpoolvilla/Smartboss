@@ -4,7 +4,8 @@
  * โดนัทใบงานที่ยังไม่ปิด — กดแถวหรือสีเพื่อดูว่าเป็นใบไหน (ผู้ใช้ 5/11/2569 "อยากให้รู้ว่าคืองานไหน")
  * โหลดรายการตอนกดเท่านั้น แดชบอร์ดไม่ต้องดึงทุกใบทุกครั้ง · เห็นเท่าที่มีสิทธิ์ ตรงกับตัวเลข
  */
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
+import { arrivedByBack } from "@/lib/nav-stack";
 import Link from "next/link";
 import { ChevronRight, Search, TrendingDown } from "lucide-react";
 import { Button } from "@smartboss/ui/components/button";
@@ -15,6 +16,30 @@ import { loadScoreWatchDocksAction, loadScoreWatchRowsAction } from "@/app/(shel
 
 const SEARCH_FROM = 9;
 type Open = ScoreWatchGroup | "docks";
+
+/**
+ * กดเข้าใบจากหน้าต่างแล้วย้อนกลับ: หน้าต่างกลุ่มเดิม (คำค้นเดิม) เปิดให้ต่อ จะได้ไล่ดูใบถัดไปได้
+ * เข้าแดชบอร์ดด้วยวิธีอื่น (กดเมนู / เปิดใหม่) ไม่เปิดเอง (ผู้ใช้ 6/11/2569 "ปรับให้เหมาะสม ไม่สับสน")
+ */
+const REOPEN_KEY = "sb-score-watch-reopen";
+const REOPEN_MAX_MS = 30 * 60_000;
+function rememberOpen(key: Open, query: string) {
+  try {
+    sessionStorage.setItem(REOPEN_KEY, JSON.stringify({ key, query, at: Date.now() }));
+  } catch {
+    // โหมดส่วนตัว — ไม่เปิดค้างก็ใช้งานได้ปกติ
+  }
+}
+function takeRemembered(): { key: Open; query: string } | null {
+  try {
+    const raw = sessionStorage.getItem(REOPEN_KEY);
+    sessionStorage.removeItem(REOPEN_KEY);
+    const v = raw ? (JSON.parse(raw) as { key: Open; query: string; at: number }) : null;
+    return v && Date.now() - v.at < REOPEN_MAX_MS ? v : null;
+  } catch {
+    return null;
+  }
+}
 
 const INFO: Record<ScoreWatchGroup, { label: string; color: string; desc: string; empty: string }> = {
   late: { label: "เลยกำหนด", color: "#DC2626", desc: "เลยวันส่งแล้วยังไม่ปิด ระบบหักคะแนนคนที่ยังไม่เสร็จ", empty: "ไม่มีใบงานเลยกำหนดแล้ว" },
@@ -33,11 +58,11 @@ function dueChip(days: number | null): { text: string; bg: string; fg: string } 
   return { text: `อีก ${days} วัน`, bg: "#ECFDF3", fg: "#15803D" };
 }
 
-function OrderRow({ r }: { r: ScoreWatchRow }) {
+function OrderRow({ r, onOpen }: { r: ScoreWatchRow; onOpen: () => void }) {
   const chip = dueChip(r.days);
   const meta = [r.place, r.who ? `${r.who}${r.extra > 0 ? ` +${r.extra}` : ""}` : null, r.dueText ? `ครบ ${r.dueText}` : null].filter(Boolean).join(" · ");
   return (
-    <Link href={`/maintenance/work-orders/${r.id}`} data-testid="watch-row" className="flex items-center gap-2.5 border-b border-(--line) px-1 py-2.5 last:border-0 hover:bg-(--bg-soft)">
+    <Link href={`/maintenance/work-orders/${r.id}`} onClick={onOpen} data-testid="watch-row" className="flex items-center gap-2.5 border-b border-(--line) px-1 py-2.5 last:border-0 hover:bg-(--bg-soft)">
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-(--ink)">
           <span className="min-w-0 break-words">{r.title}</span>
@@ -66,7 +91,7 @@ function OrderRow({ r }: { r: ScoreWatchRow }) {
   );
 }
 
-function DockRow({ r }: { r: ScoreWatchDockRow }) {
+function DockRow({ r, onOpen }: { r: ScoreWatchDockRow; onOpen: () => void }) {
   const body = (
     <>
       <span className="min-w-0 flex-1">
@@ -80,7 +105,7 @@ function DockRow({ r }: { r: ScoreWatchDockRow }) {
   );
   const cls = "flex items-center gap-2.5 border-b border-(--line) px-1 py-2.5 last:border-0";
   return r.href ? (
-    <Link href={r.href} data-testid="watch-row" className={`${cls} hover:bg-(--bg-soft)`}>
+    <Link href={r.href} onClick={onOpen} data-testid="watch-row" className={`${cls} hover:bg-(--bg-soft)`}>
       {body}
     </Link>
   ) : (
@@ -122,17 +147,29 @@ export function ScoreWatchDonut({ data }: { data: ScoreWatch }) {
       }
     });
   };
-  const show = (key: Open) => {
+  const show = (key: Open, keepQuery = "") => {
     // จำนวนต่อรอบเดียวกับบอร์ด: จอคอม 10 มือถือ 12
     const size = window.matchMedia("(min-width: 640px)").matches ? 10 : 12;
     setStep(size);
     setShown(size);
-    setQuery("");
+    setQuery(keepQuery);
     setRows([]);
     setDocks([]);
     setOpen(key);
     load(key);
   };
+
+  // ย้อนกลับมาจากใบที่กดจากหน้าต่าง — รอ NavTracker บันทึกการย้อนก่อน (เอฟเฟกต์ของแม่รันหลังลูก)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const saved = takeRemembered();
+      if (saved && arrivedByBack()) show(saved.key, saved.query);
+    }, 80);
+    return () => clearTimeout(t);
+    // เปิดหน้าครั้งเดียว
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const remember = () => open && rememberOpen(open, query);
 
   const isDocks = open === "docks";
   const q = query.trim().toLowerCase();
@@ -268,7 +305,9 @@ export function ScoreWatchDonut({ data }: { data: ScoreWatch }) {
               <p className="py-8 text-center text-sm text-(--ink-soft)">{q ? `ไม่พบ "${query.trim()}"` : info ? info.empty : "ไม่มีคะแนนที่โดนหักแล้ว"}</p>
             ) : (
               <div className="flex flex-col">
-                {isDocks ? hitDocks.slice(0, shown).map((r) => <DockRow key={r.id} r={r} />) : hitRows.slice(0, shown).map((r) => <OrderRow key={r.id} r={r} />)}
+                {isDocks
+                  ? hitDocks.slice(0, shown).map((r) => <DockRow key={r.id} r={r} onOpen={remember} />)
+                  : hitRows.slice(0, shown).map((r) => <OrderRow key={r.id} r={r} onOpen={remember} />)}
               </div>
             )}
             {!loading && !error && hitCount > 0 && (

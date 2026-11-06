@@ -306,14 +306,18 @@ export function DeleteButton({
   title,
   label = "ลบใบงาน",
   message,
+  reasonHint,
 }: {
   id: string;
   action: Action;
   title: string;
   label?: string;
   message?: string;
+  /** ต้องใส่เหตุผลก่อนลบ (ใบที่โดนหักคะแนนแล้ว) — ข้อความบอกว่าเหตุผลไปถึงใคร */
+  reasonHint?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
   return (
     <>
       <button
@@ -339,7 +343,8 @@ export function DeleteButton({
               </Button>
               <form action={action}>
                 <input type="hidden" name="id" value={id} />
-                <Button type="submit" variant="danger" size="sm">
+                {reasonHint && <input type="hidden" name="reason" value={reason} />}
+                <Button type="submit" variant="danger" size="sm" disabled={!!reasonHint && reason.trim().length < 2} data-testid="delete-confirm">
                   ลบ
                 </Button>
               </form>
@@ -349,7 +354,21 @@ export function DeleteButton({
           <p className="text-sm text-(--ink)">
             {message ??
               `ต้องการลบ "${title}" หรือไม่?\n\nการดำเนินการนี้ไม่สามารถย้อนกลับได้`}
-          </p>
+          </p>
+          {reasonHint && (
+            <label className="mt-3 grid gap-1 text-xs text-(--ink-soft)">
+              เหตุผลที่ลบ (จำเป็น)
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={2}
+                maxLength={300}
+                data-testid="delete-reason"
+                className="w-full rounded-lg border border-(--line) bg-(--bg) px-2.5 py-1.5 text-base text-(--ink) sm:text-sm"
+              />
+              <span>{reasonHint}</span>
+            </label>
+          )}
         </Modal>
       )}
     </>

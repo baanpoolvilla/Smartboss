@@ -1,3 +1,4 @@
+import type { WorkOrderScoreChip } from "@/modules/maintenance/data/work-order-score-chips";
 import { presetRange } from "@/modules/report_task/lib/date-filter";
 import { getUser } from "@/modules/report_task/lib/directory";
 import { dueUrgency, effectiveDueDate } from "@/modules/report_task/lib/task-flags";
@@ -84,6 +85,8 @@ export interface MaintenanceBoardItem {
   pendingDueTo?: string | null;
   /** คนที่ดูอยู่คือคนเปิดใบที่ต้องอนุมัติ — แถบแดงค้างจนกว่าจะตัดสิน (กติกาเดียวกับ dueRequestWaitsFor ของงาน) */
   pendingDueWaitsMe?: boolean;
+  /** ป้ายคะแนนแบบการ์ดงาน */
+  score?: WorkOrderScoreChip;
   isPrivate?: boolean;
   /** สถานะจริง open | in_progress | completed */
   status?: string;

@@ -1,5 +1,6 @@
 "use server";
 
+import { roundDockRefId } from "@/modules/maintenance/lib/pm-rounds";
 import { createHash, randomUUID } from "node:crypto";
 import { checklistAllowsClose, checklistFromTemplate, itemsOf, readChecklist, readChecklistTemplate, remainingCount } from "@/modules/maintenance/lib/work-order-checklist";
 import { z } from "zod";
@@ -806,11 +807,50 @@ export async function deleteWorkOrderAction(formData: FormData) {
     const target = await getWorkOrder(s.orgId, id);
     if (target && !canDeleteWorkOrderWithPerm(target)) throw new Error("ลบได้เฉพาะใบที่ยังไม่ปิดและยังไม่เลยกำหนด");
   }
+  // ใบที่โดนหักคะแนนแล้ว: ต้องมีเหตุผล · คืนคะแนนทันทีและบอกคนที่โดนหัก (ผู้ใช้ 6/11/2569 "ต้องมีบอกเค้าสิ")
+  // เดิมงานหักคะแนนคืนให้เองรอบถัดไปโดยไม่บอกเหตุผล
+  const woForDocks = await getWorkOrder(s.orgId, id);
+  const dockRows = woForDocks
+    ? await prisma.performanceEvent.findMany({
+        where: {
+          orgId: s.orgId,
+          source: "maintenance",
+          category: { in: ["workorder_overdue", "pm_missed"] },
+          OR: [
+            { refId: id },
+            { refId: { startsWith: `${id}:` } },
+            ...(woForDocks.pmRoundDate && woForDocks.pmScheduleId
+              ? [{ refId: { startsWith: roundDockRefId(woForDocks.pmScheduleId, woForDocks.pmRoundDate, id) } }]
+              : []),
+          ],
+        },
+        select: { id: true, userId: true, category: true, refId: true, refType: true, points: true, note: true },
+      })
+    : [];
+  const undoneKeys = new Set(dockRows.filter((e) => e.refType?.endsWith("_undo")).map((e) => `${e.category}|${e.refId}`));
+  const liveDocks = dockRows.filter((e) => !e.refType?.endsWith("_undo") && !undoneKeys.has(`${e.category}|${e.refId}`));
+  const deleteReason = String(formData.get("reason") ?? "").trim().slice(0, 300);
+  if (liveDocks.length > 0 && deleteReason.length < 2) throw new Error("ใบนี้โดนหักคะแนนแล้ว ใส่เหตุผลที่ลบก่อน");
   // ลบใบงานที่ยังเปิดอยู่จาก PM = ข้ามรอบนั้นด้วย (เหตุผลเดียวกับยกเลิก)
   const wo = await getWorkOrder(s.orgId, id);
   if (wo && (wo.status === "open" || wo.status === "in_progress") && wo.completedAt === null) await skipLinkedPm(s.orgId, wo);
   await deleteWorkOrder(s.orgId, id);
-  if (wo) await woLog(s, wo, "delete", "ลบใบงาน", { status: wo.status, propertyId: wo.propertyId });
+  if (wo) await woLog(s, wo, "delete", "ลบใบงาน", { status: wo.status, propertyId: wo.propertyId, ...(deleteReason ? { reason: deleteReason } : {}), ...(liveDocks.length ? { refundedDocks: liveDocks.length } : {}) });
+  if (wo && dockRows.length > 0) {
+    // ลบทั้งการหักและคู่คืนคะแนน (ถ้ามี) เหมือนงานหักคะแนนทำตอนต้นเรื่องหาย — ไม่งั้นคืนซ้ำ
+    await prisma.performanceEvent.deleteMany({ where: { orgId: s.orgId, id: { in: dockRows.map((e) => e.id) } } });
+    const who = (await notifyActorName(s.userId)) ?? "ผู้ดูแล";
+    const byUser = new Map<string, number>();
+    for (const e of liveDocks) byUser.set(e.userId, (byUser.get(e.userId) ?? 0) + Math.abs(Number(e.points)));
+    for (const [userId, pts] of byUser) {
+      await notifyUser(s.orgId, userId, {
+        title: `คืนคะแนน +${pts} · ใบงานถูกลบ: ${wo.title}`,
+        body: `${wo.code ?? ""} ถูกลบโดย ${who} · เหตุผล: ${deleteReason}`.trim(),
+        type: "work_order",
+        referenceId: null,
+      });
+    }
+  }
   // เก็บกวาดแจ้งเตือนของใบงานนี้ด้วย ไม่งั้นกระดิ่งค้างชี้ไปใบงานที่ไม่มีแล้ว
   // (ดู deleteNotificationsByReference's doc — บั๊กคลาสเดียวกับที่ report_task
   // เจอกับ removeTaskNotifications)

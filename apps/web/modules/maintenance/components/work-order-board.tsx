@@ -1,5 +1,6 @@
 "use client";
 
+import type { WorkOrderScoreChip } from "@/modules/maintenance/data/work-order-score-chips";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import { useIsMobile } from "@/modules/report_task/hooks/use-is-mobile";
@@ -55,6 +56,8 @@ export interface BoardOrder {
   commentCount?: number;
   photoCount?: number;
   pendingDue?: number;
+  /** ป้ายคะแนนแบบการ์ดงาน */
+  score?: WorkOrderScoreChip;
 }
 
 /** แถวเบาของใบในคอลัมน์เสร็จแล้ว — พอสำหรับนับและกรอง ข้อมูลการ์ดโหลดตอนจะแสดง */
@@ -274,6 +277,7 @@ function OrderCard({
       commentCount={wo.commentCount ?? 0}
       photoCount={wo.photoCount ?? 0}
       pendingDue={wo.pendingDue ?? 0}
+      score={wo.score}
       isPrivate={wo.isPrivate}
       subline={wo.pmRound ? <>รอบ {wo.pmRound.label}</> : undefined}
       avatar={

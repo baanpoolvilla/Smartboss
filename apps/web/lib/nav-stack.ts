@@ -82,6 +82,12 @@ export function currentUrl(): string {
   return window.location.pathname + window.location.search;
 }
 
+/** หน้านี้มาถึงด้วยการย้อนกลับ (ปุ่มลูกศรของแอป / ปุ่ม back) ไม่ใช่กดเมนูเข้ามาใหม่ — ต้องเรียกหลัง NavTracker บันทึกแล้ว */
+export function arrivedByBack(): boolean {
+  const top = read()[read().length - 1];
+  return !!top?.detached && pathOf(top.u) === pathOf(currentUrl());
+}
+
 export function recordVisit(url: string) {
   write(visit(read(), url));
 }

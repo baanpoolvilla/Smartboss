@@ -1,10 +1,11 @@
+import { workOrderScoreChips } from "@/modules/maintenance/data/work-order-score-chips";
 import { earliestPendingDue } from "@/modules/maintenance/lib/work-order-members";
 import "server-only";
 import { prisma, type Prisma } from "@smartboss/database";
 import { hasPermission, isSuperAdmin, type OrgSession } from "@smartboss/auth";
 
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
-import { workOrderAccess, workOrderVisibilityWhere, type WorkOrderAccess } from "@/modules/maintenance/data/work-order-access";
+import { canSeeWorkOrder, workOrderAccess, workOrderVisibilityWhere, type WorkOrderAccess } from "@/modules/maintenance/data/work-order-access";
 import type { MaintenanceBoardItem, MaintenanceColumn, WoType, WorkOrderReaction } from "@/modules/report_task/lib/maintenance-board";
 import { loadExpenseTracking, pendingExpenseWorkOrders, recordedExpenseWorkOrders } from "@/modules/maintenance/data/expense-tracking";
 import { expenseDueAt } from "@/modules/maintenance/lib/expense-deadline";
@@ -93,6 +94,10 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
           dueRequests: { where: { status: "pending" } },
         },
       },
+      overdueScore: true,
+      pmRoundDate: true,
+      propertyId: true,
+      additionalPropertyIds: true,
       dueRequests: {
         where: { status: "pending" },
         select: { createdAt: true, newDate: true, requestedBy: true, kind: true },
@@ -125,16 +130,39 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
       take: LIMIT,
     });
     const pendingRows = specialIds.length > 0 ? await prisma.workOrder.findMany({ where: { orgId, id: { in: specialIds } }, select }) : [];
+    // ใบ PM อัตโนมัติไม่มีคนเปิด คนสร้างแผนจึงไม่ "เกี่ยวข้อง" ตามเกณฑ์บอร์ด — แต่เป็นคนอนุมัติคำขอเลื่อน
+    // ขึ้นการ์ดให้เฉพาะตอนมีคำขอรอเขาอนุมัติ และเปิดใบได้จริง (ไม่งั้นบอร์ดคนสร้างแผนให้คนอื่นจะรก)
+    const shownIds = new Set([...rows, ...pendingRows].map((w) => w.id));
+    const myPlanIds = access.seeAll
+      ? []
+      : (await prisma.pmSchedule.findMany({ where: { orgId, createdBy: session.userId }, select: { id: true } })).map((p) => p.id);
+    const awaitingMe = myPlanIds.length > 0
+      ? (
+          await prisma.workOrder.findMany({
+            where: {
+              orgId,
+              autoCreated: true,
+              createdBy: null,
+              pmScheduleId: { in: myPlanIds },
+              status: { in: ["open", "in_progress"] },
+              dueRequests: { some: { status: "pending", kind: null, requestedBy: { not: session.userId } } },
+            },
+            select,
+          })
+        ).filter((w) => !shownIds.has(w.id) && canSeeWorkOrder(full, w))
+      : [];
+    const awaitingMeIds = new Set(awaitingMe.map((w) => w.id));
     const tracking = pendingIds.length > 0 ? await loadExpenseTracking(orgId) : null;
     const clockFrom = new Map(tracking ? (await pendingExpenseWorkOrders(orgId)).map((o) => [o.id, o.clockFrom] as const) : []);
     // ใบ PM อัตโนมัติไม่มีคนเปิด เจ้าของคำขอคือคนสร้างแผน (เหมือน workOrderOwnerId)
-    const planIds = [...new Set([...pendingRows, ...rows].filter((w) => w.dueRequests.length > 0 && !w.createdBy && w.autoCreated && w.pmScheduleId).map((w) => w.pmScheduleId!))];
+    const planIds = [...new Set([...pendingRows, ...rows, ...awaitingMe].filter((w) => w.dueRequests.length > 0 && !w.createdBy && w.autoCreated && w.pmScheduleId).map((w) => w.pmScheduleId!))];
     const planOwner = new Map(
       planIds.length > 0
         ? (await prisma.pmSchedule.findMany({ where: { orgId, id: { in: planIds } }, select: { id: true, createdBy: true } })).map((p) => [p.id, p.createdBy] as const)
         : [],
     );
-    for (const w of [...pendingRows, ...rows]) {
+    const scoreChips = await workOrderScoreChips(orgId, [...pendingRows, ...rows, ...awaitingMe]);
+    for (const w of [...pendingRows, ...rows, ...awaitingMe]) {
       const dueOwner = w.createdBy ?? (w.autoCreated && w.pmScheduleId ? (planOwner.get(w.pmScheduleId) ?? null) : null);
       const expensePending = pendingSet.has(w.id);
       const expenseRecordedTotal = recordedMap.get(w.id);
@@ -164,7 +192,7 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
         assigneeMore: w.groupMemberIds.length,
         groupMemberIds: w.groupMemberIds,
         createdById: w.createdBy,
-        involvedIds: [...new Set([w.assignedTo, ...w.groupMemberIds, w.createdBy, ...w.ccUserIds].filter((x): x is string => !!x))],
+        involvedIds: [...new Set([w.assignedTo, ...w.groupMemberIds, w.createdBy, ...w.ccUserIds, ...(awaitingMeIds.has(w.id) ? [session.userId] : [])].filter((x): x is string => !!x))],
         place: w.property?.name ?? null,
         href: `/maintenance/work-orders/${w.id}`,
         reactions: reactionsByWo.get(w.id) ?? [],
@@ -175,6 +203,7 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
         pendingDueAt: w.dueRequests[0]?.createdAt.toISOString() ?? null,
         pendingDueTo: w.dueRequests.length === 1 ? bangkokDay(w.dueRequests[0]!.newDate) : null,
         // ขอเลื่อนกำหนดส่ง (ไม่นับขอเลื่อนบันทึกค่าใช้จ่ายที่ CEO ตัดสิน) · คนขอเองอนุมัติของตัวเองไม่ได้
+        score: scoreChips.get(w.id),
         pendingDueWaitsMe: dueOwner === session.userId && w.dueRequests.some((r) => r.kind === null && r.requestedBy !== session.userId),
         isPrivate: w.isPrivate,
         status: w.status,

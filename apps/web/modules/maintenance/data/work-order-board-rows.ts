@@ -1,3 +1,4 @@
+import { workOrderScoreChips } from "@/modules/maintenance/data/work-order-score-chips";
 import { earliestPendingDue } from "@/modules/maintenance/lib/work-order-members";
 import "server-only";
 import { prisma } from "@smartboss/database";
@@ -45,6 +46,7 @@ export async function buildBoardRows(
   const expenseTotals = new Map(
     [...new Set(expenseRows.map((r) => r.workOrderId))].map((id) => [id, realExpenseTotal(expenseRows.filter((r) => r.workOrderId === id))] as const),
   );
+  const scoreChips = await workOrderScoreChips(orgId, orders);
   const pendingClock = new Map(trackingOn ? (await pendingExpenseWorkOrders(orgId)).map((o) => [o.id, o.clockFrom] as const) : []);
   return orders
     .map((o) => ({
@@ -73,6 +75,7 @@ export async function buildBoardRows(
       commentCount: commentsBy.get(o.id) ?? 0,
       photoCount: o.photoUrls.length + o.afterPhotoUrls.length,
       pendingDue: dueReqBy.get(o.id) ?? 0,
+      score: scoreChips.get(o.id),
       due: dueTag(earliestPendingDue(o), o.status),
     }));
 }

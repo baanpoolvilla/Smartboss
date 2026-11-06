@@ -1,5 +1,6 @@
 "use client";
 
+import type { WorkOrderScoreChip } from "@/modules/maintenance/data/work-order-score-chips";
 import Link from "next/link";
 import { CalendarClock, CalendarDays, CalendarX2, Check, Clock, Lock, MapPin, MessageSquare, Paperclip } from "lucide-react";
 
@@ -54,6 +55,8 @@ export interface WoCardProps {
   photoCount: number;
   /** คำขอเลื่อนที่รออนุมัติ */
   pendingDue: number;
+  /** ป้ายคะแนนแบบการ์ดงาน: หักแล้ว / คืนแล้ว / ยกเว้น */
+  score?: WorkOrderScoreChip;
   /** ขอเลื่อนเป็นวันไหน (YYYY-MM-DD) เมื่อมีคำขอเดียว — บอร์ดงานส่งมา */
   pendingDueTo?: string | null;
   /** คนที่ดูอยู่ต้องอนุมัติ: แถบแดงค้างจนกว่าจะตัดสิน เปิดอ่านแล้วไม่หาย (เหมือนการ์ดงาน) */
@@ -163,7 +166,7 @@ export function WoCard(p: WoCardProps) {
       : doneTone === "gray"
         ? "bg-(--bg-soft) text-(--ink-soft) ring-(--line)"
         : "bg-[color-mix(in_srgb,var(--brand-green)_14%,white)] text-[var(--brand-green-dark)] ring-transparent";
-  const showMetaRow = (open && !p.autoCreated) || p.pendingDue > 0 || p.commentCount > 0 || unreadComments > 0;
+  const showMetaRow = (open && !p.autoCreated) || p.pendingDue > 0 || p.commentCount > 0 || unreadComments > 0 || !!p.score;
 
   return (
     <Link
@@ -231,6 +234,23 @@ export function WoCard(p: WoCardProps) {
                 className="mr-auto inline-block h-2.5 w-2.5 shrink-0 rounded-full"
                 style={{ backgroundColor: dot.color }}
               />
+            )}
+            {p.score && (
+              <span
+                data-testid="wo-score-chip"
+                title={
+                  p.score.kind === "docked"
+                    ? `โดนหักคะแนน ${p.score.points} คะแนนแล้ว (เลยกำหนด)`
+                    : p.score.kind === "refunded"
+                      ? `คืนคะแนน ${p.score.points} คะแนนแล้ว · ไม่นับการหักครั้งนี้`
+                      : "ยกเว้นคะแนนใบนี้ · เลยกำหนดก็ไม่หัก แต่ยังต้องทำและปิดงานตามปกติ"
+                }
+                className={`inline-flex h-4 shrink-0 items-center whitespace-nowrap rounded-md px-1.5 text-[10px] font-semibold ring-1 ring-inset ${
+                  p.score.kind === "docked" ? "bg-red-50 text-red-700 ring-red-200" : "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                }`}
+              >
+                {p.score.kind === "docked" ? `−${p.score.points}` : p.score.kind === "refunded" ? `คืน +${p.score.points}` : "ยกเว้นคะแนน"}
+              </span>
             )}
             {p.pendingDue > 0 && !p.pendingDueWaitsMe && (
               <span className="flex h-4 items-center gap-1 rounded-full bg-(--danger) px-1.5 text-[10px] font-bold text-white" title="มีคำขอเลื่อนกำหนดส่งรออนุมัติ">
