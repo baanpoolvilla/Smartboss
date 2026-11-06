@@ -50,6 +50,7 @@ export function RequestsHome({
   statsTitle,
   petty,
   overdueNote,
+  createdNote = null,
   showPayTab,
   showAllTab,
   showApproveTab,
@@ -61,6 +62,8 @@ export function RequestsHome({
   statsTitle: string;
   petty: { id: string; name: string; balance: number }[];
   overdueNote: string | null;
+  /** หลังลง OT หลายคน — "ส่งแล้ว N ใบ" */
+  createdNote?: string | null;
   showPayTab: boolean;
   showAllTab: boolean;
   /** คนที่อนุมัติได้ (HR/CEO) — เห็นแท็บ "รอฉันอนุมัติ" แม้ว่าง · คนดูทุกใบอย่างเดียว (เช่น IT) ไม่ต้องเห็น */
@@ -360,6 +363,7 @@ export function RequestsHome({
             {mobileTabs}
           </div>
           {strip}
+          {createdNote && <Notice tone="ok">{createdNote}</Notice>}
           {overdueNote && <Notice tone="warn">{overdueNote}</Notice>}
           {activeFilters > 0 && (
             <div className="flex flex-wrap items-center gap-1.5 text-xs">

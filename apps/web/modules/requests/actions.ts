@@ -670,6 +670,80 @@ export async function createRequestAction(input: CreateInput): Promise<Result<{ 
   }
 }
 
+/** OT หลายคนในงานเดียว — ครั้งละไม่เกินเท่านี้ */
+const OT_GROUP_MAX = 30;
+
+/**
+ * ลง OT ให้หลายคนที่ทำงานเดียวกัน (ผู้ใช้ 6/11/2569 "งานนั้นมีคนทำหลายคน") — ออกเป็นใบละคนเหมือนยื่นทีละใบ
+ * แต่ละคนคิดเงินจากเงินเดือน/ค่าแรงของตัวเอง ไม่หารกัน · HR ตัดสินทีละใบตามเดิม
+ * ตรวจครบทุกคนก่อน ติดคนเดียว = ไม่สร้างสักใบ (บอกชื่อคนที่ติด ให้เอาออกแล้วส่งใหม่)
+ * คนที่ต้องกรอกค่า OT เอง (ไม่มีเงินเดือนในระบบ) ลงรวมไม่ได้ — ยอดกรอกเองเป็นของคนเดียว
+ * ยื่นทีละคน (createRequestAction) ไม่เปลี่ยนอะไร
+ */
+export async function createOtGroupAction(input: CreateInput, beneficiaryUserIds: string[]): Promise<Result<{ ids: string[]; codes: string[] }>> {
+  try {
+    const session = await guard();
+    const orgId = session.orgId;
+    if (input.kind !== "ot") return { error: "ลงหลายคนได้เฉพาะ OT" };
+    const ids = [...new Set((beneficiaryUserIds ?? []).map((x) => String(x ?? "").trim()).filter(Boolean))];
+    if (ids.length === 0) return { error: "เลือกคนที่ทำ OT" };
+    if (ids.length > OT_GROUP_MAX) return { error: `ลงพร้อมกันได้ครั้งละไม่เกิน ${OT_GROUP_MAX} คน` };
+
+    const preps: Prepared[] = [];
+    for (const id of ids) {
+      const prep = await prepareRequest(session, { ...input, kind: "ot", beneficiaryUserId: id });
+      if ("error" in prep) return { error: `${await nameOf(id)}: ${prep.error}` };
+      if (ids.length > 1 && prep.fields.otBaseKind === "manual") {
+        return { error: `${prep.fields.beneficiaryName}: ยังไม่มีเงินเดือนในระบบ ต้องกรอกค่า OT เอง — เอาออกจากกลุ่มแล้วลงแยกใบ` };
+      }
+      preps.push(prep);
+    }
+
+    const byName = await nameOf(session.userId);
+    const groupNote = ids.length > 1 ? ` · ลงพร้อมกัน ${ids.length} คน` : "";
+    const created = await withRequestsTenantAfter(
+      orgId,
+      async (tx) => {
+        const codes: string[] = [];
+        for (let i = 0; i < preps.length; i++) codes.push(await nextRequestCode(tx, orgId));
+        return codes;
+      },
+      async (tx, codes) => {
+        const out: { id: string; code: string }[] = [];
+        for (let i = 0; i < preps.length; i++) {
+          const prep = preps[i]!;
+          const f = prep.fields;
+          const { lines, attachments, ...rest } = f;
+          const row = await tx.moneyRequest.create({
+            data: {
+              orgId,
+              code: codes[i]!,
+              kind: "ot",
+              ...rest,
+              ...(lines ? { lines } : {}),
+              attachments: attachments as unknown as object,
+              createdBy: session.userId,
+              createdByName: byName,
+            },
+          });
+          const summary = `ลง OT ให้ ${f.beneficiaryName} ${thai(prep.workDate)} ${f.otStart}–${f.otEnd} (${hoursText(f.otMinutes ?? 0)}) ${baht(f.netAmount)}${groupNote}`;
+          await insertEvent(tx, orgId, { requestId: row.id, byUserId: session.userId, byName, action: "create", summary });
+          out.push({ id: row.id, code: row.code });
+        }
+        return out;
+      },
+    );
+    created.forEach((c, i) => {
+      const f = preps[i]!.fields;
+      void notifyApprovers(orgId, { id: c.id, code: c.code, kind: "ot", title: f.title, netAmount: f.netAmount, beneficiaryName: f.beneficiaryName }, f.approverLevel, [session.userId, f.beneficiaryUserId ?? ""]);
+    });
+    refresh();
+    return { ok: true, ids: created.map((c) => c.id), codes: created.map((c) => c.code) };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
 /**
  * แก้ไขใบที่ยังรออนุมัติ — เฉพาะคนยื่น และยังไม่มีใครตัดสิน (รวมถึงขั้นแรกของ HR ในใบสองขั้น)
  * ตรวจใหม่ทุกข้อเหมือนตอนยื่น (ไม่นับใบตัวเองเป็นของซ้ำ) · เส้นทางอนุมัติคิดใหม่จากยอดใหม่

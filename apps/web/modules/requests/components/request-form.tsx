@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 
-import { createRequestAction, previewRequestAction, updateRequestAction, type Preview, type UploadedFile } from "../actions";
+import { createOtGroupAction, createRequestAction, previewRequestAction, updateRequestAction, type Preview, type UploadedFile } from "../actions";
 import {
   KIND_META,
   amountMismatch,
@@ -123,6 +123,9 @@ export function RequestForm({
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, startSave] = useTransition();
+  // OT: คนอื่นที่ทำงานเดียวกัน (ผู้ใช้ 6/11/2569) — ส่งแล้วแยกเป็นใบละคน · ใบที่กำลังแก้ไม่มีช่องนี้
+  const [extras, setExtras] = useState<string[]>([]);
+  const [extraPreviews, setExtraPreviews] = useState<Record<string, Preview>>({});
 
   const selfKind = kind === "expense" || kind === "cash_advance";
   const effectiveBeneficiary = kind === "contractor" ? null : selfKind && !onBehalf ? me.userId : beneficiary || null;
@@ -141,6 +144,8 @@ export function RequestForm({
     setOnBehalf(false);
     setBeneficiary("");
     setWorkDate(today);
+    setExtras([]);
+    setExtraPreviews({});
   }
 
   const linesTotal = useMemo(() => round2(lines.reduce((s, l) => s + (Number.isFinite(parseMoney(l.amount)) ? parseMoney(l.amount) : 0), 0)), [lines]);
@@ -178,6 +183,32 @@ export function RequestForm({
     return () => clearTimeout(t);
   }, [kind, effectiveBeneficiary, workDate, otStart, otEnd, rateId, routeAmount, editId]);
 
+  // คนที่ทำด้วยกัน: ตรวจ + คิดเงินทีละคน (กติกาเดียวกับคนแรก)
+  const groupMode = kind === "ot" && !editId;
+  const extraIds = groupMode ? extras.filter((id) => id !== effectiveBeneficiary) : [];
+  const extraKey = extraIds.join(",");
+  const seqExtra = useRef(0);
+  useEffect(() => {
+    if (!groupMode || extraIds.length === 0) {
+      setExtraPreviews({});
+      return;
+    }
+    const n = ++seqExtra.current;
+    const t = setTimeout(async () => {
+      const results = await Promise.all(
+        extraIds.map((id) => previewRequestAction({ kind: "ot", beneficiaryUserId: id, workDate, otStart, otEnd, otRateId: rateId, amount: 0 })),
+      );
+      if (n !== seqExtra.current) return;
+      const next: Record<string, Preview> = {};
+      results.forEach((r, i) => {
+        if (r.ok) next[extraIds[i]!] = r.preview;
+      });
+      setExtraPreviews(next);
+    }, 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupMode, extraKey, workDate, otStart, otEnd, rateId]);
+
   const vendorInit = useRef(Boolean(editId));
   useEffect(() => {
     if (vendorInit.current) {
@@ -197,7 +228,21 @@ export function RequestForm({
   const otMinutes = /^\d{2}:\d{2}$/.test(otStart) && /^\d{2}:\d{2}$/.test(otEnd) ? minutesBetween(otStart, otEnd) : 0;
   const manualOt = kind === "ot" && preview?.baseKind === "manual";
   const otAmount = kind === "ot" ? (manualOt ? parseMoney(amount) : (preview?.amount ?? null)) : null;
-  const blocks = preview?.blocks ?? [];
+  const nameOfPerson = (id: string) => people.find((p) => p.userId === id)?.name ?? "";
+  const extraBlocks = extraIds.flatMap((id) => {
+    const p = extraPreviews[id];
+    if (!p) return [];
+    const own = p.blocks.map((b) => `${nameOfPerson(id)}: ${b}`);
+    if (p.baseKind === "manual") own.push(`${nameOfPerson(id)}: ยังไม่มีเงินเดือนในระบบ ต้องกรอกค่า OT เอง — เอาออกแล้วลงแยกใบ`);
+    return own;
+  });
+  const groupCount = extraIds.length > 0 && effectiveBeneficiary ? extraIds.length + 1 : 0;
+  const blocks = [
+    ...(groupCount > 0 && preview ? (preview.blocks).map((b) => `${person?.name ?? ""}: ${b}`) : (preview?.blocks ?? [])),
+    ...(groupCount > 0 && manualOt ? [`${person?.name ?? ""}: ยังไม่มีเงินเดือนในระบบ ต้องกรอกค่า OT เอง — ลงแยกใบ`] : []),
+    ...extraBlocks,
+  ];
+  const extraChecking = extraIds.some((id) => !extraPreviews[id]);
   const fileBlock = files.some((f) => f.duplicateOf);
 
   const total =
@@ -226,6 +271,15 @@ export function RequestForm({
         whtPercent,
         attachments: files,
       };
+      if (groupCount > 0 && effectiveBeneficiary) {
+        const res = await createOtGroupAction(payload, [effectiveBeneficiary, ...extraIds]);
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        router.push(`/requests?created=${res.ids.length}`);
+        return;
+      }
       const res = editId ? await updateRequestAction(editId, payload) : await createRequestAction(payload);
       if (!res.ok) {
         setError(res.error);
@@ -387,6 +441,43 @@ export function RequestForm({
               onChange={setBeneficiary}
               hint={kind === "ot" ? "ลง OT ให้ตัวเองไม่ได้" : "ขอให้ตัวเองไม่ได้"}
             />
+          )}
+          {groupMode && effectiveBeneficiary && (
+            <div className="flex flex-col gap-2 rounded-(--radius) border border-dashed border-(--line) p-3">
+              {extraIds.length > 0 && (
+                <ul className="flex flex-col gap-1.5" aria-label="คนที่ทำด้วยกัน">
+                  {extraIds.map((id) => {
+                    const p = people.find((x) => x.userId === id);
+                    return (
+                      <li key={id} className="flex items-center justify-between gap-2 rounded-(--radius) bg-(--bg-soft) px-3 py-1.5 text-sm">
+                        <span className="min-w-0 truncate">
+                          <span className="font-semibold text-(--ink)">{p?.name ?? id}</span>
+                          {p?.isWorker && <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-900">คนงาน</span>}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={`เอา ${p?.name ?? ""} ออก`}
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-(--ink-soft) hover:bg-(--bg)"
+                          onClick={() => setExtras(extras.filter((x) => x !== id))}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {extraIds.length + 1 < 30 && (
+                <PersonPicker
+                  label={extraIds.length > 0 ? `เพิ่มคนที่ทำด้วยกันอีก (รวม ${extraIds.length + 1} คน)` : "มีคนทำด้วยกันอีกไหม (ถ้ามี)"}
+                  placeholder="พิมพ์ชื่อคนที่ทำงานนี้ด้วยกัน"
+                  items={peopleItems(me.userId).filter((i) => i.id !== effectiveBeneficiary && !extras.includes(i.id))}
+                  value=""
+                  onChange={(v) => v && setExtras([...extras, v])}
+                  hint="วันที่ เวลา อัตรา และงานเดียวกัน · ส่งแล้วแยกเป็นใบละคน แต่ละคนคิดเงินจากเงินเดือน/ค่าแรงของตัวเอง ไม่หารกัน"
+                />
+              )}
+            </div>
           )}
           {person?.isWorker && (kind === "ot" || kind === "advance") && (
             <Notice tone="warn">
@@ -603,6 +694,26 @@ export function RequestForm({
                   <span className="text-(--ink-soft)">เวลา</span>
                   <span className="text-(--ink)">{otMinutes ? `${otStart}–${otEnd} · ${hoursText(otMinutes)}` : "—"}</span>
                 </div>
+                {groupCount > 0 ? (
+                  <div className="flex flex-col gap-1.5 border-t border-(--line) pt-2">
+                    <span className="text-xs font-semibold text-(--ink)">ค่า OT รายคน · {groupCount} ใบ ไม่หารกัน</span>
+                    {[effectiveBeneficiary!, ...extraIds].map((id, i) => {
+                      const pv = i === 0 ? preview : extraPreviews[id];
+                      const who = people.find((x) => x.userId === id);
+                      const bad = pv && (pv.blocks.length > 0 || pv.baseKind === "manual");
+                      return (
+                        <div key={id} className="flex items-baseline justify-between gap-2 text-sm">
+                          <span className={`min-w-0 truncate ${bad ? "text-red-700" : "text-(--ink)"}`}>{who?.name ?? ""}</span>
+                          <span className="shrink-0 tabular-nums text-(--ink)">
+                            {!pv ? "…" : bad ? "ติดปัญหา" : pv.payHidden ? "คิดจากเงินเดือน" : baht(pv.amount ?? 0)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    <span className="text-[11px] text-(--ink-soft)">ยอดของพนักงานประจำเห็นเฉพาะเจ้าตัว / CEO / ผู้ดูแลเงินเดือน</span>
+                  </div>
+                ) : (
+                <>
                 {preview?.formula && <div className="rounded-(--radius) bg-(--bg-soft) px-2.5 py-2 text-xs text-(--ink-soft)">{preview.formula}</div>}
                 {person && preview?.payHidden ? (
                   <div className="border-t border-(--line) pt-2 text-sm text-(--ink-soft)">
@@ -612,6 +723,8 @@ export function RequestForm({
                   <MoneyRow strong label="ค่า OT" value={Number.isFinite(otAmount ?? NaN) ? (otAmount as number) : 0} hint={person.isWorker ? "คิดตามค่าแรงในโมดูลคนงาน" : preview?.rateLabel ?? undefined} />
                 ) : (
                   <div className="border-t border-(--line) pt-2 text-sm text-(--ink-soft)">เลือกคนที่ทำ OT ก่อน ระบบจะคิดค่า OT ให้</div>
+                )}
+                </>
                 )}
               </>
             )}
@@ -672,11 +785,11 @@ export function RequestForm({
           <button
             type="button"
             onClick={submit}
-            disabled={saving || blocks.length > 0 || fileBlock || total <= 0 && kind !== "ot"}
+            disabled={saving || blocks.length > 0 || fileBlock || (groupCount > 0 && extraChecking) || total <= 0 && kind !== "ot"}
             className="inline-flex h-12 items-center justify-center gap-2 rounded-(--radius) bg-(--app) px-4 text-base font-semibold text-white hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-            {editId ? `บันทึกการแก้ไข${total > 0 ? ` ${baht(total)}` : ""}` : kind === "ot" ? "ส่งให้ HR ตรวจ" : `ส่งขออนุมัติ${total > 0 ? ` ${baht(total)}` : ""}`}
+            {editId ? `บันทึกการแก้ไข${total > 0 ? ` ${baht(total)}` : ""}` : kind === "ot" ? (groupCount > 0 ? `ส่งให้ HR ตรวจ (${groupCount} คน)` : "ส่งให้ HR ตรวจ") : `ส่งขออนุมัติ${total > 0 ? ` ${baht(total)}` : ""}`}
           </button>
           <p className="text-center text-xs text-(--ink-soft)">
             {thaiDate(workDate)} · แก้ไขได้จนกว่าจะมีคนอนุมัติ

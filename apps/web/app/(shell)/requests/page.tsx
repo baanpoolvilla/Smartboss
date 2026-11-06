@@ -18,7 +18,9 @@ export const dynamic = "force-dynamic";
  * เบิกจ่าย & OT — หน้ารวม: ตัวเลขเดือนนี้ + รายการ (รอฉันอนุมัติ / รอจ่าย / ของฉัน / ทั้งหมด)
  * ใบที่ต้องทำอะไรอยู่ขึ้นพื้นแดงอ่อน (แบบเดียวกับการ์ดบนบอร์ดงาน)
  */
-export default async function RequestsPage() {
+export default async function RequestsPage({ searchParams }: { searchParams: Promise<{ created?: string }> }) {
+  const sp = await searchParams;
+  const createdCount = Math.floor(Number(sp.created));
   const { session, viewer } = await requestsPage();
   const today = bangkokToday();
   const month = today.slice(0, 7);
@@ -44,7 +46,7 @@ export default async function RequestsPage() {
     : [];
   const ceoIds = new Set(await usersWithPermission(session.orgId, REQ_PERMS.approveCeo));
   const pureHr = (await usersWithPermission(session.orgId, REQ_PERMS.approve)).filter((id) => !ceoIds.has(id));
-  return <Body all={all} viewer={viewer} today={today} month={month} petty={petty} pureHr={pureHr} />;
+  return <Body all={all} viewer={viewer} today={today} month={month} petty={petty} pureHr={pureHr} createdCount={createdCount} />;
 }
 
 async function Body({
@@ -54,6 +56,7 @@ async function Body({
   month,
   petty,
   pureHr,
+  createdCount,
 }: {
   all: ReturnType<typeof maskRequest>[] | null;
   viewer: Awaited<ReturnType<typeof requestsPage>>["viewer"];
@@ -61,6 +64,7 @@ async function Body({
   month: string;
   petty: { id: string; name: string; balance: number }[];
   pureHr: string[];
+  createdCount: number;
 }) {
   if (!all) {
     return (
@@ -134,6 +138,7 @@ async function Body({
       stats={seesAll ? stats : null}
       statsTitle={monthTitle(month)}
       petty={petty}
+      createdNote={Number.isFinite(createdCount) && createdCount > 1 ? `ส่ง OT ให้ HR ตรวจแล้ว ${createdCount} ใบ (ใบละคน) — ดูได้ในแท็บของฉัน` : null}
       overdueNote={
         overdueClear.length > 0 && seesAll
           ? `เบิกเงินไปซื้อของแล้วเลยกำหนดส่งใบเสร็จ ${overdueClear.length} ใบ (${overdueClear.map((r) => `${r.code} ${r.beneficiaryName}`).join(", ")})`
