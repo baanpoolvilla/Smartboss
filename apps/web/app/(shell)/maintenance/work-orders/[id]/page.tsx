@@ -244,7 +244,7 @@ export default async function WorkOrderDetailPage({
   const canEditTeam = isOpenNow && !wo.isPrivate && canEditDueDate({ userId: session.userId, viewAll }, { createdBy: ownerId });
   const teamUsers = canEditTeam
     ? (await listOrgUsers(orgId))
-        .filter((u) => hasPermission(session, MAINT_PERMS.propertyManage) || u.roleCodes.includes("TECHNICIAN") || u.roleCodes.includes("CARETAKER") || workOrderMemberIds(wo).includes(u.id))
+        // เลือกได้ทั้งองค์กร — เดิมผู้ดูแลบ้านเห็นแค่ช่าง/ผู้ดูแลบ้าน (ผู้ใช้ 6/11/2569)
         .map((u) => ({ id: u.id, label: u.name, sub: roleLabel(u.roleCodes) }))
     : [];
   const checkItems = readChecklist(wo.checklist);

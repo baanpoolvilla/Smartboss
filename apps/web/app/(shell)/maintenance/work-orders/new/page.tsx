@@ -72,16 +72,8 @@ export default async function NewWorkOrderPage({
       })
     : null;
 
-  // ผู้ดูแลบ้านมอบหมายได้เฉพาะช่าง/ผู้ดูแลบ้าน (เหมือนของเดิม)
-  const isCaretaker =
-    !hasPermission(session, MAINT_PERMS.propertyManage) &&
-    hasPermission(session, MAINT_PERMS.workorderManage);
-  const assignable = isCaretaker
-    ? users.filter(
-        (u) =>
-          u.roleCodes.includes("TECHNICIAN") || u.roleCodes.includes("CARETAKER")
-      )
-    : users;
+  // ทุกคนที่สร้างใบได้ เลือกผู้รับผิดชอบได้ทั้งองค์กร — เดิมผู้ดูแลบ้านเห็นแค่ช่าง/ผู้ดูแลบ้าน (ผู้ใช้ 6/11/2569)
+  const assignable = users;
 
   const prefillProps = [
     ...(sp.propertyId ? [sp.propertyId] : []),
