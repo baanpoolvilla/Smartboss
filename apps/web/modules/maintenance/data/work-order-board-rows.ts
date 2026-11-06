@@ -15,6 +15,8 @@ export async function buildBoardRows(
   orders: Awaited<ReturnType<typeof listWorkOrders>>,
   expenseSet: Set<string>,
   tracking: Awaited<ReturnType<typeof loadExpenseTracking>>,
+  /** คนที่ดูอยู่ — แถบแดง "รอคุณอนุมัติ" ค้างจนกว่าจะตัดสิน เหมือนบอร์ดงาน (ผู้ใช้ 6/11/2569) */
+  viewerId?: string,
 ): Promise<BoardOrder[]> {
   const trackingOn = trackingActive(tracking);
   // การ์ดแบบการ์ดงาน: จำนวนความคิดเห็น (ไม่นับบันทึกระบบ) + คำขอเลื่อนที่รออนุมัติ ต่อใบ
@@ -26,15 +28,22 @@ export async function buildBoardRows(
           where: { orgId, workOrderId: { in: orderIds }, OR: [{ kind: null }, { kind: { not: "log" } }] },
           _count: { _all: true },
         }),
-        prisma.workOrderDueRequest.groupBy({
-          by: ["workOrderId"],
+        prisma.workOrderDueRequest.findMany({
           where: { orgId, workOrderId: { in: orderIds }, status: "pending" },
-          _count: { _all: true },
+          select: { workOrderId: true, newDate: true, requestedBy: true, kind: true },
         }),
       ])
     : [[], []];
   const commentsBy = new Map(commentCounts.map((c) => [c.workOrderId, c._count._all]));
-  const dueReqBy = new Map(dueReqCounts.map((c) => [c.workOrderId, c._count._all]));
+  const dueReqsOf = new Map<string, typeof dueReqCounts>();
+  for (const r of dueReqCounts) dueReqsOf.set(r.workOrderId, [...(dueReqsOf.get(r.workOrderId) ?? []), r]);
+  // ใบ PM อัตโนมัติไม่มีคนเปิด คนอนุมัติคือคนสร้างแผน (เหมือน workOrderOwnerId)
+  const planIds = [...new Set(orders.filter((o) => dueReqsOf.has(o.id) && !o.createdBy && o.autoCreated && o.pmScheduleId).map((o) => o.pmScheduleId!))];
+  const planOwner = new Map(
+    planIds.length > 0
+      ? (await prisma.pmSchedule.findMany({ where: { orgId, id: { in: planIds } }, select: { id: true, createdBy: true } })).map((p) => [p.id, p.createdBy] as const)
+      : [],
+  );
   // ชื่อทั้งผู้เปิดและผู้ได้รับมอบหมาย — ใช้ตารางเดียวกัน (การ์ด + ตัวกรองผู้รับผิดชอบ)
   // ยอดจ่ายจริง (ใบหลายบ้านนับครั้งเดียว) · ใบรอต้นทาง (PR/PO/ใบเบิก) = ไม่อยู่ในรายการรอบันทึก
   const expenseRows = trackingOn && orderIds.length
@@ -74,7 +83,13 @@ export async function buildBoardRows(
       expenseHeld: trackingOn && o.status === "completed" && o.requiresExpense && !o.isPrivate && !expenseSet.has(o.id) && !pendingClock.has(o.id),
       commentCount: commentsBy.get(o.id) ?? 0,
       photoCount: o.photoUrls.length + o.afterPhotoUrls.length,
-      pendingDue: dueReqBy.get(o.id) ?? 0,
+      pendingDue: dueReqsOf.get(o.id)?.length ?? 0,
+      pendingDueTo: dueReqsOf.get(o.id)?.length === 1 ? dueReqsOf.get(o.id)![0]!.newDate.toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" }) : null,
+      // ขอเลื่อนกำหนดส่ง (ไม่นับขอเลื่อนบันทึกค่าใช้จ่ายที่ CEO ตัดสิน) · คนขอเองอนุมัติของตัวเองไม่ได้
+      pendingDueWaitsMe:
+        !!viewerId &&
+        (o.createdBy ?? (o.autoCreated && o.pmScheduleId ? (planOwner.get(o.pmScheduleId) ?? null) : null)) === viewerId &&
+        (dueReqsOf.get(o.id) ?? []).some((r) => r.kind === null && r.requestedBy !== viewerId),
       score: scoreChips.get(o.id),
       due: dueTag(earliestPendingDue(o), o.status),
     }));

@@ -58,6 +58,10 @@ export interface BoardOrder {
   pendingDue?: number;
   /** ป้ายคะแนนแบบการ์ดงาน */
   score?: WorkOrderScoreChip;
+  /** ขอเลื่อนเป็นวันไหน (YYYY-MM-DD) เมื่อมีคำขอเดียว */
+  pendingDueTo?: string | null;
+  /** คนที่ดูอยู่ต้องอนุมัติ — แถบแดงค้างจนกว่าจะตัดสิน */
+  pendingDueWaitsMe?: boolean;
 }
 
 /** แถวเบาของใบในคอลัมน์เสร็จแล้ว — พอสำหรับนับและกรอง ข้อมูลการ์ดโหลดตอนจะแสดง */
@@ -277,6 +281,8 @@ function OrderCard({
       commentCount={wo.commentCount ?? 0}
       photoCount={wo.photoCount ?? 0}
       pendingDue={wo.pendingDue ?? 0}
+      pendingDueTo={wo.pendingDueTo}
+      pendingDueWaitsMe={wo.pendingDueWaitsMe}
       score={wo.score}
       isPrivate={wo.isPrivate}
       subline={wo.pmRound ? <>รอบ {wo.pmRound.label}</> : undefined}

@@ -118,6 +118,7 @@ export default async function WorkOrdersPage({
     ),
     expenseSet,
     tracking,
+    session.userId,
   );
 
   const rows = builtRows.filter((o) => !doneFirstIds.has(o.id));

@@ -921,5 +921,5 @@ export async function loadDoneWorkOrderCardsAction(ids: string[]): Promise<Board
     workOrderIdsWithExpenses(orgId),
     loadExpenseTracking(orgId),
   ]);
-  return buildBoardRows(orgId, orders, expenseSet, tracking);
+  return buildBoardRows(orgId, orders, expenseSet, tracking, session.userId);
 }
