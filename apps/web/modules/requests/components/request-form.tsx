@@ -126,6 +126,9 @@ export function RequestForm({
   // OT: คนอื่นที่ทำงานเดียวกัน (ผู้ใช้ 6/11/2569) — ส่งแล้วแยกเป็นใบละคน · ใบที่กำลังแก้ไม่มีช่องนี้
   const [extras, setExtras] = useState<string[]>([]);
   const [extraPreviews, setExtraPreviews] = useState<Record<string, Preview>>({});
+  // คนงานที่ยังไม่มีในระบบ — พิมพ์ชื่อไว้ก่อน ผูกกับคนงานจริงทีหลังในใบ (ผู้ใช้ 6/11/2569)
+  const [pendingNames, setPendingNames] = useState<string[]>([]);
+  const [typing, setTyping] = useState<string | null>(null);
 
   const selfKind = kind === "expense" || kind === "cash_advance";
   const effectiveBeneficiary = kind === "contractor" ? null : selfKind && !onBehalf ? me.userId : beneficiary || null;
@@ -146,6 +149,8 @@ export function RequestForm({
     setWorkDate(today);
     setExtras([]);
     setExtraPreviews({});
+    setPendingNames([]);
+    setTyping(null);
   }
 
   const linesTotal = useMemo(() => round2(lines.reduce((s, l) => s + (Number.isFinite(parseMoney(l.amount)) ? parseMoney(l.amount) : 0), 0)), [lines]);
@@ -236,7 +241,10 @@ export function RequestForm({
     if (p.baseKind === "manual") own.push(`${nameOfPerson(id)}: ยังไม่มีเงินเดือนในระบบ ต้องกรอกค่า OT เอง — เอาออกแล้วลงแยกใบ`);
     return own;
   });
-  const groupCount = extraIds.length > 0 && effectiveBeneficiary ? extraIds.length + 1 : 0;
+  const pendingList = groupMode ? pendingNames : [];
+  const realCount = (effectiveBeneficiary ? 1 : 0) + extraIds.length;
+  // ส่งแบบกลุ่มเมื่อมีมากกว่าหนึ่งคน หรือมีชื่อที่รอผูก (ลงคนเดียวปกติใช้ทางเดิม)
+  const groupCount = groupMode && (extraIds.length > 0 || pendingList.length > 0) ? realCount + pendingList.length : 0;
   const blocks = [
     ...(groupCount > 0 && preview ? (preview.blocks).map((b) => `${person?.name ?? ""}: ${b}`) : (preview?.blocks ?? [])),
     ...(groupCount > 0 && manualOt ? [`${person?.name ?? ""}: ยังไม่มีเงินเดือนในระบบ ต้องกรอกค่า OT เอง — ลงแยกใบ`] : []),
@@ -271,8 +279,8 @@ export function RequestForm({
         whtPercent,
         attachments: files,
       };
-      if (groupCount > 0 && effectiveBeneficiary) {
-        const res = await createOtGroupAction(payload, [effectiveBeneficiary, ...extraIds]);
+      if (groupCount > 0) {
+        const res = await createOtGroupAction(payload, [...(effectiveBeneficiary ? [effectiveBeneficiary] : []), ...extraIds], pendingList);
         if (!res.ok) {
           setError(res.error);
           return;
@@ -442,8 +450,28 @@ export function RequestForm({
               hint={kind === "ot" ? "ลง OT ให้ตัวเองไม่ได้" : "ขอให้ตัวเองไม่ได้"}
             />
           )}
-          {groupMode && effectiveBeneficiary && (
+          {groupMode && (effectiveBeneficiary || pendingList.length > 0 || typing !== null) && (
             <div className="flex flex-col gap-2 rounded-(--radius) border border-dashed border-(--line) p-3">
+              {pendingList.length > 0 && (
+                <ul className="flex flex-col gap-1.5" aria-label="คนงานที่ยังไม่มีในระบบ">
+                  {pendingList.map((n) => (
+                    <li key={n} className="flex items-center justify-between gap-2 rounded-(--radius) bg-amber-50 px-3 py-1.5 text-sm">
+                      <span className="min-w-0 truncate">
+                        <span className="font-semibold text-(--ink)">{n}</span>
+                        <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-900">ยังไม่มีในระบบ</span>
+                      </span>
+                      <button
+                        type="button"
+                        aria-label={`เอา ${n} ออก`}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-(--ink-soft) hover:bg-(--bg)"
+                        onClick={() => setPendingNames(pendingNames.filter((x) => x !== n))}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
               {extraIds.length > 0 && (
                 <ul className="flex flex-col gap-1.5" aria-label="คนที่ทำด้วยกัน">
                   {extraIds.map((id) => {
@@ -467,9 +495,9 @@ export function RequestForm({
                   })}
                 </ul>
               )}
-              {extraIds.length + 1 < 30 && (
+              {effectiveBeneficiary && realCount + pendingList.length < 30 && (
                 <PersonPicker
-                  label={extraIds.length > 0 ? `เพิ่มคนที่ทำด้วยกันอีก (รวม ${extraIds.length + 1} คน)` : "มีคนทำด้วยกันอีกไหม (ถ้ามี)"}
+                  label={realCount + pendingList.length > 1 ? `เพิ่มคนที่ทำด้วยกันอีก (รวม ${realCount + pendingList.length} คน)` : "มีคนทำด้วยกันอีกไหม (ถ้ามี)"}
                   placeholder="พิมพ์ชื่อคนที่ทำงานนี้ด้วยกัน"
                   items={peopleItems(me.userId).filter((i) => i.id !== effectiveBeneficiary && !extras.includes(i.id))}
                   value=""
@@ -477,7 +505,52 @@ export function RequestForm({
                   hint="วันที่ เวลา อัตรา และงานเดียวกัน · ส่งแล้วแยกเป็นใบละคน แต่ละคนคิดเงินจากเงินเดือน/ค่าแรงของตัวเอง ไม่หารกัน"
                 />
               )}
+              {typing !== null && (
+                <div className="flex flex-col gap-1.5 text-sm">
+                  <label htmlFor="pending-name" className="font-semibold text-(--ink)">ชื่อคนงานที่ยังไม่มีในระบบ</label>
+                  <div className="flex gap-2">
+                    <input
+                      id="pending-name"
+                      autoFocus
+                      className={`${fieldNoW} min-w-0 flex-1`}
+                      placeholder="เช่น มิ้นต์ (คนงานใหม่)"
+                      value={typing}
+                      maxLength={120}
+                      onChange={(e) => setTyping(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const n = typing.trim();
+                          if (n && !pendingNames.includes(n)) setPendingNames([...pendingNames, n]);
+                          setTyping(null);
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="h-11 shrink-0 rounded-(--radius) bg-(--app) px-4 text-sm font-semibold text-white disabled:opacity-50"
+                      disabled={!typing.trim()}
+                      onClick={() => {
+                        const n = typing.trim();
+                        if (n && !pendingNames.includes(n)) setPendingNames([...pendingNames, n]);
+                        setTyping(null);
+                      }}
+                    >
+                      เพิ่ม
+                    </button>
+                    <button type="button" className="h-11 shrink-0 rounded-(--radius) border border-(--line) px-3 text-sm text-(--ink-soft)" onClick={() => setTyping(null)}>
+                      ยกเลิก
+                    </button>
+                  </div>
+                  <span className="text-xs text-(--ink-soft)">ใบจะรอผูกชื่อ ยังไม่คิดเงิน · เพิ่มคนงานเข้าระบบแล้วกด "ผูกกับคนงาน" ในใบ ระบบจะตรวจลงเวลาเข้างานและคิดค่า OT จากค่าแรงให้ แล้วส่ง HR อนุมัติ</span>
+                </div>
+              )}
             </div>
+          )}
+          {groupMode && typing === null && realCount + pendingList.length < 30 && (
+            <button type="button" className="-mt-2 self-start text-xs font-medium text-(--app-strong) hover:underline" onClick={() => setTyping("")}>
+              ＋ คนงานยังไม่มีในระบบ? พิมพ์ชื่อไว้ก่อน
+            </button>
           )}
           {person?.isWorker && (kind === "ot" || kind === "advance") && (
             <Notice tone="warn">
@@ -696,9 +769,9 @@ export function RequestForm({
                 </div>
                 {groupCount > 0 ? (
                   <div className="flex flex-col gap-1.5 border-t border-(--line) pt-2">
-                    <span className="text-xs font-semibold text-(--ink)">ค่า OT รายคน · {groupCount} ใบ ไม่หารกัน</span>
-                    {[effectiveBeneficiary!, ...extraIds].map((id, i) => {
-                      const pv = i === 0 ? preview : extraPreviews[id];
+                    <span className="text-xs font-semibold text-(--ink)">ค่า OT รายคน · {groupCount} ใบ{groupCount > 1 ? " ไม่หารกัน" : ""}</span>
+                    {[...(effectiveBeneficiary ? [effectiveBeneficiary] : []), ...extraIds].map((id, i) => {
+                      const pv = i === 0 && id === effectiveBeneficiary ? preview : extraPreviews[id];
                       const who = people.find((x) => x.userId === id);
                       const bad = pv && (pv.blocks.length > 0 || pv.baseKind === "manual");
                       return (
@@ -710,6 +783,12 @@ export function RequestForm({
                         </div>
                       );
                     })}
+                    {pendingList.map((n) => (
+                      <div key={`p-${n}`} className="flex items-baseline justify-between gap-2 text-sm">
+                        <span className="min-w-0 truncate text-(--ink)">{n}</span>
+                        <span className="shrink-0 text-amber-700">รอผูกชื่อ · ยังไม่คิดเงิน</span>
+                      </div>
+                    ))}
                     <span className="text-[11px] text-(--ink-soft)">ยอดของพนักงานประจำเห็นเฉพาะเจ้าตัว / CEO / ผู้ดูแลเงินเดือน</span>
                   </div>
                 ) : (
@@ -789,7 +868,7 @@ export function RequestForm({
             className="inline-flex h-12 items-center justify-center gap-2 rounded-(--radius) bg-(--app) px-4 text-base font-semibold text-white hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-            {editId ? `บันทึกการแก้ไข${total > 0 ? ` ${baht(total)}` : ""}` : kind === "ot" ? (groupCount > 0 ? `ส่งให้ HR ตรวจ (${groupCount} คน)` : "ส่งให้ HR ตรวจ") : `ส่งขออนุมัติ${total > 0 ? ` ${baht(total)}` : ""}`}
+            {editId ? `บันทึกการแก้ไข${total > 0 ? ` ${baht(total)}` : ""}` : kind === "ot" ? (groupCount > 0 ? (realCount === 0 ? `บันทึก OT ไว้ก่อน (รอผูกชื่อ ${groupCount} คน)` : `ส่งให้ HR ตรวจ (${groupCount} คน)`) : "ส่งให้ HR ตรวจ") : `ส่งขออนุมัติ${total > 0 ? ` ${baht(total)}` : ""}`}
           </button>
           <p className="text-center text-xs text-(--ink-soft)">
             {thaiDate(workDate)} · แก้ไขได้จนกว่าจะมีคนอนุมัติ

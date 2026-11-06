@@ -11,7 +11,8 @@ import { withWorkforceTenant } from "@/modules/report_task/lib/db/workforce-cale
 import { loadScorePeriodConfig } from "@/lib/score-period-config";
 import { scorePeriodOf } from "@/lib/score-period";
 import { REQ_PERMS } from "@/modules/requests/permissions";
-import { canDecide, canSee } from "@/modules/requests/lib/data";
+import { canDecide, canSee, isUnlinkedOt, listPeople } from "@/modules/requests/lib/data";
+import { LinkWorkerPanel } from "@/modules/requests/components/link-worker";
 import { loadRequests, pettyBalances, readSettings, withRequestsTenant, type RequestView } from "@/modules/requests/lib/db";
 import { listPettyHolders } from "@/modules/requests/lib/holders";
 import { beneficiaryLabel, requestsPage, statusOf } from "@/modules/requests/lib/page";
@@ -212,6 +213,17 @@ export default async function RequestDetailPage({ params, searchParams }: { para
   }
   if (r.status === "cancelled" && r.decidedAt) steps.push({ title: "ยกเลิก", sub: `${r.cancelledByName} · ${r.cancelReason}`, state: "stop" });
 
+  // OT ที่พิมพ์ชื่อคนงานไว้ก่อน — คนลงใบ/HR/CEO ผูกกับคนงานจริงได้
+  const unlinked = isUnlinkedOt(r);
+  const canLink = unlinked && (r.createdBy === session.userId || viewer.canApprove || viewer.canApproveCeo);
+  const linkWorkers = canLink
+    ? (await listPeople(orgId))
+        .filter((p) => p.isWorker && p.userId !== r.createdBy)
+        .map((p) => ({ id: p.userId, name: p.name, badge: "คนงาน", sub: [p.departmentName, p.email].filter(Boolean).join(" · "), keywords: p.email ?? "" }))
+    : [];
+  if (unlinked) steps.splice(1, 0, { title: `ผูกชื่อ "${r.beneficiaryName}" กับคนงานในระบบ`, sub: "ยังไม่คิดเงิน · ยังอนุมัติไม่ได้", state: "now" });
+  if (unlinked) for (const x of steps.slice(2)) if (x.state === "now") x.state = "todo";
+
   const breakdown = r.kind === "contractor" ? contractorBreakdown(r.amount, r.vatPercent, r.whtPercent) : null;
   const vendor = r.vendorId ? await withRequestsTenant(orgId, (tx) => tx.moneyVendor.findFirst({ where: { orgId, id: r.vendorId! } })) : null;
 
@@ -237,7 +249,9 @@ export default async function RequestDetailPage({ params, searchParams }: { para
                 </div>
                 <div className="sm:text-right">
                   <div className="text-xs text-(--ink-soft)">{r.kind === "contractor" ? "จ่ายร้านจริง" : "ยอด"}</div>
-                  {payHidden ? (
+                  {unlinked ? (
+                    <div className="text-sm font-medium text-amber-700">ยังไม่คิด · รอผูกชื่อ</div>
+                  ) : payHidden ? (
                     <div className="max-w-[14rem] text-sm font-medium text-(--ink-soft)">ซ่อนยอด · {HIDDEN_PAY_LABEL}</div>
                   ) : (
                     <div className="text-2xl font-bold tabular-nums text-(--ink)">{baht(r.netAmount)}</div>
@@ -245,7 +259,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
                 </div>
               </div>
               <dl className="mt-4 grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-                <div><dt className="text-xs text-(--ink-soft)">ของใคร</dt><dd className="font-medium text-(--ink)">{r.beneficiaryName} <span className="font-normal text-(--ink-soft)">({beneficiaryLabel(r)})</span></dd></div>
+                <div><dt className="text-xs text-(--ink-soft)">ของใคร</dt><dd className="font-medium text-(--ink)">{r.beneficiaryName} <span className="font-normal text-(--ink-soft)">({beneficiaryLabel(r)})</span>{unlinked && <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-900">ยังไม่มีในระบบ</span>}</dd></div>
                 <div><dt className="text-xs text-(--ink-soft)">ผู้ยื่น</dt><dd className="text-(--ink)">{r.createdByName} · {thaiDateTime(r.createdAt)}</dd></div>
                 <div><dt className="text-xs text-(--ink-soft)">{r.kind === "ot" ? "วันที่ทำ" : r.kind === "advance" ? "วันที่ขอ" : "วันที่"}</dt><dd className="text-(--ink)">{thaiDate(r.workDate)}{r.kind === "ot" && r.otMinutes ? ` · ${r.otStart}–${r.otEnd} (${hoursText(r.otMinutes)})` : ""}</dd></div>
                 {(r.propertyName || r.workOrderCode) && (
@@ -278,7 +292,10 @@ export default async function RequestDetailPage({ params, searchParams }: { para
                   {scanNote && <Notice tone={scanNote.tone}>{scanNote.text}</Notice>}
                 </>
               )}
-              {r.kind === "ot" && !payHidden && (
+              {r.kind === "ot" && !payHidden && unlinked && (
+                <div className="text-sm text-amber-700">ยังไม่คิดเงิน — รอผูกชื่อกับคนงานในระบบ แล้วระบบคิดจากค่าแรง ÷ 8 × % OT × {hoursText(r.otMinutes ?? 0)}</div>
+              )}
+              {r.kind === "ot" && !payHidden && !unlinked && (
                 <>
                   {r.otBaseKind === "manual" ? (
                     <div className="text-sm text-(--ink-soft)">ไม่มีเงินเดือนในระบบตอนยื่น — แอดมินกรอกค่า OT เอง</div>
@@ -385,6 +402,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
 
           {/* ───────── ขวา: ขั้นตอน + ปุ่ม ───────── */}
           <aside className="order-2 flex min-w-0 flex-col gap-3 lg:sticky lg:top-4 lg:col-start-2 lg:row-start-1">
+            {canLink && <LinkWorkerPanel id={r.id} typedName={r.beneficiaryName} workers={linkWorkers} />}
             {canDecide(r, viewer) && (
               <DecidePanel id={r.id} version={r.updatedAt} level={r.approverLevel} isOt={r.kind === "ot"} forwardsToCeo={r.approverLevel === "hr" && r.needCeo && !viewer.canApproveCeo} firstBy={r.firstDecidedByName} />
             )}
@@ -405,7 +423,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
               <Steps steps={steps} />
               <p className="mt-3 border-t border-(--line) pt-2 text-xs text-(--ink-soft)">ต่อไป: {steps.find((x) => x.state === "now")?.title ?? st.next}</p>
             </section>
-            {r.status === "pending" && !r.firstDecidedAt && r.createdBy === session.userId && (
+            {r.status === "pending" && !r.firstDecidedAt && r.createdBy === session.userId && !unlinked && (
               <Link href={`/requests/${r.id}/edit`} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-(--radius) border border-(--line) bg-(--bg) text-sm font-semibold text-(--ink) hover:bg-(--bg-soft)">
                 <Pencil className="h-4 w-4" aria-hidden="true" /> แก้ไขใบ
               </Link>

@@ -302,10 +302,13 @@ export function statusInfo(r: {
   clearStatus: string | null;
   deductAmount: number;
   deductedAt: string | null;
+  /** OT ที่ไม่มีคนนี้ในระบบ (null) = รอผูกชื่อ · ไม่ส่งมา = ไม่เช็ก */
+  beneficiaryUserId?: string | null;
 }): StatusInfo {
   const approver = r.approverLevel === "ceo" ? "CEO" : "HR";
   switch (r.status) {
     case "pending":
+      if (r.kind === "ot" && r.beneficiaryUserId === null) return { label: "รอผูกชื่อคนงาน", tone: "warn", next: "เพิ่มคนงานเข้าระบบ แล้วกด \"ผูกกับคนงาน\" ในใบ" };
       if (r.approverLevel === "ceo" && r.firstDecidedAt) return { label: "HR ผ่านแล้ว · รอ CEO", tone: "warn", next: "CEO อนุมัติ (ยอดเกินเกณฑ์)" };
       if (r.approverLevel === "hr" && r.needCeo) return { label: "รอ HR อนุมัติ", tone: "warn", next: "HR ตรวจ แล้วต่อ CEO (ยอดเกินเกณฑ์)" };
       return { label: `รอ ${approver} อนุมัติ`, tone: "warn", next: r.kind === "ot" ? `${approver} ตรวจว่ามีจริง` : `รอ ${approver} ตัดสิน` };

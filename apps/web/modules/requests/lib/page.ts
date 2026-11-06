@@ -65,6 +65,7 @@ export const statusOf = (r: RequestView) =>
     clearStatus: r.clearStatus,
     deductAmount: r.deductAmount,
     deductedAt: r.deductedAt,
+    beneficiaryUserId: r.beneficiaryUserId,
   });
 
 export const beneficiaryLabel = (r: Pick<RequestView, "beneficiaryKind">) =>

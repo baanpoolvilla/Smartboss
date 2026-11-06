@@ -209,8 +209,14 @@ export function canSee(r: RequestView, viewer: Viewer): boolean {
   return viewer.canViewAll || viewer.canApprove || viewer.canApproveCeo || viewer.canPay || viewer.isPettyHolder;
 }
 
+/** OT ที่ลงให้คนงานที่ยังไม่มีในระบบ (พิมพ์ชื่อไว้ก่อน) — ต้องผูกกับพนักงานจริงก่อนถึงจะอนุมัติ/คิดเงินได้ */
+export function isUnlinkedOt(r: { kind: string; status: string; beneficiaryUserId: string | null }): boolean {
+  return r.kind === "ot" && r.status === "pending" && !r.beneficiaryUserId;
+}
+
 export function canDecide(r: RequestView, viewer: Viewer): boolean {
   if (r.status !== "pending") return false;
+  if (isUnlinkedOt(r)) return false;
   if (r.createdBy === viewer.userId || r.beneficiaryUserId === viewer.userId) return false;
   return r.approverLevel === "ceo" ? viewer.canApproveCeo : viewer.canApprove || viewer.canApproveCeo;
 }

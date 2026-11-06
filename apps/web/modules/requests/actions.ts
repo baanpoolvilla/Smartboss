@@ -680,27 +680,34 @@ const OT_GROUP_MAX = 30;
  * คนที่ต้องกรอกค่า OT เอง (ไม่มีเงินเดือนในระบบ) ลงรวมไม่ได้ — ยอดกรอกเองเป็นของคนเดียว
  * ยื่นทีละคน (createRequestAction) ไม่เปลี่ยนอะไร
  */
-export async function createOtGroupAction(input: CreateInput, beneficiaryUserIds: string[]): Promise<Result<{ ids: string[]; codes: string[] }>> {
+export async function createOtGroupAction(input: CreateInput, beneficiaryUserIds: string[], pendingNames: string[] = []): Promise<Result<{ ids: string[]; codes: string[] }>> {
   try {
     const session = await guard();
     const orgId = session.orgId;
     if (input.kind !== "ot") return { error: "ลงหลายคนได้เฉพาะ OT" };
     const ids = [...new Set((beneficiaryUserIds ?? []).map((x) => String(x ?? "").trim()).filter(Boolean))];
-    if (ids.length === 0) return { error: "เลือกคนที่ทำ OT" };
-    if (ids.length > OT_GROUP_MAX) return { error: `ลงพร้อมกันได้ครั้งละไม่เกิน ${OT_GROUP_MAX} คน` };
+    const names = [...new Set((pendingNames ?? []).map((x) => String(x ?? "").trim().slice(0, 120)).filter(Boolean))];
+    const total = ids.length + names.length;
+    if (total === 0) return { error: "เลือกคนที่ทำ OT" };
+    if (total > OT_GROUP_MAX) return { error: `ลงพร้อมกันได้ครั้งละไม่เกิน ${OT_GROUP_MAX} คน` };
 
     const preps: Prepared[] = [];
     for (const id of ids) {
       const prep = await prepareRequest(session, { ...input, kind: "ot", beneficiaryUserId: id });
       if ("error" in prep) return { error: `${await nameOf(id)}: ${prep.error}` };
-      if (ids.length > 1 && prep.fields.otBaseKind === "manual") {
+      if (total > 1 && prep.fields.otBaseKind === "manual") {
         return { error: `${prep.fields.beneficiaryName}: ยังไม่มีเงินเดือนในระบบ ต้องกรอกค่า OT เอง — เอาออกจากกลุ่มแล้วลงแยกใบ` };
       }
       preps.push(prep);
     }
+    for (const name of names) {
+      const prep = await prepareUnlinkedOt(session, input, name);
+      if ("error" in prep) return { error: `${name}: ${prep.error}` };
+      preps.push(prep);
+    }
 
     const byName = await nameOf(session.userId);
-    const groupNote = ids.length > 1 ? ` · ลงพร้อมกัน ${ids.length} คน` : "";
+    const groupNote = total > 1 ? ` · ลงพร้อมกัน ${total} คน` : "";
     const created = await withRequestsTenantAfter(
       orgId,
       async (tx) => {
@@ -726,7 +733,9 @@ export async function createOtGroupAction(input: CreateInput, beneficiaryUserIds
               createdByName: byName,
             },
           });
-          const summary = `ลง OT ให้ ${f.beneficiaryName} ${thai(prep.workDate)} ${f.otStart}–${f.otEnd} (${hoursText(f.otMinutes ?? 0)}) ${baht(f.netAmount)}${groupNote}`;
+          const summary = f.beneficiaryUserId
+            ? `ลง OT ให้ ${f.beneficiaryName} ${thai(prep.workDate)} ${f.otStart}–${f.otEnd} (${hoursText(f.otMinutes ?? 0)}) ${baht(f.netAmount)}${groupNote}`
+            : `ลง OT ให้ ${f.beneficiaryName} (ยังไม่มีในระบบ — รอผูกชื่อ) ${thai(prep.workDate)} ${f.otStart}–${f.otEnd} (${hoursText(f.otMinutes ?? 0)})${groupNote}`;
           await insertEvent(tx, orgId, { requestId: row.id, byUserId: session.userId, byName, action: "create", summary });
           out.push({ id: row.id, code: row.code });
         }
@@ -735,10 +744,142 @@ export async function createOtGroupAction(input: CreateInput, beneficiaryUserIds
     );
     created.forEach((c, i) => {
       const f = preps[i]!.fields;
+      if (!f.beneficiaryUserId) return; // รอผูกชื่อ — แจ้งผู้อนุมัติตอนผูกแล้ว
       void notifyApprovers(orgId, { id: c.id, code: c.code, kind: "ot", title: f.title, netAmount: f.netAmount, beneficiaryName: f.beneficiaryName }, f.approverLevel, [session.userId, f.beneficiaryUserId ?? ""]);
     });
     refresh();
     return { ok: true, ids: created.map((c) => c.id), codes: created.map((c) => c.code) };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/**
+ * OT ของคนงานที่ยังไม่มีในระบบ (ผู้ใช้ 6/11/2569 "อยากกรอกชื่อไปก่อน ยังไม่ได้เอาเข้าระบบ")
+ * เก็บวัน เวลา งาน ไว้ก่อน · ยังไม่คิดเงิน ยังอนุมัติไม่ได้ · ผูกกับคนงานจริงทีหลังที่ linkOtWorkerAction
+ * แล้วตรวจ/คิดเงินเหมือนลงปกติทุกข้อ (ลงเวลาเข้างาน เวลาทับ ค่าแรง)
+ */
+async function prepareUnlinkedOt(session: OrgSession, input: CreateInput, name: string): Promise<{ error: string } | Prepared> {
+  const orgId = session.orgId;
+  if (!hasPermission(session, REQ_PERMS.fileOthers)) return { error: "ไม่มีสิทธิ์ลงรายการนี้ให้คนอื่น" };
+  if (!name) return { error: "พิมพ์ชื่อคนงาน" };
+  const title = input.title.trim().slice(0, 160);
+  if (!title) return { error: "ใส่ว่าทำอะไร" };
+  const detail = input.detail.trim().slice(0, 2000);
+  const today = bangkokToday();
+  const workDate = normalizeDate(input.workDate);
+  if (!workDate) return { error: "วันที่ไม่ถูกต้อง" };
+  if (workDate > today) return { error: "ลง OT ล่วงหน้าไม่ได้ — ลงหลังทำงานเสร็จแล้ว" };
+  const start = input.otStart ?? "";
+  const end = input.otEnd ?? "";
+  if (!TIME_RE.test(start) || !TIME_RE.test(end)) return { error: "ใส่เวลาเริ่ม-ถึง" };
+  const minutes = minutesBetween(start, end);
+  if (minutes > 16 * 60) return { error: "OT ยาวเกิน 16 ชั่วโมง — ตรวจเวลาอีกครั้ง" };
+
+  const attachments = cleanAttachments(orgId, input.attachments, ["evidence", "receipt"]);
+  const used = await withRequestsTenant(orgId, (tx) => usedHashes(tx, orgId, attachments.map((a) => a.sha256)));
+  const dup = attachments.find((a) => used.has(a.sha256));
+  if (dup) return { error: `${dup.name}: ไฟล์นี้เคยใช้เบิกแล้วใน ${used.get(dup.sha256)}` };
+
+  let workOrder: { id: string; code: string; propertyId: string } | null = null;
+  if (input.workOrderId) {
+    workOrder = await prisma.workOrder.findFirst({ where: { orgId, id: input.workOrderId }, select: { id: true, code: true, propertyId: true } });
+    if (!workOrder) return { error: "ไม่พบใบงานที่เลือก" };
+  }
+  const propertyId = input.propertyId || workOrder?.propertyId || null;
+  const property = propertyId ? await prisma.property.findFirst({ where: { orgId, id: propertyId }, select: { id: true, name: true } }) : null;
+
+  return {
+    workDate,
+    fields: {
+      title,
+      detail,
+      beneficiaryUserId: null,
+      beneficiaryName: name,
+      beneficiaryKind: "worker",
+      employmentId: null,
+      vendorId: null,
+      propertyId: property?.id ?? null,
+      propertyName: property?.name ?? null,
+      workOrderId: workOrder?.id ?? null,
+      workOrderCode: workOrder?.code ?? null,
+      workDate: dateOnly(workDate),
+      otStart: start,
+      otEnd: end,
+      otMinutes: minutes,
+      otPercent: null,
+      otRateLabel: null,
+      otBase: null,
+      otBaseKind: null,
+      amount: 0,
+      vatPercent: 0,
+      vatAmount: 0,
+      whtPercent: 0,
+      whtAmount: 0,
+      netAmount: 0,
+      lines: null,
+      attachments,
+      approverLevel: "hr",
+      needCeo: false,
+    },
+  };
+}
+
+/**
+ * ผูกใบ OT "รอผูกชื่อ" กับคนงานที่เพิ่มเข้าระบบแล้ว — ตรวจใหม่ทุกข้อเหมือนตอนลง (ลงเวลาเข้างาน เวลาทับ ลง OT ซ้ำในหน้าคนงาน)
+ * ผ่านแล้วคิดค่า OT จากค่าแรงของคนงาน แล้วเข้าคิวอนุมัติตามปกติ · ทำได้: คนที่ลงใบนี้ หรือ HR/CEO
+ */
+export async function linkOtWorkerAction(input: { id: string; userId: string }): Promise<Result> {
+  try {
+    const session = await guard();
+    const orgId = session.orgId;
+    const viewer = await viewerOf(session);
+    const r = await withRequestsTenant(orgId, (tx) => loadOne(tx, orgId, input.id));
+    if (!r || !canSee(r, viewer)) return { error: "ไม่พบคำขอ" };
+    if (!(r.kind === "ot" && r.status === "pending" && !r.beneficiaryUserId)) return { error: "ใบนี้ผูกชื่อแล้ว หรือไม่ได้รอผูกชื่อ" };
+    if (r.createdBy !== session.userId && !(viewer.canApprove || viewer.canApproveCeo)) return { error: "ผูกชื่อได้เฉพาะคนที่ลงใบนี้ หรือ HR" };
+    if (!r.otStart || !r.otEnd) return { error: "ข้อมูลเวลา OT ไม่ครบ" };
+    if (!input.userId || input.userId === r.createdBy) return { error: "เลือกคนงาน (ผูกกับคนที่ลงใบเองไม่ได้)" };
+    const settings = await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId));
+    const preview = await computePreview(
+      session,
+      { kind: "ot", beneficiaryUserId: input.userId, workDate: r.workDate, otStart: r.otStart, otEnd: r.otEnd, exceptRequestId: r.id },
+      settings,
+    );
+    if (preview.beneficiaryKind !== "worker") return { error: "เลือกได้เฉพาะคนงานรายวัน" };
+    // ข้อ "ลงให้ตัวเองไม่ได้" ใน preview คิดจากคนที่กดผูก — ที่นี่ใช้คนลงใบ (เช็กข้างบนแล้ว) จึงข้ามข้อนั้น
+    const blocks = preview.blocks.filter((b) => !b.startsWith("ลง OT ให้ตัวเองไม่ได้"));
+    if (blocks.length > 0) return { error: blocks[0]! };
+    const amount = preview.amount ?? 0;
+    const { level, needCeo } = await approverLevelFor(orgId, "ot", r.createdBy, input.userId, amount, settings.approvalRoutes);
+    const byName = await nameOf(session.userId);
+    const saved = await withRequestsTenant(orgId, async (tx) => {
+      const res = await tx.moneyRequest.updateMany({
+        where: { orgId, id: r.id, status: "pending", beneficiaryUserId: null },
+        data: {
+          beneficiaryUserId: input.userId,
+          beneficiaryName: preview.beneficiaryName!,
+          beneficiaryKind: "worker",
+          employmentId: preview.employmentId,
+          otMinutes: preview.minutes,
+          otPercent: preview.percent,
+          otRateLabel: preview.rateLabel,
+          otBase: preview.base,
+          otBaseKind: preview.baseKind,
+          amount,
+          netAmount: amount,
+          approverLevel: level,
+          needCeo,
+        },
+      });
+      if (res.count === 0) return false;
+      await insertEvent(tx, orgId, { requestId: r.id, byUserId: session.userId, byName, action: "edit", summary: `ผูกชื่อ "${r.beneficiaryName}" กับคนงาน ${preview.beneficiaryName} · ค่า OT ${baht(amount)}` });
+      return true;
+    });
+    if (!saved) return { error: "มีคนผูกชื่อใบนี้ไปก่อนแล้ว — รีเฟรช" };
+    void notifyApprovers(orgId, { id: r.id, code: r.code, kind: "ot", title: r.title, netAmount: amount, beneficiaryName: preview.beneficiaryName! }, level, [r.createdBy, input.userId]);
+    refresh(r.id);
+    return { ok: true };
   } catch (error) {
     return fail(error);
   }
