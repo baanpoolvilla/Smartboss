@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useRef, useState, useEffect } from "react";
 import { Check, ChevronDown, ChevronRight, ListChecks, Plus, Search, UserPlus, X } from "lucide-react";
 import { Button } from "@smartboss/ui/components/button";
 import { Modal } from "./dialog";
@@ -277,6 +278,11 @@ export function MultiPicker({
 }
 
 /** ฟอร์มสร้างใบงาน: ผู้รับผิดชอบหลัก + CC ที่ตัดคนซ้ำกันออกให้ (เหมือนของเดิม) */
+/** วาดลงกล่องอื่นในฟอร์มถ้ามี ไม่งั้นวาดตรงนี้ */
+function renderInto(target: HTMLElement | null, node: React.ReactNode) {
+  return target ? createPortal(node, target) : node;
+}
+
 /** ข้อในเช็กลิสต์ระหว่างกรอกฟอร์ม — ownerId null = ช่วยกันทำ / ยังไม่เลือก */
 export type DraftItem = { text: string; ownerId: string | null };
 
@@ -291,6 +297,7 @@ export function AssigneeAndCc({
   withMemberDue = true,
   withChecklist = false,
   defaultChecklist = [],
+  checklistSlotId,
 }: {
   /** ผู้ที่มอบหมายงานได้ */
   users: PickOption[];
@@ -307,6 +314,8 @@ export function AssigneeAndCc({
   /** แถวเช็กลิสต์ (ไม่บังคับ) ส่งค่าในช่อง checklist เป็น JSON [{ text, ownerId }] */
   withChecklist?: boolean;
   defaultChecklist?: DraftItem[];
+  /** วางแถวเช็กลิสต์ไว้ที่อื่นในฟอร์ม (เช่น ในตัวเลือกขั้นสูง) — id ของกล่องปลายทาง */
+  checklistSlotId?: string;
 }) {
   // ลำดับที่เลือก: คนแรกคือ assignedTo คนที่เหลือคือสมาชิกกลุ่ม · ใบเดี่ยวมีคนเดียว
   const [picked, setPicked] = useState<string[]>(defaultAssignee ? [defaultAssignee, ...defaultMembers.filter((x) => x !== defaultAssignee)] : []);
@@ -318,6 +327,13 @@ export function AssigneeAndCc({
   const [checkOpen, setCheckOpen] = useState(false);
   const [newItem, setNewItem] = useState("");
   const perOwner = group && rule !== "shared";
+  // กล่องปลายทางอยู่ในฟอร์มเดียวกัน ช่องซ่อนจึงยังถูกส่งไปกับฟอร์ม
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    // กล่องปลายทางมีหลังเรนเดอร์แรกเท่านั้น (อยู่คนละคอมโพเนนต์)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (checklistSlotId) setSlot(document.getElementById(checklistSlotId));
+  }, [checklistSlotId]);
   // กำหนดส่งแยกรายคน (เหมือนงานกลุ่ม) — ไม่ใส่ = ใช้กำหนดส่งของใบ
   const [memberDue, setMemberDue] = useState<Record<string, string>>(defaultMemberDue);
   const [dueDraft, setDueDraft] = useState<Record<string, string>>({});
@@ -461,8 +477,7 @@ export function AssigneeAndCc({
       )}
 
       {/* เช็กลิสต์ (ไม่บังคับ) — แถวเดียวแบบวันรายคน กดแล้วแก้ในหน้าต่าง */}
-      {withChecklist && (
-        <>
+      {withChecklist && (!checklistSlotId || slot) && renderInto(slot, <>
           <button
             type="button"
             onClick={() => {
@@ -487,8 +502,7 @@ export function AssigneeAndCc({
             name="checklist"
             value={checklist.length > 0 ? JSON.stringify(checklist.map((c) => ({ text: c.text, ownerId: perOwner ? (picked.includes(c.ownerId ?? "") ? c.ownerId : picked[0] ?? null) : null }))) : ""}
           />
-        </>
-      )}
+        </>)}
 
       {checkOpen && (
         <Modal

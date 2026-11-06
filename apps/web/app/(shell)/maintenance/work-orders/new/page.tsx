@@ -186,6 +186,7 @@ export default async function NewWorkOrderPage({
                 defaultRule={plan?.completionRule ?? "all"}
                 defaultChecklist={readChecklistTemplate(plan?.checklist)}
                 withChecklist
+                checklistSlotId="wo-checklist-slot"
               />
               </div>
             </div>
@@ -195,13 +196,15 @@ export default async function NewWorkOrderPage({
             <WoDueDateField defaultValue={sp.dueDate} minDate={todayBangkok()} />
           </Row>
 
-          <div className="pl-8 group-data-[private=1]/wo:hidden">
-            <WoAdvancedOptions canOpenPr={canOpenPr} defaultNoExpense={defaultNoExpense} ccOptions={userOptions} />
+          {/* เช็กลิสต์และรูปภาพอยู่ในตัวเลือกขั้นสูง (ผู้ใช้ 6/11/2569) — ใบส่วนตัวยังแนบรูป/ใส่เช็กลิสต์ได้ */}
+          <div className="pl-8">
+            <WoAdvancedOptions canOpenPr={canOpenPr} defaultNoExpense={defaultNoExpense} ccOptions={userOptions} checklistSlotId="wo-checklist-slot">
+              <div className="flex items-start gap-2">
+                <Paperclip className="mt-1 h-4 w-4 shrink-0 text-(--ink-soft)" aria-hidden="true" />
+                <FilePreviewInput name="photos" label="รูปภาพ" attachStyle />
+              </div>
+            </WoAdvancedOptions>
           </div>
-
-          <Row icon={Paperclip}>
-            <FilePreviewInput name="photos" label="รูปภาพ" attachStyle />
-          </Row>
 
           <div className="-mx-5 -mb-5 mt-1 flex items-center justify-between gap-2 border-t border-(--line) px-5 py-3">
             <span className="flex min-w-0 items-center gap-1.5 text-[11.5px] text-(--ink-soft)">

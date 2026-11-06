@@ -167,9 +167,15 @@ export function WoAdvancedOptions({
   canOpenPr,
   defaultNoExpense = false,
   ccOptions,
+  checklistSlotId,
+  children,
 }: {
   canOpenPr: boolean;
   defaultNoExpense?: boolean;
+  /** กล่องให้แถวเช็กลิสต์มาวาง (AssigneeAndCc checklistSlotId) */
+  checklistSlotId?: string;
+  /** ของเพิ่มท้ายแผง เช่น แนบรูปภาพ (ผู้ใช้ 6/11/2569 "เอาไปอยู่ในตัวเลือกขั้นสูง") */
+  children?: React.ReactNode;
   /** ผู้รับสำเนา — ย้ายมาจากแถวผู้รับผิดชอบ ให้แถวหลักไม่กินที่ (ผู้ใช้ 5/11/2569) */
   ccOptions: PickOption[];
 }) {
@@ -178,18 +184,35 @@ export function WoAdvancedOptions({
   // คนที่เป็นผู้รับผิดชอบอยู่แล้วไม่ต้องอยู่ใน CC — ช่องอยู่คนละส่วนของฟอร์ม อ่านค่าจาก select
   const [assignee, setAssignee] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
+  const [photoCount, setPhotoCount] = useState(0);
+  const [checkCount, setCheckCount] = useState(0);
   useEffect(() => {
     const form = rootRef.current?.closest("form");
     if (!form) return;
-    const read = () => setAssignee(form.querySelector<HTMLSelectElement>('select[name="assignedTo"]')?.value ?? "");
+    const read = () => {
+      setAssignee(form.querySelector<HTMLSelectElement>('select[name="assignedTo"]')?.value ?? "");
+      setPhotoCount(form.querySelector<HTMLInputElement>('input[name="photos"]')?.files?.length ?? 0);
+      try {
+        const raw = form.querySelector<HTMLInputElement>('input[name="checklist"]')?.value;
+        setCheckCount(raw ? (JSON.parse(raw) as unknown[]).length : 0);
+      } catch {
+        setCheckCount(0);
+      }
+    };
     read();
     form.addEventListener("change", read);
-    return () => form.removeEventListener("change", read);
+    // ช่องซ่อนเช็กลิสต์เปลี่ยนค่าไม่เกิด change — ดูจากแอตทริบิวต์แทน
+    const mo = new MutationObserver(read);
+    mo.observe(form, { subtree: true, attributes: true, attributeFilter: ["value"] });
+    return () => {
+      form.removeEventListener("change", read);
+      mo.disconnect();
+    };
   }, []);
   // สร้างจากแผน PM ที่ตั้ง "ไม่มีค่าใช้จ่าย" ⇒ เลือกไว้ให้ก่อน (เปลี่ยนเองได้) — ดู pmPlansSkipExpense
   const [noExpense, setNoExpense] = useState(defaultNoExpense);
   const [openPr, setOpenPr] = useState(false);
-  const summary = [ccCount > 0 ? `CC ${ccCount} คน` : null, noExpense ? "ไม่มีค่าใช้จ่าย" : null, openPr ? "เปิด PR ต่อ" : null].filter(Boolean).join(" · ");
+  const summary = [checkCount > 0 ? `เช็กลิสต์ ${checkCount} ข้อ` : null, photoCount > 0 ? `รูป ${photoCount}` : null, ccCount > 0 ? `CC ${ccCount} คน` : null, noExpense ? "ไม่มีค่าใช้จ่าย" : null, openPr ? "เปิด PR ต่อ" : null].filter(Boolean).join(" · ");
 
   return (
     <div ref={rootRef} className="flex flex-col gap-2">
@@ -211,6 +234,10 @@ export function WoAdvancedOptions({
 
       {/* พับด้วย class ไม่ถอดออก — รายชื่อ CC ที่เลือกต้องอยู่ในฟอร์มตลอด */}
       <div className={open ? "flex flex-col gap-3 rounded-(--radius) border border-(--line) p-3" : "hidden"}>
+          {checklistSlotId && <div id={checklistSlotId} className="flex flex-col gap-1 empty:hidden" />}
+          {children}
+          {/* ใบส่วนตัวไม่มี CC / ค่าใช้จ่าย / PR (เหมือนเดิม) — เช็กลิสต์กับรูปยังใช้ได้ */}
+          <div className="contents group-data-[private=1]/wo:hidden">
           <MultiPicker
             name="ccUserIds"
             title="เพิ่ม CC (แจ้งสำเนา)"
@@ -260,6 +287,7 @@ export function WoAdvancedOptions({
               </span>
             </label>
           )}
+          </div>
       </div>
     </div>
   );
