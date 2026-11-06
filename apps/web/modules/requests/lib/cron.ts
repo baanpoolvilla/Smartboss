@@ -23,8 +23,8 @@ export async function remindRequests(): Promise<{ pending: number; overdueClear:
         clear: await loadRequests(tx, org.id, { kind: "cash_advance", status: "paid", clearStatus: null, clearDueDate: { lt: new Date(`${today}T00:00:00Z`) } }, 200),
       }));
       for (const r of pending) {
-        if (r.kind === "ot" && !r.beneficiaryUserId && r.netAmount <= 0) continue; // ชื่อที่ยังไม่มีในระบบและไม่มียอด — ยังไม่มีอะไรให้อนุมัติ
-        await notifyApprovers(org.id, r, r.approverLevel, [r.createdBy, r.beneficiaryUserId ?? ""]);
+        const noAmount = r.kind === "ot" && !r.beneficiaryUserId && r.netAmount <= 0; // คนงานที่ยังไม่มีในระบบ รอ HR ใส่ยอด
+        await notifyApprovers(org.id, r, r.approverLevel, [r.createdBy, r.beneficiaryUserId ?? ""], noAmount ? "OT รอใส่ยอด (ยังไม่มีในระบบ)" : undefined);
         out.pending++;
       }
       if (clear.length > 0) {

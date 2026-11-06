@@ -753,8 +753,8 @@ export async function createOtGroupAction(
     );
     created.forEach((c, i) => {
       const f = preps[i]!.fields;
-      if (!f.beneficiaryUserId && f.netAmount <= 0) return; // ไม่มียอด — ยังไม่มีอะไรให้อนุมัติ แจ้งตอนผูกชื่อ
-      void notifyApprovers(orgId, { id: c.id, code: c.code, kind: "ot", title: f.title, netAmount: f.netAmount, beneficiaryName: f.beneficiaryName }, f.approverLevel, [session.userId, f.beneficiaryUserId ?? ""]);
+      // ไม่มียอด = HR ต้องใส่เงินในใบ → แจ้ง HR ว่า "รอใส่ยอด"
+      void notifyApprovers(orgId, { id: c.id, code: c.code, kind: "ot", title: f.title, netAmount: f.netAmount, beneficiaryName: f.beneficiaryName }, f.approverLevel, [session.userId, f.beneficiaryUserId ?? ""], !f.beneficiaryUserId && f.netAmount <= 0 ? "OT รอใส่ยอด (ยังไม่มีในระบบ)" : undefined);
     });
     refresh();
     return { ok: true, ids: created.map((c) => c.id), codes: created.map((c) => c.code) };
@@ -891,6 +891,61 @@ export async function linkOtWorkerAction(input: { id: string; userId: string }):
     });
     if (!saved) return { error: "มีคนผูกชื่อใบนี้ไปก่อนแล้ว — รีเฟรช" };
     void notifyApprovers(orgId, { id: r.id, code: r.code, kind: "ot", title: r.title, netAmount: amount, beneficiaryName: preview.beneficiaryName! }, level, [r.createdBy, input.userId]);
+    refresh(r.id);
+    return { ok: true };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/**
+ * HR ใส่เงินค่า OT ให้ใบ OT ของคนงานที่ยังไม่มีในระบบ (ผู้ใช้ 6/11/2569 "ตอนกรอกใส่แค่เวลา ให้ HR ไปใส่ค่าใช้จ่าย เลือกว่าจ่ายตามอะไร")
+ * daily = ค่าแรงต่อวัน ÷ 8 × % OT คนงานของบริษัท × ชม. · manual = กรอกยอดเอง · แก้ได้จนกว่าจะอนุมัติ
+ * ใส่แล้วใบอนุมัติได้ (ไม่ผูกชื่อ = จ่ายตรงจากใบ) · เฉพาะคนที่อนุมัติ OT ได้ (HR/CEO)
+ */
+export async function setUnlinkedOtAmountAction(input: { id: string; mode: "daily" | "manual"; value: number; note?: string }): Promise<Result> {
+  try {
+    const session = await guard();
+    const orgId = session.orgId;
+    const viewer = await viewerOf(session);
+    if (!(viewer.canApprove || viewer.canApproveCeo)) return { error: "ใส่ยอด OT ได้เฉพาะ HR / CEO" };
+    const r = await withRequestsTenant(orgId, (tx) => loadOne(tx, orgId, input.id));
+    if (!r || !canSee(r, viewer)) return { error: "ไม่พบคำขอ" };
+    if (!(r.kind === "ot" && r.status === "pending" && !r.beneficiaryUserId)) return { error: "ใบนี้ไม่ได้รอใส่ยอด (ผูกชื่อแล้ว หรือตัดสินไปแล้ว)" };
+    if (r.createdBy === session.userId) return { error: "ใส่ยอดใบที่ตัวเองลงไม่ได้ — ให้ HR คนอื่นใส่" };
+    const value = round2(Number(input.value));
+    if (!Number.isFinite(value) || value <= 0 || value > 100_000) return { error: input.mode === "daily" ? "ใส่ค่าแรงต่อวัน" : "ใส่ยอด OT" };
+    const minutes = r.otMinutes ?? 0;
+    if (minutes <= 0) return { error: "ข้อมูลเวลา OT ไม่ครบ" };
+    const note = String(input.note ?? "").trim().slice(0, 200);
+    const pct = input.mode === "daily" ? await workerCompanyOtPercent(orgId) : null;
+    const amount = input.mode === "daily" ? otCalc("daily", value, pct!, minutes).amount : value;
+    const settings = await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId));
+    const route = await approverLevelFor(orgId, "ot", r.createdBy, null, amount, settings.approvalRoutes);
+    const byName = await nameOf(session.userId);
+    const saved = await withRequestsTenant(orgId, async (tx) => {
+      const res = await tx.moneyRequest.updateMany({
+        where: { orgId, id: r.id, status: "pending", beneficiaryUserId: null, firstDecidedAt: null },
+        data: {
+          amount,
+          netAmount: amount,
+          otBase: input.mode === "daily" ? value : null,
+          otBaseKind: input.mode === "daily" ? "daily" : "manual",
+          otPercent: pct,
+          otRateLabel: input.mode === "daily" ? `HR ใส่ค่าแรง · % OT คนงานของบริษัท (${pct}%)` : `HR กรอกยอดเอง${note ? ` · ${note}` : ""}`,
+          approverLevel: route.level,
+          needCeo: route.needCeo,
+        },
+      });
+      if (res.count === 0) return false;
+      const what = input.mode === "daily" ? `ค่าแรง ${baht(value)}/วัน × ${pct}% × ${hoursText(minutes)}` : `กรอกยอดเอง${note ? ` (${note})` : ""}`;
+      await insertEvent(tx, orgId, { requestId: r.id, byUserId: session.userId, byName, action: "edit", summary: `${r.netAmount > 0 ? "แก้" : "ใส่"}ยอด OT: ${what} → ${baht(amount)}${r.netAmount > 0 ? ` (เดิม ${baht(r.netAmount)})` : ""}` });
+      return true;
+    });
+    if (!saved) return { error: "ใบนี้เพิ่งเปลี่ยน — รีเฟรช" };
+    if (route.level === "ceo" || route.needCeo) {
+      void notifyApprovers(orgId, { id: r.id, code: r.code, kind: "ot", title: r.title, netAmount: amount, beneficiaryName: r.beneficiaryName }, route.level, [session.userId, r.createdBy]);
+    }
     refresh(r.id);
     return { ok: true };
   } catch (error) {

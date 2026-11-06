@@ -311,7 +311,7 @@ export function statusInfo(r: {
       if (r.kind === "ot" && r.beneficiaryUserId === null) {
         return r.netAmount > 0
           ? { label: `รอ ${approver} อนุมัติ · ไม่มีในระบบ`, tone: "warn", next: "อนุมัติแล้ว HR จ่ายเงินสด/โอนเอง · หรือผูกชื่อก่อนเพื่อเข้าบัญชีค่าแรง" }
-          : { label: "รอผูกชื่อคนงาน", tone: "warn", next: "ไม่ได้ใส่ค่าแรงไว้ — เพิ่มคนงานเข้าระบบ แล้วกด \"ผูกกับคนงาน\" ในใบ" };
+          : { label: "รอ HR ใส่ยอด", tone: "warn", next: "HR ใส่เงินค่า OT ในใบ (หรือผูกชื่อกับคนงานในระบบ)" };
       }
       if (r.approverLevel === "ceo" && r.firstDecidedAt) return { label: "HR ผ่านแล้ว · รอ CEO", tone: "warn", next: "CEO อนุมัติ (ยอดเกินเกณฑ์)" };
       if (r.approverLevel === "hr" && r.needCeo) return { label: "รอ HR อนุมัติ", tone: "warn", next: "HR ตรวจ แล้วต่อ CEO (ยอดเกินเกณฑ์)" };

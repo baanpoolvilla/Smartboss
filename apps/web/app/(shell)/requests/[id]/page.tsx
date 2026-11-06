@@ -11,8 +11,9 @@ import { withWorkforceTenant } from "@/modules/report_task/lib/db/workforce-cale
 import { loadScorePeriodConfig } from "@/lib/score-period-config";
 import { scorePeriodOf } from "@/lib/score-period";
 import { REQ_PERMS } from "@/modules/requests/permissions";
-import { canDecide, canSee, isUnlinkedOt, listPeople } from "@/modules/requests/lib/data";
+import { canDecide, canSee, isUnlinkedOt, listPeople, workerCompanyOtPercent } from "@/modules/requests/lib/data";
 import { LinkWorkerPanel } from "@/modules/requests/components/link-worker";
+import { SetOtAmountPanel } from "@/modules/requests/components/set-ot-amount";
 import { loadRequests, pettyBalances, readSettings, withRequestsTenant, type RequestView } from "@/modules/requests/lib/db";
 import { listPettyHolders } from "@/modules/requests/lib/holders";
 import { beneficiaryLabel, requestsPage, statusOf } from "@/modules/requests/lib/page";
@@ -223,8 +224,11 @@ export default async function RequestDetailPage({ params, searchParams }: { para
         .filter((p) => p.isWorker && p.userId !== r.createdBy)
         .map((p) => ({ id: p.userId, name: p.name, badge: "คนงาน", sub: [p.departmentName, p.email].filter(Boolean).join(" · "), keywords: p.email ?? "" }))
     : [];
+  // HR ใส่เงินค่า OT ในใบ (คนลงใบใส่แค่ชื่อ+เวลา) — HR/CEO ที่ไม่ใช่คนลงใบ
+  const canSetAmount = unlinked && !r.firstDecidedAt && (viewer.canApprove || viewer.canApproveCeo) && r.createdBy !== session.userId;
+  const companyPct = canSetAmount ? await workerCompanyOtPercent(orgId) : 150;
   if (unlinked && r.netAmount <= 0) {
-    steps.splice(1, 0, { title: `ผูกชื่อ "${r.beneficiaryName}" กับคนงานในระบบ`, sub: "ยังไม่คิดเงิน · ยังอนุมัติไม่ได้", state: "now" });
+    steps.splice(1, 0, { title: "HR ใส่เงินค่า OT", sub: "เลือกคิดจากค่าแรงรายวัน หรือกรอกยอดเอง · หรือผูกชื่อกับคนงานในระบบ", state: "now" });
     for (const x of steps.slice(2)) if (x.state === "now") x.state = "todo";
   } else if (unlinked) {
     steps.splice(1, 0, { title: `(ไม่บังคับ) ผูกชื่อ "${r.beneficiaryName}" กับคนงาน`, sub: "ผูกก่อนอนุมัติ = เข้าบัญชีค่าแรง · ไม่ผูก = อนุมัติแล้ว HR จ่ายเงินสด/โอนเอง", state: "todo" });
@@ -258,11 +262,11 @@ export default async function RequestDetailPage({ params, searchParams }: { para
                   {unlinked ? (
                     r.netAmount > 0 ? (
                       <div>
-                        <div className="text-2xl font-bold tabular-nums text-(--ink)">≈ {baht(r.netAmount)}</div>
-                        <div className="text-xs font-medium text-amber-700">ยอดประมาณ · รอผูกชื่อ</div>
+                        <div className="text-2xl font-bold tabular-nums text-(--ink)">{baht(r.netAmount)}</div>
+                        <div className="text-xs font-medium text-amber-700">คนงานยังไม่มีในระบบ</div>
                       </div>
                     ) : (
-                      <div className="text-sm font-medium text-amber-700">ยังไม่คิด · รอผูกชื่อ</div>
+                      <div className="text-sm font-medium text-amber-700">รอ HR ใส่ยอด</div>
                     )
                   ) : payHidden ? (
                     <div className="max-w-[14rem] text-sm font-medium text-(--ink-soft)">ซ่อนยอด · {HIDDEN_PAY_LABEL}</div>
@@ -306,16 +310,18 @@ export default async function RequestDetailPage({ params, searchParams }: { para
                 </>
               )}
               {r.kind === "ot" && !payHidden && unlinked && (
-                r.otBase ? (
+                r.netAmount > 0 ? (
                   <>
                     <div className="rounded-(--radius) bg-(--bg-soft) px-3 py-2 text-sm text-(--ink)">
-                      ค่าแรงที่กรอกไว้ {baht(r.otBase)}/วัน ÷ 8 = {baht(round2(r.otBase / 8))}/ชม. × {r.otPercent}% × {hoursText(r.otMinutes ?? 0)}
-                      <div className="text-xs text-amber-700">ยอดประมาณ — ผูกชื่อแล้วระบบคิดใหม่จากค่าแรงจริงของคนงานคนนั้น (อาจมากหรือน้อยกว่านี้)</div>
+                      {r.otBase && r.otBaseKind === "daily"
+                        ? <>ค่าแรง {baht(r.otBase)}/วัน ÷ 8 = {baht(round2(r.otBase / 8))}/ชม. × {r.otPercent}% × {hoursText(r.otMinutes ?? 0)}</>
+                        : <>กรอกยอดเอง · {hoursText(r.otMinutes ?? 0)}</>}
+                      <div className="text-xs text-(--ink-soft)">{r.otRateLabel}</div>
                     </div>
-                    <MoneyRow strong label="ค่า OT (ประมาณ)" value={r.netAmount} />
+                    <MoneyRow strong label="ค่า OT" value={r.netAmount} />
                   </>
                 ) : (
-                  <div className="text-sm text-amber-700">ยังไม่คิดเงิน — รอผูกชื่อกับคนงานในระบบ แล้วระบบคิดจากค่าแรง ÷ 8 × % OT × {hoursText(r.otMinutes ?? 0)}</div>
+                  <div className="text-sm text-amber-700">ยังไม่คิดเงิน — รอ HR ใส่เงินค่า OT (คิดจากค่าแรงรายวัน หรือกรอกยอดเอง) · {hoursText(r.otMinutes ?? 0)}</div>
                 )
               )}
               {r.kind === "ot" && !payHidden && !unlinked && (
@@ -425,7 +431,16 @@ export default async function RequestDetailPage({ params, searchParams }: { para
 
           {/* ───────── ขวา: ขั้นตอน + ปุ่ม ───────── */}
           <aside className="order-2 flex min-w-0 flex-col gap-3 lg:sticky lg:top-4 lg:col-start-2 lg:row-start-1">
-            {canLink && <LinkWorkerPanel id={r.id} typedName={r.beneficiaryName} workers={linkWorkers} optional={r.netAmount > 0} />}
+            {canSetAmount && (
+              <SetOtAmountPanel
+                id={r.id}
+                name={r.beneficiaryName}
+                minutes={r.otMinutes ?? 0}
+                companyPct={companyPct}
+                current={r.netAmount > 0 ? { amount: r.netAmount, base: r.otBase, manual: r.otBaseKind === "manual" } : null}
+              />
+            )}
+            {canLink && <LinkWorkerPanel id={r.id} typedName={r.beneficiaryName} workers={linkWorkers} optional />}
             {noAccount && r.status === "pending" && r.netAmount > 0 && canDecide(r, viewer) && (
               <Notice tone="warn">
                 <b>{r.beneficiaryName}</b> ยังไม่มีในระบบ — อนุมัติตอนนี้ได้เลย แล้วจ่ายเป็นเงินสด/โอน (ไม่เข้าบัญชีค่าแรง) · ถ้าอยากให้จ่ายพร้อมค่าแรง ให้ผูกชื่อก่อนแล้วค่อยอนุมัติ
