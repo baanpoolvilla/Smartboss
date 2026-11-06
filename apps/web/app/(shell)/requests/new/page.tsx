@@ -1,7 +1,7 @@
 import { prisma } from "@smartboss/database";
 
 import { AppScaffold } from "@/components/module/app-scaffold";
-import { listLinkableWorkOrders, listPeople, listProperties, loadSettings } from "@/modules/requests/lib/data";
+import { listLinkableWorkOrders, listPeople, listProperties, loadSettings, workerCompanyOtPercent } from "@/modules/requests/lib/data";
 import { canManageVendors, requestsPage } from "@/modules/requests/lib/page";
 import { withRequestsTenant, toVendor } from "@/modules/requests/lib/db";
 import { RequestForm } from "@/modules/requests/components/request-form";
@@ -62,6 +62,7 @@ export default async function NewRequestPage({ searchParams }: { searchParams: P
         settings={settings}
         today={today}
         advanceRound={advanceRound}
+        workerOtPercent={viewer.canFileOthers ? await workerCompanyOtPercent(session.orgId) : undefined}
       />
     </AppScaffold>
   );

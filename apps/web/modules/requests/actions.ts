@@ -21,6 +21,7 @@ import {
   workerCameOn,
   workerOtOn,
   workerRateOn,
+  workerCompanyOtPercent,
   type Viewer,
 } from "./lib/data";
 import { dateOnly, insertEvent, loadRequests, pettyBalances, readSettings, withRequestsTenant, withRequestsTenantAfter, ymd, type RequestView, type Tx } from "./lib/db";
@@ -680,7 +681,13 @@ const OT_GROUP_MAX = 30;
  * คนที่ต้องกรอกค่า OT เอง (ไม่มีเงินเดือนในระบบ) ลงรวมไม่ได้ — ยอดกรอกเองเป็นของคนเดียว
  * ยื่นทีละคน (createRequestAction) ไม่เปลี่ยนอะไร
  */
-export async function createOtGroupAction(input: CreateInput, beneficiaryUserIds: string[], pendingNames: string[] = []): Promise<Result<{ ids: string[]; codes: string[] }>> {
+export async function createOtGroupAction(
+  input: CreateInput,
+  beneficiaryUserIds: string[],
+  pendingNames: string[] = [],
+  /** ค่าแรงต่อวันที่กรอกไว้ให้ชื่อที่ยังไม่มีในระบบ — มี = คิดยอดประมาณไว้ก่อน (ผูกชื่อแล้วคิดใหม่จากค่าแรงจริง) */
+  pendingWages: Record<string, number> = {},
+): Promise<Result<{ ids: string[]; codes: string[] }>> {
   try {
     const session = await guard();
     const orgId = session.orgId;
@@ -700,8 +707,10 @@ export async function createOtGroupAction(input: CreateInput, beneficiaryUserIds
       }
       preps.push(prep);
     }
+    const companyPct = names.length > 0 ? await workerCompanyOtPercent(orgId) : 0;
     for (const name of names) {
-      const prep = await prepareUnlinkedOt(session, input, name);
+      const wage = Number(pendingWages?.[name]);
+      const prep = await prepareUnlinkedOt(session, input, name, Number.isFinite(wage) && wage > 0 && wage <= 100_000 ? round2(wage) : null, companyPct);
       if ("error" in prep) return { error: `${name}: ${prep.error}` };
       preps.push(prep);
     }
@@ -735,7 +744,7 @@ export async function createOtGroupAction(input: CreateInput, beneficiaryUserIds
           });
           const summary = f.beneficiaryUserId
             ? `ลง OT ให้ ${f.beneficiaryName} ${thai(prep.workDate)} ${f.otStart}–${f.otEnd} (${hoursText(f.otMinutes ?? 0)}) ${baht(f.netAmount)}${groupNote}`
-            : `ลง OT ให้ ${f.beneficiaryName} (ยังไม่มีในระบบ — รอผูกชื่อ) ${thai(prep.workDate)} ${f.otStart}–${f.otEnd} (${hoursText(f.otMinutes ?? 0)})${groupNote}`;
+            : `ลง OT ให้ ${f.beneficiaryName} (ยังไม่มีในระบบ — รอผูกชื่อ) ${thai(prep.workDate)} ${f.otStart}–${f.otEnd} (${hoursText(f.otMinutes ?? 0)})${f.netAmount > 0 ? ` ยอดประมาณ ${baht(f.netAmount)} จากค่าแรงที่กรอก ${baht(f.otBase ?? 0)}/วัน` : ""}${groupNote}`;
           await insertEvent(tx, orgId, { requestId: row.id, byUserId: session.userId, byName, action: "create", summary });
           out.push({ id: row.id, code: row.code });
         }
@@ -759,7 +768,7 @@ export async function createOtGroupAction(input: CreateInput, beneficiaryUserIds
  * เก็บวัน เวลา งาน ไว้ก่อน · ยังไม่คิดเงิน ยังอนุมัติไม่ได้ · ผูกกับคนงานจริงทีหลังที่ linkOtWorkerAction
  * แล้วตรวจ/คิดเงินเหมือนลงปกติทุกข้อ (ลงเวลาเข้างาน เวลาทับ ค่าแรง)
  */
-async function prepareUnlinkedOt(session: OrgSession, input: CreateInput, name: string): Promise<{ error: string } | Prepared> {
+async function prepareUnlinkedOt(session: OrgSession, input: CreateInput, name: string, wage: number | null, companyPct: number): Promise<{ error: string } | Prepared> {
   const orgId = session.orgId;
   if (!hasPermission(session, REQ_PERMS.fileOthers)) return { error: "ไม่มีสิทธิ์ลงรายการนี้ให้คนอื่น" };
   if (!name) return { error: "พิมพ์ชื่อคนงาน" };
@@ -788,6 +797,8 @@ async function prepareUnlinkedOt(session: OrgSession, input: CreateInput, name: 
   }
   const propertyId = input.propertyId || workOrder?.propertyId || null;
   const property = propertyId ? await prisma.property.findFirst({ where: { orgId, id: propertyId }, select: { id: true, name: true } }) : null;
+  // กรอกค่าแรงไว้ = คิดยอดประมาณให้เห็นก่อน (ผู้ใช้ 6/11/2569 "อยากให้ขึ้นว่า OT ใครเท่านี้ ๆ") · ผูกชื่อแล้วคิดใหม่จากค่าแรงจริงของคนนั้น
+  const est = wage ? otCalc("daily", wage, companyPct, minutes) : null;
 
   return {
     workDate,
@@ -807,16 +818,16 @@ async function prepareUnlinkedOt(session: OrgSession, input: CreateInput, name: 
       otStart: start,
       otEnd: end,
       otMinutes: minutes,
-      otPercent: null,
-      otRateLabel: null,
-      otBase: null,
-      otBaseKind: null,
-      amount: 0,
+      otPercent: est ? companyPct : null,
+      otRateLabel: est ? `ยอดประมาณ · % OT คนงานของบริษัท (${companyPct}%)` : null,
+      otBase: est ? wage : null,
+      otBaseKind: est ? "daily" : null,
+      amount: est?.amount ?? 0,
       vatPercent: 0,
       vatAmount: 0,
       whtPercent: 0,
       whtAmount: 0,
-      netAmount: 0,
+      netAmount: est?.amount ?? 0,
       lines: null,
       attachments,
       approverLevel: "hr",
@@ -873,7 +884,7 @@ export async function linkOtWorkerAction(input: { id: string; userId: string }):
         },
       });
       if (res.count === 0) return false;
-      await insertEvent(tx, orgId, { requestId: r.id, byUserId: session.userId, byName, action: "edit", summary: `ผูกชื่อ "${r.beneficiaryName}" กับคนงาน ${preview.beneficiaryName} · ค่า OT ${baht(amount)}` });
+      await insertEvent(tx, orgId, { requestId: r.id, byUserId: session.userId, byName, action: "edit", summary: `ผูกชื่อ "${r.beneficiaryName}" กับคนงาน ${preview.beneficiaryName} · ค่า OT ${baht(amount)}${r.netAmount > 0 && Math.abs(r.netAmount - amount) > 0.005 ? ` (ยอดประมาณเดิม ${baht(r.netAmount)} → คิดใหม่จากค่าแรงจริง ${amount > r.netAmount ? "+" : "−"}${baht(Math.abs(round2(amount - r.netAmount)))})` : ""}` });
       return true;
     });
     if (!saved) return { error: "มีคนผูกชื่อใบนี้ไปก่อนแล้ว — รีเฟรช" };

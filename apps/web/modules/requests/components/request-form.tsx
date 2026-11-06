@@ -69,6 +69,7 @@ export function RequestForm({
   initial,
   kinds,
   initialKind,
+  workerOtPercent = 150,
   me,
   canFileOthers,
   canManageVendors = false,
@@ -96,6 +97,8 @@ export function RequestForm({
   advanceRound?: string | null;
   /** มี = แก้ใบเดิม (เปลี่ยนประเภทไม่ได้) */
   editId?: string;
+  /** % OT คนงานของบริษัท — คิดยอดประมาณให้ชื่อที่ยังไม่มีในระบบ */
+  workerOtPercent?: number;
   initial?: EditInitial;
 }) {
   const router = useRouter();
@@ -129,6 +132,7 @@ export function RequestForm({
   // คนงานที่ยังไม่มีในระบบ — พิมพ์ชื่อไว้ก่อน ผูกกับคนงานจริงทีหลังในใบ (ผู้ใช้ 6/11/2569)
   const [pendingNames, setPendingNames] = useState<string[]>([]);
   const [typing, setTyping] = useState<string | null>(null);
+  const [pendingWages, setPendingWages] = useState<Record<string, string>>({});
 
   const selfKind = kind === "expense" || kind === "cash_advance";
   const effectiveBeneficiary = kind === "contractor" ? null : selfKind && !onBehalf ? me.userId : beneficiary || null;
@@ -280,7 +284,12 @@ export function RequestForm({
         attachments: files,
       };
       if (groupCount > 0) {
-        const res = await createOtGroupAction(payload, [...(effectiveBeneficiary ? [effectiveBeneficiary] : []), ...extraIds], pendingList);
+        const wages: Record<string, number> = {};
+        for (const n of pendingList) {
+          const w = parseMoney(pendingWages[n] ?? "");
+          if (Number.isFinite(w) && w > 0) wages[n] = w;
+        }
+        const res = await createOtGroupAction(payload, [...(effectiveBeneficiary ? [effectiveBeneficiary] : []), ...extraIds], pendingList, wages);
         if (!res.ok) {
           setError(res.error);
           return;
@@ -455,11 +464,22 @@ export function RequestForm({
               {pendingList.length > 0 && (
                 <ul className="flex flex-col gap-1.5" aria-label="คนงานที่ยังไม่มีในระบบ">
                   {pendingList.map((n) => (
-                    <li key={n} className="flex items-center justify-between gap-2 rounded-(--radius) bg-amber-50 px-3 py-1.5 text-sm">
-                      <span className="min-w-0 truncate">
+                    <li key={n} className="flex flex-wrap items-center justify-between gap-2 rounded-(--radius) bg-amber-50 px-3 py-1.5 text-sm">
+                      <span className="min-w-0 flex-1 truncate">
                         <span className="font-semibold text-(--ink)">{n}</span>
                         <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-900">ยังไม่มีในระบบ</span>
                       </span>
+                      <label className="flex items-center gap-1.5 text-xs text-(--ink-soft)">
+                        ค่าแรง/วัน
+                        <input
+                          inputMode="decimal"
+                          className="h-9 w-24 rounded-(--radius) border border-(--line) bg-(--bg) px-2 text-right text-sm text-(--ink)"
+                          placeholder="ถ้ารู้"
+                          value={pendingWages[n] ?? ""}
+                          aria-label={`ค่าแรงต่อวันของ ${n}`}
+                          onChange={(e) => setPendingWages({ ...pendingWages, [n]: e.target.value })}
+                        />
+                      </label>
                       <button
                         type="button"
                         aria-label={`เอา ${n} ออก`}
@@ -542,7 +562,7 @@ export function RequestForm({
                       ยกเลิก
                     </button>
                   </div>
-                  <span className="text-xs text-(--ink-soft)">ใบจะรอผูกชื่อ ยังไม่คิดเงิน · เพิ่มคนงานเข้าระบบแล้วกด "ผูกกับคนงาน" ในใบ ระบบจะตรวจลงเวลาเข้างานและคิดค่า OT จากค่าแรงให้ แล้วส่ง HR อนุมัติ</span>
+                  <span className="text-xs text-(--ink-soft)">ใส่ค่าแรงต่อวันไว้ได้ (ถ้ารู้) จะเห็นยอด OT ประมาณก่อน · ใบรอผูกชื่อ HR ยังอนุมัติไม่ได้ · เพิ่มคนงานเข้าระบบแล้วกด "ผูกกับคนงาน" ในใบ ระบบคิดใหม่จากค่าแรงจริงของคนนั้น (มากกว่า/น้อยกว่าที่ประมาณได้) แล้วส่ง HR อนุมัติ</span>
                 </div>
               )}
             </div>
@@ -783,12 +803,19 @@ export function RequestForm({
                         </div>
                       );
                     })}
-                    {pendingList.map((n) => (
-                      <div key={`p-${n}`} className="flex items-baseline justify-between gap-2 text-sm">
-                        <span className="min-w-0 truncate text-(--ink)">{n}</span>
-                        <span className="shrink-0 text-amber-700">รอผูกชื่อ · ยังไม่คิดเงิน</span>
-                      </div>
-                    ))}
+                    {pendingList.map((n) => {
+                      const w = parseMoney(pendingWages[n] ?? "");
+                      const est = Number.isFinite(w) && w > 0 && otMinutes > 0 ? round2((w / 8) * (workerOtPercent / 100) * (otMinutes / 60)) : null;
+                      return (
+                        <div key={`p-${n}`} className="flex items-baseline justify-between gap-2 text-sm">
+                          <span className="min-w-0 truncate text-(--ink)">{n}</span>
+                          <span className="shrink-0 tabular-nums text-amber-700">{est !== null ? `≈ ${baht(est)} · รอผูกชื่อ` : "รอผูกชื่อ · ยังไม่คิดเงิน"}</span>
+                        </div>
+                      );
+                    })}
+                    {pendingList.some((n) => parseMoney(pendingWages[n] ?? "") > 0) && (
+                      <span className="text-[11px] text-amber-700">≈ = ประมาณจากค่าแรงที่กรอก × OT คนงาน {workerOtPercent}% · ผูกชื่อแล้วคิดใหม่จากค่าแรงจริง</span>
+                    )}
                     <span className="text-[11px] text-(--ink-soft)">ยอดของพนักงานประจำเห็นเฉพาะเจ้าตัว / CEO / ผู้ดูแลเงินเดือน</span>
                   </div>
                 ) : (

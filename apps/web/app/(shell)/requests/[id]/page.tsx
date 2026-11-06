@@ -221,7 +221,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
         .filter((p) => p.isWorker && p.userId !== r.createdBy)
         .map((p) => ({ id: p.userId, name: p.name, badge: "คนงาน", sub: [p.departmentName, p.email].filter(Boolean).join(" · "), keywords: p.email ?? "" }))
     : [];
-  if (unlinked) steps.splice(1, 0, { title: `ผูกชื่อ "${r.beneficiaryName}" กับคนงานในระบบ`, sub: "ยังไม่คิดเงิน · ยังอนุมัติไม่ได้", state: "now" });
+  if (unlinked) steps.splice(1, 0, { title: `ผูกชื่อ "${r.beneficiaryName}" กับคนงานในระบบ`, sub: r.netAmount > 0 ? `ยอดประมาณ ${baht(r.netAmount)} · ยังอนุมัติไม่ได้` : "ยังไม่คิดเงิน · ยังอนุมัติไม่ได้", state: "now" });
   if (unlinked) for (const x of steps.slice(2)) if (x.state === "now") x.state = "todo";
 
   const breakdown = r.kind === "contractor" ? contractorBreakdown(r.amount, r.vatPercent, r.whtPercent) : null;
@@ -250,7 +250,14 @@ export default async function RequestDetailPage({ params, searchParams }: { para
                 <div className="sm:text-right">
                   <div className="text-xs text-(--ink-soft)">{r.kind === "contractor" ? "จ่ายร้านจริง" : "ยอด"}</div>
                   {unlinked ? (
-                    <div className="text-sm font-medium text-amber-700">ยังไม่คิด · รอผูกชื่อ</div>
+                    r.netAmount > 0 ? (
+                      <div>
+                        <div className="text-2xl font-bold tabular-nums text-(--ink)">≈ {baht(r.netAmount)}</div>
+                        <div className="text-xs font-medium text-amber-700">ยอดประมาณ · รอผูกชื่อ</div>
+                      </div>
+                    ) : (
+                      <div className="text-sm font-medium text-amber-700">ยังไม่คิด · รอผูกชื่อ</div>
+                    )
                   ) : payHidden ? (
                     <div className="max-w-[14rem] text-sm font-medium text-(--ink-soft)">ซ่อนยอด · {HIDDEN_PAY_LABEL}</div>
                   ) : (
@@ -293,7 +300,17 @@ export default async function RequestDetailPage({ params, searchParams }: { para
                 </>
               )}
               {r.kind === "ot" && !payHidden && unlinked && (
-                <div className="text-sm text-amber-700">ยังไม่คิดเงิน — รอผูกชื่อกับคนงานในระบบ แล้วระบบคิดจากค่าแรง ÷ 8 × % OT × {hoursText(r.otMinutes ?? 0)}</div>
+                r.otBase ? (
+                  <>
+                    <div className="rounded-(--radius) bg-(--bg-soft) px-3 py-2 text-sm text-(--ink)">
+                      ค่าแรงที่กรอกไว้ {baht(r.otBase)}/วัน ÷ 8 = {baht(round2(r.otBase / 8))}/ชม. × {r.otPercent}% × {hoursText(r.otMinutes ?? 0)}
+                      <div className="text-xs text-amber-700">ยอดประมาณ — ผูกชื่อแล้วระบบคิดใหม่จากค่าแรงจริงของคนงานคนนั้น (อาจมากหรือน้อยกว่านี้)</div>
+                    </div>
+                    <MoneyRow strong label="ค่า OT (ประมาณ)" value={r.netAmount} />
+                  </>
+                ) : (
+                  <div className="text-sm text-amber-700">ยังไม่คิดเงิน — รอผูกชื่อกับคนงานในระบบ แล้วระบบคิดจากค่าแรง ÷ 8 × % OT × {hoursText(r.otMinutes ?? 0)}</div>
+                )
               )}
               {r.kind === "ot" && !payHidden && !unlinked && (
                 <>

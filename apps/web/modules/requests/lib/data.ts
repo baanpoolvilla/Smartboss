@@ -93,6 +93,11 @@ export async function workerRateOn(orgId: string, employmentId: string, date: st
   return { wage: wage !== null && Number.isFinite(wage) && wage > 0 ? wage : null, otPercent: settings.otPercent };
 }
 
+/** % OT คนงานของบริษัท (ตั้งในโมดูลคนงาน) — ใช้คิดยอดประมาณของ OT ที่ยังไม่ผูกชื่อ */
+export async function workerCompanyOtPercent(orgId: string): Promise<number> {
+  return (await readDwSettings(orgId)).otPercent;
+}
+
 /** OT ที่ผู้ดูแลลงไว้ในโมดูลคนงานแล้ววันนั้น (กันลงซ้ำ) */
 export async function workerOtOn(orgId: string, employmentId: string, date: string) {
   const { list } = await readOt(orgId);
