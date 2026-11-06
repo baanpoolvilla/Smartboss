@@ -308,7 +308,11 @@ export function statusInfo(r: {
   const approver = r.approverLevel === "ceo" ? "CEO" : "HR";
   switch (r.status) {
     case "pending":
-      if (r.kind === "ot" && r.beneficiaryUserId === null) return { label: "รอผูกชื่อคนงาน", tone: "warn", next: "เพิ่มคนงานเข้าระบบ แล้วกด \"ผูกกับคนงาน\" ในใบ" };
+      if (r.kind === "ot" && r.beneficiaryUserId === null) {
+        return r.netAmount > 0
+          ? { label: `รอ ${approver} อนุมัติ · ไม่มีในระบบ`, tone: "warn", next: "อนุมัติแล้ว HR จ่ายเงินสด/โอนเอง · หรือผูกชื่อก่อนเพื่อเข้าบัญชีค่าแรง" }
+          : { label: "รอผูกชื่อคนงาน", tone: "warn", next: "ไม่ได้ใส่ค่าแรงไว้ — เพิ่มคนงานเข้าระบบ แล้วกด \"ผูกกับคนงาน\" ในใบ" };
+      }
       if (r.approverLevel === "ceo" && r.firstDecidedAt) return { label: "HR ผ่านแล้ว · รอ CEO", tone: "warn", next: "CEO อนุมัติ (ยอดเกินเกณฑ์)" };
       if (r.approverLevel === "hr" && r.needCeo) return { label: "รอ HR อนุมัติ", tone: "warn", next: "HR ตรวจ แล้วต่อ CEO (ยอดเกินเกณฑ์)" };
       return { label: `รอ ${approver} อนุมัติ`, tone: "warn", next: r.kind === "ot" ? `${approver} ตรวจว่ามีจริง` : `รอ ${approver} ตัดสิน` };
@@ -322,7 +326,7 @@ export function statusInfo(r: {
       return { label: "อนุมัติ · รอจ่าย", tone: "info", next: "HR บันทึกจ่าย + แนบสลิป" };
     }
     case "paid": {
-      if (r.kind === "ot" && r.beneficiaryKind === "worker") return { label: "เข้าบัญชีค่าแรงแล้ว", tone: "ok", next: "จ่ายพร้อมค่าแรงที่หน้าจ่ายเงินคนงาน" };
+      if (r.kind === "ot" && r.beneficiaryKind === "worker" && r.beneficiaryUserId !== null) return { label: "เข้าบัญชีค่าแรงแล้ว", tone: "ok", next: "จ่ายพร้อมค่าแรงที่หน้าจ่ายเงินคนงาน" };
       if (r.kind === "advance" && r.beneficiaryKind === "worker") return { label: "จ่ายแล้ว · หักจากค่าแรงอัตโนมัติ", tone: "ok", next: "ระบบคนงานหักจากค่าแรงวันถัดไปเอง" };
       if (r.kind === "cash_advance" && r.clearStatus !== "cleared") {
         return r.clearStatus === "submitted"

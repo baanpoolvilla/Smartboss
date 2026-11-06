@@ -221,7 +221,8 @@ export function isUnlinkedOt(r: { kind: string; status: string; beneficiaryUserI
 
 export function canDecide(r: RequestView, viewer: Viewer): boolean {
   if (r.status !== "pending") return false;
-  if (isUnlinkedOt(r)) return false;
+  // ชื่อที่ยังไม่มีในระบบ: อนุมัติได้เมื่อมียอด (กรอกค่าแรงไว้) — อนุมัติแล้ว HR จ่ายเงินสด/โอนเอง (ผู้ใช้ 6/11/2569)
+  if (isUnlinkedOt(r) && r.netAmount <= 0) return false;
   if (r.createdBy === viewer.userId || r.beneficiaryUserId === viewer.userId) return false;
   return r.approverLevel === "ceo" ? viewer.canApproveCeo : viewer.canApprove || viewer.canApproveCeo;
 }

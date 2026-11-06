@@ -12,7 +12,7 @@ import { Notice } from "./ui";
  * ใบ OT ที่พิมพ์ชื่อคนงานไว้ก่อน (ยังไม่มีในระบบ) — เลือกคนงานจริงเพื่อผูก
  * ผูกแล้วระบบตรวจลงเวลาเข้างาน/เวลาทับ และคิดค่า OT จากค่าแรง แล้วส่งให้ HR อนุมัติตามปกติ
  */
-export function LinkWorkerPanel({ id, typedName, workers }: { id: string; typedName: string; workers: PickItem[] }) {
+export function LinkWorkerPanel({ id, typedName, workers, optional = false }: { id: string; typedName: string; workers: PickItem[]; optional?: boolean }) {
   const router = useRouter();
   const [userId, setUserId] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +21,7 @@ export function LinkWorkerPanel({ id, typedName, workers }: { id: string; typedN
   return (
     <section className="flex flex-col gap-3 rounded-(--radius-lg) border-2 border-amber-300 bg-amber-50 p-4">
       <div>
-        <h2 className="text-base font-bold text-(--ink)">ผูกกับคนงาน</h2>
+        <h2 className="text-base font-bold text-(--ink)">ผูกกับคนงาน{optional && <span className="ml-1 text-xs font-normal text-(--ink-soft)">(ไม่บังคับ)</span>}</h2>
         <p className="mt-1 text-xs text-(--ink-soft)">
           ใบนี้ลงให้ <b>&ldquo;{typedName}&rdquo;</b> ที่ยังไม่มีในระบบ · เพิ่มคนงานเข้าระบบแล้วเลือกชื่อจริงที่นี่ ระบบจะตรวจลงเวลาเข้างานวันนั้น คิดค่า OT จากค่าแรง แล้วส่งให้ HR อนุมัติ
         </p>

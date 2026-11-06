@@ -46,7 +46,7 @@ export function payableByHolder(r: RequestView & { payHidden: boolean }, userId:
   return (
     r.status === "approved" &&
     r.beneficiaryUserId !== userId &&
-    !(r.kind === "ot" && r.beneficiaryKind === "worker") &&
+    !(r.kind === "ot" && r.beneficiaryKind === "worker" && r.beneficiaryUserId) &&
     !r.payHidden &&
     r.netAmount - r.paidTotal > 0.005
   );

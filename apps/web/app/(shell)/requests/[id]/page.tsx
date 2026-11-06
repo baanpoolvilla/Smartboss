@@ -160,7 +160,9 @@ export default async function RequestDetailPage({ params, searchParams }: { para
 
   const isBeneficiary = r.beneficiaryUserId === session.userId;
   const outstanding = round2(r.netAmount - r.paidTotal);
-  const workerOt = r.kind === "ot" && r.beneficiaryKind === "worker";
+  // OT คนงานที่ยังไม่มีในระบบ ไม่มีบัญชีค่าแรง — อนุมัติแล้วจ่ายเงินสด/โอนแบบใบทั่วไป
+  const workerOt = r.kind === "ot" && r.beneficiaryKind === "worker" && !!r.beneficiaryUserId;
+  const noAccount = r.kind === "ot" && !r.beneficiaryUserId;
   // ยอดซ่อน = จ่ายผ่านรอบเงินเดือน (ผู้ดูแลเงินเดือนทำ) ไม่ใช่ที่หน้านี้ — จ่ายเงินโดยไม่รู้ยอดไม่ได้
   const canPayHere = r.status === "approved" && !workerOt && !isBeneficiary && !payHidden && (viewer.canPay || viewer.isPettyHolder) && outstanding > 0.005;
   const methods: PaymentMethod[] = viewer.canPay
@@ -206,7 +208,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
     else {
       steps.push({ title: "HR จ่ายเงิน + หลักฐาน", sub: payHidden ? (r.kind === "ot" ? "รวมกับเงินเดือน (ผู้ดูแลเงินเดือนทำ)" : undefined) : r.paidTotal > 0 ? `จ่ายแล้ว ${baht(r.paidTotal)}${outstanding > 0.005 ? ` · เหลือ ${baht(outstanding)}` : ""}` : undefined, state: r.status === "paid" ? "done" : r.status === "approved" ? "now" : "todo" });
       if (r.kind === "cash_advance") steps.push({ title: "คนเบิกส่งใบเสร็จ + เงินทอน → HR ตรวจ", sub: r.clearedAt ? `ตรวจแล้ว · ${r.clearedByName}` : r.clearStatus === "submitted" ? "ส่งแล้ว รอ HR ตรวจ" : r.clearDueDate ? `ภายใน ${thaiDate(r.clearDueDate)}` : undefined, state: r.clearedAt ? "done" : r.status === "paid" ? "now" : "todo" });
-      if (r.beneficiaryKind !== "vendor") steps.push({ title: "ผู้รับยืนยันได้รับเงิน", sub: r.receivedAt ? thaiDateTime(r.receivedAt) : undefined, state: r.receivedAt ? "done" : r.paidTotal > 0 && !r.payments.every((p) => p.method === "payroll") ? "now" : "todo" });
+      if (r.beneficiaryKind !== "vendor" && !noAccount) steps.push({ title: "ผู้รับยืนยันได้รับเงิน", sub: r.receivedAt ? thaiDateTime(r.receivedAt) : undefined, state: r.receivedAt ? "done" : r.paidTotal > 0 && !r.payments.every((p) => p.method === "payroll") ? "now" : "todo" });
       if (r.kind === "advance" && r.beneficiaryKind === "worker") steps.push({ title: "หักคืนจากค่าแรงอัตโนมัติ", sub: "ลงเป็น \"เบิกล่วงหน้า\" ในบัญชีค่าแรงแล้ว", state: r.status === "paid" ? "done" : "todo" });
       else if (r.deductAmount > 0) steps.push({ title: r.beneficiaryKind === "worker" ? "หักคืนจากค่าแรงอัตโนมัติ" : "หักคืนในงวดเงินเดือน", sub: r.deductedAt ? `หักแล้ว งวด ${r.deductedPeriod && PERIOD_RE.test(r.deductedPeriod) ? salaryPeriodLabel(r.deductedPeriod) : r.deductedPeriod}` : `${baht(r.deductAmount)}${deductRound ? ` · ${deductRound}` : ""}`, state: r.deductedAt || r.beneficiaryKind === "worker" ? "done" : "now" });
     }
@@ -221,8 +223,12 @@ export default async function RequestDetailPage({ params, searchParams }: { para
         .filter((p) => p.isWorker && p.userId !== r.createdBy)
         .map((p) => ({ id: p.userId, name: p.name, badge: "คนงาน", sub: [p.departmentName, p.email].filter(Boolean).join(" · "), keywords: p.email ?? "" }))
     : [];
-  if (unlinked) steps.splice(1, 0, { title: `ผูกชื่อ "${r.beneficiaryName}" กับคนงานในระบบ`, sub: r.netAmount > 0 ? `ยอดประมาณ ${baht(r.netAmount)} · ยังอนุมัติไม่ได้` : "ยังไม่คิดเงิน · ยังอนุมัติไม่ได้", state: "now" });
-  if (unlinked) for (const x of steps.slice(2)) if (x.state === "now") x.state = "todo";
+  if (unlinked && r.netAmount <= 0) {
+    steps.splice(1, 0, { title: `ผูกชื่อ "${r.beneficiaryName}" กับคนงานในระบบ`, sub: "ยังไม่คิดเงิน · ยังอนุมัติไม่ได้", state: "now" });
+    for (const x of steps.slice(2)) if (x.state === "now") x.state = "todo";
+  } else if (unlinked) {
+    steps.splice(1, 0, { title: `(ไม่บังคับ) ผูกชื่อ "${r.beneficiaryName}" กับคนงาน`, sub: "ผูกก่อนอนุมัติ = เข้าบัญชีค่าแรง · ไม่ผูก = อนุมัติแล้ว HR จ่ายเงินสด/โอนเอง", state: "todo" });
+  }
 
   const breakdown = r.kind === "contractor" ? contractorBreakdown(r.amount, r.vatPercent, r.whtPercent) : null;
   const vendor = r.vendorId ? await withRequestsTenant(orgId, (tx) => tx.moneyVendor.findFirst({ where: { orgId, id: r.vendorId! } })) : null;
@@ -419,7 +425,12 @@ export default async function RequestDetailPage({ params, searchParams }: { para
 
           {/* ───────── ขวา: ขั้นตอน + ปุ่ม ───────── */}
           <aside className="order-2 flex min-w-0 flex-col gap-3 lg:sticky lg:top-4 lg:col-start-2 lg:row-start-1">
-            {canLink && <LinkWorkerPanel id={r.id} typedName={r.beneficiaryName} workers={linkWorkers} />}
+            {canLink && <LinkWorkerPanel id={r.id} typedName={r.beneficiaryName} workers={linkWorkers} optional={r.netAmount > 0} />}
+            {noAccount && r.status === "pending" && r.netAmount > 0 && canDecide(r, viewer) && (
+              <Notice tone="warn">
+                <b>{r.beneficiaryName}</b> ยังไม่มีในระบบ — อนุมัติตอนนี้ได้เลย แล้วจ่ายเป็นเงินสด/โอน (ไม่เข้าบัญชีค่าแรง) · ถ้าอยากให้จ่ายพร้อมค่าแรง ให้ผูกชื่อก่อนแล้วค่อยอนุมัติ
+              </Notice>
+            )}
             {canDecide(r, viewer) && (
               <DecidePanel id={r.id} version={r.updatedAt} level={r.approverLevel} isOt={r.kind === "ot"} forwardsToCeo={r.approverLevel === "hr" && r.needCeo && !viewer.canApproveCeo} firstBy={r.firstDecidedByName} />
             )}

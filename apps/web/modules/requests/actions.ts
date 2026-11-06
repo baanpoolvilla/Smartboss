@@ -753,7 +753,7 @@ export async function createOtGroupAction(
     );
     created.forEach((c, i) => {
       const f = preps[i]!.fields;
-      if (!f.beneficiaryUserId) return; // รอผูกชื่อ — แจ้งผู้อนุมัติตอนผูกแล้ว
+      if (!f.beneficiaryUserId && f.netAmount <= 0) return; // ไม่มียอด — ยังไม่มีอะไรให้อนุมัติ แจ้งตอนผูกชื่อ
       void notifyApprovers(orgId, { id: c.id, code: c.code, kind: "ot", title: f.title, netAmount: f.netAmount, beneficiaryName: f.beneficiaryName }, f.approverLevel, [session.userId, f.beneficiaryUserId ?? ""]);
     });
     refresh();
@@ -799,6 +799,8 @@ async function prepareUnlinkedOt(session: OrgSession, input: CreateInput, name: 
   const property = propertyId ? await prisma.property.findFirst({ where: { orgId, id: propertyId }, select: { id: true, name: true } }) : null;
   // กรอกค่าแรงไว้ = คิดยอดประมาณให้เห็นก่อน (ผู้ใช้ 6/11/2569 "อยากให้ขึ้นว่า OT ใครเท่านี้ ๆ") · ผูกชื่อแล้วคิดใหม่จากค่าแรงจริงของคนนั้น
   const est = wage ? otCalc("daily", wage, companyPct, minutes) : null;
+  const settings = await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId));
+  const route = await approverLevelFor(orgId, "ot", session.userId, null, est?.amount ?? 0, settings.approvalRoutes);
 
   return {
     workDate,
@@ -830,8 +832,8 @@ async function prepareUnlinkedOt(session: OrgSession, input: CreateInput, name: 
       netAmount: est?.amount ?? 0,
       lines: null,
       attachments,
-      approverLevel: "hr",
-      needCeo: false,
+      approverLevel: route.level,
+      needCeo: route.needCeo,
     },
   };
 }
@@ -1000,7 +1002,8 @@ export async function decideRequestAction(input: { id: string; outcome: "approve
 
     // OT ของคนงาน: อนุมัติ = ลงชั่วโมง OT ในโมดูลคนงาน (ยอดเงินคิดที่บัญชีค่าแรงตามกติกาเดิม)
     let dwOtEntryId: string | null = null;
-    const workerOt = input.outcome === "approve" && r.kind === "ot" && r.beneficiaryKind === "worker";
+    // OT คนงานที่ยังไม่ผูกชื่อ (ไม่มีบัญชีค่าแรง) อนุมัติแล้วเป็น "รอจ่าย" ให้ HR จ่ายเงินสด/โอนเอง — ไม่เข้าบัญชีค่าแรง
+    const workerOt = input.outcome === "approve" && r.kind === "ot" && r.beneficiaryKind === "worker" && !!r.beneficiaryUserId;
     if (workerOt) {
       if (!r.employmentId || !r.otStart || !r.otEnd || !r.otMinutes) return { error: "ข้อมูล OT ของคนงานไม่ครบ" };
       const existing = await workerOtOn(orgId, r.employmentId, r.workDate);
@@ -1118,7 +1121,7 @@ export async function cancelRequestAction(input: { id: string; reason: string })
     if (r.status === "rejected" || r.status === "cancelled") return { error: "ใบนี้จบไปแล้ว" };
     if (r.status === "pending" && r.createdBy !== session.userId && !manager) return { error: "ยกเลิกได้เฉพาะคนยื่น หรือ HR" };
     if (r.status !== "pending" && !manager) return { error: "ใบที่อนุมัติแล้ว ยกเลิกได้เฉพาะ HR/CEO" };
-    const workerLedger = r.kind === "ot" && r.beneficiaryKind === "worker" && r.status === "paid";
+    const workerLedger = r.kind === "ot" && r.beneficiaryKind === "worker" && !!r.beneficiaryUserId && r.status === "paid";
     const realPaid = r.payments.some((p) => !p.voided && p.method !== "worker_ledger");
     if (realPaid) return { error: "ใบนี้จ่ายเงินไปแล้ว — ยกเลิกการจ่ายก่อน แล้วค่อยยกเลิกใบ" };
 
@@ -1168,7 +1171,7 @@ export async function recordPaymentAction(input: PayInput): Promise<Result> {
     const r = await withRequestsTenant(orgId, (tx) => loadOne(tx, orgId, input.id));
     if (!r) return { error: "ไม่พบคำขอ" };
     if (r.status !== "approved") return { error: r.status === "pending" ? "ใบนี้ยังไม่อนุมัติ" : "ใบนี้จ่ายครบ/จบไปแล้ว" };
-    if (r.kind === "ot" && r.beneficiaryKind === "worker") return { error: "OT ของคนงานจ่ายผ่านบัญชีค่าแรง" };
+    if (r.kind === "ot" && r.beneficiaryKind === "worker" && r.beneficiaryUserId) return { error: "OT ของคนงานจ่ายผ่านบัญชีค่าแรง" };
     if (r.beneficiaryUserId === session.userId) return { error: "บันทึกจ่ายเงินให้ตัวเองไม่ได้ — ให้ HR อีกคนหรือคนถือเงินสดย่อยเป็นคนจ่าย" };
     const method = input.method;
     if (!METHOD_LABEL[method] || method === "worker_ledger") return { error: "วิธีจ่ายไม่ถูกต้อง" };
