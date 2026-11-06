@@ -14,7 +14,7 @@ import {
   voidPaymentAction,
   type UploadedFile,
 } from "../actions";
-import { METHOD_LABEL, SIMILAR_SLIP_PREFIX, baht, parseMoney, round2, type PaymentMethod } from "../lib/types";
+import { METHOD_LABEL, SIMILAR_SLIP_PREFIX, baht, parseMoney, round2, thaiDate, type PaymentMethod } from "../lib/types";
 import { FilePicker } from "./file-picker";
 import { MoneyRow, Notice } from "./ui";
 
@@ -287,12 +287,13 @@ export function ClearingSubmit({ id, paid, dueDate, today, maxAgeDays }: { id: s
   const s = parseMoney(spent);
   const r = parseMoney(returned || "0");
   const diff = Number.isFinite(s) && Number.isFinite(r) ? round2(paid - s - r) : null;
+  // dueDate / today เป็น YYYY-MM-DD ทั้งคู่ — เดิมส่งวันที่ไทย "13 พ.ย. 2569" มาเทียบ ขึ้น "เลยกำหนด" ผิดทุกวันที่ 1–20
   const overdue = dueDate !== null && dueDate < today;
   return (
     <section className="flex flex-col gap-3 rounded-(--radius-lg) border-2 border-(--app) bg-(--bg) p-4">
       <div>
         <h2 className="text-base font-bold text-(--ink)">ส่งใบเสร็จ + เงินทอน <span className="font-normal text-(--ink-soft)">(เบิกไป {baht(paid)})</span></h2>
-        {dueDate && <p className={`text-xs ${overdue ? "font-semibold text-red-700" : "text-(--ink-soft)"}`}>{overdue ? "เลยกำหนดส่งแล้ว" : "ส่งภายใน"} {dueDate}</p>}
+        {dueDate && <p className={`text-xs ${overdue ? "font-semibold text-red-700" : "text-(--ink-soft)"}`}>{overdue ? "เลยกำหนดส่งแล้ว" : "ส่งภายใน"} {thaiDate(dueDate)}</p>}
       </div>
       <FilePicker
         role="clearing"
