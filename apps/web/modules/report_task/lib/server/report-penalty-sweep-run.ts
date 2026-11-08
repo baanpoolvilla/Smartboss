@@ -5,6 +5,7 @@ import { prisma } from "@smartboss/database";
 
 import { loadPerformanceSettings, type PerformanceEventInput } from "@/lib/performance";
 import { createStoreIfAbsent, readStore } from "@/modules/report_task/lib/db/org-store";
+import { readStoreCached } from "@/modules/report_task/lib/db/store-cached-read";
 import { normalizeEarlySubmitDays } from "@/modules/report_task/lib/submission-rounds";
 import { listDirectory } from "@/modules/report_task/lib/db/employee-directory";
 import { buildDateExemptions } from "@/modules/report_task/lib/report-feed-exemptions";
@@ -95,7 +96,8 @@ export async function runReportPenaltySweep(orgId: string, actorId: string | nul
       readStore<boolean>(orgId, "report-penalty-settings"),
       readStore<string>(orgId, "report-penalty-enabled-since"),
       readStore<number>(orgId, "report-penalty-grace-days"),
-      readStore<{ topics: ReportTopic[]; posts: ReportPost[]; submitterGroups?: SubmitterGroup[] }>(orgId, "report-feed"),
+      // ฟีดก้อนใหญ่ — ใช้ชุดในหน่วยความจำถ้ายังเป็นเวอร์ชันล่าสุด (store-cached-read.ts)
+      readStoreCached<{ topics: ReportTopic[]; posts: ReportPost[]; submitterGroups?: SubmitterGroup[] }>(orgId, "report-feed"),
       listDirectory(orgId),
       listLeaveEvents(orgId, fromStr, toStr),
       listHolidayEvents(orgId, fromStr, toStr),
