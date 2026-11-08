@@ -18,6 +18,8 @@ import {
 } from "@/modules/report_task/lib/db/org-store";
 import { recordReportStickerEvents, refundDeletedReportRoundEvents } from "@/modules/report_task/lib/db/report-feed-performance";
 import type { Department } from "@/modules/report_task/types";
+import { DELTA_KEYS, deltasSince, rememberSnapshot, snapshotAt } from "@/modules/report_task/lib/db/store-delta-log";
+import { applyDelta, type StoreDelta } from "@/modules/report_task/lib/store-delta";
 import {
   DEPARTMENTS_KEY,
   DIRECTORY_KEY,
@@ -86,10 +88,21 @@ export async function GET(request: NextRequest, context: { params: Promise<{ key
     } else {
       const current = await readStoreVersion(session.orgId, key);
       if (String(current) === known) return unchanged(current);
+      // เครื่องรับ "เฉพาะส่วนที่เปลี่ยน" ได้ และเรามี delta ต่อกันครบตั้งแต่เวอร์ชันที่มันถือ — ส่งแค่นั้น
+      if (request.headers.get("x-delta-ok") === "1" && /^\d+$/.test(known)) {
+        const deltas = deltasSince(session.orgId, key, Number(known), current);
+        if (deltas) {
+          return Response.json(
+            { deltas },
+            { headers: { "Cache-Control": "no-store", "X-Data-Version": String(current), "X-Delta": "1" } }
+          );
+        }
+      }
     }
   }
 
   const { payload, version } = await readStorePayload(session.orgId, session.userId, key);
+  if (DELTA_KEYS.has(key)) rememberSnapshot(session.orgId, key, version, payload);
   return Response.json(payload, { headers: { "Cache-Control": "no-store", "X-Data-Version": String(version) } });
 }
 
@@ -102,11 +115,36 @@ async function put(request: NextRequest, key: string) {
     return Response.json({ error: "ข้อมูลใหญ่เกินไป" }, { status: 413 });
   }
 
-  let body: { data?: unknown; expectedVersion?: unknown } | null;
+  let body: { data?: unknown; expectedVersion?: unknown; patch?: unknown; baseVersion?: unknown } | null;
   try {
     body = JSON.parse(raw);
   } catch {
     body = null;
+  }
+  // ส่งมาแค่ส่วนที่เปลี่ยนจากเวอร์ชันที่เครื่องถือ (lib/store-delta.ts) — ประกอบเป็นก้อนเต็มที่นี่ แล้วเขียนทางเดิมทุกอย่าง
+  // ใช้ได้เฉพาะเมื่อเซิร์ฟเวอร์ยังอยู่เวอร์ชันนั้นพอดี (ไม่งั้นตอบ 409 ให้เครื่องรวมของใหม่ก่อน เหมือนส่งเต็ม)
+  let patchedBefore: { data: unknown; version: number } | null = null;
+  if (body && typeof body === "object" && "patch" in body && DELTA_KEYS.has(key)) {
+    const baseVersion = typeof body.baseVersion === "number" ? body.baseVersion : null;
+    if (baseVersion == null) return Response.json({ error: "ต้องส่งข้อมูลทั้งก้อน" }, { status: 422 });
+    let baseData = snapshotAt(session.orgId, key, baseVersion);
+    if (baseData === undefined) {
+      const current = await readStore<unknown>(session.orgId, key);
+      if (current.version !== baseVersion) {
+        return Response.json(
+          { error: "ข้อมูลถูกแก้ไขโดยผู้ใช้อื่นแล้ว กรุณาโหลดใหม่", currentVersion: current.version },
+          { status: 409 }
+        );
+      }
+      baseData = current.data;
+      rememberSnapshot(session.orgId, key, current.version, current.data);
+    }
+    try {
+      body = { data: applyDelta(baseData, body.patch as StoreDelta), expectedVersion: baseVersion };
+    } catch {
+      return Response.json({ error: "ต้องส่งข้อมูลทั้งก้อน" }, { status: 422 });
+    }
+    patchedBefore = { data: baseData, version: baseVersion };
   }
   if (!body || typeof body !== "object" || !("data" in body)) {
     return Response.json({ error: "รูปแบบข้อมูลไม่ถูกต้อง" }, { status: 400 });
@@ -177,7 +215,11 @@ async function put(request: NextRequest, key: string) {
 
   // ต้องอ่านก้อนเก่าไว้ก่อนเขียนทับ — หลังเขียนแล้วก้อนเก่าหายไปเลย ไม่มีทาง
   // ย้อนกลับมา diff ว่า reaction ไหนเพิ่งติดใหม่ หรือรอบส่งไหนถูกลบไป (เฉพาะคีย์ report-feed)
-  const before = key === REPORT_FEED_KEY ? await readStore<{ posts?: unknown[]; topics?: unknown[] }>(session.orgId, key) : null;
+  const before =
+    key !== REPORT_FEED_KEY
+      ? null
+      : (patchedBefore as { data: { posts?: unknown[]; topics?: unknown[] } | null; version: number } | null) ??
+        (await readStore<{ posts?: unknown[]; topics?: unknown[] }>(session.orgId, key));
   // ประชุมที่ถูกลบในรอบนี้ — ต้องรู้ก้อนเก่าเพื่อลบแจ้งเตือนของประชุมนั้นจากกระดิ่งทุกคน
   const meetingsBefore = key === MEETINGS_KEY ? await readStore<{ id?: unknown }[]>(session.orgId, key) : null;
 

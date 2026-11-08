@@ -8,6 +8,7 @@ import { isTopicOn, topicForReportNotification } from "@/modules/notifications/p
 import { publishToOrg, publishToUsers } from "@/lib/realtime/server";
 
 import { fileForStoreKey, type StoreKey } from "./store-registry";
+import { forgetDeltas, recordWrite } from "./store-delta-log";
 import { absorbedIdSet, groupAttachmentNotifications } from "./attachment-notif-group";
 import { groupTaskCommentNotifications } from "./comment-notif-group";
 
@@ -106,7 +107,10 @@ export async function writeStore(
     return result;
   }
   const result = await writeStoreRaw(orgId, key, data, expectedVersion, updatedBy);
-  if (result.ok) announceStoreChanged(orgId, key, result.version);
+  if (result.ok) {
+    recordWrite(orgId, key, result.version, data); // ให้เครื่องอื่นดึงเฉพาะส่วนที่เปลี่ยน (store-delta-log.ts)
+    announceStoreChanged(orgId, key, result.version);
+  }
   return result;
 }
 
@@ -382,6 +386,7 @@ async function writeStoreRaw(
 /** ล้างคีย์นี้ของบริษัท (ปุ่ม "รีเซ็ตข้อมูล" ในหน้าตั้งค่า) */
 export async function clearStore(orgId: string, key: string): Promise<void> {
   await prisma.reportTaskStore.deleteMany({ where: { orgId, key } });
+  forgetDeltas(orgId, key);
 }
 
 /**

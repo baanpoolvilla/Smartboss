@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { batchRead } from "@/modules/report_task/lib/store-batch";
+import { applyDelta, diffSlice, type StoreDelta } from "@/modules/report_task/lib/store-delta";
 import { toast } from "sonner";
 import type { StoreApi, UseBoundStore } from "zustand";
 import type { StoreKey } from "@/modules/report_task/lib/db/store-registry";
@@ -44,6 +45,13 @@ function sameFields(a: unknown, b: unknown): boolean {
  */
 const CACHE_ON_REVISIT = new Set<string>(["report-feed"]);
 const confirmedCache = new Map<string, { version: number; slice: unknown }>();
+/** คีย์ที่ส่งขึ้น/ดึงลงเฉพาะส่วนที่เปลี่ยน (lib/store-delta.ts) แทนทั้งก้อน — ไม่ได้/ไม่ครบ = ทั้งก้อนแบบเดิม */
+const DELTA_SYNC = new Set<string>(["report-feed"]);
+
+function applyDeltas<S>(base: S, deltas: unknown): S {
+  if (!Array.isArray(deltas)) throw new Error("delta: bad body");
+  return (deltas as StoreDelta[]).reduce((acc, d) => applyDelta(acc, d), base);
+}
 
 /**
  * Generic server-backed replacement for zustand's `persist` + localStorage,
@@ -122,13 +130,23 @@ export function ServerStoreSync<T, S>({
     // GET the current server slice + version. `slice` is null for a store the
     // company has never saved yet.
     async function fetchServer(known?: { version: number; slice: unknown }): Promise<{ slice: S | null; version: number | null }> {
-      const res = await fetch(`/api/report-task/store/${apiKey}`, {
-        cache: "no-store",
-        headers: known ? { "X-Known-Version": String(known.version) } : undefined,
-      });
+      const headers: Record<string, string> = {};
+      if (known) {
+        headers["X-Known-Version"] = String(known.version);
+        if (DELTA_SYNC.has(apiKey) && known.slice != null) headers["X-Delta-Ok"] = "1";
+      }
+      const res = await fetch(`/api/report-task/store/${apiKey}`, { cache: "no-store", headers });
       // ไม่มีอะไรเปลี่ยนตั้งแต่ครั้งก่อนที่เปิด — ใช้ชุดที่เซิร์ฟเวอร์ยืนยันไว้ ไม่ต้องโหลดก้อนใหญ่ใหม่
       if (known && res.status === 204) return { slice: known.slice as S | null, version: known.version };
       const version = Number(res.headers.get("X-Data-Version")) || null;
+      if (known && res.headers.get("X-Delta") === "1") {
+        try {
+          const body = (await res.json()) as { deltas?: unknown };
+          return { slice: applyDeltas(known.slice as S, body.deltas), version };
+        } catch {
+          return fetchServer(); // ประกอบไม่ได้ — โหลดเต็ม
+        }
+      }
       const slice = (await res.json()) as S | null;
       return { slice, version };
     }
@@ -174,25 +192,42 @@ export function ServerStoreSync<T, S>({
     /** true = เซิร์ฟเวอร์ตรงกับเครื่องแล้ว (หรือกู้ไม่ได้และโหลดของเซิร์ฟเวอร์กลับมาแล้ว) · false = ยังไม่ได้ ต้องลองใหม่ */
     async function putWithMerge(): Promise<boolean> {
       let mine = select(store.getState());
+      let forceFull = false; // เซิร์ฟเวอร์ประกอบส่วนที่เปลี่ยนไม่ได้ (422) — รอบนี้ส่งทั้งก้อน
       // ชนกันได้หลายรอบตอนหลายคนส่งพร้อมกัน (ทั้งก้อนใหญ่ ส่ง/ดึงใช้เวลา) — ให้โอกาสมากพอ + เว้นจังหวะสุ่ม
       // ไม่ให้ทุกเครื่องยิงซ้ำพร้อมกันอีก ครบแล้วยังไม่ได้ก็ "ลองใหม่ทีหลัง" ไม่ใช่ทิ้ง
       for (let attempt = 0; attempt < 8; attempt++) {
         let res: Response;
+        const patch =
+          !forceFull && DELTA_SYNC.has(apiKey) && versionRef.current != null && baseRef.current != null
+            ? diffSlice(baseRef.current, mine)
+            : null;
         try {
           res = await fetch(`/api/report-task/store/${apiKey}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ data: mine, expectedVersion: versionRef.current }),
+            body: JSON.stringify(
+              patch ? { patch, baseVersion: versionRef.current } : { data: mine, expectedVersion: versionRef.current }
+            ),
           });
         } catch {
           return false; // เน็ตสะดุด — เก็บของในเครื่องไว้ ลองใหม่
+        }
+
+        if (patch && res.status === 422) {
+          forceFull = true;
+          attempt--; // ไม่นับเป็นการชน — ส่งทั้งก้อนทันที
+          continue;
         }
 
         if (res.status === 409) {
           // มีคนบันทึกก่อน — ดึงของล่าสุด รวมสิ่งที่เครื่องนี้เปลี่ยนทับลงไป แล้วส่งใหม่
           let latest: { slice: S | null; version: number | null };
           try {
-            latest = await fetchServer();
+            latest = await fetchServer(
+              DELTA_SYNC.has(apiKey) && versionRef.current != null && baseRef.current != null
+                ? { version: versionRef.current, slice: baseRef.current }
+                : undefined
+            );
           } catch {
             return false;
           }
@@ -296,6 +331,14 @@ export function ServerStoreSync<T, S>({
 
     /** ปิดแท็บ/ออกจากหน้า — ยิงครั้งเดียวแบบ keepalive (รอผล/รวม/ลองใหม่ไม่ได้) ให้แท็บอื่นหรือการเปิดครั้งหน้ารวมให้
      * `keepalive` รับ body ได้ ~64KB ใน Chromium ก้อนใหญ่กว่านั้นเบราว์เซอร์จะไม่ส่ง — การบันทึกปกติจึงไม่ใช้ทางนี้ */
+    /** ส่วนที่เปลี่ยนเล็กพอจะผ่าน keepalive (~64KB) ได้ ต่างจากทั้งก้อน */
+    function unloadBody() {
+      const mine = select(store.getState());
+      const patch =
+        DELTA_SYNC.has(apiKey) && versionRef.current != null && baseRef.current != null ? diffSlice(baseRef.current, mine) : null;
+      return patch ? { patch, baseVersion: versionRef.current } : { data: mine, expectedVersion: versionRef.current };
+    }
+
     function flushOnUnload() {
       if (pendingRef.current == null && !dirtyRef.current) return;
       pendingRef.current = null;
@@ -303,7 +346,7 @@ export function ServerStoreSync<T, S>({
         void fetch(`/api/report-task/store/${apiKey}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ data: select(store.getState()), expectedVersion: versionRef.current }),
+          body: JSON.stringify(unloadBody()),
           keepalive: true,
         }).catch(() => undefined);
       } catch {
@@ -375,11 +418,16 @@ export function ServerStoreSync<T, S>({
       lastPull = Date.now();
       signalRef.current = false;
       const seqAtStart = saveSeqRef.current;
+      const baseAtStart = baseRef.current;
+      const deltaOk = DELTA_SYNC.has(apiKey) && versionRef.current != null && baseAtStart != null;
       try {
         // บอก version ที่ถืออยู่ — ไม่มีอะไรใหม่เซิร์ฟเวอร์ตอบ 204 ไม่มี body
         const res = await fetch(`/api/report-task/store/${apiKey}`, {
           cache: "no-store",
-          headers: versionRef.current != null ? { "X-Known-Version": String(versionRef.current) } : undefined,
+          headers:
+            versionRef.current != null
+              ? { "X-Known-Version": String(versionRef.current), ...(deltaOk ? { "X-Delta-Ok": "1" } : {}) }
+              : undefined,
         });
         if (res.status === 204) return; // nothing new
         if (!res.ok) return;
@@ -396,7 +444,28 @@ export function ServerStoreSync<T, S>({
         }
         // เก่ากว่าที่เรารู้อยู่แล้ว (เลขเวอร์ชันเพิ่มขึ้นทุกครั้งที่บันทึก) — ไม่เอามาทับ
         if (version != null && versionRef.current != null && version < versionRef.current) return;
-        const slice = (await res.json()) as S | null;
+        let slice: S | null;
+        if (res.headers.get("X-Delta") === "1") {
+          // เฉพาะส่วนที่เปลี่ยนจากเวอร์ชันที่ถืออยู่ — ประกอบบนชุดที่เซิร์ฟเวอร์ยืนยันไว้ (base) ไม่ใช่ store
+          try {
+            slice = applyDeltas(baseAtStart as S, ((await res.json()) as { deltas?: unknown }).deltas);
+          } catch {
+            const full = await fetchServer();
+            if (cancelled || full.version == null) return;
+            if (savingRef.current > 0 || saveSeqRef.current !== seqAtStart || pendingRef.current || dirtyRef.current) {
+              signalRef.current = true;
+              return;
+            }
+            versionRef.current = full.version;
+            if (full.slice != null) {
+              applyRemoteState((s) => apply(s, full.slice as S));
+              baseRef.current = select(store.getState());
+            }
+            return;
+          }
+        } else {
+          slice = (await res.json()) as S | null;
+        }
         if (cancelled) return;
         versionRef.current = version;
         if (slice != null) {
