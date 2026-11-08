@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useRef, useState, type PointerEvent as RPointerEvent } from "react";
+import { useRef, useState, type PointerEvent as RPointerEvent, useMemo } from "react";
 import { toast } from "sonner";
 
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
@@ -26,6 +26,7 @@ import { SUGGESTED_ROLES } from "./project-roles";
 import { fmtDay, todayBkk, useCompanyHolidays } from "./project-ui";
 
 import { useCeoTitle } from "@/lib/ceo-title-client";
+import { ceoText } from "@/lib/ceo-title-shared";
 /**
  * แม่แบบโปรเจกต์ — สร้าง/แก้เองได้ (CEO + หัวหน้าแผนก)
  * งานในแม่แบบใช้ "เริ่มวันที่ n ของโปรเจกต์ + กี่วัน" และผู้รับผิดชอบเป็นตำแหน่ง · ลากแถบในตัวอย่างแทนพิมพ์ตัวเลขได้
@@ -34,7 +35,13 @@ import { useCeoTitle } from "@/lib/ceo-title-client";
 export function ProjectTemplatesPage() {
   const ceo = useCeoTitle();
   const me = useIdentityStore((s) => s.viewingAsUserId);
-  const templates = useProjectStore((s) => s.templates);
+  const rawTemplates = useProjectStore((s) => s.templates);
+  // ชื่องานในแม่แบบที่มีคำว่า CEO (เช่นแม่แบบสำเร็จรูป "CEO อนุมัติสื่อ") แสดงตามชื่อเรียกของบริษัท (CEO/Boss)
+  const ceoWord = useCeoTitle();
+  const templates = useMemo(
+    () => rawTemplates.map((t) => ({ ...t, items: t.items.map((i) => ({ ...i, name: ceoText(i.name, ceoWord) })) })),
+    [rawTemplates, ceoWord],
+  );
   const ready = useProjectStore((s) => s.templatesLoaded);
   const upsert = useProjectStore((s) => s.upsertTemplate);
   const remove = useProjectStore((s) => s.removeTemplate);

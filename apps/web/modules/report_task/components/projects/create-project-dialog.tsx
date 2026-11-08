@@ -15,6 +15,8 @@ import type { Project, ProjectMilestone, ProjectTemplate, Task } from "@/modules
 import { TemplateEditor } from "./project-templates-page";
 import { guessPersonForRole } from "./project-roles";
 import { defaultMemberRole, fmtDay, notifyAddedToProject, todayBkk, useCompanyHolidays } from "./project-ui";
+import { useCeoTitle } from "@/lib/ceo-title-client";
+import { ceoText } from "@/lib/ceo-title-shared";
 
 /**
  * สร้างโปรเจกต์ — เริ่มเปล่า หรือจากแม่แบบ (ช่วงงาน + งาน + จุดสำคัญ + งานที่ต้องรอ + คำอธิบาย/เช็คลิสต์)
@@ -22,7 +24,13 @@ import { defaultMemberRole, fmtDay, notifyAddedToProject, todayBkk, useCompanyHo
  */
 export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
   const me = useIdentityStore((s) => s.viewingAsUserId);
-  const templates = useProjectStore((s) => s.templates);
+  const rawTemplates = useProjectStore((s) => s.templates);
+  // ชื่องานในแม่แบบที่มีคำว่า CEO (เช่นแม่แบบสำเร็จรูป "CEO อนุมัติสื่อ") แสดงตามชื่อเรียกของบริษัท (CEO/Boss)
+  const ceoWord = useCeoTitle();
+  const templates = useMemo(
+    () => rawTemplates.map((t) => ({ ...t, items: t.items.map((i) => ({ ...i, name: ceoText(i.name, ceoWord) })) })),
+    [rawTemplates, ceoWord],
+  );
   const addProject = useProjectStore((s) => s.addProject);
   const upsertTemplate = useProjectStore((s) => s.upsertTemplate);
   const addTask = useTaskStore((s) => s.addTask);

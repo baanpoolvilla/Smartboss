@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from "react";
 import Link from "next/link";
+import { CeoWord } from "@/lib/ceo-word";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Square, SquareCheckBig } from "lucide-react";
 
@@ -417,7 +418,8 @@ function renderPlainRichText(text: string): ReactNode[] {
           </Link>
         ) : (
           <span key={key++} className={mentionChipClass}>
-            {mentionSymbolFor(mType as MentionType)}{label}
+            {/* แท็กตำแหน่งสูงสุด — แสดงตามชื่อเรียกปัจจุบันของบริษัท (CEO/Boss) แม้แท็กไว้ก่อนเปลี่ยนชื่อ */}
+            {mentionSymbolFor(mType as MentionType)}{mType === "role" && mId === CEO_MENTION_ID ? <CeoWord /> : label}
           </span>
         )
       );
