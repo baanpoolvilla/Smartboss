@@ -68,6 +68,8 @@ export interface WoCardProps {
   footerSlot?: React.ReactNode;
   /** แถวสติกเกอร์ที่ติดแล้ว */
   extraRow?: React.ReactNode;
+  /** สติกเกอร์ที่ติดแล้ว — อยู่แถวเดียวกับป้ายความสำคัญ/คอมเมนต์ ไม่เปิดแถวใหม่ (แบบการ์ดงาน · ผู้ใช้ 8/11/2569) */
+  stickers?: React.ReactNode;
   /** ข้อความเล็กใต้หัวข้อ เช่น "รอบ 1 พ.ย. 2569" */
   subline?: React.ReactNode;
   /** ใบปิดแล้วรอบันทึกค่าใช้จ่าย — แถบบอกเหลือกี่วัน + วันครบกำหนดใช้วันนี้แทน (lib/expense-deadline.ts) */
@@ -166,7 +168,7 @@ export function WoCard(p: WoCardProps) {
       : doneTone === "gray"
         ? "bg-(--bg-soft) text-(--ink-soft) ring-(--line)"
         : "bg-[color-mix(in_srgb,var(--brand-green)_14%,white)] text-[var(--brand-green-dark)] ring-transparent";
-  const showMetaRow = (open && !p.autoCreated) || p.pendingDue > 0 || p.commentCount > 0 || unreadComments > 0 || !!p.score;
+  const showMetaRow = (open && !p.autoCreated) || p.pendingDue > 0 || p.commentCount > 0 || unreadComments > 0 || !!p.score || !!p.stickers;
 
   return (
     <Link
@@ -236,6 +238,8 @@ export function WoCard(p: WoCardProps) {
                 {dot.label}
               </span>
             )}
+            {/* ไม่มีป้ายความสำคัญ (ปิดแล้ว/ใบอัตโนมัติ) ก็ยังชิดขวาเหมือนเดิม */}
+            {p.stickers && <span className={open && !p.autoCreated ? "" : "ml-auto"}>{p.stickers}</span>}
             {p.score && (
               <span
                 data-testid="wo-score-chip"

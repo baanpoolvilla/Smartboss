@@ -114,24 +114,26 @@ export function MaintenanceCard({ item }: { item: MaintenanceBoardItem }) {
         isPrivate={item.isPrivate}
         // ปุ่มสติกเกอร์วางทับนอกลิงก์ (ด้านล่าง) — เว้นที่ไว้ข้างรูปคน
         footerSlot={canSticker ? <span className="inline-block h-6 w-6" aria-hidden="true" /> : undefined}
-        extraRow={
+        // สติกเกอร์อยู่แถวเดียวกับป้ายความสำคัญ ไม่มีพื้นหลัง — แบบเดียวกับการ์ดงาน (เดิมเป็นแถวแยก การ์ดสูงขึ้น · ผู้ใช้ 8/11/2569)
+        stickers={
           counts.size > 0 ? (
-            <div className="flex flex-wrap gap-1">
-              {[...counts].map(([stickerId, count]) => {
+            <span className="flex shrink-0 flex-nowrap items-center justify-end gap-1.5" data-testid="wo-card-stickers">
+              {[...counts].slice(0, 3).map(([stickerId, count]) => {
                 const sticker = stickers.find((s) => s.id === stickerId);
                 if (!sticker) return null;
                 return (
                   <span
                     key={stickerId}
                     title={`${sticker.label} (${sticker.points > 0 ? `+${sticker.points}` : sticker.points})`}
-                    className="flex items-center gap-0.5 rounded-full bg-[var(--bg-soft)] px-1.5 py-0.5 text-[10px]"
+                    className="-my-0.5 flex h-3.5 items-center gap-0.5 text-[12px] leading-none"
                   >
-                    <span>{sticker.emoji}</span>
-                    {count > 1 && <span className="text-[var(--ink-soft)]">{count}</span>}
+                    <span className="leading-none">{sticker.emoji}</span>
+                    {count > 1 && <span className="text-[10px] font-semibold text-[var(--ink-soft)]">{count}</span>}
                   </span>
                 );
               })}
-            </div>
+              {counts.size > 3 && <span className="text-[10px] font-semibold text-[var(--ink-soft)]">+{counts.size - 3}</span>}
+            </span>
           ) : undefined
         }
         avatar={
