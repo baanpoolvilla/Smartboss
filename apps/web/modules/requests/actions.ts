@@ -1797,6 +1797,8 @@ export async function voidPettyEntryAction(input: { id: string; reason: string }
     if (res === "linked") return { error: "รายการนี้มาจากการจ่ายคำขอ — ยกเลิกที่ตัวการจ่ายในใบคำขอ" };
     if (res === "denied") return { error: "ยกเลิกได้เฉพาะคนลงเอง หรือ HR" };
     if (res === "reviewed") return { error: "รายการนี้ตรวจแล้ว — ให้ HR เป็นคนยกเลิก" };
+    // ยกเลิกรายการที่รอตรวจ — แจ้งเตือนให้ตรวจหายไปด้วย
+    await clearActionNotifications(orgId, input.id, ["petty_topup"]);
     revalidatePath("/requests/petty-cash");
     return { ok: true };
   } catch (error) {
@@ -2026,6 +2028,8 @@ export async function reviewPettySpendAction(input: { id: string; outcome: "appr
       return { ok: true, holderUserId: e.holderUserId, amount, title: e.note } as const;
     });
     if ("error" in res) return { error: res.error ?? "ทำไม่สำเร็จ" };
+    // ตรวจแล้ว — แจ้งเตือน "ตรวจเงินสดย่อยที่จ่ายไปก่อน" ของทุกคนหายไป (ไม่ค้างให้คนอื่นกดซ้ำ)
+    await clearActionNotifications(orgId, input.id, ["petty_topup"]);
     void notifyPettyTopupResult(
       orgId,
       [res.holderUserId],
