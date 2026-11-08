@@ -227,13 +227,14 @@ export function WoCard(p: WoCardProps) {
         {showMetaRow && (
           <div className="-mb-1 mt-1.5 flex items-center justify-end gap-2">
             {open && !p.autoCreated && (
+              // ตัวหนังสือแทนจุด — แบบเดียวกับการ์ดงานบนบอร์ดเดียวกัน (ผู้ใช้ 8/11/2569)
               <span
-                role="img"
                 title={`ความสำคัญ: ${dot.label}`}
-                aria-label={`ความสำคัญ: ${dot.label}`}
-                className="mr-auto inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: dot.color }}
-              />
+                className="mr-auto shrink-0 whitespace-nowrap text-[10px] font-semibold leading-none"
+                style={{ color: `color-mix(in srgb, ${dot.color} 80%, black)` }}
+              >
+                {dot.label}
+              </span>
             )}
             {p.score && (
               <span

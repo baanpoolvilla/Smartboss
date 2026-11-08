@@ -203,15 +203,15 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
   const hasStickers = Object.keys(reactionTotals).length > 0;
   const pillMeta = groupedByPriority ? statusMeta[task.status] : priorityMeta[task.priority];
   const pillKind = groupedByPriority ? "สถานะ" : "ความสำคัญ";
-  // จุดสีอย่างเดียว ไม่มีคำ ("เอาเป็นแค่สีพอ") — ชี้ค้างเห็นชื่อระดับ
+  // ตัวหนังสือสีอย่างเดียว ไม่มีจุด ไม่มีพื้น (ผู้ใช้ 8/11/2569 "เอาจุดออกและให้เหลือแค่ตัวหนังสือ" — เดิม 21/10 เป็นจุดสีอย่างเดียว)
   const priorityPill = (
     <span
-      role="img"
       title={`${pillKind}: ${pillMeta.label}`}
-      aria-label={`${pillKind}: ${pillMeta.label}`}
-      className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-      style={{ backgroundColor: pillMeta.accentColor }}
-    />
+      className="shrink-0 whitespace-nowrap text-[10px] font-semibold leading-none"
+      style={{ color: `color-mix(in srgb, ${pillMeta.accentColor} 80%, black)` }}
+    >
+      {pillMeta.label}
+    </span>
   );
 
   // งานเสร็จแล้วไม่มีแถวจุดสี แต่มีแถวป้ายสถานะอยู่แล้ว — สติกเกอร์ไปอยู่ข้างป้ายนั้น ไม่เปิดแถวใหม่
