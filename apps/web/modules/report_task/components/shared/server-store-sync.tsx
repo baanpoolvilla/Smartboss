@@ -37,6 +37,15 @@ function sameFields(a: unknown, b: unknown): boolean {
 }
 
 /**
+ * ฟีดรายงานเป็นก้อนใหญ่หลาย MB — เดิมโหลดใหม่ทั้งก้อนทุกครั้งที่เข้าโมดูลรีพอร์ต/บอร์ดงาน
+ * (prod 8/11/2569: p90 8 วิ สูงสุด 47 วิ และกิน CPU เซิร์ฟเวอร์จนโมดูลอื่นหน่วงไปด้วย)
+ * ตอนออกจากโมดูลจำชุดที่เซิร์ฟเวอร์ยืนยันไว้ในหน่วยความจำของแท็บ กลับเข้ามาส่งเลขเวอร์ชันไปถาม —
+ * ไม่มีใครแก้ = เซิร์ฟเวอร์ตอบ 204 ใช้ชุดเดิม · มีคนแก้ = โหลดใหม่ตามปกติ
+ */
+const CACHE_ON_REVISIT = new Set<string>(["report-feed"]);
+const confirmedCache = new Map<string, { version: number; slice: unknown }>();
+
+/**
  * Generic server-backed replacement for zustand's `persist` + localStorage,
  * for state that's shared across teammates (not per-user view prefs — those
  * stay in localStorage). Loads `select(state)` from `/api/report-task/store/{apiKey}` on
@@ -112,8 +121,13 @@ export function ServerStoreSync<T, S>({
 
     // GET the current server slice + version. `slice` is null for a store the
     // company has never saved yet.
-    async function fetchServer(): Promise<{ slice: S | null; version: number | null }> {
-      const res = await fetch(`/api/report-task/store/${apiKey}`, { cache: "no-store" });
+    async function fetchServer(known?: { version: number; slice: unknown }): Promise<{ slice: S | null; version: number | null }> {
+      const res = await fetch(`/api/report-task/store/${apiKey}`, {
+        cache: "no-store",
+        headers: known ? { "X-Known-Version": String(known.version) } : undefined,
+      });
+      // ไม่มีอะไรเปลี่ยนตั้งแต่ครั้งก่อนที่เปิด — ใช้ชุดที่เซิร์ฟเวอร์ยืนยันไว้ ไม่ต้องโหลดก้อนใหญ่ใหม่
+      if (known && res.status === 204) return { slice: known.slice as S | null, version: known.version };
       const version = Number(res.headers.get("X-Data-Version")) || null;
       const slice = (await res.json()) as S | null;
       return { slice, version };
@@ -124,7 +138,7 @@ export function ServerStoreSync<T, S>({
         // โหลดครั้งแรกรวมกับคีย์อื่นที่ mount พร้อมกันเป็นคำขอเดียว (lib/store-batch.ts) — ฟีดรายงาน
         // ก้อนใหญ่หลาย MB แยกไปของมันเอง ไม่ให้คีย์เล็ก ๆ ทั้งหมดต้องรอมัน · ทางนี้พลาด = อ่านแบบเดิม
         const batched = apiKey === "report-feed" ? null : await batchRead(apiKey);
-        const { slice, version } = batched ? { slice: batched.slice as S | null, version: batched.version } : await fetchServer();
+        const { slice, version } = batched ? { slice: batched.slice as S | null, version: batched.version } : await fetchServer(confirmedCache.get(apiKey));
         versionRef.current = version;
         // A brand-new store has nothing saved server-side yet (slice is null) —
         // still run `apply` (with the store's own current slice as a no-op
@@ -442,6 +456,10 @@ export function ServerStoreSync<T, S>({
         retryTimerRef.current = null;
       }
       window.removeEventListener("pagehide", flushOnUnload);
+      // จำชุดที่เซิร์ฟเวอร์ยืนยันล่าสุด (ไม่ใช่ของที่ยังไม่ได้บันทึก) ไว้ใช้ตอนกลับเข้าโมดูลนี้อีก
+      if (CACHE_ON_REVISIT.has(apiKey) && versionRef.current != null && baseRef.current != null) {
+        confirmedCache.set(apiKey, { version: versionRef.current, slice: baseRef.current });
+      }
       flushPending();
     };
     // apiKey/store/select/apply are expected to be stable identities from the
