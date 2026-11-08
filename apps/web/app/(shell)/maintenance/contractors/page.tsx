@@ -27,6 +27,8 @@ export default async function ContractorsPage({
   const session = await requireOrg();
   if (!hasPermission(session, MAINT_PERMS.contractorView)) redirect("/");
   const canManage = hasPermission(session, MAINT_PERMS.contractorManage);
+  // เพิ่ม Contact ได้ แม้แก้/ลบไม่ได้ (สิทธิ์ contractor.create — ผู้ดูแลบ้าน)
+  const canAdd = canManage || hasPermission(session, MAINT_PERMS.contractorCreate);
   const { add } = await searchParams;
 
   const all = await listContractors(session.orgId);
@@ -59,12 +61,12 @@ export default async function ContractorsPage({
       title="รายชื่อ Contact"
       width="max-w-none"
       fab={
-        canManage ? (
+        canAdd ? (
           <Fab href="/maintenance/contractors?add=1" label="เพิ่ม Contact" />
         ) : null
       }
     >
-      {canManage && (
+      {canAdd && (
         <details className="mb-4" open={add === "1"}>
           <summary className="mb-2 inline-flex cursor-pointer items-center gap-1 text-sm font-medium text-(--brand-green)">
             <Plus className="h-4 w-4" /> เพิ่ม Contact
@@ -141,7 +143,7 @@ export default async function ContractorsPage({
 
       {rows.length === 0 ? (
         <Card className="p-10 text-center text-sm text-(--ink-soft)">
-          ยังไม่มี Contact {canManage ? "— เพิ่ม Contact แรกได้เลย" : ""}
+          ยังไม่มี Contact {canAdd ? "— เพิ่ม Contact แรกได้เลย" : ""}
         </Card>
       ) : (
         <ContactList contacts={rows} />

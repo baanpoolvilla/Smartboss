@@ -77,7 +77,7 @@ export const MAINT_PERMS = [
   "asset.view", "asset.manage",
   "pm.view", "pm.manage",
   "expense.view", "expense.manage",
-  "contractor.view", "contractor.manage",
+  "contractor.view", "contractor.manage", "contractor.create",
   "po.view", "po.create", "po.approve",
   "admin",
 ].map((s) => `maintenance.${s}`);

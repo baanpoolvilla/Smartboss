@@ -27,6 +27,8 @@ export const MAINT_PERMS = {
 
   contractorView: "maintenance.contractor.view",
   contractorManage: "maintenance.contractor.manage",
+  /** เพิ่ม Contact ใหม่อย่างเดียว (แก้/ลบของที่มีอยู่ยังต้อง contractor.manage) — ผู้ใช้ 8/11/2569 ให้ผู้ดูแลบ้านเพิ่มได้ */
+  contractorCreate: "maintenance.contractor.create",
 
   poView: "maintenance.po.view",
   poCreate: "maintenance.po.create",
@@ -56,6 +58,7 @@ export const MAINT_PERM_LABELS: Record<string, string> = {
   [MAINT_PERMS.expenseManage]: "บันทึก/แก้ไขค่าใช้จ่าย",
   [MAINT_PERMS.contractorView]: "ดูรายชื่อผู้รับเหมา/Contact",
   [MAINT_PERMS.contractorManage]: "เพิ่ม/แก้ไขผู้รับเหมา",
+  [MAINT_PERMS.contractorCreate]: "เพิ่ม Contact ใหม่ (แก้/ลบไม่ได้)",
   [MAINT_PERMS.poView]: "ดูใบสั่งซื้อ (PR/PO)",
   [MAINT_PERMS.poCreate]: "เปิด PR / สร้างใบสั่งซื้อ",
   [MAINT_PERMS.poApprove]: "อนุมัติใบสั่งซื้อ",

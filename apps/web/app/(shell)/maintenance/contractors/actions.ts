@@ -87,7 +87,12 @@ function toInput(d: z.infer<typeof schema>) {
 }
 
 export async function createContractorAction(formData: FormData) {
-  const who = await requireContractorManage();
+  // เพิ่มอย่างเดียว: คนมีสิทธิ์จัดการ หรือสิทธิ์ "เพิ่ม Contact" (เช่นผู้ดูแลบ้าน) — แก้/ลบยังต้องจัดการ
+  const s = await requireOrg();
+  if (!hasPermission(s, MAINT_PERMS.contractorManage) && !hasPermission(s, MAINT_PERMS.contractorCreate)) {
+    throw new Error("ไม่มีสิทธิ์เพิ่ม Contact");
+  }
+  const who = { orgId: s.orgId, userId: s.userId };
   const { orgId } = who;
   const parsed = parse(formData);
   if (!parsed.success) return;
