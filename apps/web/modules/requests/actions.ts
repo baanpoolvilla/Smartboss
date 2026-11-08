@@ -29,7 +29,7 @@ import { clearActionNotifications, notifyApprovers, notifyClear, notifyPayers, n
 import { usersWithPermission } from "@/modules/maintenance/data/notify";
 import { readReceipt } from "./lib/receipt-ai";
 import { isPettyHolder } from "./lib/holders";
-import { PAYROLL_METHOD_BLOCKED, payPrivacy, payrollHandoffBlock, usesSalaryModule } from "./lib/pay-privacy";
+import { PAYROLL_METHOD_BLOCKED, canSeePay, payPrivacy, payrollHandoffBlock, usesSalaryModule } from "./lib/pay-privacy";
 import {
   KIND_META,
   METHOD_LABEL,
@@ -362,7 +362,9 @@ async function computePreview(session: OrgSession, input: PreviewInput, settings
           Object.assign(p, { baseKind: "monthly", base: salary, amount: c.amount, formula: c.formula });
         } else {
           p.baseKind = "manual";
-          p.needsManual = p.employmentId ? "ยังไม่มีเงินเดือนในระบบบุคคล — กรอกค่า OT เอง" : "คนนี้ยังไม่อยู่ในทะเบียนพนักงาน — กรอกค่า OT เอง";
+          // ไม่ให้คนยื่นกรอกเงิน — HR (คนที่ตรวจ/อนุมัติ) ใส่ยอดในใบตอนตรวจ (ผู้ใช้ 8/11/2569)
+          p.needsManual = p.employmentId ? "ยังไม่มีเงินเดือนในระบบบุคคล — HR จะใส่ค่า OT ตอนตรวจ" : "คนนี้ยังไม่อยู่ในทะเบียนพนักงาน — HR จะใส่ค่า OT ตอนตรวจ";
+          p.amount = 0;
         }
       }
       // OT ใบอื่นของคนเดียวกันวันเดียวกัน เวลาทับกัน
@@ -535,10 +537,8 @@ async function prepareRequest(session: OrgSession, input: CreateInput, exceptReq
   let lines: { item: string; amount: number }[] | null = null;
   let vendor: { id: string | null; name: string } | null = null;
   if (kind === "ot") {
-    if (preview.baseKind === "manual") {
-      amount = round2(Number(input.amount));
-      if (!Number.isFinite(amount) || amount <= 0) return { error: "กรอกค่า OT (คิดจากเงินเดือนไม่ได้)" };
-    } else amount = preview.amount ?? 0;
+    // ไม่มีเงินเดือนในระบบ = ยื่นแบบไม่มียอด รอ HR ใส่ตอนตรวจ (ผู้ใช้ 8/11/2569) — ยอดที่ส่งมาจากฟอร์มไม่ใช้
+    amount = preview.baseKind === "manual" ? 0 : (preview.amount ?? 0);
   } else if (kind === "contractor") {
     if (input.vendorId) {
       const v = await withRequestsTenant(orgId, (tx) => tx.moneyVendor.findFirst({ where: { orgId, id: input.vendorId!, active: true } }));
@@ -663,12 +663,20 @@ export async function createRequestAction(input: CreateInput): Promise<Result<{ 
         return { id: row.id, code: row.code };
       },
     );
-    void notifyApprovers(orgId, { id: created.id, code: created.code, kind, title: f.title, netAmount: f.netAmount, beneficiaryName: f.beneficiaryName }, f.approverLevel, [session.userId, f.beneficiaryUserId ?? ""]);
+    void notifyApprovers(orgId, { id: created.id, code: created.code, kind, title: f.title, netAmount: f.netAmount, beneficiaryName: f.beneficiaryName }, f.approverLevel, [session.userId, f.beneficiaryUserId ?? ""], awaitingAmountLabel(kind, f));
     refresh();
     return { ok: true, ...created };
   } catch (error) {
     return fail(error);
   }
+}
+
+/** หัวแจ้งเตือน "OT รอใส่ยอด" — ใบ OT ที่ยื่นแบบไม่มียอด ให้ HR ใส่เงินตอนตรวจ */
+function awaitingAmountLabel(kind: RequestKind, f: { beneficiaryUserId: string | null; otBaseKind: string | null; netAmount: number }): string | undefined {
+  if (kind !== "ot" || f.netAmount > 0) return undefined;
+  if (!f.beneficiaryUserId) return "OT รอใส่ยอด (ยังไม่มีในระบบ)";
+  if (f.otBaseKind === "manual") return "OT รอใส่ยอด (ยังไม่มีเงินเดือนในระบบ)";
+  return undefined;
 }
 
 /** OT หลายคนในงานเดียว — ครั้งละไม่เกินเท่านี้ */
@@ -702,9 +710,6 @@ export async function createOtGroupAction(
     for (const id of ids) {
       const prep = await prepareRequest(session, { ...input, kind: "ot", beneficiaryUserId: id });
       if ("error" in prep) return { error: `${await nameOf(id)}: ${prep.error}` };
-      if (total > 1 && prep.fields.otBaseKind === "manual") {
-        return { error: `${prep.fields.beneficiaryName}: ยังไม่มีเงินเดือนในระบบ ต้องกรอกค่า OT เอง — เอาออกจากกลุ่มแล้วลงแยกใบ` };
-      }
       preps.push(prep);
     }
     const companyPct = names.length > 0 ? await workerCompanyOtPercent(orgId) : 0;
@@ -754,7 +759,7 @@ export async function createOtGroupAction(
     created.forEach((c, i) => {
       const f = preps[i]!.fields;
       // ไม่มียอด = HR ต้องใส่เงินในใบ → แจ้ง HR ว่า "รอใส่ยอด"
-      void notifyApprovers(orgId, { id: c.id, code: c.code, kind: "ot", title: f.title, netAmount: f.netAmount, beneficiaryName: f.beneficiaryName }, f.approverLevel, [session.userId, f.beneficiaryUserId ?? ""], !f.beneficiaryUserId && f.netAmount <= 0 ? "OT รอใส่ยอด (ยังไม่มีในระบบ)" : undefined);
+      void notifyApprovers(orgId, { id: c.id, code: c.code, kind: "ot", title: f.title, netAmount: f.netAmount, beneficiaryName: f.beneficiaryName }, f.approverLevel, [session.userId, f.beneficiaryUserId ?? ""], awaitingAmountLabel("ot", f));
     });
     refresh();
     return { ok: true, ids: created.map((c) => c.id), codes: created.map((c) => c.code) };
@@ -911,8 +916,13 @@ export async function setUnlinkedOtAmountAction(input: { id: string; mode: "dail
     if (!(viewer.canApprove || viewer.canApproveCeo)) return { error: "ใส่ยอด OT ได้เฉพาะ HR / CEO" };
     const r = await withRequestsTenant(orgId, (tx) => loadOne(tx, orgId, input.id));
     if (!r || !canSee(r, viewer)) return { error: "ไม่พบคำขอ" };
-    if (!(r.kind === "ot" && r.status === "pending" && !r.beneficiaryUserId)) return { error: "ใบนี้ไม่ได้รอใส่ยอด (ผูกชื่อแล้ว หรือตัดสินไปแล้ว)" };
-    if (r.createdBy === session.userId) return { error: "ใส่ยอดใบที่ตัวเองลงไม่ได้ — ให้ HR คนอื่นใส่" };
+    // ชื่อที่ยังไม่มีในระบบ หรือพนักงานที่ยังไม่มีเงินเดือนในระบบ (ยื่นแบบไม่มียอด — ผู้ใช้ 8/11/2569)
+    const unlinked = !r.beneficiaryUserId;
+    if (!(r.kind === "ot" && r.status === "pending" && !r.firstDecidedAt && (unlinked || r.otBaseKind === "manual"))) return { error: "ใบนี้ไม่ได้รอใส่ยอด (ผูกชื่อแล้ว หรือตัดสินไปแล้ว)" };
+    if (r.beneficiaryUserId === session.userId) return { error: "ใส่ยอด OT ของตัวเองไม่ได้ — ให้ HR คนอื่นใส่" };
+    if (unlinked && r.createdBy === session.userId) return { error: "ใส่ยอดใบที่ตัวเองลงไม่ได้ — ให้ HR คนอื่นใส่" };
+    if (!unlinked && !canSeePay(await payPrivacy(session), r)) return { error: "ยอด OT พนักงานประจำใส่ได้เฉพาะ CEO / ผู้ดูแลเงินเดือน" };
+    if (!unlinked && input.mode !== "manual") return { error: "ใส่ยอด OT" };
     const value = round2(Number(input.value));
     if (!Number.isFinite(value) || value <= 0 || value > 100_000) return { error: input.mode === "daily" ? "ใส่ค่าแรงต่อวัน" : "ใส่ยอด OT" };
     const minutes = r.otMinutes ?? 0;
@@ -921,18 +931,23 @@ export async function setUnlinkedOtAmountAction(input: { id: string; mode: "dail
     const pct = input.mode === "daily" ? await workerCompanyOtPercent(orgId) : null;
     const amount = input.mode === "daily" ? otCalc("daily", value, pct!, minutes).amount : value;
     const settings = await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId));
-    const route = await approverLevelFor(orgId, "ot", r.createdBy, null, amount, settings.approvalRoutes);
+    const route = await approverLevelFor(orgId, "ot", r.createdBy, r.beneficiaryUserId, amount, settings.approvalRoutes);
     const byName = await nameOf(session.userId);
     const saved = await withRequestsTenant(orgId, async (tx) => {
       const res = await tx.moneyRequest.updateMany({
-        where: { orgId, id: r.id, status: "pending", beneficiaryUserId: null, firstDecidedAt: null },
+        where: { orgId, id: r.id, status: "pending", beneficiaryUserId: r.beneficiaryUserId, firstDecidedAt: null },
         data: {
           amount,
           netAmount: amount,
-          otBase: input.mode === "daily" ? value : null,
-          otBaseKind: input.mode === "daily" ? "daily" : "manual",
-          otPercent: pct,
-          otRateLabel: input.mode === "daily" ? `HR ใส่ค่าแรง · % OT คนงานของบริษัท (${pct}%)` : `HR กรอกยอดเอง${note ? ` · ${note}` : ""}`,
+          // พนักงานในระบบ: คงอัตรา OT ที่ยื่นไว้ (รอบเงินเดือนโชว์ × %) · HR กรอกแค่ยอด
+          ...(unlinked
+            ? {
+                otBase: input.mode === "daily" ? value : null,
+                otBaseKind: input.mode === "daily" ? "daily" : "manual",
+                otPercent: pct,
+                otRateLabel: input.mode === "daily" ? `HR ใส่ค่าแรง · % OT คนงานของบริษัท (${pct}%)` : `HR กรอกยอดเอง${note ? ` · ${note}` : ""}`,
+              }
+            : { otRateLabel: `${(r.otRateLabel ?? "").split(" · HR กรอกยอดเอง")[0]} · HR กรอกยอดเอง${note ? ` · ${note}` : ""}`.replace(/^ · /, "") }),
           approverLevel: route.level,
           needCeo: route.needCeo,
         },
@@ -944,7 +959,7 @@ export async function setUnlinkedOtAmountAction(input: { id: string; mode: "dail
     });
     if (!saved) return { error: "ใบนี้เพิ่งเปลี่ยน — รีเฟรช" };
     if (route.level === "ceo" || route.needCeo) {
-      void notifyApprovers(orgId, { id: r.id, code: r.code, kind: "ot", title: r.title, netAmount: amount, beneficiaryName: r.beneficiaryName }, route.level, [session.userId, r.createdBy]);
+      void notifyApprovers(orgId, { id: r.id, code: r.code, kind: "ot", title: r.title, netAmount: amount, beneficiaryName: r.beneficiaryName }, route.level, [session.userId, r.createdBy, r.beneficiaryUserId ?? ""]);
     }
     refresh(r.id);
     return { ok: true };
@@ -1021,6 +1036,15 @@ export async function updateRequestAction(id: string, input: CreateInput): Promi
     const prep = await prepareRequest(session, input, id, old.kind === "advance" ? old.workDate : undefined);
     if ("error" in prep) return prep;
     const f = prep.fields;
+    // OT ที่ HR ใส่ยอดไว้แล้ว (ไม่มีเงินเดือนในระบบ) — คนยื่นแก้ข้อความ/ไฟล์ ยอดเดิมคงไว้ · เปลี่ยนคน/วัน/เวลา = HR ใส่ใหม่
+    if (
+      old.kind === "ot" && f.otBaseKind === "manual" && old.otBaseKind === "manual" && old.netAmount > 0 &&
+      old.beneficiaryUserId === f.beneficiaryUserId && old.workDate === prep.workDate && old.otStart === f.otStart && old.otEnd === f.otEnd
+    ) {
+      const settings = await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId));
+      const route = await approverLevelFor(orgId, "ot", old.createdBy, f.beneficiaryUserId, old.netAmount, settings.approvalRoutes);
+      Object.assign(f, { amount: old.amount, netAmount: old.netAmount, otRateLabel: old.otRateLabel, approverLevel: route.level, needCeo: route.needCeo });
+    }
 
     // สรุปว่าแก้อะไร ให้ผู้อนุมัติเห็นในประวัติ
     const changes: string[] = [];

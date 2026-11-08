@@ -11,7 +11,7 @@ import { withWorkforceTenant } from "@/modules/report_task/lib/db/workforce-cale
 import { loadScorePeriodConfig } from "@/lib/score-period-config";
 import { scorePeriodOf } from "@/lib/score-period";
 import { REQ_PERMS } from "@/modules/requests/permissions";
-import { canDecide, canSee, isUnlinkedOt, listPeople, workerRateOn } from "@/modules/requests/lib/data";
+import { canDecide, canSee, canSetOtAmount, isUnlinkedOt, listPeople, needsOtAmount, workerRateOn } from "@/modules/requests/lib/data";
 import { LinkWorkerPanel } from "@/modules/requests/components/link-worker";
 import { SetOtAmountPanel } from "@/modules/requests/components/set-ot-amount";
 import { WorkerOtAmountPanel } from "@/modules/requests/components/worker-ot-amount";
@@ -227,7 +227,9 @@ export default async function RequestDetailPage({ params, searchParams }: { para
         .map((p) => ({ id: p.userId, name: p.name, badge: "คนงาน", sub: [p.departmentName, p.email].filter(Boolean).join(" · "), keywords: p.email ?? "" }))
     : [];
   // HR ใส่เงินค่า OT ในใบ (คนลงใบใส่แค่ชื่อ+เวลา) — HR/CEO ที่ไม่ใช่คนลงใบ
-  const canSetAmount = unlinked && !r.firstDecidedAt && (viewer.canApprove || viewer.canApproveCeo) && r.createdBy !== session.userId;
+  // + พนักงานที่ยังไม่มีเงินเดือนในระบบ ยื่นแบบไม่มียอด (ผู้ใช้ 8/11/2569) — ยอดพนักงานประจำใส่ได้เฉพาะคนที่เห็นยอด
+  const staffNoSalary = r.kind === "ot" && !unlinked && r.otBaseKind === "manual";
+  const canSetAmount = canSetOtAmount(r, viewer) && (unlinked || !payHidden);
   // คนงานที่มีในระบบ: HR เลือกคิดจากค่าแรง หรือกรอกยอดเอง (ก่อนอนุมัติ)
   const canSetWorker =
     r.kind === "ot" && r.status === "pending" && !r.firstDecidedAt && r.beneficiaryKind === "worker" && !!r.beneficiaryUserId && !!r.employmentId &&
@@ -241,6 +243,9 @@ export default async function RequestDetailPage({ params, searchParams }: { para
     : null;
   if (unlinked && r.netAmount <= 0) {
     steps.splice(1, 0, { title: "HR ใส่เงินค่า OT", sub: "กรอกยอด OT ในใบ · หรือผูกชื่อกับคนงานในระบบ", state: "now" });
+    for (const x of steps.slice(2)) if (x.state === "now") x.state = "todo";
+  } else if (staffNoSalary && needsOtAmount(r)) {
+    steps.splice(1, 0, { title: "HR ใส่เงินค่า OT", sub: "ยังไม่มีเงินเดือนในระบบบุคคล — HR/ผู้อนุมัติกรอกยอด OT ในใบ แล้วค่อยอนุมัติ", state: "now" });
     for (const x of steps.slice(2)) if (x.state === "now") x.state = "todo";
   } else if (unlinked) {
     steps.splice(1, 0, { title: `(ไม่บังคับ) ผูกชื่อ "${r.beneficiaryName}" กับคนงาน`, sub: "ผูกก่อนอนุมัติ = เข้าบัญชีค่าแรง · ไม่ผูก = อนุมัติแล้ว HR จ่ายเงินสด/โอนเอง", state: "todo" });
@@ -339,7 +344,11 @@ export default async function RequestDetailPage({ params, searchParams }: { para
               {r.kind === "ot" && !payHidden && !unlinked && (
                 <>
                   {r.otBaseKind === "manual" ? (
-                    <div className="text-sm text-(--ink-soft)">ไม่มีเงินเดือนในระบบตอนยื่น — แอดมินกรอกค่า OT เอง</div>
+                    r.netAmount > 0 ? (
+                      <div className="text-sm text-(--ink-soft)">ไม่มีเงินเดือนในระบบ — ยอดกรอกเอง · {hoursText(r.otMinutes ?? 0)}{r.otRateLabel ? <div className="text-xs">{r.otRateLabel}</div> : null}</div>
+                    ) : (
+                      <div className="text-sm text-amber-700">ยังไม่มีเงินเดือนในระบบบุคคล — รอ HR กรอกยอด OT · {hoursText(r.otMinutes ?? 0)}</div>
+                    )
                   ) : r.otBase ? (
                     <div className="rounded-(--radius) bg-(--bg-soft) px-3 py-2 text-sm text-(--ink)">
                       {r.otBaseKind === "monthly" ? `เงินเดือน ${baht(r.otBase)} ÷ 30 ÷ 8` : `ค่าแรง ${baht(r.otBase)}/วัน ÷ 8`} = {baht(round2(r.otBaseKind === "monthly" ? r.otBase / 240 : r.otBase / 8))}/ชม. × {r.otPercent}% × {hoursText(r.otMinutes ?? 0)}

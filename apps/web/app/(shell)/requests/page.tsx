@@ -5,10 +5,10 @@ import { REQ_PERMS } from "@/modules/requests/permissions";
 import { usersWithPermission } from "@/modules/maintenance/data/notify";
 import { pettyBalances, withRequestsTenant } from "@/modules/requests/lib/db";
 import { listPettyHolders } from "@/modules/requests/lib/holders";
-import { canDecide, listVisibleRequests } from "@/modules/requests/lib/data";
+import { canDecide, canSetOtAmount, listVisibleRequests, needsOtAmount } from "@/modules/requests/lib/data";
 import { beneficiaryLabel, isOpen, payableByHolder, pettyAccess, requestsPage, statusOf } from "@/modules/requests/lib/page";
 import { RequestsHome, type ListRow } from "@/modules/requests/components/request-list";
-import { maskRequest, payPrivacy } from "@/modules/requests/lib/pay-privacy";
+import { canSeePay, maskRequest, payPrivacy } from "@/modules/requests/lib/pay-privacy";
 import { Notice } from "@/modules/requests/components/ui";
 import { bangkokToday, baht, costOf, hoursText, monthTitle, round2, type RequestKind } from "@/modules/requests/lib/types";
 
@@ -26,8 +26,13 @@ export default async function RequestsPage({ searchParams }: { searchParams: Pro
   const month = today.slice(0, 7);
   // ยอด OT พนักงานประจำตัดทิ้งก่อนส่งหน้าเว็บ สำหรับคนที่ไม่ใช่เจ้าตัว/CEO/ผู้ดูแลเงินเดือน (lib/pay-privacy.ts)
   const privacy = await payPrivacy(session);
+  // OT ที่ยื่นแบบไม่มียอด — ดูจากข้อมูลจริงก่อนตัดยอด: null = ไม่ได้รอยอด · true = ฉันใส่ยอดได้ (ขึ้น "รอฉัน")
+  const awaitingAmount = new Map<string, boolean>();
   const all = await listVisibleRequests(session.orgId, viewer)
-    .then((list) => list.map((r) => maskRequest(privacy, r)))
+    .then((list) => {
+      for (const r of list) if (needsOtAmount(r)) awaitingAmount.set(r.id, canSetOtAmount(r, viewer) && (!r.beneficiaryUserId || canSeePay(privacy, r)));
+      return list.map((r) => maskRequest(privacy, r));
+    })
     .catch((error: unknown) => {
       console.error("[requests] list failed", error);
       return null;
@@ -46,7 +51,7 @@ export default async function RequestsPage({ searchParams }: { searchParams: Pro
     : [];
   const ceoIds = new Set(await usersWithPermission(session.orgId, REQ_PERMS.approveCeo));
   const pureHr = (await usersWithPermission(session.orgId, REQ_PERMS.approve)).filter((id) => !ceoIds.has(id));
-  return <Body all={all} viewer={viewer} today={today} month={month} petty={petty} pureHr={pureHr} createdCount={createdCount} />;
+  return <Body all={all} viewer={viewer} today={today} month={month} petty={petty} pureHr={pureHr} createdCount={createdCount} awaitingAmount={awaitingAmount} />;
 }
 
 async function Body({
@@ -57,6 +62,7 @@ async function Body({
   petty,
   pureHr,
   createdCount,
+  awaitingAmount,
 }: {
   all: ReturnType<typeof maskRequest>[] | null;
   viewer: Awaited<ReturnType<typeof requestsPage>>["viewer"];
@@ -65,6 +71,7 @@ async function Body({
   petty: { id: string; name: string; balance: number }[];
   pureHr: string[];
   createdCount: number;
+  awaitingAmount: Map<string, boolean>;
 }) {
   if (!all) {
     return (
@@ -108,7 +115,9 @@ async function Body({
       amount: r.netAmount,
       amountHidden: r.payHidden,
       status: statusOf(r),
-      waitingMe: canDecide(r, viewer) && (r.approverLevel === "ceo" || !viewer.canApproveCeo || !hasPureHr(r)),
+      waitingMe: awaitingAmount.has(r.id)
+        ? awaitingAmount.get(r.id)! && (!viewer.canApproveCeo || !hasPureHr(r))
+        : canDecide(r, viewer) && (r.approverLevel === "ceo" || !viewer.canApproveCeo || !hasPureHr(r)),
       toPay:
         (viewer.canPay && r.status === "approved" && r.beneficiaryUserId !== viewer.userId && !(r.kind === "ot" && r.beneficiaryKind === "worker")) ||
         (viewer.canPay && r.kind === "cash_advance" && r.clearStatus === "submitted" && r.beneficiaryUserId !== viewer.userId) ||

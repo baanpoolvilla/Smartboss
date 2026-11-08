@@ -3,6 +3,7 @@ import { prisma } from "@smartboss/database";
 
 import { usersWithPermission } from "@/modules/maintenance/data/notify";
 import { REQ_PERMS } from "../permissions";
+import { needsOtAmount } from "./data";
 import { loadRequests, withRequestsTenant } from "./db";
 import { notifyApprovers, notifyClear } from "./notify";
 import { bangkokToday } from "./types";
@@ -23,8 +24,9 @@ export async function remindRequests(): Promise<{ pending: number; overdueClear:
         clear: await loadRequests(tx, org.id, { kind: "cash_advance", status: "paid", clearStatus: null, clearDueDate: { lt: new Date(`${today}T00:00:00Z`) } }, 200),
       }));
       for (const r of pending) {
-        const noAmount = r.kind === "ot" && !r.beneficiaryUserId && r.netAmount <= 0; // คนงานที่ยังไม่มีในระบบ รอ HR ใส่ยอด
-        await notifyApprovers(org.id, r, r.approverLevel, [r.createdBy, r.beneficiaryUserId ?? ""], noAmount ? "OT รอใส่ยอด (ยังไม่มีในระบบ)" : undefined);
+        // ใบ OT ที่ยื่นแบบไม่มียอด รอ HR ใส่ — ชื่อที่ยังไม่มีในระบบ / พนักงานที่ยังไม่มีเงินเดือนในระบบ
+        const noAmount = needsOtAmount(r) ? (r.beneficiaryUserId ? "OT รอใส่ยอด (ยังไม่มีเงินเดือนในระบบ)" : "OT รอใส่ยอด (ยังไม่มีในระบบ)") : undefined;
+        await notifyApprovers(org.id, r, r.approverLevel, [r.createdBy, r.beneficiaryUserId ?? ""], noAmount);
         out.pending++;
       }
       if (clear.length > 0) {

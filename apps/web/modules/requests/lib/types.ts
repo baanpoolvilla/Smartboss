@@ -304,6 +304,8 @@ export function statusInfo(r: {
   deductedAt: string | null;
   /** OT ที่ไม่มีคนนี้ในระบบ (null) = รอผูกชื่อ · ไม่ส่งมา = ไม่เช็ก */
   beneficiaryUserId?: string | null;
+  /** "manual" + ไม่มียอด = พนักงานที่ยังไม่มีเงินเดือนในระบบ รอ HR ใส่ยอด */
+  otBaseKind?: string | null;
 }): StatusInfo {
   const approver = r.approverLevel === "ceo" ? "CEO" : "HR";
   switch (r.status) {
@@ -312,6 +314,9 @@ export function statusInfo(r: {
         return r.netAmount > 0
           ? { label: `รอ ${approver} อนุมัติ · ไม่มีในระบบ`, tone: "warn", next: "อนุมัติแล้ว HR จ่ายเงินสด/โอนเอง · หรือผูกชื่อก่อนเพื่อเข้าบัญชีค่าแรง" }
           : { label: "รอ HR ใส่ยอด", tone: "warn", next: "HR ใส่เงินค่า OT ในใบ (หรือผูกชื่อกับคนงานในระบบ)" };
+      }
+      if (r.kind === "ot" && r.otBaseKind === "manual" && r.netAmount <= 0 && !r.firstDecidedAt) {
+        return { label: "รอ HR ใส่ยอด", tone: "warn", next: "ยังไม่มีเงินเดือนในระบบ — HR ใส่เงินค่า OT ในใบ แล้วค่อยอนุมัติ" };
       }
       if (r.approverLevel === "ceo" && r.firstDecidedAt) return { label: "HR ผ่านแล้ว · รอ CEO", tone: "warn", next: "CEO อนุมัติ (ยอดเกินเกณฑ์)" };
       if (r.approverLevel === "hr" && r.needCeo) return { label: "รอ HR อนุมัติ", tone: "warn", next: "HR ตรวจ แล้วต่อ CEO (ยอดเกินเกณฑ์)" };

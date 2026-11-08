@@ -236,13 +236,13 @@ export function RequestForm({
   const breakdown = kind === "contractor" && Number.isFinite(parseMoney(amount)) ? contractorBreakdown(parseMoney(amount), vatOn ? settings.vatPercent : 0, whtPercent) : null;
   const otMinutes = /^\d{2}:\d{2}$/.test(otStart) && /^\d{2}:\d{2}$/.test(otEnd) ? minutesBetween(otStart, otEnd) : 0;
   const manualOt = kind === "ot" && preview?.baseKind === "manual";
-  const otAmount = kind === "ot" ? (manualOt ? parseMoney(amount) : (preview?.amount ?? null)) : null;
+  // ไม่มีเงินเดือนในระบบ = ยื่นแบบไม่มียอด HR ใส่ตอนตรวจ (ผู้ใช้ 8/11/2569)
+  const otAmount = kind === "ot" ? (manualOt ? null : (preview?.amount ?? null)) : null;
   const nameOfPerson = (id: string) => people.find((p) => p.userId === id)?.name ?? "";
   const extraBlocks = extraIds.flatMap((id) => {
     const p = extraPreviews[id];
     if (!p) return [];
     const own = p.blocks.map((b) => `${nameOfPerson(id)}: ${b}`);
-    if (p.baseKind === "manual") own.push(`${nameOfPerson(id)}: ยังไม่มีเงินเดือนในระบบ ต้องกรอกค่า OT เอง — เอาออกแล้วลงแยกใบ`);
     return own;
   });
   const pendingList = groupMode ? pendingNames : [];
@@ -251,7 +251,6 @@ export function RequestForm({
   const groupCount = groupMode && (extraIds.length > 0 || pendingList.length > 0) ? realCount + pendingList.length : 0;
   const blocks = [
     ...(groupCount > 0 && preview ? (preview.blocks).map((b) => `${person?.name ?? ""}: ${b}`) : (preview?.blocks ?? [])),
-    ...(groupCount > 0 && manualOt ? [`${person?.name ?? ""}: ยังไม่มีเงินเดือนในระบบ ต้องกรอกค่า OT เอง — ลงแยกใบ`] : []),
     ...extraBlocks,
   ];
   const extraChecking = extraIds.some((id) => !extraPreviews[id]);
@@ -275,7 +274,7 @@ export function RequestForm({
         otStart,
         otEnd,
         otRateId: rateId,
-        amount: kind === "contractor" || kind === "advance" || kind === "cash_advance" || manualOt ? parseMoney(amount) : usesLines ? linesTotal : undefined,
+        amount: kind === "contractor" || kind === "advance" || kind === "cash_advance" ? parseMoney(amount) : usesLines ? linesTotal : undefined,
         lines: usesLines ? lines.map((l) => ({ item: l.item, amount: parseMoney(l.amount) })) : undefined,
         propertyId: propertyId || null,
         workOrderId: workOrderId || null,
@@ -597,11 +596,9 @@ export function RequestForm({
                 </label>
               )}
               {manualOt && (
-                <label className={labelCls}>
-                  <span className={labelText}>ค่า OT (บาท)</span>
-                  <input inputMode="decimal" className={field} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" />
-                  <span className="text-xs text-amber-700">{preview?.needsManual}</span>
-                </label>
+                <div className="rounded-(--radius) border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  {preview?.needsManual} — ส่งได้เลย ไม่ต้องกรอกเงิน
+                </div>
               )}
               <label className={labelCls}>
                 <span className={labelText}>ทำอะไร</span>
@@ -782,12 +779,13 @@ export function RequestForm({
                     {[...(effectiveBeneficiary ? [effectiveBeneficiary] : []), ...extraIds].map((id, i) => {
                       const pv = i === 0 && id === effectiveBeneficiary ? preview : extraPreviews[id];
                       const who = people.find((x) => x.userId === id);
-                      const bad = pv && (pv.blocks.length > 0 || pv.baseKind === "manual");
+                      const bad = pv && pv.blocks.length > 0;
+                      const noSalary = pv?.baseKind === "manual";
                       return (
                         <div key={id} className="flex items-baseline justify-between gap-2 text-sm">
                           <span className={`min-w-0 truncate ${bad ? "text-red-700" : "text-(--ink)"}`}>{who?.name ?? ""}</span>
-                          <span className="shrink-0 tabular-nums text-(--ink)">
-                            {!pv ? "…" : bad ? "ติดปัญหา" : pv.payHidden ? "คิดจากเงินเดือน" : baht(pv.amount ?? 0)}
+                          <span className={`shrink-0 tabular-nums ${noSalary && !bad ? "text-amber-700" : "text-(--ink)"}`}>
+                            {!pv ? "…" : bad ? "ติดปัญหา" : noSalary ? "HR ใส่ยอด" : pv.payHidden ? "คิดจากเงินเดือน" : baht(pv.amount ?? 0)}
                           </span>
                         </div>
                       );
@@ -806,6 +804,11 @@ export function RequestForm({
                 {person && preview?.payHidden ? (
                   <div className="border-t border-(--line) pt-2 text-sm text-(--ink-soft)">
                     ค่า OT: ระบบคิดจากเงินเดือนให้เอง ({preview.rateLabel ?? `${preview.percent ?? ""}%`}) — ยอดเงินเห็นเฉพาะเจ้าตัว / CEO / ผู้ดูแลเงินเดือน
+                  </div>
+                ) : person && manualOt ? (
+                  <div className="flex items-center justify-between border-t border-(--line) pt-2 text-sm">
+                    <span className="font-semibold text-(--ink)">ค่า OT</span>
+                    <span className="text-amber-700">HR ใส่ยอดตอนตรวจ</span>
                   </div>
                 ) : person ? (
                   <MoneyRow strong label="ค่า OT" value={Number.isFinite(otAmount ?? NaN) ? (otAmount as number) : 0} hint={person.isWorker ? "คิดตามค่าแรงในโมดูลคนงาน" : preview?.rateLabel ?? undefined} />

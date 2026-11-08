@@ -219,10 +219,33 @@ export function isUnlinkedOt(r: { kind: string; status: string; beneficiaryUserI
   return r.kind === "ot" && r.status === "pending" && !r.beneficiaryUserId;
 }
 
+/**
+ * OT ที่ยังไม่มียอด รอ HR ใส่ตอนตรวจ — ชื่อที่ยังไม่มีในระบบ หรือพนักงานที่ยังไม่มีเงินเดือนในระบบบุคคล
+ * (ผู้ใช้ 8/11/2569 "อันนี้ให้กรอกพอ เหมือนกรอกฟอร์มขอเฉยๆ แล้วค่อยไปให้ HR หรือคนที่มีสิทธิตรวจและอนุมัติ")
+ */
+export function needsOtAmount(r: { kind: string; status: string; beneficiaryUserId: string | null; otBaseKind: string | null; netAmount: number }): boolean {
+  return r.kind === "ot" && r.status === "pending" && r.netAmount <= 0 && (!r.beneficiaryUserId || r.otBaseKind === "manual");
+}
+
+/**
+ * HR/CEO ใส่ยอด OT ให้ใบนี้ได้ไหม — ยังไม่มีใครตัดสิน · ไม่ใช่ใบของตัวเอง
+ * ชื่อที่ยังไม่มีในระบบ: คนลงใบใส่ไม่ได้ (ของเดิม) · พนักงานไม่มีเงินเดือน: คนลงใบที่เป็น HR ใส่ได้ (ใบจากแท็บ OT ของ HR) — อนุมัติต้องเป็นคนอื่นอยู่แล้ว
+ */
+export function canSetOtAmount(
+  r: { kind: string; status: string; beneficiaryUserId: string | null; otBaseKind: string | null; createdBy: string; firstDecidedAt: unknown },
+  viewer: Viewer,
+): boolean {
+  if (!(r.kind === "ot" && r.status === "pending" && !r.firstDecidedAt)) return false;
+  if (!(!r.beneficiaryUserId || r.otBaseKind === "manual")) return false;
+  if (r.beneficiaryUserId === viewer.userId) return false;
+  if (!r.beneficiaryUserId && r.createdBy === viewer.userId) return false;
+  return viewer.canApprove || viewer.canApproveCeo;
+}
+
 export function canDecide(r: RequestView, viewer: Viewer): boolean {
   if (r.status !== "pending") return false;
-  // ชื่อที่ยังไม่มีในระบบ: อนุมัติได้เมื่อมียอด (กรอกค่าแรงไว้) — อนุมัติแล้ว HR จ่ายเงินสด/โอนเอง (ผู้ใช้ 6/11/2569)
-  if (isUnlinkedOt(r) && r.netAmount <= 0) return false;
+  // ชื่อที่ยังไม่มีในระบบ / ไม่มีเงินเดือน: อนุมัติได้เมื่อ HR ใส่ยอดแล้ว — อนุมัติแล้ว HR จ่ายเงินสด/โอนเอง (ผู้ใช้ 6/11/2569)
+  if (needsOtAmount(r)) return false;
   if (r.createdBy === viewer.userId || r.beneficiaryUserId === viewer.userId) return false;
   return r.approverLevel === "ceo" ? viewer.canApproveCeo : viewer.canApprove || viewer.canApproveCeo;
 }
