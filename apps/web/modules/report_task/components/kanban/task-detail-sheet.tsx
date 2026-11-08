@@ -1,5 +1,6 @@
 "use client";
 
+import { markTaskSheetOpen } from "@/modules/report_task/components/shared/task-sync";
 import { useDismissKeyboardOnDrag } from "@/lib/dismiss-keyboard-on-drag";
 import { ReactionPicker } from "@/components/emoji-picker";
 import { Fragment, type SyntheticEvent, type UIEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -235,6 +236,12 @@ export function TaskDetailSheet({
   onOpenChange: (open: boolean) => void;
 }) {
   const task = useTaskStore((s) => s.tasks.find((t) => t.id === taskId));
+  // เปิดหน้านี้อยู่ = กำลังคุยในความคิดเห็น — บอก TaskSync ให้เช็กของใหม่ถี่ขึ้น (8/11/2569 "คุยกลับไปมาไม่ต่อเนื่อง")
+  useEffect(() => {
+    if (!taskId) return;
+    markTaskSheetOpen(1);
+    return () => markTaskSheetOpen(-1);
+  }, [taskId]);
   const moveTask = useTaskStore((s) => s.moveTask);
   const markReviewed = useTaskStore((s) => s.markReviewed);
   const rejectReview = useTaskStore((s) => s.rejectReview);

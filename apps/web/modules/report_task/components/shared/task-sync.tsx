@@ -17,6 +17,15 @@ import { realtimeStatus, subscribeRealtime } from "@/lib/realtime-client";
 const TASK_POLL_MS = 5000;
 /** Realtime pipe connected = saves arrive as signals; the poll only backs that up. */
 const REALTIME_FALLBACK_MS = 60_000;
+/**
+ * มีหน้ารายละเอียดงานเปิดอยู่ = มีคนกำลังคุยในความคิดเห็น — เช็กของใหม่ทุกรอบ (TASK_POLL_MS) แม้ช่องสดจะบอกว่าต่ออยู่
+ * (8/11/2569: บน prod แจ้งเตือนเด้งแต่ความคิดเห็นไม่ขึ้นจนปิดแล้วเปิดใหม่ — ช่องสดเงียบ เหลือแต่รอบสำรอง 60 วิ)
+ * เช็กแค่เลขเวอร์ชัน (ไม่กี่สิบไบต์) มีของใหม่ค่อยดึงทั้งชุด
+ */
+let openTaskSheets = 0;
+export function markTaskSheetOpen(delta: 1 | -1) {
+  openTaskSheets = Math.max(0, openTaskSheets + delta);
+}
 
 // Rollback switches (R10) — this rewrite touches Task's core save path in
 // production use, so both new behaviors can be killed independently without
@@ -467,13 +476,14 @@ export function TaskSync() {
       else signalRef.current = true;
     });
     function onVisibleForSignal() {
-      if (document.visibilityState === "visible" && signalRef.current && canPullNow()) void pullTasks();
+      // กลับมาที่แท็บ = เช็กของใหม่เลย (เดิมเช็กเฉพาะตอนมีสัญญาณค้าง — ช่องสดเงียบเลยไม่รู้ว่ามีของใหม่)
+      if (document.visibilityState === "visible" && canPullNow()) void pullTasks();
     }
     document.addEventListener("visibilitychange", onVisibleForSignal);
     const pollTimer = ENABLE_TASK_POLL
       ? setInterval(() => {
           if (!canPullNow()) return;
-          const fallbackMs = realtimeStatus() === "open" ? REALTIME_FALLBACK_MS : TASK_POLL_MS;
+          const fallbackMs = realtimeStatus() === "open" && openTaskSheets === 0 ? REALTIME_FALLBACK_MS : TASK_POLL_MS;
           if (!signalRef.current && Date.now() - lastPull < fallbackMs) return;
           void pullTasks();
         }, TASK_POLL_MS)
