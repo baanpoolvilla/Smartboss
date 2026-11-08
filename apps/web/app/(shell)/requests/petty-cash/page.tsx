@@ -10,12 +10,13 @@ import { AppScaffold } from "@/components/module/app-scaffold";
 import { InfoTip } from "@/modules/salary/components/help";
 import { REQ_PERMS } from "@/modules/requests/permissions";
 import { WORKER_ROLE_CODE } from "@/modules/daily_worker/permissions";
-import { loadRequests, pettyBalances, toPettyTopup, withRequestsTenant } from "@/modules/requests/lib/db";
+import { loadRequests, pettyBalances, toPetty, toPettyTopup, withRequestsTenant } from "@/modules/requests/lib/db";
+import { usersWithPermission } from "@/modules/maintenance/data/notify";
 import { listPettyHolders } from "@/modules/requests/lib/holders";
 import { pettyMonth } from "@/modules/requests/lib/petty-report";
 import { payableByHolder, pettyAccess, requestsPage } from "@/modules/requests/lib/page";
 import { maskRequest, payPrivacy } from "@/modules/requests/lib/pay-privacy";
-import { PendingTopupRow, PettyHolderCard, PettyHoldersButton, VoidPettyButton } from "@/modules/requests/components/petty-forms";
+import { MoneyBackButton, PendingTopupRow, PettyHolderCard, PettyHoldersButton, ReviewSpendButtons, VoidPettyButton } from "@/modules/requests/components/petty-forms";
 import { bangkokToday, baht, monthTitle, shiftMonthOf, thaiDateTime } from "@/modules/requests/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -40,9 +41,11 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
   const orgId = session.orgId;
   const sp = await searchParams;
   const holderUsers = await listPettyHolders(orgId);
-  const { balances, pending } = await withRequestsTenant(orgId, async (tx) => ({
+  const { balances, pending, toReview } = await withRequestsTenant(orgId, async (tx) => ({
     balances: await pettyBalances(tx, orgId),
     pending: (await tx.moneyPettyTopup.findMany({ where: { orgId, status: "pending" }, orderBy: { createdAt: "asc" } })).map(toPettyTopup),
+    // "ซื้อของเอง" ที่จ่ายไปก่อน: รอตรวจ + ไม่ผ่านที่ยังไม่ได้เงินคืน (ทุกเดือน ไม่ใช่แค่เดือนที่เลือก)
+    toReview: (await tx.moneyPettyCashEntry.findMany({ where: { orgId, voidedAt: null, reviewStatus: { in: ["pending", "rejected"] } }, orderBy: { createdAt: "asc" } })).map(toPetty),
   }));
   const seesAll = petty.view || petty.topUp || petty.adjust;
   const holders = holderUsers.map((u) => ({ userId: u.id, name: u.name, balance: balances.get(u.id) ?? 0 }));
@@ -79,6 +82,14 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
         .filter((r) => payableByHolder(r, session.userId))
         .map((r) => ({ id: r.id, code: r.code, title: r.title, beneficiaryName: r.beneficiaryName, outstanding: r.netAmount - r.paidTotal }))
     : [];
+  // ตรวจ "ซื้อของเอง": HR/CEO ที่อนุมัติได้ · ไม่ตรวจของตัวเอง · ผู้ถือเป็น HR ⇒ CEO
+  const [hrIds, ceoIds] = await Promise.all([usersWithPermission(orgId, REQ_PERMS.approve), usersWithPermission(orgId, REQ_PERMS.approveCeo)]);
+  const holderNeedsCeo = (id: string) => hrIds.includes(id) && !ceoIds.includes(id);
+  const reviewers = viewer.canApprove || viewer.canApproveCeo;
+  const canReview = (e: (typeof toReview)[number]) =>
+    reviewers && e.holderUserId !== session.userId && e.byUserId !== session.userId && (!holderNeedsCeo(e.holderUserId) || viewer.canApproveCeo);
+  const reviewList = toReview.filter((e) => e.review?.status === "pending" && (seesAll || reviewers || e.holderUserId === session.userId));
+  const shortList = toReview.filter((e) => e.review?.status === "rejected" && (seesAll || reviewers || e.holderUserId === session.userId));
   const canDecide = (p: (typeof pending)[number]) => canTopUp && p.holderUserId !== session.userId && p.requestedByUserId !== session.userId && (!p.needsCeo || viewer.canApproveCeo);
 
   return (
@@ -124,6 +135,71 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
             <ul className="divide-y divide-(--line)">
               {visiblePending.map((p) => (
                 <PendingTopupRow key={p.id} item={p} canDecide={canDecide(p)} isMine={p.requestedByUserId === session.userId} waitingFor={p.needsCeo ? "CEO" : "HR หรือ CEO"} today={today} />
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {reviewList.length > 0 && (
+          <section className="rounded-(--radius-lg) border-2 border-amber-300 bg-(--bg)">
+            <h2 className="flex items-center border-b border-(--line) px-4 py-3 text-sm font-bold text-(--ink)">
+              จ่ายไปก่อน รอตรวจ ({reviewList.length})
+              <InfoTip label="จ่ายไปก่อน รอตรวจ">
+                ผู้ถือเงินจ่ายค่าของจากเงินสดย่อยไปก่อน (ทำเรื่องไม่ทัน) แล้วมาลงว่าจ่ายอะไร พร้อมใบเสร็จ — HR หรือ CEO ดูใบเสร็จแล้วกด “ผ่าน” หรือ “ไม่ผ่าน” · ไม่ผ่าน = ผู้ถือต้องคืนเงินเข้ากอง · ตรวจของตัวเองไม่ได้ · ของ HR ต้องให้ CEO ตรวจ
+              </InfoTip>
+            </h2>
+            <ul className="divide-y divide-(--line)">
+              {reviewList.map((e) => (
+                <li key={e.id} className="px-4 py-3">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <div className="min-w-0 text-sm">
+                      <span className="font-semibold text-(--ink)">{e.holderName}</span>
+                      {e.category && <span className="ml-1.5 rounded-full bg-(--bg-soft) px-2 py-0.5 text-xs text-(--ink-soft)">{e.category}</span>}
+                      <div className="text-(--ink)">{e.note}</div>
+                    </div>
+                    <div className="shrink-0 text-sm font-bold tabular-nums text-(--danger)">{baht(-e.delta)}</div>
+                  </div>
+                  <div className="text-xs text-(--ink-soft)">
+                    ลงเมื่อ {thaiDateTime(e.at)}
+                    {e.attachments.map((a, i) => (
+                      <a key={i} href={fileUrlWithName(a.url, a.name)} target="_blank" rel="noreferrer" className="ml-2 text-(--app-strong) hover:underline">ใบเสร็จ{e.attachments.length > 1 ? ` ${i + 1}` : ""}</a>
+                    ))}
+                  </div>
+                  {canReview(e) ? (
+                    <ReviewSpendButtons id={e.id} />
+                  ) : (
+                    <div className="mt-1 text-xs text-amber-800">รอ{holderNeedsCeo(e.holderUserId) ? " CEO" : " HR หรือ CEO"} ตรวจ</div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {shortList.length > 0 && (
+          <section className="rounded-(--radius-lg) border-2 border-red-300 bg-(--bg)">
+            <h2 className="flex items-center border-b border-(--line) px-4 py-3 text-sm font-bold text-red-800">
+              เงินขาด · ไม่ผ่าน รอคืนเงิน ({shortList.length} รายการ · {baht(shortList.reduce((t, e) => t - e.delta, 0))})
+              <InfoTip label="เงินขาด">
+                รายการที่จ่ายไปก่อนแต่ตรวจแล้วไม่ผ่าน — เงินในมือของผู้ถือยังถูกหักอยู่ ผู้ถือต้องคืนเงินเข้ากอง แล้ว HR กด “ได้เงินคืนแล้ว” ยอดในมือถึงจะกลับมา
+              </InfoTip>
+            </h2>
+            <ul className="divide-y divide-(--line)">
+              {shortList.map((e) => (
+                <li key={e.id} className="px-4 py-3">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <div className="min-w-0 text-sm">
+                      <span className="font-semibold text-(--ink)">{e.holderName}</span> · {e.note}
+                    </div>
+                    <div className="shrink-0 text-sm font-bold tabular-nums text-(--danger)">{baht(-e.delta)}</div>
+                  </div>
+                  <div className="text-xs text-red-700">ไม่ผ่าน · {e.review?.byName} · {e.review?.note}</div>
+                  {petty.adjust ? (
+                    <MoneyBackButton id={e.id} />
+                  ) : e.holderUserId === session.userId ? (
+                    <div className="mt-1 text-xs text-(--ink-soft)">คืนเงินเข้ากองแล้วแจ้ง HR ให้กด “ได้เงินคืนแล้ว”</div>
+                  ) : null}
+                </li>
               ))}
             </ul>
           </section>
@@ -248,6 +324,11 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
                     <div className="min-w-0 text-sm">
                       <span className="font-semibold text-(--ink)">{KIND_LABEL[e.kind]}</span> · {e.holderName}
                       {e.category && <span className="ml-1.5 rounded-full bg-(--bg-soft) px-2 py-0.5 text-xs text-(--ink-soft)">{e.category}</span>}
+                      {e.review && !e.voided && (
+                        <span className={`ml-1.5 rounded-full px-2 py-0.5 text-xs font-semibold ${e.review.status === "pending" ? "bg-amber-100 text-amber-900" : e.review.status === "approved" ? "bg-slate-100 text-slate-700" : "bg-red-100 text-red-800"}`}>
+                          {e.review.status === "pending" ? "รอตรวจ" : e.review.status === "approved" ? `ผ่าน · ${e.review.byName ?? ""}` : "ไม่ผ่าน · ค้างคืน"}
+                        </span>
+                      )}
                       {e.requestId && (
                         <>
                           {" · "}
@@ -285,7 +366,7 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
                     )}
                   </div>
                   {e.voided && <div className="text-xs font-medium text-red-700">ยกเลิก · {e.voided.byName} · {e.voided.reason}</div>}
-                  {!e.voided && !e.requestId && (petty.adjust || e.holderUserId === session.userId) && <VoidPettyButton id={e.id} />}
+                  {!e.voided && !e.requestId && (petty.adjust || (e.holderUserId === session.userId && (!e.review || e.review.status === "pending"))) && <VoidPettyButton id={e.id} />}
                 </li>
               ))}
             </ul>

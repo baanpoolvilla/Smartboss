@@ -329,9 +329,12 @@ export interface PettyEntryView {
   /** หมวด — เฉพาะ "จ่ายค่าของ" ที่จดเองบนหน้าเงินสดย่อย */
   category: string | null;
   attachments: Attachment[];
+  byUserId: string;
   byName: string;
   at: string;
   voided: { byName: string; at: string; reason: string } | null;
+  /** "ซื้อของเอง" ที่ต้องตรวจทีหลัง — null = รายการเดิม/ไม่ต้องตรวจ */
+  review: { status: "pending" | "approved" | "rejected"; byName: string | null; at: string | null; note: string | null } | null;
 }
 
 export function toPetty(e: Awaited<ReturnType<Tx["moneyPettyCashEntry"]["findFirstOrThrow"]>>): PettyEntryView {
@@ -345,9 +348,13 @@ export function toPetty(e: Awaited<ReturnType<Tx["moneyPettyCashEntry"]["findFir
     note: e.note,
     category: e.category,
     attachments: (e.attachments as unknown as Attachment[]) ?? [],
+    byUserId: e.byUserId,
     byName: e.byName,
     at: e.createdAt.toISOString(),
     voided: e.voidedAt ? { byName: e.voidedByName ?? "", at: e.voidedAt.toISOString(), reason: e.voidReason ?? "" } : null,
+    review: e.reviewStatus
+      ? { status: e.reviewStatus as "pending" | "approved" | "rejected", byName: e.reviewedByName, at: e.reviewedAt ? e.reviewedAt.toISOString() : null, note: e.reviewNote }
+      : null,
   };
 }
 

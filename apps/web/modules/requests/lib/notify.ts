@@ -96,6 +96,21 @@ export async function notifyPettyTopupApprovers(orgId: string, t: { id: string; 
   });
 }
 
+/**
+ * เงินสดย่อย "ซื้อของเอง" รอตรวจ (ผู้ใช้ 8/11/2569) — ผู้ถือเป็น HR ⇒ CEO ตรวจ · ไม่งั้น HR (ไม่มี → CEO) · ไม่แจ้งตัวผู้ถือ
+ */
+export async function notifyPettySpendReviewers(orgId: string, e: { id: string; holderUserId: string; holderName: string; amount: number; title: string; needsCeo: boolean }) {
+  const ids = e.needsCeo
+    ? (await usersWithPermission(orgId, REQ_PERMS.approveCeo)).filter((id) => id !== e.holderUserId)
+    : await approverRecipients(orgId, "hr", [e.holderUserId]);
+  await notifyUsers(orgId, ids, {
+    title: `ตรวจเงินสดย่อยที่จ่ายไปก่อน: ${e.holderName} ${baht(e.amount)}`,
+    body: `${e.title} — ดูใบเสร็จแล้วกด ผ่าน / ไม่ผ่าน`,
+    type: "petty_topup",
+    referenceId: e.id,
+  });
+}
+
 export async function notifyPettyTopupResult(orgId: string, userIds: (string | null)[], title: string, body: string) {
   await notifyUsers(orgId, userIds, { title, body, type: "petty_topup" });
 }

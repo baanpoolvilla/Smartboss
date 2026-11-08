@@ -25,7 +25,7 @@ import {
   type Viewer,
 } from "./lib/data";
 import { dateOnly, insertEvent, loadRequests, pettyBalances, readSettings, withRequestsTenant, withRequestsTenantAfter, ymd, type RequestView, type Tx } from "./lib/db";
-import { clearActionNotifications, notifyApprovers, notifyClear, notifyPayers, notifyPettyTopupApprovers, notifyPettyTopupResult, notifyResult } from "./lib/notify";
+import { clearActionNotifications, notifyApprovers, notifyClear, notifyPayers, notifyPettySpendReviewers, notifyPettyTopupApprovers, notifyPettyTopupResult, notifyResult } from "./lib/notify";
 import { usersWithPermission } from "@/modules/maintenance/data/notify";
 import { readReceipt } from "./lib/receipt-ai";
 import { isPettyHolder } from "./lib/holders";
@@ -1787,6 +1787,8 @@ export async function voidPettyEntryAction(input: { id: string; reason: string }
       if (!e) return "missing";
       if (e.paymentId || e.requestId) return "linked";
       if (!hasPermission(session, REQ_PERMS.pettyAdjust) && e.byUserId !== session.userId) return "denied";
+      // ตรวจแล้ว (ผ่าน/ไม่ผ่าน) ผู้ถือลบเองไม่ได้ — ไม่งั้นลบรายการที่ไม่ผ่านทิ้ง เงินขาดหายไปเฉย ๆ · HR กด "ได้เงินคืนแล้ว" แทน
+      if (e.reviewStatus && e.reviewStatus !== "pending" && !hasPermission(session, REQ_PERMS.pettyAdjust)) return "reviewed";
       await tx.moneyPettyCashEntry.update({ where: { id: e.id }, data: { voidedAt: new Date(), voidedByName: byName, voidReason: reason } });
       await insertEvent(tx, orgId, { byUserId: session.userId, byName, action: "petty", summary: `ยกเลิกรายการเงินสดย่อย ${e.holderName} ${baht(Number(e.delta))} · ${reason}` });
       return "ok";
@@ -1794,6 +1796,7 @@ export async function voidPettyEntryAction(input: { id: string; reason: string }
     if (res === "missing") return { error: "ไม่พบรายการ" };
     if (res === "linked") return { error: "รายการนี้มาจากการจ่ายคำขอ — ยกเลิกที่ตัวการจ่ายในใบคำขอ" };
     if (res === "denied") return { error: "ยกเลิกได้เฉพาะคนลงเอง หรือ HR" };
+    if (res === "reviewed") return { error: "รายการนี้ตรวจแล้ว — ให้ HR เป็นคนยกเลิก" };
     revalidatePath("/requests/petty-cash");
     return { ok: true };
   } catch (error) {
@@ -1971,13 +1974,64 @@ export async function addPettySpendAction(input: { title: string; category: stri
     const res = await withRequestsTenant(orgId, async (tx) => {
       const balance = (await pettyBalances(tx, orgId)).get(holder.id) ?? 0;
       if (amount > balance + 0.005) return { error: `เงินในมือไม่พอ (เหลือ ${baht(balance)}) — กด “ขอเติมเงิน” ก่อน` } as const;
-      await tx.moneyPettyCashEntry.create({
-        data: { orgId, holderUserId: holder.id, holderName: holder.name, kind: "spend", delta: -amount, category: input.category, note: `${title} · จ่ายวันที่ ${thaiDate(spentOn)}`, attachments: attachments as unknown as object, byUserId: session.userId, byName: holder.name },
+      // จ่ายไปแล้ว = หักเงินในมือทันที แต่ต้องมีคนตรวจทีหลัง (ผู้ใช้ 8/11/2569)
+      const entry = await tx.moneyPettyCashEntry.create({
+        data: { orgId, holderUserId: holder.id, holderName: holder.name, kind: "spend", delta: -amount, category: input.category, note: `${title} · จ่ายวันที่ ${thaiDate(spentOn)}`, attachments: attachments as unknown as object, byUserId: session.userId, byName: holder.name, reviewStatus: "pending" },
       });
-      await insertEvent(tx, orgId, { byUserId: session.userId, byName: holder.name, action: "petty", summary: `จ่ายจากเงินสดย่อย ${holder.name} ${baht(amount)} · ${input.category} · ${title}` });
-      return { ok: true } as const;
+      await insertEvent(tx, orgId, { byUserId: session.userId, byName: holder.name, action: "petty", summary: `จ่ายจากเงินสดย่อย ${holder.name} ${baht(amount)} · ${input.category} · ${title} · รอตรวจ` });
+      return { ok: true, entryId: entry.id } as const;
     });
     if ("error" in res) return { error: res.error ?? "ทำไม่สำเร็จ" };
+    void notifyPettySpendReviewers(orgId, { id: res.entryId, holderUserId: holder.id, holderName: holder.name, amount, title, needsCeo: await holderIsHr(orgId, holder.id) }).catch((error: unknown) =>
+      console.error("[requests] petty spend notify failed", error),
+    );
+    revalidatePath("/requests/petty-cash");
+    return { ok: true };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/**
+ * ตรวจ "ซื้อของเอง" ที่ผู้ถือจ่ายจากเงินสดย่อยไปก่อน (ผู้ใช้ 8/11/2569)
+ * ผ่าน = จบ · ไม่ผ่าน = เงินขาด ค้างคืน (ยอดยังหักอยู่) จน HR ได้เงินคืนแล้วกด "ได้เงินคืนแล้ว" (ยกเลิกรายการ)
+ * คนตรวจ = HR/CEO ที่อนุมัติได้ · ไม่ตรวจของตัวเอง · ผู้ถือเป็น HR ⇒ CEO เท่านั้น (เหมือนคำขอเติมเงิน)
+ */
+export async function reviewPettySpendAction(input: { id: string; outcome: "approve" | "reject"; note: string }): Promise<Result> {
+  try {
+    const session = await guard();
+    const orgId = session.orgId;
+    const viewer = await viewerOf(session);
+    if (!(viewer.canApprove || viewer.canApproveCeo)) return { error: "ตรวจได้เฉพาะ HR หรือ CEO ที่อนุมัติได้" };
+    const note = input.note.trim().slice(0, 300);
+    if (input.outcome === "reject" && !note) return { error: "ใส่เหตุผลที่ไม่ผ่าน" };
+    const byName = await nameOf(session.userId);
+    const res = await withRequestsTenant(orgId, async (tx) => {
+      const e = await tx.moneyPettyCashEntry.findFirst({ where: { orgId, id: input.id, voidedAt: null, reviewStatus: "pending" } });
+      if (!e) return { error: "ไม่พบรายการ หรือมีคนตรวจไปแล้ว" } as const;
+      if (e.holderUserId === session.userId || e.byUserId === session.userId) return { error: "ตรวจรายการของตัวเองไม่ได้" } as const;
+      if (!viewer.canApproveCeo && (await holderIsHr(orgId, e.holderUserId))) return { error: "รายการของ HR ต้องให้ CEO ตรวจ" } as const;
+      const done = await tx.moneyPettyCashEntry.updateMany({
+        where: { orgId, id: e.id, reviewStatus: "pending", voidedAt: null },
+        data: { reviewStatus: input.outcome === "approve" ? "approved" : "rejected", reviewedByUserId: session.userId, reviewedByName: byName, reviewedAt: new Date(), reviewNote: note || null },
+      });
+      if (done.count === 0) return { error: "มีคนตรวจไปแล้ว — รีเฟรช" } as const;
+      const amount = Math.abs(Number(e.delta));
+      await insertEvent(tx, orgId, {
+        byUserId: session.userId,
+        byName,
+        action: "petty",
+        summary: input.outcome === "approve" ? `ผ่าน: เงินสดย่อย ${e.holderName} ${baht(amount)} · ${e.note}` : `ไม่ผ่าน: เงินสดย่อย ${e.holderName} ${baht(amount)} · ${e.note} · ${note} — ค้างคืนเงิน`,
+      });
+      return { ok: true, holderUserId: e.holderUserId, amount, title: e.note } as const;
+    });
+    if ("error" in res) return { error: res.error ?? "ทำไม่สำเร็จ" };
+    void notifyPettyTopupResult(
+      orgId,
+      [res.holderUserId],
+      input.outcome === "approve" ? `เงินสดย่อยที่จ่ายไปก่อน ผ่านแล้ว ${baht(res.amount)}` : `เงินสดย่อยที่จ่ายไปก่อน ไม่ผ่าน ${baht(res.amount)}`,
+      input.outcome === "approve" ? res.title : `${res.title} · ${note} — ต้องคืนเงินเข้าเงินสดย่อย แล้วแจ้ง HR`,
+    ).catch(() => null);
     revalidatePath("/requests/petty-cash");
     return { ok: true };
   } catch (error) {

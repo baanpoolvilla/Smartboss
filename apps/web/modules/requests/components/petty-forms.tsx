@@ -13,6 +13,7 @@ import {
   decidePettyTopupAction,
   recordPaymentAction,
   requestPettyTopupAction,
+  reviewPettySpendAction,
   setPettyHolderAction,
   voidPettyEntryAction,
   type UploadedFile,
@@ -396,7 +397,7 @@ function SpendForm({ balance, today, onClose }: { balance: number; today: string
   const ready = title.trim() && category && Number.isFinite(value) && value > 0 && !over && spentOn && files.length > 0;
   return (
       <div className="flex flex-col gap-3">
-        <Explain>ใช้เงินในมือซื้อของ/จ่ายค่าบริการเอง ไม่ต้องทำใบเบิก — กรอกครบทุกช่องที่มี * และแนบรูปใบเสร็จ บันทึกแล้วยอดในมือลดลงทันที · เงินในมือตอนนี้ {baht(balance)}</Explain>
+        <Explain>ใช้เงินในมือซื้อของ/จ่ายค่าบริการเอง ไม่ต้องทำใบเบิก — กรอกครบทุกช่องที่มี * และแนบรูปใบเสร็จ บันทึกแล้วยอดในมือลดลงทันที แล้ว HR (หรือ CEO ถ้าคุณเป็น HR) จะตรวจใบเสร็จทีหลัง — ไม่ผ่านต้องคืนเงินเข้ากอง · เงินในมือตอนนี้ {baht(balance)}</Explain>
         <Field label="จ่ายค่าอะไร" required>
           <input className={field} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="เช่น น้ำแข็ง 2 ถุง บ้าน A3" />
         </Field>
@@ -671,6 +672,84 @@ export function VoidPettyButton({ id }: { id: string }) {
       >
         ยืนยัน
       </button>
+      {error && <span className="w-full text-xs text-red-700">{error}</span>}
+    </div>
+  );
+}
+
+/**
+ * ตรวจ "ซื้อของเอง" ที่จ่ายจากเงินสดย่อยไปก่อน (ผู้ใช้ 8/11/2569) — ผ่าน / ไม่ผ่าน (ต้องมีเหตุผล)
+ * ไม่ผ่าน = เงินขาด ค้างคืน · HR กด "ได้เงินคืนแล้ว" เมื่อผู้ถือคืนเงินเข้ากองแล้ว
+ */
+export function ReviewSpendButtons({ id }: { id: string }) {
+  const router = useRouter();
+  const [busy, start] = useTransition();
+  const [rejecting, setRejecting] = useState(false);
+  const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const go = (outcome: "approve" | "reject") =>
+    start(async () => {
+      setError(null);
+      const res = await reviewPettySpendAction({ id, outcome, note });
+      if (!res.ok) setError(res.error);
+      else router.refresh();
+    });
+  return (
+    <div className="mt-2 flex flex-col gap-2">
+      {!rejecting ? (
+        <div className="flex flex-wrap gap-2">
+          <button type="button" disabled={busy} onClick={() => go("approve")} className="inline-flex h-9 items-center gap-1.5 rounded-(--radius) bg-(--brand-navy,#1b2537) px-4 text-sm font-semibold text-white disabled:opacity-50">
+            {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} ผ่าน
+          </button>
+          <button type="button" disabled={busy} onClick={() => setRejecting(true)} className="h-9 rounded-(--radius) border border-red-200 px-4 text-sm font-semibold text-red-800 disabled:opacity-50">
+            ไม่ผ่าน
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <input className="h-9 min-w-48 flex-1 rounded-(--radius) border border-(--line) px-2 text-sm" placeholder="เหตุผลที่ไม่ผ่าน (ผู้ถือต้องคืนเงิน)" value={note} onChange={(e) => setNote(e.target.value)} aria-label="เหตุผลที่ไม่ผ่าน" autoFocus />
+          <button type="button" disabled={busy || !note.trim()} onClick={() => go("reject")} className="h-9 rounded-(--radius) border border-red-200 bg-red-50 px-3 text-sm font-semibold text-red-800 disabled:opacity-50">
+            ยืนยันไม่ผ่าน
+          </button>
+          <button type="button" disabled={busy} onClick={() => setRejecting(false)} className="h-9 px-2 text-sm text-(--ink-soft)">ยกเลิก</button>
+        </div>
+      )}
+      {error && <span className="text-xs text-red-700">{error}</span>}
+    </div>
+  );
+}
+
+/** เงินขาดจากรายการที่ไม่ผ่าน — ผู้ถือคืนเงินเข้ากองแล้ว HR กดปิด (ยกเลิกรายการ = ยอดในมือกลับมา) */
+export function MoneyBackButton({ id }: { id: string }) {
+  const router = useRouter();
+  const [busy, start] = useTransition();
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  if (!open)
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="mt-2 h-9 rounded-(--radius) border border-(--line) px-3 text-sm font-semibold text-(--ink) hover:bg-(--bg-soft)">
+        ได้เงินคืนแล้ว
+      </button>
+    );
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <input className="h-9 min-w-48 flex-1 rounded-(--radius) border border-(--line) px-2 text-sm" placeholder="หมายเหตุ (ไม่บังคับ) เช่น คืนเงินสดวันที่…" value={note} onChange={(e) => setNote(e.target.value)} aria-label="หมายเหตุ" autoFocus />
+      <button
+        type="button"
+        disabled={busy}
+        className="h-9 rounded-(--radius) bg-(--brand-navy,#1b2537) px-3 text-sm font-semibold text-white disabled:opacity-50"
+        onClick={() =>
+          start(async () => {
+            const res = await voidPettyEntryAction({ id, reason: `ได้เงินคืนแล้ว${note.trim() ? ` · ${note.trim()}` : ""}` });
+            if (!res.ok) setError(res.error);
+            else router.refresh();
+          })
+        }
+      >
+        ยืนยัน ได้เงินคืนครบแล้ว
+      </button>
+      <button type="button" disabled={busy} onClick={() => setOpen(false)} className="h-9 px-2 text-sm text-(--ink-soft)">ยกเลิก</button>
       {error && <span className="w-full text-xs text-red-700">{error}</span>}
     </div>
   );

@@ -202,6 +202,12 @@ model MoneyPettyCashEntry {
   note         String    @default("")
   /// หมวดค่าใช้จ่าย — เฉพาะ "จ่ายค่าของ" ที่ผู้ถือจดเองบนหน้าเงินสดย่อย (PETTY_CATEGORIES) · รายการอื่น NULL
   category     String?
+  /// "ซื้อของเอง" ต้องมีคนตรวจทีหลัง: null = รายการเดิม/ไม่ต้องตรวจ · pending · approved · rejected (เงินขาด ค้างคืน)
+  reviewStatus     String?   @map("review_status")
+  reviewedByUserId String?   @map("reviewed_by_user_id")
+  reviewedByName   String?   @map("reviewed_by_name")
+  reviewedAt       DateTime? @map("reviewed_at") @db.Timestamptz(6)
+  reviewNote       String?   @map("review_note")
   attachments  Json      @default("[]")
   byUserId     String    @map("by_user_id")
   byName       String    @map("by_name")
