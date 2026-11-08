@@ -325,7 +325,7 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
                       <span className="font-semibold text-(--ink)">{KIND_LABEL[e.kind]}</span> · {e.holderName}
                       {e.category && <span className="ml-1.5 rounded-full bg-(--bg-soft) px-2 py-0.5 text-xs text-(--ink-soft)">{e.category}</span>}
                       {e.review && !e.voided && (
-                        <span className={`ml-1.5 rounded-full px-2 py-0.5 text-xs font-semibold ${e.review.status === "pending" ? "bg-amber-100 text-amber-900" : e.review.status === "approved" ? "bg-slate-100 text-slate-700" : "bg-red-100 text-red-800"}`}>
+                        <span className={`ml-1.5 inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${e.review.status === "pending" ? "bg-amber-100 text-amber-900" : e.review.status === "approved" ? "bg-slate-100 text-slate-700" : "bg-red-100 text-red-800"}`}>
                           {e.review.status === "pending" ? "รอตรวจ" : e.review.status === "approved" ? `ผ่าน · ${e.review.byName ?? ""}` : "ไม่ผ่าน · ค้างคืน"}
                         </span>
                       )}
