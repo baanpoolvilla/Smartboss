@@ -16,6 +16,7 @@ export function useReportTaskOpener(topic: ReportTopic, onOpenTask?: (taskId: st
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const setPostLinkedTask = useReportFeedStore((s) => s.setPostLinkedTask);
   const setReplyLinkedTask = useReportFeedStore((s) => s.setReplyLinkedTask);
+  const addTaskCardReply = useReportFeedStore((s) => s.addTaskCardReply);
   const [target, setTarget] = useState<{ key: number; postId: string; replyId?: string; prefill: ReportTaskPrefill; files: File[] } | null>(null);
 
   async function openAsTask(post: ReportPost, reply?: ReportPostReply) {
@@ -48,9 +49,11 @@ export function useReportTaskOpener(topic: ReportTopic, onOpenTask?: (taskId: st
       defaultAssigneeIds={target.prefill.assigneeIds}
       defaultFiles={target.files}
       source={target.prefill.source}
-      onCreated={(taskId) => {
+      onCreated={(taskId, title) => {
         if (target.replyId) setReplyLinkedTask(target.postId, target.replyId, taskId);
         else setPostLinkedTask(target.postId, taskId);
+        // การ์ดงานขึ้นในเธรดของโพสต์นี้ (แบบ Planner ใน Teams) — เปิดจากความคิดเห็นก็ตอบกลับความคิดเห็นนั้น
+        if (viewingAsUserId) addTaskCardReply(target.postId, viewingAsUserId, { id: taskId, title: title ?? target.prefill.title }, target.replyId);
         setTarget(null);
         onOpenTask?.(taskId);
       }}

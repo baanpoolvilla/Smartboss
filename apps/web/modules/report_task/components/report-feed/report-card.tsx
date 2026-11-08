@@ -1836,6 +1836,7 @@ export function ReportCard({
                     onJumpToQuote={jumpToQuote}
                     onCopyLink={() => copyLink(post.replies[post.replies.length - 1]!.id)}
                     onOpenAsTask={() => void taskOpener.openAsTask(post, post.replies[post.replies.length - 1]!)}
+                    onOpenTaskCard={onOpenTask}
                     onOpenWorkOrder={workOrderOpener.canOpen ? () => workOrderOpener.open(post, post.replies[post.replies.length - 1]!) : undefined}
                     onToggleReaction={(emoji) =>
                       toggleReplyReaction(post.id, post.replies[post.replies.length - 1]!.id, emoji, viewingAsUserId)
@@ -1872,6 +1873,7 @@ export function ReportCard({
                           onJumpToQuote={jumpToQuote}
                           onCopyLink={() => copyLink(r.id)}
                           onOpenAsTask={() => void taskOpener.openAsTask(post, r)}
+                          onOpenTaskCard={onOpenTask}
                           onOpenWorkOrder={workOrderOpener.canOpen ? () => workOrderOpener.open(post, r) : undefined}
                           onToggleReaction={(emoji) => toggleReplyReaction(post.id, r.id, emoji, viewingAsUserId)}
                           mentionCandidates={replyMentionCandidates}

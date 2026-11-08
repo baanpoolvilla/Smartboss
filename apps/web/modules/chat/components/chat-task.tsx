@@ -22,7 +22,8 @@ import { channelTitle } from "../lib/format";
  * สร้างงานจากแชท (27/10/2569 "สร้างงานจากแชทที่คุยอยู่เรื่องนั้นเลย … ให้เหมือนของ task")
  * กดค้างที่ข้อความ → "เปิดเป็นงาน" / ปุ่ม + → "สร้างงาน" ⇒ หน้าสร้างงานตัวเดียวกับบอร์ด เด้งทับแชท
  * เติมชื่อ/รายละเอียด/ผู้รับผิดชอบ/ไฟล์จากข้อความให้
- * ไม่ส่งการ์ดลงห้อง — ผู้รับผิดชอบได้แจ้งเตือน "มอบหมายงานให้คุณ" ตามปกติของงาน ("ไม่ต้องเห็นในแชท … เดี๋ยวงง")
+ * ห้องกลุ่ม: การ์ดงานขึ้นในห้องนั้น ตอบกลับข้อความต้นทาง (8/11/2569 Os-Thanonchai "แสดงในหน้าที่สนทนาอยู่ เหมือน Microsoft")
+ *   — เดิม 27/10 ไม่ส่งการ์ดลงห้อง · แชท 1:1 ได้การ์ดจากแจ้งเตือนมอบหมายงานอยู่แล้ว
  * ส่งสัญญาณผ่าน window event แบบการ์ดอัลบั้ม — ไม่ต้องส่ง prop ผ่านรายการข้อความหลายชั้น
  */
 export const CHAT_CREATE_TASK_EVENT = "chat:create-task";
@@ -45,6 +46,8 @@ export function canOpenAsTask(m: RoomMessage): boolean {
 
 interface Prefill {
   key: number;
+  /** ข้อความต้นทาง — การ์ดงานในห้องกลุ่มตอบกลับข้อความนี้ */
+  messageId?: string;
   title: string;
   description: string;
   assigneeIds: string[];
@@ -93,6 +96,7 @@ export function ChatTaskHost({ channel }: { channel: ChatChannelSummary }) {
       const files = m ? await filesOf(m) : [];
       setPrefill({
         key: Date.now(),
+        messageId: m?.id,
         title: firstLine.slice(0, 100) || (m ? `งานจากแชท ${room}` : ""),
         description: m ? `${body}${body ? "\n\n" : ""}— จากแชท "${room}" · ${users[m.authorId]?.name ?? "สมาชิก"} · ${when}` : "",
         assigneeIds: assignee ? [assignee] : [],
@@ -156,8 +160,17 @@ export function ChatTaskHost({ channel }: { channel: ChatChannelSummary }) {
           defaultAssigneeIds={prefill.assigneeIds}
           defaultFiles={prefill.files}
           source={prefill.source}
-          onCreated={(taskId) => {
+          onCreated={(taskId, title) => {
+            const from = prefill;
             setPrefill(null);
+            // ห้องกลุ่ม: การ์ดงานขึ้นในห้องที่คุยอยู่ ตอบกลับข้อความต้นทาง (ผู้ใช้ 8/11/2569 "เหมือน Microsoft") · 1:1 มีการ์ดอยู่แล้ว
+            if (channel.type !== "dm") {
+              void fetch(`/api/chat/channels/${encodeURIComponent(channel.id)}/task-card`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ taskId, title: title ?? from.title, replyToId: from.messageId ?? null }),
+              }).catch(() => null);
+            }
             toast.success("สร้างงานแล้ว — ผู้รับผิดชอบได้แจ้งเตือน", {
               action: { label: "เปิดงาน", onClick: () => setOpenTaskId(taskId) },
             });

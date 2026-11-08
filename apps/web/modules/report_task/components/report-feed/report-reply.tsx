@@ -19,6 +19,7 @@ import { attachmentKind } from "@/modules/report_task/lib/report-attachment-kind
 import { MentionEditBox } from "@/modules/report_task/components/report-feed/mention-edit-box";
 import type { MentionItem } from "@/modules/report_task/components/report-feed/mention-utils";
 import { sortByUsage, useStickerUsageStore } from "@/modules/report_task/store/sticker-usage-store";
+import { ReportTaskCard } from "@/modules/report_task/components/report-feed/report-task-card";
 
 const reactionEmojis = ["👍", "❤️", "🎉", "😂", "😮", "😢"];
 
@@ -54,6 +55,7 @@ export function ReportReply({
   onJumpToQuote,
   onCopyLink,
   onOpenAsTask,
+  onOpenTaskCard,
   onOpenWorkOrder,
   onToggleReaction,
   onEdit,
@@ -81,6 +83,8 @@ export function ReportReply({
   onCopyLink: () => void;
   /** เปิดความคิดเห็นนี้เป็นงาน (ซ่อนเมื่อมีแต่สติกเกอร์ — ไม่มีเนื้อหาให้เปิดงาน) */
   onOpenAsTask?: () => void;
+  /** กด "เปิดงาน" บนการ์ดงานในเธรด */
+  onOpenTaskCard?: (taskId: string) => void;
   /** เปิดใบแจ้งซ่อมจากความคิดเห็นนี้ — ไม่ส่งมา = ผู้ใช้ไม่มีสิทธิ์สร้างใบงาน */
   onOpenWorkOrder?: () => void;
   /** Reacting to one specific comment, same as the post's own reaction row — Teams lets you do this per-message, not just per-post. */
@@ -398,6 +402,7 @@ export function ReportReply({
                 every line break into a space, so a two-line comment always
                 rendered as one line ("พิม test shift+enter 111 แต่แสดงแถวเดียวกัน"). */}
             {reply.body && <p className="text-[15px] sm:text-base leading-relaxed mt-0.5 whitespace-pre-wrap">{renderRichBulletText(reply.body)}</p>}
+            {reply.taskCard && <ReportTaskCard taskId={reply.taskCard.taskId} title={reply.taskCard.title} onOpen={onOpenTaskCard} />}
             {!!reply.images?.some((img) => img.sticker) && (
               <div className="flex flex-wrap gap-1 mt-1">
                 {reply.images.filter((img) => img.sticker).map((img) => (

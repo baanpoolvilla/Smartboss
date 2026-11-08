@@ -241,7 +241,7 @@ export function NewTaskDialog({
   /** ต้นทางของงาน (โพสต์/ความคิดเห็น/แชท) — เก็บในงาน กดกลับไปดูได้จากหน้ารายละเอียดงาน */
   source?: TaskSource;
   /** Fires with the new task's id right after a task (not meeting/leave) is created — lets a caller that opened this dialog for a specific purpose (e.g. linking a report post to the task it spawned) follow up without guessing the id. */
-  onCreated?: (taskId: string) => void;
+  onCreated?: (taskId: string, title?: string) => void;
 }) {
   const addTask = useTaskStore((s) => s.addTask);
   const addMeeting = useMeetingStore((s) => s.addMeeting);
@@ -666,7 +666,7 @@ export function NewTaskDialog({
     }
     addTask(task);
     toast.success(repeatOn ? `สร้างงานทำซ้ำแล้ว · ${describeRule(effectiveRule)}` : "สร้างงานเรียบร้อยแล้ว");
-    onCreated?.(task.id);
+    onCreated?.(task.id, task.title);
   }
 
   async function createMeeting() {

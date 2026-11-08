@@ -136,6 +136,11 @@ export interface ReportPostReply {
   replyToId?: string;
   /** เปิดความคิดเห็นนี้เป็นงานแล้ว — เหมือน ReportPost.linkedTaskId กดอีกครั้งไปงานเดิม ไม่สร้างซ้ำ */
   linkedTaskId?: string;
+  /**
+   * ความคิดเห็นนี้คือ "การ์ดงาน" ที่ระบบลงให้ตอนเปิดงานจากโพสต์/ความคิดเห็น (ผู้ใช้ 8/11/2569 แบบ Planner ใน Teams)
+   * title = ชื่อตอนสร้าง (ใช้เมื่อหางานไม่เจอ) · การ์ดแสดงข้อมูลสดจากรายการงาน (report-task-card.tsx)
+   */
+  taskCard?: { taskId: string; title: string };
 }
 
 export interface ReportPostFields {
@@ -586,6 +591,8 @@ interface ReportFeedStore {
   /** Records which Task a post was opened/converted into (see report-card.tsx's "เปิดเป็นงาน"). */
   setPostLinkedTask: (postId: string, taskId: string) => void;
   setReplyLinkedTask: (postId: string, replyId: string, taskId: string) => void;
+  /** ลงการ์ดงานในเธรดของโพสต์ (ตอบกลับความคิดเห็นต้นทางถ้าเปิดจากความคิดเห็น) — ไม่แจ้งเตือนเพิ่ม (ผู้รับงานได้แจ้งเตือนงานแล้ว) */
+  addTaskCardReply: (postId: string, authorId: string, task: { id: string; title: string }, replyToId?: string) => void;
   /** Moves an already-posted image in or out of an album after the fact
    * (the "ไฟล์" tab's one-tap save) — searches the post's own images and
    * every reply's images, since the caller only knows the image id, not
@@ -1027,6 +1034,33 @@ export const useReportFeedStore = create<ReportFeedStore>()(
             ? `${sticker.label} ที่เคยให้ ${getUser(removed?.targetUserId ?? post.authorId)?.name ?? "ไม่ทราบชื่อ"}`
             : undefined,
         });
+      },
+      addTaskCardReply: (postId, authorId, task, replyToId) => {
+        const post = get().posts.find((p) => p.id === postId);
+        if (!post || post.replies.some((r) => r.taskCard?.taskId === task.id)) return;
+        const topic = get().topics.find((t) => t.id === post.topicId);
+        const others = topic ? users.filter((u) => u.id !== authorId && canSeeReportTopic(topic.visibility, u.id)).map((u) => u.id) : [];
+        set((s) => ({
+          posts: s.posts.map((p) =>
+            p.id === postId
+              ? {
+                  ...p,
+                  replies: [
+                    ...p.replies,
+                    {
+                      id: nextId("reply"),
+                      authorId,
+                      body: "",
+                      createdAt: new Date().toISOString(),
+                      replyToId,
+                      unreadFor: others,
+                      taskCard: { taskId: task.id, title: task.title.slice(0, 200) },
+                    },
+                  ],
+                }
+              : p
+          ),
+        }));
       },
       addReply: (postId, authorId, body, extra) => {
         // Captured up front so notifications below can deep-link straight to

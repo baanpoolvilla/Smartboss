@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@smartboss/database";
 
 import type { ChatTaskCard } from "../types";
-import { broadcastToChannel, getOrCreateDm } from "./channels";
+import { broadcastToChannel, getChannelAccess, getOrCreateDm } from "./channels";
 import { hydrateMessages } from "./serialize";
 
 /**
@@ -52,6 +52,71 @@ export async function postTaskCard(
     // มอบหมายงานเดิมให้คนเดิมซ้ำ = การ์ดเดิมยังอยู่ในห้อง ไม่ต้องโพสต์ใหม่
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return;
     console.error("[chat] task card failed", err);
+  }
+}
+
+/**
+ * การ์ดงานลงห้องแชทกลุ่มที่เปิดงานมา (ผู้ใช้ 8/11/2569 ตามที่ Os-Thanonchai ขอ: "ให้แสดงในหน้าที่สนทนาอยู่ เหมือน Microsoft")
+ * ตอบกลับข้อความต้นทาง (replyToId) ให้เห็นว่างานนี้มาจากข้อความไหน · แชท 1:1 ไม่ต้อง (การ์ดลงแชทส่วนตัวอยู่แล้ว)
+ * คนส่งต้องเป็นสมาชิกห้อง · กันซ้ำด้วย clientId = room-task-<taskId> · ไม่ throw ออกไปเป็น 500 ถ้าการ์ดซ้ำ
+ */
+export async function postTaskCardToRoom(
+  orgId: string,
+  input: { channelId: string; authorId: string; taskId: string; title: string; replyToId?: string | null }
+): Promise<{ posted: boolean }> {
+  const access = await getChannelAccess({ orgId, userId: input.authorId, isChatAdmin: false }, input.channelId);
+  if (access.type === "dm") return { posted: false };
+  // งานใหม่บันทึกจากฝั่งเบราว์เซอร์ อาจยังไม่ลงตาราง — รอแป๊บแล้วอ่านอีกรอบ (แบบ postTaskCard)
+  const readTask = () =>
+    prisma.reportTask
+      .findUnique({ where: { orgId_id: { orgId, id: input.taskId } }, select: { title: true, dueDate: true, code: true, parentId: true, data: true } })
+      .catch(() => null);
+  let task = await readTask();
+  if (!task) {
+    await new Promise((r) => setTimeout(r, 2500));
+    task = await readTask();
+  }
+  const card: ChatTaskCard = {
+    taskId: input.taskId,
+    title: task?.title ?? input.title.slice(0, 200),
+    dueDate: task?.dueDate || null,
+    link: `/report-task/tasks?task=${encodeURIComponent(input.taskId)}`,
+    ...(task?.code ? { code: task.code } : {}),
+    tags: taskTags(task),
+  };
+  const replyTo = input.replyToId
+    ? await prisma.chatMessage.findFirst({ where: { orgId, channelId: input.channelId, id: input.replyToId }, select: { id: true } })
+    : null;
+  try {
+    const row = await prisma.$transaction(async (tx) => {
+      const created = await tx.chatMessage.create({
+        data: {
+          orgId,
+          channelId: input.channelId,
+          authorId: input.authorId,
+          kind: "task",
+          body: `เปิดงาน "${card.title}"`,
+          meta: card as unknown as Prisma.InputJsonValue,
+          clientId: `room-task-${input.taskId}`,
+          ...(replyTo ? { replyToId: replyTo.id } : {}),
+        },
+      });
+      await tx.chatReadState.upsert({
+        where: { channelId_userId: { channelId: input.channelId, userId: input.authorId } },
+        update: { lastReadSeq: created.seq, lastReadAt: created.createdAt },
+        create: { channelId: input.channelId, userId: input.authorId, orgId, lastReadSeq: created.seq, lastReadAt: created.createdAt },
+      });
+      return created;
+    });
+    const [[message], author] = await Promise.all([
+      hydrateMessages(orgId, [row]),
+      prisma.user.findUnique({ where: { id: input.authorId }, select: { name: true } }),
+    ]);
+    await broadcastToChannel(orgId, input.channelId, { type: "chat.message", channelId: input.channelId, message: message!, authorName: author?.name, channelType: access.type });
+    return { posted: true };
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return { posted: false };
+    throw err;
   }
 }
 
