@@ -62,7 +62,12 @@ export function AccessForm({
           {error && <Notice tone="danger">{error}</Notice>}
           {saved && <Notice tone="ok">บันทึกแล้ว — สิทธิ์ส่งไปที่ระบบบุคคลแล้ว · CEO คนอื่นได้แจ้งเตือน</Notice>}
           <div>
-            <button type="button" className={navy} disabled={busy} onClick={() => run(() => saveAccessAction({ editorUserIds: ids, superAdminAccess: superOn }), () => setSaved(true))}>
+            <button type="button" className={navy} disabled={busy} onClick={() => {
+              // เลือกชื่อไว้แต่ลืมกด "+ เพิ่ม" — นับรวมด้วย (8/11/2569 บันทึกไปแบบรายชื่อว่าง ทั้งที่เลือกพี่เซี้ยไว้)
+              const next = pick && !ids.includes(pick) ? [...ids, pick] : ids;
+              if (next !== ids) { setIds(next); setPick(""); }
+              run(() => saveAccessAction({ editorUserIds: next, superAdminAccess: superOn }), () => setSaved(true));
+            }}>
               {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} บันทึกรายชื่อ
             </button>
           </div>
