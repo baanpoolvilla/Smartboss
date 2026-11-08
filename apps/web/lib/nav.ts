@@ -1,3 +1,4 @@
+import { maybeNotifyPendingOvertime } from "@/modules/hr/lib/hr-notify";
 import { cache } from "react";
 import { getSession, loadAuthUser } from "@smartboss/auth";
 import { prisma } from "@smartboss/database";
@@ -42,6 +43,8 @@ export const loadShellNav = cache(async (): Promise<ShellNav | null> => {
 
   const user = await loadAuthUser(session.userId);
   if (!user) return null;
+  // แจ้ง "มี OT รออนุมัติ" — prod ไม่มี cron จึงพ่วงกับการเปิดแอป (ไม่รอผล · บริษัทละไม่เกิน 1 ครั้ง/30 นาที)
+  if (user.orgId) maybeNotifyPendingOvertime(user.orgId);
 
   // โมดูลที่บริษัทของผู้ใช้เปิดใช้งาน (subscription) — platform user (ไม่มี org) = ว่าง
   const enabledCodes = user.orgId

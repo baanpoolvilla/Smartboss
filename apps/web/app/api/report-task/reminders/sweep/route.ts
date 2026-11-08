@@ -2,6 +2,7 @@ import { requireOrg } from "@smartboss/auth";
 
 import { runReminderSweep } from "@/modules/report_task/lib/server/reminder-sweep-run";
 import { claimSweep, releaseSweep } from "@/modules/report_task/lib/server/sweep-throttle";
+import { maybeNotifyPendingOvertime } from "@/modules/hr/lib/hr-notify";
 
 /**
  * แจ้งเตือน "ใกล้ถึงกำหนด" (งาน/ประชุม/รอบส่งรีพอต) — คนละงานกับ
@@ -23,6 +24,7 @@ export async function POST() {
   // ทุกแท็บสั่งทุก 60 วิ — รันจริงไม่เกิน 1 ครั้ง/30 วิ/บริษัท (ดู sweep-throttle.ts)
   if (!claimSweep("reminders", session.orgId)) return Response.json({ ok: true, sent: 0, throttled: true });
   try {
+    maybeNotifyPendingOvertime(session.orgId);
     return Response.json(await runReminderSweep(session.orgId, session.userId));
   } finally {
     releaseSweep("reminders", session.orgId);

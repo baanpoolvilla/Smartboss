@@ -231,10 +231,27 @@ export async function notifyPendingOvertime(): Promise<{ orgs: number; notified:
   const result = { orgs: 0, notified: 0 };
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
   const from = new Date(Date.parse(`${today}T00:00:00Z`) - OT_LOOKBACK_DAYS * 86_400_000).toISOString().slice(0, 10);
-  const type = "hr_overtime_pending";
 
   const orgs = await prisma.organization.findMany({ where: { isActive: true }, select: { id: true } });
   for (const { id: orgId } of orgs) {
+    const n = await notifyPendingOvertimeForOrg(orgId, today, from);
+    if (n > 0) result.orgs++;
+    result.notified += n;
+  }
+  return result;
+}
+
+/**
+ * ตัวเดียวกับข้างบน แต่บริษัทเดียว — เรียกจากงานเตือนตอนมีคนเปิดแอป (reminders sweep) ได้ด้วย
+ * (ผู้ใช้ 8/11/2569 "ทำไมไม่แจ้งเตือน ไม่มีคนกดเลย": prod ไม่มี cron เลย แจ้งเตือนนี้จึงไม่เคยถูกส่ง)
+ * รันซ้ำทั้งวันได้ — คนที่ได้ของวันนี้แล้วไม่แจ้งซ้ำ
+ */
+export async function notifyPendingOvertimeForOrg(orgId: string, todayArg?: string, fromArg?: string): Promise<number> {
+  const today = todayArg ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
+  const from = fromArg ?? new Date(Date.parse(`${today}T00:00:00Z`) - OT_LOOKBACK_DAYS * 86_400_000).toISOString().slice(0, 10);
+  const type = "hr_overtime_pending";
+  let notified = 0;
+  {
     try {
       const [pending, approverIds] = await Promise.all([
         withWorkforceTenant(orgId, (tx) =>
@@ -266,8 +283,7 @@ export async function notifyPendingOvertime(): Promise<{ orgs: number; notified:
       if (stale.length > 0) await prisma.notification.deleteMany({ where: { orgId, id: { in: stale } } });
       const doneToday = new Set(existing.filter((n) => n.referenceId === today).map((n) => n.userId));
 
-      if (pending.length === 0 || approverIds.length === 0) continue;
-      result.orgs++;
+      if (pending.length === 0 || approverIds.length === 0) return 0;
 
       for (const approverId of approverIds) {
         if (doneToday.has(approverId)) continue;
@@ -286,12 +302,26 @@ export async function notifyPendingOvertime(): Promise<{ orgs: number; notified:
           type,
           referenceId: today,
         });
-        result.notified++;
+        notified++;
       }
     } catch (err) {
       // บริษัทที่ยังไม่มีข้อมูลฝั่ง HR — ข้าม
       console.error("[hr-notify] notifyPendingOvertime failed", orgId, err);
     }
   }
-  return result;
+  return notified;
+}
+
+/**
+ * "มี OT รออนุมัติ" เดิมส่งจาก cron อย่างเดียว — prod ไม่มี cron จึงไม่เคยส่ง (ผู้ใช้ 8/11/2569 "ทำไมไม่แจ้งเตือน")
+ * เรียกจากจุดที่มีคนใช้งานแอป (โหลดหน้า shell · งานเตือนทุก 60 วิ) · ตรวจบริษัทละไม่เกิน 1 ครั้ง/30 นาที
+ * ไม่รอผล ไม่ throw — คนที่ได้แจ้งเตือนของวันนี้แล้วไม่ได้ซ้ำ (notifyPendingOvertimeForOrg)
+ */
+const OT_PENDING_EVERY_MS = 30 * 60 * 1000;
+const otPendingLastRun = new Map<string, number>();
+export function maybeNotifyPendingOvertime(orgId: string): void {
+  const now = Date.now();
+  if (now - (otPendingLastRun.get(orgId) ?? 0) < OT_PENDING_EVERY_MS) return;
+  otPendingLastRun.set(orgId, now);
+  void notifyPendingOvertimeForOrg(orgId).catch((err: unknown) => console.error("[hr-notify] OT pending (in-app) failed", err));
 }
