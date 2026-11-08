@@ -161,6 +161,17 @@ export function RoomInfo({
   // Keep Memo = ห้องของคนเดียว ไม่มีแท็บสมาชิก/ปุ่มเพิ่มคน/ออกจากกลุ่ม (เหมือน DM)
   const isKeep = isKeepChannelId(channel.id);
   const [tab, setTab] = useState<Tab>(channel.type === "dm" || isKeep ? "media" : "members");
+  // จำนวนโน้ต/อัลบั้มบนหัวแท็บ (ผู้ใช้ 8/11/2569 "อยากให้บอกด้วยมีกี่อัลบั้มกี่โน้ต") — นับใหม่ทุกครั้งที่สลับแท็บ
+  // จะได้ตรงหลังเพิ่ม/ลบในแท็บนั้น · โหลดไม่ได้ = ไม่แสดงตัวเลข (หน้าตาเหมือนเดิม)
+  const [counts, setCounts] = useState<{ notes?: number; albums?: number }>({});
+  useEffect(() => {
+    let cancelled = false;
+    void api.fetchNotes(channel.id).then((r) => !cancelled && setCounts((c) => ({ ...c, notes: r.notes.length }))).catch(() => undefined);
+    void api.fetchAlbums(channel.id).then((r) => !cancelled && setCounts((c) => ({ ...c, albums: r.albums.length }))).catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [channel.id, tab]);
   // กดการ์ดอัลบั้มในแชท → สลับมาแท็บอัลบั้ม (AlbumsTab เปิดอัลบั้มนั้นเอง) — ปรับตอน render ไม่ใช้ effect
   const [seenAlbum, setSeenAlbum] = useState<typeof openAlbum>(null);
   if (openAlbum !== seenAlbum) {
@@ -233,8 +244,9 @@ export function RoomInfo({
 
   const tabs: { id: Tab; label: string }[] = [
     ...(channel.type === "dm" || isKeep ? [] : [{ id: "members" as const, label: `สมาชิก ${members.length}` }]),
-    { id: "note", label: "โน้ต" },
-    { id: "album", label: "อัลบั้ม" },
+    // ฝั่งเซิร์ฟเวอร์ส่งโน้ตมาไม่เกิน 300 (data/notes.ts) — ครบ 300 = "300+"
+    { id: "note", label: counts.notes === undefined ? "โน้ต" : `โน้ต ${counts.notes >= 300 ? "300+" : counts.notes}` },
+    { id: "album", label: counts.albums === undefined ? "อัลบั้ม" : `อัลบั้ม ${counts.albums}` },
     { id: "media", label: "รูป/วิดีโอ" },
     { id: "file", label: "ไฟล์" },
     { id: "link", label: "ลิงก์" },
