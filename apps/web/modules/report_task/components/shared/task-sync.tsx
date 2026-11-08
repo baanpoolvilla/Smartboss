@@ -18,10 +18,11 @@ const TASK_POLL_MS = 5000;
 /** Realtime pipe connected = saves arrive as signals; the poll only backs that up. */
 const REALTIME_FALLBACK_MS = 60_000;
 /**
- * มีหน้ารายละเอียดงานเปิดอยู่ = มีคนกำลังคุยในความคิดเห็น — เช็กของใหม่ทุกรอบ (TASK_POLL_MS) แม้ช่องสดจะบอกว่าต่ออยู่
+ * มีหน้ารายละเอียดงานเปิดอยู่ = มีคนกำลังคุยในความคิดเห็น — เช็กของใหม่ทุก 3 วิ (OPEN_SHEET_POLL_MS) แม้ช่องสดจะบอกว่าต่ออยู่
  * (8/11/2569: บน prod แจ้งเตือนเด้งแต่ความคิดเห็นไม่ขึ้นจนปิดแล้วเปิดใหม่ — ช่องสดเงียบ เหลือแต่รอบสำรอง 60 วิ)
  * เช็กแค่เลขเวอร์ชัน (ไม่กี่สิบไบต์) มีของใหม่ค่อยดึงทั้งชุด
  */
+const OPEN_SHEET_POLL_MS = 3000;
 let openTaskSheets = 0;
 export function markTaskSheetOpen(delta: 1 | -1) {
   openTaskSheets = Math.max(0, openTaskSheets + delta);
@@ -480,13 +481,15 @@ export function TaskSync() {
       if (document.visibilityState === "visible" && canPullNow()) void pullTasks();
     }
     document.addEventListener("visibilitychange", onVisibleForSignal);
+    // ตัวจับเวลาเดินทุกวินาที (ไม่ดึงอะไรถ้ายังไม่ถึงรอบ) — เปิดหน้างานอยู่เช็กทุก 3 วิ · ช่องสดหลุดทุก 5 วิ · ช่องสดต่ออยู่ทุก 60 วิ
+    // (เดิมเดินทุก 5 วิ รอบที่เหลื่อมกันทำให้ช้าได้ 10 วิ — วัดตอนจำลองช่องสดเงียบ 8/11/2569)
     const pollTimer = ENABLE_TASK_POLL
       ? setInterval(() => {
           if (!canPullNow()) return;
-          const fallbackMs = realtimeStatus() === "open" && openTaskSheets === 0 ? REALTIME_FALLBACK_MS : TASK_POLL_MS;
+          const fallbackMs = openTaskSheets > 0 ? OPEN_SHEET_POLL_MS : realtimeStatus() === "open" ? REALTIME_FALLBACK_MS : TASK_POLL_MS;
           if (!signalRef.current && Date.now() - lastPull < fallbackMs) return;
           void pullTasks();
-        }, TASK_POLL_MS)
+        }, 1000)
       : null;
 
     // Write-through: save after changes settle. Skips writes until the
