@@ -21,7 +21,8 @@ export async function GET(req: Request) {
   const month = Number(url.searchParams.get("month")) || now.getMonth() + 1;
   const house = url.searchParams.get("house") || null;
   const data = await loadMonthReceipts(session.orgId, year, month, house);
-  const head = ["วันที่", "ยอด", "จำนวนบ้าน", "บ้าน", "รายการ", "จ่ายให้", "ผู้จ่าย", "วิธีจ่าย", "เลขที่ใบเสร็จ", "ใบงาน", "ไม่มีใบเสร็จ", "ลิงก์รูป"];
+  const head = ["วันที่", "ยอด", "จำนวนบ้าน", "บ้าน", "รายการ", "ค่าอะไร", "จ่ายให้", "บุคคล/บริษัท", "VAT", "หัก ณ ที่จ่าย %", "หัก ณ ที่จ่าย", "ภ.ง.ด.", "โอนจริง", "ผู้จ่าย", "วิธีจ่าย", "เลขที่ใบเสร็จ", "ใบงาน", "ไม่มีใบเสร็จ", "ลิงก์รูป"];
+  const KIND = { goods: "ค่าของ", service: "ค่าแรง/ค่าบริการ" } as Record<string, string>;
   const lines = data.items.map((i) =>
     [
       i.date.toISOString().slice(0, 10),
@@ -29,7 +30,14 @@ export async function GET(req: Request) {
       i.houses,
       i.houseNames.join(", "),
       i.description,
+      i.costKind ? (KIND[i.costKind] ?? "") : "",
       i.payee,
+      i.payeeKind === "company" ? "บริษัท" : i.payeeKind === "person" ? "บุคคล" : "",
+      i.vat ? i.vat.toFixed(2) : "",
+      i.wht ? i.whtPercent : "",
+      i.wht ? i.wht.toFixed(2) : "",
+      i.wht ? (i.payeeKind === "company" ? "ภ.ง.ด.53" : "ภ.ง.ด.3") : "",
+      i.wht ? (i.amount - i.wht).toFixed(2) : "",
       i.payer,
       paymentMethodLabel(i.paymentMethod),
       i.receiptNo,
@@ -40,7 +48,12 @@ export async function GET(req: Request) {
       .map(cell)
       .join(","),
   );
-  return new NextResponse(`﻿${[head.map(cell).join(","), ...lines].join("\r\n")}`, {
+  const foot = [
+    ...(data.tax.vat ? [["VAT ซื้อ (ใบกำกับเต็มรูป)", data.tax.vat.toFixed(2)]] : []),
+    ...(data.tax.wht3 ? [["หัก ณ ที่จ่ายนำส่ง ภ.ง.ด.3", data.tax.wht3.toFixed(2)]] : []),
+    ...(data.tax.wht53 ? [["หัก ณ ที่จ่ายนำส่ง ภ.ง.ด.53", data.tax.wht53.toFixed(2)]] : []),
+  ].map((r) => r.map(cell).join(","));
+  return new NextResponse(`﻿${[head.map(cell).join(","), ...lines, ...(foot.length ? ["", ...foot] : [])].join("\r\n")}`, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="receipts-${year}-${String(month).padStart(2, "0")}.csv"`,

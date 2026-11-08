@@ -10,6 +10,7 @@ import { ExpenseForm } from "@/modules/maintenance/components/expense-form";
 import { AppScaffold } from "@/modules/maintenance/components/app-scaffold";
 import type { ReceiptData } from "@/modules/maintenance/lib/receipt-read";
 import { createExpenseAction, createNoExpenseAction } from "../actions";
+import { loadSettings as loadRequestSettings } from "@/modules/requests/lib/data";
 
 export default async function NewExpensePage({
   searchParams,
@@ -103,7 +104,14 @@ export default async function NewExpensePage({
         returnTo={workOrderId ? returnTo : undefined}
         prefill={prefill}
         expectedExpenses={expectedExpenses}
+        tax={await taxSettings(session.orgId)}
       />
     </AppScaffold>
   );
+}
+
+/** VAT % + อัตราหัก ณ ที่จ่าย จากตั้งค่าเบิกจ่าย & OT — ช่องภาษีของค่าแรง/ค่าบริการ */
+async function taxSettings(orgId: string) {
+  const st = await loadRequestSettings(orgId);
+  return { vatPercent: st.vatPercent, whtRates: st.whtRates.filter((r) => r > 0) };
 }

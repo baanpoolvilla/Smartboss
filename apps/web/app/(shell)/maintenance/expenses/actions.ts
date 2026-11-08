@@ -15,7 +15,8 @@ import {
   deleteExpense,
   getExpense,
 } from "@/modules/maintenance/data/expenses";
-import { updateExpenseBatch } from "@/modules/maintenance/data/expenses";
+import { expenseTaxColumns, updateExpenseBatch, type ExpenseTaxInput } from "@/modules/maintenance/data/expenses";
+import { loadSettings as loadRequestSettings } from "@/modules/requests/lib/data";
 import { logActivity } from "@/modules/maintenance/data/activity";
 import { addWorkOrderComment, findWorkOrderForPmExpense, getWorkOrder } from "@/modules/maintenance/data/work-orders";
 import { getPmSchedule } from "@/modules/maintenance/data/pm";
@@ -173,6 +174,9 @@ async function saveExpense(
       }),
     );
   }
+  if (!isNoExpense && formData.get("costKind") === "service" && amount >= 1000 && !String(formData.get("payee") ?? "").trim()) {
+    return { error: "ค่าแรง/ค่าบริการตั้งแต่ 1,000 บาท ใส่ด้วยว่าจ่ายให้ใคร" };
+  }
   const receiptUrl = newFile ? await putFile(`${s.orgId}/maintenance/receipts`, file) : draftUrl;
   const receiptSha256 = newFile ? createHash("sha256").update(Buffer.from(await file.arrayBuffer())).digest("hex") : draftUrl ? (draft?.receiptSha256 ?? null) : null;
   const receiptAi = isNoExpense ? null : (parseAi(formData.get("receiptAi")) ?? (draftUrl ? ((draft?.ai ?? null) as Prisma.InputJsonValue | null) : null));
@@ -197,6 +201,7 @@ async function saveExpense(
     paidBy: d.paidBy,
     isNoExpense,
     createdBy: s.userId,
+    ...(isNoExpense ? {} : await taxFields(formData, s.orgId)),
   }, split ?? undefined);
   // คำขอซ้ำ — รูปใบเสร็จที่เพิ่งอัปโหลดมากับคำขอนี้ไม่มีรายการไหนใช้
   if (!saved && newFile && receiptUrl) await deleteFiles([receiptUrl]).catch(() => 0);
@@ -247,6 +252,22 @@ function receiptFields(formData: FormData) {
   };
 }
 
+/**
+ * ค่าของ / ค่าแรง-ค่าบริการ + ภาษี (ผู้ใช้ 8/11/2569) — ฟอร์มไม่ส่ง costKind = แบบเดิม (ไม่แตะคอลัมน์ภาษี)
+ * VAT % ตามตั้งค่าเบิกจ่าย & OT (ที่เดียวกับเงินสดย่อย/ใบค่าช่าง) · หัก ณ ที่จ่ายคิดจากยอดก่อน VAT
+ */
+async function taxFields(formData: FormData, orgId: string): Promise<{ costKind?: "goods" | "service"; payeeKind?: "person" | "company" | null; tax?: ExpenseTaxInput | null }> {
+  const kind = String(formData.get("costKind") ?? "");
+  if (kind !== "goods" && kind !== "service") return {};
+  if (kind === "goods") return { costKind: "goods", payeeKind: null, tax: null };
+  const pk = String(formData.get("payeeKind") ?? "");
+  const vatIncluded = formData.get("vatIncluded") === "1";
+  const wht = Number(formData.get("whtPercent") ?? 0);
+  const whtPercent = Number.isFinite(wht) && wht > 0 && wht <= 15 ? Math.round(wht * 100) / 100 : 0;
+  const vatPercent = vatIncluded ? (await loadRequestSettings(orgId)).vatPercent : 0;
+  return { costKind: "service", payeeKind: pk === "person" || pk === "company" ? pk : null, tax: vatIncluded || whtPercent ? { vatIncluded, vatPercent, whtPercent } : null };
+}
+
 /** วันที่ลงบัญชี (คอลัมน์วันล้วน เวลาไทย): วันบนใบเสร็จ → วันปิดงาน → วันนี้ */
 function monthDate(paidAt: Date | null, completedAt: Date | null): Date {
   const d = paidAt ?? completedAt ?? new Date();
@@ -294,6 +315,12 @@ export async function updateExpenseAction(_prev: ExpenseFormState, formData: For
     ...(receipt.noReceipt ? { receiptSha256: null } : {}),
     // แก้วันบนใบเสร็จ = ย้ายเดือนตาม · ไม่มีวันเดิมไว้
     ...(tracked && receipt.paidAt ? { expenseDate: monthDate(receipt.paidAt, null) } : {}),
+    ...(await (async () => {
+      const t = await taxFields(formData, s.orgId);
+      if (!t.costKind) return {};
+      const c = expenseTaxColumns(amount, t.costKind, t.payeeKind, t.tax) as { vatAmount?: number | null; whtPercent?: number | null; whtAmount?: number | null };
+      return { costKind: t.costKind, payeeKind: t.payeeKind ?? null, vatAmount: c.vatAmount ?? null, whtPercent: c.whtPercent ?? null, whtAmount: c.whtAmount ?? null };
+    })()),
   });
   const wo = before.workOrderId ? await getWorkOrder(s.orgId, before.workOrderId) : null;
   const was = Number(before.amount);

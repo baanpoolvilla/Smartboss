@@ -8,6 +8,7 @@ import { expenseHasSource } from "@/modules/maintenance/data/expense-tracking";
 import { ExpenseForm } from "@/modules/maintenance/components/expense-form";
 import { AppScaffold } from "@/modules/maintenance/components/app-scaffold";
 import { createNoExpenseAction, updateExpenseAction } from "../../actions";
+import { loadSettings as loadRequestSettings } from "@/modules/requests/lib/data";
 
 /** YYYY-MM-DDTHH:mm เวลาไทย — ค่าของ input datetime-local */
 const toLocalInput = (d: Date | null) => (d ? new Date(d.getTime() + 7 * 3600e3).toISOString().slice(0, 16) : "");
@@ -23,6 +24,7 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
   if (expenseHasSource(e)) redirect(wo ? `/maintenance/work-orders/${wo.id}` : "/maintenance/expenses");
   const house = wo ? await getProperty(session.orgId, wo.propertyId) : null;
   const returnTo = wo ? `/maintenance/work-orders/${wo.id}` : "/maintenance/expenses";
+  const reqSettings = await loadRequestSettings(session.orgId);
 
   return (
     <AppScaffold title="แก้ไขค่าใช้จ่าย" width="max-w-none" backHref={returnTo}>
@@ -45,7 +47,12 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
           paidAt: toLocalInput(e.paidAt),
           paymentMethod: e.paymentMethod ?? "",
           noReceipt: e.noReceipt,
+          costKind: e.costKind === "goods" || e.costKind === "service" ? e.costKind : null,
+          payeeKind: e.payeeKind === "person" || e.payeeKind === "company" ? e.payeeKind : null,
+          vatIncluded: Number(e.vatAmount ?? 0) > 0,
+          whtPercent: e.whtPercent === null ? null : Number(e.whtPercent),
         }}
+        tax={{ vatPercent: reqSettings.vatPercent, whtRates: reqSettings.whtRates.filter((r) => r > 0) }}
       />
     </AppScaffold>
   );

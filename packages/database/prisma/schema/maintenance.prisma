@@ -242,6 +242,14 @@ model Expense {
   costType          String   @default("work_order") @map("cost_type") // work_order|pm
   paidBy            String   @default("company") @map("paid_by") // company|owner
   isNoExpense       Boolean  @default(false) @map("is_no_expense")
+  /// ค่าของ (goods) หรือ ค่าแรง/ค่าบริการ (service) — null = รายการเดิม/ไม่ได้ระบุ (ผู้ใช้ 8/11/2569)
+  costKind          String?  @map("cost_kind")
+  /// ภาษีในบิล (ถ้ามี) · amount = ยอดเต็มตามบิล · โอนจริง = amount − whtAmount
+  vatAmount         Decimal? @map("vat_amount") @db.Decimal(12, 2)
+  whtPercent        Decimal? @map("wht_percent") @db.Decimal(5, 2)
+  whtAmount         Decimal? @map("wht_amount") @db.Decimal(12, 2)
+  /// person = ภ.ง.ด.3 · company = ภ.ง.ด.53
+  payeeKind         String?  @map("payee_kind")
   expenseDate       DateTime @default(now()) @map("expense_date") @db.Date
   createdBy         String?  @map("created_by")
   createdAt         DateTime @default(now()) @map("created_at")

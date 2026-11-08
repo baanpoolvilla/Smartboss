@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma, type Prisma } from "@smartboss/database";
+import { pettyTax } from "@/modules/requests/lib/types";
 
 export interface ExpenseFilters {
   workOrderId?: string;
@@ -63,6 +64,24 @@ export interface ExpenseInput {
   isNoExpense?: boolean;
   expenseDate?: Date;
   createdBy?: string | null;
+  /** ค่าของ / ค่าแรง-ค่าบริการ + ภาษี (ผู้ใช้ 8/11/2569) — ไม่ส่ง = แบบเดิม */
+  costKind?: "goods" | "service" | null;
+  payeeKind?: "person" | "company" | null;
+  tax?: ExpenseTaxInput | null;
+}
+
+export interface ExpenseTaxInput {
+  vatIncluded: boolean;
+  vatPercent: number;
+  whtPercent: number;
+}
+
+/** ภาษีของแถวนี้จากยอดเต็มตามบิล — แถวแยกบ้านคิดจากยอดของบ้านนั้น */
+export function expenseTaxColumns(amount: number, costKind: "goods" | "service" | null | undefined, payeeKind: "person" | "company" | null | undefined, tax: ExpenseTaxInput | null | undefined) {
+  if (!costKind) return {};
+  if (!tax || (!tax.vatIncluded && !tax.whtPercent)) return { costKind, payeeKind: payeeKind ?? null, vatAmount: null, whtPercent: null, whtAmount: null };
+  const t = pettyTax(amount, tax.vatIncluded, tax.whtPercent, tax.vatPercent);
+  return { costKind, payeeKind: payeeKind ?? null, vatAmount: t.vat || null, whtPercent: t.wht ? t.whtPercent : null, whtAmount: t.wht || null };
 }
 
 export function createExpense(orgId: string, data: ExpenseInput) {
@@ -90,6 +109,7 @@ export function createExpense(orgId: string, data: ExpenseInput) {
       isNoExpense: data.isNoExpense ?? false,
       expenseDate: data.expenseDate ?? new Date(),
       createdBy: data.createdBy ?? null,
+      ...expenseTaxColumns(data.amount, data.costKind, data.payeeKind, data.tax),
     },
   });
 }
@@ -151,6 +171,7 @@ export async function createExpensesForProperties(
           isNoExpense: base.isNoExpense ?? false,
           expenseDate: base.expenseDate ?? new Date(),
           createdBy: base.createdBy ?? null,
+          ...expenseTaxColumns(split?.get(pid ?? "")?.amount ?? base.amount, base.costKind, base.payeeKind, base.tax),
         },
       });
     }
@@ -179,6 +200,11 @@ export async function updateExpenseBatch(
     receiptSha256?: string | null;
     receiptAi?: Prisma.InputJsonValue;
     expenseDate?: Date;
+    costKind?: "goods" | "service" | null;
+    payeeKind?: "person" | "company" | null;
+    vatAmount?: number | null;
+    whtPercent?: number | null;
+    whtAmount?: number | null;
   },
 ): Promise<void> {
   const row = await prisma.expense.findFirst({ where: { orgId, id } });

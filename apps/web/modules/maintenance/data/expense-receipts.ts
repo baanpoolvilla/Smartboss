@@ -41,6 +41,12 @@ export async function loadMonthReceipts(orgId: string, year: number, month: numb
       fromRequest: !!e.receiptUrl?.includes("/requests/"),
       workOrder: e.workOrderId ? (woById.get(e.workOrderId) ?? null) : null,
       purchaseOrderId: e.purchaseOrderId,
+      // ค่าของ / ค่าแรง-ค่าบริการ + ภาษี (ผู้ใช้ 8/11/2569) — ใบหลายบ้านรวมทุกแถวของชุด
+      costKind: e.costKind,
+      payeeKind: e.payeeKind,
+      whtPercent: e.whtPercent === null ? null : Number(e.whtPercent),
+      vat: batch.reduce((n, r) => n + Number(r.vatAmount ?? 0), 0),
+      wht: batch.reduce((n, r) => n + Number(r.whtAmount ?? 0), 0),
     }))
     .sort((a, b) => b.date.getTime() - a.date.getTime());
 
@@ -51,6 +57,11 @@ export async function loadMonthReceipts(orgId: string, year: number, month: numb
     realTotal: items.reduce((n, i) => n + i.amount, 0),
     houseTotal: rows.reduce((n, e) => n + Number(e.amount), 0),
     withReceipt: items.filter((i) => !!i.receiptUrl).length,
+    tax: {
+      vat: items.reduce((n, i) => n + i.vat, 0),
+      wht3: items.filter((i) => i.payeeKind !== "company").reduce((n, i) => n + i.wht, 0),
+      wht53: items.filter((i) => i.payeeKind === "company").reduce((n, i) => n + i.wht, 0),
+    },
     without: items.filter((i) => !i.receiptUrl).length,
   };
 }

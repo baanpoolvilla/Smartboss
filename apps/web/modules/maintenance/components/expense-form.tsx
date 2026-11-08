@@ -7,6 +7,7 @@ import { Info, Loader2, Receipt, MinusCircle, Sparkles } from "lucide-react";
 import { PAYMENT_METHODS, paymentMethodLabel, receiptDateWarning, receiptHasData, type ReceiptData } from "@/modules/maintenance/lib/receipt-read";
 import type { ExpenseFormState } from "@/app/(shell)/maintenance/expenses/actions";
 import { Card } from "@smartboss/ui/components/card";
+import { pettyTax } from "@/modules/requests/lib/types";
 import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 
 const inputClass =
@@ -35,7 +36,10 @@ export function ExpenseForm({
   edit,
   prefill,
   expectedExpenses,
+  tax = { vatPercent: 7, whtRates: [1, 2, 3, 5] },
 }: {
+  /** VAT % + อัตราหัก ณ ที่จ่าย จากตั้งค่าเบิกจ่าย & OT (ที่เดียวกับเงินสดย่อย) */
+  tax?: { vatPercent: number; whtRates: number[] };
   saveAction: ExpenseAction;
   noExpenseAction: ExpenseAction;
   workOrders: WoOption[];
@@ -57,6 +61,11 @@ export function ExpenseForm({
     paidAt: string;
     paymentMethod: string;
     noReceipt: boolean;
+    /** ค่าของ / ค่าแรง-ค่าบริการ + ภาษี — ไม่มี = รายการเดิม */
+    costKind?: "goods" | "service" | null;
+    payeeKind?: "person" | "company" | null;
+    vatIncluded?: boolean;
+    whtPercent?: number | null;
   };
   /** จำนวนรายการของใบนี้ตอนเปิดฟอร์ม — กันบันทึกชนกับคนอื่น */
   expectedExpenses?: number;
@@ -90,6 +99,13 @@ export function ExpenseForm({
   const [paidAt, setPaidAt] = useState(init?.paidAt ?? "");
   const [paymentMethod, setPaymentMethod] = useState(init?.paymentMethod ?? "");
   const [noReceipt, setNoReceipt] = useState(init?.noReceipt ?? false);
+  // ค่าอะไร (ผู้ใช้ 8/11/2569): ค่าของ = จบ · ค่าแรง/ค่าบริการ = ถามจ่ายให้ใคร + ภาษีถ้าถึง 1,000
+  const [costKind, setCostKind] = useState<"" | "goods" | "service">(edit?.costKind ?? "");
+  const [payeeKind, setPayeeKind] = useState<"" | "person" | "company">(edit?.payeeKind ?? "");
+  const [vatIncluded, setVatIncluded] = useState(edit?.vatIncluded ?? false);
+  // null = ยังไม่ได้แตะ → ตั้งแต่ 1,000 เลือก 3% ไว้ให้ (หรืออัตราแรกที่ตั้งไว้) · "other" = พิมพ์เอง
+  const [whtChoice, setWhtChoice] = useState<string | null>(edit?.costKind === "service" ? String(edit.whtPercent ?? 0) : null);
+  const [whtCustom, setWhtCustom] = useState("");
   const [warnings, setWarnings] = useState<string[]>([]);
   const [aiRead, setAiRead] = useState<ReceiptData | null>(null);
   const dateWarning = receiptDateWarning(paidAt || null);
@@ -145,6 +161,18 @@ export function ExpenseForm({
   const splitHouses = !edit ? workOrders.find((w) => w.id === woId)?.houses : undefined;
   const asNumber = (v: string) => Number(v.replace(/[\s,฿]/g, "")) || 0;
   const splitSum = (splitHouses ?? []).reduce((n, h) => n + asNumber(houseAmounts[h.id] ?? ""), 0);
+  const amt = asNumber(amount);
+  const service = costKind === "service";
+  const bigService = service && amt >= 1000;
+  const defaultWht = tax.whtRates.includes(3) ? 3 : (tax.whtRates[0] ?? 0);
+  const whtShown = whtChoice ?? (bigService ? String(defaultWht) : "0");
+  const whtPercent = !bigService ? 0 : whtShown === "other" ? Math.min(15, Math.max(0, asNumber(whtCustom))) : Number(whtShown);
+  const taxCalc = bigService && amt > 0 ? pettyTax(amt, vatIncluded, whtPercent, tax.vatPercent) : null;
+  const payeeInput = (
+    <input name="payee" value={payee} onChange={(e) => setPayee(e.target.value)} maxLength={200} className={inputClass} required={bigService} placeholder={service ? "เช่น ช่างสมชาย / บจก. แอร์เย็น" : undefined} />
+  );
+  const chip = (on: boolean) =>
+    `inline-flex min-h-10 cursor-pointer items-center justify-center rounded-full border px-4 text-sm ${on ? "border-(--brand-navy,#1b2537) bg-(--brand-navy,#1b2537) font-semibold text-white" : "border-(--line) text-(--ink)"}`;
 
   return (
     <Card className="p-5">
@@ -329,6 +357,70 @@ export function ExpenseForm({
           <input name="amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} />
         </label>
 
+        <fieldset className="flex flex-col gap-2" data-testid="cost-kind">
+          <legend className="mb-1.5 text-sm font-medium text-(--ink)">ค่าอะไร *</legend>
+          <div className="grid grid-cols-2 gap-2">
+            {([
+              ["goods", "ค่าของ / อุปกรณ์", "วัสดุ อะไหล่ ของใช้"],
+              ["service", "ค่าแรง / ค่าบริการ", "จ้างช่าง ล้างแอร์ ขนส่ง"],
+            ] as const).map(([k, title, sub]) => (
+              <label key={k} className={`flex cursor-pointer flex-col rounded-(--radius) border px-3 py-2.5 ${costKind === k ? "border-2 border-[#0F766E] bg-[#F0FDFA]" : "border-(--line)"}`}>
+                <input type="radio" name="costKind" value={k} required className="sr-only" checked={costKind === k} onChange={() => setCostKind(k)} />
+                <span className="text-sm font-semibold text-(--ink)">{costKind === k ? "✓ " : ""}{title}</span>
+                <span className="text-xs text-(--ink-soft)">{sub}</span>
+              </label>
+            ))}
+          </div>
+          {service && (
+            <div className="flex flex-col gap-3 rounded-(--radius) border border-(--line) p-3">
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium text-(--ink)">จ่ายให้ใคร {bigService && "*"}</span>
+                {payeeInput}
+              </label>
+              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="ผู้รับเงินเป็น">
+                {([["person", "บุคคล"], ["company", "บริษัท / ห้างร้าน"]] as const).map(([k, label]) => (
+                  <label key={k} className={chip(payeeKind === k)}>
+                    <input type="radio" className="sr-only" checked={payeeKind === k} onChange={() => setPayeeKind(k)} />
+                    {label}
+                  </label>
+                ))}
+              </div>
+              {bigService && (
+                <div className="flex flex-col gap-2 border-t border-(--line) pt-3">
+                  <p className="text-xs text-(--ink-soft)">ค่าบริการตั้งแต่ 1,000 บาท ปกติต้องหัก ณ ที่จ่าย — เลือกไว้ให้แล้ว ไม่ใช่ก็กด “ไม่หัก”</p>
+                  <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="หัก ณ ที่จ่าย">
+                    {[{ v: "0", t: "ไม่หัก" }, ...tax.whtRates.map((r) => ({ v: String(r), t: `${r}%` })), { v: "other", t: "อื่น ๆ" }].map((o) => (
+                      <label key={o.v} className={chip(whtShown === o.v)}>
+                        <input type="radio" className="sr-only" checked={whtShown === o.v} onChange={() => setWhtChoice(o.v)} />
+                        {o.t}
+                      </label>
+                    ))}
+                  </div>
+                  {whtShown === "other" && (
+                    <label className="flex items-center gap-2 text-sm">
+                      หัก <input inputMode="decimal" value={whtCustom} onChange={(e) => setWhtCustom(e.target.value)} className={`${inputClass} w-24 text-right`} aria-label="% หัก ณ ที่จ่าย" placeholder="เช่น 1.5" /> %
+                    </label>
+                  )}
+                  <label className="flex items-center gap-2 text-sm text-(--ink)">
+                    <input type="checkbox" className="h-4 w-4" checked={vatIncluded} onChange={(e) => setVatIncluded(e.target.checked)} />
+                    มี VAT {tax.vatPercent}% รวมในยอดแล้ว (ใบกำกับภาษีเต็มรูป)
+                  </label>
+                  {taxCalc && (vatIncluded || whtPercent > 0) && (
+                    <dl className="grid grid-cols-[1fr_auto] gap-x-3 rounded-(--radius) bg-(--bg-soft) px-3 py-2 text-sm tabular-nums">
+                      {vatIncluded && (<><dt className="text-(--ink-soft)">ก่อน VAT</dt><dd className="text-right">฿{taxCalc.base.toLocaleString()}</dd><dt className="text-(--ink-soft)">VAT</dt><dd className="text-right">฿{taxCalc.vat.toLocaleString()}</dd></>)}
+                      {whtPercent > 0 && (<><dt className="text-(--ink-soft)">หัก ณ ที่จ่าย {whtPercent}% (บริษัทนำส่งสรรพากร)</dt><dd className="text-right">−฿{taxCalc.wht.toLocaleString()}</dd></>)}
+                      <dt className="font-semibold text-(--ink)">โอน/จ่ายให้ผู้รับจริง</dt><dd className="text-right font-bold text-(--ink)">฿{taxCalc.paid.toLocaleString()}</dd>
+                    </dl>
+                  )}
+                </div>
+              )}
+              <input type="hidden" name="payeeKind" value={payeeKind} />
+              <input type="hidden" name="vatIncluded" value={bigService && vatIncluded ? "1" : ""} />
+              <input type="hidden" name="whtPercent" value={bigService ? String(whtPercent) : "0"} />
+            </div>
+          )}
+        </fieldset>
+
         {splitHouses && splitHouses.length > 1 && (
           <div className="flex flex-col gap-2 rounded-(--radius) border border-(--line) p-3" data-testid="house-amounts">
             <span className="text-sm font-medium text-(--ink)">ยอดจริงของแต่ละบ้าน *</span>
@@ -359,10 +451,13 @@ export function ExpenseForm({
             <span className="ml-2 text-xs text-(--ink-soft)">{detailSummary || "ร้าน วันเวลา เลขที่ วิธีจ่าย (ไม่บังคับ)"}</span>
           </summary>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-(--ink)">จ่ายให้ใคร (ร้าน/ผู้รับเงิน)</span>
-            <input name="payee" value={payee} onChange={(e) => setPayee(e.target.value)} maxLength={200} className={inputClass} />
-          </label>
+          {/* ค่าแรง/ค่าบริการ: ช่อง "จ่ายให้ใคร" ย้ายไปอยู่ข้างบนให้เห็น (ไม่ซ้ำสองช่อง) */}
+          {!service && (
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-(--ink)">จ่ายให้ใคร (ร้าน/ผู้รับเงิน)</span>
+              {payeeInput}
+            </label>
+          )}
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-(--ink)">ผู้จ่าย/ผู้โอน</span>
             <input name="payer" value={payer} onChange={(e) => setPayer(e.target.value)} maxLength={200} className={inputClass} />
