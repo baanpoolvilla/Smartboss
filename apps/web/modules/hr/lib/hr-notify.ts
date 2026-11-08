@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
-import { notifyUser, notifyActorName } from "@/modules/maintenance/data/notify";
+import { notifyUser, notifyActorName, usersWithPermission } from "@/modules/maintenance/data/notify";
+import { REQ_PERMS } from "@/modules/requests/permissions";
 
 /**
  * แจ้งเตือนผู้มีสิทธิ์อนุมัติ ตอนมีคำขอ HR ใหม่เข้ามา (ลา/แก้เวลาเข้า-ออกงาน)
@@ -271,7 +272,12 @@ export async function notifyPendingOvertimeForOrg(orgId: string, todayArg?: stri
                   AND o.status IN ('FINAL_APPROVED', 'REJECTED')
               )`
         ),
-        resolveApproverUserIds(orgId, "workforce.overtime.approve"),
+        // คนที่อนุมัติ OT ในเบิกจ่าย & OT ได้ (พี่เซี้ย + CEO) และถือสิทธิ์ฝั่ง workforce ด้วย — ผู้ใช้ 8/11/2569
+        Promise.all([
+          resolveApproverUserIds(orgId, "workforce.overtime.approve"),
+          usersWithPermission(orgId, REQ_PERMS.approve),
+          usersWithPermission(orgId, REQ_PERMS.approveCeo),
+        ]).then(([wf, hr, ceo]) => wf.filter((id) => hr.includes(id) || ceo.includes(id))),
       ]);
 
       const existing = await prisma.notification.findMany({

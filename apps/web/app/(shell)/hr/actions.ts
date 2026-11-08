@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { HR_PERMS } from "@/modules/hr/permissions";
+import { REQ_PERMS } from "@/modules/requests/permissions";
 import { canSeeYearlyEntitlements } from "@/modules/hr/lib/yearly-entitlement-access";
 import {
   wfFetch,
@@ -2318,6 +2319,10 @@ export async function rejectAttendanceCorrectionAction(formData: FormData) {
  */
 export async function decideOvertimeAction(formData: FormData) {
   const session = await guard(HR_PERMS.employeeManage);
+  // เฉพาะคนที่อนุมัติ OT ในเบิกจ่าย & OT ได้ (พี่เซี้ย + CEO) — ผู้ใช้ 8/11/2569
+  if (!hasPermission(session, REQ_PERMS.approve) && !hasPermission(session, REQ_PERMS.approveCeo)) {
+    throw new Error("อนุมัติ OT ได้เฉพาะ HR / CEO ที่อนุมัติ OT ในเบิกจ่าย & OT");
+  }
 
   const employmentId = String(formData.get("employment_id") ?? "");
   const workDate = String(formData.get("work_date") ?? "");

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { requireOrg } from "@smartboss/auth";
+import { hasPermission, requireOrg } from "@smartboss/auth";
+import { REQ_PERMS } from "@/modules/requests/permissions";
 import { withRequestsTenant } from "@/modules/requests/lib/db";
 import {
   wfTry,
@@ -94,7 +95,11 @@ export async function renderOvertimeTab(): Promise<React.ReactNode> {
   const decidedKeys = new Set(decided.map((r) => `${r.employment_id}|${r.work_date}`));
   // ใบ OT ในเบิกจ่าย & OT ที่สร้างให้เองตอนอนุมัติ — โชว์เลขใบให้กดไปดูยอดเงิน/สถานะ
   const approvedIds = decided.filter((r) => r.status === "FINAL_APPROVED").map((r) => r.id);
-  const { orgId } = await requireOrg();
+  const session = await requireOrg();
+  const { orgId } = session;
+  // อนุมัติ OT จากเวลาสแกนได้เฉพาะคนที่อนุมัติ OT ในเบิกจ่าย & OT ได้ (พี่เซี้ย + CEO) — ผู้ใช้ 8/11/2569
+  // คนอื่นที่มีสิทธิ์จัดการพนักงานยังเปิดดูได้ แต่ไม่มีปุ่ม
+  const canDecide = hasPermission(session, REQ_PERMS.approve) || hasPermission(session, REQ_PERMS.approveCeo);
   const linked =
     approvedIds.length === 0
       ? []
@@ -155,7 +160,7 @@ export async function renderOvertimeTab(): Promise<React.ReactNode> {
         ) : (
           <div className="space-y-3">
             {pending.map((item) => (
-              <OvertimeCard key={`${item.employmentId}|${item.workDate}`} item={item} />
+              <OvertimeCard key={`${item.employmentId}|${item.workDate}`} item={item} canDecide={canDecide} />
             ))}
           </div>
         )}
