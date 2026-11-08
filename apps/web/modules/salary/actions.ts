@@ -63,10 +63,39 @@ async function guard(need: keyof Pick<SalaryAccess, "canEdit" | "canApprove" | "
  */
 async function guardFor(employmentId: string, need: "canEdit" = "canEdit") {
   const g = await guard(need);
-  if (ownSalaryLocked(g.access, await isOwnEmployment(g.orgId, g.session.userId, employmentId))) {
+  const own = await isOwnEmployment(g.orgId, g.session.userId, employmentId);
+  if (ownSalaryLocked(g.access, own)) {
     throw new Error("แก้ข้อมูลเงินเดือนของตัวเองไม่ได้ — ให้ CEO เป็นคนแก้ให้ (กันการแก้ให้ตัวเอง)");
   }
-  return g;
+  return { ...g, selfEdit: own && !g.access.isCeo };
+}
+
+/**
+ * คนทำเงินเดือน (ไม่ใช่ CEO) แก้ของตัวเอง → บันทึก "self_edit" + แจ้ง CEO ทันที (ผู้ใช้ 8/11/2569 ข้อ 4)
+ * หน้า CEO อนุมัติขึ้นป้าย "แก้โดยเจ้าตัว" และรอบนั้นอนุมัติอัตโนมัติไม่ได้ (lib/run.ts selfEditsForRun)
+ * ไม่ใส่ยอดเงินในแจ้งเตือน (ขึ้นบนหน้าจอล็อกได้) — ดูยอดในหน้าเว็บ
+ */
+async function noteSelfEdit(
+  g: { selfEdit: boolean; orgId: string; actor: { userId: string; name: string }; session: { userId: string } },
+  employmentId: string,
+  what: string,
+  runId?: string,
+) {
+  if (!g.selfEdit) return;
+  await withSalaryTenant(g.orgId, (tx) =>
+    insertEvent(tx, g.orgId, { runId: runId ?? null, byUserId: g.actor.userId, byName: g.actor.name, action: "self_edit", summary: `แก้ของตัวเอง: ${what}`, detail: { employmentId } }),
+  );
+  try {
+    const ceos = await prisma.user.findMany({ where: { orgId: g.orgId, isActive: true, roles: { some: { role: { code: "CEO" } } } }, select: { id: true } });
+    await notifyUsers(g.orgId, ceos.map((u) => u.id).filter((id) => id !== g.session.userId), {
+      title: "คนทำเงินเดือนแก้ข้อมูลเงินเดือนของตัวเอง",
+      body: `${g.actor.name}: ${what.replace(/-?\d[\d,]*\.\d{2}/g, "•••")} — ตรวจก่อนอนุมัติรอบเงินเดือน`,
+      type: runId ? "salary_run" : "salary_self_edit",
+      ...(runId ? { referenceId: runId } : {}),
+    });
+  } catch (error) {
+    console.error("[salary] self-edit notify failed", error);
+  }
 }
 
 function fail(error: unknown): { error: string } {
@@ -335,7 +364,8 @@ export interface ProfileInput {
 
 export async function saveProfileAction(input: ProfileInput): Promise<Result<{ notes: string[] }>> {
   try {
-    const { orgId, actor } = await guardFor(input.employmentId);
+    const g = await guardFor(input.employmentId);
+    const { orgId, actor } = g;
     if (!input.employmentId) return { error: "ไม่พบพนักงาน" };
     if (input.payChannel !== "transfer" && input.payChannel !== "cash") return { error: "ช่องทางรับเงินไม่ถูกต้อง" };
     const account = text(input.bankAccount, 30).replace(/\D/g, "");
@@ -379,6 +409,7 @@ export async function saveProfileAction(input: ProfileInput): Promise<Result<{ n
       await tx.salaryProfile.upsert({ where: { orgId_employmentId: { orgId, employmentId: input.employmentId } }, create: { orgId, employmentId: input.employmentId, ...data }, update: data });
       await insertEvent(tx, orgId, { byUserId: actor.userId, byName: actor.name, action: "employee", summary: `แก้ข้อมูลเงินเดือนรายคน (${input.employmentId.slice(0, 8)})` });
     });
+    await noteSelfEdit(g, input.employmentId, "แก้ข้อมูลเงินเดือน (บัญชีรับเงิน/ภาษี/ประกันสังคม/ลดหย่อน)");
     refresh();
     return { ok: true, notes };
   } catch (error) {
@@ -389,7 +420,8 @@ export async function saveProfileAction(input: ProfileInput): Promise<Result<{ n
 /** ตั้ง/ขึ้นเงินเดือน — เก็บที่ระบบบุคคลแบบมีวันมีผล (ประวัติเดิมยังอยู่) */
 export async function setSalaryAction(input: { employmentId: string; amount: number; effectiveFrom: string; reason: string }): Promise<Result> {
   try {
-    const { orgId, actor } = await guardFor(input.employmentId);
+    const g = await guardFor(input.employmentId);
+    const { orgId, actor } = g;
     const amount = money(input.amount, "เงินเดือน", 10_000_000);
     if (amount <= 0) return { error: "ใส่เงินเดือน" };
     if (!DATE_RE.test(input.effectiveFrom)) return { error: "วันที่มีผลไม่ถูกต้อง" };
@@ -416,6 +448,7 @@ export async function setSalaryAction(input: { employmentId: string; amount: num
     await withSalaryTenant(orgId, (tx) =>
       insertEvent(tx, orgId, { byUserId: actor.userId, byName: actor.name, action: "employee", summary: `ตั้งเงินเดือน ${fmtBaht(amount)} มีผล ${input.effectiveFrom}${reason ? ` · ${reason}` : ""} (${input.employmentId.slice(0, 8)})` }),
     );
+    await noteSelfEdit(g, input.employmentId, `ตั้งเงินเดือน ${fmtBaht(Number(input.amount))} มีผล ${input.effectiveFrom}`);
     refresh();
     return { ok: true };
   } catch (error) {
@@ -425,7 +458,8 @@ export async function setSalaryAction(input: { employmentId: string; amount: num
 
 export async function addRecurringAction(input: { employmentId: string; itemId: string; amount: number; fromPeriod: string; toPeriod: string | null; note: string }): Promise<Result> {
   try {
-    const { orgId, actor } = await guardFor(input.employmentId);
+    const g = await guardFor(input.employmentId);
+    const { orgId, actor } = g;
     const amount = money(input.amount, "จำนวนเงิน", 10_000_000);
     if (amount <= 0) return { error: "ใส่จำนวนเงิน" };
     if (!PERIOD_RE.test(input.fromPeriod)) return { error: "งวดเริ่มไม่ถูกต้อง" };
@@ -436,6 +470,7 @@ export async function addRecurringAction(input: { employmentId: string; itemId: 
       await tx.salaryEmployeeItem.create({ data: { orgId, employmentId: input.employmentId, itemId: item.id, amount, fromPeriod: input.fromPeriod, toPeriod: input.toPeriod, note: text(input.note, 200), createdByName: actor.name } });
       await insertEvent(tx, orgId, { byUserId: actor.userId, byName: actor.name, action: "employee", summary: `รายการประจำ "${item.name}" ${fmtBaht(amount)} ตั้งแต่ ${periodLabel(input.fromPeriod)}${input.toPeriod ? ` ถึง ${periodLabel(input.toPeriod)}` : ""}` });
     });
+    await noteSelfEdit(g, input.employmentId, `เพิ่มรายการประจำ ${fmtBaht(Number(input.amount))} ตั้งแต่ ${periodLabel(input.fromPeriod)}`);
     refresh();
     return { ok: true };
   } catch (error) {
@@ -446,13 +481,16 @@ export async function addRecurringAction(input: { employmentId: string; itemId: 
 export async function endRecurringAction(input: { id: string }): Promise<Result> {
   try {
     const { orgId, actor, access, session } = await guard("canEdit");
-    await withSalaryTenant(orgId, async (tx) => {
+    const ended = await withSalaryTenant(orgId, async (tx) => {
       const row = await tx.salaryEmployeeItem.findFirst({ where: { orgId, id: input.id, endedAt: null } });
       if (!row) throw new Error("ไม่พบรายการ (อาจเลิกไปแล้ว)");
-      if (ownSalaryLocked(access, await isOwnEmployment(orgId, session.userId, row.employmentId))) throw new Error("แก้ข้อมูลเงินเดือนของตัวเองไม่ได้ — ให้ CEO เป็นคนแก้ให้");
+      const own = await isOwnEmployment(orgId, session.userId, row.employmentId);
+      if (ownSalaryLocked(access, own)) throw new Error("แก้ข้อมูลเงินเดือนของตัวเองไม่ได้ — ให้ CEO เป็นคนแก้ให้");
       await tx.salaryEmployeeItem.update({ where: { id: row.id }, data: { endedAt: new Date(), endedByName: actor.name } });
       await insertEvent(tx, orgId, { byUserId: actor.userId, byName: actor.name, action: "employee", summary: `เลิกรายการประจำ ${fmtBaht(Number(row.amount))}` });
+      return { own, employmentId: row.employmentId, amount: Number(row.amount) };
     });
+    await noteSelfEdit({ selfEdit: ended.own && !access.isCeo, orgId, actor, session }, ended.employmentId, `เลิกรายการประจำ ${fmtBaht(ended.amount)}`);
     refresh();
     return { ok: true };
   } catch (error) {
@@ -511,7 +549,8 @@ export interface AdjustInput {
 
 export async function addAdjustmentAction(input: AdjustInput): Promise<Result> {
   try {
-    const { orgId, actor } = await guardFor(input.employmentId);
+    const g = await guardFor(input.employmentId);
+    const { orgId, actor } = g;
     const amount = money(input.amount, "จำนวนเงิน", 10_000_000);
     if (amount <= 0) return { error: "ใส่จำนวนเงิน" };
     const reason = text(input.reason, 300);
@@ -559,6 +598,7 @@ export async function addAdjustmentAction(input: AdjustInput): Promise<Result> {
     } else {
       await computeRun(orgId, run.id, actor);
     }
+    await noteSelfEdit(g, input.employmentId, `${input.kind === "earning" ? "เพิ่ม" : "หัก"} "${input.label}" ${fmtBaht(Number(input.amount))} ในรอบเงินเดือน`, input.runId);
     refresh(input.runId);
     return { ok: true };
   } catch (error) {
@@ -568,12 +608,14 @@ export async function addAdjustmentAction(input: AdjustInput): Promise<Result> {
 
 export async function removeAdjustmentAction(input: { runId: string; employmentId: string; expectUpdatedAt: string | null; adjustmentId: string }): Promise<Result> {
   try {
-    const { orgId, actor } = await guardFor(input.employmentId);
+    const g = await guardFor(input.employmentId);
+    const { orgId, actor } = g;
     await editLine(orgId, actor, input, (line) => {
       const gone = line.adjustments.find((a) => a.id === input.adjustmentId);
       if (!gone) throw new Error("ไม่พบรายการ (อาจถูกลบไปแล้ว)");
       return { adjustments: line.adjustments.filter((a) => a.id !== input.adjustmentId), info: line.info, summary: `ลบรายการ "${gone.label}" ${fmtBaht(gone.amount)}` };
     });
+    await noteSelfEdit(g, input.employmentId, "ลบรายการเพิ่ม/หักในรอบเงินเดือน", input.runId);
     refresh(input.runId);
     return { ok: true };
   } catch (error) {
@@ -592,7 +634,8 @@ export async function updateAdjustmentAction(input: {
   amount: number;
 }): Promise<Result> {
   try {
-    const { orgId, actor } = await guardFor(input.employmentId);
+    const g = await guardFor(input.employmentId);
+    const { orgId, actor } = g;
     const amount = money(input.amount, "จำนวนเงิน", 10_000_000);
     if (amount <= 0) return { error: "ใส่จำนวนเงิน (ไม่ใช้แล้วให้กดลบ)" };
     const label = text(input.label, 50);
@@ -613,6 +656,7 @@ export async function updateAdjustmentAction(input: {
         summary: `แก้${old.kind === "earning" ? "รายเพิ่ม" : "รายหัก"} "${old.label}": ${changes.join(" · ") || "ไม่เปลี่ยน"}`,
       };
     });
+    await noteSelfEdit(g, input.employmentId, "แก้รายการเพิ่ม/หักในรอบเงินเดือน", input.runId);
     refresh(input.runId);
     return { ok: true };
   } catch (error) {
@@ -623,7 +667,8 @@ export async function updateAdjustmentAction(input: {
 /** ปรับยอดประกันสังคม/ภาษีงวดนี้เอง (ต้องมีเหตุผล) · amount null = กลับไปใช้ที่ระบบคิด */
 export async function overrideAction(input: { runId: string; employmentId: string; expectUpdatedAt: string | null; which: "sso" | "tax" | "commission" | "diligence"; amount: number | null; reason: string }): Promise<Result> {
   try {
-    const { orgId, actor } = await guardFor(input.employmentId);
+    const g = await guardFor(input.employmentId);
+    const { orgId, actor } = g;
     if (!["sso", "tax", "commission", "diligence"].includes(input.which)) return { error: "รายการไม่ถูกต้อง" };
     const reason = text(input.reason, 300);
     const name = input.which === "sso" ? "ประกันสังคม" : input.which === "tax" ? "ภาษี" : input.which === "commission" ? "ค่าคอม" : "เบี้ยขยัน";
@@ -635,6 +680,7 @@ export async function overrideAction(input: { runId: string; employmentId: strin
       else overrides[input.which] = { amount, reason, byName: actor.name };
       return { adjustments: line.adjustments, info: { ...line.info, overrides }, summary: amount === null ? `${name}กลับไปใช้ที่ระบบคิด` : `ปรับ${name}เป็น ${fmtBaht(amount)} · ${reason}` };
     });
+    await noteSelfEdit(g, input.employmentId, `ปรับยอด${({ sso: "ประกันสังคม", tax: "ภาษี", commission: "ค่าคอม", diligence: "เบี้ยขยัน" } as const)[input.which]}เอง${input.amount !== null ? ` ${fmtBaht(Number(input.amount))}` : " (กลับไปใช้ที่ระบบคิด)"}`, input.runId);
     refresh(input.runId);
     return { ok: true };
   } catch (error) {
@@ -645,13 +691,15 @@ export async function overrideAction(input: { runId: string; employmentId: strin
 /** เลื่อนหักเบิกล่วงหน้าใบนี้ไปงวดหน้า (เช่น ยอดสุทธิไม่พอหัก) / กลับมาหักงวดนี้ */
 export async function deferAdvanceAction(input: { runId: string; employmentId: string; expectUpdatedAt: string | null; requestId: string; defer: boolean }): Promise<Result> {
   try {
-    const { orgId, actor } = await guardFor(input.employmentId);
+    const g = await guardFor(input.employmentId);
+    const { orgId, actor } = g;
     await editLine(orgId, actor, input, (line) => {
       const cur = new Set(line.info.deferAdvances ?? []);
       if (input.defer) cur.add(input.requestId);
       else cur.delete(input.requestId);
       return { adjustments: line.adjustments, info: { ...line.info, deferAdvances: [...cur] }, summary: input.defer ? "เลื่อนหักเบิกล่วงหน้าไปงวดหน้า" : "กลับมาหักเบิกล่วงหน้างวดนี้" };
     });
+    await noteSelfEdit(g, input.employmentId, input.defer ? "เลื่อนหักเงินเบิกล่วงหน้าไปงวดหน้า" : "ยกเลิกการเลื่อนหักเงินเบิกล่วงหน้า", input.runId);
     refresh(input.runId);
     return { ok: true };
   } catch (error) {
@@ -744,10 +792,12 @@ export async function confirmCashAction(input: { runId: string }): Promise<Resul
 
 export async function excludeAction(input: { runId: string; employmentId: string; exclude: boolean; reason: string }): Promise<Result> {
   try {
-    const { orgId, actor } = await guardFor(input.employmentId);
+    const g = await guardFor(input.employmentId);
+    const { orgId, actor } = g;
     const reason = text(input.reason, 300);
     if (input.exclude && !reason) return { error: "ใส่เหตุผลที่ไม่จ่ายงวดนี้" };
     await setExcluded(orgId, actor, input.runId, input.employmentId, input.exclude, reason);
+    await noteSelfEdit(g, input.employmentId, input.exclude ? "เอาตัวเองออกจากรอบเงินเดือน" : "ใส่ตัวเองกลับเข้ารอบเงินเดือน", input.runId);
     refresh(input.runId);
     return { ok: true };
   } catch (error) {

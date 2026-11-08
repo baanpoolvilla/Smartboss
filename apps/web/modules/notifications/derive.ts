@@ -260,6 +260,8 @@ export function maintenanceHrefFor(type: string, referenceId: string | null): st
   if (type === "salary_run" && referenceId) return `/salary/runs/${referenceId}`;
   if (type === "salary_slip" && referenceId) return `/salary/my/${referenceId}`;
   if (type === "salary_access") return "/salary/settings";
+  // คนทำเงินเดือนแก้ข้อมูลรายคนของตัวเอง (ไม่อยู่ในรอบ) → รายชื่อพนักงาน (modules/salary/actions.ts noteSelfEdit)
+  if (type === "salary_self_edit") return "/salary/employees";
   // คำขอแก้คะแนน — คนอนุมัติไปหน้าคิว · ผลการพิจารณาไปหน้าคะแนนของตัวเอง (lib/score-requests.ts)
   if (type === "score_req") return "/hr/penalty-requests";
   if (type === "score_req_decided") return "/hr/my-score";

@@ -6,7 +6,7 @@ import { fillSubjectsByEmail } from "./people";
 import { isNewHire, loadProbationFrom } from "./probation";
 import type { Adjustment, PayLine } from "./compute";
 import { num, readRates, ymd, withSalaryTenant, type Tx } from "./db";
-import { previousPaid, type ExcludedEntry, type LineInfo, type RunTotals } from "./run";
+import { previousPaid, selfEditsForRun, type ExcludedEntry, type LineInfo, type RunTotals } from "./run";
 import { DEFAULT_SSO, bangkokToday, rateOn, type AllowanceEntry, type PayChannel, type RunStatus, type SsoParams, type TaxMode } from "./types";
 
 /** ข้อมูลสำหรับหน้าจอ — อ่านอย่างเดียว ผ่าน RLS ของบริษัทเสมอ */
@@ -143,7 +143,7 @@ export async function loadRun(orgId: string, runId: string): Promise<RunDetail |
 }
 
 export interface ChangeItem {
-  tag: "manual" | "recurring" | "override" | "salary" | "ot" | "new" | "left" | "skipped" | "exempt" | "deferred" | "warning";
+  tag: "self" | "manual" | "recurring" | "override" | "salary" | "ot" | "new" | "left" | "skipped" | "exempt" | "deferred" | "warning";
   who: string;
   detail: string;
   amount: number | null;
@@ -153,12 +153,19 @@ export interface ChangeItem {
 export async function approvalSummary(orgId: string, run: RunDetail): Promise<{ prevPeriod: string | null; prevNet: number | null; changes: ChangeItem[] }> {
   // รายการประจำ/ผ่อนที่เริ่มงวดนี้ — ตั้งจากหน้าพนักงานหรือจาก drawer ก็ต้องให้ CEO เห็น (ไม่ใช่แค่รายการเพิ่มเองงวดเดียว)
   const recRefs = run.lines.flatMap((l) => l.lines.filter((x) => x.source === "recurring" && x.refId).map((x) => x.refId!));
-  const [prev, startedHere] = await withSalaryTenant(orgId, async (tx) => [
+  const [prev, startedHere, selfEdits] = await withSalaryTenant(orgId, async (tx) => [
     await previousPaid(tx, orgId, run.period),
     recRefs.length ? await tx.salaryEmployeeItem.findMany({ where: { orgId, id: { in: recRefs }, fromPeriod: run.period }, select: { id: true, note: true, createdByName: true } }) : [],
+    await selfEditsForRun(tx, orgId, run, run.lines.map((l) => l.employmentId)),
   ] as const);
   const startedBy = new Map(startedHere.map((r) => [r.id, r]));
   const changes: ChangeItem[] = [];
+  // คนทำเงินเดือนแก้ของตัวเอง — ขึ้นบนสุด (ผู้ใช้ 8/11/2569)
+  const nameOfEmp = new Map(run.lines.map((l) => [l.employmentId, l.name]));
+  for (const e of selfEdits) {
+    const when = new Date(e.at).toLocaleString("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    changes.push({ tag: "self", who: nameOfEmp.get(e.employmentId) ?? e.byName, detail: `${e.summary.replace(/^แก้ของตัวเอง: /, "")} · แก้เองเมื่อ ${when} — ตรวจว่าถูกต้องก่อนอนุมัติ`, amount: null });
+  }
   for (const l of run.lines) {
     for (const x of l.lines) {
       const r = x.refId ? startedBy.get(x.refId) : undefined;

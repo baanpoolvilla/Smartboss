@@ -21,6 +21,7 @@ import { loadRequests, withRequestsTenant } from "@/modules/requests/lib/db";
 export const dynamic = "force-dynamic";
 
 const TAG: Record<ChangeItem["tag"], { text: string; cls: string }> = {
+  self: { text: "แก้โดยเจ้าตัว", cls: "bg-yellow-300 text-yellow-950" },
   manual: { text: "HR เพิ่ม/หักเอง", cls: "bg-sky-100 text-sky-900" },
   recurring: { text: "รายการใหม่ (ประจำ/ผ่อน)", cls: "bg-sky-100 text-sky-900" },
   override: { text: "ปรับยอดเอง", cls: "bg-amber-100 text-amber-900" },
@@ -322,6 +323,11 @@ export default async function RunPage({ params, searchParams }: { params: Promis
                 </ul>
               )}
             </div>
+            {summary.changes.some((c) => c.tag === "self") && (
+              <div className="rounded-(--radius) border-2 border-yellow-400 bg-yellow-50 px-3 py-2 text-sm text-yellow-950">
+                <strong>มีคนทำเงินเดือนแก้ข้อมูลเงินเดือนของตัวเองในรอบนี้</strong> — ดูรายการ “แก้โดยเจ้าตัว” ด้านบน แล้วกดชื่อคนนั้นในตารางเพื่อตรวจยอดก่อนอนุมัติ
+              </div>
+            )}
             <p className={hint}>กดชื่อในตารางด้านล่างเพื่อดูว่าแต่ละคนได้อะไร หักอะไร คิดยังไง</p>
             <div data-tour="approve"><ApproveBar runId={run.id} net={t.net} canApprove={access.canApprove} approved={false} /></div>
           </section>

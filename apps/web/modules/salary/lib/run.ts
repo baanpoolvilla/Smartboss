@@ -319,6 +319,35 @@ export async function previousPaid(tx: Tx, orgId: string, beforePeriod: string):
 }
 
 /** ส่งอนุมัติ — ตามโหมดที่บริษัทตั้ง (CEO ทุกงวด / CEO เมื่อเปลี่ยนมาก / HR อนุมัติเอง) */
+/**
+ * คนทำเงินเดือน (ไม่ใช่ CEO) แก้ข้อมูลเงินเดือนของตัวเอง — บันทึกเป็น event action "self_edit" (actions.ts noteSelfEdit)
+ * นับเฉพาะที่เกิดหลังรอบก่อนหน้าได้อนุมัติ (CEO เห็นไปแล้ว) และเป็นของคนที่อยู่ในรอบนี้
+ * ผู้ใช้ 8/11/2569: แก้ของตัวเองได้ แต่ต้องมีป้าย "แก้โดยเจ้าตัว" ให้ CEO เห็น + รอบนั้นต้องให้ CEO อนุมัติ
+ */
+export async function selfEditsForRun(
+  tx: Tx,
+  orgId: string,
+  run: { id: string; period: string },
+  employmentIds: string[],
+): Promise<{ employmentId: string; byName: string; at: string; summary: string }[]> {
+  if (employmentIds.length === 0) return [];
+  const prev = await tx.salaryRun.findFirst({
+    where: { orgId, period: { lt: run.period }, approvedAt: { not: null } },
+    orderBy: { period: "desc" },
+    select: { approvedAt: true },
+  });
+  const rows = await tx.salaryEvent.findMany({
+    where: { orgId, action: "self_edit", ...(prev?.approvedAt ? { at: { gt: prev.approvedAt } } : {}) },
+    orderBy: { at: "asc" },
+    select: { at: true, byName: true, summary: true, detail: true, runId: true },
+  });
+  const want = new Set(employmentIds);
+  return rows
+    .map((r) => ({ r, emp: String((r.detail as { employmentId?: string } | null)?.employmentId ?? "") }))
+    .filter(({ r, emp }) => want.has(emp) && (!r.runId || r.runId === run.id))
+    .map(({ r, emp }) => ({ employmentId: emp, byName: r.byName, at: r.at.toISOString(), summary: r.summary }));
+}
+
 export async function submitRun(orgId: string, actor: Actor, runId: string): Promise<{ status: RunStatus; auto: boolean }> {
   return withSalaryTenant(orgId, async (tx) => {
     const run = await lockRun(tx, orgId, runId);
@@ -340,6 +369,9 @@ export async function submitRun(orgId: string, actor: Actor, runId: string): Pro
       const changePct = prev.net ? (Math.abs(totals.net - prev.net) / prev.net) * 100 : 100;
       auto = !manual && prev.net !== null && changePct <= settings.changeThreshold;
     }
+    // มีคนทำเงินเดือนแก้ของตัวเองในรอบนี้ → ต้องให้ CEO อนุมัติเสมอ ไม่ว่าตั้งค่าไว้แบบไหน
+    const selfEdits = await selfEditsForRun(tx, orgId, run, lines.map((l) => l.employmentId));
+    if (selfEdits.length > 0) auto = false;
     const now = new Date();
     await tx.salaryRun.update({
       where: { id: runId },
@@ -354,7 +386,7 @@ export async function submitRun(orgId: string, actor: Actor, runId: string): Pro
           : {}),
       },
     });
-    await insertEvent(tx, orgId, { runId, byUserId: actor.userId, byName: actor.name, action: "submit", summary: auto ? "ส่งแล้ว · อนุมัติตามตั้งค่าบริษัท" : "ส่งให้ CEO อนุมัติ" });
+    await insertEvent(tx, orgId, { runId, byUserId: actor.userId, byName: actor.name, action: "submit", summary: auto ? "ส่งแล้ว · อนุมัติตามตั้งค่าบริษัท" : selfEdits.length > 0 ? "ส่งให้ CEO อนุมัติ (มีรายการที่คนทำเงินเดือนแก้ของตัวเอง)" : "ส่งให้ CEO อนุมัติ" });
     return { status: auto ? "approved" : "submitted", auto };
   });
 }
