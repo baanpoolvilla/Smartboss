@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { requireOrg } from "@smartboss/auth";
+import { requireOrg, hasPermission } from "@smartboss/auth";
+import { HR_PERMS } from "@/modules/hr/permissions";
 import { loadDayOffOverrides, overrideDaysFor } from "@/lib/day-off-quota";
 import { Button } from "@smartboss/ui/components/button";
 import { currentMonth, todayIso } from "@/modules/hr/lib/date";
@@ -152,7 +153,8 @@ export async function renderCalendarTab(
   const nameOf = new Map(
     (employments?.items ?? []).map((e) => [e.id, e.display_name || e.full_name]),
   );
-  const canApprove = me.permissions.includes("workforce.leave.approve");
+  // ต้องมีทั้งบทบาทอนุมัติลาในระบบบุคคล และติ๊ก "อนุมัติใบลา/วันหยุด" ที่บทบาทในหลังบ้าน (ผู้ใช้ 8/11/2569)
+  const canApprove = me.permissions.includes("workforce.leave.approve") && hasPermission(session, HR_PERMS.leaveApprove);
   const canManageTypes = me.permissions.includes("workforce.scheduling.manage");
   // ประวัติใครลง/ยกเลิก/สลับ — เห็นเฉพาะคนอนุมัติการลา (อ่านไม่ได้ = ไม่โชว์ ไม่ทำให้ทั้งหน้าพัง)
   const history = canApprove

@@ -1557,6 +1557,7 @@ export async function relabelLeaveAction(input: {
 /** อนุมัติ/ไม่อนุมัติคำขอลา — ต้องมี workforce.leave.approve (SUPERVISOR ขึ้นไป) */
 export async function decideLeaveAction(formData: FormData) {
   const session = await requireOrg();
+  if (!hasPermission(session, HR_PERMS.leaveApprove)) throw new Error("ไม่มีสิทธิ์อนุมัติใบลา — ให้ผู้ดูแลติ๊ก “อนุมัติใบลา/วันหยุด” ที่บทบาท");
   const id = String(formData.get("requestId") ?? "");
   const outcome = String(formData.get("outcome") ?? "");
   if (!id) throw new Error("ไม่พบคำขอ");

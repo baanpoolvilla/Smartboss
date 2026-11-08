@@ -68,6 +68,8 @@ export const HR_PERMS = [
   "hr.payroll.manage",
   "hr.payroll.approve",
   "hr.setting.manage",
+  // อนุมัติใบลา/วันหยุด + แจ้งเตือนคำขอลา (8/11/2569) — ADMIN/CEO/HR_OFFICER ได้จากชุดนี้ · MANAGER ใส่เองด้านล่าง
+  "hr.leave.approve",
 ];
 
 export const MAINT_PERMS = [
@@ -259,7 +261,7 @@ const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
     // หัวหน้างานดูคะแนนลูกทีมได้ แต่แก้เกณฑ์ไม่ได้ — ไม่งั้นแก้เกณฑ์ให้ทีมตัวเองดูดีได้
     "core.performance.view",
     "core.department.view",
-    "hr.access", "hr.employee.view", "hr.employee.manage",
+    "hr.access", "hr.employee.view", "hr.employee.manage", "hr.leave.approve",
     "maintenance.access",
     "maintenance.workorder.view", "maintenance.workorder.manage", "maintenance.workorder.complete",
     "maintenance.property.view", "maintenance.property.manage",

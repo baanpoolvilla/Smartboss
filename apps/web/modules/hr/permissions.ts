@@ -22,6 +22,13 @@ export const HR_PERMS = {
   payrollApprove: "hr.payroll.approve",
 
   settingManage: "hr.setting.manage",
+
+  /**
+   * อนุมัติ/ไม่อนุมัติใบลาและวันหยุด + ได้แจ้งเตือนคำขอ (ผู้ใช้ 8/11/2569 "ทำไม IT กดอนุมัติได้ ต้อง HR/CEO")
+   * เดิมใครได้บทบาทอนุมัติลาในระบบบุคคล (จาก ตั้งค่าบุคคล/จัดการพนักงาน/จัดการคนงาน/หัวหน้างาน) ก็อนุมัติได้หมด
+   * ตอนนี้ต้องติ๊กสิทธิ์นี้ด้วย — migration ให้ทุกบทบาทที่อนุมัติได้อยู่แล้ว แต่ละบริษัทเอาออกเองที่ หลังบ้าน › บทบาท
+   */
+  leaveApprove: "hr.leave.approve",
 } as const;
 
 export const ALL_HR_PERMS: string[] = Object.values(HR_PERMS);
@@ -37,4 +44,5 @@ export const HR_PERM_LABELS: Record<string, string> = {
   [HR_PERMS.payrollManage]: "สร้าง/คำนวณรอบจ่าย",
   [HR_PERMS.payrollApprove]: "อนุมัติและปิดรอบจ่าย",
   [HR_PERMS.settingManage]: "ตั้งค่าการคำนวณเงินเดือน",
+  [HR_PERMS.leaveApprove]: "อนุมัติใบลา/วันหยุด (ได้แจ้งเตือนคำขอลา)",
 };

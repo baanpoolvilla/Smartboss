@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@smartboss/database";
 import { notifyUser, notifyActorName, usersWithPermission } from "@/modules/maintenance/data/notify";
 import { REQ_PERMS } from "@/modules/requests/permissions";
+import { HR_PERMS } from "@/modules/hr/permissions";
 
 /**
  * แจ้งเตือนผู้มีสิทธิ์อนุมัติ ตอนมีคำขอ HR ใหม่เข้ามา (ลา/แก้เวลาเข้า-ออกงาน)
@@ -76,10 +77,17 @@ export async function notifyApprovers(
   input: { title: string; body?: string; type: string; referenceId?: string }
 ): Promise<void> {
   try {
-    const [approverIds, actorName] = await Promise.all([
+    const [wfApproverIds, actorName] = await Promise.all([
       resolveApproverUserIds(orgId, permission),
       notifyActorName(actorUserId),
     ]);
+    // คำขอลา: ต้องติ๊ก "อนุมัติใบลา/วันหยุด" ที่บทบาทในหลังบ้านด้วย — ไม่งั้น IT/หัวหน้างานที่ได้บทบาทในระบบบุคคล
+    // ติดมาจากสิทธิ์อื่น (ตั้งค่าบุคคล ฯลฯ) ก็ได้แจ้งเตือนทั้งที่ไม่ใช่คนอนุมัติ (ผู้ใช้ 8/11/2569)
+    let approverIds = wfApproverIds;
+    if (permission === "workforce.leave.approve") {
+      const allowed = new Set(await usersWithPermission(orgId, HR_PERMS.leaveApprove));
+      approverIds = wfApproverIds.filter((id) => allowed.has(id));
+    }
     // ชื่อผู้ยื่นนำหน้าหัวข้อ — กระดิ่งของผู้อนุมัติมักมีคำขอค้างพร้อมกันหลายใบ
     // ซึ่งหัวข้อเหมือนกันเป๊ะทุกใบ ("มีคำขอลาใหม่รออนุมัติ" เรียงกัน 7 บรรทัด)
     // แยกไม่ออกว่าใบไหนของใคร ต้องกดเข้าไปดูทีละใบถึงจะรู้ ("อยากให้บอกด้วยว่า
