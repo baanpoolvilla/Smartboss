@@ -251,9 +251,9 @@ export async function addChecklistItemAction(workOrderId: string, text: string, 
   const clean = text.trim().slice(0, CHECKLIST_MAX_TEXT);
   if (!clean) return { error: "พิมพ์ข้อความก่อน" };
   const editor = await canEditTeam(s, wo);
-  // คนในทีมเพิ่มข้อของตัวเองได้ · คนเปิดใบ/ผู้ดูแลเพิ่มให้ใครก็ได้
-  if (!editor && !isWorkOrderMember(wo, s.userId)) return { error: "เพิ่มเช็กลิสต์ได้เฉพาะคนในใบหรือคนเปิดใบ" };
-  const owner = editor ? fitOwner(ownerId, wo) : fitOwner(s.userId, wo);
+  // เช็กลิสต์กำหนดโดยคนเปิดใบ (หรือ CEO/ผู้ดูแล) เท่านั้น — ผู้รับงานติ๊กได้อย่างเดียว (IS-0009 ผู้ใช้ 8/11/2569)
+  if (!editor) return { error: "เพิ่มเช็กลิสต์ได้เฉพาะคนเปิดใบงาน — แจ้งคนเปิดใบให้เพิ่มให้" };
+  const owner = fitOwner(ownerId, wo);
   const items = readChecklist(wo.checklist);
   if (items.length >= CHECKLIST_MAX_ITEMS) return { error: `เช็กลิสต์ได้สูงสุด ${CHECKLIST_MAX_ITEMS} ข้อ` };
   await saveChecklist(s, wo, [...items, { id: randomUUID(), text: clean, done: false, ownerId: owner }], `เพิ่มเช็กลิสต์: ${clean}`);
@@ -269,8 +269,8 @@ export async function removeChecklistItemAction(workOrderId: string, itemId: str
   const item = items.find((c) => c.id === itemId);
   if (!item) return {};
   const editor = await canEditTeam(s, wo);
-  // คนในทีมลบได้เฉพาะข้อของตัวเองที่ยังไม่ติ๊ก
-  if (!editor && !(item.ownerId === s.userId && !item.done)) return { error: "ลบได้เฉพาะคนเปิดใบ หรือข้อของตัวเองที่ยังไม่ติ๊ก" };
+  // ลบได้เฉพาะคนเปิดใบ (หรือ CEO/ผู้ดูแล) — IS-0009
+  if (!editor) return { error: "ลบเช็กลิสต์ได้เฉพาะคนเปิดใบงาน" };
   await saveChecklist(s, wo, items.filter((c) => c.id !== itemId), `ลบเช็กลิสต์: ${item.text}`);
   return {};
 }

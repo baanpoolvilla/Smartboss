@@ -260,7 +260,8 @@ export default async function WorkOrderDetailPage({
     doneByName: c.done && c.doneBy && (isGroupWo || c.doneBy !== c.ownerId) ? (names[c.doneBy] ?? "-") : null,
     mine: c.ownerId === session.userId && isGroupWo && !sharedWo,
     canTick: canTickItem(c, session.userId, wo, viewAll),
-    canRemove: canEditTeam || (c.ownerId === session.userId && !c.done),
+    // เช็กลิสต์กำหนดโดยคนเปิดใบ (หรือ CEO/ผู้ดูแล) — ผู้รับงานติ๊กได้อย่างเดียว (IS-0009 ผู้ใช้ 8/11/2569)
+    canRemove: canEditTeam,
   }));
   const checklistHint =
     checkItems.length === 0
@@ -519,7 +520,7 @@ export default async function WorkOrderDetailPage({
           workOrderId={id}
           items={checklistViews}
           hint={checklistHint}
-          canAdd={!wo.isPrivate || wo.createdBy === session.userId ? canEditTeam || isWorkOrderMember(wo, session.userId) : false}
+          canAdd={!wo.isPrivate || wo.createdBy === session.userId ? canEditTeam : false}
           ownerOptions={canEditTeam && isGroupWo && !sharedWo ? workOrderMemberIds(wo).map((u) => ({ id: u, label: names[u] ?? "-" })) : []}
           defaultOwner={canEditTeam && isGroupWo && !sharedWo ? wo.assignedTo : null}
           open={isOpenNow}
