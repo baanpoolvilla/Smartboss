@@ -322,12 +322,19 @@ function ActionMenu({
   const reactionEmojis = sortReactionEmojis(CHAT_REACTION_EMOJIS, reactionUsage);
   const item = "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-(--ink) hover:bg-(--bg-soft)";
   const desktop = typeof window !== "undefined" && window.matchMedia("(min-width: 640px)").matches;
-  // คอม: วางใต้ฟอง ถ้าที่ข้างล่างไม่พอก็วางเหนือฟองแทน
+  // คอม: วางใต้จุดที่กด (ปุ่ม ⋯ / คลิกขวา) ถ้าข้างล่างไม่พอก็วางเหนือจุดนั้น — เลือกฝั่งที่มีที่มากกว่า และไม่ให้สูงเกินจอ
+  // (ผู้ใช้ 8/11/2569: ข้อความยาว ๆ กด ⋯ แล้วเมนูไปอยู่เหนือฟองซึ่งเลยขอบบนจอ มองไม่เห็น — เดิมอิงขอบบนของทั้งฟอง)
+  const spaceBelow = anchor ? window.innerHeight - anchor.bottom - 12 : 0;
+  const spaceAbove = anchor ? anchor.top - 12 : 0;
+  const placeBelow = spaceBelow > 440 || spaceBelow >= spaceAbove;
   const style: React.CSSProperties | undefined =
     desktop && anchor
       ? {
           position: "fixed",
-          ...(window.innerHeight - anchor.bottom > 440 ? { top: anchor.bottom + 4 } : { bottom: window.innerHeight - anchor.top + 4 }),
+          ...(placeBelow
+            ? { top: anchor.bottom + 4, maxHeight: Math.max(160, spaceBelow) }
+            : { bottom: window.innerHeight - anchor.top + 4, maxHeight: Math.max(160, spaceAbove) }),
+          overflowY: "auto",
           ...(mine ? { right: Math.max(8, window.innerWidth - anchor.right) } : { left: Math.max(8, anchor.left) }),
         }
       : undefined;
@@ -588,8 +595,13 @@ export const MessageBubble = memo(function MessageBubble(props: MessageBubblePro
   const [menuOpen, setMenuOpenState] = useState(false);
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const bubbleRef = useRef<HTMLDivElement>(null);
-  const setMenuOpen = (open: boolean) => {
-    if (open) setAnchor(bubbleRef.current?.getBoundingClientRect() ?? null);
+  /** at = จุดที่กด (ปุ่ม ⋯ / ตำแหน่งคลิกขวา) — แนวตั้งยึดจุดนี้ แนวนอนยึดขอบฟองเหมือนเดิม
+   * ไม่มี (กดค้างบนมือถือ — มือถือเป็นแผ่นล่างจอ ไม่ใช้ตำแหน่ง) = ทั้งฟองแบบเดิม */
+  const setMenuOpen = (open: boolean, at?: { top: number; bottom: number }) => {
+    if (open) {
+      const bubble = bubbleRef.current?.getBoundingClientRect() ?? null;
+      setAnchor(bubble && at ? new DOMRect(bubble.left, at.top, bubble.width, Math.max(0, at.bottom - at.top)) : bubble);
+    }
     setMenuOpenState(open);
   };
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -735,7 +747,7 @@ export const MessageBubble = memo(function MessageBubble(props: MessageBubblePro
             onContextMenu={(e) => {
               if (local) return;
               e.preventDefault();
-              setMenuOpen(true);
+              setMenuOpen(true, { top: e.clientY, bottom: e.clientY });
             }}
             onTouchStart={startPress}
             onTouchEnd={cancelPress}
@@ -775,10 +787,10 @@ export const MessageBubble = memo(function MessageBubble(props: MessageBubblePro
               <button type="button" onClick={() => props.onReply(m)} className="flex h-7 w-7 items-center justify-center rounded-full text-(--ink-soft) hover:bg-black/5" aria-label="ตอบกลับ" title="ตอบกลับ">
                 <CornerUpLeft className="h-4 w-4" />
               </button>
-              <button type="button" onClick={() => setMenuOpen(true)} className="flex h-7 w-7 items-center justify-center rounded-full text-(--ink-soft) hover:bg-black/5" aria-label="กดอีโมจิ" title="กดอีโมจิ">
+              <button type="button" onClick={(e) => setMenuOpen(true, e.currentTarget.getBoundingClientRect())} className="flex h-7 w-7 items-center justify-center rounded-full text-(--ink-soft) hover:bg-black/5" aria-label="กดอีโมจิ" title="กดอีโมจิ">
                 <SmilePlus className="h-4 w-4" />
               </button>
-              <button type="button" onClick={() => setMenuOpen(true)} className="flex h-7 w-7 items-center justify-center rounded-full text-(--ink-soft) hover:bg-black/5" aria-label="เพิ่มเติม" title="เพิ่มเติม">
+              <button type="button" onClick={(e) => setMenuOpen(true, e.currentTarget.getBoundingClientRect())} className="flex h-7 w-7 items-center justify-center rounded-full text-(--ink-soft) hover:bg-black/5" aria-label="เพิ่มเติม" title="เพิ่มเติม">
                 <MoreHorizontal className="h-4 w-4" />
               </button>
             </div>
