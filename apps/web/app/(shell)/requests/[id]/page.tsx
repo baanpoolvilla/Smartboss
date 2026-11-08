@@ -227,9 +227,9 @@ export default async function RequestDetailPage({ params, searchParams }: { para
         .map((p) => ({ id: p.userId, name: p.name, badge: "คนงาน", sub: [p.departmentName, p.email].filter(Boolean).join(" · "), keywords: p.email ?? "" }))
     : [];
   // HR ใส่เงินค่า OT ในใบ (คนลงใบใส่แค่ชื่อ+เวลา) — HR/CEO ที่ไม่ใช่คนลงใบ
-  // + พนักงานที่ยังไม่มีเงินเดือนในระบบ ยื่นแบบไม่มียอด — ใครอนุมัติ OT ได้ก็ใส่ยอดแล้วอนุมัติต่อได้ (ผู้ใช้ 8/11/2569)
+  // + พนักงานที่ยังไม่มีเงินเดือนในระบบ ยื่นแบบไม่มียอด (ผู้ใช้ 8/11/2569) — ยอดพนักงานประจำใส่ได้เฉพาะคนที่เห็นยอด
   const staffNoSalary = r.kind === "ot" && !unlinked && r.otBaseKind === "manual";
-  const canSetAmount = canSetOtAmount(r, viewer);
+  const canSetAmount = canSetOtAmount(r, viewer) && (unlinked || !payHidden);
   // คนงานที่มีในระบบ: HR เลือกคิดจากค่าแรง หรือกรอกยอดเอง (ก่อนอนุมัติ)
   const canSetWorker =
     r.kind === "ot" && r.status === "pending" && !r.firstDecidedAt && r.beneficiaryKind === "worker" && !!r.beneficiaryUserId && !!r.employmentId &&

@@ -29,7 +29,7 @@ import { clearActionNotifications, notifyApprovers, notifyClear, notifyPayers, n
 import { usersWithPermission } from "@/modules/maintenance/data/notify";
 import { readReceipt } from "./lib/receipt-ai";
 import { isPettyHolder } from "./lib/holders";
-import { PAYROLL_METHOD_BLOCKED, payPrivacy, payrollHandoffBlock, usesSalaryModule } from "./lib/pay-privacy";
+import { PAYROLL_METHOD_BLOCKED, canSeePay, payPrivacy, payrollHandoffBlock, usesSalaryModule } from "./lib/pay-privacy";
 import {
   KIND_META,
   METHOD_LABEL,
@@ -921,6 +921,7 @@ export async function setUnlinkedOtAmountAction(input: { id: string; mode: "dail
     if (!(r.kind === "ot" && r.status === "pending" && !r.firstDecidedAt && (unlinked || r.otBaseKind === "manual"))) return { error: "ใบนี้ไม่ได้รอใส่ยอด (ผูกชื่อแล้ว หรือตัดสินไปแล้ว)" };
     if (r.beneficiaryUserId === session.userId) return { error: "ใส่ยอด OT ของตัวเองไม่ได้ — ให้ HR คนอื่นใส่" };
     if (unlinked && r.createdBy === session.userId) return { error: "ใส่ยอดใบที่ตัวเองลงไม่ได้ — ให้ HR คนอื่นใส่" };
+    if (!unlinked && !canSeePay(await payPrivacy(session), r)) return { error: "ยอด OT พนักงานประจำใส่ได้เฉพาะ CEO / ผู้ดูแลเงินเดือน" };
     if (!unlinked && input.mode !== "manual") return { error: "ใส่ยอด OT" };
     const value = round2(Number(input.value));
     if (!Number.isFinite(value) || value <= 0 || value > 100_000) return { error: input.mode === "daily" ? "ใส่ค่าแรงต่อวัน" : "ใส่ยอด OT" };

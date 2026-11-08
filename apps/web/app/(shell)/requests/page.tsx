@@ -8,7 +8,7 @@ import { listPettyHolders } from "@/modules/requests/lib/holders";
 import { canDecide, canSetOtAmount, listVisibleRequests, needsOtAmount } from "@/modules/requests/lib/data";
 import { beneficiaryLabel, isOpen, payableByHolder, pettyAccess, requestsPage, statusOf } from "@/modules/requests/lib/page";
 import { RequestsHome, type ListRow } from "@/modules/requests/components/request-list";
-import { maskRequest, payPrivacy } from "@/modules/requests/lib/pay-privacy";
+import { canSeePay, maskRequest, payPrivacy } from "@/modules/requests/lib/pay-privacy";
 import { Notice } from "@/modules/requests/components/ui";
 import { bangkokToday, baht, costOf, hoursText, monthTitle, round2, type RequestKind } from "@/modules/requests/lib/types";
 
@@ -30,7 +30,7 @@ export default async function RequestsPage({ searchParams }: { searchParams: Pro
   const awaitingAmount = new Map<string, boolean>();
   const all = await listVisibleRequests(session.orgId, viewer)
     .then((list) => {
-      for (const r of list) if (needsOtAmount(r)) awaitingAmount.set(r.id, canSetOtAmount(r, viewer));
+      for (const r of list) if (needsOtAmount(r)) awaitingAmount.set(r.id, canSetOtAmount(r, viewer) && (!r.beneficiaryUserId || canSeePay(privacy, r)));
       return list.map((r) => maskRequest(privacy, r));
     })
     .catch((error: unknown) => {
