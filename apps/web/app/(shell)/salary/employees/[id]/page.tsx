@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { ProfileSection, RecurringSection, SalarySection } from "@/modules/salary/components/employee-forms";
 import { readSettings, withSalaryTenant } from "@/modules/salary/lib/db";
+import { ownSalaryLocked } from "@/modules/salary/lib/access";
 import { salaryPage } from "@/modules/salary/lib/page";
 import { lastPaidDiligence, listStaff } from "@/modules/salary/lib/views";
 import { bangkokToday, periodDates, shiftPeriod, thaiDate } from "@/modules/salary/lib/types";
@@ -24,7 +25,7 @@ export default async function SalaryEmployeePage({ params }: { params: Promise<{
   const p = today.slice(0, 7);
   const lastDiligence = settings.diligenceEnabled ? await lastPaidDiligence(orgId, row.employmentId) : null;
   // คนทำเงินเดือน (ไม่ใช่ CEO) ดูของตัวเองได้แต่แก้ไม่ได้ — server ก็กันซ้ำใน actions
-  const ownLocked = !access.isCeo && row.userId === session.userId;
+  const ownLocked = ownSalaryLocked(access, row.userId === session.userId);
   const thisPeriod = periodDates(p, settings.cutoffDay, settings.payDay).endsOn >= today ? p : shiftPeriod(p, 1);
   return (
     <AppScaffold title="ข้อมูลเงินเดือน" backHref="/salary/employees" width="max-w-none">

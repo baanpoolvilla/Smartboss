@@ -8,7 +8,7 @@ import { prisma } from "@smartboss/database";
 import { syncUserToWorkforce } from "@/modules/admin/data/user-guards";
 import { wfFetch, WorkforceError } from "@/modules/hr/lib/api";
 import { notifyUsers } from "@/modules/maintenance/data/notify";
-import { isOwnEmployment, salaryAccess, type SalaryAccess } from "./lib/access";
+import { isOwnEmployment, ownSalaryLocked, salaryAccess, type SalaryAccess } from "./lib/access";
 import type { Adjustment } from "./lib/compute";
 import { insertEvent, readSettings, withSalaryTenant } from "./lib/db";
 import { actorOf } from "./lib/page";
@@ -63,7 +63,7 @@ async function guard(need: keyof Pick<SalaryAccess, "canEdit" | "canApprove" | "
  */
 async function guardFor(employmentId: string, need: "canEdit" = "canEdit") {
   const g = await guard(need);
-  if (!g.access.isCeo && (await isOwnEmployment(g.orgId, g.session.userId, employmentId))) {
+  if (ownSalaryLocked(g.access, await isOwnEmployment(g.orgId, g.session.userId, employmentId))) {
     throw new Error("แก้ข้อมูลเงินเดือนของตัวเองไม่ได้ — ให้ CEO เป็นคนแก้ให้ (กันการแก้ให้ตัวเอง)");
   }
   return g;
@@ -449,7 +449,7 @@ export async function endRecurringAction(input: { id: string }): Promise<Result>
     await withSalaryTenant(orgId, async (tx) => {
       const row = await tx.salaryEmployeeItem.findFirst({ where: { orgId, id: input.id, endedAt: null } });
       if (!row) throw new Error("ไม่พบรายการ (อาจเลิกไปแล้ว)");
-      if (!access.isCeo && (await isOwnEmployment(orgId, session.userId, row.employmentId))) throw new Error("แก้ข้อมูลเงินเดือนของตัวเองไม่ได้ — ให้ CEO เป็นคนแก้ให้");
+      if (ownSalaryLocked(access, await isOwnEmployment(orgId, session.userId, row.employmentId))) throw new Error("แก้ข้อมูลเงินเดือนของตัวเองไม่ได้ — ให้ CEO เป็นคนแก้ให้");
       await tx.salaryEmployeeItem.update({ where: { id: row.id }, data: { endedAt: new Date(), endedByName: actor.name } });
       await insertEvent(tx, orgId, { byUserId: actor.userId, byName: actor.name, action: "employee", summary: `เลิกรายการประจำ ${fmtBaht(Number(row.amount))}` });
     });

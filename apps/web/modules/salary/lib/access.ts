@@ -67,6 +67,18 @@ export async function userCanEditSalary(orgId: string, userId: string): Promise<
   return (await salaryAccess({ userId, orgId, roles })).canEdit;
 }
 
+/**
+ * คนที่ CEO เลือก (ไม่ใช่ CEO) แก้ข้อมูลเงินเดือนของตัวเองได้ไหม
+ * ผู้ใช้ 8/11/2569: "อยากให้ใส่เงินเดือนตัวเองได้ด้วย เพราะเค้าเป็น HR เค้าต้องทำเงินเดือนอยู่แล้ว" → เปิด
+ * (รอบเงินเดือนยังต้องให้ CEO อนุมัติ) · อยากกลับไปกันแบบเดิม = เปลี่ยนเป็น false ที่เดียว
+ */
+export const EDITORS_EDIT_OWN_SALARY = true;
+
+/** ล็อกไม่ให้แก้ของตัวเองไหม — CEO แก้ได้เสมอ */
+export function ownSalaryLocked(access: Pick<SalaryAccess, "isCeo">, isOwn: boolean): boolean {
+  return isOwn && !access.isCeo && !EDITORS_EDIT_OWN_SALARY;
+}
+
 /** พนักงานคนนี้ (employment) คือบัญชีผู้ใช้ userId เองไหม — ใช้กันคนทำเงินเดือนแก้ของตัวเอง */
 export async function isOwnEmployment(orgId: string, userId: string, employmentId: string): Promise<boolean> {
   if (!/^[0-9a-f-]{36}$/i.test(employmentId)) return false;

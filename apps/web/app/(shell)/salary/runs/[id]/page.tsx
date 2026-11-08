@@ -11,6 +11,7 @@ import { ApproveBar, DeleteRunButton, PayDialog, RecomputeButton, RunNote } from
 import { AdjustmentsDialog, type ReviewPerson } from "@/modules/salary/components/adjustments-dialog";
 import { STATUS_LABEL, card, hint, outline } from "@/modules/salary/components/ui";
 import { readRates, readSettings, withSalaryTenant } from "@/modules/salary/lib/db";
+import { ownSalaryLocked } from "@/modules/salary/lib/access";
 import { salaryPage } from "@/modules/salary/lib/page";
 import { approvalSummary, loadRun, type ChangeItem } from "@/modules/salary/lib/views";
 import { DEFAULT_SSO, TH_MONTH, fmtBaht, periodLabel, rateOn, shiftPeriod, thaiDate } from "@/modules/salary/lib/types";
@@ -70,8 +71,8 @@ export default async function RunPage({ params, searchParams }: { params: Promis
         department: editLine.department,
         employeeCode: editLine.employeeCode,
         // คนทำเงินเดือน (ไม่ใช่ CEO) แก้บรรทัดของตัวเองไม่ได้ — server กันซ้ำ
-        editable: editable && !(editLine.userId === session.userId && !access.isCeo),
-        ownLocked: editable && editLine.userId === session.userId && !access.isCeo,
+        editable: editable && !ownSalaryLocked(access, editLine.userId === session.userId),
+        ownLocked: editable && ownSalaryLocked(access, editLine.userId === session.userId),
         expectUpdatedAt: editLine.updatedAt,
         lines: editLine.lines,
         adjustments: editLine.adjustments,
