@@ -2083,6 +2083,42 @@ export async function reviewPettySpendAction(input: { id: string; outcome: "appr
   }
 }
 
+/**
+ * เงินขาดที่เรียกคืนไม่ได้ (เช่น เงินหาย) → บริษัทรับเป็นค่าใช้จ่าย (ผู้ใช้ 8/11/2569)
+ * เฉพาะ CEO · ต้องมีเหตุผล · ไม่ใช่รายการของตัวเอง — เปลี่ยนผลตรวจเป็น "ผ่าน" พร้อมบันทึกเหตุผล ยอดยังหักจากเงินในมือ (เงินออกไปแล้วจริง)
+ * แนวปฏิบัติ: เงินขาดที่คนถือเงินคุมไม่ได้ หน่วยงานรับเป็นค่าใช้จ่ายเอง (Bradley University / BYU petty cash policy)
+ */
+export async function writeOffPettyShortageAction(input: { id: string; reason: string }): Promise<Result> {
+  try {
+    const session = await guard();
+    const orgId = session.orgId;
+    const viewer = await viewerOf(session);
+    if (!viewer.canApproveCeo) return { error: "บริษัทรับเป็นค่าใช้จ่ายได้เฉพาะ CEO" };
+    const reason = input.reason.trim().slice(0, 300);
+    if (!reason) return { error: "ใส่เหตุผลที่บริษัทรับเป็นค่าใช้จ่าย" };
+    const byName = await nameOf(session.userId);
+    const res = await withRequestsTenant(orgId, async (tx) => {
+      const e = await tx.moneyPettyCashEntry.findFirst({ where: { orgId, id: input.id, voidedAt: null, reviewStatus: "rejected" } });
+      if (!e) return { error: "ไม่พบรายการเงินขาด หรือจัดการไปแล้ว" } as const;
+      if (e.holderUserId === session.userId || e.byUserId === session.userId) return { error: "จัดการเงินขาดของตัวเองไม่ได้" } as const;
+      const done = await tx.moneyPettyCashEntry.updateMany({
+        where: { orgId, id: e.id, reviewStatus: "rejected", voidedAt: null },
+        data: { reviewStatus: "approved", reviewedByUserId: session.userId, reviewedByName: byName, reviewedAt: new Date(), reviewNote: `บริษัทรับเป็นค่าใช้จ่าย: ${reason} (เดิมไม่ผ่าน: ${e.reviewNote ?? ""})`.slice(0, 600) },
+      });
+      if (done.count === 0) return { error: "มีคนจัดการไปแล้ว — รีเฟรช" } as const;
+      const amount = Math.abs(Number(e.delta));
+      await insertEvent(tx, orgId, { byUserId: session.userId, byName, action: "petty", summary: `บริษัทรับเป็นค่าใช้จ่าย: เงินขาด ${e.holderName} ${baht(amount)} · ${e.note} · ${reason}` });
+      return { ok: true, holderUserId: e.holderUserId, amount, title: e.note } as const;
+    });
+    if ("error" in res) return { error: res.error ?? "ทำไม่สำเร็จ" };
+    void notifyPettyTopupResult(orgId, [res.holderUserId], `เงินขาด ${baht(res.amount)} บริษัทรับเป็นค่าใช้จ่ายแล้ว`, `${res.title} · ${reason} — ไม่ต้องคืนเงิน`).catch(() => null);
+    revalidatePath("/requests/petty-cash");
+    return { ok: true };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
 /* ═════════════════════════ ตั้งค่า ═════════════════════════ */
 
 export async function saveSettingsAction(input: RequestSettings): Promise<Result> {

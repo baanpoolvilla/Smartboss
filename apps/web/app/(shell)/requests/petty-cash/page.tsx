@@ -16,7 +16,7 @@ import { listPettyHolders } from "@/modules/requests/lib/holders";
 import { pettyMonth } from "@/modules/requests/lib/petty-report";
 import { payableByHolder, pettyAccess, requestsPage } from "@/modules/requests/lib/page";
 import { maskRequest, payPrivacy } from "@/modules/requests/lib/pay-privacy";
-import { MoneyBackButton, PendingTopupRow, PettyHolderCard, PettyHoldersButton, ReviewSpendButtons, VoidPettyButton } from "@/modules/requests/components/petty-forms";
+import { MoneyBackButton, PendingTopupRow, PettyHolderCard, PettyHoldersButton, ReviewSpendButtons, VoidPettyButton, WriteOffButton } from "@/modules/requests/components/petty-forms";
 import { bangkokToday, baht, monthTitle, shiftMonthOf, thaiDateTime } from "@/modules/requests/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -195,7 +195,7 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
             <h2 className="flex items-center border-b border-(--line) px-4 py-3 text-sm font-bold text-red-800">
               เงินขาด · ไม่ผ่าน รอคืนเงิน ({shortList.length} รายการ · {baht(shortList.reduce((t, e) => t - e.delta, 0))})
               <InfoTip label="เงินขาด">
-                รายการที่จ่ายไปก่อนแต่ตรวจแล้วไม่ผ่าน — เงินในมือของผู้ถือยังถูกหักอยู่ ผู้ถือต้องคืนเงินเข้ากอง แล้ว HR กด “ได้เงินคืนแล้ว” ยอดในมือถึงจะกลับมา
+                รายการที่จ่ายไปก่อนแต่ตรวจแล้วไม่ผ่าน — เงินในมือของผู้ถือยังถูกหักอยู่ ผู้ถือต้องคืนเงินเข้ากอง แล้ว HR กด “ได้เงินคืนแล้ว” ยอดในมือถึงจะกลับมา · เรียกคืนไม่ได้จริง (เช่น เงินหาย) CEO กด “บริษัทรับเป็นค่าใช้จ่าย” · ในรายงานเบิกจ่าย เงินขาดไม่นับเป็นค่าใช้จ่าย
               </InfoTip>
             </h2>
             <ul className="divide-y divide-(--line)">
@@ -208,11 +208,13 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
                     <div className="shrink-0 text-sm font-bold tabular-nums text-(--danger)">{baht(-e.delta)}</div>
                   </div>
                   <div className="text-xs text-red-700">ไม่ผ่าน · {e.review?.byName} · {e.review?.note}</div>
-                  {petty.adjust ? (
-                    <MoneyBackButton id={e.id} />
-                  ) : e.holderUserId === session.userId ? (
+                  <div className="flex flex-wrap gap-2">
+                    {petty.adjust && <MoneyBackButton id={e.id} />}
+                    {viewer.canApproveCeo && e.holderUserId !== session.userId && <WriteOffButton id={e.id} />}
+                  </div>
+                  {!petty.adjust && e.holderUserId === session.userId && (
                     <div className="mt-1 text-xs text-(--ink-soft)">คืนเงินเข้ากองแล้วแจ้ง HR ให้กด “ได้เงินคืนแล้ว”</div>
-                  ) : null}
+                  )}
                 </li>
               ))}
             </ul>

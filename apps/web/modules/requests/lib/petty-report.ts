@@ -125,7 +125,12 @@ export async function pettyMonth(orgId: string, month: string, holders: { userId
 export interface MoneyOut {
   viaPetty: number;
   viaOther: number;
+  /** ซื้อของเองที่ตรวจผ่านแล้ว (+ รายการเดิมที่ไม่ต้องตรวจ) — นับเป็นค่าใช้จ่าย */
   selfSpend: number;
+  /** ซื้อของเองที่ยังรอตรวจ — ไม่นับในยอดรวม จนกว่าจะผ่าน */
+  selfSpendPending: number;
+  /** ตรวจไม่ผ่าน ยังไม่ได้เงินคืน = ลูกหนี้ของคนถือเงิน ไม่ใช่ค่าใช้จ่าย (ผู้ใช้ 8/11/2569) */
+  shortage: number;
   total: number;
   hiddenCount: number;
 }
@@ -138,7 +143,7 @@ export async function moneyOutOfMonth(orgId: string, month: string, isHidden: (r
         where: { orgId, voidedAt: null, paidOn: { gte: new Date(`${month}-01T00:00:00Z`), lt: new Date(`${shiftMonthOf(month, 1)}-01T00:00:00Z`) } },
         select: { requestId: true, amount: true, method: true },
       }),
-      tx.moneyPettyCashEntry.aggregate({ where: { orgId, voidedAt: null, kind: "spend", requestId: null, createdAt: { gte: start, lt: end } }, _sum: { delta: true } }),
+      tx.moneyPettyCashEntry.groupBy({ by: ["reviewStatus"], where: { orgId, voidedAt: null, kind: "spend", requestId: null, createdAt: { gte: start, lt: end } }, _sum: { delta: true } }),
     ]);
     const reqIds = [...new Set(pays.map((p) => p.requestId))];
     const reqs = new Map((reqIds.length ? await loadRequests(tx, orgId, { id: { in: reqIds } }, reqIds.length) : []).map((r) => [r.id, r]));
@@ -154,7 +159,18 @@ export async function moneyOutOfMonth(orgId: string, month: string, isHidden: (r
       if (p.method === "petty_cash") viaPetty += num0(p.amount);
       else viaOther += num0(p.amount);
     }
-    const selfSpend = -num0(spends._sum.delta);
-    return { viaPetty: round2(viaPetty), viaOther: round2(viaOther), selfSpend: round2(selfSpend), total: round2(viaPetty + viaOther + selfSpend), hiddenCount: hidden.size };
+    const sumOf = (pred: (s: string | null) => boolean) => -spends.filter((g) => pred(g.reviewStatus)).reduce((t, g) => t + num0(g._sum.delta), 0);
+    const selfSpend = sumOf((s) => s === null || s === "approved");
+    const selfSpendPending = sumOf((s) => s === "pending");
+    const shortage = sumOf((s) => s === "rejected");
+    return {
+      viaPetty: round2(viaPetty),
+      viaOther: round2(viaOther),
+      selfSpend: round2(selfSpend),
+      selfSpendPending: round2(selfSpendPending),
+      shortage: round2(shortage),
+      total: round2(viaPetty + viaOther + selfSpend),
+      hiddenCount: hidden.size,
+    };
   });
 }

@@ -59,10 +59,21 @@ export default async function RequestsReportPage({ searchParams }: { searchParam
             <li className="flex justify-between gap-3"><span>จ่ายตามใบเบิก — โอน / เงินสด / รวมเงินเดือน</span><span className="tabular-nums">{baht(out.viaOther)}</span></li>
             <li className="flex justify-between gap-3"><span>จ่ายตามใบเบิก — จากเงินสดย่อย</span><span className="tabular-nums">{baht(out.viaPetty)}</span></li>
             <li className="flex justify-between gap-3">
-              <span>ซื้อของเองจากเงินสดย่อย (ไม่มีใบเบิก) <Link href={`/requests/petty-cash?month=${month}`} className="text-xs text-(--app-strong) hover:underline print:hidden">ดูรายการ</Link></span>
+              <span>ซื้อของเองจากเงินสดย่อย (ตรวจผ่านแล้ว) <Link href={`/requests/petty-cash?month=${month}`} className="text-xs text-(--app-strong) hover:underline print:hidden">ดูรายการ</Link></span>
               <span className="tabular-nums">{baht(out.selfSpend)}</span>
             </li>
           </ul>
+          {(out.selfSpendPending > 0 || out.shortage > 0) && (
+            <ul className="mt-2 flex flex-col gap-1 border-t border-dashed border-(--line) pt-2 text-sm">
+              <li className="text-[11px] font-semibold text-(--ink-soft)">ไม่รวมในยอดด้านบน</li>
+              {out.selfSpendPending > 0 && (
+                <li className="flex justify-between gap-3 text-amber-800"><span>ซื้อของเองที่ยังรอตรวจ (นับเมื่อตรวจผ่าน)</span><span className="tabular-nums">{baht(out.selfSpendPending)}</span></li>
+              )}
+              {out.shortage > 0 && (
+                <li className="flex justify-between gap-3 text-red-700"><span>เงินขาดรอคืน (ตรวจไม่ผ่าน · คนถือเงินต้องคืน ไม่ใช่ค่าใช้จ่าย)</span><span className="tabular-nums">{baht(out.shortage)}</span></li>
+              )}
+            </ul>
+          )}
           <p className="mt-2 text-[11px] text-(--ink-soft)">
             นับตามวันที่จ่ายจริง (ใบที่ยื่นเดือนก่อนแต่จ่ายเดือนนี้ นับเดือนนี้) · การเติมเงินสดย่อยไม่นับเป็นรายจ่าย นับตอนเงินถูกใช้
             {out.hiddenCount > 0 ? ` · ไม่รวม OT พนักงานประจำ ${out.hiddenCount} ใบ (ซ่อนยอด)` : ""}

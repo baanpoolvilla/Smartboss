@@ -15,6 +15,7 @@ import {
   requestPettyTopupAction,
   reviewPettySpendAction,
   setPettyHolderAction,
+  writeOffPettyShortageAction,
   voidPettyEntryAction,
   type UploadedFile,
 } from "../actions";
@@ -851,6 +852,42 @@ export function MoneyBackButton({ id }: { id: string }) {
         }
       >
         ยืนยัน ได้เงินคืนครบแล้ว
+      </button>
+      <button type="button" disabled={busy} onClick={() => setOpen(false)} className="h-9 px-2 text-sm text-(--ink-soft)">ยกเลิก</button>
+      {error && <span className="w-full text-xs text-red-700">{error}</span>}
+    </div>
+  );
+}
+
+/** เงินขาดที่เรียกคืนไม่ได้ — CEO กดให้บริษัทรับเป็นค่าใช้จ่าย (ต้องมีเหตุผล) */
+export function WriteOffButton({ id }: { id: string }) {
+  const router = useRouter();
+  const [busy, start] = useTransition();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  if (!open)
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="mt-2 h-9 rounded-(--radius) border border-(--line) px-3 text-sm text-(--ink-soft) hover:bg-(--bg-soft)">
+        บริษัทรับเป็นค่าใช้จ่าย
+      </button>
+    );
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <input className="h-9 min-w-48 flex-1 rounded-(--radius) border border-(--line) px-2 text-sm" placeholder="เหตุผล เช่น เงินหาย เรียกคืนไม่ได้" value={reason} onChange={(e) => setReason(e.target.value)} aria-label="เหตุผลที่บริษัทรับเป็นค่าใช้จ่าย" autoFocus />
+      <button
+        type="button"
+        disabled={busy || !reason.trim()}
+        className="h-9 rounded-(--radius) border border-(--line) bg-(--bg-soft) px-3 text-sm font-semibold text-(--ink) disabled:opacity-50"
+        onClick={() =>
+          start(async () => {
+            const res = await writeOffPettyShortageAction({ id, reason });
+            if (!res.ok) setError(res.error);
+            else router.refresh();
+          })
+        }
+      >
+        ยืนยัน บริษัทรับเป็นค่าใช้จ่าย
       </button>
       <button type="button" disabled={busy} onClick={() => setOpen(false)} className="h-9 px-2 text-sm text-(--ink-soft)">ยกเลิก</button>
       {error && <span className="w-full text-xs text-red-700">{error}</span>}
