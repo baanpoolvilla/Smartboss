@@ -35,6 +35,7 @@ import { SaveFeedback } from "./save-feedback";
 import { SessionRefresher } from "./session-refresher";
 import { FileSizeGuard } from "./file-size-guard";
 import { SystemNotify } from "./system-notify";
+import { LiveRefresh } from "./live-refresh";
 import { ChatNotifyListener } from "@/modules/chat/components/chat-nav-badge";
 import { CallManager } from "@/modules/chat/components/call-manager";
 import { MarkReadOnRoute } from "@/modules/notifications/mark-read-on-route";
@@ -115,6 +116,7 @@ export function Shell({
       <SaveFeedback />
       {/* เสียง + เด้งแจ้งเตือนของทุกโมดูล (ท่อสด notify.new) */}
       <SystemNotify />
+      <LiveRefresh />
       {/* แชทเข้า → เสียง + เด้ง ทุกหน้า ทุกโมดูล (ไม่ใช่แค่ตอนเห็นเมนูแชท) */}
       {hasChat && <ChatNotifyListener />}
       {/* โทรในแชท — จอสายเข้า/คุยอยู่ ขึ้นได้ทุกหน้า (modules/chat/lib/call-controller.ts) */}
