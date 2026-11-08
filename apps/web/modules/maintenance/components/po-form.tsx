@@ -19,6 +19,7 @@ import { Input } from "@smartboss/ui/components/input";
 import type { PickOption } from "./multi-picker";
 import { PasteDropFiles } from "@/components/annotate/paste-drop-files";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 const inputClass =
   "h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm text-(--ink) focus-visible:border-(--brand-green) focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-(--brand-green)/30";
 
@@ -54,6 +55,7 @@ export function PoForm({
   /** มาจากบอร์ดงาน → บันทึกแล้วกลับใบงานพร้อม ?from=tasks (ปุ่มย้อนกลับของใบงานยังพากลับบอร์ดได้) */
   fromTasks?: boolean;
 }) {
+  const ceo = useCeoTitle();
   const [openAsPo, setOpenAsPo] = useState(canOpenPo);
   const [isEmergency, setEmergency] = useState(false);
   const [items, setItems] = useState([{ name: "", qty: "1", price: "" }]);
@@ -139,7 +141,7 @@ export function PoForm({
               <p className="mt-1.5 text-xs text-(--ink-soft)">
                 {openAsPo
                   ? "เปิด PO เลย — ข้ามการรออนุมัติ มอบหมายคนไปซื้อได้ทันที"
-                  : "เปิด PR — ส่งให้ CEO อนุมัติก่อน"}
+                  : `เปิด PR — ส่งให้ ${ceo} อนุมัติก่อน`}
               </p>
             </div>
           )}
@@ -224,7 +226,7 @@ export function PoForm({
                 ? "ใส่ชื่ออุปกรณ์ จำนวน และราคาที่จ่ายไปแล้ว"
                 : openAsPo
                   ? "ใส่ชื่ออุปกรณ์ — ผู้รับ PO จะกรอกจำนวนและราคาตอนไปซื้อ"
-                  : "ใส่ชื่ออุปกรณ์ — CEO จะใส่จำนวนและราคาตอนอนุมัติ"}
+                  : `ใส่ชื่ออุปกรณ์ — ${ceo} จะใส่จำนวนและราคาตอนอนุมัติ`}
             </p>
 
             <div className="mt-2 flex flex-col gap-2">
@@ -388,7 +390,7 @@ export function PoForm({
                     className="block text-xs"
                     style={{ color: isEmergency ? "#DC2626" : "var(--ink-soft)" }}
                   >
-                    ใส่ราคาได้เลย — CEO อนุมัติแล้วจบทันที
+                    ใส่ราคาได้เลย — {ceo} อนุมัติแล้วจบทันที
                   </span>
                 </span>
               </label>
@@ -419,11 +421,11 @@ export function PoForm({
               </>
             ) : isEmergency ? (
               <>
-                <AlertTriangle className="h-4 w-4" /> เปิด PR (ฉุกเฉิน) — ส่งให้ CEO อนุมัติ
+                <AlertTriangle className="h-4 w-4" /> เปิด PR (ฉุกเฉิน) — ส่งให้ {ceo} อนุมัติ
               </>
             ) : (
               <>
-                <Send className="h-4 w-4" /> เปิด PR — ส่งให้ CEO อนุมัติ
+                <Send className="h-4 w-4" /> เปิด PR — ส่งให้ {ceo} อนุมัติ
               </>
             )}
           </SubmitButton>

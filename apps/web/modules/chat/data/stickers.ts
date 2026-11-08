@@ -7,6 +7,8 @@ import { sniffMime } from "@/modules/report_task/lib/upload-sniff";
 import { checkOrgQuota, toGB } from "@/modules/company-files/lib/quota";
 import { ChatError, type ChatActor } from "./serialize";
 import type { ChatStickerDTO, ChatStickerPackDTO } from "../types";
+import { ceoText } from "@/lib/ceo-title-shared";
+import { ceoTitle } from "@/lib/ceo-title";
 
 /**
  * สติกเกอร์ของบริษัท — แอดมินแชทเพิ่ม/ลบ/จัดหมวด/เรียง ทุกคนในบริษัทใช้ได้ (แชท + รายงาน)
@@ -48,8 +50,8 @@ export async function listStickers(orgId: string): Promise<{ packs: ChatStickerP
   return { packs, stickers: stickers.map(toDTO) };
 }
 
-function requireAdmin(actor: ChatActor): void {
-  if (!actor.canManageStickers) throw new ChatError("เพิ่ม/จัดการสติกเกอร์ได้เฉพาะแอดมิน CEO ฝ่าย IT และการตลาด", 403);
+async function requireAdmin(actor: ChatActor): Promise<void> {
+  if (!actor.canManageStickers) throw new ChatError(ceoText("เพิ่ม/จัดการสติกเกอร์ได้เฉพาะแอดมิน CEO ฝ่าย IT และการตลาด", await ceoTitle(actor.orgId)), 403);
 }
 
 async function ownPackId(orgId: string, packId: string | null | undefined): Promise<string | null> {
@@ -74,7 +76,7 @@ export async function createSticker(
   actor: ChatActor,
   input: { file: File; name?: string; packId?: string | null; width?: number; height?: number }
 ): Promise<ChatStickerDTO> {
-  requireAdmin(actor);
+  await requireAdmin(actor);
   if (input.file.size === 0) throw new ChatError("ต้องแนบรูป", 400);
   if (input.file.size > STICKER_MAX_BYTES) throw new ChatError("ไฟล์สติกเกอร์ใหญ่เกิน 1 MB — ใช้รูปขนาดไม่เกิน 512×512 px", 413);
   if ((await prisma.chatSticker.count({ where: { orgId: actor.orgId } })) >= STICKER_MAX_COUNT) {
@@ -117,7 +119,7 @@ export async function updateSticker(
   id: string,
   input: { name?: unknown; keywords?: unknown; packId?: unknown }
 ): Promise<ChatStickerDTO> {
-  requireAdmin(actor);
+  await requireAdmin(actor);
   const data: { name?: string; keywords?: string; packId?: string | null; sortOrder?: number } = {};
   if (typeof input.name === "string") {
     const name = input.name.trim().slice(0, 40);
@@ -137,7 +139,7 @@ export async function updateSticker(
 
 /** เอาออกจากชุด — ไฟล์ไม่ลบ ข้อความ/คอมเมนต์ที่เคยส่งสติกเกอร์นี้ไปยังแสดงได้ */
 export async function deleteSticker(actor: ChatActor, id: string): Promise<void> {
-  requireAdmin(actor);
+  await requireAdmin(actor);
   const res = await prisma.chatSticker.deleteMany({ where: { orgId: actor.orgId, id } });
   if (res.count === 0) throw new ChatError("ไม่พบสติกเกอร์นี้", 404);
 }
@@ -149,7 +151,7 @@ function packName(name: unknown): string {
 }
 
 export async function createPack(actor: ChatActor, name: unknown): Promise<ChatStickerPackDTO> {
-  requireAdmin(actor);
+  await requireAdmin(actor);
   const clean = packName(name);
   if ((await prisma.chatStickerPack.count({ where: { orgId: actor.orgId } })) >= PACK_MAX_COUNT) {
     throw new ChatError(`มีหมวดครบ ${PACK_MAX_COUNT} หมวดแล้ว`, 400);
@@ -162,21 +164,21 @@ export async function createPack(actor: ChatActor, name: unknown): Promise<ChatS
 }
 
 export async function renamePack(actor: ChatActor, id: string, name: unknown): Promise<void> {
-  requireAdmin(actor);
+  await requireAdmin(actor);
   const res = await prisma.chatStickerPack.updateMany({ where: { orgId: actor.orgId, id }, data: { name: packName(name) } });
   if (res.count === 0) throw new ChatError("ไม่พบหมวดนี้", 404);
 }
 
 /** ลบหมวด — สติกเกอร์ในหมวดไม่หาย ย้ายไป "ทั่วไป" (ไม่มีหมวด) */
 export async function deletePack(actor: ChatActor, id: string): Promise<void> {
-  requireAdmin(actor);
+  await requireAdmin(actor);
   const res = await prisma.chatStickerPack.deleteMany({ where: { orgId: actor.orgId, id } });
   if (res.count === 0) throw new ChatError("ไม่พบหมวดนี้", 404);
 }
 
 /** เรียงใหม่ตามลำดับใน array — หมวด และ/หรือ สติกเกอร์ในหมวดเดียวกัน */
 export async function reorderStickers(actor: ChatActor, input: { packIds?: unknown; stickerIds?: unknown }): Promise<void> {
-  requireAdmin(actor);
+  await requireAdmin(actor);
   const ids = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").slice(0, 500) : []);
   await prisma.$transaction([
     ...ids(input.packIds).map((id, i) => prisma.chatStickerPack.updateMany({ where: { orgId: actor.orgId, id }, data: { sortOrder: i } })),

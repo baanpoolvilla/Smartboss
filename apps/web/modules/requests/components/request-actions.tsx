@@ -18,6 +18,7 @@ import { METHOD_LABEL, SIMILAR_SLIP_PREFIX, baht, parseMoney, round2, thaiDate, 
 import { FilePicker } from "./file-picker";
 import { MoneyRow, Notice } from "./ui";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 const field = "h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm text-(--ink) focus-visible:border-(--app) focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-(--app)/25";
 const primary = "inline-flex h-11 items-center justify-center gap-2 rounded-(--radius) bg-(--app) px-4 text-sm font-semibold text-white hover:brightness-95 disabled:opacity-50";
 const outline = "inline-flex h-11 items-center justify-center gap-2 rounded-(--radius) border border-(--line) bg-(--bg) px-4 text-sm font-medium text-(--ink) hover:bg-(--bg-soft) disabled:opacity-50";
@@ -45,15 +46,16 @@ function useRun() {
 /* ───────── อนุมัติ ───────── */
 
 export function DecidePanel({ id, version, level, isOt, forwardsToCeo = false, firstBy = null }: { id: string; version: string; level: "hr" | "ceo"; isOt: boolean; forwardsToCeo?: boolean; firstBy?: string | null }) {
+  const ceo = useCeoTitle();
   const { busy, error, run } = useRun();
   const [note, setNote] = useState("");
   return (
     <section className="flex flex-col gap-3 rounded-(--radius-lg) border-2 border-(--app) bg-(--bg) p-4">
       <div>
-        <h2 className="text-base font-bold text-(--ink)">รอคุณ{level === "ceo" ? " (CEO)" : ""}อนุมัติ</h2>
+        <h2 className="text-base font-bold text-(--ink)">รอคุณ{level === "ceo" ? ` (${ceo})` : ""}อนุมัติ</h2>
         <p className="text-xs text-(--ink-soft)">{isOt ? "ดูเวลาสแกนและหลักฐานในใบว่าทำงานจริง" : "ดูรายการและหลักฐานในใบก่อนตัดสิน"}</p>
-        {forwardsToCeo && <p className="mt-1 text-xs font-medium text-amber-700">ยอดเกินเกณฑ์ — คุณอนุมัติแล้วจะส่งต่อให้ CEO อนุมัติอีกขั้น</p>}
-        {firstBy && <p className="mt-1 text-xs font-medium text-emerald-700">{firstBy} (HR) ผ่านแล้ว — เหลือ CEO</p>}
+        {forwardsToCeo && <p className="mt-1 text-xs font-medium text-amber-700">ยอดเกินเกณฑ์ — คุณอนุมัติแล้วจะส่งต่อให้ {ceo} อนุมัติอีกขั้น</p>}
+        {firstBy && <p className="mt-1 text-xs font-medium text-emerald-700">{firstBy} (HR) ผ่านแล้ว — เหลือ {ceo}</p>}
       </div>
       <label className="flex flex-col gap-1.5 text-sm">
         <span className="font-semibold text-(--ink)">หมายเหตุ <span className="font-normal text-(--ink-soft)">(ไม่อนุมัติต้องใส่)</span></span>
@@ -63,7 +65,7 @@ export function DecidePanel({ id, version, level, isOt, forwardsToCeo = false, f
       <div className="grid grid-cols-2 gap-2">
         <button type="button" className={primary} disabled={busy} onClick={() => run(() => decideRequestAction({ id, outcome: "approve", note, version }))}>
           {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-          {forwardsToCeo ? "อนุมัติ → ส่ง CEO" : "อนุมัติ"}
+          {forwardsToCeo ? `อนุมัติ → ส่ง ${ceo}` : "อนุมัติ"}
         </button>
         <button type="button" className={dangerOutline} disabled={busy || !note.trim()} onClick={() => run(() => decideRequestAction({ id, outcome: "reject", note, version }))}>
           ไม่อนุมัติ

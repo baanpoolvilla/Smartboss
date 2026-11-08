@@ -34,6 +34,7 @@ import { maintenanceScoreWatch } from "@/modules/maintenance/data/score-watch";
 import { ScoreWatchSection } from "@/modules/maintenance/components/score-watch-section";
 import { countPileups } from "@/modules/maintenance/data/pm-rounds";
 
+import { ceoTitle } from "@/lib/ceo-title";
 const STATUS_META: Record<
   string,
   { color: string; Icon: typeof FileText }
@@ -95,6 +96,7 @@ function SectionHeader({ title, href }: { title: string; href: string }) {
 
 /** แดชบอร์ด — port จาก dashboard_screen.dart */
 export default async function MaintenanceDashboardPage() {
+  const ceo = await ceoTitle();
   const session = await requireOrg();
   if (!hasPermission(session, MAINT_PERMS.access)) redirect("/");
   const orgId = session.orgId;
@@ -161,7 +163,7 @@ export default async function MaintenanceDashboardPage() {
         >
           <span aria-hidden="true">⚠</span>
           <span className="flex-1">
-            <b className="text-red-700">PM ค้างหลายรอบ {pileups} แผน</b> รอ CEO ตัดสิน: รอบไหนไม่ต้องทำ, หักคะแนนหรือไม่ หรือรวบเป็นใบเดียว
+            <b className="text-red-700">PM ค้างหลายรอบ {pileups} แผน</b> รอ {ceo} ตัดสิน: รอบไหนไม่ต้องทำ, หักคะแนนหรือไม่ หรือรวบเป็นใบเดียว
           </span>
           <span className="font-semibold text-red-700">ดูและตัดสิน →</span>
         </Link>
@@ -169,7 +171,7 @@ export default async function MaintenanceDashboardPage() {
       {/* ─── การ์ดสรุป 4 ช่อง ─── */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <SummaryCard
-          title="PR รอ CEO อนุมัติ"
+          title={`PR รอ ${ceo} อนุมัติ`}
           value={stats.pendingPr}
           color="#EA580C"
           href="/maintenance/purchase-orders"

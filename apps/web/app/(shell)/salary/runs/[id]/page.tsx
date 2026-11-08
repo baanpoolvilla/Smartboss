@@ -18,6 +18,8 @@ import { DEFAULT_SSO, TH_MONTH, fmtBaht, periodLabel, rateOn, shiftPeriod, thaiD
 import { WorkDaysLine } from "@/modules/salary/components/work-days";
 import { loadRequests, withRequestsTenant } from "@/modules/requests/lib/db";
 
+import { ceoTitle } from "@/lib/ceo-title";
+import { ceoText } from "@/lib/ceo-title-shared";
 export const dynamic = "force-dynamic";
 
 const TAG: Record<ChangeItem["tag"], { text: string; cls: string }> = {
@@ -41,6 +43,7 @@ const TAG: Record<ChangeItem["tag"], { text: string; cls: string }> = {
  * · สรุปยอดด้านล่าง · โน้ต · ประวัติ — CEO เห็นสรุป "สิ่งที่เปลี่ยน" + ปุ่มอนุมัติเมื่อรออนุมัติ
  */
 export default async function RunPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ edit?: string }> }) {
+  const ceo = await ceoTitle();
   const { session, access } = await salaryPage({ edit: true });
   const { id } = await params;
   const sp = await searchParams;
@@ -58,7 +61,7 @@ export default async function RunPage({ params, searchParams }: { params: Promis
         loadRequests(tx, orgId, { beneficiaryKind: "staff", deductedAt: null, deductAmount: { gt: 0 }, workDate: { gt: new Date(`${run.endsOn}T00:00:00Z`) } }, 200),
       )
     : [];
-  const st = STATUS_LABEL[run.status]!;
+  const st = { ...STATUS_LABEL[run.status]!, label: ceoText(STATUS_LABEL[run.status]!.label, ceo) };
   const editable = run.status === "draft";
   const t = run.totals ?? { people: 0, gross: 0, deductions: 0, net: 0, ssoEmployee: 0, ssoEmployer: 0, tax: 0, transferNet: 0, cashNet: 0, skipped: [], warnings: 0, negatives: 0 };
   const summary = run.status === "submitted" || run.status === "approved" ? await approvalSummary(orgId, run) : null;
@@ -99,7 +102,7 @@ export default async function RunPage({ params, searchParams }: { params: Promis
     : null;
   const steps = [
     { id: "draft", text: "เตรียม · ตรวจ" },
-    { id: "submitted", text: "CEO อนุมัติ" },
+    { id: "submitted", text: `${ceo} อนุมัติ` },
     { id: "approved", text: "โอนเงิน" },
     { id: "paid", text: "จ่ายแล้ว · ส่งสลิป" },
   ];
@@ -123,7 +126,7 @@ export default async function RunPage({ params, searchParams }: { params: Promis
       <>
         <span>HR ตรวจและแก้ได้ทุกอย่างในขั้นนี้ — กดชื่อคนเพื่อเพิ่ม/หักรายการ</span>
         <span>อนุมัติ OT/เบิกเพิ่มทีหลัง หรือแก้เงินเดือน → กด &quot;ดึงข้อมูลใหม่&quot; (รายการที่เพิ่มเองไม่หาย)</span>
-        <span>เสร็จแล้วกด &quot;ส่งให้ CEO อนุมัติ&quot; — ส่งแล้วแก้ไม่ได้จนกว่า CEO ส่งกลับ</span>
+        <span>เสร็จแล้วกด &quot;ส่งให้ {ceo} อนุมัติ&quot; — ส่งแล้วแก้ไม่ได้จนกว่า {ceo} ส่งกลับ</span>
       </>
     ),
     submitted: (
@@ -137,7 +140,7 @@ export default async function RunPage({ params, searchParams }: { params: Promis
       <>
         <span>1. โหลด &quot;ไฟล์โอนธนาคาร&quot; → โอนในแอปธนาคาร (คนรับเงินสดอยู่ท้ายไฟล์)</span>
         <span>2. โอนเสร็จจริงแล้วค่อยกด &quot;บันทึกการจ่ายเงินเดือน&quot; → สลิปส่งถึงพนักงานเอง</span>
-        <Example>เจอผิดก่อนกดบันทึกจ่าย? CEO กด &quot;ยกเลิกอนุมัติ (ส่งกลับแก้)&quot; ได้</Example>
+        <Example>เจอผิดก่อนกดบันทึกจ่าย? {ceo} กด &quot;ยกเลิกอนุมัติ (ส่งกลับแก้)&quot; ได้</Example>
       </>
     ),
     paid: (
@@ -154,7 +157,7 @@ export default async function RunPage({ params, searchParams }: { params: Promis
           { target: "row-name", title: "กดชื่อเพื่อดูทีละบรรทัด", body: "ทุกตัวเลขบอกที่มา — เงินเดือน ประกันสังคม ภาษี OT เบิกล่วงหน้า · เพิ่ม/หักเฉพาะคนที่ต่างจากปกติตรงนั้น" },
           { target: "row-warn", title: "ดูแถวที่มี ⚠ ก่อน", body: "ระบบเตือนเมื่อมีอะไรต้องเช็ก เช่น ไม่มีเลขบัญชี ยังไม่มียอดยกมา ยอดติดลบ · แถวที่ไม่มี ⚠ ปกติไม่ต้องแตะ" },
           { target: "recompute", title: "อนุมัติใบ OT เพิ่ม? กดดึงข้อมูลใหม่", body: "OT เบิกล่วงหน้า ลา และเงินเดือนที่เปลี่ยน ดึงมาใหม่ทั้งหมด · รายการที่คุณเพิ่มเองไม่หาย" },
-          { target: "submit", title: "เสร็จแล้วส่งให้ CEO", body: "CEO ได้แจ้งเตือน ดูสรุป “ควรดู” แล้วอนุมัติหรือส่งกลับพร้อมเหตุผล" },
+          { target: "submit", title: `เสร็จแล้วส่งให้ ${ceo}`, body: `${ceo} ได้แจ้งเตือน ดูสรุป “ควรดู” แล้วอนุมัติหรือส่งกลับพร้อมเหตุผล` },
         ]
       : run.status === "submitted"
         ? [
@@ -253,14 +256,14 @@ export default async function RunPage({ params, searchParams }: { params: Promis
                     people={reviewPeople}
                     items={reviewItems}
                     editable
-                    trigger={settings.approvalMode === "hr" ? "ตรวจแล้วยืนยันยอด" : "ตรวจแล้วส่งให้ CEO"}
+                    trigger={settings.approvalMode === "hr" ? "ตรวจแล้วยืนยันยอด" : `ตรวจแล้วส่งให้ ${ceo}`}
                     submit={{ mode: settings.approvalMode, blocks, negatives: run.lines.filter((l) => l.net < 0).map((l) => l.name), warnings: t.warnings }}
                   />
                 </span>
               </>
             )}
             <Link href={`/salary/runs/${run.id}/report`} className={outline}><ClipboardList className="h-4 w-4" aria-hidden="true" /> รายงานเงินเดือน</Link>
-            {run.status === "submitted" && !access.canApprove && <Notice tone="info">ส่งให้ CEO แล้ว{run.submittedByName ? ` โดย ${run.submittedByName}` : ""} — รออนุมัติ</Notice>}
+            {run.status === "submitted" && !access.canApprove && <Notice tone="info">ส่งให้ {ceo} แล้ว{run.submittedByName ? ` โดย ${run.submittedByName}` : ""} — รออนุมัติ</Notice>}
             {run.status === "approved" && (
               <>
                 {access.canApprove && <ApproveBar runId={run.id} net={t.net} canApprove approved />}
@@ -294,7 +297,7 @@ export default async function RunPage({ params, searchParams }: { params: Promis
           <section className={`${card} flex flex-col gap-3 border-2 border-(--brand-navy,#1b2537) p-4 sm:p-5`}>
             <div data-tour="review" className="flex flex-wrap items-end justify-between gap-3">
               <div>
-                <h2 className="text-base font-bold text-(--ink)">{access.canApprove ? "รอคุณอนุมัติ" : "รอ CEO อนุมัติ"}</h2>
+                <h2 className="text-base font-bold text-(--ink)">{access.canApprove ? "รอคุณอนุมัติ" : `รอ ${ceo} อนุมัติ`}</h2>
                 <p className="text-sm text-(--ink-soft)">
                   ต้องโอนให้พนักงาน {t.people} คน รวม <strong className="text-(--ink)">{fmtBaht(t.net)}</strong>
                   {summary.prevNet !== null && (

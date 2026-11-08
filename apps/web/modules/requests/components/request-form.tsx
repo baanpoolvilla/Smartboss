@@ -23,6 +23,8 @@ import { FilePicker } from "./file-picker";
 import { PersonPicker, type PickItem } from "./person-picker";
 import { KindChip, MoneyRow, Notice } from "./ui";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
+import { ceoText } from "@/lib/ceo-title-shared";
 export interface FormPerson {
   userId: string;
   name: string;
@@ -101,6 +103,7 @@ export function RequestForm({
   workerOtPercent?: number;
   initial?: EditInitial;
 }) {
+  const ceo = useCeoTitle();
   const router = useRouter();
   const [kind, setKind] = useState<RequestKind | null>(initialKind && kinds.includes(initialKind) ? initialKind : kinds.length === 1 ? kinds[0]! : null);
   const [beneficiary, setBeneficiary] = useState<string>(initial?.beneficiaryUserId ?? "");
@@ -325,7 +328,7 @@ export function RequestForm({
             </span>
             <span className="text-xs text-(--ink-soft)">{m.hint}</span>
             <span className="text-[11px] text-(--ink-soft)">
-              {m.who} · {m.approver}
+              {m.who} · {ceoText(m.approver, ceo)}
             </span>
           </button>
         );
@@ -796,14 +799,14 @@ export function RequestForm({
                         <span className="shrink-0 text-amber-700">HR ใส่ยอด</span>
                       </div>
                     ))}
-                    <span className="text-[11px] text-(--ink-soft)">ยอดของพนักงานประจำเห็นเฉพาะเจ้าตัว / CEO / ผู้ดูแลเงินเดือน</span>
+                    <span className="text-[11px] text-(--ink-soft)">ยอดของพนักงานประจำเห็นเฉพาะเจ้าตัว / {ceo} / ผู้ดูแลเงินเดือน</span>
                   </div>
                 ) : (
                 <>
                 {preview?.formula && <div className="rounded-(--radius) bg-(--bg-soft) px-2.5 py-2 text-xs text-(--ink-soft)">{preview.formula}</div>}
                 {person && preview?.payHidden ? (
                   <div className="border-t border-(--line) pt-2 text-sm text-(--ink-soft)">
-                    ค่า OT: ระบบคิดจากเงินเดือนให้เอง ({preview.rateLabel ?? `${preview.percent ?? ""}%`}) — ยอดเงินเห็นเฉพาะเจ้าตัว / CEO / ผู้ดูแลเงินเดือน
+                    ค่า OT: ระบบคิดจากเงินเดือนให้เอง ({preview.rateLabel ?? `${preview.percent ?? ""}%`}) — ยอดเงินเห็นเฉพาะเจ้าตัว / {ceo} / ผู้ดูแลเงินเดือน
                   </div>
                 ) : person && manualOt ? (
                   <div className="flex items-center justify-between border-t border-(--line) pt-2 text-sm">
@@ -852,12 +855,12 @@ export function RequestForm({
             <div className="rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4 text-sm">
               <div className="font-bold text-(--ink)">ใครอนุมัติ</div>
               <div className="mt-1 text-(--ink-soft)">
-                {preview.approverLevel === "ceo" ? "CEO" : "HR"}
+                {preview.approverLevel === "ceo" ? ceo : "HR"}
                 {preview.approverNames.length > 0 ? ` · ${preview.approverNames.join(", ")}` : ""}
               </div>
               {preview.needCeo && (
                 <div className="mt-1 text-(--ink-soft)">
-                  → แล้วต่อ CEO{preview.ceoNames.length > 0 ? ` · ${preview.ceoNames.join(", ")}` : ""}
+                  → แล้วต่อ {ceo}{preview.ceoNames.length > 0 ? ` · ${preview.ceoNames.join(", ")}` : ""}
                   <span className="block text-xs">ยอดเกินเกณฑ์ที่บริษัทตั้งไว้</span>
                 </div>
               )}

@@ -6,6 +6,7 @@ import { ROUND_REMIND_DAYS } from "@/modules/maintenance/lib/pm-rounds";
 import { Button } from "@smartboss/ui/components/button";
 import { Modal } from "./dialog";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 /**
  * บอกกติกา PM ให้คนใช้งานรู้ตรงหน้าจอ (ผู้ใช้ 4/11/2569 "อยากให้มีบอกให้ชัดเจน")
  * ตัวเลขมาจากการตั้งค่าจริงของบริษัท เปลี่ยนคะแนนแล้วข้อความเปลี่ยนตาม
@@ -14,6 +15,7 @@ import { Modal } from "./dialog";
  * คนที่รู้แล้วไม่ต้องเห็นทุกครั้ง คนที่ไม่เข้าใจกดอ่านได้
  */
 export function PmRulesNote({ points, leadDays, className = "" }: { points: number; leadDays: number; className?: string }) {
+  const ceo = useCeoTitle();
   const [open, setOpen] = useState(false);
   const before = ROUND_REMIND_DAYS.filter((d) => d > 0 && d < leadDays).join(", ");
   return (
@@ -46,7 +48,7 @@ export function PmRulesNote({ points, leadDays, className = "" }: { points: numb
               <li>รอบเดินตามวันที่ตั้งไว้ ปิดงานวันไหนรอบถัดไปก็ไม่ขยับ</li>
               <li>สร้างแผนแล้วครบกำหนดภายใน {leadDays} วัน ใบงานขึ้นทันที</li>
               <li>เลยกำหนดเตือนทุกวันจนกว่าจะปิด ไม่มีผ่อนผัน</li>
-              <li>ค้างตั้งแต่ 2 รอบ CEO รวมเป็นใบเดียวและเลือกได้ว่าจะหักคะแนนหรือไม่ ทำครั้งเดียวครบหลายรอบให้แจ้ง CEO</li>
+              <li>ค้างตั้งแต่ 2 รอบ {ceo} รวมเป็นใบเดียวและเลือกได้ว่าจะหักคะแนนหรือไม่ ทำครั้งเดียวครบหลายรอบให้แจ้ง {ceo}</li>
               <li>แผนแบบกลุ่ม: ใบทุกรอบเปิดให้ทุกคนในทีม เลยกำหนดหักเฉพาะคนที่ยังไม่เสร็จ</li>
               <li>แผนแบบจำกัดจำนวนครั้งต่างออกไป: นัดวันเองทีละครั้งหลังจบแต่ละครั้ง</li>
             </ul>

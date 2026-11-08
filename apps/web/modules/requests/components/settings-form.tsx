@@ -8,10 +8,13 @@ import { saveSettingsAction } from "../actions";
 import { KIND_META, KINDS, routeText, type AdvanceCapMode, type ApprovalRoute, type OtRate, type RequestKind, type RequestSettings } from "../lib/types";
 import { Notice } from "./ui";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
+import { ceoText } from "@/lib/ceo-title-shared";
 const field = "h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm text-(--ink)";
 const fieldNoW = field.replace("w-full ", "");
 
 export function SettingsForm({ initial }: { initial: RequestSettings }) {
+  const ceo = useCeoTitle();
   const router = useRouter();
   const [busy, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -60,20 +63,20 @@ export function SettingsForm({ initial }: { initial: RequestSettings }) {
       <section className="flex flex-col gap-3 rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4">
         <div>
           <h2 className="text-sm font-bold text-(--ink)">ใครอนุมัติ</h2>
-          <p className="text-xs text-(--ink-soft)">ตั้งแยกแต่ละประเภท · ใบที่ HR ยื่นเองหรือเป็นผู้ได้เงินเอง ไป CEO เสมอ (อนุมัติใบตัวเองไม่ได้) · มีผลกับใบที่ยื่นใหม่</p>
+          <p className="text-xs text-(--ink-soft)">ตั้งแยกแต่ละประเภท · ใบที่ HR ยื่นเองหรือเป็นผู้ได้เงินเอง ไป {ceo} เสมอ (อนุมัติใบตัวเองไม่ได้) · มีผลกับใบที่ยื่นใหม่</p>
         </div>
         <ul className="flex flex-col divide-y divide-(--line)">
           {KINDS.map((k) => (
             <li key={k} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:gap-4">
               <div className="min-w-0 sm:w-44">
                 <div className="text-sm font-semibold text-(--ink)">{KIND_META[k].label}</div>
-                <div className="text-xs text-(--ink-soft)">{routeText(toRoute(k))}</div>
+                <div className="text-xs text-(--ink-soft)">{ceoText(routeText(toRoute(k)), ceo)}</div>
               </div>
               <div className="flex flex-wrap gap-1.5" role="group" aria-label={`ผู้อนุมัติ ${KIND_META[k].label}`}>
                 {(
                   [
                     ["hr", "HR อนุมัติ"],
-                    ["ceo", "CEO อนุมัติทุกใบ"],
+                    ["ceo", `${ceo} อนุมัติทุกใบ`],
                   ] as ["hr" | "ceo", string][]
                 ).map(([m, label]) => (
                   <button key={m} type="button" aria-pressed={routes[k].mode === m} onClick={() => setRoute(k, { mode: m })} className={`h-9 rounded-full px-3.5 text-sm ${routes[k].mode === m ? "bg-(--brand-navy) font-semibold text-white" : "border border-(--line)"}`}>
@@ -84,14 +87,14 @@ export function SettingsForm({ initial }: { initial: RequestSettings }) {
               {routes[k].mode === "hr" && (
                 <label className="flex flex-1 items-center gap-2 text-sm">
                   <span className="shrink-0 text-(--ink-soft)">ถ้ายอดเกิน</span>
-                  <input inputMode="decimal" className={`${fieldNoW} w-28 text-right`} value={routes[k].above} placeholder="ไม่ต้อง" onChange={(e) => setRoute(k, { above: e.target.value })} aria-label={`เกณฑ์ส่งต่อ CEO ของ ${KIND_META[k].label}`} />
-                  <span className="text-(--ink-soft)">บาท ต้องผ่าน CEO ด้วย</span>
+                  <input inputMode="decimal" className={`${fieldNoW} w-28 text-right`} value={routes[k].above} placeholder="ไม่ต้อง" onChange={(e) => setRoute(k, { above: e.target.value })} aria-label={`เกณฑ์ส่งต่อ ${ceo} ของ ${KIND_META[k].label}`} />
+                  <span className="text-(--ink-soft)">บาท ต้องผ่าน {ceo} ด้วย</span>
                 </label>
               )}
             </li>
           ))}
         </ul>
-        <p className="text-xs text-(--ink-soft)">เว้นช่องว่าง = HR อนุมัติจบเลย ไม่ต้องผ่าน CEO · ใส่ 0 = ทุกใบผ่าน HR แล้วต่อ CEO</p>
+        <p className="text-xs text-(--ink-soft)">เว้นช่องว่าง = HR อนุมัติจบเลย ไม่ต้องผ่าน {ceo} · ใส่ 0 = ทุกใบผ่าน HR แล้วต่อ {ceo}</p>
       </section>
 
       <section className="flex flex-col gap-3 rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4">
@@ -152,7 +155,7 @@ export function SettingsForm({ initial }: { initial: RequestSettings }) {
           <span>
             “ซื้อของเอง” ต้องมีคนตรวจทีหลัง
             <span className="block text-xs text-(--ink-soft)">
-              คนถือเงินจ่ายไปก่อนได้ แล้ว HR (หรือ CEO ถ้าคนถือเป็น HR) กดผ่าน/ไม่ผ่าน · ไม่ผ่าน = เงินขาดรอคืน ไม่นับเป็นค่าใช้จ่าย · ปิด = ลงแล้วจบ ไม่ต้องตรวจ
+              คนถือเงินจ่ายไปก่อนได้ แล้ว HR (หรือ {ceo} ถ้าคนถือเป็น HR) กดผ่าน/ไม่ผ่าน · ไม่ผ่าน = เงินขาดรอคืน ไม่นับเป็นค่าใช้จ่าย · ปิด = ลงแล้วจบ ไม่ต้องตรวจ
             </span>
           </span>
         </label>

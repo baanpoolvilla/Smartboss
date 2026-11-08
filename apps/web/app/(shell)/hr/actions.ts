@@ -36,6 +36,7 @@ import { thaiHolidayEvents } from "@/modules/report_task/data/thai-holidays";
 import { createOtFromHrApproval } from "@/modules/requests/lib/hr-ot-link";
 import { salaryAccess } from "@/modules/salary/lib/access";
 
+import { ceoTitle } from "@/lib/ceo-title";
 /**
  * อนุมัติลา / แก้เวลาแล้ว → คำนวณผลลงเวลาใหม่และคืนคะแนนที่หักไปแล้วทันที ไม่ต้องรอ cron 08:00/17:00
  * (เจอจริง: อนุมัติ WFH ย้อนหลังแล้วหน้าคะแนนยังขึ้น "ขาดงาน" อยู่จนรอบถัดไป)
@@ -56,9 +57,10 @@ function refreshAttendanceScores() {
  * (ผู้ใช้กำหนด 22/10/2569 · modules/salary/lib/access.ts)
  */
 async function guardSalary() {
+  const ceo = await ceoTitle();
   const session = await requireOrg();
   if (!(await salaryAccess(session)).canEdit) {
-    throw new Error("เฉพาะ CEO และคนที่ CEO เลือก (เงินเดือน › ตั้งค่า) เท่านั้นที่แก้ข้อมูลเงินเดือนได้");
+    throw new Error(`เฉพาะ ${ceo} และคนที่ ${ceo} เลือก (เงินเดือน › ตั้งค่า) เท่านั้นที่แก้ข้อมูลเงินเดือนได้`);
   }
   return session;
 }
@@ -449,6 +451,7 @@ export async function importEmployeesAction(formData: FormData) {
 }
 
 export async function addCompensationRateAction(formData: FormData) {
+  const ceo = await ceoTitle();
   await guardSalary();
   const employmentId = String(formData.get("employment_id") ?? "");
   const amount = String(formData.get("amount") ?? "").trim();
@@ -475,7 +478,7 @@ export async function addCompensationRateAction(formData: FormData) {
   } catch (error) {
     if (error instanceof WorkforceError && error.status === 403) {
       throw new Error(
-        "ระบบบุคคลยังไม่ได้เปิดสิทธิ์ฐานเงินเดือนให้บัญชีนี้ — ให้ CEO เอาชื่อออกแล้วเพิ่มใหม่ที่ เงินเดือน › ตั้งค่า " +
+        `ระบบบุคคลยังไม่ได้เปิดสิทธิ์ฐานเงินเดือนให้บัญชีนี้ — ให้ ${ceo} เอาชื่อออกแล้วเพิ่มใหม่ที่ เงินเดือน › ตั้งค่า ` +
           "(ระบบจะส่งสิทธิ์ไปให้ใหม่) แล้วลองอีกครั้ง",
       );
     }
@@ -1749,8 +1752,9 @@ async function yearlyOverError(leaveTypeId: string, employmentId: string, dates:
  * ผู้ใช้ 5/11/2569 "ห้ามให้คนอื่นเห็นนอกจากเจ้าตัวเอง" (+ HR ที่กรอก และ CEO)
  */
 async function guardYearlyEntitlements() {
+  const ceo = await ceoTitle();
   const session = await requireOrg();
-  if (!canSeeYearlyEntitlements(session)) throw new Error("เฉพาะฝ่ายบุคคลและ CEO เท่านั้น");
+  if (!canSeeYearlyEntitlements(session)) throw new Error(`เฉพาะฝ่ายบุคคลและ ${ceo} เท่านั้น`);
 }
 
 export async function setYearlyEntitlementAction(formData: FormData): Promise<{ error?: string; ok?: boolean }> {
@@ -2367,10 +2371,11 @@ export async function rejectAttendanceCorrectionAction(formData: FormData) {
  * ของแต่ละ <form> ไม่ใช่ formAction/value ของปุ่ม (ปุ่มกินค่าตัวเองจนฟอร์มพังเงียบ)
  */
 export async function decideOvertimeAction(formData: FormData) {
+  const ceo = await ceoTitle();
   const session = await guard(HR_PERMS.employeeManage);
   // เฉพาะคนที่อนุมัติ OT ในเบิกจ่าย & OT ได้ (พี่เซี้ย + CEO) — ผู้ใช้ 8/11/2569
   if (!hasPermission(session, REQ_PERMS.approve) && !hasPermission(session, REQ_PERMS.approveCeo)) {
-    throw new Error("อนุมัติ OT ได้เฉพาะ HR / CEO ที่อนุมัติ OT ในเบิกจ่าย & OT");
+    throw new Error(`อนุมัติ OT ได้เฉพาะ HR / ${ceo} ที่อนุมัติ OT ในเบิกจ่าย & OT`);
   }
 
   const employmentId = String(formData.get("employment_id") ?? "");

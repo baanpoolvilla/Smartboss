@@ -60,6 +60,8 @@ import {
   type RequestSettings,
 } from "./lib/types";
 
+import { ceoTitle } from "@/lib/ceo-title";
+import { ceoText } from "@/lib/ceo-title-shared";
 type Result<T = object> = ({ ok: true } & T) | { ok?: false; error: string };
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -287,6 +289,7 @@ async function advanceUsed(tx: Tx, orgId: string, userId: string, month: string,
 }
 
 async function computePreview(session: OrgSession, input: PreviewInput, settings: RequestSettings): Promise<Preview> {
+  const ceo = await ceoTitle();
   const orgId = session.orgId;
   const p: Preview = {
     beneficiaryKind: null,
@@ -321,7 +324,7 @@ async function computePreview(session: OrgSession, input: PreviewInput, settings
   const selfOnly = input.kind === "ot" || input.kind === "advance";
   if (who && selfOnly && who.userId === session.userId) p.blocks.push(input.kind === "ot" ? "ลง OT ให้ตัวเองไม่ได้ — ให้แอดมินเป็นคนลง" : "ขอเบิกล่วงหน้าให้ตัวเองไม่ได้ — ให้ผู้ดูแลบ้านหรือ HR เป็นคนขอ");
   if (who && (input.kind === "expense" || input.kind === "cash_advance") && who.userId === session.userId && hasPermission(session, REQ_PERMS.approveCeo)) {
-    p.blocks.push("CEO ไม่ต้องยื่นเบิกของตัวเอง");
+    p.blocks.push(`${ceo} ไม่ต้องยื่นเบิกของตัวเอง`);
   }
 
   if (input.kind === "ot" && who) {
@@ -411,9 +414,9 @@ async function computePreview(session: OrgSession, input: PreviewInput, settings
       const ceoIds = await eligibleApprovers(orgId, "ceo", session.userId, who?.userId ?? null);
       const ceos = ceoIds.length ? await prisma.user.findMany({ where: { orgId, id: { in: ceoIds } }, select: { name: true } }) : [];
       p.ceoNames = ceos.map((u) => u.name);
-      if (ceoIds.length === 0) p.blocks.push("ยอดเกินเกณฑ์ต้องให้ CEO อนุมัติต่อ แต่ไม่มี CEO ที่อนุมัติใบนี้ได้");
+      if (ceoIds.length === 0) p.blocks.push(`ยอดเกินเกณฑ์ต้องให้ ${ceo} อนุมัติต่อ แต่ไม่มี ${ceo} ที่อนุมัติใบนี้ได้`);
     }
-    if (ids.length === 0) p.blocks.push(p.approverLevel === "ceo" ? "ไม่มี CEO ที่อนุมัติใบนี้ได้ (คนยื่น/ผู้ได้เงินอนุมัติเองไม่ได้)" : "ไม่มี HR ที่อนุมัติใบนี้ได้ — ตั้งสิทธิ์ที่ /admin/roles");
+    if (ids.length === 0) p.blocks.push(p.approverLevel === "ceo" ? `ไม่มี ${ceo} ที่อนุมัติใบนี้ได้ (คนยื่น/ผู้ได้เงินอนุมัติเองไม่ได้)` : "ไม่มี HR ที่อนุมัติใบนี้ได้ — ตั้งสิทธิ์ที่ /admin/roles");
   }
   return p;
 }
@@ -910,11 +913,12 @@ export async function linkOtWorkerAction(input: { id: string; userId: string }):
  * ใส่แล้วใบอนุมัติได้ (ไม่ผูกชื่อ = จ่ายตรงจากใบ) · เฉพาะคนที่อนุมัติ OT ได้ (HR/CEO)
  */
 export async function setUnlinkedOtAmountAction(input: { id: string; mode: "daily" | "manual"; value: number; note?: string }): Promise<Result> {
+  const ceo = await ceoTitle();
   try {
     const session = await guard();
     const orgId = session.orgId;
     const viewer = await viewerOf(session);
-    if (!(viewer.canApprove || viewer.canApproveCeo)) return { error: "ใส่ยอด OT ได้เฉพาะ HR / CEO" };
+    if (!(viewer.canApprove || viewer.canApproveCeo)) return { error: `ใส่ยอด OT ได้เฉพาะ HR / ${ceo}` };
     const r = await withRequestsTenant(orgId, (tx) => loadOne(tx, orgId, input.id));
     if (!r || !canSee(r, viewer)) return { error: "ไม่พบคำขอ" };
     // ชื่อที่ยังไม่มีในระบบ หรือพนักงานที่ยังไม่มีเงินเดือนในระบบ (ยื่นแบบไม่มียอด — ผู้ใช้ 8/11/2569)
@@ -922,7 +926,7 @@ export async function setUnlinkedOtAmountAction(input: { id: string; mode: "dail
     if (!(r.kind === "ot" && r.status === "pending" && !r.firstDecidedAt && (unlinked || r.otBaseKind === "manual"))) return { error: "ใบนี้ไม่ได้รอใส่ยอด (ผูกชื่อแล้ว หรือตัดสินไปแล้ว)" };
     if (r.beneficiaryUserId === session.userId) return { error: "ใส่ยอด OT ของตัวเองไม่ได้ — ให้ HR คนอื่นใส่" };
     if (unlinked && r.createdBy === session.userId) return { error: "ใส่ยอดใบที่ตัวเองลงไม่ได้ — ให้ HR คนอื่นใส่" };
-    if (!unlinked && !canSeePay(await payPrivacy(session), r)) return { error: "ยอด OT พนักงานประจำใส่ได้เฉพาะ CEO / ผู้ดูแลเงินเดือน" };
+    if (!unlinked && !canSeePay(await payPrivacy(session), r)) return { error: `ยอด OT พนักงานประจำใส่ได้เฉพาะ ${ceo} / ผู้ดูแลเงินเดือน` };
     if (!unlinked && input.mode !== "manual") return { error: "ใส่ยอด OT" };
     const value = round2(Number(input.value));
     if (!Number.isFinite(value) || value <= 0 || value > 100_000) return { error: input.mode === "daily" ? "ใส่ค่าแรงต่อวัน" : "ใส่ยอด OT" };
@@ -974,11 +978,12 @@ export async function setUnlinkedOtAmountAction(input: { id: string; mode: "dail
  * อนุมัติแล้วยอดที่กรอกไปอยู่ในบัญชีค่าแรงแทนสูตรชั่วโมง (OtEntry.amount) · พนักงานประจำไม่มีตัวเลือกนี้ · แก้ได้จนกว่าจะอนุมัติ
  */
 export async function setWorkerOtAmountAction(input: { id: string; mode: "system" | "manual"; value?: number; note?: string }): Promise<Result> {
+  const ceo = await ceoTitle();
   try {
     const session = await guard();
     const orgId = session.orgId;
     const viewer = await viewerOf(session);
-    if (!(viewer.canApprove || viewer.canApproveCeo)) return { error: "เปลี่ยนยอด OT ได้เฉพาะ HR / CEO" };
+    if (!(viewer.canApprove || viewer.canApproveCeo)) return { error: `เปลี่ยนยอด OT ได้เฉพาะ HR / ${ceo}` };
     const r = await withRequestsTenant(orgId, (tx) => loadOne(tx, orgId, input.id));
     if (!r || !canSee(r, viewer)) return { error: "ไม่พบคำขอ" };
     if (!(r.kind === "ot" && r.status === "pending" && !r.firstDecidedAt && r.beneficiaryKind === "worker" && r.beneficiaryUserId && r.employmentId)) return { error: "ใบนี้เปลี่ยนยอดไม่ได้ (ไม่ใช่ OT คนงานที่รออนุมัติ)" };
@@ -1026,6 +1031,7 @@ export async function setWorkerOtAmountAction(input: { id: string; mode: "system
  * ใบที่อนุมัติแล้วแก้ไม่ได้ (ผู้ใช้ตกลง 21/10/2569) — จ่ายน้อยกว่าทำตอนบันทึกจ่าย มากกว่าต้องยื่นใหม่
  */
 export async function updateRequestAction(id: string, input: CreateInput): Promise<Result<{ id: string }>> {
+  const ceo = await ceoTitle();
   try {
     const session = await guard();
     const orgId = session.orgId;
@@ -1063,7 +1069,7 @@ export async function updateRequestAction(id: string, input: CreateInput): Promi
     if (old.detail !== f.detail) changes.push("แก้รายละเอียด");
     if ((old.propertyId ?? null) !== f.propertyId || (old.workOrderId ?? null) !== f.workOrderId) changes.push("แก้บ้าน/ใบงาน");
     if (old.approverLevel !== f.approverLevel || old.needCeo !== f.needCeo) {
-      changes.push(f.needCeo ? "ยอดเกินเกณฑ์ ต้องผ่าน CEO ด้วย" : f.approverLevel === "ceo" ? "ผู้อนุมัติเปลี่ยนเป็น CEO" : "ผู้อนุมัติเปลี่ยนเป็น HR");
+      changes.push(f.needCeo ? `ยอดเกินเกณฑ์ ต้องผ่าน ${ceo} ด้วย` : f.approverLevel === "ceo" ? `ผู้อนุมัติเปลี่ยนเป็น ${ceo}` : "ผู้อนุมัติเปลี่ยนเป็น HR");
     }
     if (changes.length === 0) return { ok: true, id };
 
@@ -1099,6 +1105,7 @@ const thai = (d: string) => {
 /* ═════════════════════════ อนุมัติ / ไม่อนุมัติ / ยกเลิก ═════════════════════════ */
 
 export async function decideRequestAction(input: { id: string; outcome: "approve" | "reject"; note: string; version?: string }): Promise<Result> {
+  const ceo = await ceoTitle();
   try {
     const session = await guard();
     const orgId = session.orgId;
@@ -1108,25 +1115,26 @@ export async function decideRequestAction(input: { id: string; outcome: "approve
     const byName = await nameOf(session.userId);
     const r = await withRequestsTenant(orgId, (tx) => loadOne(tx, orgId, input.id));
     if (!r) return { error: "ไม่พบคำขอ" };
-    if (!canDecide(r, viewer)) return { error: r.status !== "pending" ? "ใบนี้ตัดสินไปแล้ว" : "คุณอนุมัติใบนี้ไม่ได้ (ใบของตัวเอง หรือต้องเป็น CEO)" };
+    if (!canDecide(r, viewer)) return { error: r.status !== "pending" ? "ใบนี้ตัดสินไปแล้ว" : `คุณอนุมัติใบนี้ไม่ได้ (ใบของตัวเอง หรือต้องเป็น ${ceo})` };
     // คนยื่นเพิ่งแก้ใบระหว่างที่เปิดดูอยู่ — ไม่ให้อนุมัติยอดเก่าที่เห็นบนจอ
     if (input.version && input.version !== r.updatedAt) return { error: "ใบนี้เพิ่งถูกแก้ไข — โหลดหน้าใหม่เพื่อดูยอดล่าสุดก่อนตัดสิน" };
 
     // ใบยอดเกินเกณฑ์: HR อนุมัติขั้นแรก → ส่งต่อ CEO (ยังไม่มีผล) · CEO กดเองตั้งแต่ขั้นแรก = จบทีเดียว
     if (input.outcome === "approve" && r.approverLevel === "hr" && r.needCeo && !viewer.canApproveCeo) {
       const moved = await withRequestsTenant(orgId, async (tx) => {
+  const ceo = await ceoTitle();
         const res = await tx.moneyRequest.updateMany({
           where: { orgId, id: r.id, status: "pending", approverLevel: "hr" },
           data: { approverLevel: "ceo", firstDecidedBy: session.userId, firstDecidedByName: byName, firstDecidedAt: new Date(), firstDecisionNote: note || null },
         });
         if (res.count === 0) return false;
-        await insertEvent(tx, orgId, { requestId: r.id, byUserId: session.userId, byName, action: "approve", summary: `HR อนุมัติขั้นแรก → ส่งต่อ CEO (ยอดเกินเกณฑ์)${note ? ` · ${note}` : ""}` });
+        await insertEvent(tx, orgId, { requestId: r.id, byUserId: session.userId, byName, action: "approve", summary: `HR อนุมัติขั้นแรก → ส่งต่อ ${ceo} (ยอดเกินเกณฑ์)${note ? ` · ${note}` : ""}` });
         return true;
       });
       if (!moved) return { error: "มีคนตัดสินใบนี้ไปก่อนแล้ว — รีเฟรช" };
       await clearActionNotifications(orgId, r.id, ["req_pending"]);
       void notifyApprovers(orgId, brief(r), "ceo", [r.createdBy, r.beneficiaryUserId ?? "", session.userId]);
-      void notifyResult(orgId, brief(r), [r.createdBy, staffOnly(r)], "HR ผ่านแล้ว รอ CEO");
+      void notifyResult(orgId, brief(r), [r.createdBy, staffOnly(r)], `HR ผ่านแล้ว รอ ${ceo}`);
       refresh(r.id);
       return { ok: true };
     }
@@ -1241,6 +1249,7 @@ export async function decideRequestAction(input: { id: string; outcome: "approve
 }
 
 export async function cancelRequestAction(input: { id: string; reason: string }): Promise<Result> {
+  const ceo = await ceoTitle();
   try {
     const session = await guard();
     const orgId = session.orgId;
@@ -1253,7 +1262,7 @@ export async function cancelRequestAction(input: { id: string; reason: string })
     const manager = viewer.canApprove || viewer.canApproveCeo || viewer.canPay;
     if (r.status === "rejected" || r.status === "cancelled") return { error: "ใบนี้จบไปแล้ว" };
     if (r.status === "pending" && r.createdBy !== session.userId && !manager) return { error: "ยกเลิกได้เฉพาะคนยื่น หรือ HR" };
-    if (r.status !== "pending" && !manager) return { error: "ใบที่อนุมัติแล้ว ยกเลิกได้เฉพาะ HR/CEO" };
+    if (r.status !== "pending" && !manager) return { error: `ใบที่อนุมัติแล้ว ยกเลิกได้เฉพาะ HR/${ceo}` };
     const workerLedger = r.kind === "ot" && r.beneficiaryKind === "worker" && !!r.beneficiaryUserId && r.status === "paid";
     const realPaid = r.payments.some((p) => !p.voided && p.method !== "worker_ledger");
     if (realPaid) return { error: "ใบนี้จ่ายเงินไปแล้ว — ยกเลิกการจ่ายก่อน แล้วค่อยยกเลิกใบ" };
@@ -1382,7 +1391,7 @@ export async function recordPaymentAction(input: PayInput): Promise<Result> {
           data: { orgId, employmentId: r.employmentId, payDate: dateOnly(paidOn), amount, kind: "advance", note: `${r.code} เบิกล่วงหน้า: ${r.title}`.slice(0, 200), byUserId: session.userId, byName },
         });
         dwPaymentId = dw.id;
-        await insertDwAudit(tx, orgId, { byUserId: session.userId, byName, action: "payment", employmentIds: [r.employmentId], workDate: paidOn, summary: `เบิกล่วงหน้า ${baht(amount, false)} บาท จากคำขอ ${r.code} (${approvedByText(r)})` });
+        await insertDwAudit(tx, orgId, { byUserId: session.userId, byName, action: "payment", employmentIds: [r.employmentId], workDate: paidOn, summary: `เบิกล่วงหน้า ${baht(amount, false)} บาท จากคำขอ ${r.code} (${ceoText(approvedByText(r), await ceoTitle(orgId))})` });
       }
       const paidTotal = round2(r.paidTotal + amount);
       const full = paidTotal >= r.netAmount - 0.005 || (short && input.closeShort === true);
@@ -1746,6 +1755,7 @@ export async function saveVendorAction(input: VendorInput): Promise<Result<{ id:
 /* ═════════════════════════ เงินสดย่อย ═════════════════════════ */
 
 export async function addPettyEntryAction(input: { holderUserId: string; kind: "top_up" | "adjust"; amount: number; note: string; attachments: Attachment[] }): Promise<Result> {
+  const ceo = await ceoTitle();
   try {
     const session = await guard();
     const orgId = session.orgId;
@@ -1755,7 +1765,7 @@ export async function addPettyEntryAction(input: { holderUserId: string; kind: "
     if (holder.id !== session.userId && !hasPermission(session, REQ_PERMS.pettyAdjust) && !(input.kind === "top_up" && canTopUp))
       return { error: "ลงได้เฉพาะเงินสดย่อยของตัวเอง (หรือ HR)" };
     // เติมเงิน: เฉพาะ HR/CEO และเติมให้ตัวเองตรง ๆ ไม่ได้ (ผู้ใช้ 30/10/2569) — ของตัวเองต้อง "ขอเติมเงิน" ให้อีกคนอนุมัติ
-    if (input.kind === "top_up" && !canTopUp) return { error: "เติมเงินได้เฉพาะ HR หรือ CEO — ผู้ถือกด “ขอเติมเงิน” แทน" };
+    if (input.kind === "top_up" && !canTopUp) return { error: `เติมเงินได้เฉพาะ HR หรือ ${ceo} — ผู้ถือกด “ขอเติมเงิน” แทน` };
     if (input.kind === "top_up" && holder.id === session.userId) return { error: "เติมเงินให้ตัวเองไม่ได้ — กด “ขอเติมเงิน” ให้อีกคนอนุมัติ" };
     const amount = round2(Number(input.amount));
     if (!Number.isFinite(amount) || amount === 0) return { error: "กรอกจำนวนเงิน" };
@@ -1852,11 +1862,12 @@ export async function requestPettyTopupAction(input: { amount: number; note: str
 }
 
 export async function decidePettyTopupAction(input: { id: string; outcome: "approve" | "reject"; method: "transfer" | "cash"; note: string; attachments: Attachment[] }): Promise<Result> {
+  const ceo = await ceoTitle();
   try {
     const session = await guard();
     const orgId = session.orgId;
     const viewer = await viewerOf(session);
-    if (!hasPermission(session, REQ_PERMS.pettyTopup)) return { error: "อนุมัติได้เฉพาะ HR หรือ CEO" };
+    if (!hasPermission(session, REQ_PERMS.pettyTopup)) return { error: `อนุมัติได้เฉพาะ HR หรือ ${ceo}` };
     const note = input.note.trim().slice(0, 300);
     if (input.outcome === "reject" && !note) return { error: "ใส่เหตุผลที่ไม่อนุมัติ" };
     if (input.outcome === "approve" && !["transfer", "cash"].includes(input.method)) return { error: "เลือกว่าให้เงินแบบโอนหรือเงินสด" };
@@ -1864,10 +1875,11 @@ export async function decidePettyTopupAction(input: { id: string; outcome: "appr
     if (input.outcome === "approve" && attachments.length === 0) return { error: input.method === "cash" ? "แนบรูปเงินสดที่ให้ (เห็นจำนวนชัด)" : "แนบสลิปโอนเงิน" };
     const byName = await nameOf(session.userId);
     const res = await withRequestsTenant(orgId, async (tx) => {
+  const ceo = await ceoTitle();
       const t = await tx.moneyPettyTopup.findFirst({ where: { orgId, id: input.id, status: "pending" } });
       if (!t) return { error: "ไม่พบคำขอ หรือมีคนตัดสินไปแล้ว" } as const;
       if (t.holderUserId === session.userId || t.requestedByUserId === session.userId) return { error: "อนุมัติคำขอของตัวเองไม่ได้" } as const;
-      if (t.needsCeo && !viewer.canApproveCeo) return { error: "คำขอของ HR ต้องให้ CEO อนุมัติ" } as const;
+      if (t.needsCeo && !viewer.canApproveCeo) return { error: `คำขอของ HR ต้องให้ ${ceo} อนุมัติ` } as const;
       let entryId: string | null = null;
       if (input.outcome === "approve") {
         const how = input.method === "cash" ? "ให้เงินสด" : "โอนเงิน";
@@ -1904,10 +1916,11 @@ export async function decidePettyTopupAction(input: { id: string; outcome: "appr
  * เอาออกได้เมื่อเงินในมือเป็น 0 และไม่มีคำขอเติมค้าง — ไม่งั้นยอดที่ยังถืออยู่หายจากหน้าจอ
  */
 export async function setPettyHolderAction(input: { userId: string; holds: boolean }): Promise<Result> {
+  const ceo = await ceoTitle();
   try {
     const session = await guard();
     const orgId = session.orgId;
-    if (!hasPermission(session, REQ_PERMS.pettyTopup) && !hasPermission(session, REQ_PERMS.settings)) return { error: "ตั้งคนถือเงินได้เฉพาะ HR หรือ CEO" };
+    if (!hasPermission(session, REQ_PERMS.pettyTopup) && !hasPermission(session, REQ_PERMS.settings)) return { error: `ตั้งคนถือเงินได้เฉพาะ HR หรือ ${ceo}` };
     const user = await prisma.user.findFirst({ where: { orgId, id: input.userId }, select: { id: true, name: true, isActive: true } });
     if (!user) return { error: "ไม่พบผู้ใช้" };
     if (input.holds && !user.isActive) return { error: "ผู้ใช้นี้ถูกปิดใช้งานอยู่" };
@@ -2042,19 +2055,21 @@ export async function addPettySpendAction(input: {
  * คนตรวจ = HR/CEO ที่อนุมัติได้ · ไม่ตรวจของตัวเอง · ผู้ถือเป็น HR ⇒ CEO เท่านั้น (เหมือนคำขอเติมเงิน)
  */
 export async function reviewPettySpendAction(input: { id: string; outcome: "approve" | "reject"; note: string }): Promise<Result> {
+  const ceo = await ceoTitle();
   try {
     const session = await guard();
     const orgId = session.orgId;
     const viewer = await viewerOf(session);
-    if (!(viewer.canApprove || viewer.canApproveCeo)) return { error: "ตรวจได้เฉพาะ HR หรือ CEO ที่อนุมัติได้" };
+    if (!(viewer.canApprove || viewer.canApproveCeo)) return { error: `ตรวจได้เฉพาะ HR หรือ ${ceo} ที่อนุมัติได้` };
     const note = input.note.trim().slice(0, 300);
     if (input.outcome === "reject" && !note) return { error: "ใส่เหตุผลที่ไม่ผ่าน" };
     const byName = await nameOf(session.userId);
     const res = await withRequestsTenant(orgId, async (tx) => {
+  const ceo = await ceoTitle();
       const e = await tx.moneyPettyCashEntry.findFirst({ where: { orgId, id: input.id, voidedAt: null, reviewStatus: "pending" } });
       if (!e) return { error: "ไม่พบรายการ หรือมีคนตรวจไปแล้ว" } as const;
       if (e.holderUserId === session.userId || e.byUserId === session.userId) return { error: "ตรวจรายการของตัวเองไม่ได้" } as const;
-      if (!viewer.canApproveCeo && (await holderIsHr(orgId, e.holderUserId))) return { error: "รายการของ HR ต้องให้ CEO ตรวจ" } as const;
+      if (!viewer.canApproveCeo && (await holderIsHr(orgId, e.holderUserId))) return { error: `รายการของ HR ต้องให้ ${ceo} ตรวจ` } as const;
       const done = await tx.moneyPettyCashEntry.updateMany({
         where: { orgId, id: e.id, reviewStatus: "pending", voidedAt: null },
         data: { reviewStatus: input.outcome === "approve" ? "approved" : "rejected", reviewedByUserId: session.userId, reviewedByName: byName, reviewedAt: new Date(), reviewNote: note || null },
@@ -2091,11 +2106,12 @@ export async function reviewPettySpendAction(input: { id: string; outcome: "appr
  * แนวปฏิบัติ: เงินขาดที่คนถือเงินคุมไม่ได้ หน่วยงานรับเป็นค่าใช้จ่ายเอง (Bradley University / BYU petty cash policy)
  */
 export async function writeOffPettyShortageAction(input: { id: string; reason: string }): Promise<Result> {
+  const ceo = await ceoTitle();
   try {
     const session = await guard();
     const orgId = session.orgId;
     const viewer = await viewerOf(session);
-    if (!viewer.canApproveCeo) return { error: "บริษัทรับเป็นค่าใช้จ่ายได้เฉพาะ CEO" };
+    if (!viewer.canApproveCeo) return { error: `บริษัทรับเป็นค่าใช้จ่ายได้เฉพาะ ${ceo}` };
     const reason = input.reason.trim().slice(0, 300);
     if (!reason) return { error: "ใส่เหตุผลที่บริษัทรับเป็นค่าใช้จ่าย" };
     const byName = await nameOf(session.userId);
@@ -2124,6 +2140,7 @@ export async function writeOffPettyShortageAction(input: { id: string; reason: s
 /* ═════════════════════════ ตั้งค่า ═════════════════════════ */
 
 export async function saveSettingsAction(input: RequestSettings): Promise<Result> {
+  const ceo = await ceoTitle();
   try {
     const session = await guard();
     const orgId = session.orgId;
@@ -2147,7 +2164,7 @@ export async function saveSettingsAction(input: RequestSettings): Promise<Result
       const r = input.approvalRoutes?.[k];
       const mode = r?.mode === "ceo" ? "ceo" : "hr";
       const above = r?.ceoAbove === null || r?.ceoAbove === undefined || (r.ceoAbove as unknown) === "" ? null : round2(Number(r.ceoAbove));
-      if (above !== null && (!Number.isFinite(above) || above < 0)) return { error: `เกณฑ์ CEO ของ ${KIND_META[k].label} ไม่ถูกต้อง` };
+      if (above !== null && (!Number.isFinite(above) || above < 0)) return { error: `เกณฑ์ ${ceo} ของ ${KIND_META[k].label} ไม่ถูกต้อง` };
       approvalRoutes[k] = { mode, ceoAbove: mode === "ceo" ? null : above };
     }
     const byName = await nameOf(session.userId);
@@ -2169,7 +2186,7 @@ export async function saveSettingsAction(input: RequestSettings): Promise<Result
         byUserId: session.userId,
         byName,
         action: "settings",
-        summary: `ตั้งค่า: อนุมัติ ${(Object.keys(approvalRoutes) as RequestKind[]).map((k) => `${KIND_META[k].short} ${routeText(approvalRoutes[k])}`).join(", ")} · OT ${rates.map((r) => `${r.label} ${r.percent}%`).join(", ")} · เพดานเบิกล่วงหน้า ${input.advanceCapMode === "none" ? "ไม่จำกัด" : input.advanceCapMode === "baht" ? baht(capValue) : `${capValue} วัน`} · VAT ${vat}% · ซื้อของเองจากเงินสดย่อย${input.pettySpendReview ? "ต้องมีคนตรวจ" : "ไม่ต้องตรวจ"}`,
+        summary: `ตั้งค่า: อนุมัติ ${(Object.keys(approvalRoutes) as RequestKind[]).map((k) => `${KIND_META[k].short} ${ceoText(routeText(approvalRoutes[k]), ceo)}`).join(", ")} · OT ${rates.map((r) => `${r.label} ${r.percent}%`).join(", ")} · เพดานเบิกล่วงหน้า ${input.advanceCapMode === "none" ? "ไม่จำกัด" : input.advanceCapMode === "baht" ? baht(capValue) : `${capValue} วัน`} · VAT ${vat}% · ซื้อของเองจากเงินสดย่อย${input.pettySpendReview ? "ต้องมีคนตรวจ" : "ไม่ต้องตรวจ"}`,
       });
     });
     revalidatePath("/requests");

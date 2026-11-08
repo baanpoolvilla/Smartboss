@@ -36,6 +36,7 @@ import {
   type TaxParams,
 } from "./lib/types";
 
+import { ceoTitle } from "@/lib/ceo-title";
 type Result<T = object> = ({ ok: true } & T) | { ok?: false; error: string };
 
 /**
@@ -46,11 +47,12 @@ type Result<T = object> = ({ ok: true } & T) | { ok?: false; error: string };
  */
 
 async function guard(need: keyof Pick<SalaryAccess, "canEdit" | "canApprove" | "canManageAccess"> = "canEdit") {
+  const ceo = await ceoTitle();
   const session = await requireOrg();
   const access = await salaryAccess(session);
   if (!access[need]) {
     throw new Error(
-      need === "canApprove" ? "อนุมัติเงินเดือนได้เฉพาะ CEO" : need === "canManageAccess" ? "เปลี่ยนรายชื่อได้เฉพาะ CEO" : "เฉพาะ CEO และคนที่ CEO เลือกเท่านั้นที่แก้ข้อมูลเงินเดือนได้",
+      need === "canApprove" ? `อนุมัติเงินเดือนได้เฉพาะ ${ceo}` : need === "canManageAccess" ? `เปลี่ยนรายชื่อได้เฉพาะ ${ceo}` : `เฉพาะ ${ceo} และคนที่ ${ceo} เลือกเท่านั้นที่แก้ข้อมูลเงินเดือนได้`,
     );
   }
   const actor = await actorOf(session.userId);
@@ -62,10 +64,11 @@ async function guard(need: keyof Pick<SalaryAccess, "canEdit" | "canApprove" | "
  * — หลักแยกหน้าที่ของระบบเงินเดือน: คนทำจ่ายห้ามแก้ของตัวเอง ให้ CEO แก้ให้ · เช็กที่ server ไม่เชื่อหน้าเว็บ
  */
 async function guardFor(employmentId: string, need: "canEdit" = "canEdit") {
+  const ceo = await ceoTitle();
   const g = await guard(need);
   const own = await isOwnEmployment(g.orgId, g.session.userId, employmentId);
   if (ownSalaryLocked(g.access, own)) {
-    throw new Error("แก้ข้อมูลเงินเดือนของตัวเองไม่ได้ — ให้ CEO เป็นคนแก้ให้ (กันการแก้ให้ตัวเอง)");
+    throw new Error(`แก้ข้อมูลเงินเดือนของตัวเองไม่ได้ — ให้ ${ceo} เป็นคนแก้ให้ (กันการแก้ให้ตัวเอง)`);
   }
   return { ...g, selfEdit: own && !g.access.isCeo };
 }
@@ -200,6 +203,7 @@ export interface SettingsInput {
 }
 
 export async function saveSettingsAction(input: SettingsInput): Promise<Result> {
+  const ceo = await ceoTitle();
   try {
     const { orgId, actor } = await guard("canEdit");
     const cutoffDay = Math.trunc(Number(input.cutoffDay));
@@ -208,7 +212,7 @@ export async function saveSettingsAction(input: SettingsInput): Promise<Result> 
     if (!(payDay >= 0 && payDay <= 31)) return { error: "วันจ่ายต้องเป็น 1–31 (หรือสิ้นเดือน)" };
     if (!["ceo", "ceo_on_change", "hr"].includes(input.approvalMode)) return { error: "วิธีอนุมัติไม่ถูกต้อง" };
     if (!["minute", "per_time"].includes(input.lateMode)) return { error: "วิธีหักสายไม่ถูกต้อง" };
-    const changeThreshold = money(input.changeThreshold, "% ที่ต้องผ่าน CEO", 100);
+    const changeThreshold = money(input.changeThreshold, `% ที่ต้องผ่าน ${ceo}`, 100);
     const latePerTime = money(input.latePerTime, "หักสายครั้งละ", 10_000);
     const taxId = text(input.companyTaxId, 20).replace(/\D/g, "");
     if (taxId && taxId.length !== 13) return { error: "เลขผู้เสียภาษีบริษัทต้องมี 13 หลัก" };
@@ -420,6 +424,7 @@ export async function saveProfileAction(input: ProfileInput): Promise<Result<{ n
 
 /** ตั้ง/ขึ้นเงินเดือน — เก็บที่ระบบบุคคลแบบมีวันมีผล (ประวัติเดิมยังอยู่) */
 export async function setSalaryAction(input: { employmentId: string; amount: number; effectiveFrom: string; reason: string }): Promise<Result> {
+  const ceo = await ceoTitle();
   try {
     const g = await guardFor(input.employmentId);
     const { orgId, actor } = g;
@@ -442,7 +447,7 @@ export async function setSalaryAction(input: { employmentId: string; amount: num
       });
     } catch (error) {
       if (error instanceof WorkforceError && error.status === 403) {
-        return { error: "ระบบบุคคลยังไม่ได้เปิดสิทธิ์ฐานเงินเดือนให้บัญชีนี้ — ให้ CEO เอาชื่อออกแล้วเพิ่มใหม่ที่ ตั้งค่า › คนที่เห็นเงินเดือน แล้วลองอีกครั้ง" };
+        return { error: `ระบบบุคคลยังไม่ได้เปิดสิทธิ์ฐานเงินเดือนให้บัญชีนี้ — ให้ ${ceo} เอาชื่อออกแล้วเพิ่มใหม่ที่ ตั้งค่า › คนที่เห็นเงินเดือน แล้วลองอีกครั้ง` };
       }
       throw error;
     }
@@ -483,10 +488,11 @@ export async function endRecurringAction(input: { id: string }): Promise<Result>
   try {
     const { orgId, actor, access, session } = await guard("canEdit");
     const ended = await withSalaryTenant(orgId, async (tx) => {
+  const ceo = await ceoTitle();
       const row = await tx.salaryEmployeeItem.findFirst({ where: { orgId, id: input.id, endedAt: null } });
       if (!row) throw new Error("ไม่พบรายการ (อาจเลิกไปแล้ว)");
       const own = await isOwnEmployment(orgId, session.userId, row.employmentId);
-      if (ownSalaryLocked(access, own)) throw new Error("แก้ข้อมูลเงินเดือนของตัวเองไม่ได้ — ให้ CEO เป็นคนแก้ให้");
+      if (ownSalaryLocked(access, own)) throw new Error(`แก้ข้อมูลเงินเดือนของตัวเองไม่ได้ — ให้ ${ceo} เป็นคนแก้ให้`);
       await tx.salaryEmployeeItem.update({ where: { id: row.id }, data: { endedAt: new Date(), endedByName: actor.name } });
       await insertEvent(tx, orgId, { byUserId: actor.userId, byName: actor.name, action: "employee", summary: `เลิกรายการประจำ ${fmtBaht(Number(row.amount))}` });
       return { own, employmentId: row.employmentId, amount: Number(row.amount) };
@@ -549,13 +555,14 @@ export interface AdjustInput {
 }
 
 export async function addAdjustmentAction(input: AdjustInput): Promise<Result> {
+  const ceo = await ceoTitle();
   try {
     const g = await guardFor(input.employmentId);
     const { orgId, actor } = g;
     const amount = money(input.amount, "จำนวนเงิน", 10_000_000);
     if (amount <= 0) return { error: "ใส่จำนวนเงิน" };
     const reason = text(input.reason, 300);
-    if (!reason) return { error: "ใส่หมายเหตุ (CEO เห็นตอนอนุมัติ)" };
+    if (!reason) return { error: `ใส่หมายเหตุ (${ceo} เห็นตอนอนุมัติ)` };
     if (input.kind !== "earning" && input.kind !== "deduction") return { error: "ชนิดรายการไม่ถูกต้อง" };
     // ชื่อ: จากรายการที่ตั้งไว้ (ใช้ธงภาษี/ประกันสังคมของรายการนั้น) หรือพิมพ์เอง
     let label = text(input.label, 50);
@@ -634,6 +641,7 @@ export async function updateAdjustmentAction(input: {
   reason: string;
   amount: number;
 }): Promise<Result> {
+  const ceo = await ceoTitle();
   try {
     const g = await guardFor(input.employmentId);
     const { orgId, actor } = g;
@@ -642,7 +650,7 @@ export async function updateAdjustmentAction(input: {
     const label = text(input.label, 50);
     if (!label) return { error: "ใส่ประเภทรายการ" };
     const reason = text(input.reason, 300);
-    if (!reason) return { error: "ใส่รายละเอียด (CEO เห็นตอนอนุมัติ)" };
+    if (!reason) return { error: `ใส่รายละเอียด (${ceo} เห็นตอนอนุมัติ)` };
     await editLine(orgId, actor, input, (line) => {
       const old = line.adjustments.find((a) => a.id === input.adjustmentId);
       if (!old) throw new Error("ไม่พบรายการ (อาจถูกลบไปแล้ว)");
@@ -730,6 +738,7 @@ export async function submitRunAction(input: { runId: string }): Promise<Result<
 }
 
 export async function decideRunAction(input: { runId: string; outcome: "approve" | "return"; note: string }): Promise<Result> {
+  const ceo = await ceoTitle();
   try {
     const { orgId, actor } = await guard(input.outcome === "approve" ? "canApprove" : "canEdit");
     const note = text(input.note, 500);
@@ -737,7 +746,7 @@ export async function decideRunAction(input: { runId: string; outcome: "approve"
     const run = await withSalaryTenant(orgId, (tx) => tx.salaryRun.findFirst({ where: { orgId, id: input.runId }, select: { period: true, submittedBy: true } }));
     if (run?.submittedBy && run.submittedBy !== actor.userId) {
       await notifyUsers(orgId, [run.submittedBy], {
-        title: input.outcome === "approve" ? `CEO อนุมัติเงินเดือน ${periodLabel(run.period)} แล้ว` : `เงินเดือน ${periodLabel(run.period)} ถูกส่งกลับให้แก้`,
+        title: input.outcome === "approve" ? `${ceo} อนุมัติเงินเดือน ${periodLabel(run.period)} แล้ว` : `เงินเดือน ${periodLabel(run.period)} ถูกส่งกลับให้แก้`,
         body: input.outcome === "approve" ? "บันทึกจ่ายเมื่อโอนเสร็จ" : note,
         type: "salary_run",
         referenceId: input.runId,

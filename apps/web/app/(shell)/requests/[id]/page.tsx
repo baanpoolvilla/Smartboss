@@ -49,6 +49,8 @@ import {
   type PettyHolder,
 } from "@/modules/requests/components/request-actions";
 
+import { ceoTitle } from "@/lib/ceo-title";
+import { ceoText } from "@/lib/ceo-title-shared";
 export const dynamic = "force-dynamic";
 
 async function scansOn(orgId: string, employmentId: string, date: string) {
@@ -111,6 +113,7 @@ function Files({ files, title, flagsFor }: { files: Attachment[]; title: string;
 }
 
 export default async function RequestDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ created?: string; edited?: string }> }) {
+  const ceo = await ceoTitle();
   const { session, viewer } = await requestsPage();
   const { id } = await params;
   const sp = await searchParams;
@@ -142,7 +145,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
   const payHidden = !canSeePay(privacy, r);
   const shown = maskRequest(privacy, r);
   const today = bangkokToday();
-  const st = statusOf(r);
+  const st = statusOf(r, ceo);
   const meta = KIND_META[r.kind];
 
   const scans = r.kind === "ot" && r.employmentId ? await scansOn(orgId, r.employmentId, r.workDate) : null;
@@ -200,12 +203,12 @@ export default async function RequestDetailPage({ params, searchParams }: { para
         : r.decidedAt
           ? { title: `${r.decidedByName} อนุมัติ`, sub: `${thaiDateTime(r.decidedAt)}${r.decisionNote ? ` · ${r.decisionNote}` : ""}`, state: "done" }
           : r.needCeo && !r.firstDecidedAt
-            ? { title: "HR อนุมัติ", sub: "รออยู่ · ยอดเกินเกณฑ์ ต่อ CEO", state: "now" }
-            : { title: `${r.approverLevel === "ceo" ? "CEO" : "HR"} อนุมัติ`, sub: "รออยู่", state: "now" },
+            ? { title: "HR อนุมัติ", sub: `รออยู่ · ยอดเกินเกณฑ์ ต่อ ${ceo}`, state: "now" }
+            : { title: `${r.approverLevel === "ceo" ? ceo : "HR"} อนุมัติ`, sub: "รออยู่", state: "now" },
   ];
   // อนุมัติสองขั้น (ยอดเกินเกณฑ์): แทรกขั้น HR ที่ผ่านแล้ว / ขั้น CEO ที่ยังไม่ถึง
   if (r.firstDecidedAt) steps.splice(1, 0, { title: `${r.firstDecidedByName} (HR) อนุมัติขั้นแรก`, sub: `${thaiDateTime(r.firstDecidedAt)}${r.firstDecisionNote ? ` · ${r.firstDecisionNote}` : ""}`, state: "done" });
-  else if (r.needCeo && r.status === "pending") steps.push({ title: "CEO อนุมัติ", sub: "ยอดเกินเกณฑ์", state: "todo" });
+  else if (r.needCeo && r.status === "pending") steps.push({ title: `${ceo} อนุมัติ`, sub: "ยอดเกินเกณฑ์", state: "todo" });
   if (r.status !== "rejected" && !(r.status === "cancelled" && !r.decidedAt)) {
     if (workerOt) steps.push({ title: "เข้าบัญชีค่าแรงคนงาน", sub: r.status === "paid" ? "จ่ายพร้อมค่าแรงที่หน้าจ่ายเงินคนงาน" : undefined, state: r.status === "paid" ? "done" : "todo" });
     else {
@@ -286,7 +289,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
                       <div className="text-sm font-medium text-amber-700">รอ HR ใส่ยอด</div>
                     )
                   ) : payHidden ? (
-                    <div className="max-w-[14rem] text-sm font-medium text-(--ink-soft)">ซ่อนยอด · {HIDDEN_PAY_LABEL}</div>
+                    <div className="max-w-[14rem] text-sm font-medium text-(--ink-soft)">ซ่อนยอด · {ceoText(HIDDEN_PAY_LABEL, ceo)}</div>
                   ) : (
                     <div className="text-2xl font-bold tabular-nums text-(--ink)">{baht(r.netAmount)}</div>
                   )}
@@ -321,7 +324,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
                 <>
                   <div className="rounded-(--radius) bg-(--bg-soft) px-3 py-2 text-sm text-(--ink)">
                     {hoursText(r.otMinutes ?? 0)} × {r.otPercent}% ({r.otRateLabel})
-                    <div className="text-xs text-(--ink-soft)">ระบบคิดเงินให้จากเงินเดือน · ยอดเงิน{HIDDEN_PAY_LABEL} (ยอด OT บอกเงินเดือนได้)</div>
+                    <div className="text-xs text-(--ink-soft)">ระบบคิดเงินให้จากเงินเดือน · ยอดเงิน{ceoText(HIDDEN_PAY_LABEL, ceo)} (ยอด OT บอกเงินเดือนได้)</div>
                   </div>
                   {scanNote && <Notice tone={scanNote.tone}>{scanNote.text}</Notice>}
                 </>

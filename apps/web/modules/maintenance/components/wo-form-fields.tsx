@@ -8,6 +8,7 @@ import { MultiPicker, type PickOption } from "@/modules/maintenance/components/m
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/modules/report_task/components/ui/select";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 /**
  * ช่องของฟอร์มสร้างใบงานที่ต้องมี state ฝั่งเครื่อง (ผู้ใช้ 2/11/2569 "ให้เหมือนรูปแบบของ task")
  * ส่งค่าผ่าน input ชื่อเดิมทุกช่อง (dueDate, noExpense, openPr) — createWorkOrderAction ไม่ต้องแก้
@@ -53,6 +54,7 @@ export function WoRequiredGuard() {
  * (class group-data-[private=1]/wo:hidden ในหน้า) · เซิร์ฟเวอร์บังคับซ้ำ: ผู้รับคือคนเปิด ไม่มี CC ไม่มีค่าใช้จ่าย
  */
 export function WoPrivateToggle() {
+  const ceo = useCeoTitle();
   const [on, setOn] = useState(false);
   const ref = useRef<HTMLLabelElement>(null);
   return (
@@ -60,7 +62,7 @@ export function WoPrivateToggle() {
       <label
         ref={ref}
         className={`flex w-fit cursor-pointer items-center gap-1.5 text-xs font-medium ${on ? "text-(--brand-navy)" : "text-(--ink-soft)"}`}
-        title="ใบงานส่วนตัว — เห็นเฉพาะคุณกับ CEO ไม่มีผลกับคะแนน"
+        title={`ใบงานส่วนตัว — เห็นเฉพาะคุณกับ ${ceo} ไม่มีผลกับคะแนน`}
       >
         <input
           type="checkbox"
@@ -83,7 +85,7 @@ export function WoPrivateToggle() {
       </label>
       {on && (
         <span className="text-xs text-(--ink-soft)">
-          กันลืมของคุณเอง · เห็นเฉพาะคุณกับ CEO · ไม่หักคะแนน ไม่นับสถิติ ไม่แจ้งใคร
+          กันลืมของคุณเอง · เห็นเฉพาะคุณกับ {ceo} · ไม่หักคะแนน ไม่นับสถิติ ไม่แจ้งใคร
         </span>
       )}
       {on && <input type="hidden" name="isPrivate" value="1" />}

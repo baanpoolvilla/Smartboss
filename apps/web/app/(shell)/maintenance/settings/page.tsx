@@ -16,7 +16,9 @@ import {
 } from "@/modules/maintenance/components/app-scaffold";
 import { saveExpenseTrackingAction, saveLineConfigAction } from "./actions";
 
+import { ceoTitle } from "@/lib/ceo-title";
 export default async function MaintenanceSettingsPage() {
+  const ceo = await ceoTitle();
   const session = await requireOrg();
   if (!hasPermission(session, MAINT_PERMS.admin)) redirect("/");
 
@@ -78,7 +80,7 @@ export default async function MaintenanceSettingsPage() {
                 </label>
               ))
             )}
-            <span className="text-xs text-(--ink-soft)">รายชื่อคือคนที่มีสิทธิ์บันทึก/แก้ไขค่าใช้จ่าย · CEO ที่ติ๊กไว้ยังเห็นทุกใบตามเดิม</span>
+            <span className="text-xs text-(--ink-soft)">รายชื่อคือคนที่มีสิทธิ์บันทึก/แก้ไขค่าใช้จ่าย · {ceo} ที่ติ๊กไว้ยังเห็นทุกใบตามเดิม</span>
           </div>
           <Button type="submit" className="w-fit">บันทึก</Button>
         </form>

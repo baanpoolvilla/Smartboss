@@ -66,6 +66,7 @@ import {
   type PoItem,
 } from "@/modules/maintenance/lib/po";
 
+import { ceoTitle } from "@/lib/ceo-title";
 function readItems(formData: FormData, withPricing: boolean): PoItem[] {
   const names = formData.getAll("itemName").map(String);
   const qtys = formData.getAll("itemQty").map(String);
@@ -279,9 +280,10 @@ async function notifyWorkOrderOwner(
 }
 
 async function ceoOnly() {
+  const ceo = await ceoTitle();
   const s = await requireOrg();
   if (!hasPermission(s, MAINT_PERMS.poApprove)) {
-    throw new Error("เฉพาะ CEO เท่านั้นที่อนุมัติได้");
+    throw new Error(`เฉพาะ ${ceo} เท่านั้นที่อนุมัติได้`);
   }
   return s;
 }

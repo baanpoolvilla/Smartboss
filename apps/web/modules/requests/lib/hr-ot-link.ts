@@ -10,6 +10,7 @@ import { dateOnly, insertEvent, readSettings, withRequestsTenant, withRequestsTe
 import { notifyApprovers, notifyPayers } from "./notify";
 import { baht, hoursText, otCalc, round2, routeFor, timesOverlap, type OtRate } from "./types";
 
+import { ceoTitle } from "@/lib/ceo-title";
 /*
  * HR อนุมัติ OT ที่ระบบจับจากเวลาสแกน (แท็บ "OT รออนุมัติ") → สร้างใบ OT ในเบิกจ่าย & OT ให้เอง
  * (ผู้ใช้ 22/10/2569 — "พอได้อนุมัติให้สร้างใบ OT คนนั้นอัตโนมัติ") แอดมินไม่ต้องพิมพ์ซ้ำ
@@ -127,6 +128,7 @@ export async function createOtFromHrApproval(session: OrgSession, input: HrOtApp
       orgId,
       (tx) => nextRequestCode(tx, orgId),
       async (tx, code) => {
+  const ceo = await ceoTitle(orgId);
         const r = await tx.moneyRequest.create({
           data: {
             orgId,
@@ -165,7 +167,7 @@ export async function createOtFromHrApproval(session: OrgSession, input: HrOtApp
           byUserId: session.userId,
           byName: actorName,
           action: "create",
-          summary: `สร้างอัตโนมัติจาก OT ที่ HR อนุมัติ · ${user.name} ${part.start}–${part.end} (${hoursText(part.minutes)}) ${salary ? baht(round2(amount)) : "ยังไม่มีเงินเดือนในระบบ — กรอกค่า OT"}${done ? " · อนุมัติแล้ว" : toCeo ? " · รอ CEO" : ""}`,
+          summary: `สร้างอัตโนมัติจาก OT ที่ HR อนุมัติ · ${user.name} ${part.start}–${part.end} (${hoursText(part.minutes)}) ${salary ? baht(round2(amount)) : "ยังไม่มีเงินเดือนในระบบ — กรอกค่า OT"}${done ? " · อนุมัติแล้ว" : toCeo ? ` · รอ ${ceo}` : ""}`,
         });
         return { id: r.id, code: r.code };
       },

@@ -9,7 +9,8 @@ export const ROLE_LABELS: Record<string, string> = {
 };
 
 /** ป้ายบทบาทตัวแรกที่รู้จักจากรายการ role code ของผู้ใช้ */
-export function ROLE_LABEL_TH(codes: string[]): string {
+export function ROLE_LABEL_TH(codes: string[], ceo = "CEO"): string {
   const c = codes.find((x) => ROLE_LABELS[x]);
-  return c ? ROLE_LABELS[c]! : "";
+  // ชื่อเรียกตำแหน่งสูงสุดของบริษัท (CEO/Boss) — lib/ceo-title.ts
+  return c ? (c === "CEO" ? ceo : ROLE_LABELS[c]!) : "";
 }

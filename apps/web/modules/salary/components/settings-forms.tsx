@@ -9,6 +9,7 @@ import { fmtBaht, thaiDate, type SsoParams, type TaxParams } from "../lib/types"
 import { card, field, hint, label, labelText, navy, outline } from "./ui";
 import { useRun } from "./use-run";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 /** ใครเห็น/แก้เงินเดือนได้ — CEO เท่านั้นที่แก้ส่วนนี้ */
 export function AccessForm({
   canManage,
@@ -19,6 +20,7 @@ export function AccessForm({
   users: { id: string; name: string; roles: string }[];
   initial: { editorUserIds: string[]; superAdminAccess: boolean; editorsEditOwn: boolean };
 }) {
+  const ceo = useCeoTitle();
   const [ids, setIds] = useState(initial.editorUserIds);
   const [superOn, setSuperOn] = useState(initial.superAdminAccess);
   const [editOwn, setEditOwn] = useState(initial.editorsEditOwn);
@@ -30,10 +32,10 @@ export function AccessForm({
     <section className={`${card} flex flex-col gap-3 border-2 border-(--brand-navy,#1b2537) p-4 sm:p-5`}>
       <div>
         <h2 className="text-base font-bold text-(--ink)">ใครเห็น / แก้ข้อมูลเงินเดือนได้</h2>
-        <p className={hint}>CEO เห็นและแก้ได้เสมอ · เพิ่มคนอื่นได้เฉพาะ CEO · HR คนอื่นและผู้ดูแลบริษัท (IT) ไม่เห็นเงินเดือนของใคร · พนักงานทุกคนเห็นสลิปของตัวเอง</p>
+        <p className={hint}>{ceo} เห็นและแก้ได้เสมอ · เพิ่มคนอื่นได้เฉพาะ {ceo} · HR คนอื่นและผู้ดูแลบริษัท (IT) ไม่เห็นเงินเดือนของใคร · พนักงานทุกคนเห็นสลิปของตัวเอง</p>
       </div>
       <div className="flex flex-wrap gap-2">
-        {ids.length === 0 && <span className="text-sm text-(--ink-soft)">ยังไม่ได้เลือกใคร (นอกจาก CEO)</span>}
+        {ids.length === 0 && <span className="text-sm text-(--ink-soft)">ยังไม่ได้เลือกใคร (นอกจาก {ceo})</span>}
         {ids.map((id) => (
           <span key={id} className="inline-flex items-center gap-1.5 rounded-full border border-(--line) bg-(--bg-soft) py-1 pl-3 pr-1 text-sm">
             {nameOf(id)}
@@ -60,7 +62,7 @@ export function AccessForm({
             <input type="checkbox" className="mt-0.5 h-5 w-5" checked={editOwn} onChange={(e) => { setSaved(false); setEditOwn(e.target.checked); }} />
             <span>
               คนในรายชื่อแก้ข้อมูลเงินเดือนของตัวเองได้
-              <span className="block text-xs text-(--ink-soft)">เช่น HR ที่ทำเงินเดือนเอง · ทุกครั้งที่แก้ CEO ได้แจ้งเตือน หน้าอนุมัติขึ้นป้าย “แก้โดยเจ้าตัว” และรอบนั้นต้องให้ CEO อนุมัติ · ปิด = ต้องให้ CEO แก้ให้</span>
+              <span className="block text-xs text-(--ink-soft)">เช่น HR ที่ทำเงินเดือนเอง · ทุกครั้งที่แก้ {ceo} ได้แจ้งเตือน หน้าอนุมัติขึ้นป้าย “แก้โดยเจ้าตัว” และรอบนั้นต้องให้ {ceo} อนุมัติ · ปิด = ต้องให้ {ceo} แก้ให้</span>
             </span>
           </label>
           <label className="flex min-h-11 items-center gap-3 rounded-(--radius) border border-amber-200 bg-amber-50 px-3 text-sm text-amber-950">
@@ -68,7 +70,7 @@ export function AccessForm({
             ผู้ดูแลระบบสูงสุดเห็นข้อมูลเงินเดือนได้ (ช่วงติดตั้ง/แก้ปัญหา) — ปิดเมื่อพร้อมใช้จริง
           </label>
           {error && <Notice tone="danger">{error}</Notice>}
-          {saved && <Notice tone="ok">บันทึกแล้ว — สิทธิ์ส่งไปที่ระบบบุคคลแล้ว · CEO คนอื่นได้แจ้งเตือน</Notice>}
+          {saved && <Notice tone="ok">บันทึกแล้ว — สิทธิ์ส่งไปที่ระบบบุคคลแล้ว · {ceo} คนอื่นได้แจ้งเตือน</Notice>}
           <div>
             <button type="button" className={navy} disabled={busy} onClick={() => {
               // เลือกชื่อไว้แต่ลืมกด "+ เพิ่ม" — นับรวมด้วย (8/11/2569 บันทึกไปแบบรายชื่อว่าง ทั้งที่เลือกพี่เซี้ยไว้)
@@ -81,13 +83,14 @@ export function AccessForm({
           </div>
         </>
       )}
-      {!canManage && <p className={hint}>เปลี่ยนรายชื่อได้เฉพาะ CEO</p>}
+      {!canManage && <p className={hint}>เปลี่ยนรายชื่อได้เฉพาะ {ceo}</p>}
     </section>
   );
 }
 
 /** ตั้งค่าทั่วไป: ข้อมูลบริษัท · งวด/วันจ่าย · การอนุมัติ · สาย/ขาด/ลา · OT */
 export function GeneralSettingsForm({ initial }: { initial: SettingsInput }) {
+  const ceo = useCeoTitle();
   const [v, setV] = useState(initial);
   const [stepsText, setStepsText] = useState(initial.diligenceSteps.join(", "));
   const [saved, setSaved] = useState(false);
@@ -128,13 +131,13 @@ export function GeneralSettingsForm({ initial }: { initial: SettingsInput }) {
         </div>
         <p className={hint}>เป็นค่าเริ่มต้นตอนสร้างรอบ — แก้วันของแต่ละรอบได้ตอนกด &quot;สร้างใหม่&quot;</p>
         <div role="radiogroup" aria-label="การอนุมัติ" className="flex flex-col">
-          <label className={radio(v.approvalMode === "ceo")}><input type="radio" className="h-4 w-4" checked={v.approvalMode === "ceo"} onChange={() => set({ approvalMode: "ceo" })} /> CEO อนุมัติทุกงวด (แนะนำ)</label>
+          <label className={radio(v.approvalMode === "ceo")}><input type="radio" className="h-4 w-4" checked={v.approvalMode === "ceo"} onChange={() => set({ approvalMode: "ceo" })} /> {ceo} อนุมัติทุกงวด (แนะนำ)</label>
           <label className={radio(v.approvalMode === "ceo_on_change")}>
             <input type="radio" className="h-4 w-4" checked={v.approvalMode === "ceo_on_change"} onChange={() => set({ approvalMode: "ceo_on_change" })} />
-            CEO อนุมัติเฉพาะเมื่อยอดต่างจากงวดก่อนเกิน
+            {ceo} อนุมัติเฉพาะเมื่อยอดต่างจากงวดก่อนเกิน
             <input aria-label="เปอร์เซ็นต์" inputMode="decimal" className={`${field} h-9 w-20`} value={v.changeThreshold} onChange={(e) => set({ changeThreshold: Number(e.target.value) || 0 })} />% หรือ HR เพิ่ม/ปรับรายการเอง
           </label>
-          <label className={radio(v.approvalMode === "hr")}><input type="radio" className="h-4 w-4" checked={v.approvalMode === "hr"} onChange={() => set({ approvalMode: "hr" })} /> HR อนุมัติเอง (CEO ได้แจ้งเตือน)</label>
+          <label className={radio(v.approvalMode === "hr")}><input type="radio" className="h-4 w-4" checked={v.approvalMode === "hr"} onChange={() => set({ approvalMode: "hr" })} /> HR อนุมัติเอง ({ceo} ได้แจ้งเตือน)</label>
         </div>
       </section>
 

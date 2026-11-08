@@ -34,6 +34,9 @@ import {
 } from "@smartboss/database/defaults";
 import { editableScorePeriodMonths } from "@/lib/score-period";
 import { loadScorePeriodConfig, saveScorePeriodConfig } from "@/lib/score-period-config";
+import { ceoTitle, CEO_TITLE_KEY, forgetCeoTitle } from "@/lib/ceo-title";
+import { normalizeCeoTitle } from "@/lib/ceo-title-shared";
+import { readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
 
 /** ทุก action ต้องผ่านด่านนี้ก่อน — คืน session ที่มี orgId แน่นอน */
 async function guard(permission: string) {
@@ -717,6 +720,27 @@ export async function updateOrganizationAction(formData: FormData) {
     targetId: session.orgId,
   });
   revalidatePath("/admin/organization");
+}
+
+/**
+ * ชื่อเรียกตำแหน่งสูงสุดของบริษัท (CEO / Boss / ...) — ผู้ใช้ 8/11/2569 "เปลี่ยนจาก CEO เป็น Boss"
+ * แสดงแทนคำว่า CEO ทั้งระบบ (lib/ceo-title.ts) · บทบาท/สิทธิ์จริงยังเป็นรหัส CEO เหมือนเดิม
+ * ชื่อบทบาท CEO ของบริษัทเปลี่ยนตามด้วย ถ้ายังเป็นชื่อเรียกเดิมอยู่ (ไม่ทับชื่อที่ตั้งเองไว้อย่างอื่น)
+ */
+export async function updateCeoTitleAction(formData: FormData) {
+  const session = await guard(ADMIN_PERMS.orgManage);
+  const title = normalizeCeoTitle(formData.get("ceo_title"));
+  const before = await ceoTitle(session.orgId);
+  const { version } = await readStore<unknown>(session.orgId, CEO_TITLE_KEY);
+  const saved = await writeStore(session.orgId, CEO_TITLE_KEY, { ceo: title }, version, session.userId);
+  if (!saved.ok) throw new Error("มีคนแก้พร้อมกัน — ลองบันทึกอีกครั้ง");
+  forgetCeoTitle(session.orgId);
+  await prisma.role.updateMany({
+    where: { orgId: session.orgId, code: "CEO", name: { in: [before, "CEO"] } },
+    data: { name: title },
+  });
+  await audit({ userId: session.userId, action: "ORG_UPDATED", targetId: session.orgId });
+  revalidatePath("/", "layout");
 }
 
 /* ═══════════════════════ เกณฑ์คะแนนผลงาน ═══════════════════════ */

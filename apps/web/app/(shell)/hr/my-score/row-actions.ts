@@ -16,6 +16,8 @@ import { defaultReminderSettings, type ReminderSettings } from "@/modules/report
 import type { ReportPost, ReportTopic, SubmitterGroup } from "@/modules/report_task/store/report-feed-store";
 import type { RowActionSpec } from "./score-row-action";
 
+import { ceoTitle } from "@/lib/ceo-title";
+import { ceoText } from "@/lib/ceo-title-shared";
 /**
  * ปุ่ม "ขอแก้ไข" / สถานะคำขอ ของทุกรายการที่โดนหัก ในหน้า "คะแนนของฉัน" (ผู้ใช้ขอ 21/10/2569)
  *
@@ -64,6 +66,7 @@ const latestBy = <T extends { createdAt: string }>(list: T[]) =>
   [...list].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
 
 export async function buildRowActions(orgId: string, userId: string, events: Ev[], period: ScorePeriodConfig): Promise<Map<string, RowActionSpec>> {
+  const ceo = await ceoTitle(orgId);
   const out = new Map<string, RowActionSpec>();
   const reversed = reversedIds(events);
   const docks = events.filter((e) => !isReversalEvent(e) && !reversed.has(e.id) && Number(e.points) < 0 && e.refId);
@@ -111,7 +114,7 @@ export async function buildRowActions(orgId: string, userId: string, events: Ev[
     if (SCORE_BASE[e.category] === e.refType) {
       const r = latestBy(scoreReqs.filter((x) => x.category === e.category && x.refId === e.refId));
       if (r?.status === "pending") {
-        const who = r.approverId ? `${r.approverRole} ${names.get(r.approverId) ?? ""}`.trim() : "CEO";
+        const who = r.approverId ? `${ceoText(r.approverRole, ceo)} ${names.get(r.approverId) ?? ""}`.trim() : ceo;
         out.set(e.id, open ? { status: { tone: "wait", text: "⏳ รอพิจารณา", sub: `${who} · ต้องอนุมัติ${deadline.replace("ขอได้", "")}` } } : { status: lateLock });
       } else if (r?.status === "rejected") {
         out.set(e.id, { status: { tone: "no", text: "❌ ไม่อนุมัติ", sub: r.decisionNote ?? "" } });
@@ -125,7 +128,7 @@ export async function buildRowActions(orgId: string, userId: string, events: Ev[
             title: e.note ?? label,
             points,
             day,
-            approverText: e.category === "expense_overdue" ? "CEO" : `${SCORE_ROLE[e.category]} (หรือ CEO)`,
+            approverText: e.category === "expense_overdue" ? ceo : `${SCORE_ROLE[e.category]} (หรือ ${ceo})`,
             reasonTags: [...SCORE_REASON_TAGS],
           },
         });
@@ -146,7 +149,7 @@ export async function buildRowActions(orgId: string, userId: string, events: Ev[
         !evidence?.post &&
         !(feed?.posts ?? []).some((p) => p.topicId === topicId && p.authorId === userId && !p.excludeFromSubmission && localDateStr(new Date(p.createdAt)) === reportDay);
       if (r?.status === "pending") {
-        out.set(e.id, open ? { status: { tone: "wait", text: "⏳ รอพิจารณา", sub: `CEO · ต้องอนุมัติ${deadline.replace("ขอได้", "")}` } } : { status: lateLock });
+        out.set(e.id, open ? { status: { tone: "wait", text: "⏳ รอพิจารณา", sub: `${ceo} · ต้องอนุมัติ${deadline.replace("ขอได้", "")}` } } : { status: lateLock });
       } else if (r?.status === "approved" && r.awaitingPost) {
         const posted = (feed?.posts ?? []).some((p) => p.retroFor?.requestId === r.id);
         if (posted) {
@@ -198,7 +201,7 @@ export async function buildRowActions(orgId: string, userId: string, events: Ev[
       const workDay = /^\d{4}-\d{2}-\d{2}$/.test(e.refId!.split(":")[1] ?? "") ? e.refId!.split(":")[1]! : day;
       const c = latestBy(corrections.filter((x) => x.work_date.slice(0, 10) === workDay).map((x) => ({ ...x, createdAt: x.created_at })));
       if (c?.status === "PENDING") {
-        out.set(e.id, open ? { status: { tone: "wait", text: "⏳ ยื่นแก้เวลาแล้ว", sub: `รอ HR / CEO · ต้องอนุมัติ${deadline.replace("ขอได้", "")}` } } : { status: lateLock });
+        out.set(e.id, open ? { status: { tone: "wait", text: "⏳ ยื่นแก้เวลาแล้ว", sub: `รอ HR / ${ceo} · ต้องอนุมัติ${deadline.replace("ขอได้", "")}` } } : { status: lateLock });
       } else if (c?.status === "APPROVED") {
         out.set(e.id, { status: { tone: "ok", text: "✅ อนุมัติแก้เวลาแล้ว", sub: "ระบบกำลังคิดคะแนนวันนั้นใหม่" } });
       } else if (open && me?.employment_id) {

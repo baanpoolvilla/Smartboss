@@ -6,6 +6,7 @@ import { Button } from "@smartboss/ui/components/button";
 import { Modal } from "@/components/module/dialog";
 import type { PenaltyEvidence } from "@/modules/report_task/lib/penalty-evidence";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 /**
  * ชิป "ไม่ส่งรายงานประจำวัน -2 ×14" ที่กดได้ — แทนที่ span เดิมของหมวด
  * report_missed/report_late เท่านั้น (หมวดอื่นยังเป็นชิปธรรมดา ไม่ใช่ทุกหมวด
@@ -93,6 +94,7 @@ export function PenaltyRequestDialog({
   fixedItem?: PenaltyEventItem;
   onClose: () => void;
 }) {
+  const ceo = useCeoTitle();
   const [loading, setLoading] = useState(!fixedItem);
   const [items, setItems] = useState<PenaltyEventItem[]>(fixedItem ? [fixedItem] : []);
   const [selectedRefId, setSelectedRefId] = useState<string | null>(fixedItem?.refId ?? null);
@@ -150,7 +152,7 @@ export function PenaltyRequestDialog({
     return (
       <Modal title="ยื่นคำร้องแล้ว" onClose={onClose} actions={<Button onClick={onClose}>ปิด</Button>}>
         <p className="text-sm text-(--ink)">
-          ส่งคำร้องขอแก้ไขคะแนนให้ CEO พิจารณาแล้ว — คะแนนจะยังไม่เปลี่ยนจนกว่าจะได้รับการอนุมัติ
+          ส่งคำร้องขอแก้ไขคะแนนให้ {ceo} พิจารณาแล้ว — คะแนนจะยังไม่เปลี่ยนจนกว่าจะได้รับการอนุมัติ
         </p>
       </Modal>
     );
@@ -169,7 +171,7 @@ export function PenaltyRequestDialog({
             ยกเลิก
           </Button>
           <Button onClick={submit} disabled={!selectedRefId || !reason.trim() || submitting}>
-            {submitting ? "กำลังส่ง..." : "ส่งคำร้องให้ CEO อนุมัติ"}
+            {submitting ? "กำลังส่ง..." : `ส่งคำร้องให้ ${ceo} อนุมัติ`}
           </Button>
         </>
       }
@@ -285,7 +287,7 @@ export function PenaltyRequestDialog({
           <div className="rounded-(--radius) bg-[#eef3ff] px-3 py-2 text-xs text-[#1e3a8a]">
             <div className="font-semibold">ขั้นตอนถัดไป</div>
             <ol className="m-0 list-decimal pl-4">
-              <li>CEO พิจารณาคำร้อง ระบบจะแจ้งผลให้ทราบ</li>
+              <li>{ceo} พิจารณาคำร้อง ระบบจะแจ้งผลให้ทราบ</li>
               <li>ถ้าอนุมัติ กดแจ้งเตือนเพื่อไปส่งรีพอตในห้อง {fixedItem.evidence.roomName}</li>
               <li>
                 ส่งได้ถึง {fixedItem.retroDeadlineText ?? "วันตัดรอบ"} ส่งแล้วได้คืน {Math.abs(fixedItem.points)} คะแนน
@@ -301,7 +303,7 @@ export function PenaltyRequestDialog({
             onChange={(e) => setReason(e.target.value)}
             rows={3}
             className="rounded-(--radius) border border-(--line) bg-(--bg) px-3 py-2 text-sm text-(--ink) focus-visible:border-(--app) focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-(--app)/30"
-            placeholder="อธิบายเหตุผลให้ CEO พิจารณา"
+            placeholder={`อธิบายเหตุผลให้ ${ceo} พิจารณา`}
           />
         </label>
 

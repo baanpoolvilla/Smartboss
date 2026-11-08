@@ -7,6 +7,7 @@ import { actorOf } from "@/modules/salary/lib/page";
 import { exactText, reportRow } from "@/modules/salary/lib/report";
 import { loadRun } from "@/modules/salary/lib/views";
 
+import { ceoTitle } from "@/lib/ceo-title";
 /**
  * ไฟล์ของรอบเงินเดือน (CSV เปิดใน Excel ได้ ภาษาไทยไม่เพี้ยน — มี BOM)
  *   bank    ไฟล์โอนกลาง: ชื่อบัญชี ธนาคาร เลขบัญชี ยอด (เฉพาะคนรับโอนที่มีเลขบัญชี) — ผู้ใช้เลือก "Excel กลางไปก่อน" 22/10/2569
@@ -17,6 +18,7 @@ import { loadRun } from "@/modules/salary/lib/views";
  * ดาวน์โหลดได้เฉพาะ CEO + คนที่ CEO เลือก · บันทึกว่าใครดาวน์โหลดเมื่อไหร่ · ห้ามแคช
  */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const ceo = await ceoTitle();
   const session = await requireOrg();
   if (!(await salaryAccess(session)).canEdit) return new NextResponse("Forbidden", { status: 403 });
   const { id } = await params;
@@ -27,7 +29,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (!run) return new NextResponse("Not found", { status: 404 });
   // ไฟล์โอน/ยื่นใช้ตัวเลขที่ CEO อนุมัติแล้วเท่านั้น — ร่างยังเปลี่ยนได้ ห้ามเอาไปโอน
   if (type !== "report" && run.status !== "approved" && run.status !== "paid") {
-    return new NextResponse("รอบนี้ยังไม่ได้อนุมัติ — ดาวน์โหลดไฟล์ได้หลัง CEO อนุมัติ", { status: 409, headers: { "content-type": "text/plain; charset=utf-8" } });
+    return new NextResponse(`รอบนี้ยังไม่ได้อนุมัติ — ดาวน์โหลดไฟล์ได้หลัง ${ceo} อนุมัติ`, { status: 409, headers: { "content-type": "text/plain; charset=utf-8" } });
   }
   const settings = await withSalaryTenant(orgId, (tx) => readSettings(tx, orgId));
 

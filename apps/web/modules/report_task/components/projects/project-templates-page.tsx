@@ -25,12 +25,14 @@ import type { ProjectDepRule, ProjectTemplate, ProjectTemplateItem } from "@/mod
 import { SUGGESTED_ROLES } from "./project-roles";
 import { fmtDay, todayBkk, useCompanyHolidays } from "./project-ui";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 /**
  * แม่แบบโปรเจกต์ — สร้าง/แก้เองได้ (CEO + หัวหน้าแผนก)
  * งานในแม่แบบใช้ "เริ่มวันที่ n ของโปรเจกต์ + กี่วัน" และผู้รับผิดชอบเป็นตำแหน่ง · ลากแถบในตัวอย่างแทนพิมพ์ตัวเลขได้
  * แก้แม่แบบแล้วโปรเจกต์ที่สร้างไปแล้วไม่เปลี่ยน
  */
 export function ProjectTemplatesPage() {
+  const ceo = useCeoTitle();
   const me = useIdentityStore((s) => s.viewingAsUserId);
   const templates = useProjectStore((s) => s.templates);
   const ready = useProjectStore((s) => s.templatesLoaded);
@@ -61,7 +63,7 @@ export function ProjectTemplatesPage() {
       <Link href="/report-task/projects" className="text-xs text-[var(--ink-soft)] hover:text-[var(--ink)]">‹ โปรเจกต์ทั้งหมด</Link>
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="m-0 text-xl font-bold">แม่แบบโปรเจกต์</h1>
-        <span className="text-xs text-[var(--ink-soft)]">แก้ได้: CEO + หัวหน้าแผนก · แก้แม่แบบแล้วโปรเจกต์ที่สร้างไปแล้วไม่เปลี่ยน</span>
+        <span className="text-xs text-[var(--ink-soft)]">แก้ได้: {ceo} + หัวหน้าแผนก · แก้แม่แบบแล้วโปรเจกต์ที่สร้างไปแล้วไม่เปลี่ยน</span>
         {canEdit && <button type="button" className="ml-auto rounded-lg bg-[var(--brand-green)] px-3 py-1.5 text-xs font-semibold text-white" onClick={newTemplate}>+ แม่แบบใหม่</button>}
       </div>
       <div className="grid overflow-hidden rounded-xl border border-[var(--line)] md:grid-cols-[240px_minmax(0,1fr)]">

@@ -7,6 +7,7 @@ import { Layers } from "lucide-react";
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { decidePileupAction, mergePileupAction, type MergeScore } from "@/app/(shell)/maintenance/pm/rounds/actions";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 export interface PileupRoundView {
   id: string;
   code: string;
@@ -34,6 +35,7 @@ export function PmPileupCard({
   rounds: PileupRoundView[];
   minDate: string;
 }) {
+  const ceo = useCeoTitle();
   const [skip, setSkip] = useState<Record<string, boolean>>({});
   const [waive, setWaive] = useState<Record<string, boolean>>(() => Object.fromEntries(rounds.map((r) => [r.id, r.waived])));
   const [merging, setMerging] = useState(false);
@@ -164,7 +166,7 @@ export function PmPileupCard({
             />
           </div>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-(--ink-soft)">หมายเหตุ CEO (ช่างเห็นในใบงาน)</span>
+            <span className="text-xs text-(--ink-soft)">หมายเหตุ {ceo} (ช่างเห็นในใบงาน)</span>
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}

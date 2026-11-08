@@ -14,6 +14,7 @@ import { TaxSteps } from "./tax-steps";
 import { dangerOutline, field, hint, label, labelText, navy, outline } from "./ui";
 import { useRun } from "./use-run";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 export interface EditorData {
   runId: string;
   employmentId: string;
@@ -62,6 +63,7 @@ const BADGE: Record<string, { text: string; cls: string }> = {
  * ประกันสังคม/ภาษีปรับเองได้ ต้องมีเหตุผล และโชว์ยอดที่ระบบคิดได้คู่กันเสมอ
  */
 export function LineEditor({ d }: { d: EditorData }) {
+  const ceo = useCeoTitle();
   const earn = d.lines.filter((l) => l.kind === "earning" && l.source !== "salary" && l.source !== "commission" && l.source !== "diligence");
   const diligence = d.lines.find((l) => l.source === "diligence");
   const showDiligence = !!diligence || d.diligenceComputed !== undefined && d.diligenceComputed !== null || !!d.overrides.diligence;
@@ -90,7 +92,7 @@ export function LineEditor({ d }: { d: EditorData }) {
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
           <div className="flex flex-col gap-5">
-            {d.ownLocked && <Notice tone="warn">นี่คือเงินเดือนของคุณเอง — แก้เองไม่ได้ ให้ CEO เป็นคนแก้ให้</Notice>}
+            {d.ownLocked && <Notice tone="warn">นี่คือเงินเดือนของคุณเอง — แก้เองไม่ได้ ให้ {ceo} เป็นคนแก้ให้</Notice>}
             {!d.editable && !d.ownLocked && <Notice tone="info">รอบนี้ส่งอนุมัติแล้ว — ดูได้อย่างเดียว (แก้ได้เมื่อถูกส่งกลับ)</Notice>}
             {d.warnings.map((w, i) => (
               <Notice key={i} tone={w.includes("ติดลบ") ? "danger" : "warn"}>{w}</Notice>
@@ -297,6 +299,7 @@ function OverrideRow({
   /** คำอธิบายเมื่อไม่มีบรรทัด (เช่น ปรับค่าคอมเป็น 0) */
   fallbackHow?: string;
 }) {
+  const ceo = useCeoTitle();
   const earning = which === "commission" || which === "diligence";
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState(String(current?.amount ?? computed));
@@ -335,10 +338,10 @@ function OverrideRow({
           <input aria-label="เหตุผล" className={field} placeholder="เหตุผล (จำเป็น)" value={reason} onChange={(e) => setReason(e.target.value)} />
           <p className={`${hint} sm:col-span-3 sm:order-last`}>
             {which === "diligence"
-              ? "เช่น กรณีพิเศษที่ผู้จัดการอนุมัติ หรือใส่ 0 = ไม่ให้เบี้ยขยันงวดนี้ · รอบหน้านับขั้นต่อจากยอดนี้ · CEO เห็นยอดนี้คู่กับที่ระบบคิดตอนอนุมัติ"
+              ? `เช่น กรณีพิเศษที่ผู้จัดการอนุมัติ หรือใส่ 0 = ไม่ให้เบี้ยขยันงวดนี้ · รอบหน้านับขั้นต่อจากยอดนี้ · ${ceo} เห็นยอดนี้คู่กับที่ระบบคิดตอนอนุมัติ`
               : earning
-              ? "เช่น เพิ่ม/ลดตามผลงานจริง หรือใส่ 0 = ไม่ให้ค่าคอมงวดนี้ · CEO เห็นยอดนี้คู่กับที่ระบบคิดตอนอนุมัติ"
-              : "ใช้เมื่อยอดต้องต่างจากที่ระบบคิดจริง ๆ เช่น พนักงานขอให้หักภาษีเพิ่ม · CEO เห็นยอดนี้คู่กับที่ระบบคิดตอนอนุมัติ"}
+              ? `เช่น เพิ่ม/ลดตามผลงานจริง หรือใส่ 0 = ไม่ให้ค่าคอมงวดนี้ · ${ceo} เห็นยอดนี้คู่กับที่ระบบคิดตอนอนุมัติ`
+              : `ใช้เมื่อยอดต้องต่างจากที่ระบบคิดจริง ๆ เช่น พนักงานขอให้หักภาษีเพิ่ม · ${ceo} เห็นยอดนี้คู่กับที่ระบบคิดตอนอนุมัติ`}
           </p>
           <div className="flex gap-1.5">
             <button type="button" className={outline} onClick={() => setOpen(false)} disabled={busy}>ยกเลิก</button>
@@ -354,6 +357,7 @@ function OverrideRow({
 const OTHER = "__other__";
 
 function AddForm({ kind, items, ctx }: { kind: "earning" | "deduction"; items: EditorData["items"]; ctx: { runId: string; employmentId: string; expectUpdatedAt: string } }) {
+  const ceo = useCeoTitle();
   const [open, setOpen] = useState(false);
   const choices = items.filter((i) => i.kind === kind);
   const [itemId, setItemId] = useState(choices.length ? "" : OTHER);
@@ -430,7 +434,7 @@ function AddForm({ kind, items, ctx }: { kind: "earning" | "deduction"; items: E
         </label>
       )}
       <label className={label}>
-        <span className={labelText}>หมายเหตุ <span className="font-normal text-(--ink-soft)">(จำเป็น — CEO เห็นตอนอนุมัติ)</span></span>
+        <span className={labelText}>หมายเหตุ <span className="font-normal text-(--ink-soft)">(จำเป็น — {ceo} เห็นตอนอนุมัติ)</span></span>
         <input className={field} value={reason} onChange={(e) => setReason(e.target.value)} />
       </label>
       {error && <Notice tone="danger">{error}</Notice>}

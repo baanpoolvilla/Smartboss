@@ -12,6 +12,7 @@ import {
   requestDueDateAction,
 } from "@/app/(shell)/maintenance/work-orders/due-request-actions";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 export interface DueRequestView {
   id: string;
   requestedBy: string;
@@ -58,6 +59,7 @@ export function WorkOrderDueRequest({
   myId: string;
   requests: DueRequestView[];
 }) {
+  const ceo = useCeoTitle();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const today = todayBangkok();
@@ -136,7 +138,7 @@ export function WorkOrderDueRequest({
             <button type="button" className="rounded-lg px-3 py-1.5 text-[13px] text-(--ink-soft)" onClick={() => setOpen(false)}>ยกเลิก</button>
             <button type="button" disabled={pending || !reason.trim() || date <= dueDate}
               className="rounded-lg bg-[#2E7D32] px-4 py-1.5 text-[13px] font-semibold text-white disabled:opacity-50"
-              onClick={() => run(async () => { const r = await requestDueDateAction(workOrderId, date, reason); if (!r.error) { setOpen(false); setReason(""); } return r; }, "ส่งคำขอแล้ว · รอ CEO / คนเปิดใบงานอนุมัติ")}>
+              onClick={() => run(async () => { const r = await requestDueDateAction(workOrderId, date, reason); if (!r.error) { setOpen(false); setReason(""); } return r; }, `ส่งคำขอแล้ว · รอ ${ceo} / คนเปิดใบงานอนุมัติ`)}>
               ส่งคำขอ
             </button>
           </div>
@@ -173,7 +175,7 @@ export function WorkOrderDueRequest({
               ยกเลิกคำขอ
             </button>
           )}
-          {!pendingReq.canDecide && pendingReq.requestedBy !== myId && <span className="text-[12px] text-(--ink-soft)">รอ CEO หรือคนเปิดใบงานอนุมัติ</span>}
+          {!pendingReq.canDecide && pendingReq.requestedBy !== myId && <span className="text-[12px] text-(--ink-soft)">รอ {ceo} หรือคนเปิดใบงานอนุมัติ</span>}
         </div>
       ))}
 

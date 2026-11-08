@@ -14,6 +14,7 @@ import { canDecideDueRequest, canEditDueDate } from "@/modules/maintenance/lib/d
 import { isWorkOrderMember, memberDueAt, workOrderMemberIds } from "@/modules/maintenance/lib/work-order-members";
 import { isPastDay } from "@/modules/maintenance/lib/no-past-date";
 
+import { ceoTitle } from "@/lib/ceo-title";
 /**
  * ขอเลื่อนกำหนดส่งใบงาน — แบบเดียวกับงานบนบอร์ดงาน (ผู้ใช้ขอ 17/10/2569)
  *   ขอได้:     ผู้รับผิดชอบใบงาน · ใบงานยังไม่เสร็จ/ไม่ยกเลิก · มีกำหนดส่ง · ขอได้แค่ "เลื่อนออกไป"
@@ -169,12 +170,13 @@ export async function decideDueRequestAction(requestId: string, approve: boolean
  *   บันทึกในความคิดเห็น (log) + แจ้งผู้รับผิดชอบ
  */
 export async function editDueDateAction(workOrderId: string, newDate: string, reason: string): Promise<{ error?: string }> {
+  const ceo = await ceoTitle();
   const s = await requireOrg();
   const wo = await getWorkOrder(s.orgId, workOrderId);
   if (!wo || !canSeeWorkOrder(await workOrderAccess(s), wo)) return { error: "ไม่พบใบงาน" };
   // สิทธิ์ชั่วคราวใช้กับใบ PM เท่านั้น ปุ่มในใบงานไม่ได้เปิดให้ ใช้ผ่านการแก้วันที่ในแผน
   const movesPm = !!wo.pmScheduleId && hasPermission(s, MAINT_PERMS.pmMoveRounds);
-  if (!canEditDueDate({ userId: s.userId, viewAll: canViewAll(s) || movesPm }, { createdBy: await workOrderOwnerId(s.orgId, wo) })) return { error: "แก้กำหนดส่งได้เฉพาะ CEO หรือคนเปิดใบงาน" };
+  if (!canEditDueDate({ userId: s.userId, viewAll: canViewAll(s) || movesPm }, { createdBy: await workOrderOwnerId(s.orgId, wo) })) return { error: `แก้กำหนดส่งได้เฉพาะ ${ceo} หรือคนเปิดใบงาน` };
   if (wo.status === "completed" || wo.status === "cancelled") return { error: "ใบงานนี้ปิดแล้ว" };
   const d = endOfDayBkk(newDate);
   if (!d) return { error: "วันที่ไม่ถูกต้อง" };

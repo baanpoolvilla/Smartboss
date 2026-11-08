@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { fmtDays } from "@/modules/hr/lib/leave-type-choice";
 import { setYearlyEntitlementAction } from "../../actions";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 export interface YearlyRow {
   employmentId: string;
   name: string;
@@ -32,6 +33,7 @@ export function YearlyEntitlements({
   year: number;
   rows: YearlyRow[];
 }) {
+  const ceo = useCeoTitle();
   const sorted = [...rows].sort((a, b) => a.name.localeCompare(b.name, "th"));
   const unset = rows.filter((r) => r.entitled <= 0).length;
   const yearLink = (y: number) => `/hr/settings/leave-types?year=${y}#yearly-${leaveTypeId}`;
@@ -41,7 +43,7 @@ export function YearlyEntitlements({
         <div>
           <h2 className="text-base font-semibold text-(--ink)">สิทธิ์{leaveTypeName}รายคน · ปี {year + 543}</h2>
           <p className="text-xs text-(--ink-soft)">
-            กรอกจำนวนวันของแต่ละคนแล้วกดบันทึก · นับ ม.ค.–ธ.ค. หมดปีแล้วทิ้ง · เห็นได้เฉพาะเจ้าตัว ฝ่ายบุคคล และ CEO
+            กรอกจำนวนวันของแต่ละคนแล้วกดบันทึก · นับ ม.ค.–ธ.ค. หมดปีแล้วทิ้ง · เห็นได้เฉพาะเจ้าตัว ฝ่ายบุคคล และ {ceo}
             {unset > 0 ? ` · ยังไม่ได้กรอก ${unset} คน (คนกลุ่มนี้ลงประเภทนี้ไม่ได้)` : ""}
           </p>
         </div>

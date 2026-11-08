@@ -94,6 +94,7 @@ import { canDecideDueRequest, canEditDueDate } from "@/modules/maintenance/lib/d
 import { canDeleteWorkOrderWithPerm } from "@/modules/maintenance/lib/work-order-delete";
 import { COMPLETION_RULE_LABEL, earliestPendingDue, isWorkOrderMember, memberDueAt, waitingOnMembers, workOrderMemberIds } from "@/modules/maintenance/lib/work-order-members";
 
+import { ceoTitle } from "@/lib/ceo-title";
 const STATUS_COLOR: Record<string, string> = {
   open: "#2563EB",
   in_progress: "#EA580C",
@@ -124,6 +125,7 @@ export default async function WorkOrderDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ from?: string }>;
 }) {
+  const ceo = await ceoTitle();
   const { id } = await params;
   // เปิดมาจากการ์ดบนบอร์ดงาน (?from=tasks — maintenance-card.tsx) = ปุ่มย้อนกลับพากลับบอร์ดงาน
   const fromTasks = (await searchParams).from === "tasks";
@@ -554,7 +556,7 @@ export default async function WorkOrderDetailPage({
             icon={<Info className="h-5 w-5" />}
             label="ส่วนตัว"
             className="sm:col-span-2"
-            value="🔒 ใบกันลืมของคนเปิด · เห็นเฉพาะคนเปิดกับ CEO · ไม่หักคะแนน ไม่นับสถิติ"
+            value={`🔒 ใบกันลืมของคนเปิด · เห็นเฉพาะคนเปิดกับ ${ceo} · ไม่หักคะแนน ไม่นับสถิติ`}
             valueColor="#1b2537"
           />
         )}
@@ -584,7 +586,7 @@ export default async function WorkOrderDetailPage({
             className="sm:col-span-2"
             value={
               <Link href={`/maintenance/work-orders/${wo.mergedIntoId}`} className="text-(--brand-navy) hover:underline">
-                ดูใบรวมที่ CEO รวบไว้ →
+                ดูใบรวมที่ {ceo} รวบไว้ →
               </Link>
             }
           />
@@ -834,7 +836,7 @@ export default async function WorkOrderDetailPage({
           {seeOwnPoStatus && linkedPos.length > 0 ? (
             <ul className="flex flex-col">
               {linkedPos.map((po, i) => {
-                const m = poStatusMeta(po.status);
+                const m = poStatusMeta(po.status, ceo);
                 const ret = openReturns.get(po.id);
                 return (
                   <li
@@ -871,7 +873,7 @@ export default async function WorkOrderDetailPage({
           ) : (
             <ul className="flex flex-col">
               {linkedPos.map((po, i) => {
-                const m = poStatusMeta(po.status);
+                const m = poStatusMeta(po.status, ceo);
                 const count = poItemsFromJson(po.items).length;
                 return (
                   <li

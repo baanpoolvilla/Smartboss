@@ -53,6 +53,7 @@ import type { CalendarEvent, CalendarEventType, TodoItem } from "@/modules/repor
 import { TeamLeaveRoster } from "./team-leave-roster";
 import { CalendarHolidaysCard } from "./calendar-holidays-card";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 /** จำว่าติ๊ก "วันหยุด · ลา" ไว้หรือไม่ — ต่อเครื่อง */
 const SHOW_SCHEDULE_KEY = "pm-calendar-show-schedule";
 const RAIL_OPEN_KEY = "pm-calendar-rail-open";
@@ -199,6 +200,7 @@ function ScheduleToggle({
 }
 
 export function CalendarView() {
+  const ceo = useCeoTitle();
   const isMobile = useIsMobile();
   const tasks = useTaskStore((s) => s.tasks);
   const updateTask = useTaskStore((s) => s.updateTask);
@@ -896,7 +898,7 @@ export function CalendarView() {
       const target = tasks.find((t) => t.id === taskId);
       // เลื่อนกำหนดส่งเองได้เฉพาะ CEO — คนอื่นกด "ขอเลื่อนกำหนดส่ง" ในหน้างาน
       if (target && !isOwner(viewingAsUserId)) {
-        toast.error(`เลื่อนกำหนดส่งเองได้เฉพาะ CEO — เปิดงาน "${target.title}" แล้วกด "ขอเลื่อนกำหนดส่ง"`);
+        toast.error(`เลื่อนกำหนดส่งเองได้เฉพาะ ${ceo} — เปิดงาน "${target.title}" แล้วกด "ขอเลื่อนกำหนดส่ง"`);
         return false;
       }
       updateTask(taskId, { dueDate: new Date(start).toISOString() });

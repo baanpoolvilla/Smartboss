@@ -56,6 +56,7 @@ import {
   deletePoCommentAction,
   deletePoAction,
 } from "../actions";
+import { ceoTitle } from "@/lib/ceo-title";
 
 function TimelineRow({
   icon,
@@ -89,6 +90,7 @@ export default async function PoDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ from?: string; wo?: string }>;
 }) {
+  const ceo = await ceoTitle();
   const { id } = await params;
   // เปิดมาจากการ์ดบนบอร์ดงาน (?from=tasks — maintenance-card.tsx) = ปุ่มย้อนกลับพากลับบอร์ดงาน
   const sp = await searchParams;
@@ -139,7 +141,7 @@ export default async function PoDetailPage({
     po.createdBy === session.userId ||
     po.receiverAssignedTo === session.userId;
 
-  const meta = poStatusMeta(po.status);
+  const meta = poStatusMeta(po.status, ceo);
   const items = poItemsFromJson(po.items);
   const total = Number(po.totalPrice);
   const receiptUrls =
@@ -363,7 +365,7 @@ export default async function PoDetailPage({
               users={users.map((u) => ({
                 id: u.id,
                 label: u.name,
-                sub: ROLE_LABEL_TH(u.roleCodes),
+                sub: ROLE_LABEL_TH(u.roleCodes, ceo),
               }))}
             />
             <RejectButton id={id} action={rejectAction} />
@@ -393,7 +395,7 @@ export default async function PoDetailPage({
               users={users.map((u) => ({
                 id: u.id,
                 label: u.name,
-                sub: ROLE_LABEL_TH(u.roleCodes),
+                sub: ROLE_LABEL_TH(u.roleCodes, ceo),
               }))}
             />
           )}

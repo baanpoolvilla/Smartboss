@@ -10,6 +10,7 @@ import { ceoUserIds, expenseLinks, loadExpenseTracking } from "@/modules/mainten
 import { expenseDueAt, trackingActive } from "@/modules/maintenance/lib/expense-deadline";
 import { fmtThaiDate } from "@/modules/maintenance/lib/format";
 
+import { ceoTitle } from "@/lib/ceo-title";
 /**
  * ขอเลื่อนกำหนดบันทึกค่าใช้จ่าย (ผู้ใช้ 3/11/2569) — แยกจากขอเลื่อนกำหนดส่งใบงาน (due-request-actions.ts)
  *   ขอได้:      คนในรายชื่อผู้บันทึกค่าใช้จ่าย · ใบต้องปิดแล้วและยังไม่บันทึก · ต้องใส่เหตุผล · ขอได้ทั้งก่อนและหลังครบกำหนด
@@ -102,8 +103,9 @@ export async function cancelExpenseExtensionAction(requestId: string): Promise<{
 }
 
 export async function decideExpenseExtensionAction(requestId: string, approve: boolean, note: string): Promise<{ error?: string }> {
+  const ceo = await ceoTitle();
   const s = await requireOrg();
-  if (!hasRole(s, "CEO") && !isSuperAdmin(s)) return { error: "อนุมัติได้เฉพาะ CEO" };
+  if (!hasRole(s, "CEO") && !isSuperAdmin(s)) return { error: `อนุมัติได้เฉพาะ ${ceo}` };
   const r = await prisma.workOrderDueRequest.findFirst({ where: { orgId: s.orgId, id: requestId, kind: "expense" } });
   if (!r || r.status !== "pending") return { error: "คำขอนี้ถูกตัดสินไปแล้ว" };
   if (r.requestedBy === s.userId) return { error: "อนุมัติคำขอของตัวเองไม่ได้" };
@@ -126,7 +128,7 @@ export async function decideExpenseExtensionAction(requestId: string, approve: b
   await addWorkOrderComment(s.orgId, wo.id, s.userId, text, null, { kind: "log" });
   await log(s.orgId, s.userId, wo, `${text} ของ`);
 
-  const who = (await notifyActorName(s.userId)) ?? "CEO";
+  const who = (await notifyActorName(s.userId)) ?? ceo;
   await notifyUser(s.orgId, r.requestedBy, {
     title: approve ? `${who} · ✅ อนุมัติเลื่อนบันทึกค่าใช้จ่าย` : `${who} · ❌ ไม่อนุมัติเลื่อนบันทึกค่าใช้จ่าย`,
     body: `${wo.code} ${wo.title}${approve ? ` · ครบกำหนดใหม่ ${fmtThaiDate(r.newDate)}` : ""}${memo ? ` · ${memo}` : ""}`,

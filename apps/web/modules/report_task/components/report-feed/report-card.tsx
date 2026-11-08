@@ -144,6 +144,7 @@ import {
 import { uuid } from "@/modules/report_task/lib/uuid";
 import { isCoarsePointer } from "@/modules/report_task/lib/device";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 // ขยายจาก 12 เป็นชุดใหญ่ขึ้นอีก ("สติกเกอร์ปกติด้วยสิแบบมีให้เลือกเยอะๆ") —
 // เลี่ยงอิโมจิที่ชนกับชุดสติกเกอร์มีคะแนนเริ่มต้น (😡⚠️🔥👏⭐ ดู
 // data/stickers.ts) เพราะอันเดียวกันไปโผล่สองแถวในป็อปอัปเดียวกันจะงงว่า
@@ -211,6 +212,7 @@ export function ReportCard({
    * wired up a task sheet, so the menu item silently no-ops. */
   onOpenTask?: (taskId: string) => void;
 }) {
+  const ceo = useCeoTitle();
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const replyTargeted = !!highlighted && !!highlightReplyId && post.replies.some((r) => r.id === highlightReplyId);
   const maxImages = useAttachmentSettingsStore((s) => s.settings.maxImagesPerReportPost);
@@ -537,7 +539,7 @@ export function ReportCard({
       { type: "everyone", id: EVERYONE_MENTION_ID, label: "ทุกคนในห้องนี้", sublabel: "แจ้งทุกคนที่เห็นห้องนี้" },
       // @CEO — แจ้งเฉพาะคนที่ถือ role CEO และเห็นห้องนี้ (ไม่ต้องจำว่า CEO ชื่ออะไร) · ขึ้นเฉพาะเมื่อมี CEO ที่เห็นห้องนี้
       ...(directoryUsers.some((u) => u.isCeo && canSeeReportTopic(topic.visibility, u.id))
-        ? [{ type: "role", id: CEO_MENTION_ID, label: "CEO", sublabel: "แจ้งเฉพาะ CEO" } as MentionItem]
+        ? [{ type: "role", id: CEO_MENTION_ID, label: ceo, sublabel: `แจ้งเฉพาะ ${ceo}` } as MentionItem]
         : []),
       ...directoryUsers
         .filter((u) => canSeeReportTopic(topic.visibility, u.id))
@@ -1102,7 +1104,7 @@ export function ReportCard({
   const roundBadge = post.retroFor ? (
       // ส่งย้อนหลังหลัง CEO อนุมัติ (report-retro.ts) — นับเป็นรีพอตของวันที่ลืม ไม่ใช่วันที่โพสต์
       <span className="flex items-center gap-1 shrink-0 rounded-full px-1.5 py-0 text-[10px] leading-4 font-medium bg-violet-50 text-violet-700 border border-violet-200">
-        ส่งย้อนหลัง · รีพอตวันที่ {post.retroFor.day} · CEO อนุมัติ
+        ส่งย้อนหลัง · รีพอตวันที่ {post.retroFor.day} · {ceo} อนุมัติ
       </span>
     ) : post.excludeFromSubmission ? (
       // Visible marker so "why is there no ตรงเวลา/สาย badge

@@ -9,6 +9,7 @@ import { useReportFeedStore, type ReportTopic } from "@/modules/report_task/stor
 import { useRetroSubmitStore } from "@/modules/report_task/store/retro-submit-store";
 import { effectiveRoundsOf } from "@/modules/report_task/lib/submission-rounds";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 const fmtDay = new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short" });
 const fmtDeadline = new Intl.DateTimeFormat("th-TH", {
   timeZone: "Asia/Bangkok",
@@ -23,6 +24,7 @@ const fmtDeadline = new Intl.DateTimeFormat("th-TH", {
  * กด "ส่งย้อนหลัง" ⇒ ช่องเขียนรีพอตเปลี่ยนเป็นโหมดส่งย้อนหลัง (report-composer.tsx) · ส่งแล้วหรือเลยกำหนดแล้วหายไป
  */
 export function RetroSubmitBanner({ topic }: { topic: ReportTopic }) {
+  const ceo = useCeoTitle();
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const posts = useReportFeedStore((s) => s.posts);
   const requests = useRetroSubmitStore((s) => s.requests);
@@ -66,7 +68,7 @@ export function RetroSubmitBanner({ topic }: { topic: ReportTopic }) {
           <div key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-violet-900">
             <History className="h-4 w-4 shrink-0 text-violet-600" />
             <span className="min-w-0 flex-1">
-              <b>CEO อนุมัติให้ส่งย้อนหลัง</b> · รีพอตวันที่ {fmtDay.format(new Date(`${r.day}T12:00:00+07:00`))}
+              <b>{ceo} อนุมัติให้ส่งย้อนหลัง</b> · รีพอตวันที่ {fmtDay.format(new Date(`${r.day}T12:00:00+07:00`))}
               {round ? ` รอบ "${round.label}" (${round.time})` : ""} · ส่งได้ถึง {fmtDeadline.format(lastMinute)} น.
               <span className="text-violet-700/80"> · ส่งแล้วได้คะแนนคืน {Math.abs(r.points)} · ไม่ส่งยังโดนหัก</span>
             </span>

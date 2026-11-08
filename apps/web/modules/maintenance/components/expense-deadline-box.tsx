@@ -13,6 +13,7 @@ import {
   requestExpenseExtensionAction,
 } from "@/app/(shell)/maintenance/work-orders/expense-deadline-actions";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 export interface ExpenseRequestView {
   id: string;
   requestedBy: string;
@@ -60,6 +61,7 @@ export function ExpenseDeadlineBox({
   noDock: boolean;
   requests: ExpenseRequestView[];
 }) {
+  const ceo = useCeoTitle();
   const [asking, setAsking] = useState(false);
   const [date, setDate] = useState("");
   const [reason, setReason] = useState("");
@@ -110,7 +112,7 @@ export function ExpenseDeadlineBox({
 
       {asking && canRequest && !pending && (
         <div className="mt-3 flex flex-col gap-2 rounded-(--radius) border border-(--line) bg-(--bg) p-3">
-          <p className="text-xs text-(--ink-soft)">ส่งให้ CEO อนุมัติ · ถ้าเลยกำหนดไปก่อนอนุมัติ ระบบหักคะแนนตามปกติ</p>
+          <p className="text-xs text-(--ink-soft)">ส่งให้ {ceo} อนุมัติ · ถ้าเลยกำหนดไปก่อนอนุมัติ ระบบหักคะแนนตามปกติ</p>
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm text-(--ink)">ขอเลื่อนเป็นวันที่</span>
             <DatePickerField value={date} minDate={minDate} onChange={setDate} className="h-9 max-w-56 text-(--ink)" />
@@ -128,7 +130,7 @@ export function ExpenseDeadlineBox({
             <button
               type="button"
               disabled={busy}
-              onClick={() => run(() => requestExpenseExtensionAction(workOrderId, date, reason), "ส่งคำขอให้ CEO แล้ว", () => { setAsking(false); setDate(""); setReason(""); })}
+              onClick={() => run(() => requestExpenseExtensionAction(workOrderId, date, reason), `ส่งคำขอให้ ${ceo} แล้ว`, () => { setAsking(false); setDate(""); setReason(""); })}
               className="h-9 rounded-(--radius) bg-[#0F766E] px-4 text-sm font-medium text-white hover:brightness-95 disabled:opacity-50"
             >
               ส่งคำขอ
@@ -143,7 +145,7 @@ export function ExpenseDeadlineBox({
       {pending && (
         <div className="mt-3 rounded-(--radius) border border-(--line) bg-(--bg) p-3 text-sm text-(--ink)">
           <p>
-            <b>{pending.requestedByName}</b> ขอเลื่อนเป็น <b>{th(pending.newDate)}</b> · รอ CEO อนุมัติ
+            <b>{pending.requestedByName}</b> ขอเลื่อนเป็น <b>{th(pending.newDate)}</b> · รอ {ceo} อนุมัติ
           </p>
           <p className="mt-0.5 text-(--ink-soft)">เหตุผล: {pending.reason}</p>
           {canDecide && pending.requestedBy !== myId && (

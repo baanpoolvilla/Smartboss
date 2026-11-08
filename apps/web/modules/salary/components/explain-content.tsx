@@ -1,4 +1,5 @@
 import { fmtBaht, type SsoParams } from "../lib/types";
+import { CeoWord } from "@/lib/ceo-word";
 
 /*
  * ข้อความอธิบายที่ใช้ซ้ำ (drawer ของ HR/CEO · สลิปพนักงาน) — ตัวเลขดึงจากอัตราที่ตั้งไว้ ไม่เขียนตายตัว
@@ -39,7 +40,7 @@ export function AdvanceExplain({ forEmployee = false }: { forEmployee?: boolean 
   ) : (
     <>
       <div>ดึงจากใบเบิกล่วงหน้าที่จ่ายแล้วใน เบิกจ่าย &amp; OT — กดบันทึกจ่ายรอบนี้แล้วใบเบิกปิดเป็น &quot;หักแล้ว&quot; เอง</div>
-      <div>หักทีเดียวแล้วเงินเหลือน้อยเกิน? กด &quot;เลื่อนไปหักงวดหน้า&quot; (CEO เห็นในกล่องควรดู)</div>
+      <div>หักทีเดียวแล้วเงินเหลือน้อยเกิน? กด &quot;เลื่อนไปหักงวดหน้า&quot; (<CeoWord /> เห็นในกล่องควรดู)</div>
     </>
   );
 }

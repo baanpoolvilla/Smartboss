@@ -45,6 +45,7 @@ import { toast } from "sonner";
 import { uuid } from "@/modules/report_task/lib/uuid";
 import { isCoarsePointer } from "@/modules/report_task/lib/device";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 interface MentionItem {
   type: MentionType;
   id: string;
@@ -126,6 +127,7 @@ export function ReportPostFields({
    * เฉพาะคอม — มือถือไม่มี Shift บนแป้น Enter ยังขึ้นบรรทัดใหม่ตามเดิม · ไม่ส่ง (ฟอร์มแก้ไขโพสต์) = Enter ขึ้นบรรทัด */
   onEnterSubmit?: () => void;
 }) {
+  const ceo = useCeoTitle();
   // คนงาน: placeholder/ปุ่มตามภาษาที่เลือก · คนอื่นไทยเหมือนเดิม
   const { t: wt } = useWorkerUi();
   const maxVideoMB = useAttachmentSettingsStore((s) => s.settings.maxVideoMB);
@@ -169,7 +171,7 @@ export function ReportPostFields({
       { type: "everyone", id: EVERYONE_MENTION_ID, label: "ทุกคนในห้องนี้", sublabel: "แจ้งทุกคนที่เห็นห้องนี้" },
       // @CEO — แจ้งเฉพาะคนที่ถือ role CEO และเห็นห้องนี้ (ไม่ต้องจำว่า CEO ชื่ออะไร) · ขึ้นเฉพาะเมื่อมี CEO ที่เห็นห้องนี้
       ...(users.some((u) => u.isCeo && canSeeReportTopic(targetTopicVisibility, u.id))
-        ? [{ type: "role", id: CEO_MENTION_ID, label: "CEO", sublabel: "แจ้งเฉพาะ CEO" } as MentionItem]
+        ? [{ type: "role", id: CEO_MENTION_ID, label: ceo, sublabel: `แจ้งเฉพาะ ${ceo}` } as MentionItem]
         : []),
       ...users
         .filter((u) => canSeeReportTopic(targetTopicVisibility, u.id))

@@ -22,6 +22,7 @@ import { acceptRetroPosts, carryLateRequestsToMissed, listPenaltyRequests, markR
 import { reportDayText } from "@/modules/report_task/lib/penalty-evidence";
 import { writeOwnNotificationsForUsers } from "@/modules/report_task/lib/server/retro-notify";
 
+import { ceoTitle } from "@/lib/ceo-title";
 /**
  * หักคะแนน HR เมื่อพลาด/ส่งช้ารอบส่งรายงาน (category `report_missed`/`report_late`)
  * — เฟส 2 ของ docs/spec-report-submission-rounds.md ข้อ 7 คู่กับ
@@ -205,6 +206,7 @@ export async function runReportPenaltySweep(orgId: string, actorId: string | nul
   // แยกตาม category) แท็บที่แย่งล็อกไม่ได้แค่ข้ามรอบนี้ไปเฉยๆ (ปลอดภัย — sweep
   // ถัดไปใน 60 วิคำนวณใหม่จากข้อมูลล่าสุดเองเสมออยู่แล้ว)
   const result = await prisma.$transaction(async (tx) => {
+  const ceo = await ceoTitle(orgId);
     const lockRows = await tx.$queryRaw<{ locked: boolean }[]>`SELECT pg_try_advisory_xact_lock(hashtext(${orgId})) AS locked`;
     if (!lockRows[0]?.locked) {
       return { changed: false, skipped: "locked" as const };
@@ -285,7 +287,7 @@ export async function runReportPenaltySweep(orgId: string, actorId: string | nul
           refType: "report_round_undo",
           refId,
           note: retroRefIds.has(refId) && targetCategory === null
-            ? "คืนคะแนน: ส่งรีพอตย้อนหลังแล้ว (CEO อนุมัติคำร้อง)"
+            ? `คืนคะแนน: ส่งรีพอตย้อนหลังแล้ว (${ceo} อนุมัติคำร้อง)`
             : targetCategory === null
               ? "ยกเลิก: วันนั้นมีวันลา/หยุด/ไม่ต้องส่งแล้ว"
               : targetCategory === "report_missed"

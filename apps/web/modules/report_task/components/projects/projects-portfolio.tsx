@@ -21,11 +21,13 @@ import { PersonDot, ProjectStatusChip, askProjectUpdate, fmtDay, todayBkk } from
 import type { Project, ProjectStatus } from "@/modules/report_task/types";
 import type { TimelineItem } from "@/modules/report_task/lib/project-schedule";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 /** เรียงการ์ด: โปรเจกต์ที่มีปัญหาขึ้นก่อน */
 const RANK: Record<string, number> = { late: 0, risk: 1, ok: 2, hold: 3, done: 4, dropped: 5 };
 
 /** หน้ารวมโปรเจกต์ (Portfolio) — ทุกโปรเจกต์ที่เห็นได้ สถานะ ความคืบหน้า และแถบเวลาบนปฏิทินเดียวกัน */
 export function ProjectsPortfolio() {
+  const ceo = useCeoTitle();
   const router = useRouter();
   const me = useIdentityStore((s) => s.viewingAsUserId);
   const projects = useProjectStore((s) => s.projects);
@@ -122,7 +124,7 @@ export function ProjectsPortfolio() {
       ) : rows.length === 0 ? (
         <div className="grid place-items-center gap-2 rounded-xl border border-dashed border-[var(--line)] py-16 text-center text-sm text-[var(--ink-soft)]">
           <p className="m-0">{projects.length ? "ไม่มีโปรเจกต์ในตัวกรองนี้" : "ยังไม่มีโปรเจกต์"}</p>
-          {canCreateProject(me) ? <p className="m-0">กด &quot;+ สร้างโปรเจกต์&quot; เพื่อเริ่ม — เลือกแม่แบบได้ เช่น รีโนเวทบ้าน</p> : <p className="m-0">หัวหน้าแผนกหรือ CEO เป็นคนสร้างโปรเจกต์ แล้วเพิ่มคุณเป็นสมาชิก</p>}
+          {canCreateProject(me) ? <p className="m-0">กด &quot;+ สร้างโปรเจกต์&quot; เพื่อเริ่ม — เลือกแม่แบบได้ เช่น รีโนเวทบ้าน</p> : <p className="m-0">หัวหน้าแผนกหรือ {ceo} เป็นคนสร้างโปรเจกต์ แล้วเพิ่มคุณเป็นสมาชิก</p>}
         </div>
       ) : (
         <>

@@ -7,6 +7,7 @@ import { canManageVendors, requestsPage, statusOf } from "@/modules/requests/lib
 import { VendorEditToggle, VendorForm } from "@/modules/requests/components/vendor-form";
 import { StatusChip } from "@/modules/requests/components/ui";
 import { bangkokToday, baht, round2, thaiDate } from "@/modules/requests/lib/types";
+import { ceoTitle } from "@/lib/ceo-title";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export const dynamic = "force-dynamic";
  * ยอดปีนี้แยก ก่อนหัก / หัก ณ ที่จ่าย / จ่ายจริง ให้เห็นชัดว่าหักอะไรไปเท่าไหร่
  */
 export default async function VendorsPage() {
+  const ceo = await ceoTitle();
   const { session } = await requestsPage();
   if (!(await canManageVendors(session))) redirect("/requests");
   const orgId = session.orgId;
@@ -62,7 +64,7 @@ export default async function VendorsPage() {
                           <span className="text-xs text-(--ink-soft)">{thaiDate(j.workDate)} · </span>{j.title}{j.propertyName ? ` · ${j.propertyName}` : ""}
                         </Link>
                         <span className="flex shrink-0 items-center gap-2">
-                          <StatusChip info={statusOf(j)} />
+                          <StatusChip info={statusOf(j, ceo)} />
                           <span className="font-semibold tabular-nums">{baht(j.netAmount)}</span>
                         </span>
                       </li>

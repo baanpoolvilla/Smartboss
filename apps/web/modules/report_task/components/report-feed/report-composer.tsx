@@ -33,6 +33,7 @@ import { bulletsFromText } from "@/modules/report_task/lib/report-feed-rich-text
 import { useRetroSubmitStore } from "@/modules/report_task/store/retro-submit-store";
 import { useWorkerUi } from "@/modules/daily_worker/components/use-worker-ui";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 function roundMinutesOf(time: string): number {
   const [h, m] = time.split(":").map(Number) as [number, number];
   return h * 60 + m;
@@ -72,6 +73,7 @@ function loadDraft(topicId: string): StoredDraft | null {
 }
 
 export function ReportComposer({ topic }: { topic: ReportTopic }) {
+  const ceo = useCeoTitle();
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   // คนงาน: ข้อความบนฟอร์มตามภาษาที่เลือก (พม่า/ไทย/อังกฤษ) · คนอื่นไทยเหมือนเดิม
   const { lang, t: wt } = useWorkerUi();
@@ -406,7 +408,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
           <div role="status" className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-violet-300 bg-violet-50 px-3 py-2 text-xs text-violet-900">
             <span className="min-w-0 flex-1">
               กำลังส่งรีพอต<b>ย้อนหลัง</b>ของวันที่ {retro.day}
-              {retroRound ? ` รอบ "${retroRound.label}" (${retroRound.time})` : ""} · CEO อนุมัติแล้ว · ไม่นับเป็นรีพอตของวันนี้
+              {retroRound ? ` รอบ "${retroRound.label}" (${retroRound.time})` : ""} · {ceo} อนุมัติแล้ว · ไม่นับเป็นรีพอตของวันนี้
               {minImagesRequired > 0 && ` · ต้องแนบรูปอย่างน้อย ${minImagesRequired} รูป`}
               {retroExpired && <b className="text-[var(--chart-red)]"> · เลยกำหนดส่งย้อนหลังแล้ว</b>}
             </span>

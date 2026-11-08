@@ -25,6 +25,7 @@ import type { Department, User } from "@/modules/report_task/types";
 import { Building2, Check, Crown, Save, Search, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 /**
  * Owner-only: manage the company's real org structure (departments +
  * employees) — company-wide config, lives on the settings page
@@ -148,6 +149,7 @@ export function DepartmentSettingsPanel() {
 
 /** Sibling panel to DepartmentSettingsPanel — same file, same owner-only Settings section. */
 export function EmployeeSettingsPanel() {
+  const ceo = useCeoTitle();
   const stored = useEmployeeStore((s) => s.employees);
   const setEmployees = useEmployeeStore((s) => s.setEmployees);
   const departments = useDepartmentStore((s) => s.departments);
@@ -220,7 +222,7 @@ export function EmployeeSettingsPanel() {
             หลังบ้าน → ผู้ใช้งาน
           </Link>
           {" "}— &quot;เจ้าของบริษัท&quot; (เห็น/แก้ได้ทุกอย่างโดยไม่จำกัดแผนก) ค่าเริ่มต้นมาจากบทบาท
-          ผู้ดูแลบริษัท/CEO ที่ /admin แต่ยกเว้นเฉพาะคนได้ที่นี่ — ติ๊กออกได้แม้ยังถือบทบาทนั้นอยู่
+          ผู้ดูแลบริษัท/{ceo} ที่ /admin แต่ยกเว้นเฉพาะคนได้ที่นี่ — ติ๊กออกได้แม้ยังถือบทบาทนั้นอยู่
           โดยไม่กระทบสิทธิ์เมนู/RBAC จริงเลย
         </p>
       </div>

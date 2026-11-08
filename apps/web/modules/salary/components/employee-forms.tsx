@@ -10,6 +10,7 @@ import { Example, InfoTip } from "./help";
 import { card, field, hint, label, labelText, navy, outline } from "./ui";
 import { useRun } from "./use-run";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 const BANKS = ["กสิกรไทย", "ไทยพาณิชย์", "กรุงเทพ", "กรุงไทย", "กรุงศรีอยุธยา", "ทหารไทยธนชาต (ttb)", "ออมสิน", "ธ.ก.ส.", "ยูโอบี", "ซีไอเอ็มบี", "เกียรตินาคินภัทร", "แลนด์ แอนด์ เฮ้าส์", "อื่นๆ"];
 
 /** 1. เงินเดือน — ตั้ง/ขึ้นเงินเดือน (มีวันมีผล เก็บประวัติ) */
@@ -90,6 +91,7 @@ export function ProfileSection({
   /** บริษัทเปิดเบี้ยขยัน — ขั้นที่ตั้งไว้ + ขั้นรอบล่าสุดที่จ่ายผ่านระบบแล้ว (มี = ช่องยกมาไม่มีผล) */
   diligence?: { steps: number[]; lastPaid: { amount: number; period: string } | null };
 }) {
+  const ceo = useCeoTitle();
   const [v, setV] = useState(initial);
   const [saved, setSaved] = useState(false);
   const { busy, error, run } = useRun();
@@ -151,7 +153,7 @@ export function ProfileSection({
           <InfoTip label="ประกันสังคม" title="หักประกันสังคมเมื่อไหร่">
             <span>ลูกจ้างทั่วไปต้องหักทุกคน (มาตรา 33) — ระบบคิด 5% จากค่าจ้าง มีขั้นต่ำและเพดานตามที่ตั้งค่า</span>
             <span>ไม่หักเฉพาะกรณีที่กฎหมายยกเว้น เช่น เริ่มงานครั้งแรกตอนอายุเกิน 60 ปี หรือเป็นกรรมการ/เจ้าของที่ไม่ใช่ลูกจ้าง</span>
-            <span className="text-(--ink-soft)">ไม่แน่ใจให้ถามนักบัญชีหรือสำนักงานประกันสังคม · CEO เห็นคนที่ไม่หักในกล่อง &quot;ควรดู&quot; ทุกเดือน</span>
+            <span className="text-(--ink-soft)">ไม่แน่ใจให้ถามนักบัญชีหรือสำนักงานประกันสังคม · {ceo} เห็นคนที่ไม่หักในกล่อง &quot;ควรดู&quot; ทุกเดือน</span>
           </InfoTip>
         </h2>
         <label className="flex min-h-11 items-center gap-3 text-sm">
@@ -344,6 +346,7 @@ export function RecurringSection({
   items: { id: string; name: string; kind: string }[];
   thisPeriod: string;
 }) {
+  const ceo = useCeoTitle();
   const [open, setOpen] = useState(false);
   const [itemId, setItemId] = useState("");
   const [amount, setAmount] = useState("");
@@ -359,7 +362,7 @@ export function RecurringSection({
           <InfoTip label="รายการประจำ" title="รายการประจำ / ผ่อน">
             <span>ตั้งครั้งเดียว เข้าทุกงวดเอง เช่น ค่าตำแหน่ง เบี้ยขยัน หัก กยศ.</span>
             <span>ใส่ &quot;ถึงงวด&quot; = ผ่อนมีกำหนด สลิปขึ้น &quot;ผ่อนงวดที่ 2/3&quot; แล้วหยุดเอง</span>
-            <span className="text-(--ink-soft)">รายการที่เริ่มงวดนี้ CEO เห็นในกล่อง &quot;ควรดู&quot; ตอนอนุมัติ</span>
+            <span className="text-(--ink-soft)">รายการที่เริ่มงวดนี้ {ceo} เห็นในกล่อง &quot;ควรดู&quot; ตอนอนุมัติ</span>
           </InfoTip>
         </h2>
         {!open && <button type="button" className="text-sm font-semibold text-(--app-strong) underline" onClick={() => setOpen(true)}>+ เพิ่ม</button>}

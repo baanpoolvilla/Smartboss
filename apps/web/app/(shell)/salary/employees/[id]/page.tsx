@@ -8,10 +8,12 @@ import { salaryPage } from "@/modules/salary/lib/page";
 import { lastPaidDiligence, listStaff } from "@/modules/salary/lib/views";
 import { bangkokToday, periodDates, shiftPeriod, thaiDate } from "@/modules/salary/lib/types";
 
+import { ceoTitle } from "@/lib/ceo-title";
 export const dynamic = "force-dynamic";
 
 /** ข้อมูลเงินเดือนรายคน — 5 หมวด (เงินเดือน · การรับเงิน · ประกันสังคม · ภาษี · รายการประจำ) */
 export default async function SalaryEmployeePage({ params }: { params: Promise<{ id: string }> }) {
+  const ceo = await ceoTitle();
   const { session, access } = await salaryPage({ edit: true });
   const { id } = await params;
   const orgId = session.orgId;
@@ -39,7 +41,7 @@ export default async function SalaryEmployeePage({ params }: { params: Promise<{
         </div>
         {ownLocked ? (
           <div className="rounded-(--radius) border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-            <strong>นี่คือข้อมูลเงินเดือนของคุณเอง</strong> — แก้เองไม่ได้ ให้ CEO เป็นคนแก้ให้ (หลักแยกหน้าที่: คนทำเงินเดือนห้ามแก้ของตัวเอง)
+            <strong>นี่คือข้อมูลเงินเดือนของคุณเอง</strong> — แก้เองไม่ได้ ให้ {ceo} เป็นคนแก้ให้ (หลักแยกหน้าที่: คนทำเงินเดือนห้ามแก้ของตัวเอง)
             <div className="mt-1 tabular-nums">เงินเดือนปัจจุบัน {row.salary !== null ? `${row.salary.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท` : "ยังไม่ได้ตั้ง"}</div>
           </div>
         ) : (

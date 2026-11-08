@@ -13,12 +13,14 @@ import { ROLE_LABEL_TH } from "@/modules/maintenance/lib/roles";
 import { PmForm } from "@/modules/maintenance/components/pm-form";
 import { createPmAction } from "../actions";
 import { AppScaffold } from "@/modules/maintenance/components/app-scaffold";
+import { ceoTitle } from "@/lib/ceo-title";
 
 export default async function NewPmPage({
   searchParams,
 }: {
   searchParams: Promise<{ propertyId?: string; assetId?: string }>;
 }) {
+  const ceo = await ceoTitle();
   const session = await requireOrg();
   if (!hasPermission(session, MAINT_PERMS.pmManage)) redirect("/maintenance/pm");
   const sp = await searchParams;
@@ -47,7 +49,7 @@ export default async function NewPmPage({
         users={users.map((u) => ({
           id: u.id,
           label: u.name,
-          sub: ROLE_LABEL_TH(u.roleCodes),
+          sub: ROLE_LABEL_TH(u.roleCodes, ceo),
         }))}
         frequencies={PM_FREQUENCIES.map((f) => ({
           value: f.value,

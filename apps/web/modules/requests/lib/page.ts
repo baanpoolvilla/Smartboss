@@ -7,6 +7,7 @@ import { isPettyHolder } from "./holders";
 import type { Viewer } from "./data";
 import type { RequestView } from "./db";
 import { statusInfo } from "./types";
+import { ceoText, DEFAULT_CEO_TITLE } from "@/lib/ceo-title-shared";
 
 /** เปิดหน้าของโมดูล — ไม่มีสิทธิ์ (หรือเป็นคนงาน) กลับหน้าแรก */
 export async function requestsPage(extra?: string) {
@@ -52,8 +53,9 @@ export function payableByHolder(r: RequestView & { payHidden: boolean }, userId:
   );
 }
 
-export const statusOf = (r: RequestView) =>
-  statusInfo({
+export const statusOf = (r: RequestView, ceo = DEFAULT_CEO_TITLE) => {
+  // ชื่อเรียกตำแหน่งสูงสุดของบริษัท (CEO/Boss) — lib/ceo-title.ts
+  const info = statusInfo({
     kind: r.kind,
     status: r.status,
     approverLevel: r.approverLevel,
@@ -68,6 +70,8 @@ export const statusOf = (r: RequestView) =>
     beneficiaryUserId: r.beneficiaryUserId,
     otBaseKind: r.otBaseKind,
   });
+  return { ...info, label: ceoText(info.label, ceo), next: info.next === undefined ? info.next : ceoText(info.next, ceo) };
+};
 
 export const beneficiaryLabel = (r: Pick<RequestView, "beneficiaryKind">) =>
   r.beneficiaryKind === "worker" ? "คนงาน" : r.beneficiaryKind === "vendor" ? "ภายนอก" : "พนักงาน";

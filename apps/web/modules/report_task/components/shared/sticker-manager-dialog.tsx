@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { uuid } from "@/modules/report_task/lib/uuid";
 import { notifyStickerChange } from "@/modules/report_task/lib/notify-sticker-change";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 // แต่ก่อนช่องอิโมจิเป็นกล่องพิมพ์เฉยๆ — คนใช้งานไม่รู้จะพิมพ์อิโมจิยังไง
 // ("เวลาใส่อิโมจิละ ใส่ยังไง") ต้องรู้ทางลัดของเครื่องเอง (Win+. บนวินโดวส์)
 // ถึงจะพิมพ์ได้ เลยมีชุดให้กดเลือกตรงๆ แทน (ยังพิมพ์/วางเองได้อยู่ด้านล่าง
@@ -110,6 +111,7 @@ export function StickerManagerPanel({
   compact?: boolean;
   onSaved?: () => void;
 }) {
+  const ceo = useCeoTitle();
   const stickers = useStickerStore((s) => s.stickers);
   const setStickers = useStickerStore((s) => s.setStickers);
   const defaultPoints = usePenaltySettingsStore((s) => s.defaultPoints);
@@ -197,7 +199,7 @@ export function StickerManagerPanel({
               ในหน้ารายงาน กันเข้าใจผิดว่าคอมเมนต์ก็โดนหักคะแนนได้ด้วย ("การตอบ
               คอมเม้นจะไม่มีการหักคะแนนทั้งสิ้น"). */}
           <p className="text-[11px] text-[var(--ink-soft)] mt-1.5 rounded-md bg-[var(--bg-soft)] px-2.5 py-1.5">
-            ชุดนี้ใช้ร่วมกับ <b>หน้ารายงาน</b> ด้วย — เฉพาะ CEO/เจ้าของบริษัทติดสติกเกอร์ให้ &ldquo;โพสต์หลัก&rdquo; ได้ (หักคะแนนคนที่โพสต์) ส่วนความคิดเห็นใต้โพสต์ไม่มีสติกเกอร์มีคะแนนให้ติด
+            ชุดนี้ใช้ร่วมกับ <b>หน้ารายงาน</b> ด้วย — เฉพาะ {ceo}/เจ้าของบริษัทติดสติกเกอร์ให้ &ldquo;โพสต์หลัก&rdquo; ได้ (หักคะแนนคนที่โพสต์) ส่วนความคิดเห็นใต้โพสต์ไม่มีสติกเกอร์มีคะแนนให้ติด
           </p>
         </div>
       )}

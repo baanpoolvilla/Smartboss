@@ -6,6 +6,8 @@ import { cn } from "@smartboss/ui/cn";
 
 import { formatShortDate } from "@/modules/report_task/lib/format";
 import type { ChatTaskCard } from "../types";
+import { ceoText } from "@/lib/ceo-title-shared";
+import { useCeoTitle } from "@/lib/ceo-title-client";
 
 /**
  * การ์ด "งานใหม่" ในแชทส่วนตัว (ChatMessage kind "task") — ผู้ใช้ 30/10/2569: มอบหมายงานจากที่ไหนก็ได้
@@ -22,6 +24,7 @@ const TAG_BG: Record<string, string> = {
 };
 
 export function TaskCard({ card, body, mine }: { card: ChatTaskCard; body: string | null; mine: boolean }) {
+  const ceo = useCeoTitle();
   const isWorkOrder = card.target === "work_order";
   const assigned = body?.startsWith("มอบหมาย");
   return (
@@ -38,7 +41,7 @@ export function TaskCard({ card, body, mine }: { card: ChatTaskCard; body: strin
         {/* ป้ายประเภท (ผู้ใช้ 2/11/2569) — สีเดียวกับป้ายบนบอร์ดงาน · การ์ดเก่าไม่มีป้าย */}
         {card.tags?.map((t) => (
           <span key={t} className="shrink-0 rounded px-1 text-[10px] font-bold leading-4 text-white" style={{ backgroundColor: TAG_BG[t] ?? "#475569" }}>
-            {t}
+            {ceoText(t, ceo)}
           </span>
         ))}
       </div>

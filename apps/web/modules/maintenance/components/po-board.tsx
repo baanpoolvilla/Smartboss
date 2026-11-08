@@ -23,6 +23,8 @@ import {
 import { Card } from "@smartboss/ui/components/card";
 import { PendingBand, usePendingFor } from "@/modules/notifications/pending-for-you";
 import type { NotifCategory } from "@/modules/notifications/types";
+import { ceoText } from "@/lib/ceo-title-shared";
+import { useCeoTitle } from "@/lib/ceo-title-client";
 
 export interface BoardPo {
   id: string;
@@ -235,6 +237,7 @@ export function PoBoard({
   /** true = ผู้ดูแล/เห็นทั้งบริษัท — เลือกดูรายคนได้ · false = พนักงานทั่วไป มีแค่ "ของฉัน" */
   canPickPeople?: boolean;
 }) {
+  const ceo = useCeoTitle();
   // ?tab=returns มาจากตอนเพิ่ง "แจ้งคืน" เสร็จ (ดู actions.ts) — คืนของที่เพิ่ง
   // แจ้งยังไม่จบเรื่อง จึงอยู่แท็บ "ดำเนินการ" ไม่ใช่แท็บที่ 5 ที่ไม่มีแล้ว
   const [tab, setTab] = useState(initialTab === "returns" ? 2 : 0);
@@ -361,7 +364,7 @@ export function PoBoard({
                   {c.title}
                 </p>
                 <p className="truncate text-[11px]" style={{ color: `${c.color}b3` }}>
-                  {c.subtitle}
+                  {ceoText(c.subtitle, ceo)}
                 </p>
               </div>
               <span

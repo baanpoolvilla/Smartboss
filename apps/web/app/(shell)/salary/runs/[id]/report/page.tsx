@@ -11,6 +11,8 @@ import { salaryPage } from "@/modules/salary/lib/page";
 import { exactText, reportRow } from "@/modules/salary/lib/report";
 import { fmtBaht, periodLabel, thaiDate } from "@/modules/salary/lib/types";
 import { loadRun } from "@/modules/salary/lib/views";
+import { ceoTitle } from "@/lib/ceo-title";
+import { ceoText } from "@/lib/ceo-title-shared";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +21,7 @@ export const dynamic = "force-dynamic";
  * ใช้ตรวจก่อนสรุป (รอบร่าง) และเก็บเป็นหลักฐาน (รอบที่จ่ายแล้ว)
  */
 export default async function SalaryReportPage({ params }: { params: Promise<{ id: string }> }) {
+  const ceo = await ceoTitle();
   const { session } = await salaryPage({ edit: true });
   const { id } = await params;
   const orgId = session.orgId;
@@ -32,7 +35,7 @@ export default async function SalaryReportPage({ params }: { params: Promise<{ i
   const total = (k: "base" | "commission" | "diligence" | "ot" | "addTotal" | "deductTotal" | "sso" | "tax" | "net") =>
     Math.round(rows.reduce((n, r) => n + Math.round(r[k] * 100), 0)) / 100;
   const sumExact = (k: "commGradeExact" | "commTierExact") => rows.reduce((n, r) => n + (r[k] ?? 0), 0);
-  const st = STATUS_LABEL[run.status]!;
+  const st = { ...STATUS_LABEL[run.status]!, label: ceoText(STATUS_LABEL[run.status]!.label, ceo) };
   const th = "px-1.5 py-2 font-semibold";
   const td = "px-1.5 py-2 align-top";
   const listCell = `${td} min-w-[8rem] max-w-[11rem]`;

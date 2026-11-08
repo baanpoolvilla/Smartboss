@@ -5,6 +5,8 @@ import { Search } from "lucide-react";
 
 import { card, hint } from "./ui";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
+import { ceoText } from "@/lib/ceo-title-shared";
 /*
  * คู่มือเงินเดือน (HR / CEO) — ทำอะไรวันไหน · ปีละครั้ง · คำศัพท์ · คำถามที่เจอบ่อย · ค้นหาได้
  * เนื้อหาเป็นภาษาคน เขียนจากคำถามที่คาดว่าจะเจอจริงตอนทดสอบระบบ — กำหนดยื่นแบบอ้างกฎหมายปัจจุบัน
@@ -38,6 +40,7 @@ const FAQ: { q: string; a: string }[] = [
 ];
 
 export function SalaryGuide({ cutoffDay, payDayText }: { cutoffDay: number; payDayText: string }) {
+  const ceo = useCeoTitle();
   const [q, setQ] = useState("");
   const [term, setTerm] = useState(TERMS[2]!.name);
   const needle = q.trim().toLowerCase();
@@ -47,8 +50,8 @@ export function SalaryGuide({ cutoffDay, payDayText }: { cutoffDay: number; payD
   const cutoff = cutoffDay >= 31 ? "สิ้นเดือน" : `วันที่ ${cutoffDay}`;
   const month: { when: string; what: string; detail: string; due?: boolean }[] = [
     { when: `ก่อนตัดงวด (${cutoff})`, what: "HR เคลียร์ของค้าง", detail: "อนุมัติใบ OT/เบิกล่วงหน้าที่ค้าง · ใส่คนเข้าใหม่และวันออกของคนลาออก · ขึ้นเงินเดือนให้มีผลตามวันจริง" },
-    { when: "หลังตัดงวด", what: "HR กด \"สร้างใหม่\"", detail: "ระบบเติมทุกคนให้ · ดูแถวที่มี ⚠ ก่อน · เพิ่ม/หักเฉพาะคนที่ต่างจากปกติ → ส่งให้ CEO" },
-    { when: "ก่อนวันจ่าย", what: "CEO อนุมัติ", detail: "ดูกล่อง \"ควรดู\" (อะไรต่างจากเดือนก่อน) → อนุมัติ หรือส่งกลับพร้อมเหตุผล" },
+    { when: "หลังตัดงวด", what: "HR กด \"สร้างใหม่\"", detail: `ระบบเติมทุกคนให้ · ดูแถวที่มี ⚠ ก่อน · เพิ่ม/หักเฉพาะคนที่ต่างจากปกติ → ส่งให้ ${ceo}` },
+    { when: "ก่อนวันจ่าย", what: `${ceo} อนุมัติ`, detail: "ดูกล่อง \"ควรดู\" (อะไรต่างจากเดือนก่อน) → อนุมัติ หรือส่งกลับพร้อมเหตุผล" },
     { when: `วันจ่าย (${payDayText})`, what: "โหลดไฟล์โอน → โอน → กดบันทึกจ่าย", detail: "สลิปส่งถึงพนักงานเอง · ใบ OT/เบิกในรอบปิดให้เอง" },
     { when: "ภายในวันที่ 7 (ออนไลน์ 15) เดือนถัดไป", what: "ยื่น ภ.ง.ด.1", detail: "พร้อมเงินภาษีที่หักไว้ ที่ระบบ e-Filing ของกรมสรรพากร — ใช้ไฟล์ \"สรุป ภ.ง.ด.1\"", due: true },
     { when: "ภายในวันที่ 15 เดือนถัดไป", what: "ส่งเงินประกันสังคม (สปส.1-10)", detail: "ทั้งส่วนลูกจ้างและบริษัท ที่ e-Service ประกันสังคม — ใช้ไฟล์ \"สรุปประกันสังคม\"", due: true },
@@ -121,7 +124,7 @@ export function SalaryGuide({ cutoffDay, payDayText }: { cutoffDay: number; payD
               {f.q}
               <span className="text-(--ink-soft) group-open:rotate-45" aria-hidden="true">+</span>
             </summary>
-            <div className="whitespace-pre-line pb-4 text-sm leading-relaxed text-(--ink)">{f.a}</div>
+            <div className="whitespace-pre-line pb-4 text-sm leading-relaxed text-(--ink)">{ceoText(f.a, ceo)}</div>
           </details>
         ))}
       </section>

@@ -9,6 +9,8 @@ import { usesSalaryModule } from "@/modules/requests/lib/pay-privacy";
 import { KINDS, bangkokToday, type RequestKind } from "@/modules/requests/lib/types";
 import { readSettings as readSalarySettings, withSalaryTenant } from "@/modules/salary/lib/db";
 import { periodDates, periodLabel, periodOfDate, thaiDate } from "@/modules/salary/lib/types";
+import { ceoTitle } from "@/lib/ceo-title";
+import { ceoText } from "@/lib/ceo-title-shared";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +23,7 @@ const roleLabel = (roles: string[]) => roles.map((r) => ROLE_TH[r]).find(Boolean
 
 /** ยื่นคำขอ — ประเภทที่เห็นขึ้นกับสิทธิ์: ทุกคนเบิกค่าใช้จ่าย/เบิกไปก่อนของตัวเองได้ · OT เบิกล่วงหน้า ช่างภายนอก = คนที่ลงให้คนอื่นได้ */
 export default async function NewRequestPage({ searchParams }: { searchParams: Promise<{ kind?: string }> }) {
+  const ceo = await ceoTitle();
   const { session, viewer } = await requestsPage();
   const sp = await searchParams;
   const kinds = KINDS.filter((k) => (k === "expense" || k === "cash_advance" ? true : viewer.canFileOthers));
@@ -55,7 +58,7 @@ export default async function NewRequestPage({ searchParams }: { searchParams: P
         me={{ userId: session.userId, name: me?.name ?? "" }}
         canFileOthers={viewer.canFileOthers}
         canManageVendors={await canManageVendors(session)}
-        people={people.map((p) => ({ userId: p.userId, name: p.name, email: p.email, roleLabel: roleLabel(p.roles), isWorker: p.isWorker, departmentName: p.departmentName }))}
+        people={people.map((p) => ({ userId: p.userId, name: p.name, email: p.email, roleLabel: ceoText(roleLabel(p.roles) ?? "", ceo) || null, isWorker: p.isWorker, departmentName: p.departmentName }))}
         properties={properties}
         workOrders={workOrders}
         vendors={vendors.map((v) => ({ id: v.id, name: v.name, whtPercent: v.whtPercent, vatRegistered: v.vatRegistered }))}

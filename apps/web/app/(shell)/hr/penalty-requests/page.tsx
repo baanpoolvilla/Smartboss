@@ -5,6 +5,7 @@ import { PenaltyRequestsQueue } from "./penalty-requests-queue";
 import { ScoreRequestsQueue } from "./score-requests-queue";
 import { buildScoreQueue } from "@/lib/score-request-views";
 
+import { ceoTitle } from "@/lib/ceo-title";
 /**
  * คิวคำร้องขอแก้ไข/ขอส่งย้อนหลังของคะแนนรายงาน — ย้ายมาอยู่ในระบบบุคคล
  * (เดิมอยู่ที่ /report-task/penalty-requests เพราะสร้างพร้อมฟีเจอร์หักคะแนน
@@ -19,6 +20,7 @@ export default async function PenaltyRequestsPage() {
       permission={HR_PERMS.access}
       width="max-w-none"
       load={async () => {
+  const ceo = await ceoTitle();
         const session = await requireOrg();
         const canDecide = hasRole(session, "CEO") || isSuperAdmin(session);
         // คำขอแก้คะแนน งาน/ใบงาน/PM — เจ้าของเรื่อง (คนสั่งงาน/คนเปิดใบงาน/คนสร้างแผน PM) อนุมัติได้ด้วย ไม่ใช่แค่ CEO
@@ -29,7 +31,7 @@ export default async function PenaltyRequestsPage() {
           if (score.pending.length === 0 && score.decided.length === 0) {
             return (
               <div className="rounded-2xl border border-(--line) bg-white p-6 text-sm text-(--ink-soft)">
-                ไม่มีคำขอแก้คะแนนที่รอคุณพิจารณา — คำร้องเรื่องรายงานอนุมัติได้เฉพาะ CEO
+                ไม่มีคำขอแก้คะแนนที่รอคุณพิจารณา — คำร้องเรื่องรายงานอนุมัติได้เฉพาะ {ceo}
               </div>
             );
           }
@@ -40,7 +42,7 @@ export default async function PenaltyRequestsPage() {
           <div className="flex flex-col gap-8">
             {scoreQueue}
             <div className="flex flex-col gap-3">
-              <h2 className="text-sm font-semibold text-(--ink)">คำร้องเรื่องรายงาน · CEO อนุมัติ</h2>
+              <h2 className="text-sm font-semibold text-(--ink)">คำร้องเรื่องรายงาน · {ceo} อนุมัติ</h2>
               <PenaltyRequestsQueue />
             </div>
           </div>

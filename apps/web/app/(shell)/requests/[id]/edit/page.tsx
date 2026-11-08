@@ -7,6 +7,8 @@ import { canManageVendors, requestsPage } from "@/modules/requests/lib/page";
 import { loadRequests, toVendor, withRequestsTenant } from "@/modules/requests/lib/db";
 import { RequestForm, type EditInitial } from "@/modules/requests/components/request-form";
 import { bangkokToday } from "@/modules/requests/lib/types";
+import { ceoTitle } from "@/lib/ceo-title";
+import { ceoText } from "@/lib/ceo-title-shared";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +20,7 @@ const roleLabel = (roles: string[]) => roles.map((r) => ROLE_TH[r]).find(Boolean
 
 /** แก้ไขใบที่ยังรออนุมัติ — เฉพาะคนยื่น · ใบที่มีคนตัดสินแล้ว (รวมขั้นแรกของ HR) กลับไปหน้าใบ */
 export default async function EditRequestPage({ params }: { params: Promise<{ id: string }> }) {
+  const ceo = await ceoTitle();
   const { session, viewer } = await requestsPage();
   const { id } = await params;
   const orgId = session.orgId;
@@ -71,7 +74,7 @@ export default async function EditRequestPage({ params }: { params: Promise<{ id
         me={{ userId: session.userId, name: me?.name ?? "" }}
         canFileOthers={viewer.canFileOthers}
         canManageVendors={await canManageVendors(session)}
-        people={people.map((p) => ({ userId: p.userId, name: p.name, email: p.email, roleLabel: roleLabel(p.roles), isWorker: p.isWorker, departmentName: p.departmentName }))}
+        people={people.map((p) => ({ userId: p.userId, name: p.name, email: p.email, roleLabel: ceoText(roleLabel(p.roles) ?? "", ceo) || null, isWorker: p.isWorker, departmentName: p.departmentName }))}
         properties={properties}
         workOrders={workOrders}
         vendors={vendors.map((v) => ({ id: v.id, name: v.name, whtPercent: v.whtPercent, vatRegistered: v.vatRegistered }))}

@@ -10,6 +10,7 @@ import { fmtBaht, thaiDate } from "../lib/types";
 import { dangerOutline, field, hint, label, labelText, navy, outline } from "./ui";
 import { useRun } from "./use-run";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 export function RecomputeButton({ runId }: { runId: string }) {
   const { busy, error, run } = useRun();
   return (
@@ -48,9 +49,10 @@ export function DeleteRunButton({ runId, period }: { runId: string; period: stri
 }
 
 export function SubmitButton({ runId, mode, negatives }: { runId: string; mode: "ceo" | "ceo_on_change" | "hr"; negatives: number }) {
+  const ceo = useCeoTitle();
   const { busy, error, run } = useRun();
   const [confirm, setConfirm] = useState(false);
-  const labelBtn = mode === "hr" ? "ยืนยันยอด (HR อนุมัติเอง)" : "ส่งให้ CEO อนุมัติ";
+  const labelBtn = mode === "hr" ? "ยืนยันยอด (HR อนุมัติเอง)" : `ส่งให้ ${ceo} อนุมัติ`;
   return (
     <div className="flex flex-col items-end gap-1">
       {!confirm ? (

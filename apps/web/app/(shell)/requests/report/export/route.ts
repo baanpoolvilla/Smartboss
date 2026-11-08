@@ -7,9 +7,11 @@ import { monthRequests } from "@/modules/requests/lib/report";
 import { beneficiaryLabel, statusOf } from "@/modules/requests/lib/page";
 import { KIND_META, METHOD_LABEL, bangkokToday, costOf } from "@/modules/requests/lib/types";
 import { maskRequest, payPrivacy } from "@/modules/requests/lib/pay-privacy";
+import { ceoTitle } from "@/lib/ceo-title";
 
 /** ส่งออกทุกใบของเดือนเป็น CSV (เปิดใน Excel ได้ภาษาไทยไม่เพี้ยน — มี BOM) ให้ฝ่ายบัญชี */
 export async function GET(req: Request) {
+  const ceo = await ceoTitle();
   const session = await requireOrg();
   if (!hasPermission(session, REQ_PERMS.viewAll)) return new NextResponse("Forbidden", { status: 403 });
   const url = new URL(req.url);
@@ -55,7 +57,7 @@ export async function GET(req: Request) {
       r.payHidden ? "" : r.paidTotal.toFixed(2),
       [...new Set(r.payments.filter((p) => !p.voided).map((p) => METHOD_LABEL[p.method]))].join(" + "),
       r.deductAmount > 0 && !r.deductedAt ? r.deductAmount.toFixed(2) : "",
-      statusOf(r).label,
+      statusOf(r, ceo).label,
       r.createdByName,
       r.decidedByName ?? "",
     ]

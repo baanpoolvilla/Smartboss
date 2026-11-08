@@ -8,6 +8,7 @@ import { AppScaffold } from "@/components/module/app-scaffold";
 import { KIND_META, KINDS, baht, monthTitle, shiftMonthOf, thaiDate, type BeneficiaryKind, type RequestKind, type StatusInfo } from "../lib/types";
 import { KindChip, Notice, StatusChip } from "./ui";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 export interface ListRow {
   id: string;
   code: string;
@@ -69,6 +70,7 @@ export function RequestsHome({
   /** คนที่อนุมัติได้ (HR/CEO) — เห็นแท็บ "รอฉันอนุมัติ" แม้ว่าง · คนดูทุกใบอย่างเดียว (เช่น IT) ไม่ต้องเห็น */
   showApproveTab: boolean;
 }) {
+  const ceo = useCeoTitle();
   const counts = {
     me: rows.filter((r) => r.waitingMe).length,
     pay: rows.filter((r) => r.toPay).length,
@@ -453,7 +455,7 @@ export function RequestsHome({
                         <StatusChip info={r.status} />
                       </div>
                       <div className="row-span-2 self-center text-right text-base font-bold tabular-nums text-(--ink) xl:row-span-1">
-                        {r.amountHidden ? <span className="text-xs font-medium text-(--ink-soft)" title="ยอด OT บอกเงินเดือนได้ — เห็นเฉพาะเจ้าตัว / CEO / ผู้ดูแลเงินเดือน">ซ่อนยอด</span> : baht(r.amount)}
+                        {r.amountHidden ? <span className="text-xs font-medium text-(--ink-soft)" title={`ยอด OT บอกเงินเดือนได้ — เห็นเฉพาะเจ้าตัว / ${ceo} / ผู้ดูแลเงินเดือน`}>ซ่อนยอด</span> : baht(r.amount)}
                       </div>
                     </Link>
                   </li>

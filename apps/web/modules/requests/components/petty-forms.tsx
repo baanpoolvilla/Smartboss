@@ -23,6 +23,7 @@ import { PETTY_CATEGORIES, SIMILAR_SLIP_PREFIX, baht, parseMoney, pettyTax, thai
 import { FilePicker } from "./file-picker";
 import { Notice } from "./ui";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 /*
  * เงินสดย่อย (ผู้ใช้ 30/10/2569: "ใช้ยาก งง" → ปุ่มอยู่บนการ์ดของแต่ละคน + ปุ่ม ⓘ บอกว่าทำอะไร)
  *   ผู้ถือ:   − จ่ายเงิน = หน้าต่างเดียวสองแบบ (ผู้ใช้ 31/10/2569 "ทำทีเดียวกันเลย")
@@ -205,6 +206,7 @@ export function PettyHolderCard({
   /** ใบเบิกที่รอคนนี้จ่ายจากเงินสดย่อย (เฉพาะการ์ดของตัวเอง) */
   payable?: PettyPayableItem[];
 }) {
+  const ceo = useCeoTitle();
   const [open, setOpen] = useState<"spend" | "request" | "topup" | "adjust" | null>(null);
   const close = () => setOpen(null);
   return (
@@ -259,14 +261,14 @@ export function PettyHolderCard({
                 <b>− จ่ายเงิน</b> — ทุกครั้งที่เงินออกจากมือ กดที่นี่ เลือกว่า <b>ให้คนที่ขอมา</b> (ใบเบิกที่ HR อนุมัติแล้ว — ตัวเลขบนปุ่มคือจำนวนใบที่รอ) หรือ <b>ซื้อของเอง</b> (บอกว่าค่าอะไร เลือกหมวด แนบใบเสร็จ ไม่ต้องทำใบเบิก) ยอดในมือลดลงทันทีทั้งสองแบบ
                 <br />
                 <br />
-                <b>+ ขอเติมเงิน</b> — เงินใกล้หมด กดขอ ระบบแจ้ง HR หรือ CEO ให้อนุมัติ (HR ขอเอง = CEO อนุมัติ) คนอนุมัติโอน/ให้เงินสดแล้วแนบหลักฐาน ยอดถึงจะเพิ่ม
+                <b>+ ขอเติมเงิน</b> — เงินใกล้หมด กดขอ ระบบแจ้ง HR หรือ {ceo} ให้อนุมัติ (HR ขอเอง = {ceo} อนุมัติ) คนอนุมัติโอน/ให้เงินสดแล้วแนบหลักฐาน ยอดถึงจะเพิ่ม
                 <br />
                 <br />
               </>
             )}
             {!isMe && canTopUp && (
               <>
-                <b>+ เติมเงินให้</b> — HR/CEO ให้เงินสดย่อยกับคนนี้ (โอนหรือเงินสด) แล้วแนบสลิป/รูปเงินสด ยอดเพิ่มทันที · เติมให้ตัวเองไม่ได้ ต้องกด “ขอเติมเงิน” ให้อีกคนอนุมัติ
+                <b>+ เติมเงินให้</b> — HR/{ceo} ให้เงินสดย่อยกับคนนี้ (โอนหรือเงินสด) แล้วแนบสลิป/รูปเงินสด ยอดเพิ่มทันที · เติมให้ตัวเองไม่ได้ ต้องกด “ขอเติมเงิน” ให้อีกคนอนุมัติ
                 <br />
                 <br />
               </>
@@ -408,6 +410,7 @@ const WHT_HINT: Record<string, string> = {
 
 /** ซื้อของเองด้วยเงินในมือ — ไม่มีใบเบิก */
 function SpendForm({ balance, today, taxSettings, onClose }: { balance: number; today: string; taxSettings: PettyTaxSettings; onClose: () => void }) {
+  const ceo = useCeoTitle();
   const vatRate = taxSettings.vatPercent;
   const { busy, error, run } = useSave(onClose);
   const [title, setTitle] = useState("");
@@ -441,7 +444,7 @@ function SpendForm({ balance, today, taxSettings, onClose }: { balance: number; 
   const ready = title.trim() && category && Number.isFinite(value) && value > 0 && !over && spentOn && files.length > 0 && payeeOk && !customBad;
   return (
       <div className="flex flex-col gap-3">
-        <Explain>ใช้เงินในมือซื้อของ/จ่ายค่าบริการเอง ไม่ต้องทำใบเบิก — กรอกครบทุกช่องที่มี * และแนบรูปใบเสร็จ บันทึกแล้วยอดในมือลดลงทันที{taxSettings.review ? " แล้ว HR (หรือ CEO ถ้าคุณเป็น HR) จะตรวจใบเสร็จทีหลัง — ไม่ผ่านต้องคืนเงินเข้ากอง" : ""} · เงินในมือตอนนี้ {baht(balance)}</Explain>
+        <Explain>ใช้เงินในมือซื้อของ/จ่ายค่าบริการเอง ไม่ต้องทำใบเบิก — กรอกครบทุกช่องที่มี * และแนบรูปใบเสร็จ บันทึกแล้วยอดในมือลดลงทันที{taxSettings.review ? ` แล้ว HR (หรือ ${ceo} ถ้าคุณเป็น HR) จะตรวจใบเสร็จทีหลัง — ไม่ผ่านต้องคืนเงินเข้ากอง` : ""} · เงินในมือตอนนี้ {baht(balance)}</Explain>
         <Field label="จ่ายค่าอะไร" required>
           <input className={field} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="เช่น น้ำแข็ง 2 ถุง บ้าน A3" />
         </Field>
@@ -547,6 +550,7 @@ function SpendForm({ balance, today, taxSettings, onClose }: { balance: number; 
 /* ───────────── + ขอเติมเงิน (ผู้ถือ) ───────────── */
 
 function RequestTopupModal({ holder, onClose }: { holder: PettyHolderView; onClose: () => void }) {
+  const ceo = useCeoTitle();
   const { busy, error, run } = useSave(onClose);
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
@@ -559,7 +563,7 @@ function RequestTopupModal({ holder, onClose }: { holder: PettyHolderView; onClo
     >
       <div className="flex flex-col gap-3">
         <Explain>
-          ส่งแล้วระบบแจ้ง HR หรือ CEO ให้อนุมัติ (ถ้าคุณเป็น HR ต้องให้ CEO อนุมัติ — อนุมัติของตัวเองไม่ได้) · คนอนุมัติโอน/ให้เงินสด แล้วแนบสลิปหรือรูปเงินสด ยอดในมือถึงจะเพิ่ม · เงินในมือตอนนี้ {baht(holder.balance)}
+          ส่งแล้วระบบแจ้ง HR หรือ {ceo} ให้อนุมัติ (ถ้าคุณเป็น HR ต้องให้ {ceo} อนุมัติ — อนุมัติของตัวเองไม่ได้) · คนอนุมัติโอน/ให้เงินสด แล้วแนบสลิปหรือรูปเงินสด ยอดในมือถึงจะเพิ่ม · เงินในมือตอนนี้ {baht(holder.balance)}
         </Explain>
         <Field label="ขอเติม (บาท)" required>
           <input inputMode="decimal" className={field} value={amount} onChange={(e) => setAmount(e.target.value)} />

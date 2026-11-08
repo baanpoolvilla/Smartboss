@@ -7,6 +7,7 @@ import { Button } from "@smartboss/ui/components/button";
 
 import { decideScoreRequestAction } from "@/app/(shell)/hr/my-score/score-request-actions";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 /**
  * คิวคำขอแก้คะแนน งาน/ใบงาน/PM เลยกำหนด (lib/score-requests.ts)
  * เจ้าของเรื่องเห็นเฉพาะใบที่ตัวเองอนุมัติ · CEO เห็นทุกใบ (อนุมัติแทนได้) — ใบที่ใกล้ตัดรอบขึ้นก่อน
@@ -78,6 +79,7 @@ export function ScoreRequestsQueue({ pending, decided, isCeo }: { pending: Score
 
 /** การ์ดคำขอรอพิจารณา + ปุ่มอนุมัติ/ไม่อนุมัติ — ใช้ทั้งหน้าคิวและหน้าใบงาน */
 export function ScoreRequestCard({ item }: { item: ScoreQueueItem }) {
+  const ceo = useCeoTitle();
   const router = useRouter();
   const [mode, setMode] = useState<"idle" | "reject" | "approve">("idle");
   const [note, setNote] = useState("");
@@ -133,7 +135,7 @@ export function ScoreRequestCard({ item }: { item: ScoreQueueItem }) {
       {!item.primary && (
         <p className="text-xs text-(--ink-soft)">
           คนอนุมัติหลัก: {item.approverText}
-          {item.notifiesCeo ? " · ไม่มีคนอื่นอนุมัติได้ จึงแจ้ง CEO" : " · ใบนี้ไม่ได้แจ้งเตือน CEO — อนุมัติแทนได้ถ้าต้องการ"}
+          {item.notifiesCeo ? ` · ไม่มีคนอื่นอนุมัติได้ จึงแจ้ง ${ceo}` : ` · ใบนี้ไม่ได้แจ้งเตือน ${ceo} — อนุมัติแทนได้ถ้าต้องการ`}
         </p>
       )}
       {mode !== "idle" && (

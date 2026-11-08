@@ -17,6 +17,7 @@ import {
   type RunStatus,
 } from "./types";
 
+import { ceoTitle } from "@/lib/ceo-title";
 /**
  * รอบเงินเดือน — สร้าง · คำนวณ · ส่งอนุมัติ · อนุมัติ/ส่งกลับ · บันทึกจ่าย
  *
@@ -350,6 +351,7 @@ export async function selfEditsForRun(
 
 export async function submitRun(orgId: string, actor: Actor, runId: string): Promise<{ status: RunStatus; auto: boolean }> {
   return withSalaryTenant(orgId, async (tx) => {
+  const ceo = await ceoTitle(orgId);
     const run = await lockRun(tx, orgId, runId);
     if (run.status !== "draft") throw new Error("รอบนี้ส่งไปแล้ว");
     const lines = await tx.salaryRunLine.findMany({ where: { orgId, runId } });
@@ -386,7 +388,7 @@ export async function submitRun(orgId: string, actor: Actor, runId: string): Pro
           : {}),
       },
     });
-    await insertEvent(tx, orgId, { runId, byUserId: actor.userId, byName: actor.name, action: "submit", summary: auto ? "ส่งแล้ว · อนุมัติตามตั้งค่าบริษัท" : selfEdits.length > 0 ? "ส่งให้ CEO อนุมัติ (มีรายการที่คนทำเงินเดือนแก้ของตัวเอง)" : "ส่งให้ CEO อนุมัติ" });
+    await insertEvent(tx, orgId, { runId, byUserId: actor.userId, byName: actor.name, action: "submit", summary: auto ? "ส่งแล้ว · อนุมัติตามตั้งค่าบริษัท" : selfEdits.length > 0 ? `ส่งให้ ${ceo} อนุมัติ (มีรายการที่คนทำเงินเดือนแก้ของตัวเอง)` : `ส่งให้ ${ceo} อนุมัติ` });
     return { status: auto ? "approved" : "submitted", auto };
   });
 }
@@ -413,6 +415,7 @@ export async function decideRun(orgId: string, actor: Actor, runId: string, outc
  */
 export async function markPaid(orgId: string, actor: Actor, runId: string, paidOn: string, bankFee = 0): Promise<{ notify: { userId: string; name: string }[] }> {
   return withSalaryTenant(orgId, async (tx) => {
+  const ceo = await ceoTitle(orgId);
     const run = await lockRun(tx, orgId, runId);
     if (run.status !== "approved") throw new Error("บันทึกจ่ายได้เฉพาะรอบที่อนุมัติแล้ว");
     const lines = await tx.salaryRunLine.findMany({ where: { orgId, runId } });
@@ -430,7 +433,7 @@ export async function markPaid(orgId: string, actor: Actor, runId: string, paidO
       const r = advs.find((x) => x.id === ref.id);
       if (!r || r.deductedAt || Math.abs(num(r.deductAmount) - ref.amount) > 0.004) problems.push(`${r?.code ?? ref.id} (เบิก) ถูกหัก/แก้ไปหลังคำนวณ`);
     }
-    if (problems.length) throw new Error(`ข้อมูลเปลี่ยนหลังอนุมัติ — ให้ CEO ส่งกลับแล้วคำนวณใหม่: ${problems.slice(0, 5).join(" · ")}`);
+    if (problems.length) throw new Error(`ข้อมูลเปลี่ยนหลังอนุมัติ — ให้ ${ceo} ส่งกลับแล้วคำนวณใหม่: ${problems.slice(0, 5).join(" · ")}`);
 
     const label = `รวมเงินเดือนงวด ${periodLabel(run.period)}`;
     for (const ref of otIds) {
@@ -492,8 +495,9 @@ export async function setExcluded(orgId: string, actor: Actor, runId: string, em
  */
 export async function deleteRun(orgId: string, actor: Actor, runId: string): Promise<void> {
   await withSalaryTenant(orgId, async (tx) => {
+  const ceo = await ceoTitle(orgId);
     const run = await lockRun(tx, orgId, runId);
-    if (run.status !== "draft") throw new Error(run.status === "submitted" ? "รอบนี้ส่งให้ CEO แล้ว — ให้ CEO ส่งกลับก่อนจึงลบได้" : "รอบที่อนุมัติ/จ่ายแล้วลบไม่ได้");
+    if (run.status !== "draft") throw new Error(run.status === "submitted" ? `รอบนี้ส่งให้ ${ceo} แล้ว — ให้ ${ceo} ส่งกลับก่อนจึงลบได้` : "รอบที่อนุมัติ/จ่ายแล้วลบไม่ได้");
     await tx.salaryRunLine.deleteMany({ where: { orgId, runId } });
     await tx.salaryRun.delete({ where: { id: runId } });
     await insertEvent(tx, orgId, { runId, byUserId: actor.userId, byName: actor.name, action: "delete", summary: `ลบร่างงวด ${periodLabel(run.period)}` });

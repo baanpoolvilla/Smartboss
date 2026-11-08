@@ -109,6 +109,7 @@ import { uuid } from "@/modules/report_task/lib/uuid";
 import { EmojiStickerPicker, StickerImage } from "@/components/sticker-panel";
 import type { Sticker as CompanySticker } from "@/lib/stickers-client";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 const toDateInput = (iso: string) => iso.slice(0, 10);
 /** "YYYY-MM-DD" ของวันถัดไป (คิดแบบ UTC ให้ตรงกับ toDateInput) */
 const dayAfterInput = (ymd: string) => {
@@ -235,6 +236,7 @@ export function TaskDetailSheet({
   taskId: string | null;
   onOpenChange: (open: boolean) => void;
 }) {
+  const ceo = useCeoTitle();
   const task = useTaskStore((s) => s.tasks.find((t) => t.id === taskId));
   // เปิดหน้านี้อยู่ = กำลังคุยในความคิดเห็น — บอก TaskSync ให้เช็กของใหม่ถี่ขึ้น (8/11/2569 "คุยกลับไปมาไม่ต่อเนื่อง")
   useEffect(() => {
@@ -1305,7 +1307,7 @@ export function TaskDetailSheet({
                                   task.mainAssigneeId === a!.id ? "text-amber-500" : "text-[var(--ink-soft)] opacity-0 group-hover:opacity-100 hover:text-amber-500"
                                 )}
                                 aria-label={task.mainAssigneeId === a!.id ? `${a!.name} เป็นหัวหน้าหลักอยู่แล้ว` : `ตั้ง ${a!.name} เป็นหัวหน้าหลัก`}
-                                title={task.mainAssigneeId === a!.id ? "หัวหน้าหลัก" : "ตั้งเป็นหัวหน้าหลัก (เฉพาะ CEO)"}
+                                title={task.mainAssigneeId === a!.id ? "หัวหน้าหลัก" : `ตั้งเป็นหัวหน้าหลัก (เฉพาะ ${ceo})`}
                               >
                                 <Star className="h-3 w-3" fill={task.mainAssigneeId === a!.id ? "currentColor" : "none"} />
                               </button>
@@ -1732,7 +1734,7 @@ export function TaskDetailSheet({
 
             {requesting && canRequestDueDate && (
               <div className="rounded-lg border border-[var(--line)] p-3 space-y-2.5">
-                <p className="text-xs text-[var(--ink-soft)]">ส่งคำขอให้ผู้มอบหมายงาน / CEO อนุมัติ — กำหนดส่งจะเปลี่ยนเมื่ออนุมัติแล้ว</p>
+                <p className="text-xs text-[var(--ink-soft)]">ส่งคำขอให้ผู้มอบหมายงาน / {ceo} อนุมัติ — กำหนดส่งจะเปลี่ยนเมื่ออนุมัติแล้ว</p>
                 {task.taskMode === "group" && (
                   <div className="space-y-1.5">
                     <Label className="text-xs">เลื่อนให้ใคร</Label>

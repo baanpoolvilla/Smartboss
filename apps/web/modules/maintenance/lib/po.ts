@@ -1,4 +1,5 @@
-export const PO_STATUS: Record<string, { label: string; color: string }> = {
+
+import { ceoText, DEFAULT_CEO_TITLE } from "@/lib/ceo-title-shared";export const PO_STATUS: Record<string, { label: string; color: string }> = {
   pending: { label: "รอ CEO อนุมัติ", color: "#EA580C" },
   approved: { label: "PO ที่ได้รับ", color: "#2563EB" },
   ordered: { label: "กำลังดำเนินการ", color: "#4F46E5" },
@@ -6,8 +7,9 @@ export const PO_STATUS: Record<string, { label: string; color: string }> = {
   cancelled: { label: "ยกเลิก", color: "#6B7280" },
 };
 
-export function poStatusMeta(s: string) {
-  return PO_STATUS[s] ?? { label: s, color: "#6B7280" };
+export function poStatusMeta(s: string, ceo = DEFAULT_CEO_TITLE) {
+  const meta = PO_STATUS[s] ?? { label: s, color: "#6B7280" };
+  return { ...meta, label: ceoText(meta.label, ceo) };
 }
 
 export interface PoItem {

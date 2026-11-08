@@ -13,6 +13,7 @@ import { postWorkOrderCard } from "@/modules/chat/data/task-cards";
 import { fmtThaiDate } from "@/modules/maintenance/lib/format";
 import { isPastDay } from "@/modules/maintenance/lib/no-past-date";
 
+import { ceoTitle } from "@/lib/ceo-title";
 /**
  * PM ค้างหลายรอบ — CEO ตัดสิน (ผู้ใช้ 2/11/2569)
  *   ทีละรอบ: ไม่ต้องทำ (ยกเลิกใบ) + หัก/ไม่หักคะแนน · หรือยังต้องทำแต่ไม่หัก
@@ -24,8 +25,9 @@ const OPEN = ["open", "in_progress"];
 const DONE_TITLES = ["ได้รับมอบหมายงานใหม่", "ขอเลื่อนกำหนดส่งใบงาน รออนุมัติ"];
 
 async function requireCeo() {
+  const ceo = await ceoTitle();
   const s = await requireOrg();
-  if (!canViewAll(s)) throw new Error("เฉพาะ CEO");
+  if (!canViewAll(s)) throw new Error(`เฉพาะ ${ceo}`);
   return s;
 }
 
@@ -44,8 +46,9 @@ export interface RoundDecision {
 }
 
 export async function decidePileupAction(pmId: string, decisions: RoundDecision[]): Promise<{ error?: string }> {
+  const ceo = await ceoTitle();
   let s;
-  try { s = await requireCeo(); } catch { return { error: "เฉพาะ CEO ตัดสินได้" }; }
+  try { s = await requireCeo(); } catch { return { error: `เฉพาะ ${ceo} ตัดสินได้` }; }
   const wos = await prisma.workOrder.findMany({
     where: { orgId: s.orgId, pmScheduleId: pmId, pmRoundDate: { not: null }, status: { in: OPEN }, id: { in: decisions.map((d) => d.woId) } },
     select: { id: true, code: true, title: true, pmRoundDate: true, assignedTo: true, overdueScore: true },
@@ -63,7 +66,7 @@ export async function decidePileupAction(pmId: string, decisions: RoundDecision[
         data: {
           status: "cancelled",
           overdueScore: d.waive ? "waived" : "kept",
-          completionNotes: `CEO: ไม่ต้องทำรอบ ${round} · ${score}`,
+          completionNotes: `${ceo}: ไม่ต้องทำรอบ ${round} · ${score}`,
         },
       });
       await resolveActionNotifications(wo.id, "work_order", DONE_TITLES);
@@ -72,7 +75,7 @@ export async function decidePileupAction(pmId: string, decisions: RoundDecision[
       if (next === wo.overdueScore) continue;
       await prisma.workOrder.update({ where: { id: wo.id }, data: { overdueScore: next } });
     }
-    const summary = d.skip ? `CEO: ไม่ต้องทำรอบ ${round} · ${score}` : d.waive ? `CEO: ยังต้องทำรอบ ${round} · ไม่หักคะแนน` : `CEO: ยังต้องทำรอบ ${round} · หักคะแนนตามปกติ`;
+    const summary = d.skip ? `${ceo}: ไม่ต้องทำรอบ ${round} · ${score}` : d.waive ? `${ceo}: ยังต้องทำรอบ ${round} · ไม่หักคะแนน` : `${ceo}: ยังต้องทำรอบ ${round} · หักคะแนนตามปกติ`;
     await addWorkOrderComment(s.orgId, wo.id, s.userId, summary, null, { kind: "log" });
     await logActivity(s.orgId, { userId: s.userId, entity: "work_order", entityId: wo.id, entityCode: wo.code, action: "update", summary: `${summary} ${wo.code}` });
     if (wo.assignedTo && wo.assignedTo !== s.userId) {
@@ -92,8 +95,9 @@ export async function mergePileupAction(input: {
   score: MergeScore;
   note: string;
 }): Promise<{ error?: string; id?: string; code?: string }> {
+  const ceo = await ceoTitle();
   let s;
-  try { s = await requireCeo(); } catch { return { error: "เฉพาะ CEO ตัดสินได้" }; }
+  try { s = await requireCeo(); } catch { return { error: `เฉพาะ ${ceo} ตัดสินได้` }; }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.dueDate)) return { error: "เลือกกำหนดส่งของใบรวม" };
   if (isPastDay(input.dueDate)) return { error: "กำหนดส่งย้อนหลังไม่ได้" };
   const due = new Date(`${input.dueDate}T23:59:59.999+07:00`);
@@ -116,6 +120,7 @@ export async function mergePileupAction(input: {
   const scoreText = input.score === "all" ? "หักทุกรอบ" : input.score === "one" ? "หักรอบเดียว" : "ไม่หัก";
 
   const merged = await prisma.$transaction(async (tx) => {
+  const ceo = await ceoTitle();
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`pm-auto-wo:${pm.id}`}))`;
     const code = await nextWorkOrderCode(tx, s.orgId);
     const wo = await tx.workOrder.create({
@@ -130,7 +135,7 @@ export async function mergePileupAction(input: {
         // CEO เป็นคนเปิดใบรวม ⇒ อนุมัติคำขอเลื่อนของใบนี้ได้ (กติกาเดิม: CEO หรือคนเปิดใบ)
         createdBy: s.userId,
         title: `${pm.title} (รวม ${wos.length} รอบ)`,
-        description: [`PM: ${pm.title}`, `รวมรอบ ${rounds} (CEO รวบเป็นใบเดียว)`, note || null].filter(Boolean).join("\n"),
+        description: [`PM: ${pm.title}`, `รวมรอบ ${rounds} (${ceo} รวบเป็นใบเดียว)`, note || null].filter(Boolean).join("\n"),
         status: "open",
         priority: "medium",
         pmScheduleId: pm.id,
@@ -149,7 +154,7 @@ export async function mergePileupAction(input: {
           status: "cancelled",
           mergedIntoId: wo.id,
           overdueScore: kept ? "kept" : "waived",
-          completionNotes: `รวมเข้า ${code} (CEO รวบ ${wos.length} รอบ · ${scoreText})`,
+          completionNotes: `รวมเข้า ${code} (${ceo} รวบ ${wos.length} รอบ · ${scoreText})`,
         },
       });
     }
@@ -158,7 +163,7 @@ export async function mergePileupAction(input: {
 
   for (const w of wos) {
     await resolveActionNotifications(w.id, "work_order", DONE_TITLES);
-    await addWorkOrderComment(s.orgId, w.id, s.userId, `รวมเข้า ${merged.code} (CEO รวบ ${wos.length} รอบ · ${scoreText})`, null, { kind: "log" });
+    await addWorkOrderComment(s.orgId, w.id, s.userId, `รวมเข้า ${merged.code} (${ceo} รวบ ${wos.length} รอบ · ${scoreText})`, null, { kind: "log" });
   }
   await logActivity(s.orgId, {
     userId: s.userId,
@@ -166,12 +171,12 @@ export async function mergePileupAction(input: {
     entityId: merged.id,
     entityCode: merged.code,
     action: "create",
-    summary: `CEO รวบ PM ${wos.length} รอบเป็นใบเดียว ${merged.code} "${merged.title}" · ${scoreText}`,
+    summary: `${ceo} รวบ PM ${wos.length} รอบเป็นใบเดียว ${merged.code} "${merged.title}" · ${scoreText}`,
     detail: { pmScheduleId: pm.id, mergedFrom: wos.map((w) => w.code), score: input.score },
   });
   if (assignee && assignee !== s.userId) {
     await notifyUser(s.orgId, assignee, {
-      title: `📋 CEO รวบ PM ${wos.length} รอบเป็นใบเดียว: ${pm.title}`,
+      title: `📋 ${ceo} รวบ PM ${wos.length} รอบเป็นใบเดียว: ${pm.title}`,
       body: `${merged.code} · ครบกำหนด ${fmtThaiDate(due)}${note ? ` · ${note}` : ""}`,
       type: "work_order",
       referenceId: merged.id,

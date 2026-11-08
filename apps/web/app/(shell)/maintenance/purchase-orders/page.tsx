@@ -23,12 +23,14 @@ import {
   AppBarLink,
   Fab,
 } from "@/modules/maintenance/components/app-scaffold";
+import { ceoTitle } from "@/lib/ceo-title";
 
 export default async function PurchaseOrdersPage({
   searchParams,
 }: {
   searchParams: Promise<{ tab?: string }>;
 }) {
+  const ceo = await ceoTitle();
   const session = await requireOrg();
   if (!hasPermission(session, MAINT_PERMS.poView)) redirect("/");
   const orgId = session.orgId;
@@ -94,7 +96,7 @@ export default async function PurchaseOrdersPage({
   }
 
   const boardOrders: BoardPo[] = orders.map((o) => {
-    const meta = poStatusMeta(o.status);
+    const meta = poStatusMeta(o.status, ceo);
     return {
       id: o.id,
       code: o.code,

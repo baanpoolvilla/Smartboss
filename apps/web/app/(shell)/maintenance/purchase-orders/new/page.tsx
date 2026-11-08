@@ -15,12 +15,14 @@ import {
 import { ROLE_LABEL_TH } from "@/modules/maintenance/lib/roles";
 import { createPoAction } from "../actions";
 import { AppScaffold } from "@/modules/maintenance/components/app-scaffold";
+import { ceoTitle } from "@/lib/ceo-title";
 
 export default async function NewPoPage({
   searchParams,
 }: {
   searchParams: Promise<{ workOrderId?: string; from?: string }>;
 }) {
+  const ceo = await ceoTitle();
   const session = await requireOrg();
   if (!hasPermission(session, MAINT_PERMS.poCreate)) {
     redirect("/maintenance/purchase-orders");
@@ -78,7 +80,7 @@ export default async function NewPoPage({
         users={users.map((u) => ({
           id: u.id,
           label: u.name,
-          sub: ROLE_LABEL_TH(u.roleCodes),
+          sub: ROLE_LABEL_TH(u.roleCodes, ceo),
         }))}
       />
     </AppScaffold>

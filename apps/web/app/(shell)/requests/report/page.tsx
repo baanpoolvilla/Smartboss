@@ -11,10 +11,12 @@ import { KINDS, KIND_META, bangkokToday, baht, costOf, monthTitle, round2, shift
 import { canSeePay, maskRequest, payPrivacy } from "@/modules/requests/lib/pay-privacy";
 import { moneyOutOfMonth } from "@/modules/requests/lib/petty-report";
 
+import { ceoTitle } from "@/lib/ceo-title";
 export const dynamic = "force-dynamic";
 
 /** รายงานรายเดือน — แยกประเภท · รายคน · รายบ้าน + ตารางทุกใบ (ส่งออก Excel / พิมพ์ PDF) */
 export default async function RequestsReportPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
+  const ceo = await ceoTitle();
   const { session, viewer } = await requestsPage(REQ_PERMS.viewAll);
   const sp = await searchParams;
   const month = sp.month && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.month) ? sp.month : bangkokToday().slice(0, 7);
@@ -46,7 +48,7 @@ export default async function RequestsReportPage({ searchParams }: { searchParam
         <h1 className="hidden text-lg font-bold print:block">รายงานเบิกจ่าย & OT · {monthTitle(month)}</h1>
         {hiddenCount > 0 && (
           <p className="rounded-(--radius) border border-(--line) bg-(--bg-soft) px-3 py-2 text-xs text-(--ink-soft)">
-            ยอดรวมไม่รวม OT พนักงานประจำ {hiddenCount} ใบ — ยอด OT บอกเงินเดือนได้ จึงเห็นเฉพาะเจ้าตัว / CEO / ผู้ดูแลเงินเดือน
+            ยอดรวมไม่รวม OT พนักงานประจำ {hiddenCount} ใบ — ยอด OT บอกเงินเดือนได้ จึงเห็นเฉพาะเจ้าตัว / {ceo} / ผู้ดูแลเงินเดือน
           </p>
         )}
 
@@ -133,7 +135,7 @@ export default async function RequestsReportPage({ searchParams }: { searchParam
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5"><KindChip kind={r.kind} /><span className="truncate text-sm font-semibold">{r.title}</span></div>
                     <div className="mt-0.5 truncate text-xs text-(--ink-soft)">{r.code} · {thaiDate(r.workDate)} · {r.beneficiaryName}</div>
-                    <div className="mt-1"><StatusChip info={statusOf(r)} /></div>
+                    <div className="mt-1"><StatusChip info={statusOf(r, ceo)} /></div>
                   </div>
                   <div className="shrink-0 text-right">
                     <div className="text-sm font-bold tabular-nums">{r.payHidden ? "ซ่อนยอด" : baht(costOf(r))}</div>
@@ -168,7 +170,7 @@ export default async function RequestsReportPage({ searchParams }: { searchParam
                     <td className="px-3 py-2">{r.title}{r.propertyName ? <span className="text-xs text-(--ink-soft)"> · {r.propertyName}</span> : null}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-right font-semibold tabular-nums">{r.payHidden ? <span className="text-xs font-normal text-(--ink-soft)">ซ่อนยอด</span> : baht(costOf(r))}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{r.payHidden ? "—" : baht(r.paidTotal)}</td>
-                    <td className="px-3 py-2"><StatusChip info={statusOf(r)} /></td>
+                    <td className="px-3 py-2"><StatusChip info={statusOf(r, ceo)} /></td>
                   </tr>
                 ))}
               </tbody>

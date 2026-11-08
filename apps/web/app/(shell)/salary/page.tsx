@@ -15,6 +15,8 @@ import { loadRequests } from "@/modules/requests/lib/db";
 import { loadScorePeriodConfig } from "@/lib/score-period-config";
 import { bangkokDay, scorePeriodRange } from "@/lib/score-period";
 
+import { ceoTitle } from "@/lib/ceo-title";
+import { ceoText } from "@/lib/ceo-title-shared";
 export const dynamic = "force-dynamic";
 
 /**
@@ -22,6 +24,7 @@ export const dynamic = "force-dynamic";
  * (แบบหน้า รายการเงินเดือน/ค่าจ้าง ของ FlowAccount: ช่วงวันที่ · วันที่ชำระ · รวมเงินเดือน · ยอดจ่ายสุทธิ · สถานะ)
  */
 export default async function SalaryHome() {
+  const ceo = await ceoTitle();
   const { session, access } = await salaryPage();
   if (!access.canEdit) {
     return (
@@ -74,7 +77,7 @@ export default async function SalaryHome() {
           <div>
             <h1 className="text-lg font-bold text-(--ink)">รายการเงินเดือน</h1>
             <p className="text-xs text-(--ink-soft)">
-              เห็นหน้านี้: CEO และคนที่ CEO เลือก{access.via === "super_admin" ? " · คุณเห็นในฐานะผู้ดูแลระบบสูงสุด (ช่วงติดตั้ง)" : ""}
+              เห็นหน้านี้: {ceo} และคนที่ {ceo} เลือก{access.via === "super_admin" ? " · คุณเห็นในฐานะผู้ดูแลระบบสูงสุด (ช่วงติดตั้ง)" : ""}
             </p>
           </div>
           <CreateRun
@@ -99,7 +102,7 @@ export default async function SalaryHome() {
                 {staff.length === 0 ? null : noSalary + noBank === 0 ? <span className="text-emerald-700">✓ ครบ {staff.length} คน</span> : <span className="text-amber-700">ยังไม่มีเงินเดือน {noSalary} คน · ขาดเลขบัญชี {noBank} คน</span>}
                 <span className="block text-xs text-(--ink-soft)">เริ่มใช้กลางปี? ใส่ &quot;ยอดยกมา&quot; ของแต่ละคนด้วย ภาษีจะตรงตั้งแต่เดือนแรก</span>
               </li>
-              <li>3. กด &quot;สร้างใหม่&quot; ด้านบน — ระบบเติมทุกคนให้ ตรวจ แก้เฉพาะคนที่ต่างจากปกติ แล้วส่งให้ CEO อนุมัติ</li>
+              <li>3. กด &quot;สร้างใหม่&quot; ด้านบน — ระบบเติมทุกคนให้ ตรวจ แก้เฉพาะคนที่ต่างจากปกติ แล้วส่งให้ {ceo} อนุมัติ</li>
             </ol>
             <p className="mt-3 text-sm">
               ไม่เคยทำเงินเดือนมาก่อน? อ่าน <Link href="/salary/guide" className="font-semibold text-(--app-strong) underline">คู่มือเงินเดือน</Link> (5 นาที) — ทำอะไรวันไหน คำศัพท์ และคำถามที่เจอบ่อย
@@ -122,7 +125,7 @@ export default async function SalaryHome() {
               </thead>
               <tbody className="divide-y divide-(--line)">
                 {runs.map((r) => {
-                  const st = STATUS_LABEL[r.status]!;
+                  const st = { ...STATUS_LABEL[r.status]!, label: ceoText(STATUS_LABEL[r.status]!.label, ceo) };
                   return (
                     <tr key={r.id} className="hover:bg-(--bg-soft)">
                       <td className="px-4 py-3">

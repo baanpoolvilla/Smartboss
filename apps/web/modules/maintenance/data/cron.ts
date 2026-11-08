@@ -33,6 +33,8 @@ import {
   pmDockRevokeReason,
   workOrderDockRevokeReason,
 } from "@/modules/maintenance/lib/dock-validity";
+import { ceoText } from "@/lib/ceo-title-shared";
+import { ceoTitle } from "@/lib/ceo-title";
 
 /**
  * สร้างใบงานอัตโนมัติจาก PM ที่ถึงกำหนด (แทน DB trigger เดิมของ ChangYai)
@@ -1177,7 +1179,7 @@ async function revokeInvalidMaintenanceDocks(
     // ต้นเรื่องถูกลบไปแล้ว — ไม่ใส่ลิงก์ ไม่งั้นกดแล้วเจอหน้าไม่พบ
     const gone = reason === "ใบงานถูกลบ" || reason === "แผน PM ถูกลบ";
     await notifyUser(d.orgId, d.userId, {
-      title: `คืนคะแนน ${fmtPoints(pts)} · ${reason}`,
+      title: `คืนคะแนน ${fmtPoints(pts)} · ${ceoText(reason, await ceoTitle(d.orgId))}`,
       body: d.note ?? null,
       type: isWo ? "work_order" : "pm",
       referenceId: gone ? null : isWo ? (d.refId ? workOrderIdOfDockRef(d.refId) : null) : (d.refId?.split(":")[0] ?? null),

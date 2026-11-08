@@ -28,6 +28,7 @@ import { useTaskStore } from "@/modules/report_task/store/task-store";
 import type { Project, ProjectDepRule } from "@/modules/report_task/types";
 import { barStyle, fmtDay, PersonDot, STATE_COLOR, STATE_LABEL, StatePill, TH_MONTH_SHORT } from "./project-ui";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 const ZOOM = { day: 30, week: 14, month: 5, quarter: 2, half: 1, year: 0.5 } as const;
 type Zoom = keyof typeof ZOOM;
 const ROW = 38;
@@ -61,6 +62,7 @@ export function ProjectTimeline({
   onOpenTask: (taskId: string) => void;
   onAddTask: (sectionId: string) => void;
 }) {
+  const ceo = useCeoTitle();
   const rescheduleTask = useTaskStore((s) => s.rescheduleTask);
   const items = allItems;
   const setTaskProject = useTaskStore((s) => s.setTaskProject);
@@ -399,7 +401,7 @@ export function ProjectTimeline({
         <div className="hidden items-center gap-2 rounded-lg border border-[#d5dbe6] bg-[#eaeef5] px-2.5 py-1.5 text-[12px] text-[var(--brand-navy)] sm:flex">
           <span aria-hidden>💡</span>
           <span className="min-w-0 flex-1 leading-snug">
-            <b>ลากแถบ</b> = เลื่อนวัน{canPlan ? "" : " (เฉพาะผู้ดูแลโปรเจกต์/CEO)"} · <b>ลากขอบขวา</b> = ยืด/หดวัน · <b>ลากจุดกลมท้ายแถบ</b> ไปวางบนอีกงาน = ต้องรอกัน · <b>กดแถบ</b> = เปิดงาน · <b>Shift/Ctrl+คลิก</b> หรือ <b>ลากกรอบในที่ว่าง</b> = เลือกหลายงาน แล้วลากพร้อมกัน
+            <b>ลากแถบ</b> = เลื่อนวัน{canPlan ? "" : ` (เฉพาะผู้ดูแลโปรเจกต์/${ceo})`} · <b>ลากขอบขวา</b> = ยืด/หดวัน · <b>ลากจุดกลมท้ายแถบ</b> ไปวางบนอีกงาน = ต้องรอกัน · <b>กดแถบ</b> = เปิดงาน · <b>Shift/Ctrl+คลิก</b> หรือ <b>ลากกรอบในที่ว่าง</b> = เลือกหลายงาน แล้วลากพร้อมกัน
           </span>
           <button
             type="button"
@@ -821,6 +823,7 @@ function ItemDetail({
   onRemoveMilestone: () => void;
   onUpdateMilestone: (patch: { name?: string; date?: string; doneAt?: string | undefined; sectionId?: string }) => void;
 }) {
+  const ceo = useCeoTitle();
   const byId = new Map(items.map((i) => [i.id, i]));
   const waiting = items.filter((i) => i.deps.includes(item.id));
   const canMove = item.state !== "done" && (item.kind === "milestone" ? canEdit : canPlan);
@@ -934,7 +937,7 @@ function ItemDetail({
           )
         )}
         {!canMove && item.state !== "done" && item.kind === "task" && (
-          <span className="self-center text-xs text-[var(--ink-soft)]">เลื่อนวันได้เฉพาะผู้ดูแลโปรเจกต์/CEO · ผู้รับผิดชอบกด &quot;ขอเลื่อน&quot; ในหน้างาน</span>
+          <span className="self-center text-xs text-[var(--ink-soft)]">เลื่อนวันได้เฉพาะผู้ดูแลโปรเจกต์/{ceo} · ผู้รับผิดชอบกด &quot;ขอเลื่อน&quot; ในหน้างาน</span>
         )}
       </div>
       {item.state === "late" && dayNum(item.end) < dayNum(today) && <p className="m-0 text-xs text-red-600">เลยกำหนดมา {dayNum(today) - dayNum(item.end)} วัน</p>}

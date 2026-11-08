@@ -5,6 +5,7 @@ import { salaryAccess } from "@/modules/salary/lib/access";
 import { withSalaryTenant } from "@/modules/salary/lib/db";
 import type { RequestView } from "./db";
 
+import { ceoTitle } from "@/lib/ceo-title";
 /**
  * ยอดเงิน OT ของพนักงานประจำบอกเงินเดือนได้ (ยอด ÷ ชั่วโมง ÷ % × 240 = เงินเดือน) — ผู้ใช้กำหนด 22/10/2569:
  * "คนอื่นเห็นแค่ชั่วโมง" ⇒ เห็นยอดได้เฉพาะเจ้าตัว + CEO + คนที่ CEO เลือก (modules/salary/lib/access.ts)
@@ -77,8 +78,9 @@ export const PAYROLL_METHOD_BLOCKED =
  *   - คนกดไม่ใช่ CEO/ผู้ดูแลเงินเดือน → หน้านี้แสดงยอด OT รายคน (บอกเงินเดือนได้)
  */
 export async function payrollHandoffBlock(session: Pick<Session, "userId" | "roles" | "orgId">): Promise<string | null> {
+  const ceo = await ceoTitle(session.orgId);
   if (!session.orgId) return "ไม่มีบริษัท";
   if (await usesSalaryModule(session.orgId)) return "ตั้งแต่ใช้โมดูลเงินเดือน OT และเบิกล่วงหน้าของพนักงานประจำเข้ารอบเงินเดือนให้เองแล้ว ไม่ต้องส่งที่หน้านี้";
-  if (!(await payPrivacy(session)).canSeeAll) return "หน้านี้มียอด OT รายคน (บอกเงินเดือนได้) — ทำได้เฉพาะ CEO และคนที่ CEO เลือกให้ดูแลเงินเดือน";
+  if (!(await payPrivacy(session)).canSeeAll) return `หน้านี้มียอด OT รายคน (บอกเงินเดือนได้) — ทำได้เฉพาะ ${ceo} และคนที่ ${ceo} เลือกให้ดูแลเงินเดือน`;
   return null;
 }

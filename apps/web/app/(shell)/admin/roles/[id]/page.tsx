@@ -32,6 +32,8 @@ import {
   setRolePermissionsAction,
   updateRoleAction,
 } from "../../actions";
+import { ceoTitle } from "@/lib/ceo-title";
+import { ceoText } from "@/lib/ceo-title-shared";
 
 /** รวมป้ายไทยของสิทธิ์จากทุกโมดูล */
 const PERM_LABELS: Record<string, string> = {
@@ -49,6 +51,7 @@ export default async function RoleDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const ceo = await ceoTitle();
   const { id } = await params;
   const session = await requireOrg();
   if (!hasPermission(session, ADMIN_PERMS.roleView)) redirect("/admin");
@@ -200,7 +203,7 @@ export default async function RoleDetailPage({
               <input type="hidden" name="roleId" value={role.id} />
               <PermissionMatrix
                 groups={groups}
-                labels={PERM_LABELS}
+                labels={Object.fromEntries(Object.entries(PERM_LABELS).map(([k, v]) => [k, ceoText(v, ceo)]))}
                 defaultSelected={role.permissionIds}
                 readOnly={!canEdit}
               />

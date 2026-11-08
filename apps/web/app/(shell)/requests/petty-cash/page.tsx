@@ -19,6 +19,7 @@ import { maskRequest, payPrivacy } from "@/modules/requests/lib/pay-privacy";
 import { MoneyBackButton, PendingTopupRow, PettyHolderCard, PettyHoldersButton, ReviewSpendButtons, VoidPettyButton, WriteOffButton } from "@/modules/requests/components/petty-forms";
 import { bangkokToday, baht, monthTitle, shiftMonthOf, thaiDateTime } from "@/modules/requests/lib/types";
 
+import { ceoTitle } from "@/lib/ceo-title";
 export const dynamic = "force-dynamic";
 
 /** ภาษีของ "ซื้อของเอง" — บิลเต็ม · VAT · หัก ณ ที่จ่าย · จ่ายจริง (ผู้ใช้ 8/11/2569) */
@@ -45,6 +46,7 @@ const KIND_LABEL = { top_up: "รับเงินเติม", spend: "จ่
  *             ใครถือเงิน = HR/CEO ติ๊กรายคนที่ปุ่ม "ตั้งคนถือเงิน" บนหน้านี้ (lib/holders.ts)
  */
 export default async function PettyCashPage({ searchParams }: { searchParams: Promise<{ holder?: string; month?: string }> }) {
+  const ceo = await ceoTitle();
   const { session, viewer } = await requestsPage();
   // HR/CEO ที่ไม่ได้ถือเงินเองก็ต้องเข้ามาอนุมัติคำขอเติม/เติมเงินให้คนอื่นได้
   const petty = pettyAccess(session);
@@ -112,14 +114,14 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
           <p className="flex items-center text-sm text-(--ink)">
             เงินสดที่บริษัทให้แต่ละคนถือไว้จ่ายค่าของเล็ก ๆ น้อย ๆ
             <InfoTip label="เงินสดย่อยคืออะไร" title="เงินสดย่อยใช้ยังไง">
-              <b>1. ได้เงินมาถือ</b> — HR/CEO กด “เติมเงินให้” หรือผู้ถือกด “ขอเติมเงิน” แล้วรออนุมัติ (ทุกครั้งต้องแนบสลิปโอน/รูปเงินสด)
+              <b>1. ได้เงินมาถือ</b> — HR/{ceo} กด “เติมเงินให้” หรือผู้ถือกด “ขอเติมเงิน” แล้วรออนุมัติ (ทุกครั้งต้องแนบสลิปโอน/รูปเงินสด)
               <br />
               <b>2. ใช้จ่าย</b> — กด “จ่ายเงิน” บนการ์ดของตัวเอง แล้วเลือก “ให้คนที่ขอมา” (ใบเบิกที่ HR อนุมัติแล้ว) หรือ “ซื้อของเอง” (บอกว่าค่าอะไร เลือกหมวด แนบใบเสร็จ)
               <br />
               <b>3. เงินใกล้หมด</b> — กด “ขอเติมเงิน” อีกรอบ
               <br />
               <br />
-              ใบเบิกที่ HR เลือก “จ่ายจากเงินสดย่อย” จะหักยอดของคนที่จ่ายให้เองอัตโนมัติ · ไม่มีใครอนุมัติคำขอเติมของตัวเองได้ (HR ขอ = CEO อนุมัติ)
+              ใบเบิกที่ HR เลือก “จ่ายจากเงินสดย่อย” จะหักยอดของคนที่จ่ายให้เองอัตโนมัติ · ไม่มีใครอนุมัติคำขอเติมของตัวเองได้ (HR ขอ = {ceo} อนุมัติ)
             </InfoTip>
           </p>
           <div className="flex flex-wrap items-center gap-3">
@@ -142,12 +144,12 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
             <h2 className="flex items-center border-b border-(--line) px-4 py-3 text-sm font-bold text-(--ink)">
               คำขอเติมเงินที่รออนุมัติ ({visiblePending.length})
               <InfoTip label="คำขอเติมเงิน">
-                ผู้ถือเงินขอเติมเงินสดย่อยของตัวเอง — HR หรือ CEO ให้เงิน (โอน/เงินสด) แล้วกด “อนุมัติ + แนบสลิป” ยอดถึงจะเพิ่ม · อนุมัติของตัวเองไม่ได้ · คำขอของ HR ต้องให้ CEO อนุมัติ
+                ผู้ถือเงินขอเติมเงินสดย่อยของตัวเอง — HR หรือ {ceo} ให้เงิน (โอน/เงินสด) แล้วกด “อนุมัติ + แนบสลิป” ยอดถึงจะเพิ่ม · อนุมัติของตัวเองไม่ได้ · คำขอของ HR ต้องให้ {ceo} อนุมัติ
               </InfoTip>
             </h2>
             <ul className="divide-y divide-(--line)">
               {visiblePending.map((p) => (
-                <PendingTopupRow key={p.id} item={p} canDecide={canDecide(p)} isMine={p.requestedByUserId === session.userId} waitingFor={p.needsCeo ? "CEO" : "HR หรือ CEO"} today={today} />
+                <PendingTopupRow key={p.id} item={p} canDecide={canDecide(p)} isMine={p.requestedByUserId === session.userId} waitingFor={p.needsCeo ? ceo : `HR หรือ ${ceo}`} today={today} />
               ))}
             </ul>
           </section>
@@ -158,7 +160,7 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
             <h2 className="flex items-center border-b border-(--line) px-4 py-3 text-sm font-bold text-(--ink)">
               จ่ายไปก่อน รอตรวจ ({reviewList.length})
               <InfoTip label="จ่ายไปก่อน รอตรวจ">
-                ผู้ถือเงินจ่ายค่าของจากเงินสดย่อยไปก่อน (ทำเรื่องไม่ทัน) แล้วมาลงว่าจ่ายอะไร พร้อมใบเสร็จ — HR หรือ CEO ดูใบเสร็จแล้วกด “ผ่าน” หรือ “ไม่ผ่าน” · ไม่ผ่าน = ผู้ถือต้องคืนเงินเข้ากอง · ตรวจของตัวเองไม่ได้ · ของ HR ต้องให้ CEO ตรวจ
+                ผู้ถือเงินจ่ายค่าของจากเงินสดย่อยไปก่อน (ทำเรื่องไม่ทัน) แล้วมาลงว่าจ่ายอะไร พร้อมใบเสร็จ — HR หรือ {ceo} ดูใบเสร็จแล้วกด “ผ่าน” หรือ “ไม่ผ่าน” · ไม่ผ่าน = ผู้ถือต้องคืนเงินเข้ากอง · ตรวจของตัวเองไม่ได้ · ของ HR ต้องให้ {ceo} ตรวจ
               </InfoTip>
             </h2>
             <ul className="divide-y divide-(--line)">
@@ -182,7 +184,7 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
                   {canReview(e) ? (
                     <ReviewSpendButtons id={e.id} />
                   ) : (
-                    <div className="mt-1 text-xs text-amber-800">รอ{holderNeedsCeo(e.holderUserId) ? " CEO" : " HR หรือ CEO"} ตรวจ</div>
+                    <div className="mt-1 text-xs text-amber-800">รอ{holderNeedsCeo(e.holderUserId) ? ` ${ceo}` : ` HR หรือ ${ceo}`} ตรวจ</div>
                   )}
                 </li>
               ))}
@@ -195,7 +197,7 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
             <h2 className="flex items-center border-b border-(--line) px-4 py-3 text-sm font-bold text-red-800">
               เงินขาด · ไม่ผ่าน รอคืนเงิน ({shortList.length} รายการ · {baht(shortList.reduce((t, e) => t - e.delta, 0))})
               <InfoTip label="เงินขาด">
-                รายการที่จ่ายไปก่อนแต่ตรวจแล้วไม่ผ่าน — เงินในมือของผู้ถือยังถูกหักอยู่ ผู้ถือต้องคืนเงินเข้ากอง แล้ว HR กด “ได้เงินคืนแล้ว” ยอดในมือถึงจะกลับมา · เรียกคืนไม่ได้จริง (เช่น เงินหาย) CEO กด “บริษัทรับเป็นค่าใช้จ่าย” · ในรายงานเบิกจ่าย เงินขาดไม่นับเป็นค่าใช้จ่าย
+                รายการที่จ่ายไปก่อนแต่ตรวจแล้วไม่ผ่าน — เงินในมือของผู้ถือยังถูกหักอยู่ ผู้ถือต้องคืนเงินเข้ากอง แล้ว HR กด “ได้เงินคืนแล้ว” ยอดในมือถึงจะกลับมา · เรียกคืนไม่ได้จริง (เช่น เงินหาย) {ceo} กด “บริษัทรับเป็นค่าใช้จ่าย” · ในรายงานเบิกจ่าย เงินขาดไม่นับเป็นค่าใช้จ่าย
               </InfoTip>
             </h2>
             <ul className="divide-y divide-(--line)">
@@ -222,7 +224,7 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
         )}
 
         {visibleHolders.length === 0 ? (
-          <div className="rounded-(--radius-lg) border border-dashed border-(--line) p-6 text-center text-sm text-(--ink-soft)">ยังไม่มีใครถือเงินสดย่อย — HR/CEO กด &quot;ตั้งคนถือเงิน&quot; ด้านบน</div>
+          <div className="rounded-(--radius-lg) border border-dashed border-(--line) p-6 text-center text-sm text-(--ink-soft)">ยังไม่มีใครถือเงินสดย่อย — HR/{ceo} กด &quot;ตั้งคนถือเงิน&quot; ด้านบน</div>
         ) : (
           <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {visibleHolders.map((h) => {
@@ -251,7 +253,7 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
             <h2 className="flex items-center text-sm font-bold text-(--ink)">
               สรุปรายเดือน
               <InfoTip label="สรุปรายเดือน">
-                ยกมา = เงินในมือต้นเดือน · เติม = ที่ HR/CEO ให้ · จ่ายตามใบ = จ่ายให้คนที่ขอมา · ซื้อเอง = ใช้ซื้อของโดยไม่มีใบเบิก · คืน/ปรับ = เงินทอนที่รับคืน และ “นับเงินไม่ตรง” · คงเหลือ = ที่ควรมีในมือปลายเดือน · รายการที่ยกเลิกแล้วไม่นับ
+                ยกมา = เงินในมือต้นเดือน · เติม = ที่ HR/{ceo} ให้ · จ่ายตามใบ = จ่ายให้คนที่ขอมา · ซื้อเอง = ใช้ซื้อของโดยไม่มีใบเบิก · คืน/ปรับ = เงินทอนที่รับคืน และ “นับเงินไม่ตรง” · คงเหลือ = ที่ควรมีในมือปลายเดือน · รายการที่ยกเลิกแล้วไม่นับ
               </InfoTip>
             </h2>
             <span className="flex-1" />

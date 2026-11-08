@@ -9,6 +9,7 @@ import { effectiveRoundsOf } from "@/modules/report_task/lib/submission-rounds";
 import type { ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { loadScorePeriodConfig } from "@/lib/score-period-config";
 
+import { ceoTitle } from "@/lib/ceo-title";
 /**
  * อนุมัติ/ไม่อนุมัติคำร้องขอแก้ไขคะแนน — **CEO เท่านั้น** (ยืนยันจากผู้ใช้ตรง ๆ
  * ว่าอนุมัติได้คนเดียวคือ CEO ไม่ใช่หัวหน้าแผนกทุกคน) SUPER_ADMIN ผ่านได้
@@ -19,9 +20,10 @@ export const dynamic = "force-dynamic";
 const NOTIFICATIONS_KEY = "notifications";
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
+  const ceo = await ceoTitle();
   const session = await requireOrg();
   if (!hasRole(session, "CEO") && !isSuperAdmin(session)) {
-    return Response.json({ error: "อนุมัติได้เฉพาะ CEO เท่านั้น" }, { status: 403 });
+    return Response.json({ error: `อนุมัติได้เฉพาะ ${ceo} เท่านั้น` }, { status: 403 });
   }
 
   const { id } = await context.params;

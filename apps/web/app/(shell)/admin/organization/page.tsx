@@ -10,7 +10,8 @@ import {
   SectionCard,
   inputClass,
 } from "@/modules/admin/components/ui";
-import { updateOrganizationAction } from "../actions";
+import { updateCeoTitleAction, updateOrganizationAction } from "../actions";
+import { ceoTitle } from "@/lib/ceo-title";
 
 export default async function AdminOrganizationPage() {
   const session = await requireOrg();
@@ -20,6 +21,7 @@ export default async function AdminOrganizationPage() {
     getOrganization(session.orgId),
     countOrgUsers(session.orgId),
   ]);
+  const title = await ceoTitle(session.orgId);
   if (!org) notFound();
 
   return (
@@ -33,6 +35,29 @@ export default async function AdminOrganizationPage() {
                 defaultValue={org.name}
                 required
                 maxLength={200}
+                className={inputClass}
+              />
+            </Field>
+            <div>
+              <Button type="submit" size="sm">
+                บันทึก
+              </Button>
+            </div>
+          </form>
+        </SectionCard>
+
+        {/* ผู้ใช้ 8/11/2569 "เปลี่ยนจาก CEO เป็น Boss" — แสดงแทนคำว่า CEO ทั้งระบบ (ป้าย ข้อความอนุมัติ แจ้งเตือน @แท็ก) */}
+        <SectionCard
+          title="ชื่อเรียกตำแหน่งสูงสุด"
+          description="คำที่ระบบใช้แทน “CEO” ทุกหน้า เช่น “รอ CEO อนุมัติ” → “รอ Boss อนุมัติ” · สิทธิ์ของบทบาทไม่เปลี่ยน"
+        >
+          <form action={updateCeoTitleAction} className="flex flex-col gap-3">
+            <Field label="ชื่อเรียก">
+              <input
+                name="ceo_title"
+                defaultValue={title}
+                maxLength={30}
+                placeholder="CEO"
                 className={inputClass}
               />
             </Field>

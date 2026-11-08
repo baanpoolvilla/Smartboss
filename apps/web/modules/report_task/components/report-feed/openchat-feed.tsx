@@ -52,6 +52,7 @@ import { Building2, Check, ClipboardList, Crown, Hash, ImagePlus, MoreHorizontal
 import { uuid } from "@/modules/report_task/lib/uuid";
 import { isCoarsePointer } from "@/modules/report_task/lib/device";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 const reactionEmojis = ["👍", "❤️", "🎉", "😂", "😮", "😢"];
 /** กางทีละชุดแทนที่จะกางทั้งห้อง — เหตุผลเดียวกับ report-feed.tsx
  * ห้องโหมดแชทสะสมข้อความเร็วกว่าห้องรายงานด้วยซ้ำ */
@@ -128,6 +129,7 @@ export function OpenchatFeed({
   topicPosts: ReportPost[];
   onOpenTask?: (taskId: string) => void;
 }) {
+  const ceo = useCeoTitle();
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const taskOpener = useReportTaskOpener(topic, onOpenTask);
   const workOrderOpener = useReportWorkOrderOpener(topic);
@@ -190,7 +192,7 @@ export function OpenchatFeed({
       { type: "everyone", id: EVERYONE_MENTION_ID, label: "ทุกคนในห้องนี้", sublabel: "แจ้งทุกคนที่เห็นห้องนี้" },
       // @CEO — แจ้งเฉพาะคนที่ถือ role CEO และเห็นห้องนี้ (ไม่ต้องจำว่า CEO ชื่ออะไร) · ขึ้นเฉพาะเมื่อมี CEO ที่เห็นห้องนี้
       ...(directoryUsers.some((u) => u.isCeo && canSeeReportTopic(topic.visibility, u.id))
-        ? [{ type: "role", id: CEO_MENTION_ID, label: "CEO", sublabel: "แจ้งเฉพาะ CEO" } as MentionItem]
+        ? [{ type: "role", id: CEO_MENTION_ID, label: ceo, sublabel: `แจ้งเฉพาะ ${ceo}` } as MentionItem]
         : []),
       ...directoryUsers
         .filter((u) => canSeeReportTopic(topic.visibility, u.id))

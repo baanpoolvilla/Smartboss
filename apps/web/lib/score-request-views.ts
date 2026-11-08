@@ -10,6 +10,8 @@ import { canDecideScoreRequest } from "@/lib/score-requests";
 import { penaltyRequestOpen, retroSubmitDeadline } from "@/modules/report_task/lib/penalty-request-window";
 import type { ScoreQueueItem } from "@/app/(shell)/hr/penalty-requests/score-requests-queue";
 
+import { ceoTitle } from "@/lib/ceo-title";
+import { ceoText } from "@/lib/ceo-title-shared";
 const fmtDay = new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short" });
 const fmtDayTime = new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
@@ -35,6 +37,7 @@ export async function buildScoreQueue(
   session: OrgSession,
   filter: (r: ScoreRequest) => boolean = () => true
 ): Promise<{ pending: ScoreQueueItem[]; decided: ScoreQueueItem[]; isCeo: boolean }> {
+  const ceo = await ceoTitle(session.orgId);
   const orgId = session.orgId;
   const isCeo = hasRole(session, "CEO") || isSuperAdmin(session);
   const [all, period] = await Promise.all([listScoreRequests(orgId), loadScorePeriodConfig(orgId)]);
@@ -69,7 +72,7 @@ export async function buildScoreQueue(
       reasonTag: r.reasonTag,
       reason: r.reason,
       createdText: fmtDayTime.format(new Date(r.createdAt)),
-      approverText: r.approverId ? `${r.approverRole} ${names.get(r.approverId) ?? ""}`.trim() : "CEO (ไม่มีคนอื่นอนุมัติได้)",
+      approverText: r.approverId ? `${ceoText(r.approverRole, ceo)} ${names.get(r.approverId) ?? ""}`.trim() : `${ceo} (ไม่มีคนอื่นอนุมัติได้)`,
       // ไม่มีเจ้าของเรื่องที่อนุมัติได้ ⇒ CEO คือคนอนุมัติหลักของใบนั้น (ไม่ใช่ "อนุมัติแทน")
       primary: r.approverId === session.userId || (!r.approverId && isCeo),
       notifiesCeo: !r.approverId,

@@ -10,6 +10,7 @@ import { fmtBaht } from "../lib/types";
 import { field, hint, navy, outline } from "./ui";
 import { useRun } from "./use-run";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 export interface ReviewPerson {
   employmentId: string;
   name: string;
@@ -50,6 +51,7 @@ export function AdjustmentsDialog({
   submit?: { mode: "ceo" | "ceo_on_change" | "hr"; blocks: string[]; negatives: string[]; warnings: number };
   trigger: string;
 }) {
+  const ceo = useCeoTitle();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [onlyWith, setOnlyWith] = useState(false);
@@ -124,7 +126,7 @@ export function AdjustmentsDialog({
               {submit && (
                 <button type="button" className={navy} disabled={busy || !canSend} onClick={() => run(() => submitRunAction({ runId }), () => setOpen(false))}>
                   {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-                  {submit.mode === "hr" ? "ถูกต้อง ยืนยันยอด" : "ถูกต้อง ส่งให้ CEO อนุมัติ"}
+                  {submit.mode === "hr" ? "ถูกต้อง ยืนยันยอด" : `ถูกต้อง ส่งให้ ${ceo} อนุมัติ`}
                 </button>
               )}
             </div>
@@ -136,6 +138,7 @@ export function AdjustmentsDialog({
 }
 
 function PersonBlock({ runId, p, items, editable }: { runId: string; p: ReviewPerson; items: ReviewItem[]; editable: boolean }) {
+  const ceo = useCeoTitle();
   const [adding, setAdding] = useState(false);
   // ไม่ส่งเวลาที่เห็นล่าสุด: ทุกการแก้คำนวณทั้งรอบใหม่ (ทุกคนได้เวลาใหม่) — เพิ่ม/แก้/ลบหลายคนติด ๆ กันจะโดนปฏิเสธว่า "มีคนแก้ไปก่อน"
   // ปลอดภัยเพราะทุกคำสั่งอ้างรายการด้วย id และ server ใช้ข้อมูลล่าสุดภายใต้ล็อกรอบ (editLine) — ไม่ทับของใคร
@@ -155,7 +158,7 @@ function PersonBlock({ runId, p, items, editable }: { runId: string; p: ReviewPe
           สุทธิ <strong className="text-(--ink)">{fmtBaht(p.net)}</strong>
         </div>
       </div>
-      {p.locked && <p className="mt-1 text-xs text-amber-800">เงินเดือนของคุณเอง — ให้ CEO เป็นคนแก้</p>}
+      {p.locked && <p className="mt-1 text-xs text-amber-800">เงินเดือนของคุณเอง — ให้ {ceo} เป็นคนแก้</p>}
       {p.adjustments.length > 0 && (
         <ul className="mt-2 flex flex-col gap-1.5">
           {p.adjustments.map((a) => (
@@ -228,6 +231,7 @@ function AdjustmentRow({ a, ctx, editable, items }: { a: Adjustment; ctx: { runI
 }
 
 function AddRow({ ctx, items, onDone }: { ctx: { runId: string; employmentId: string; expectUpdatedAt: string | null }; items: ReviewItem[]; onDone: () => void }) {
+  const ceo = useCeoTitle();
   const [kind, setKind] = useState<"earning" | "deduction">("earning");
   const [itemId, setItemId] = useState("");
   const [labelText, setLabelText] = useState("");
@@ -251,7 +255,7 @@ function AddRow({ ctx, items, onDone }: { ctx: { runId: string; employmentId: st
           </select>
           {!item && <input aria-label="ชื่อประเภท" className={`${field} h-10`} placeholder="ประเภท เช่น ค่าเดินทาง" value={labelText} onChange={(e) => setLabelText(e.target.value)} />}
         </div>
-        <input aria-label="รายละเอียด" className={`${field} h-10`} placeholder="รายละเอียด (CEO เห็นตอนอนุมัติ)" value={reason} onChange={(e) => setReason(e.target.value)} />
+        <input aria-label="รายละเอียด" className={`${field} h-10`} placeholder={`รายละเอียด (${ceo} เห็นตอนอนุมัติ)`} value={reason} onChange={(e) => setReason(e.target.value)} />
         <input aria-label="จำนวนเงิน" inputMode="decimal" className={`${field} h-10`} placeholder="บาท" value={amount} onChange={(e) => setAmount(e.target.value)} />
       </div>
       <p className={hint}>เป็นรายการของงวดนี้งวดเดียว · ทุกเดือน/ผ่อนหลายงวด ตั้งที่ &quot;แก้ไข&quot; รายคน</p>

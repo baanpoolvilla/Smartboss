@@ -10,6 +10,7 @@ import { ManualAttendanceForm } from "@/app/(shell)/hr/attendance/corrections/co
 import { PenaltyRequestDialog, type PenaltyEventItem } from "@/app/(shell)/hr/employees/penalty-request-chip";
 import { createScoreRequestAction } from "./score-request-actions";
 
+import { useCeoTitle } from "@/lib/ceo-title-client";
 /**
  * ปุ่ม "ขอแก้ไข" + สถานะ ใต้แต่ละรายการที่โดนหักในหน้า "คะแนนของฉัน" (ผู้ใช้ขอ 21/10/2569)
  * ปุ่มเดียวกันทุกหมวด แต่เปิดฟอร์มที่ถูกต้องของเรื่องนั้น — พนักงานไม่ต้องรู้ว่าไปยื่นที่ไหน:
@@ -51,6 +52,7 @@ const TONE: Record<RowTone, string> = {
 };
 
 export function ScoreRowAction({ spec }: { spec: RowActionSpec }) {
+  const ceo = useCeoTitle();
   // เก็บสเปกของหน้าต่างไว้เอง — ส่งแล้วหน้ารีเฟรช แถวนี้กลายเป็น "รอพิจารณา" (spec.open หาย)
   // ถ้าอิง spec.open ตรง ๆ หน้าต่าง "ส่งคำขอแล้ว" จะปิดเองก่อนผู้ใช้ทันเห็น
   const [dialog, setDialog] = useState<RowOpen | null>(null);
@@ -106,7 +108,7 @@ export function ScoreRowAction({ spec }: { spec: RowActionSpec }) {
           <div className="flex flex-col gap-3">
             <WhatBox label={dialog.label} points={dialog.points} sub={`${dialog.day} · ใช้ฟอร์มเดียวกับหน้า "ลงเวลา"`} />
             <p className="rounded-(--radius) bg-[#eef3ff] px-3 py-2 text-xs text-[#1e3a8a]">
-              ส่งให้ HR / CEO อนุมัติ (2 คน ต้องเป็นคนละคน) · อนุมัติแล้วระบบคิดวันนั้นใหม่และคืนคะแนนให้เอง
+              ส่งให้ HR / {ceo} อนุมัติ (2 คน ต้องเป็นคนละคน) · อนุมัติแล้วระบบคิดวันนั้นใหม่และคืนคะแนนให้เอง
               {deadline ? ` · ต้องอนุมัติ${deadline.replace("ขอได้", "")} ถึงจะคืนคะแนนรอบนี้` : ""}
             </p>
             <ManualAttendanceForm

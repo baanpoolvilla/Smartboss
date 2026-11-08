@@ -11,6 +11,7 @@ import { RequestsHome, type ListRow } from "@/modules/requests/components/reques
 import { canSeePay, maskRequest, payPrivacy } from "@/modules/requests/lib/pay-privacy";
 import { Notice } from "@/modules/requests/components/ui";
 import { bangkokToday, baht, costOf, hoursText, monthTitle, round2, type RequestKind } from "@/modules/requests/lib/types";
+import { ceoTitle } from "@/lib/ceo-title";
 
 export const dynamic = "force-dynamic";
 
@@ -73,6 +74,7 @@ async function Body({
   createdCount: number;
   awaitingAmount: Map<string, boolean>;
 }) {
+  const ceo = await ceoTitle();
   if (!all) {
     return (
       <AppScaffold title="เบิกจ่าย & OT" width="max-w-none">
@@ -114,7 +116,7 @@ async function Body({
       workDate: r.workDate,
       amount: r.netAmount,
       amountHidden: r.payHidden,
-      status: statusOf(r),
+      status: statusOf(r, ceo),
       waitingMe: awaitingAmount.has(r.id)
         ? awaitingAmount.get(r.id)! && (!viewer.canApproveCeo || !hasPureHr(r))
         : canDecide(r, viewer) && (r.approverLevel === "ceo" || !viewer.canApproveCeo || !hasPureHr(r)),

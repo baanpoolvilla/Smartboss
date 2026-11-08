@@ -12,11 +12,13 @@ import type { ReceiptData } from "@/modules/maintenance/lib/receipt-read";
 import { createExpenseAction, createNoExpenseAction } from "../actions";
 import { loadSettings as loadRequestSettings } from "@/modules/requests/lib/data";
 
+import { ceoTitle } from "@/lib/ceo-title";
 export default async function NewExpensePage({
   searchParams,
 }: {
   searchParams: Promise<{ workOrderId?: string; pmScheduleId?: string; from?: string }>;
 }) {
+  const ceo = await ceoTitle();
   const session = await requireOrg();
   if (!hasPermission(session, MAINT_PERMS.expenseView)) redirect("/");
   const { workOrderId, pmScheduleId, from } = await searchParams;
@@ -37,7 +39,7 @@ export default async function NewExpensePage({
         backHref={returnTo}
       >
         <Card className="p-6 text-center text-sm text-(--ink-soft)">
-          เฉพาะ Manager, CEO และ Super Admin เท่านั้นที่บันทึกค่าใช้จ่ายได้
+          เฉพาะ Manager, {ceo} และ Super Admin เท่านั้นที่บันทึกค่าใช้จ่ายได้
         </Card>
       </AppScaffold>
     );
