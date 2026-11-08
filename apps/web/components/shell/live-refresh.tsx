@@ -4,6 +4,7 @@ import { useEffect, useRef, startTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { subscribeRealtime, type RealtimeEventMessage } from "@/lib/realtime-client";
+import { consumeStalePrefetch } from "@/components/shell/intent-link";
 
 /**
  * "อัปเดตหน้าเอง" สำหรับหน้าที่เซิร์ฟเวอร์สร้าง (แจ้งซ่อม ระบบบุคคล เบิกจ่าย เงินเดือน คนงานรายวัน ฯลฯ)
@@ -41,7 +42,9 @@ export function LiveRefresh() {
 
   useEffect(() => {
     lastRefresh.current = Date.now(); // เพิ่งเปลี่ยนหน้า = ข้อมูลใหม่อยู่แล้ว
-  }, [pathname]);
+    // ...ยกเว้นหน้าที่ได้จากชุดที่โหลดรอไว้นานแล้ว (ชี้เมนูไว้แล้วกลับมากดทีหลัง — intent-link.tsx) ดึงใหม่เลย
+    if (consumeStalePrefetch(pathname)) startTransition(() => router.refresh());
+  }, [pathname, router]);
 
   useEffect(() => {
     if (live) return;

@@ -2,6 +2,7 @@
 
 import { Fragment, Suspense, useEffect, useState } from "react";
 import Link from "next/link";
+import { IntentLink } from "@/components/shell/intent-link";
 import { usePathname, useRouter } from "next/navigation";
 import { MoreHorizontal, X } from "lucide-react";
 import { cn } from "@smartboss/ui/cn";
@@ -317,9 +318,8 @@ function ModuleRail({
           คนละหน้าที่กัน ไม่ซ้ำซ้อนแบบเดิมที่ทั้งคู่พากลับหน้ารวมแอป) ไปเมนูแรกที่ผู้ใช้คนนี้เห็น
           ไม่ใช่ basePath ตรง ๆ — คนที่ไม่มีสิทธิ์หน้าแรก (เช่น แดชบอร์ด) จะได้ไม่โดนเด้งออก
           เส้นขอบล่างปิดท้ายก่อนเข้าเมนู */}
-      <Link
+      <IntentLink
         href={module.menus[0]?.path ?? module.basePath}
-        prefetch={false}
         title={`หน้าแรกของ${module.name}`}
         className="flex h-[56px] shrink-0 items-center gap-2.5 border-b border-(--line) px-4 transition-colors hover:bg-(--bg-soft)"
       >
@@ -332,7 +332,7 @@ function ModuleRail({
         <span className="truncate text-sm font-bold text-(--ink)">
           {module.name}
         </span>
-      </Link>
+      </IntentLink>
 
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
         {module.menus.map((menu, i) => (
@@ -351,12 +351,10 @@ function ModuleRail({
 
 function RailItem({ menu, active }: { menu: ModuleMenuItem; active: boolean }) {
   return (
-    <Link
+    <IntentLink
       href={menu.path}
-      // เหตุผลเดียวกับ AppIcon ใน (shell)/page.tsx — เมนูข้างซ้ายมองเห็นครบ
-      // ทุกอันพร้อมกันตอนเข้าโมดูล prefetch ค่าเริ่มต้นเลยยิงพร้อมกันหมด
-      // ชน Prisma pool บน VM 2 core (เจอเป็นอาการ "กดเมนูข้างซ้ายหน่วง")
-      prefetch={false}
+      // ไม่ใช้ prefetch ค่าเริ่มต้น — เมนูข้างซ้ายมองเห็นครบทุกอันพร้อมกันตอนเข้าโมดูล ยิงพร้อมกันหมด
+      // ชน Prisma pool บน VM 2 core (เจอเป็นอาการ "กดเมนูข้างซ้ายหน่วง") · โหลดรอเฉพาะอันที่กำลังจะกด (intent-link.tsx)
       className={cn(
         "flex h-12 shrink-0 items-center gap-3 rounded-xl px-3 text-sm transition-colors",
         active
@@ -367,7 +365,7 @@ function RailItem({ menu, active }: { menu: ModuleMenuItem; active: boolean }) {
       <Icon name={menu.icon} className="h-5 w-5 shrink-0" />
       <span className="truncate">{menu.label}</span>
       {menu.badge}
-    </Link>
+    </IntentLink>
   );
 }
 
@@ -528,9 +526,15 @@ function BottomNavItem({
     // ปุ่ม "หน้าหลัก" โหลดรอไว้ล่วงหน้า (เก็บไว้ 5 นาที) — เดิมปิดทุกลิงก์ (เซิร์ฟเวอร์ 2 core รับ
     // prefetch ทั้งเมนูไม่ไหว) กดกลับหน้าหลักจากทุกโมดูลเลยต้องรอเซิร์ฟเวอร์ 1–2 วิ จอนิ่งจนคนกดซ้ำ
     // ("กดกลับหน้าแรกช้ามาก ต้องกดหลายครั้ง") หน้าหลักเบา (query เล็ก ๆ ไม่กี่ตัว) เปิดลิงก์เดียวนี้พอ
-    <Link href={href} prefetch={href === "/"} className={className}>
-      {body}
-    </Link>
+    href === "/" ? (
+      <Link href={href} prefetch className={className}>
+        {body}
+      </Link>
+    ) : (
+      <IntentLink href={href} className={className}>
+        {body}
+      </IntentLink>
+    )
   ) : (
     <button type="button" onClick={onClick} className={className}>
       {body}

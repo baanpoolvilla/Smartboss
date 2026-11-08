@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { IntentLink } from "@/components/shell/intent-link";
 import { redirect } from "next/navigation";
 import { getSession } from "@smartboss/auth";
 import { WORKER_ROLE_CODE } from "@/modules/daily_worker/permissions";
@@ -297,17 +298,17 @@ function AppIcon({ tile, size = "md" }: { tile: AppTile; size?: "md" | "lg" }) {
   }
 
   return (
-    <Link
+    <IntentLink
       href={href}
       title={tile.description}
       // VM 2 core → Prisma pool ~5 connection (คำนวณจาก cores*2+1) — prefetch
       // ค่าเริ่มต้นของ Next.js ยิงทุก tile ที่มองเห็นพร้อมกันตอนหน้านี้โหลด
       // (10 โมดูล) แต่ละหน้าเป็น dynamic route ต้อง query จริง ชน pool จนคลิก
       // จริงต้องรอคิว (เจอเป็นอาการ "กดเมนูรวมแล้วค้าง ต้องพิมพ์ path เอง")
-      prefetch={false}
+      // ⇒ โหลดรอเฉพาะ tile ที่กำลังจะกด (ชี้ค้าง/แตะ — intent-link.tsx)
       className="group flex flex-col items-center rounded-xl outline-hidden focus-visible:ring-2 focus-visible:ring-(--brand-green)/40"
     >
       {body}
-    </Link>
+    </IntentLink>
   );
 }
