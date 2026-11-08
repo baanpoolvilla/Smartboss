@@ -1267,6 +1267,8 @@ export async function setLeaveTypeMonthlyQuotaAction(formData: FormData) {
 export interface LeaveState {
   ok?: boolean;
   days?: number;
+  /** วันที่ลงกระชั้นชิด ต้องรอฝ่ายบุคคลอนุมัติก่อนมีผล (approval_notice_days ของประเภท) */
+  lateNoticeDates?: string[];
   error?: string;
 }
 
@@ -1302,6 +1304,9 @@ export async function submitLeaveAction(
   // คำขอที่ยัง "รออนุมัติ" จริง — ประเภทลาที่ตั้งอนุมัติอัตโนมัติ (auto_approve) ได้ APPROVED ทันที
   // ไม่มีอะไรให้ใครอนุมัติ จึงไม่ต้องแจ้ง (เดิมแจ้ง "รออนุมัติ" ทุกใบ แม้ใบที่อนุมัติไปแล้ว)
   const pendingIds: string[] = [];
+  // ลงกระชั้นชิด (ประเภทที่ปกติอนุมัติทันที แต่วันนี้/พรุ่งนี้ต้องรออนุมัติ) — แจ้งผู้อนุมัติแยกเรื่องให้ชัด
+  const lateIds: string[] = [];
+  const lateDates: string[] = [];
   // จำนวนวันที่ HR แก้ไว้ให้คนนี้ สำหรับประเภทนี้ ในเดือนนั้น (ไม่ได้แก้ = ไม่ส่ง ให้ workforce ใช้ วัน/เดือน ของประเภท)
   // workforce ใช้เฉพาะกับประเภทวันหยุดตามสิทธิ์ ประเภทการลาอื่นไม่สนใจค่านี้ · เลือกวันข้ามเดือนได้ จึงหาแยกรายเดือน
   const quotaByMonth = new Map<string, number | null>();
@@ -1313,7 +1318,7 @@ export async function submitLeaveAction(
         monthlyQuota = overrideDaysFor(await loadDayOffOverrides(session.orgId, employmentId, month), leaveTypeId);
         quotaByMonth.set(month, monthlyQuota);
       }
-      const created = await wfFetch<{ id?: string; status?: string }>("/leave-requests", {
+      const created = await wfFetch<{ id?: string; status?: string; late_notice?: boolean }>("/leave-requests", {
         method: "POST",
         body: {
           employment_id: employmentId,
@@ -1326,7 +1331,10 @@ export async function submitLeaveAction(
           ...(monthlyQuota === null ? {} : { monthly_quota_days_override: monthlyQuota }),
         },
       });
-      if (created?.status !== "APPROVED" && created?.id) pendingIds.push(created.id);
+      if (created?.late_notice && created.id) {
+        lateIds.push(created.id);
+        lateDates.push(day);
+      } else if (created?.status !== "APPROVED" && created?.id) pendingIds.push(created.id);
     } catch (error) {
       failed += 1;
       lastError = leaveErrorMessage(toMessage(error));
@@ -1341,9 +1349,22 @@ export async function submitLeaveAction(
   const submitted = dates.length - failed;
   // ครั้งเดียวต่อการยื่นทั้งชุด ไม่ใช่ต่อวัน — ลาทีเดียว 5 วันไม่ควรได้ 5
   // แจ้งเตือนแยกกันในกระดิ่งของผู้อนุมัติ · referenceId = id ทุกใบ ไว้ลบออกตอนตัดสินแล้ว
+  const typeName =
+    pendingIds.length > 0 || lateIds.length > 0
+      ? (await wfTry<Paged<LeaveType>>("/leave-types"))?.items.find((t) => t.id === leaveTypeId)?.name
+      : undefined;
+  if (lateIds.length > 0) {
+    // แบบเดียวกับคำขอสลับวัน (ผู้ใช้ 8/11/2569) — บอกว่าลงกระชั้นชิด + วันที่ ผู้อนุมัติรู้ทันทีว่าต้องรีบดู
+    const when = lateDates.map(dayLabel).join(", ");
+    void notifyApprovers(session.orgId, "workforce.leave.approve", session.userId, {
+      title: `มีคำขอลง ${typeName ?? "วันหยุด"} กระชั้นชิด รออนุมัติ`,
+      body: reason ? `หยุด ${when} · ${reason}` : `หยุด ${when}`,
+      type: "hr_leave_submitted",
+      referenceId: lateIds.join(","),
+    });
+  }
   if (pendingIds.length > 0) {
     // บอกประเภทในหัวข้อเลย ผู้อนุมัติไม่ต้องเดาจากหมายเหตุที่พนักงานพิมพ์ (ผู้ใช้ 5/11/2569)
-    const typeName = (await wfTry<Paged<LeaveType>>("/leave-types"))?.items.find((t) => t.id === leaveTypeId)?.name;
     const what = typeName && typeName.startsWith("ลา") ? `คำขอ${typeName}` : typeName ? `คำขอลา (${typeName})` : "คำขอลา";
     void notifyApprovers(session.orgId, "workforce.leave.approve", session.userId, {
       title: pendingIds.length > 1 ? `มี${what}ใหม่ ${pendingIds.length} วันรออนุมัติ` : `มี${what}ใหม่รออนุมัติ`,
@@ -1354,7 +1375,35 @@ export async function submitLeaveAction(
   }
 
   revalidatePath("/hr");
-  return { ok: true, days: submitted };
+  return { ok: true, days: submitted, ...(lateDates.length > 0 ? { lateNoticeDates: lateDates } : {}) };
+}
+
+/** "8 พ.ย. (วันนี้)" / "9 พ.ย. (พรุ่งนี้)" — วันที่ในข้อความแจ้งเตือนคำขอลงกระชั้นชิด (เวลาไทย) */
+function dayLabel(iso: string): string {
+  const today = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+  const tomorrow = new Date(Date.now() + 31 * 3600_000).toISOString().slice(0, 10);
+  const [y, m, d] = iso.split("-").map(Number) as [number, number, number];
+  const text = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("th-TH", { day: "numeric", month: "short", timeZone: "UTC" });
+  return iso === today ? `${text} (วันนี้)` : iso === tomorrow ? `${text} (พรุ่งนี้)` : text;
+}
+
+/**
+ * ลงกระชั้นชิดต้องรออนุมัติ — ประเภทที่อนุมัติอัตโนมัติ (Day-Off) ลงห่างจากวันนี้น้อยกว่า N วันเข้า "รออนุมัติ"
+ * ผู้ใช้ 8/11/2569 · 0 = ปิด (ค่าเริ่มต้นทุกบริษัท)
+ */
+export async function setLeaveTypeApprovalNoticeAction(formData: FormData) {
+  await guard(HR_PERMS.settingManage);
+  const leaveTypeId = String(formData.get("leave_type_id") ?? "");
+  const days = Number(formData.get("days") ?? 0);
+  if (!leaveTypeId) throw new Error("ไม่พบประเภทการลา");
+  if (!Number.isInteger(days) || days < 0 || days > 30) throw new Error("จำนวนวันไม่ถูกต้อง");
+  try {
+    await wfFetch(`/leave-types/${leaveTypeId}/approval-notice`, { method: "POST", body: { days } });
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+  revalidatePath("/hr");
+  revalidatePath("/hr/settings/leave-types");
 }
 
 /**

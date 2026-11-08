@@ -52,6 +52,14 @@ export const setHolidayAccrualSchema = z.object({
   enabled: z.boolean(),
 });
 
+/**
+ * ลงกระชั้นชิดต้องรออนุมัติ — ประเภทที่อนุมัติอัตโนมัติ (Day-Off) ลงห่างจากวันนี้น้อยกว่า days วันเข้า "รออนุมัติ"
+ * 1 = ลงของวันนี้ · 2 = วันนี้หรือพรุ่งนี้ · 0 = ปิด
+ */
+export const setLeaveTypeApprovalNoticeSchema = z.object({
+  days: z.number().int().min(0).max(30),
+});
+
 /** เปิด/ปิดสิทธิ์รายคนรายปีของประเภทลา (เช่น ลาพักร้อน) */
 export const setYearlyEntitlementModeSchema = z.object({
   enabled: z.boolean(),

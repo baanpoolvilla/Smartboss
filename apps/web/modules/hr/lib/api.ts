@@ -208,6 +208,8 @@ export interface LeaveType {
   accrues_from_holidays?: boolean;
   /** true = มีสิทธิ์รายคนรายปี (ลาพักร้อน) — HR ตั้งจำนวนวันของแต่ละคน ลงเกินไม่ได้ · ระบบบุคคลรุ่นเก่าไม่มี */
   yearly_entitlement?: boolean;
+  /** ลงกระชั้นชิดต้องรออนุมัติ (ประเภทอนุมัติอัตโนมัติ) — ห่างจากวันนี้น้อยกว่า N วัน = รออนุมัติ · 0/ไม่มี = ปิด */
+  approval_notice_days?: number;
   /** เดือนแรกที่เริ่มนับสิทธิ์สะสม (YYYY-MM-01) — ก่อนหน้านี้ไม่นับย้อนหลัง · null = ยังไม่เคยเปิดใช้ */
   accrual_starts_on?: string | null;
   /**

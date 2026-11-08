@@ -15,6 +15,11 @@ export const leaveTypes = workforce.table('leave_types', {
   carryOverMaxMinutes: integer('carry_over_max_minutes').notNull().default(0),
   carryOverExpiryMonths: integer('carry_over_expiry_months').notNull().default(0),
   advanceNoticeDays: integer('advance_notice_days').notNull().default(0),
+  /**
+   * ลงกระชั้นชิดต้องรออนุมัติ (เฉพาะประเภทที่อนุมัติอัตโนมัติ) — วันที่หยุดห่างจากวันนี้น้อยกว่า N วัน = รออนุมัติ
+   * 1 = ลงของวันนี้ · 2 = วันนี้หรือพรุ่งนี้ · 0 = ปิด (migration 0022) · ต่างจาก advanceNoticeDays ที่ปฏิเสธไปเลย
+   */
+  approvalNoticeDays: integer('approval_notice_days').notNull().default(0),
   /** true = อนุมัติทันทีตอนส่ง — ใช้กับสิทธิ์ที่ไม่ใช่คำขอ เช่นวันหยุดประจำเดือน */
   autoApprove: boolean('auto_approve').notNull().default(false),
   /** 0 = ไม่จำกัดรายเดือน · quota_minutes_per_year คุมรายเดือนไม่ได้ */

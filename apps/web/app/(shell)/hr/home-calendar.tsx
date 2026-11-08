@@ -233,6 +233,8 @@ export async function renderCalendarTab(
 
   const pending = requests?.items ?? [];
   const typeNameOf = new Map((types?.items ?? []).map((t) => [t.id, t.name]));
+  // ประเภทที่ปกติอนุมัติทันที (Day-Off) — ใบที่ยังรออยู่และไม่ใช่คำขอสลับ = ลงกระชั้นชิด (approval_notice_days)
+  const autoApproveTypeIds = new Set((types?.items ?? []).filter((t) => t.auto_approve).map((t) => t.id));
   // ฝ่ายบุคคล/CEO: เห็นยอดสิทธิ์รายปีของคนที่ยื่นตอนอนุมัติ — ผู้อนุมัติคนอื่นเห็นแค่ประเภท ไม่รู้ว่าใครได้กี่วัน
   const yearlyTypeIds = new Set((types?.items ?? []).filter((t) => t.yearly_entitlement).map((t) => t.id));
   const yearlyLookups = canSeeYearlyEntitlements(session)
@@ -265,6 +267,7 @@ export async function renderCalendarTab(
             availableDays: t.accrues_from_holidays ? (availableByType.get(t.id) ?? 0) : null,
             yearly: t.yearly_entitlement ? (myYearlyByType.get(t.id) ?? { entitled: 0, used: 0, available: 0 }) : null,
             usedDays: me.employment_id ? (usedDaysByType.get(t.id) ?? 0) : null,
+            approvalNoticeDays: t.approval_notice_days ?? 0,
           }))}
           entriesByDate={entriesByDate}
           otByDate={otByDate}
@@ -369,6 +372,11 @@ export async function renderCalendarTab(
                     {r.swap_from_date && (
                       <span className="ml-1 block font-sans text-[11px] text-(--ink-soft)">
                         สลับมาจาก {r.swap_from_date}
+                      </span>
+                    )}
+                    {!r.swap_from_date && autoApproveTypeIds.has(r.leave_type_id) && (
+                      <span className="ml-1 block font-sans text-[11px] font-medium text-(--ink)" data-testid="pending-leave-late">
+                        ลงกระชั้นชิด
                       </span>
                     )}
                   </Td>

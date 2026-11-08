@@ -23,6 +23,7 @@ import {
   setHolidayModeAction,
   setLeaveTypeMonthlyQuotaAction,
   setYearlyEntitlementModeAction,
+  setLeaveTypeApprovalNoticeAction,
 } from "../../actions";
 import { HolidayAllowances } from "./holiday-allowances";
 import { YearlyEntitlements } from "./yearly-entitlements";
@@ -188,6 +189,28 @@ export default async function LeaveTypesSettingsPage({
                               />
                               <Button type="submit" size="sm" variant="outline" className="h-7 px-2 text-xs">
                                 บันทึก วัน/เดือน
+                              </Button>
+                            </form>
+                          )}
+                          {/* ลงกระชั้นชิดต้องรออนุมัติ — เฉพาะวันหยุดตามสิทธิ์ (อนุมัติอัตโนมัติ) · ผู้ใช้ 8/11/2569
+                              ลงล่วงหน้าตามปกติยังอนุมัติทันที · ผู้อนุมัติได้แจ้งเตือนแบบเดียวกับคำขอสลับวัน */}
+                          {t.auto_approve && (
+                            <form action={setLeaveTypeApprovalNoticeAction} className="flex items-center gap-1">
+                              <input type="hidden" name="leave_type_id" value={t.id} />
+                              <select
+                                name="days"
+                                defaultValue={String(t.approval_notice_days ?? 0)}
+                                className={`${inputClass} h-7 w-auto text-xs`}
+                                aria-label={`ลงกระชั้นชิดต้องรออนุมัติ — ${t.name}`}
+                                title="ลงกระชั้นชิดแล้วต้องให้ผู้อนุมัติฝ่ายบุคคลกดอนุมัติก่อนมีผล"
+                              >
+                                <option value="0">ลงได้ทันทีทุกวัน</option>
+                                <option value="1">ลงของวันนี้ ต้องรออนุมัติ</option>
+                                <option value="2">ลงของวันนี้/พรุ่งนี้ ต้องรออนุมัติ</option>
+                                <option value="3">ลงล่วงหน้าไม่ถึง 3 วัน ต้องรออนุมัติ</option>
+                              </select>
+                              <Button type="submit" size="sm" variant="outline" className="h-7 px-2 text-xs">
+                                บันทึก
                               </Button>
                             </form>
                           )}

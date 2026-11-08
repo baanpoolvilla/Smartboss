@@ -5,7 +5,7 @@ import { Printer, SlidersHorizontal } from "lucide-react";
 import { Button } from "@smartboss/ui/components/button";
 import { Modal } from "@/components/module/dialog";
 import { typeHue } from "@/lib/leave-type-hue";
-import { leaveTypeDisabled, leaveTypeHint, usableLeaveTypes, yearlyOverMessage, type LeaveTypeChoice } from "@/modules/hr/lib/leave-type-choice";
+import { leaveTypeDisabled, leaveTypeHint, needsLateNoticeApproval, usableLeaveTypes, yearlyOverMessage, type LeaveTypeChoice } from "@/modules/hr/lib/leave-type-choice";
 import {
   cancelLeaveAction,
   cancelLeaveForAction,
@@ -146,7 +146,7 @@ function printMonth(
     const rows = entriesOf(cell.iso)
       .map((entry) => {
         const hue = typeHue(entry.leaveTypeName, entry.autoApprove);
-        const waiting = !entry.autoApprove && entry.status === "PENDING";
+        const waiting = entry.status === "PENDING";
         return `<div class="e${waiting ? " w" : ""}" style="border-left-color:hsl(${hue} 65% 45%);background:hsl(${hue} 80% 93%);color:hsl(${hue} 60% 22%)">${waiting ? "• " : ""}${escapeHtml(labelOf(entry))}</div>`;
       })
       .join("");
@@ -445,6 +445,12 @@ export function LeaveCalendar({
       )}
       {rowError && <p className="text-sm text-(--danger)">{rowError}</p>}
       {state.error && <p className="text-sm text-(--danger)">{state.error}</p>}
+      {state.ok && !!state.lateNoticeDates?.length && (
+        <p className="rounded-(--radius) border border-(--line) bg-(--bg-soft) px-3 py-2 text-sm text-(--ink)">
+          ลงกระชั้นชิด ({state.lateNoticeDates.map((d) => Number(d.slice(8, 10))).join(", ")}) — ส่งให้ฝ่ายบุคคลอนุมัติแล้ว
+          มีผลเมื่ออนุมัติ ระหว่างนี้ยังนับเป็นวันทำงาน
+        </p>
+      )}
       {state.ok && (
         <p className="text-sm text-(--ink-soft)">
           บันทึกแล้ว {state.days} วัน — ประเภทที่เป็น <strong>สิทธิ์</strong> มีผลทันที ส่วนประเภทที่
@@ -564,7 +570,7 @@ export function LeaveCalendar({
               </div>
               {dayEntries.map((entry, index) => {
                 const hue = typeHue(entry.leaveTypeName, entry.autoApprove);
-                const waiting = !entry.autoApprove && entry.status === "PENDING";
+                const waiting = entry.status === "PENDING";
                 return (
                   <div
                     key={`${entry.employmentId}-${index}`}
@@ -718,7 +724,7 @@ export function LeaveCalendar({
                             className="h-1.5 w-1.5 shrink-0 rounded-full"
                             style={{
                               backgroundColor: `hsl(${typeHue(entry.leaveTypeName, entry.autoApprove)} 65% 45%)`,
-                              opacity: !entry.autoApprove && entry.status === "PENDING" ? 0.45 : 1,
+                              opacity: entry.status === "PENDING" ? 0.45 : 1,
                             }}
                           />
                         ))}
@@ -742,7 +748,7 @@ export function LeaveCalendar({
                     {entries.slice(0, MAX_PER_DAY_WIDE).map((entry, index) => {
                       // สีตามประเภท (ชิปกรองด้านบนใช้สีเดียวกัน) — ใครหยุดดูจากชื่อบนรายการและรายชื่อทางซ้าย
                       const hue = typeHue(entry.leaveTypeName, entry.autoApprove);
-                      const waiting = !entry.autoApprove && entry.status === "PENDING";
+                      const waiting = entry.status === "PENDING";
                       return (
                         <span
                           key={`${entry.employmentId}-${index}`}
@@ -975,6 +981,10 @@ function DayDialog({
   // เลือกเกินสิทธิ์รายปีที่เหลือ — บอกก่อนกด ไม่ปล่อยให้ลงได้บางวัน (ผู้ใช้ 5/11/2569 ทดสอบ: เหลือ 2 เลือก 3 แล้วลงให้ 2 เงียบ ๆ)
   const selectedType = leaveTypes.find((t) => t.id === typeId);
   const yearlyOver = yearlyOverMessage(selectedType, dates.length);
+  // ห่างจากวันนี้กี่วัน (เวลาไทย) — ประเภทที่ตั้ง "ลงกระชั้นชิดต้องรออนุมัติ" บอกก่อนกด
+  const [todayTh] = useState(() => new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10));
+  const daysAhead = Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${todayTh}T00:00:00Z`)) / 86_400_000);
+  const lateNotice = !!selectedType && needsLateNoticeApproval(selectedType, daysAhead);
   // ลาพักร้อนไม่ใช่ "วันหยุด" — ปุ่มเรียกตามประเภทจริง เฉพาะประเภทที่เปิดสิทธิ์รายปี ประเภทอื่นคงคำเดิม
   const yearlyType = selectedType?.yearly ? selectedType : null;
   const fieldClass =
@@ -1123,10 +1133,15 @@ function DayDialog({
             {leaveTypes.map((t) => (
               <option key={t.id} value={t.id} disabled={leaveTypeDisabled(t)}>
                 {t.label}
-                {leaveTypeHint(t)}
+                {leaveTypeHint(t, daysAhead)}
               </option>
             ))}
           </select>
+          {lateNotice && (
+            <span className="text-xs font-medium text-(--ink)" data-testid="late-notice">
+              ลงกระชั้นชิด — ฝ่ายบุคคลต้องกดอนุมัติก่อนจึงมีผล ระหว่างรอยังนับเป็นวันทำงาน
+            </span>
+          )}
           {yearlyOver && <span className="text-xs font-medium text-(--danger)" data-testid="yearly-over">{yearlyOver}</span>}
         </label>
 

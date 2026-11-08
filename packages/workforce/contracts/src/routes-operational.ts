@@ -1081,6 +1081,17 @@ export const OPERATIONAL_ROUTES: readonly Omit<RouteDefinition, 'response'>[] = 
     successStatus: 200,
   },
   {
+    operationId: 'setApprovalNotice_post',
+    method: 'post',
+    path: '/leave-types/{leaveTypeId}/approval-notice',
+    summary: 'POST /leave-types/{leaveTypeId}/approval-notice',
+    tag: 'workflow',
+    // ลงกระชั้นชิดต้องรออนุมัติ (Day-Off ลงของวันนี้/พรุ่งนี้) — 0 = ปิด
+    permissions: ['workforce.leave.manage'] as Permission[],
+    idempotent: true,
+    successStatus: 200,
+  },
+  {
     operationId: 'setYearlyEntitlementMode_post',
     method: 'post',
     path: '/leave-types/{leaveTypeId}/yearly-entitlement-mode',

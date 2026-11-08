@@ -16,6 +16,13 @@ export interface LeaveTypeChoice {
    * null/ไม่มี = ประเภทนี้ไม่ได้คุมด้วยสิทธิ์รายปี
    */
   yearly?: YearlyEntitlement | null;
+  /** ลงกระชั้นชิดต้องรออนุมัติ — ห่างจากวันนี้น้อยกว่า N วัน (ประเภทอนุมัติอัตโนมัติ) · 0/ไม่มี = ปิด */
+  approvalNoticeDays?: number;
+}
+
+/** วันแรกที่เลือก ลงกระชั้นชิดจนต้องรออนุมัติไหม (daysAhead = วันแรก − วันนี้) */
+export function needsLateNoticeApproval(t: Pick<LeaveTypeChoice, "autoApprove" | "approvalNoticeDays">, daysAhead: number | null): boolean {
+  return !!t.autoApprove && (t.approvalNoticeDays ?? 0) > 0 && daysAhead !== null && daysAhead < (t.approvalNoticeDays ?? 0);
 }
 
 export interface YearlyEntitlement {
@@ -55,7 +62,11 @@ export function usableLeaveTypes<T extends { availableDays?: number | null; year
 }
 
 /** คำต่อท้ายชื่อประเภทในช่องเลือก — ต้องอนุมัติไหม และเหลือสิทธิ์เท่าไร */
-export function leaveTypeHint(t: Pick<LeaveTypeChoice, "autoApprove" | "monthlyQuotaDays" | "availableDays" | "usedDays" | "yearly">): string {
+export function leaveTypeHint(
+  t: Pick<LeaveTypeChoice, "autoApprove" | "monthlyQuotaDays" | "availableDays" | "usedDays" | "yearly" | "approvalNoticeDays">,
+  /** วันแรกที่เลือก − วันนี้ — ใช้บอกว่าลงกระชั้นชิดต้องรออนุมัติ · ไม่ส่ง = ไม่ดู */
+  daysAhead: number | null = null,
+): string {
   const left = t.yearly
     ? yearlyText(t.yearly)
     : t.availableDays != null
@@ -65,5 +76,10 @@ export function leaveTypeHint(t: Pick<LeaveTypeChoice, "autoApprove" | "monthlyQ
           ? `ใช้ ${t.usedDays}/${t.monthlyQuotaDays} วัน`
           : `${t.monthlyQuotaDays} วัน/เดือน`
         : "";
-  return `${t.autoApprove ? " — ไม่ต้องอนุมัติ" : " — ต้องรออนุมัติ"}${left ? ` (${left})` : ""}`;
+  const approval = needsLateNoticeApproval(t, daysAhead)
+    ? " — ลงกระชั้นชิด ต้องรออนุมัติ"
+    : t.autoApprove
+      ? " — ไม่ต้องอนุมัติ"
+      : " — ต้องรออนุมัติ";
+  return `${approval}${left ? ` (${left})` : ""}`;
 }

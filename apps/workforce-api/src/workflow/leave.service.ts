@@ -403,6 +403,32 @@ export class LeaveService {
   }
 
   /**
+   * ลงกระชั้นชิดต้องรออนุมัติ — ผู้ใช้ 8/11/2569 "ลงวันหยุดในวันนั้นหรือก่อนวันเดียวแล้วมาลง Day-Off ต้องให้ HR กดอนุมัติ"
+   * ใช้ได้เฉพาะประเภทที่อนุมัติอัตโนมัติ (ประเภทที่ต้องอนุมัติอยู่แล้วไม่มีผลอะไร) · 0 = ปิด
+   */
+  async setApprovalNotice(leaveTypeId: string, days: number): Promise<Record<string, unknown>> {
+    return this.uow.run(async (uow) => {
+      const types = await uow.tx.select().from(schema.leaveTypes).where(eq(schema.leaveTypes.id, leaveTypeId)).limit(1);
+      const type = types[0];
+      if (type === undefined) throw AppError.notFound('leave type');
+      if (days > 0 && !type.autoApprove) {
+        throw AppError.validation('approval notice is only for leave types that are approved automatically');
+      }
+      await uow.tx.update(schema.leaveTypes).set({ approvalNoticeDays: days }).where(eq(schema.leaveTypes.id, leaveTypeId));
+      await uow.audit({
+        action: 'leave.type.approval_notice',
+        resourceType: 'leave_type',
+        resourceId: leaveTypeId,
+        outcome: 'SUCCESS',
+        companyId: type.companyId,
+        before: { approval_notice_days: type.approvalNoticeDays },
+        after: { approval_notice_days: days },
+      });
+      return { id: leaveTypeId, approval_notice_days: days };
+    });
+  }
+
+  /**
    * สิทธิ์รายคนรายปี (ลาพักร้อน) — เปิดแล้วลงเกินจำนวนวันที่ HR ตั้งให้คนนั้นในปีนั้นไม่ได้
    * ปีปฏิทิน ม.ค.–ธ.ค. หมดปีแล้วทิ้ง (period_year ของ ledger) · ผู้ใช้ 5/11/2569
    */
@@ -1134,6 +1160,21 @@ export class LeaveService {
         }
       }
 
+      /*
+       * ลงกระชั้นชิด (approval_notice_days) — ประเภทที่ปกติอนุมัติทันที ต้องรออนุมัติแทน ไม่ปฏิเสธ
+       * ยกเว้นคนที่มีสิทธิ์อนุมัติลงให้คนอื่น (HR ลงแทน = ตัดสินแล้วในตัว ไม่ต้องรอใคร)
+       * ลงของตัวเองทุกคนต้องรอ แม้เป็นผู้อนุมัติ — แบบเดียวกับคำขอสลับวัน
+       */
+      const principal = this.requestContext.requirePrincipal();
+      const lateNotice =
+        swapFromRequest === undefined &&
+        leaveType.autoApprove &&
+        leaveType.approvalNoticeDays > 0 &&
+        LocalDate.fromInstant(this.clock.now(), employment.timeZone).daysUntil(startsOn) < leaveType.approvalNoticeDays &&
+        (principal.employmentId === input.employment_id || !principal.permissions.has('workforce.leave.approve'));
+      // ต้องผ่านผู้อนุมัติ: คำขอสลับวัน · ลงกระชั้นชิด · ประเภทที่ต้องอนุมัติอยู่แล้ว
+      const needsApproval = swapFromRequest !== undefined || lateNotice || !leaveType.autoApprove;
+
       const periodYear = startsOn.year;
       // ประเภทที่เปิดสิทธิ์รายปีใช้ตัวตรวจของมันเองด้านล่าง (ข้อความชัดกว่า และไม่บล็อกการสลับวัน)
       if (!leaveType.allowNegative && !leaveType.yearlyEntitlement) {
@@ -1270,8 +1311,8 @@ export class LeaveService {
         displayLabel: input.display_label,
         swapFromDate: input.swap_from_date ?? null,
         // สิทธิ์ที่ไม่ใช่คำขอ (เช่นวันหยุดประจำเดือน) อนุมัติทันที ไม่เข้าคิว
-        // ยกเว้นคำขอสลับ — ต้องรออนุมัติเสมอเพราะกระทบวันเดิมที่คนอื่นวางแผนไว้แล้ว
-        status: swapFromRequest !== undefined ? 'SUBMITTED' : leaveType.autoApprove ? 'APPROVED' : 'SUBMITTED',
+        // ยกเว้นคำขอสลับ — ต้องรออนุมัติเสมอเพราะกระทบวันเดิมที่คนอื่นวางแผนไว้แล้ว — และลงกระชั้นชิด (lateNotice)
+        status: needsApproval ? 'SUBMITTED' : 'APPROVED',
         submittedAt: this.clock.now(),
         createdBy: this.requestContext.requirePrincipal().principalId,
       });
@@ -1299,7 +1340,7 @@ export class LeaveService {
       //
       // ลงคู่ RELEASE + CONSUME เหมือน decideRequest ทุกประการ เพื่อให้ได้
       // ข้อกำหนดที่ยึดถือได้ทั้งระบบ: สถานะ APPROVED ⇒ ปลดจองแล้ว และตัดสิทธิ์แล้ว
-      if (swapFromRequest === undefined && leaveType.autoApprove) {
+      if (!needsApproval) {
         await uow.tx.insert(schema.leaveBalanceLedger).values({
           id: uuidv7(),
           tenantId: uow.tenantId,
@@ -1341,7 +1382,9 @@ export class LeaveService {
 
       return {
         id: requestId,
-        status: swapFromRequest !== undefined ? 'SUBMITTED' : leaveType.autoApprove ? 'APPROVED' : 'SUBMITTED',
+        status: needsApproval ? 'SUBMITTED' : 'APPROVED',
+        // บอกหน้าเว็บว่ารออนุมัติเพราะลงกระชั้นชิด — ใช้แจ้งผู้อนุมัติ/ผู้ลงให้ตรงเรื่อง
+        ...(lateNotice ? { late_notice: true } : {}),
       };
     });
   }
@@ -1736,6 +1779,7 @@ export class LeaveService {
           monthly_quota_days: row.monthlyQuotaDays,
           accrues_from_holidays: row.accruesFromHolidays,
           yearly_entitlement: row.yearlyEntitlement,
+          approval_notice_days: row.approvalNoticeDays,
           accrual_starts_on: row.accrualStartsOn,
           show_on_calendar: row.showOnCalendar,
           requires_reports: row.requiresReports,

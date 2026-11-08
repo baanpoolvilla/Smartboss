@@ -1148,3 +1148,68 @@ describe('timesheet close', () => {
     expect(reopened.body['status']).toBe('REOPENED');
   });
 });
+
+describe('late-notice day off needs approval (approval_notice_days)', () => {
+  // ผู้ใช้ 8/11/2569: ลง Day-Off ของวันนี้/พรุ่งนี้ ต้องให้ HR อนุมัติ · ลงล่วงหน้าปกติยังอนุมัติทันที
+  // นาฬิกาของชุดทดสอบตั้งไว้ 2026-08-01 09:00 เวลาไทย (FixedClock ใน testing/test-app.ts)
+  const bangkokDay = (offsetDays: number): string =>
+    new Date(harness.clock.now().getTime() + 7 * 3_600_000 + offsetDays * 86_400_000).toISOString().slice(0, 10);
+
+  let lateTypeId: string;
+  beforeAll(async () => {
+    const created = await call(harness, 'POST', '/leave-types', {
+      token: hrToken,
+      idempotencyKey: uuidv4(),
+      payload: {
+        company_id: tenant.companyId,
+        code: 'DOFF_LATE',
+        name: 'Day-Off กระชั้นชิด',
+        paid: true,
+        unit: 'DAY',
+        quota_minutes_per_year: 0,
+        allow_negative: true,
+        auto_approve: true,
+        monthly_quota_days: 0,
+        effective_from: '2026-01-01',
+      },
+    });
+    lateTypeId = created.body['id'] as string;
+    const set = await call(harness, 'POST', `/leave-types/${lateTypeId}/approval-notice`, {
+      token: hrToken,
+      idempotencyKey: uuidv4(),
+      payload: { days: 2 },
+    });
+    expect(set.status).toBe(200);
+  });
+
+  const submit = (token: string, employmentId: string, day: string) =>
+    call(harness, 'POST', '/leave-requests', {
+      token,
+      idempotencyKey: uuidv4(),
+      payload: { employment_id: employmentId, leave_type_id: lateTypeId, starts_on: day, ends_on: day, total_minutes: 480, reason: 'ธุระด่วน' },
+    });
+
+  it('puts today and tomorrow in SUBMITTED with late_notice, and approves two days ahead at once', async () => {
+    const employee = await createEmployee('ลงกระชั้นชิด');
+    const today = await submit(employee.token, employee.employmentId, bangkokDay(0));
+    expect(today.status).toBe(201);
+    expect(today.body['status']).toBe('SUBMITTED');
+    expect(today.body['late_notice']).toBe(true);
+
+    const tomorrow = await submit(employee.token, employee.employmentId, bangkokDay(1));
+    expect(tomorrow.body['status']).toBe('SUBMITTED');
+
+    const later = await submit(employee.token, employee.employmentId, bangkokDay(2));
+    expect(later.body['status']).toBe('APPROVED');
+    expect(later.body['late_notice']).toBeUndefined();
+  });
+
+  it('refuses the setting on a leave type that already needs approval', async () => {
+    const res = await call(harness, 'POST', `/leave-types/${unpaidLeaveTypeId}/approval-notice`, {
+      token: hrToken,
+      idempotencyKey: uuidv4(),
+      payload: { days: 1 },
+    });
+    expect(res.status).toBe(400);
+  });
+});
