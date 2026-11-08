@@ -20,6 +20,8 @@ import { useReportWorkOrderOpener } from "@/modules/report_task/components/repor
 import { useReportFeedStore, type ReportPost, type ReportPostImage, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { getUser, departments, users as directoryUsers } from "@/modules/report_task/lib/directory";
+import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
+import { useDepartmentStore } from "@/modules/report_task/store/department-store";
 import { canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { groupByDay } from "@/modules/report_task/lib/format";
 import {
@@ -177,6 +179,10 @@ export function OpenchatFeed({
   // Users filtered to who can actually see *this* room, same rule the member
   // count/RoomMembersDialog use — otherwise this listed the whole company
   // directory regardless of room ("ต้องแสดงเฉพาะคนที่อยู่ในห้องนั้นไหม").
+  // รายชื่อ/แผนกโหลดมาทีหลังฟีดได้ (กลับเข้าโมดูลแล้วฟีดขึ้นทันที — 704b0c5) — ผูกไว้ให้รายการด้านล่างคำนวณใหม่เมื่อมาถึง
+  // ไม่งั้นค้างเป็นรายชื่อตั้งต้น (มีแค่ตัวเอง): ส่งสติกเกอร์ได้แค่ให้ตัวเอง · @ ไม่เจอเพื่อนร่วมงาน
+  const directoryVersion = useEmployeeStore((s) => s.employees);
+  const departmentsVersion = useDepartmentStore((s) => s.departments);
   const personMentionCandidates = useMemo<MentionItem[]>(
     () => [
       // Pinned first, same as the section composer's own copy of this —
@@ -191,7 +197,8 @@ export function OpenchatFeed({
         .map((u): MentionItem => ({ type: "user", id: u.id, label: u.name, sublabel: u.role })),
       ...departments.map((d): MentionItem => ({ type: "dept", id: d.id, label: d.name, sublabel: "แผนก" })),
     ],
-    [topic.visibility]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- directoryUsers/departments อ่านจาก store สองตัวนี้
+    [topic.visibility, directoryVersion, departmentsVersion]
   );
   const topicMentionCandidates = useMemo<MentionItem[]>(
     () => topics.map((t): MentionItem => ({ type: "topic", id: t.id, label: t.name, sublabel: "ห้อง Report" })),

@@ -27,6 +27,8 @@ import {
 import { useReportTaskOpener } from "@/modules/report_task/components/report-feed/use-report-task-opener";
 import { useReportWorkOrderOpener } from "@/modules/report_task/components/report-feed/use-report-work-order-opener";
 import { getUser, users as directoryUsers, departments, isOwner } from "@/modules/report_task/lib/directory";
+import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
+import { useDepartmentStore } from "@/modules/report_task/store/department-store";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useStickerUsageStore, sortByUsage } from "@/modules/report_task/store/sticker-usage-store";
 import { notifyStickerChange } from "@/modules/report_task/lib/notify-sticker-change";
@@ -523,6 +525,10 @@ export function ReportCard({
   // could @tag someone with no access to the conversation at all ("ต้อง
   // แสดงเฉพาะคนที่อยู่ในห้องนั้นไหม"). Departments stay unfiltered — a dept
   // mention is a notify-this-group action, not scoped to room membership.
+  // รายชื่อ/แผนกโหลดมาทีหลังฟีดได้ (กลับเข้าโมดูลแล้วฟีดขึ้นทันที — 704b0c5) — ผูกไว้ให้รายการด้านล่างคำนวณใหม่เมื่อมาถึง
+  // ไม่งั้นค้างเป็นรายชื่อตั้งต้น (มีแค่ตัวเอง): ส่งสติกเกอร์ได้แค่ให้ตัวเอง · @ ไม่เจอเพื่อนร่วมงาน
+  const directoryVersion = useEmployeeStore((s) => s.employees);
+  const departmentsVersion = useDepartmentStore((s) => s.departments);
   const replyMentionCandidates = useMemo<MentionItem[]>(
     () => [
       // Pinned first, same as the post composer's own copy of this — "@ทุกคน"
@@ -538,7 +544,8 @@ export function ReportCard({
         .map((u): MentionItem => ({ type: "user", id: u.id, label: u.name, sublabel: u.role })),
       ...departments.map((d): MentionItem => ({ type: "dept", id: d.id, label: d.name, sublabel: "แผนก" })),
     ],
-    [topic.visibility]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- directoryUsers/departments อ่านจาก store สองตัวนี้
+    [topic.visibility, directoryVersion, departmentsVersion]
   );
   const [replyMentionMenu, setReplyMentionMenu] = useState<{ query: string; rect: DOMRect; containerTop: number; containerBottom: number; index: number } | null>(null);
 
@@ -620,7 +627,8 @@ export function ReportCard({
       .filter((u) => !u.isCeo && canSeeReportTopic(topic.visibility, u.id))
       .sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity) || a.name.localeCompare(b.name, "th"))
       .map((u) => ({ id: u.id, name: u.id === viewingAsUserId ? `${u.name} (คุณ)` : u.name }));
-  }, [post.authorId, post.sections, post.replies, topic, viewingAsUserId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- directoryUsers อ่านจาก store นี้
+  }, [post.authorId, post.sections, post.replies, topic, viewingAsUserId, directoryVersion]);
   function confirmPostSticker(targetUserIds?: string[]) {
     if (!pendingSticker) return;
     // ไม่มีตัวเลือก (คนในห้องเหลือคนเดียว) = คนนั้น · ไม่มีใครเลือกได้เลย (เช่นห้องมีแต่ CEO) = ไม่ส่ง
