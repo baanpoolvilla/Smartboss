@@ -5,7 +5,7 @@ import { prisma, type Prisma } from "@smartboss/database";
 import { hasPermission, isSuperAdmin, type OrgSession } from "@smartboss/auth";
 
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
-import { canSeeWorkOrder, workOrderAccess, workOrderVisibilityWhere, type WorkOrderAccess } from "@/modules/maintenance/data/work-order-access";
+import { canSeeWorkOrder, ownPmPlanIds, workOrderAccess, workOrderVisibilityWhere, type WorkOrderAccess } from "@/modules/maintenance/data/work-order-access";
 import type { MaintenanceBoardItem, MaintenanceColumn, WoType, WorkOrderReaction } from "@/modules/report_task/lib/maintenance-board";
 import { loadExpenseTracking, pendingExpenseWorkOrders, recordedExpenseWorkOrders } from "@/modules/maintenance/data/expense-tracking";
 import { expenseDueAt } from "@/modules/maintenance/lib/expense-deadline";
@@ -63,6 +63,8 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
             caretakerPropertyIds: (
               await prisma.property.findMany({ where: { orgId, caretakerId: session.userId }, select: { id: true } })
             ).map((r) => r.id),
+            // คนสร้างแผน PM เห็นใบอัตโนมัติของแผนตัวเอง (อนุมัติขอเลื่อนแทนคนเปิดใบ)
+            ownPlanIds: await ownPmPlanIds(orgId, session.userId),
           }
         : full;
     const select = {

@@ -36,6 +36,11 @@ export interface WorkOrderAccess {
   expensePendingIds?: string[];
   /** ผู้บันทึก: ใบที่บันทึกแล้วล่าสุด ให้กลับมาตรวจ/แก้ได้ — ดู recordedExpenseWorkOrders */
   expenseRecordedIds?: string[];
+  /**
+   * แผน PM ที่คนนี้สร้าง — ใบ PM อัตโนมัติไม่มีคนเปิด (createdBy ว่าง) คนสร้างแผนเป็นคนอนุมัติขอเลื่อนแทน
+   * ต้องเห็นใบของแผนตัวเอง (8/11/2569 เจอตอนทดสอบ: ตัวเลขแดงขึ้นแต่บอร์ดไม่มีใบ เปิดอนุมัติไม่ได้)
+   */
+  ownPlanIds?: string[];
 }
 
 export async function workOrderAccess(
@@ -47,14 +52,18 @@ export async function workOrderAccess(
   if (canViewAll(session) && !recorder) {
     return { seeAll: true, userId: session.userId, caretakerPropertyIds: [] };
   }
-  const rows = await prisma.property.findMany({
-    where: { orgId: session.orgId, caretakerId: session.userId },
-    select: { id: true },
-  });
+  const [rows, plans] = await Promise.all([
+    prisma.property.findMany({
+      where: { orgId: session.orgId, caretakerId: session.userId },
+      select: { id: true },
+    }),
+    ownPmPlanIds(session.orgId, session.userId),
+  ]);
   return {
     seeAll: false,
     userId: session.userId,
     caretakerPropertyIds: rows.map((r) => r.id),
+    ...(plans.length > 0 ? { ownPlanIds: plans } : {}),
     ...(recorder
       ? {
           expensePendingIds: (await pendingExpenseWorkOrders(session.orgId)).map((w) => w.id),
@@ -83,6 +92,8 @@ export function workOrderVisibilityWhere(
       { ccUserIds: { has: access.userId } },
       ...(access.expensePendingIds?.length ? [{ id: { in: access.expensePendingIds } }] : []),
       ...(access.expenseRecordedIds?.length ? [{ id: { in: access.expenseRecordedIds } }] : []),
+      // คนสร้างแผน PM เห็นใบอัตโนมัติของแผนตัวเอง (อนุมัติขอเลื่อนแทนคนเปิดใบ)
+      ...(access.ownPlanIds?.length ? [{ autoCreated: true, pmScheduleId: { in: access.ownPlanIds } }] : []),
       // ผู้ดูแลบ้านเห็นงานของบ้านตัวเองทุกใบ รวมบ้านที่ใบงานพ่วงมาเพิ่ม
       // (ใบเดียวครอบหลายหลัง) ไม่ใช่เฉพาะบ้านหลัก
       ...(props.length > 0
@@ -111,6 +122,8 @@ export function canSeeWorkOrder(
     propertyId: string;
     additionalPropertyIds: string[];
     isPrivate?: boolean;
+    autoCreated?: boolean;
+    pmScheduleId?: string | null;
   }
 ): boolean {
   if (access.seeAll) return true;
@@ -120,6 +133,7 @@ export function canSeeWorkOrder(
   }
   if (wo.ccUserIds.includes(access.userId)) return true;
   if (wo.id && (access.expensePendingIds?.includes(wo.id) || access.expenseRecordedIds?.includes(wo.id))) return true;
+  if (wo.autoCreated && wo.pmScheduleId && access.ownPlanIds?.includes(wo.pmScheduleId)) return true;
   if (access.caretakerPropertyIds.length === 0) return false;
   return (
     access.caretakerPropertyIds.includes(wo.propertyId) ||
@@ -127,4 +141,10 @@ export function canSeeWorkOrder(
       access.caretakerPropertyIds.includes(id)
     )
   );
+}
+
+/** แผน PM ที่คนนี้สร้าง (ใช้กับกติกาการมองเห็นใบ PM อัตโนมัติ) */
+export async function ownPmPlanIds(orgId: string, userId: string): Promise<string[]> {
+  const rows = await prisma.pmSchedule.findMany({ where: { orgId, createdBy: userId }, select: { id: true } });
+  return rows.map((r) => r.id);
 }
