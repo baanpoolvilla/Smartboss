@@ -98,6 +98,35 @@ export interface ContractorBreakdown {
   net: number;
 }
 
+/** หัก ณ ที่จ่ายที่ใช้บ่อยกับเงินสดย่อย (ผู้ใช้ 8/11/2569) — % ของยอดก่อน VAT */
+export const PETTY_WHT_OPTIONS = [
+  { percent: 1, label: "1% ค่าขนส่ง" },
+  { percent: 2, label: "2% ค่าโฆษณา" },
+  { percent: 3, label: "3% ค่าจ้าง / ค่าบริการ / ทำของ" },
+  { percent: 5, label: "5% ค่าเช่า" },
+] as const;
+
+export interface PettyTax {
+  /** ยอดเต็มตามบิล (รวม VAT) */
+  bill: number;
+  vat: number;
+  /** ยอดก่อน VAT */
+  base: number;
+  whtPercent: number;
+  wht: number;
+  /** เงินที่ออกจากมือจริง = บิล − หัก ณ ที่จ่าย */
+  paid: number;
+}
+
+/** ใส่ยอดเต็มตามบิล → แยก VAT (ถ้าเป็นใบกำกับเต็มรูป) + หัก ณ ที่จ่ายจากยอดก่อน VAT */
+export function pettyTax(bill: number, vatIncluded: boolean, whtPercent: number, vatPercent = 7): PettyTax {
+  const b = round2(bill);
+  const vat = vatIncluded ? round2((b * vatPercent) / (100 + vatPercent)) : 0;
+  const base = round2(b - vat);
+  const wht = round2((base * whtPercent) / 100);
+  return { bill: b, vat, base, whtPercent, wht, paid: round2(b - wht) };
+}
+
 export function contractorBreakdown(base: number, vatPercent: number, whtPercent: number): ContractorBreakdown {
   const b = round2(base);
   const vat = round2((b * vatPercent) / 100);
@@ -174,6 +203,8 @@ export function timesOverlap(aStart: string, aEnd: string, bStart: string, bEnd:
 
 export interface ReceiptAi {
   amount: number | null;
+  /** VAT ที่บิลแสดงแยก (ใบกำกับภาษี) — ไม่มี/อ่านไม่ได้ = null · ข้อมูลเก่าไม่มีช่องนี้ */
+  vat?: number | null;
   date: string | null;
   vendor: string | null;
   receiptNo: string | null;

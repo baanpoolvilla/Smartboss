@@ -14,8 +14,9 @@ import type { ReceiptAi } from "./types";
 const MODEL = process.env.RECEIPT_AI_MODEL || "gpt-4o-mini";
 
 const PROMPT = `คุณอ่านใบเสร็จ/ใบกำกับภาษี/สลิปทางด่วน/บิลน้ำมัน/สลิปโอนเงินจากแอปธนาคารของไทย ตอบเป็น JSON เท่านั้น:
-{"isReceipt": boolean, "amount": number|null, "date": "YYYY-MM-DD"|null, "vendor": string|null, "receiptNo": string|null, "notes": string|null}
+{"isReceipt": boolean, "amount": number|null, "vat": number|null, "date": "YYYY-MM-DD"|null, "vendor": string|null, "receiptNo": string|null, "notes": string|null}
 - amount = ยอดรวมที่ต้องจ่ายสุทธิ (รวม VAT แล้ว) เป็นบาท ตัวเลขล้วน
+- vat = ยอดภาษีมูลค่าเพิ่ม (VAT 7%) ที่บิลแสดงแยกเป็นบรรทัด เป็นบาท · บิลไม่แสดง VAT แยก = null
 - date = วันที่บนใบเสร็จ แปลงปี พ.ศ. เป็น ค.ศ. (2569 → 2026) · อ่านไม่ออก = null
 - notes = ภาษาไทยสั้น ๆ เฉพาะเมื่อเห็นสิ่งผิดปกติจริง เช่น ตัวเลขถูกขีดฆ่า/เขียนทับ ฟอนต์ไม่เข้ากัน ยอดรวมไม่ตรงกับรายการ ไม่มีชื่อร้าน · ปกติ = null
 - สลิปโอนเงิน: amount = ยอดโอน · date = วันที่โอน · vendor = ชื่อผู้รับโอน · receiptNo = เลขที่รายการ/เลขอ้างอิง · isReceipt true
@@ -47,7 +48,8 @@ export async function readReceipt(buf: Buffer, mime: string): Promise<ReceiptAi 
     const amount = typeof j.amount === "number" && Number.isFinite(j.amount) && j.amount > 0 ? Math.round(j.amount * 100) / 100 : null;
     const date = typeof j.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(j.date) ? fixYear(j.date) : null;
     const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 120) : null);
-    return { isReceipt: j.isReceipt !== false, amount, date, vendor: str(j.vendor), receiptNo: str(j.receiptNo), notes: str(j.notes) };
+    const vat = typeof j.vat === "number" && Number.isFinite(j.vat) && j.vat > 0 && (amount === null || j.vat < amount) ? Math.round(j.vat * 100) / 100 : null;
+    return { isReceipt: j.isReceipt !== false, amount, vat, date, vendor: str(j.vendor), receiptNo: str(j.receiptNo), notes: str(j.notes) };
   } catch (error) {
     console.error("[requests] readReceipt failed", error);
     return null;

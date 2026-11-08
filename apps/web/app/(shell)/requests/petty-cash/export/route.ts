@@ -26,7 +26,8 @@ export async function GET(req: Request) {
   const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(m) ? m : bangkokToday().slice(0, 7);
   const holder = seesAll ? url.searchParams.get("holder") || undefined : session.userId;
   const holders = (await listPettyHolders(session.orgId)).filter((h) => seesAll || h.id === session.userId).map((h) => ({ userId: h.id, name: h.name }));
-  const { rows, entries } = await pettyMonth(session.orgId, month, holders, holder);
+  const { rows, entries, tax, review } = await pettyMonth(session.orgId, month, holders, holder);
+  const REVIEW = { pending: "รอตรวจ", approved: "ผ่าน", rejected: "ไม่ผ่าน" } as const;
 
   const esc = (v: unknown) => {
     const s = v === null || v === undefined ? "" : String(v);
@@ -39,7 +40,13 @@ export async function GET(req: Request) {
     line(["คนถือเงิน", "ยกมา", "เติม", "จ่ายตามใบเบิก", "ซื้อของเอง", "คืน/ปรับ", "คงเหลือ"]),
     ...rows.filter((r) => !holder || r.userId === holder).map((r) => line([r.name, money(r.opening), money(r.topUp), money(r.paidRequests), money(r.selfSpend), money(r.other), money(r.closing)])),
     "",
-    line(["วันเวลา", "คนถือเงิน", "รายการ", "หมวด", "เลขใบเบิก", "จ่ายให้", "รายละเอียด", "เงินเข้า", "เงินออก", "ผู้บันทึก", "หลักฐาน", "ยกเลิก"]),
+    ...(tax.vat > 0 ? [line(["VAT ซื้อ (ใบกำกับเต็มรูป)", money(tax.vat)])] : []),
+    ...(tax.wht3 > 0 ? [line(["หัก ณ ที่จ่ายนำส่ง ภ.ง.ด.3", money(tax.wht3)])] : []),
+    ...(tax.wht53 > 0 ? [line(["หัก ณ ที่จ่ายนำส่ง ภ.ง.ด.53", money(tax.wht53)])] : []),
+    ...(review.pendingCount > 0 ? [line([`ยังรอตรวจ ${review.pendingCount} รายการ`, money(review.pendingAmount)])] : []),
+    ...(review.shortCount > 0 ? [line([`เงินขาดรอคืน ${review.shortCount} รายการ`, money(review.shortAmount)])] : []),
+    "",
+    line(["วันเวลา", "คนถือเงิน", "รายการ", "หมวด", "เลขใบเบิก", "จ่ายให้", "รายละเอียด", "เงินเข้า", "เงินออก", "ยอดตามบิล", "VAT", "หัก ณ ที่จ่าย %", "หัก ณ ที่จ่าย", "ผู้รับเงิน (50 ทวิ)", "ภ.ง.ด.", "ผลตรวจ", "ผู้บันทึก", "หลักฐาน", "ยกเลิก"]),
     ...entries.map((e) =>
       line([
         new Date(e.at).toLocaleString("th-TH", { timeZone: "Asia/Bangkok" }),
@@ -51,6 +58,13 @@ export async function GET(req: Request) {
         e.note,
         e.delta > 0 ? money(e.delta) : "",
         e.delta < 0 ? money(-e.delta) : "",
+        e.tax ? money(e.tax.bill) : "",
+        e.tax?.vat ? money(e.tax.vat) : "",
+        e.tax?.wht ? e.tax.whtPercent : "",
+        e.tax?.wht ? money(e.tax.wht) : "",
+        e.tax?.wht ? (e.tax.payeeName ?? "") : "",
+        e.tax?.wht ? (e.tax.payeeKind === "company" ? "ภ.ง.ด.53" : "ภ.ง.ด.3") : "",
+        e.review ? `${REVIEW[e.review.status]}${e.review.byName ? ` · ${e.review.byName}` : ""}${e.review.note ? ` · ${e.review.note}` : ""}` : "",
         e.byName,
         e.attachments.map((a) => new URL(a.url, url.origin).toString()).join(" "),
         e.voided ? `ยกเลิกโดย ${e.voided.byName}: ${e.voided.reason}` : "",

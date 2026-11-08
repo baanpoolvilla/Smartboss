@@ -43,6 +43,8 @@ import {
   normalizeDate,
   otCalc,
   PETTY_CATEGORIES,
+  PETTY_WHT_OPTIONS,
+  pettyTax,
   receiptFlags,
   round2,
   routeText,
@@ -1958,7 +1960,19 @@ export async function cancelPettyTopupAction(input: { id: string }): Promise<Res
   }
 }
 
-export async function addPettySpendAction(input: { title: string; category: string; amount: number; spentOn: string; attachments: Attachment[] }): Promise<Result> {
+export async function addPettySpendAction(input: {
+  title: string;
+  category: string;
+  /** ยอดเต็มตามบิล (รวม VAT) */
+  amount: number;
+  spentOn: string;
+  attachments: Attachment[];
+  /** ภาษี (ถ้ามี) — ผู้ใช้ 8/11/2569: ไม่มีก็ไม่ต้องใส่ มีก็ใส่ ระบบหักลบให้เอง */
+  vatIncluded?: boolean;
+  whtPercent?: number;
+  payeeName?: string;
+  payeeKind?: "person" | "company" | null;
+}): Promise<Result> {
   try {
     const session = await guard();
     const orgId = session.orgId;
@@ -1967,8 +1981,17 @@ export async function addPettySpendAction(input: { title: string; category: stri
     const title = input.title.trim().slice(0, 200);
     if (!title) return { error: "กรอกว่าจ่ายค่าอะไร" };
     if (!(PETTY_CATEGORIES as readonly string[]).includes(input.category)) return { error: "เลือกหมวด" };
-    const amount = round2(Number(input.amount));
-    if (!Number.isFinite(amount) || amount <= 0) return { error: "กรอกจำนวนเงิน" };
+    const bill = round2(Number(input.amount));
+    if (!Number.isFinite(bill) || bill <= 0) return { error: "กรอกจำนวนเงิน" };
+    const whtPercent = Number(input.whtPercent ?? 0);
+    if (!(PETTY_WHT_OPTIONS as readonly { percent: number }[]).some((o) => o.percent === whtPercent) && whtPercent !== 0) return { error: "% หัก ณ ที่จ่ายไม่ถูกต้อง" };
+    const payeeName = String(input.payeeName ?? "").trim().slice(0, 120);
+    const payeeKind = input.payeeKind === "person" || input.payeeKind === "company" ? input.payeeKind : null;
+    if (whtPercent > 0 && (!payeeName || !payeeKind)) return { error: "หัก ณ ที่จ่าย ต้องใส่ชื่อผู้รับเงิน และเลือกว่าเป็นบุคคลหรือบริษัท (ใช้ออก 50 ทวิ)" };
+    const hasTax = !!input.vatIncluded || whtPercent > 0;
+    const tax = pettyTax(bill, !!input.vatIncluded, whtPercent);
+    // เงินที่ออกจากมือจริง = บิล − หัก ณ ที่จ่าย
+    const amount = tax.paid;
     const spentOn = normalizeDate(input.spentOn);
     if (!spentOn || spentOn > bangkokToday()) return { error: "วันที่จ่ายไม่ถูกต้อง" };
     const attachments = cleanAttachments(orgId, input.attachments, ["receipt", "evidence"]);
@@ -1978,9 +2001,24 @@ export async function addPettySpendAction(input: { title: string; category: stri
       if (amount > balance + 0.005) return { error: `เงินในมือไม่พอ (เหลือ ${baht(balance)}) — กด “ขอเติมเงิน” ก่อน` } as const;
       // จ่ายไปแล้ว = หักเงินในมือทันที แต่ต้องมีคนตรวจทีหลัง (ผู้ใช้ 8/11/2569)
       const entry = await tx.moneyPettyCashEntry.create({
-        data: { orgId, holderUserId: holder.id, holderName: holder.name, kind: "spend", delta: -amount, category: input.category, note: `${title} · จ่ายวันที่ ${thaiDate(spentOn)}`, attachments: attachments as unknown as object, byUserId: session.userId, byName: holder.name, reviewStatus: "pending" },
+        data: {
+          orgId,
+          holderUserId: holder.id,
+          holderName: holder.name,
+          kind: "spend",
+          delta: -amount,
+          category: input.category,
+          note: `${title} · จ่ายวันที่ ${thaiDate(spentOn)}`,
+          attachments: attachments as unknown as object,
+          byUserId: session.userId,
+          byName: holder.name,
+          reviewStatus: "pending",
+          ...(hasTax
+            ? { billAmount: tax.bill, vatAmount: tax.vat, whtPercent: tax.whtPercent, whtAmount: tax.wht, payeeName: whtPercent > 0 ? payeeName : payeeName || null, payeeKind: whtPercent > 0 ? payeeKind : null }
+            : {}),
+        },
       });
-      await insertEvent(tx, orgId, { byUserId: session.userId, byName: holder.name, action: "petty", summary: `จ่ายจากเงินสดย่อย ${holder.name} ${baht(amount)} · ${input.category} · ${title} · รอตรวจ` });
+      await insertEvent(tx, orgId, { byUserId: session.userId, byName: holder.name, action: "petty", summary: `จ่ายจากเงินสดย่อย ${holder.name} ${baht(amount)} · ${input.category} · ${title}${hasTax ? ` · บิล ${baht(tax.bill)}${tax.vat ? ` VAT ${baht(tax.vat)}` : ""}${tax.wht ? ` หัก ณ ที่จ่าย ${tax.whtPercent}% ${baht(tax.wht)}` : ""}` : ""} · รอตรวจ` });
       return { ok: true, entryId: entry.id } as const;
     });
     if ("error" in res) return { error: res.error ?? "ทำไม่สำเร็จ" };

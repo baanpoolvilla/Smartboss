@@ -21,6 +21,18 @@ import { bangkokToday, baht, monthTitle, shiftMonthOf, thaiDateTime } from "@/mo
 
 export const dynamic = "force-dynamic";
 
+/** ภาษีของ "ซื้อของเอง" — บิลเต็ม · VAT · หัก ณ ที่จ่าย · จ่ายจริง (ผู้ใช้ 8/11/2569) */
+function TaxLine({ tax, paid }: { tax: { bill: number; vat: number; whtPercent: number; wht: number; payeeName: string | null; payeeKind: "person" | "company" | null }; paid: number }) {
+  return (
+    <div className="text-xs tabular-nums text-(--ink-soft)">
+      บิล {baht(tax.bill)}
+      {tax.vat > 0 && <> · VAT {baht(tax.vat)}</>}
+      {tax.wht > 0 && <> · หัก ณ ที่จ่าย {tax.whtPercent}% {baht(tax.wht)}{tax.payeeName ? ` (${tax.payeeName} · ${tax.payeeKind === "company" ? "ภ.ง.ด.53" : "ภ.ง.ด.3"})` : ""}</>}
+      {" "}· จ่ายจริง <b className="text-(--ink)">{baht(paid)}</b>
+    </div>
+  );
+}
+
 const KIND_LABEL = { top_up: "รับเงินเติม", spend: "จ่ายเงิน", return: "รับเงินทอนคืน", adjust: "ปรับยอด (นับเงินจริง)" } as const;
 
 /**
@@ -156,6 +168,7 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
                       <span className="font-semibold text-(--ink)">{e.holderName}</span>
                       {e.category && <span className="ml-1.5 rounded-full bg-(--bg-soft) px-2 py-0.5 text-xs text-(--ink-soft)">{e.category}</span>}
                       <div className="text-(--ink)">{e.note}</div>
+                      {e.tax && <TaxLine tax={e.tax} paid={-e.delta} />}
                     </div>
                     <div className="shrink-0 text-sm font-bold tabular-nums text-(--danger)">{baht(-e.delta)}</div>
                   </div>
@@ -288,6 +301,23 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
               )}
             </table>
           </div>
+          {(summary.tax.vat > 0 || summary.tax.whtCount > 0 || summary.review.pendingCount > 0 || summary.review.shortCount > 0) && (
+            <div className="flex flex-col gap-1 border-t border-(--line) px-4 py-3 text-sm">
+              {summary.tax.vat > 0 && (
+                <div>VAT ซื้อ (ใบกำกับเต็มรูป) เดือนนี้ <b className="tabular-nums">{baht(summary.tax.vat)}</b> <span className="text-(--ink-soft)">— ให้ฝ่ายบัญชีใช้ขอคืน</span></div>
+              )}
+              {summary.tax.whtCount > 0 && (
+                <div>
+                  หัก ณ ที่จ่ายที่บริษัทต้องนำส่ง ({summary.tax.whtCount} รายการ):{" "}
+                  {summary.tax.wht3 > 0 && <>ภ.ง.ด.3 <b className="tabular-nums">{baht(summary.tax.wht3)}</b> </>}
+                  {summary.tax.wht53 > 0 && <>ภ.ง.ด.53 <b className="tabular-nums">{baht(summary.tax.wht53)}</b> </>}
+                  <span className="text-(--ink-soft)">— ยื่นภายในวันที่ 7 เดือนถัดไป (ออนไลน์วันที่ 15) และออก 50 ทวิ ให้ผู้รับเงิน</span>
+                </div>
+              )}
+              {summary.review.pendingCount > 0 && <div className="text-amber-800">ยังรอตรวจ {summary.review.pendingCount} รายการ · {baht(summary.review.pendingAmount)}</div>}
+              {summary.review.shortCount > 0 && <div className="text-red-700">เงินขาดรอคืน {summary.review.shortCount} รายการ · {baht(summary.review.shortAmount)}</div>}
+            </div>
+          )}
           {summary.byCategory.length > 0 && (
             <div className="flex flex-col gap-1.5 border-t border-(--line) px-4 py-3">
               <div className="text-xs font-semibold text-(--ink-soft)">ซื้อเอง หมดไปกับอะไร</div>
@@ -365,6 +395,7 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
                       </>
                     )}
                   </div>
+                  {e.tax && <TaxLine tax={e.tax} paid={-e.delta} />}
                   {e.voided && <div className="text-xs font-medium text-red-700">ยกเลิก · {e.voided.byName} · {e.voided.reason}</div>}
                   {!e.voided && !e.requestId && (petty.adjust || (e.holderUserId === session.userId && (!e.review || e.review.status === "pending"))) && <VoidPettyButton id={e.id} />}
                 </li>

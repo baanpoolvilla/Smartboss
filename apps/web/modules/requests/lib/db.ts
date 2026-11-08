@@ -335,6 +335,8 @@ export interface PettyEntryView {
   voided: { byName: string; at: string; reason: string } | null;
   /** "ซื้อของเอง" ที่ต้องตรวจทีหลัง — null = รายการเดิม/ไม่ต้องตรวจ */
   review: { status: "pending" | "approved" | "rejected"; byName: string | null; at: string | null; note: string | null } | null;
+  /** ภาษีของ "ซื้อของเอง" — null = ไม่มีภาษี (ยอด = −delta) */
+  tax: { bill: number; vat: number; whtPercent: number; wht: number; payeeName: string | null; payeeKind: "person" | "company" | null } | null;
 }
 
 export function toPetty(e: Awaited<ReturnType<Tx["moneyPettyCashEntry"]["findFirstOrThrow"]>>): PettyEntryView {
@@ -355,6 +357,17 @@ export function toPetty(e: Awaited<ReturnType<Tx["moneyPettyCashEntry"]["findFir
     review: e.reviewStatus
       ? { status: e.reviewStatus as "pending" | "approved" | "rejected", byName: e.reviewedByName, at: e.reviewedAt ? e.reviewedAt.toISOString() : null, note: e.reviewNote }
       : null,
+    tax:
+      e.billAmount !== null
+        ? {
+            bill: num0(e.billAmount),
+            vat: num0(e.vatAmount),
+            whtPercent: num0(e.whtPercent),
+            wht: num0(e.whtAmount),
+            payeeName: e.payeeName,
+            payeeKind: (e.payeeKind as "person" | "company" | null) ?? null,
+          }
+        : null,
   };
 }
 

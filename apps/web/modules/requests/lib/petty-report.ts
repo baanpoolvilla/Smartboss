@@ -30,6 +30,10 @@ export interface PettyMonthEntry extends PettyEntryView {
 
 export interface PettyMonth {
   rows: PettyMonthRow[];
+  /** ภาษีจาก "ซื้อของเอง" ในเดือน (ไม่นับที่ยกเลิก) — VAT ซื้อ + หัก ณ ที่จ่ายที่บริษัทต้องนำส่ง แยกแบบ */
+  tax: { vat: number; wht3: number; wht53: number; whtCount: number };
+  /** "ซื้อของเอง" ที่ยังไม่จบการตรวจ (ทุกเดือน ณ ตอนนี้ ไม่ใช่เฉพาะเดือนที่เลือก) */
+  review: { pendingCount: number; pendingAmount: number; shortCount: number; shortAmount: number };
   byCategory: { category: string; amount: number }[];
   entries: PettyMonthEntry[];
 }
@@ -45,9 +49,13 @@ export async function pettyMonth(orgId: string, month: string, holders: { userId
   const { start, end } = monthBounds(month);
   const ids = holders.map((h) => h.userId);
   return withRequestsTenant(orgId, async (tx) => {
-    const [before, rows] = await Promise.all([
+    const [before, rows, open] = await Promise.all([
       tx.moneyPettyCashEntry.groupBy({ by: ["holderUserId"], where: { orgId, voidedAt: null, createdAt: { lt: start }, holderUserId: { in: ids } }, _sum: { delta: true } }),
       tx.moneyPettyCashEntry.findMany({ where: { orgId, createdAt: { gte: start, lt: end }, holderUserId: { in: ids } }, orderBy: { createdAt: "desc" } }),
+      tx.moneyPettyCashEntry.findMany({
+        where: { orgId, voidedAt: null, reviewStatus: { in: ["pending", "rejected"] }, holderUserId: { in: onlyHolder ? [onlyHolder] : ids } },
+        select: { reviewStatus: true, delta: true },
+      }),
     ]);
     const requestIds = [...new Set(rows.map((e) => e.requestId).filter((x): x is string => !!x))];
     const reqs = requestIds.length
@@ -60,8 +68,18 @@ export async function pettyMonth(orgId: string, month: string, holders: { userId
       holders.map((h) => [h.userId, { userId: h.userId, name: h.name, opening: opening.get(h.userId) ?? 0, topUp: 0, paidRequests: 0, selfSpend: 0, other: 0, closing: 0 }]),
     );
     const cats = new Map<string, number>();
+    const tax = { vat: 0, wht3: 0, wht53: 0, whtCount: 0 };
     for (const e of rows) {
       if (e.voidedAt) continue;
+      if ((!onlyHolder || e.holderUserId === onlyHolder) && e.billAmount !== null) {
+        tax.vat += num0(e.vatAmount);
+        const w = num0(e.whtAmount);
+        if (w > 0) {
+          tax.whtCount++;
+          if (e.payeeKind === "company") tax.wht53 += w;
+          else tax.wht3 += w;
+        }
+      }
       const row = sums.get(e.holderUserId);
       if (!row) continue;
       const d = num0(e.delta);
@@ -76,8 +94,17 @@ export async function pettyMonth(orgId: string, month: string, holders: { userId
       const x = { ...r, topUp: round2(r.topUp), paidRequests: round2(r.paidRequests), selfSpend: round2(r.selfSpend), other: round2(r.other) };
       return { ...x, closing: round2(x.opening + x.topUp - x.paidRequests - x.selfSpend + x.other) };
     });
+    const pend = open.filter((e) => e.reviewStatus === "pending");
+    const short = open.filter((e) => e.reviewStatus === "rejected");
     return {
       rows: out,
+      tax: { vat: round2(tax.vat), wht3: round2(tax.wht3), wht53: round2(tax.wht53), whtCount: tax.whtCount },
+      review: {
+        pendingCount: pend.length,
+        pendingAmount: round2(pend.reduce((t, e) => t - num0(e.delta), 0)),
+        shortCount: short.length,
+        shortAmount: round2(short.reduce((t, e) => t - num0(e.delta), 0)),
+      },
       byCategory: [...cats.entries()].map(([category, amount]) => ({ category, amount: round2(amount) })).sort((a, b) => b.amount - a.amount),
       entries: rows
         .filter((e) => !onlyHolder || e.holderUserId === onlyHolder)

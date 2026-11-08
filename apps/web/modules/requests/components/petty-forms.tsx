@@ -18,7 +18,7 @@ import {
   voidPettyEntryAction,
   type UploadedFile,
 } from "../actions";
-import { PETTY_CATEGORIES, SIMILAR_SLIP_PREFIX, baht, parseMoney, thaiDateTime } from "../lib/types";
+import { PETTY_CATEGORIES, PETTY_WHT_OPTIONS, SIMILAR_SLIP_PREFIX, baht, parseMoney, pettyTax, thaiDateTime } from "../lib/types";
 import { FilePicker } from "./file-picker";
 import { Notice } from "./ui";
 
@@ -392,9 +392,17 @@ function SpendForm({ balance, today, onClose }: { balance: number; today: string
   const [amount, setAmount] = useState("");
   const [spentOn, setSpentOn] = useState(today);
   const [files, setFiles] = useState<UploadedFile[]>([]);
+  // ภาษี (ถ้ามี) — ผู้ใช้ 8/11/2569: ใส่ยอดเต็มตามบิล ไม่มีภาษีก็ข้าม มีก็เลือก ระบบหักลบให้เอง
+  const [vatIncluded, setVatIncluded] = useState(false);
+  const [whtPercent, setWhtPercent] = useState(0);
+  const [payeeName, setPayeeName] = useState("");
+  const [payeeKind, setPayeeKind] = useState<"person" | "company" | null>(null);
   const value = parseMoney(amount);
-  const over = Number.isFinite(value) && value > balance + 0.005;
-  const ready = title.trim() && category && Number.isFinite(value) && value > 0 && !over && spentOn && files.length > 0;
+  const tax = Number.isFinite(value) && value > 0 ? pettyTax(value, vatIncluded, whtPercent) : null;
+  const paid = tax ? tax.paid : value;
+  const over = Number.isFinite(paid) && paid > balance + 0.005;
+  const payeeOk = whtPercent === 0 || (payeeName.trim() && payeeKind);
+  const ready = title.trim() && category && Number.isFinite(value) && value > 0 && !over && spentOn && files.length > 0 && payeeOk;
   return (
       <div className="flex flex-col gap-3">
         <Explain>ใช้เงินในมือซื้อของ/จ่ายค่าบริการเอง ไม่ต้องทำใบเบิก — กรอกครบทุกช่องที่มี * และแนบรูปใบเสร็จ บันทึกแล้วยอดในมือลดลงทันที แล้ว HR (หรือ CEO ถ้าคุณเป็น HR) จะตรวจใบเสร็จทีหลัง — ไม่ผ่านต้องคืนเงินเข้ากอง · เงินในมือตอนนี้ {baht(balance)}</Explain>
@@ -410,13 +418,56 @@ function SpendForm({ balance, today, onClose }: { balance: number; today: string
           </select>
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="จำนวนเงิน (บาท)" required>
+          <Field label="ยอดตามบิล (บาท)" required>
             <input inputMode="decimal" className={field} value={amount} onChange={(e) => setAmount(e.target.value)} />
           </Field>
           <Field label="วันที่จ่าย" required>
             <input type="date" max={today} className={field} value={spentOn} onChange={(e) => setSpentOn(e.target.value)} />
           </Field>
         </div>
+        <fieldset className="flex flex-col gap-2.5 rounded-(--radius) border border-(--line) p-3">
+          <legend className="px-1 text-sm font-semibold text-(--ink)">
+            ภาษี <span className="font-normal text-(--ink-soft)">(ถ้ามี · ไม่มีก็ข้ามได้)</span>
+          </legend>
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" className="mt-1 h-4 w-4" checked={vatIncluded} onChange={(e) => setVatIncluded(e.target.checked)} />
+            <span>
+              บิลนี้เป็นใบกำกับภาษีเต็มรูป มี VAT 7% รวมอยู่ในยอดแล้ว
+              <span className="block text-xs text-(--ink-soft)">ต้องมีชื่อบริษัทและเลขผู้เสียภาษีของเราบนบิล ถึงจะขอคืน VAT ได้</span>
+            </span>
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span>หัก ณ ที่จ่าย</span>
+            <select className={field} value={whtPercent} onChange={(e) => setWhtPercent(Number(e.target.value))} aria-label="หัก ณ ที่จ่าย">
+              <option value={0}>ไม่หัก (ซื้อของ / ค่าบริการต่ำกว่า 1,000)</option>
+              {PETTY_WHT_OPTIONS.map((o) => (
+                <option key={o.percent} value={o.percent}>{o.label}</option>
+              ))}
+            </select>
+          </label>
+          {whtPercent > 0 && (
+            <div className="flex flex-col gap-2">
+              <input className={field} value={payeeName} onChange={(e) => setPayeeName(e.target.value)} placeholder="ชื่อผู้รับเงิน (ช่าง/ร้าน) สำหรับออก 50 ทวิ *" aria-label="ชื่อผู้รับเงิน" maxLength={120} />
+              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="ผู้รับเงินเป็น">
+                {([["person", "บุคคลธรรมดา (ภ.ง.ด.3)"], ["company", "บริษัท / นิติบุคคล (ภ.ง.ด.53)"]] as const).map(([k, label]) => (
+                  <label key={k} className={`inline-flex h-10 cursor-pointer items-center gap-2 rounded-(--radius) border px-3 text-sm ${payeeKind === k ? "border-(--brand-navy,#1b2537) bg-slate-100 font-semibold" : "border-(--line)"}`}>
+                    <input type="radio" className="sr-only" name="payee-kind" checked={payeeKind === k} onChange={() => setPayeeKind(k)} />
+                    {label}
+                  </label>
+                ))}
+              </div>
+              {tax && tax.base < 1000 && <span className="text-xs text-amber-700">ยอดก่อน VAT ต่ำกว่า 1,000 บาท ปกติไม่ต้องหัก ณ ที่จ่าย — ตรวจอีกครั้ง</span>}
+            </div>
+          )}
+          {tax && (vatIncluded || whtPercent > 0) && (
+            <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5 rounded-(--radius) bg-(--bg-soft) px-3 py-2 text-sm tabular-nums">
+              <dt className="text-(--ink-soft)">ยอดตามบิล</dt><dd className="text-right">{baht(tax.bill)}</dd>
+              {vatIncluded && (<><dt className="text-(--ink-soft)">ก่อน VAT</dt><dd className="text-right">{baht(tax.base)}</dd><dt className="text-(--ink-soft)">VAT 7% (ขอคืนได้)</dt><dd className="text-right">{baht(tax.vat)}</dd></>)}
+              {whtPercent > 0 && (<><dt className="text-(--ink-soft)">หัก ณ ที่จ่าย {whtPercent}% (บริษัทนำส่งสรรพากร)</dt><dd className="text-right">−{baht(tax.wht)}</dd></>)}
+              <dt className="font-semibold text-(--ink)">จ่ายจริง (หักจากเงินในมือ)</dt><dd className="text-right font-bold text-(--ink)">{baht(tax.paid)}</dd>
+            </dl>
+          )}
+        </fieldset>
         {over && <Notice tone="warn">เงินในมือไม่พอ (เหลือ {baht(balance)}) — กด “ขอเติมเงิน” ก่อน</Notice>}
         <FilePicker
           role="receipt"
@@ -428,11 +479,13 @@ function SpendForm({ balance, today, onClose }: { balance: number; today: string
           claimDate={spentOn}
           onAiRead={(f) => {
             if (!amount && f.ai?.amount) setAmount(String(f.ai.amount));
+            // บิลแสดง VAT แยก → ติ๊กให้ (ผู้ถือเอาออกเองได้ถ้าไม่ใช่ใบกำกับเต็มรูป)
+            if (f.ai?.vat) setVatIncluded(true);
           }}
         />
         {error && <Notice tone="danger">{error}</Notice>}
         <div className="flex justify-end gap-2 border-t border-(--line) pt-3">
-          <SaveButtons busy={busy} disabled={!ready} label="บันทึกการจ่าย" onClose={onClose} onSave={() => run(() => addPettySpendAction({ title, category, amount: value, spentOn, attachments: files }))} />
+          <SaveButtons busy={busy} disabled={!ready} label="บันทึกการจ่าย" onClose={onClose} onSave={() => run(() => addPettySpendAction({ title, category, amount: value, spentOn, attachments: files, vatIncluded, whtPercent, payeeName, payeeKind }))} />
         </div>
       </div>
   );
