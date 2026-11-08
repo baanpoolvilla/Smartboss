@@ -658,7 +658,7 @@ export async function createRequestAction(input: CreateInput): Promise<Result<{ 
         });
         const summary =
           kind === "ot"
-            ? `ลง OT ให้ ${f.beneficiaryName} ${thai(prep.workDate)} ${f.otStart}–${f.otEnd} (${hoursText(f.otMinutes ?? 0)}) ${baht(f.netAmount)}`
+            ? `ลง OT ให้ ${f.beneficiaryName} ${thai(prep.workDate)} ${f.otStart}–${f.otEnd} (${hoursText(f.otMinutes ?? 0)}) ${awaitingAmountLabel(kind, f) ? "· รอ HR ใส่ยอด" : baht(f.netAmount)}`
             : `ยื่น${KIND_META[kind].label} ${baht(f.netAmount)} ให้ ${f.beneficiaryName}`;
         await insertEvent(tx, orgId, { requestId: row.id, byUserId: session.userId, byName, action: "create", summary });
         return { id: row.id, code: row.code };
@@ -749,7 +749,7 @@ export async function createOtGroupAction(
             },
           });
           const summary = f.beneficiaryUserId
-            ? `ลง OT ให้ ${f.beneficiaryName} ${thai(prep.workDate)} ${f.otStart}–${f.otEnd} (${hoursText(f.otMinutes ?? 0)}) ${baht(f.netAmount)}${groupNote}`
+            ? `ลง OT ให้ ${f.beneficiaryName} ${thai(prep.workDate)} ${f.otStart}–${f.otEnd} (${hoursText(f.otMinutes ?? 0)}) ${awaitingAmountLabel("ot", f) ? "· รอ HR ใส่ยอด" : baht(f.netAmount)}${groupNote}`
             : `ลง OT ให้ ${f.beneficiaryName} (ยังไม่มีในระบบ — รอผูกชื่อ) ${thai(prep.workDate)} ${f.otStart}–${f.otEnd} (${hoursText(f.otMinutes ?? 0)})${f.netAmount > 0 ? ` ยอดประมาณ ${baht(f.netAmount)} จากค่าแรงที่กรอก ${baht(f.otBase ?? 0)}/วัน` : ""}${groupNote}`;
           await insertEvent(tx, orgId, { requestId: row.id, byUserId: session.userId, byName, action: "create", summary });
           out.push({ id: row.id, code: row.code });
