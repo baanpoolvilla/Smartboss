@@ -384,6 +384,16 @@ function RequestPayForm({ holder, today, payable, onClose }: { holder: PettyHold
   );
 }
 
+/** คำอธิบายใต้ปุ่มหัก ณ ที่จ่ายที่เลือก — ให้คนถือเงินรู้ว่าเลือกถูกไหมโดยไม่ต้องมีรายการยาว */
+const WHT_HINT: Record<string, string> = {
+  "0": "ซื้อของ หรือค่าบริการต่ำกว่า 1,000 บาท ไม่ต้องหัก",
+  "1": "ค่าขนส่ง",
+  "2": "ค่าโฆษณา",
+  "3": "ค่าจ้าง ค่าบริการ ค่าซ่อม ทำของ",
+  "5": "ค่าเช่า",
+  other: "อัตราอื่นที่ฝ่ายบัญชีบอก",
+};
+
 /** ซื้อของเองด้วยเงินในมือ — ไม่มีใบเบิก */
 function SpendForm({ balance, today, onClose }: { balance: number; today: string; onClose: () => void }) {
   const { busy, error, run } = useSave(onClose);
@@ -393,8 +403,21 @@ function SpendForm({ balance, today, onClose }: { balance: number; today: string
   const [spentOn, setSpentOn] = useState(today);
   const [files, setFiles] = useState<UploadedFile[]>([]);
   // ภาษี (ถ้ามี) — ผู้ใช้ 8/11/2569: ใส่ยอดเต็มตามบิล ไม่มีภาษีก็ข้าม มีก็เลือก ระบบหักลบให้เอง
+  const [taxOpen, setTaxOpen] = useState(false);
   const [vatIncluded, setVatIncluded] = useState(false);
-  const [whtPercent, setWhtPercent] = useState(0);
+  // หัก ณ ที่จ่าย: เลือกจากรายการ หรือ "อื่น ๆ" พิมพ์ % เอง (ผู้ใช้ 8/11/2569)
+  const [whtChoice, setWhtChoice] = useState("0");
+  const [whtCustom, setWhtCustom] = useState("");
+  const customPct = parseMoney(whtCustom);
+  const whtPercent = whtChoice === "other" ? (Number.isFinite(customPct) && customPct > 0 && customPct <= 15 ? Math.round(customPct * 100) / 100 : 0) : Number(whtChoice);
+  const customBad = whtChoice === "other" && whtPercent === 0;
+  // ปิดกล่องภาษี = ไม่มีภาษี ล้างค่าที่เลือกไว้
+  const closeTax = () => {
+    setTaxOpen(false);
+    setVatIncluded(false);
+    setWhtChoice("0");
+    setWhtCustom("");
+  };
   const [payeeName, setPayeeName] = useState("");
   const [payeeKind, setPayeeKind] = useState<"person" | "company" | null>(null);
   const value = parseMoney(amount);
@@ -402,7 +425,7 @@ function SpendForm({ balance, today, onClose }: { balance: number; today: string
   const paid = tax ? tax.paid : value;
   const over = Number.isFinite(paid) && paid > balance + 0.005;
   const payeeOk = whtPercent === 0 || (payeeName.trim() && payeeKind);
-  const ready = title.trim() && category && Number.isFinite(value) && value > 0 && !over && spentOn && files.length > 0 && payeeOk;
+  const ready = title.trim() && category && Number.isFinite(value) && value > 0 && !over && spentOn && files.length > 0 && payeeOk && !customBad;
   return (
       <div className="flex flex-col gap-3">
         <Explain>ใช้เงินในมือซื้อของ/จ่ายค่าบริการเอง ไม่ต้องทำใบเบิก — กรอกครบทุกช่องที่มี * และแนบรูปใบเสร็จ บันทึกแล้วยอดในมือลดลงทันที แล้ว HR (หรือ CEO ถ้าคุณเป็น HR) จะตรวจใบเสร็จทีหลัง — ไม่ผ่านต้องคืนเงินเข้ากอง · เงินในมือตอนนี้ {baht(balance)}</Explain>
@@ -425,49 +448,63 @@ function SpendForm({ balance, today, onClose }: { balance: number; today: string
             <input type="date" max={today} className={field} value={spentOn} onChange={(e) => setSpentOn(e.target.value)} />
           </Field>
         </div>
-        <fieldset className="flex flex-col gap-2.5 rounded-(--radius) border border-(--line) p-3">
-          <legend className="px-1 text-sm font-semibold text-(--ink)">
-            ภาษี <span className="font-normal text-(--ink-soft)">(ถ้ามี · ไม่มีก็ข้ามได้)</span>
-          </legend>
-          <label className="flex items-start gap-2 text-sm">
-            <input type="checkbox" className="mt-1 h-4 w-4" checked={vatIncluded} onChange={(e) => setVatIncluded(e.target.checked)} />
-            <span>
-              บิลนี้เป็นใบกำกับภาษีเต็มรูป มี VAT 7% รวมอยู่ในยอดแล้ว
-              <span className="block text-xs text-(--ink-soft)">ต้องมีชื่อบริษัทและเลขผู้เสียภาษีของเราบนบิล ถึงจะขอคืน VAT ได้</span>
-            </span>
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span>หัก ณ ที่จ่าย</span>
-            <select className={field} value={whtPercent} onChange={(e) => setWhtPercent(Number(e.target.value))} aria-label="หัก ณ ที่จ่าย">
-              <option value={0}>ไม่หัก (ซื้อของ / ค่าบริการต่ำกว่า 1,000)</option>
-              {PETTY_WHT_OPTIONS.map((o) => (
-                <option key={o.percent} value={o.percent}>{o.label}</option>
-              ))}
-            </select>
-          </label>
-          {whtPercent > 0 && (
-            <div className="flex flex-col gap-2">
-              <input className={field} value={payeeName} onChange={(e) => setPayeeName(e.target.value)} placeholder="ชื่อผู้รับเงิน (ช่าง/ร้าน) สำหรับออก 50 ทวิ *" aria-label="ชื่อผู้รับเงิน" maxLength={120} />
-              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="ผู้รับเงินเป็น">
-                {([["person", "บุคคลธรรมดา (ภ.ง.ด.3)"], ["company", "บริษัท / นิติบุคคล (ภ.ง.ด.53)"]] as const).map(([k, label]) => (
-                  <label key={k} className={`inline-flex h-10 cursor-pointer items-center gap-2 rounded-(--radius) border px-3 text-sm ${payeeKind === k ? "border-(--brand-navy,#1b2537) bg-slate-100 font-semibold" : "border-(--line)"}`}>
-                    <input type="radio" className="sr-only" name="payee-kind" checked={payeeKind === k} onChange={() => setPayeeKind(k)} />
-                    {label}
+        {!taxOpen ? (
+          <button type="button" onClick={() => setTaxOpen(true)} className="self-start text-sm font-semibold text-(--app-strong) hover:underline">
+            + บิลนี้มีภาษี (VAT / หัก ณ ที่จ่าย)
+          </button>
+        ) : (
+          <fieldset className="flex flex-col gap-2.5 rounded-(--radius) border border-(--line) p-3">
+            <legend className="flex items-center gap-2 px-1 text-sm font-semibold text-(--ink)">
+              ภาษี
+              <button type="button" onClick={closeTax} className="text-xs font-normal text-(--ink-soft) hover:underline">ไม่มีภาษี ปิด</button>
+            </legend>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" className="h-4 w-4" checked={vatIncluded} onChange={(e) => setVatIncluded(e.target.checked)} />
+              มี VAT 7% รวมในยอดแล้ว (ใบกำกับภาษีเต็มรูป)
+            </label>
+            <div className="flex flex-col gap-1.5 text-sm">
+              <span>หัก ณ ที่จ่าย</span>
+              <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="หัก ณ ที่จ่าย">
+                {[{ v: "0", t: "ไม่หัก" }, ...PETTY_WHT_OPTIONS.map((o) => ({ v: String(o.percent), t: `${o.percent}%` })), { v: "other", t: "อื่น ๆ" }].map((o) => (
+                  <label key={o.v} className={`inline-flex h-9 min-w-12 cursor-pointer items-center justify-center rounded-full border px-3 text-sm ${whtChoice === o.v ? "border-(--brand-navy,#1b2537) bg-(--brand-navy,#1b2537) font-semibold text-white" : "border-(--line)"}`}>
+                    <input type="radio" className="sr-only" name="wht-choice" checked={whtChoice === o.v} onChange={() => setWhtChoice(o.v)} />
+                    {o.t}
                   </label>
                 ))}
               </div>
-              {tax && tax.base < 1000 && <span className="text-xs text-amber-700">ยอดก่อน VAT ต่ำกว่า 1,000 บาท ปกติไม่ต้องหัก ณ ที่จ่าย — ตรวจอีกครั้ง</span>}
+              <span className="text-xs text-(--ink-soft)">{WHT_HINT[whtChoice] ?? ""}</span>
             </div>
-          )}
-          {tax && (vatIncluded || whtPercent > 0) && (
-            <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5 rounded-(--radius) bg-(--bg-soft) px-3 py-2 text-sm tabular-nums">
-              <dt className="text-(--ink-soft)">ยอดตามบิล</dt><dd className="text-right">{baht(tax.bill)}</dd>
-              {vatIncluded && (<><dt className="text-(--ink-soft)">ก่อน VAT</dt><dd className="text-right">{baht(tax.base)}</dd><dt className="text-(--ink-soft)">VAT 7% (ขอคืนได้)</dt><dd className="text-right">{baht(tax.vat)}</dd></>)}
-              {whtPercent > 0 && (<><dt className="text-(--ink-soft)">หัก ณ ที่จ่าย {whtPercent}% (บริษัทนำส่งสรรพากร)</dt><dd className="text-right">−{baht(tax.wht)}</dd></>)}
-              <dt className="font-semibold text-(--ink)">จ่ายจริง (หักจากเงินในมือ)</dt><dd className="text-right font-bold text-(--ink)">{baht(tax.paid)}</dd>
-            </dl>
-          )}
-        </fieldset>
+            {whtChoice === "other" && (
+              <label className="flex items-center gap-2 text-sm">
+                <span>หัก</span>
+                <input inputMode="decimal" className={`${field} w-24 text-right`} value={whtCustom} onChange={(e) => setWhtCustom(e.target.value)} placeholder="เช่น 1.5" aria-label="% หัก ณ ที่จ่าย" autoFocus />
+                <span>%</span>
+                {customBad && whtCustom.trim() !== "" && <span className="text-xs text-red-700">ใส่ได้ 0.01–15%</span>}
+              </label>
+            )}
+            {whtPercent > 0 && (
+              <div className="flex flex-col gap-2">
+                <input className={field} value={payeeName} onChange={(e) => setPayeeName(e.target.value)} placeholder="ชื่อผู้รับเงิน (ช่าง/ร้าน) — ใช้ออก 50 ทวิ *" aria-label="ชื่อผู้รับเงิน" maxLength={120} />
+                <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="ผู้รับเงินเป็น">
+                  {([["person", "บุคคล"], ["company", "บริษัท / ห้างร้าน"]] as const).map(([k, label]) => (
+                    <label key={k} className={`inline-flex h-9 cursor-pointer items-center rounded-full border px-3 text-sm ${payeeKind === k ? "border-(--brand-navy,#1b2537) bg-(--brand-navy,#1b2537) font-semibold text-white" : "border-(--line)"}`}>
+                      <input type="radio" className="sr-only" name="payee-kind" checked={payeeKind === k} onChange={() => setPayeeKind(k)} />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+                {tax && tax.base < 1000 && <span className="text-xs text-amber-700">ยอดก่อน VAT ต่ำกว่า 1,000 บาท ปกติไม่ต้องหัก — ตรวจอีกครั้ง</span>}
+              </div>
+            )}
+            {tax && (vatIncluded || whtPercent > 0) && (
+              <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5 rounded-(--radius) bg-(--bg-soft) px-3 py-2 text-sm tabular-nums">
+                {vatIncluded && (<><dt className="text-(--ink-soft)">ก่อน VAT</dt><dd className="text-right">{baht(tax.base)}</dd><dt className="text-(--ink-soft)">VAT 7%</dt><dd className="text-right">{baht(tax.vat)}</dd></>)}
+                {whtPercent > 0 && (<><dt className="text-(--ink-soft)">หัก ณ ที่จ่าย {whtPercent}%</dt><dd className="text-right">−{baht(tax.wht)}</dd></>)}
+                <dt className="font-semibold text-(--ink)">จ่ายจริง</dt><dd className="text-right font-bold text-(--ink)">{baht(tax.paid)}</dd>
+              </dl>
+            )}
+          </fieldset>
+        )}
         {over && <Notice tone="warn">เงินในมือไม่พอ (เหลือ {baht(balance)}) — กด “ขอเติมเงิน” ก่อน</Notice>}
         <FilePicker
           role="receipt"
@@ -480,7 +517,10 @@ function SpendForm({ balance, today, onClose }: { balance: number; today: string
           onAiRead={(f) => {
             if (!amount && f.ai?.amount) setAmount(String(f.ai.amount));
             // บิลแสดง VAT แยก → ติ๊กให้ (ผู้ถือเอาออกเองได้ถ้าไม่ใช่ใบกำกับเต็มรูป)
-            if (f.ai?.vat) setVatIncluded(true);
+            if (f.ai?.vat) {
+              setTaxOpen(true);
+              setVatIncluded(true);
+            }
           }}
         />
         {error && <Notice tone="danger">{error}</Notice>}

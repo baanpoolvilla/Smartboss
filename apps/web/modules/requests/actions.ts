@@ -43,7 +43,6 @@ import {
   normalizeDate,
   otCalc,
   PETTY_CATEGORIES,
-  PETTY_WHT_OPTIONS,
   pettyTax,
   receiptFlags,
   round2,
@@ -1984,7 +1983,8 @@ export async function addPettySpendAction(input: {
     const bill = round2(Number(input.amount));
     if (!Number.isFinite(bill) || bill <= 0) return { error: "กรอกจำนวนเงิน" };
     const whtPercent = Number(input.whtPercent ?? 0);
-    if (!(PETTY_WHT_OPTIONS as readonly { percent: number }[]).some((o) => o.percent === whtPercent) && whtPercent !== 0) return { error: "% หัก ณ ที่จ่ายไม่ถูกต้อง" };
+    // เลือกจากรายการ หรือกรอกเอง — รับ 0–15% ทศนิยมไม่เกิน 2 ตำแหน่ง
+    if (!Number.isFinite(whtPercent) || whtPercent < 0 || whtPercent > 15 || Math.round(whtPercent * 100) !== whtPercent * 100) return { error: "% หัก ณ ที่จ่ายไม่ถูกต้อง (0–15%)" };
     const payeeName = String(input.payeeName ?? "").trim().slice(0, 120);
     const payeeKind = input.payeeKind === "person" || input.payeeKind === "company" ? input.payeeKind : null;
     if (whtPercent > 0 && (!payeeName || !payeeKind)) return { error: "หัก ณ ที่จ่าย ต้องใส่ชื่อผู้รับเงิน และเลือกว่าเป็นบุคคลหรือบริษัท (ใช้ออก 50 ทวิ)" };
