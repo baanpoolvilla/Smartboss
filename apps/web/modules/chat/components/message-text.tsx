@@ -3,6 +3,7 @@
 import { Fragment, type ReactNode } from "react";
 import type { ChatUser } from "../types";
 import { DEPT_MENTION_PREFIX } from "../constants";
+import { displayUrl } from "../lib/display-url";
 
 const URL_RE = /(https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]])/g;
 
@@ -23,10 +24,12 @@ function linkify(text: string, keyPrefix: string): ReactNode[] {
         href={m[0]}
         target="_blank"
         rel="noreferrer noopener"
+        title={m[0]}
         className="break-all text-(--chat-mention) underline underline-offset-2"
         onClick={(e) => e.stopPropagation()}
       >
-        {m[0]}
+        {/* ย่อลิงก์ยาว — href ยังเป็นลิงก์เต็ม (ชี้ค้างเห็นเต็ม · คัดลอกข้อความยังได้ลิงก์เต็มจากเมนู) */}
+        {displayUrl(m[0])}
       </a>
     );
     last = i + m[0].length;

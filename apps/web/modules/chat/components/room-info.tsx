@@ -9,6 +9,7 @@ import { useChatStore } from "../store/chat-store";
 import type { ChatAttachment, ChatChannelSummary, ChatMessageDTO } from "../types";
 import { isKeepChannelId } from "../types";
 import * as api from "../lib/api";
+import { displayUrl } from "../lib/display-url";
 import { channelTitle, formatDayLabel, formatFileSize } from "../lib/format";
 import { loadChannels, loadDetail } from "../lib/chat-actions";
 import { ChatAvatar } from "./chat-avatar";
@@ -126,7 +127,7 @@ function MediaTab({ channelId, kind, onOpenMedia }: { channelId: string; kind: "
             <Link2 className="h-4 w-4" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm text-(--chat-mention)">{url.replace(/^https?:\/\//, "")}</span>
+            <span className="block truncate text-sm text-(--chat-mention)">{displayUrl(url, 80)}</span>
             <span className="text-[11.5px] text-(--ink-soft)">{formatDayLabel(m.createdAt)}</span>
           </span>
           <ExternalLink className="h-4 w-4 shrink-0 text-(--ink-soft)" />
