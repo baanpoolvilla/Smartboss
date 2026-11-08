@@ -47,13 +47,13 @@ export function AccessForm({
       {canManage && (
         <>
           <div className="flex flex-wrap gap-2">
-            <select aria-label="เลือกคน" className={`${field} max-w-xs`} value={pick} onChange={(e) => setPick(e.target.value)}>
+            {/* เลือกแล้วเข้ารายชื่อเลย ไม่ต้องกด "+ เพิ่ม" (ผู้ใช้ 8/11/2569 "ทำให้แค่กดบันทึกพอ") */}
+            <select aria-label="เลือกคน" className={`${field} max-w-xs`} value={pick} onChange={(e) => { const v = e.target.value; if (v && !ids.includes(v)) { setSaved(false); setIds([...ids, v]); } setPick(""); }}>
               <option value="">— เลือกคน (เช่น หัวหน้า HR) —</option>
               {users.filter((u) => !ids.includes(u.id)).map((u) => (
                 <option key={u.id} value={u.id}>{u.name}{u.roles ? ` (${u.roles})` : ""}</option>
               ))}
             </select>
-            <button type="button" className={outline} disabled={!pick} onClick={() => { setSaved(false); setIds([...ids, pick]); setPick(""); }}>+ เพิ่ม</button>
           </div>
           <label className="flex min-h-11 items-center gap-3 rounded-(--radius) border border-amber-200 bg-amber-50 px-3 text-sm text-amber-950">
             <input type="checkbox" className="h-5 w-5" checked={superOn} onChange={(e) => { setSaved(false); setSuperOn(e.target.checked); }} />
