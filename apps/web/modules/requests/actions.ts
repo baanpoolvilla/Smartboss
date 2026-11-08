@@ -1989,7 +1989,9 @@ export async function addPettySpendAction(input: {
     const payeeKind = input.payeeKind === "person" || input.payeeKind === "company" ? input.payeeKind : null;
     if (whtPercent > 0 && (!payeeName || !payeeKind)) return { error: "หัก ณ ที่จ่าย ต้องใส่ชื่อผู้รับเงิน และเลือกว่าเป็นบุคคลหรือบริษัท (ใช้ออก 50 ทวิ)" };
     const hasTax = !!input.vatIncluded || whtPercent > 0;
-    const tax = pettyTax(bill, !!input.vatIncluded, whtPercent);
+    // VAT % ตามหน้าตั้งค่าเบิกจ่าย (ที่เดียวกับใบค่าช่าง) — เปลี่ยนอัตราเมื่อไหร่แก้ที่นั่น
+    const vatPercent = (await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId))).vatPercent;
+    const tax = pettyTax(bill, !!input.vatIncluded, whtPercent, vatPercent);
     // เงินที่ออกจากมือจริง = บิล − หัก ณ ที่จ่าย
     const amount = tax.paid;
     const spentOn = normalizeDate(input.spentOn);

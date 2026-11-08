@@ -144,7 +144,7 @@ export function SettingsForm({ initial }: { initial: RequestSettings }) {
       </section>
 
       <section className="grid grid-cols-1 gap-3 rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4 sm:grid-cols-2">
-        <h2 className="text-sm font-bold text-(--ink) sm:col-span-2">ภาษี (ช่าง/ร้านภายนอก)</h2>
+        <h2 className="text-sm font-bold text-(--ink) sm:col-span-2">ภาษี (ช่าง/ร้านภายนอก + เงินสดย่อย)</h2>
         <label className="flex flex-col gap-1.5 text-sm">
           <span className="font-semibold">VAT (%)</span>
           <input inputMode="decimal" className={field} value={vat} onChange={(e) => setVat(e.target.value)} />

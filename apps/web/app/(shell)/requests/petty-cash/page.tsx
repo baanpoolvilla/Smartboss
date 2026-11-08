@@ -10,7 +10,7 @@ import { AppScaffold } from "@/components/module/app-scaffold";
 import { InfoTip } from "@/modules/salary/components/help";
 import { REQ_PERMS } from "@/modules/requests/permissions";
 import { WORKER_ROLE_CODE } from "@/modules/daily_worker/permissions";
-import { loadRequests, pettyBalances, toPetty, toPettyTopup, withRequestsTenant } from "@/modules/requests/lib/db";
+import { loadRequests, pettyBalances, readSettings, toPetty, toPettyTopup, withRequestsTenant } from "@/modules/requests/lib/db";
 import { usersWithPermission } from "@/modules/maintenance/data/notify";
 import { listPettyHolders } from "@/modules/requests/lib/holders";
 import { pettyMonth } from "@/modules/requests/lib/petty-report";
@@ -53,7 +53,8 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
   const orgId = session.orgId;
   const sp = await searchParams;
   const holderUsers = await listPettyHolders(orgId);
-  const { balances, pending, toReview } = await withRequestsTenant(orgId, async (tx) => ({
+  const { balances, pending, toReview, reqSettings } = await withRequestsTenant(orgId, async (tx) => ({
+    reqSettings: await readSettings(tx, orgId),
     balances: await pettyBalances(tx, orgId),
     pending: (await tx.moneyPettyTopup.findMany({ where: { orgId, status: "pending" }, orderBy: { createdAt: "asc" } })).map(toPettyTopup),
     // "ซื้อของเอง" ที่จ่ายไปก่อน: รอตรวจ + ไม่ผ่านที่ยังไม่ได้เงินคืน (ทุกเดือน ไม่ใช่แค่เดือนที่เลือก)
@@ -226,6 +227,7 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
               const isMe = h.userId === session.userId;
               return (
                 <PettyHolderCard
+                  tax={{ vatPercent: reqSettings.vatPercent, whtRates: reqSettings.whtRates.filter((r) => r > 0) }}
                   key={h.userId}
                   holder={h}
                   isMe={isMe && viewer.isPettyHolder}

@@ -18,7 +18,7 @@ import {
   voidPettyEntryAction,
   type UploadedFile,
 } from "../actions";
-import { PETTY_CATEGORIES, PETTY_WHT_OPTIONS, SIMILAR_SLIP_PREFIX, baht, parseMoney, pettyTax, thaiDateTime } from "../lib/types";
+import { PETTY_CATEGORIES, SIMILAR_SLIP_PREFIX, baht, parseMoney, pettyTax, thaiDateTime } from "../lib/types";
 import { FilePicker } from "./file-picker";
 import { Notice } from "./ui";
 
@@ -187,7 +187,10 @@ export function PettyHolderCard({
   selected,
   href,
   payable = [],
+  tax = { vatPercent: 7, whtRates: [1, 2, 3, 5] },
 }: {
+  /** VAT % + อัตราหัก ณ ที่จ่าย จากหน้าตั้งค่าเบิกจ่าย (ที่เดียวกับใบค่าช่าง) */
+  tax?: PettyTaxSettings;
   holder: PettyHolderView;
   isMe: boolean;
   /** HR/CEO — เติมเงินให้คนอื่นได้ */
@@ -278,7 +281,7 @@ export function PettyHolderCard({
         </button>
       )}
 
-      {open === "spend" && <PayModal holder={holder} today={today} payable={payable} onClose={close} />}
+      {open === "spend" && <PayModal holder={holder} today={today} payable={payable} tax={tax} onClose={close} />}
       {open === "request" && <RequestTopupModal holder={holder} onClose={close} />}
       {open === "topup" && <TopUpModal holder={holder} today={today} onClose={close} />}
       {open === "adjust" && <AdjustModal holder={holder} onClose={close} />}
@@ -288,7 +291,13 @@ export function PettyHolderCard({
 
 /* ───────────── − จ่ายเงิน: ให้คนที่ขอมา / ซื้อของเอง ───────────── */
 
-function PayModal({ holder, today, payable, onClose }: { holder: PettyHolderView; today: string; payable: PettyPayableItem[]; onClose: () => void }) {
+export interface PettyTaxSettings {
+  vatPercent: number;
+  /** % หัก ณ ที่จ่ายที่ให้กดเลือก (ไม่รวม 0) */
+  whtRates: number[];
+}
+
+function PayModal({ holder, today, payable, tax, onClose }: { holder: PettyHolderView; today: string; payable: PettyPayableItem[]; tax: PettyTaxSettings; onClose: () => void }) {
   const [mode, setMode] = useState<"request" | "self">(payable.length > 0 ? "request" : "self");
   const tab = (on: boolean) => `h-10 rounded-(--radius) text-sm ${on ? "bg-(--brand-navy,#1b2537) font-semibold text-white" : "text-(--ink) hover:bg-white"}`;
   return (
@@ -305,7 +314,7 @@ function PayModal({ holder, today, payable, onClose }: { holder: PettyHolderView
         {mode === "request" ? (
           <RequestPayForm holder={holder} today={today} payable={payable} onClose={onClose} />
         ) : (
-          <SpendForm balance={holder.balance} today={today} onClose={onClose} />
+          <SpendForm balance={holder.balance} today={today} taxSettings={tax} onClose={onClose} />
         )}
       </div>
     </Modal>
@@ -395,7 +404,8 @@ const WHT_HINT: Record<string, string> = {
 };
 
 /** ซื้อของเองด้วยเงินในมือ — ไม่มีใบเบิก */
-function SpendForm({ balance, today, onClose }: { balance: number; today: string; onClose: () => void }) {
+function SpendForm({ balance, today, taxSettings, onClose }: { balance: number; today: string; taxSettings: PettyTaxSettings; onClose: () => void }) {
+  const vatRate = taxSettings.vatPercent;
   const { busy, error, run } = useSave(onClose);
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
@@ -421,7 +431,7 @@ function SpendForm({ balance, today, onClose }: { balance: number; today: string
   const [payeeName, setPayeeName] = useState("");
   const [payeeKind, setPayeeKind] = useState<"person" | "company" | null>(null);
   const value = parseMoney(amount);
-  const tax = Number.isFinite(value) && value > 0 ? pettyTax(value, vatIncluded, whtPercent) : null;
+  const tax = Number.isFinite(value) && value > 0 ? pettyTax(value, vatIncluded, whtPercent, vatRate) : null;
   const paid = tax ? tax.paid : value;
   const over = Number.isFinite(paid) && paid > balance + 0.005;
   const payeeOk = whtPercent === 0 || (payeeName.trim() && payeeKind);
@@ -460,19 +470,19 @@ function SpendForm({ balance, today, onClose }: { balance: number; today: string
             </legend>
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" className="h-4 w-4" checked={vatIncluded} onChange={(e) => setVatIncluded(e.target.checked)} />
-              มี VAT 7% รวมในยอดแล้ว (ใบกำกับภาษีเต็มรูป)
+              มี VAT {vatRate}% รวมในยอดแล้ว (ใบกำกับภาษีเต็มรูป)
             </label>
             <div className="flex flex-col gap-1.5 text-sm">
               <span>หัก ณ ที่จ่าย</span>
               <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="หัก ณ ที่จ่าย">
-                {[{ v: "0", t: "ไม่หัก" }, ...PETTY_WHT_OPTIONS.map((o) => ({ v: String(o.percent), t: `${o.percent}%` })), { v: "other", t: "อื่น ๆ" }].map((o) => (
+                {[{ v: "0", t: "ไม่หัก" }, ...taxSettings.whtRates.map((r) => ({ v: String(r), t: `${r}%` })), { v: "other", t: "อื่น ๆ" }].map((o) => (
                   <label key={o.v} className={`inline-flex h-9 min-w-12 cursor-pointer items-center justify-center rounded-full border px-3 text-sm ${whtChoice === o.v ? "border-(--brand-navy,#1b2537) bg-(--brand-navy,#1b2537) font-semibold text-white" : "border-(--line)"}`}>
                     <input type="radio" className="sr-only" name="wht-choice" checked={whtChoice === o.v} onChange={() => setWhtChoice(o.v)} />
                     {o.t}
                   </label>
                 ))}
               </div>
-              <span className="text-xs text-(--ink-soft)">{WHT_HINT[whtChoice] ?? ""}</span>
+              {WHT_HINT[whtChoice] && <span className="text-xs text-(--ink-soft)">{WHT_HINT[whtChoice]}</span>}
             </div>
             {whtChoice === "other" && (
               <label className="flex items-center gap-2 text-sm">
@@ -498,7 +508,7 @@ function SpendForm({ balance, today, onClose }: { balance: number; today: string
             )}
             {tax && (vatIncluded || whtPercent > 0) && (
               <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5 rounded-(--radius) bg-(--bg-soft) px-3 py-2 text-sm tabular-nums">
-                {vatIncluded && (<><dt className="text-(--ink-soft)">ก่อน VAT</dt><dd className="text-right">{baht(tax.base)}</dd><dt className="text-(--ink-soft)">VAT 7%</dt><dd className="text-right">{baht(tax.vat)}</dd></>)}
+                {vatIncluded && (<><dt className="text-(--ink-soft)">ก่อน VAT</dt><dd className="text-right">{baht(tax.base)}</dd><dt className="text-(--ink-soft)">VAT {vatRate}%</dt><dd className="text-right">{baht(tax.vat)}</dd></>)}
                 {whtPercent > 0 && (<><dt className="text-(--ink-soft)">หัก ณ ที่จ่าย {whtPercent}%</dt><dd className="text-right">−{baht(tax.wht)}</dd></>)}
                 <dt className="font-semibold text-(--ink)">จ่ายจริง</dt><dd className="text-right font-bold text-(--ink)">{baht(tax.paid)}</dd>
               </dl>
