@@ -293,6 +293,8 @@ export function PettyHolderCard({
 /* ───────────── − จ่ายเงิน: ให้คนที่ขอมา / ซื้อของเอง ───────────── */
 
 export interface PettyTaxSettings {
+  /** บริษัทเปิด "ซื้อของเองต้องมีคนตรวจ" */
+  review?: boolean;
   vatPercent: number;
   /** % หัก ณ ที่จ่ายที่ให้กดเลือก (ไม่รวม 0) */
   whtRates: number[];
@@ -439,7 +441,7 @@ function SpendForm({ balance, today, taxSettings, onClose }: { balance: number; 
   const ready = title.trim() && category && Number.isFinite(value) && value > 0 && !over && spentOn && files.length > 0 && payeeOk && !customBad;
   return (
       <div className="flex flex-col gap-3">
-        <Explain>ใช้เงินในมือซื้อของ/จ่ายค่าบริการเอง ไม่ต้องทำใบเบิก — กรอกครบทุกช่องที่มี * และแนบรูปใบเสร็จ บันทึกแล้วยอดในมือลดลงทันที แล้ว HR (หรือ CEO ถ้าคุณเป็น HR) จะตรวจใบเสร็จทีหลัง — ไม่ผ่านต้องคืนเงินเข้ากอง · เงินในมือตอนนี้ {baht(balance)}</Explain>
+        <Explain>ใช้เงินในมือซื้อของ/จ่ายค่าบริการเอง ไม่ต้องทำใบเบิก — กรอกครบทุกช่องที่มี * และแนบรูปใบเสร็จ บันทึกแล้วยอดในมือลดลงทันที{taxSettings.review ? " แล้ว HR (หรือ CEO ถ้าคุณเป็น HR) จะตรวจใบเสร็จทีหลัง — ไม่ผ่านต้องคืนเงินเข้ากอง" : ""} · เงินในมือตอนนี้ {baht(balance)}</Explain>
         <Field label="จ่ายค่าอะไร" required>
           <input className={field} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="เช่น น้ำแข็ง 2 ถุง บ้าน A3" />
         </Field>

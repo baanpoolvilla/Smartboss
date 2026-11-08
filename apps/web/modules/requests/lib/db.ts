@@ -281,6 +281,7 @@ export async function readSettings(tx: Tx, orgId: string): Promise<RequestSettin
     vatPercent: num0(s.vatPercent),
     receiptMaxAgeDays: s.receiptMaxAgeDays,
     clearDueDays: s.clearDueDays,
+    pettySpendReview: s.pettySpendReview,
   };
 }
 

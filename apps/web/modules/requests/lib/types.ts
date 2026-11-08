@@ -442,6 +442,8 @@ export interface RequestSettings {
   vatPercent: number;
   receiptMaxAgeDays: number;
   clearDueDays: number;
+  /** "ซื้อของเอง" จากเงินสดย่อยต้องมีคนตรวจทีหลัง — ปิด = แบบเดิม (ผู้ใช้ 8/11/2569 สวิตช์รายบริษัท) */
+  pettySpendReview: boolean;
 }
 
 export const DEFAULT_SETTINGS: RequestSettings = {
@@ -453,6 +455,7 @@ export const DEFAULT_SETTINGS: RequestSettings = {
   vatPercent: 7,
   receiptMaxAgeDays: 60,
   clearDueDays: 7,
+  pettySpendReview: false,
 };
 
 export function daysInMonthOf(month: string): number {

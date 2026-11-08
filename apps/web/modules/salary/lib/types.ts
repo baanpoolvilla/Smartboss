@@ -224,6 +224,8 @@ export interface SettingsView {
   diligencePartial: DiligencePartial;
   editorUserIds: string[];
   superAdminAccess: boolean;
+  /** คนที่ CEO เลือก แก้เงินเดือนของตัวเองได้ — ปิด = ล็อกแบบเดิม (สวิตช์รายบริษัท 8/11/2569) */
+  editorsEditOwn: boolean;
   companyTaxId: string;
   ssoEmployerNo: string;
   ssoBranch: string;
@@ -250,6 +252,7 @@ export const DEFAULT_SETTINGS: SettingsView = {
   diligencePartial: "none",
   editorUserIds: [],
   superAdminAccess: true,
+  editorsEditOwn: false,
   companyTaxId: "",
   ssoEmployerNo: "",
   ssoBranch: "000000",

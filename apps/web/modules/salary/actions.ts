@@ -125,7 +125,7 @@ function refresh(runId?: string) {
 
 /* ═════════════════════════ ใครเห็นเงินเดือนได้ (CEO) ═════════════════════════ */
 
-export async function saveAccessAction(input: { editorUserIds: string[]; superAdminAccess: boolean }): Promise<Result> {
+export async function saveAccessAction(input: { editorUserIds: string[]; superAdminAccess: boolean; editorsEditOwn?: boolean }): Promise<Result> {
   try {
     const { orgId, actor, session } = await guard("canManageAccess");
     const wanted = [...new Set(input.editorUserIds.filter((x) => typeof x === "string"))].slice(0, 20);
@@ -136,8 +136,8 @@ export async function saveAccessAction(input: { editorUserIds: string[]; superAd
       const old = await readSettings(tx, orgId);
       await tx.salarySettings.upsert({
         where: { orgId },
-        create: { orgId, editorUserIds: ids, superAdminAccess: !!input.superAdminAccess, updatedByName: actor.name },
-        update: { editorUserIds: ids, superAdminAccess: !!input.superAdminAccess, updatedByName: actor.name },
+        create: { orgId, editorUserIds: ids, superAdminAccess: !!input.superAdminAccess, editorsEditOwn: !!input.editorsEditOwn, updatedByName: actor.name },
+        update: { editorUserIds: ids, superAdminAccess: !!input.superAdminAccess, ...(input.editorsEditOwn === undefined ? {} : { editorsEditOwn: !!input.editorsEditOwn }), updatedByName: actor.name },
       });
       const added = ids.filter((x) => !old.editorUserIds.includes(x));
       const removed = old.editorUserIds.filter((x) => !ids.includes(x));
@@ -146,6 +146,7 @@ export async function saveAccessAction(input: { editorUserIds: string[]; superAd
         added.length ? `เพิ่ม ${(await Promise.all(added.map(nameOf))).join(", ")}` : null,
         removed.length ? `เอาออก ${(await Promise.all(removed.map(nameOf))).join(", ")}` : null,
         old.superAdminAccess !== !!input.superAdminAccess ? `ผู้ดูแลระบบสูงสุด${input.superAdminAccess ? "เห็นได้" : "ไม่เห็นแล้ว"}` : null,
+        input.editorsEditOwn !== undefined && old.editorsEditOwn !== !!input.editorsEditOwn ? `คนทำเงินเดือน${input.editorsEditOwn ? "แก้ของตัวเองได้" : "แก้ของตัวเองไม่ได้"}` : null,
       ].filter(Boolean).join(" · ");
       if (summary) await insertEvent(tx, orgId, { byUserId: actor.userId, byName: actor.name, action: "access", summary: `คนที่เห็นเงินเดือน: ${summary}` });
       return { old, added, removed, summary };

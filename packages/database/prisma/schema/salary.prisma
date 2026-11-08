@@ -28,6 +28,8 @@ model SalarySettings {
   deductUnpaidLeave  Boolean  @default(true) @map("deduct_unpaid_leave")
   /// คนที่เห็น/แก้เงินเดือนได้นอกจาก CEO (CEO เลือก) — core.users.id
   editorUserIds      String[] @default([]) @map("editor_user_ids")
+  /// คนที่ CEO เลือก แก้เงินเดือนของตัวเองได้ (แจ้ง CEO + ป้าย "แก้โดยเจ้าตัว") — ปิด = ล็อกแบบเดิม
+  editorsEditOwn     Boolean  @default(false) @map("editors_edit_own")
   /// SUPER_ADMIN เห็นข้อมูลเงินเดือนได้ (ช่วงติดตั้ง) — CEO ปิดเมื่อพร้อมใช้จริง
   superAdminAccess   Boolean  @default(true) @map("super_admin_access")
   companyTaxId       String   @default("") @map("company_tax_id")

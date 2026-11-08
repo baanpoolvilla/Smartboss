@@ -28,6 +28,7 @@ export function SettingsForm({ initial }: { initial: RequestSettings }) {
   const [wht, setWht] = useState(initial.whtRates.join(", "));
   const [vat, setVat] = useState(String(initial.vatPercent));
   const [maxAge, setMaxAge] = useState(String(initial.receiptMaxAgeDays));
+  const [pettyReview, setPettyReview] = useState(initial.pettySpendReview);
   const [clearDays, setClearDays] = useState(String(initial.clearDueDays));
 
   function save() {
@@ -43,6 +44,7 @@ export function SettingsForm({ initial }: { initial: RequestSettings }) {
         vatPercent: Number(vat),
         receiptMaxAgeDays: Number(maxAge),
         clearDueDays: Number(clearDays),
+        pettySpendReview: pettyReview,
       });
       if (!res.ok) {
         setError(res.error);
@@ -141,6 +143,19 @@ export function SettingsForm({ initial }: { initial: RequestSettings }) {
             <span className="text-xs text-(--ink-soft)">{capMode === "days" ? "คนงาน = ค่าแรงต่อวัน · พนักงาน = เงินเดือน ÷ 30" : "เท่ากันทุกคน"}</span>
           </label>
         )}
+      </section>
+
+      <section className="flex flex-col gap-2 rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4">
+        <h2 className="text-sm font-bold text-(--ink)">เงินสดย่อย</h2>
+        <label className="flex items-start gap-2 text-sm text-(--ink)">
+          <input type="checkbox" className="mt-1 h-4 w-4" checked={pettyReview} onChange={(e) => setPettyReview(e.target.checked)} />
+          <span>
+            “ซื้อของเอง” ต้องมีคนตรวจทีหลัง
+            <span className="block text-xs text-(--ink-soft)">
+              คนถือเงินจ่ายไปก่อนได้ แล้ว HR (หรือ CEO ถ้าคนถือเป็น HR) กดผ่าน/ไม่ผ่าน · ไม่ผ่าน = เงินขาดรอคืน ไม่นับเป็นค่าใช้จ่าย · ปิด = ลงแล้วจบ ไม่ต้องตรวจ
+            </span>
+          </span>
+        </label>
       </section>
 
       <section className="grid grid-cols-1 gap-3 rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4 sm:grid-cols-2">

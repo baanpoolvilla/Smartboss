@@ -27,19 +27,21 @@ export interface SalaryAccess {
   canManageAccess: boolean;
   isCeo: boolean;
   isSuperAdmin: boolean;
+  /** แก้ข้อมูลเงินเดือนของตัวเองได้ (CEO เสมอ · คนที่ CEO เลือกเมื่อบริษัทเปิดสวิตช์) */
+  canEditOwn: boolean;
   /** มาจากไหน — แสดงในหน้าตั้งค่า/บันทึกประวัติ */
   via: "ceo" | "editor" | "super_admin" | null;
 }
 
-const NONE: SalaryAccess = { canEdit: false, canApprove: false, canManageAccess: false, isCeo: false, isSuperAdmin: false, via: null };
+const NONE: SalaryAccess = { canEdit: false, canApprove: false, canManageAccess: false, canEditOwn: false, isCeo: false, isSuperAdmin: false, via: null };
 
-export function accessFrom(session: Pick<Session, "userId" | "roles">, settings: { editorUserIds: string[]; superAdminAccess: boolean }): SalaryAccess {
+export function accessFrom(session: Pick<Session, "userId" | "roles">, settings: { editorUserIds: string[]; superAdminAccess: boolean; editorsEditOwn?: boolean }): SalaryAccess {
   const isCeo = session.roles.includes("CEO");
   const isSuperAdmin = session.roles.includes("SUPER_ADMIN");
   const superOk = isSuperAdmin && settings.superAdminAccess;
-  if (isCeo) return { canEdit: true, canApprove: true, canManageAccess: true, isCeo, isSuperAdmin, via: "ceo" };
-  if (superOk) return { canEdit: true, canApprove: true, canManageAccess: true, isCeo, isSuperAdmin, via: "super_admin" };
-  if (settings.editorUserIds.includes(session.userId)) return { canEdit: true, canApprove: false, canManageAccess: false, isCeo, isSuperAdmin, via: "editor" };
+  if (isCeo) return { canEdit: true, canApprove: true, canManageAccess: true, canEditOwn: true, isCeo, isSuperAdmin, via: "ceo" };
+  if (superOk) return { canEdit: true, canApprove: true, canManageAccess: true, canEditOwn: !!settings.editorsEditOwn, isCeo, isSuperAdmin, via: "super_admin" };
+  if (settings.editorUserIds.includes(session.userId)) return { canEdit: true, canApprove: false, canManageAccess: false, canEditOwn: !!settings.editorsEditOwn, isCeo, isSuperAdmin, via: "editor" };
   return { ...NONE, isCeo, isSuperAdmin };
 }
 
@@ -48,7 +50,7 @@ export async function salaryAccess(session: Pick<Session, "userId" | "roles" | "
   const settings = await withSalaryTenant(session.orgId, (tx) => readSettings(tx, session.orgId!)).catch((error: unknown) => {
     // ตารางยังไม่มี (ยังไม่ได้ migrate) = ไม่ให้ใครเห็นนอกจาก CEO — ปลอดภัยไว้ก่อน
     console.error("[salary] read settings failed", error instanceof Error ? error.message : error);
-    return { editorUserIds: [] as string[], superAdminAccess: false };
+    return { editorUserIds: [] as string[], superAdminAccess: false, editorsEditOwn: false };
   });
   return accessFrom(session, settings);
 }
@@ -68,15 +70,11 @@ export async function userCanEditSalary(orgId: string, userId: string): Promise<
 }
 
 /**
- * คนที่ CEO เลือก (ไม่ใช่ CEO) แก้ข้อมูลเงินเดือนของตัวเองได้ไหม
- * ผู้ใช้ 8/11/2569: "อยากให้ใส่เงินเดือนตัวเองได้ด้วย เพราะเค้าเป็น HR เค้าต้องทำเงินเดือนอยู่แล้ว" → เปิด
- * (รอบเงินเดือนยังต้องให้ CEO อนุมัติ) · อยากกลับไปกันแบบเดิม = เปลี่ยนเป็น false ที่เดียว
+ * ล็อกไม่ให้แก้ข้อมูลเงินเดือนของตัวเองไหม — CEO แก้ได้เสมอ · คนที่ CEO เลือกแก้ได้เมื่อบริษัทเปิดสวิตช์
+ * "คนทำเงินเดือนแก้ของตัวเองได้" (ตั้งค่าเงินเดือน · ผู้ใช้ 8/11/2569 ให้เป็นรายบริษัท) — ปิด = ล็อกแบบเดิม
  */
-export const EDITORS_EDIT_OWN_SALARY = true;
-
-/** ล็อกไม่ให้แก้ของตัวเองไหม — CEO แก้ได้เสมอ */
-export function ownSalaryLocked(access: Pick<SalaryAccess, "isCeo">, isOwn: boolean): boolean {
-  return isOwn && !access.isCeo && !EDITORS_EDIT_OWN_SALARY;
+export function ownSalaryLocked(access: Pick<SalaryAccess, "isCeo" | "canEditOwn">, isOwn: boolean): boolean {
+  return isOwn && !access.isCeo && !access.canEditOwn;
 }
 
 /** พนักงานคนนี้ (employment) คือบัญชีผู้ใช้ userId เองไหม — ใช้กันคนทำเงินเดือนแก้ของตัวเอง */

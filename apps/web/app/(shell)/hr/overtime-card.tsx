@@ -25,7 +25,7 @@ function hhmm(minutes: number): string {
  * OT รออนุมัติหนึ่งรายการ — อนุมัติกับไม่อนุมัติเป็นคนละ <form> ส่ง decision ผ่าน
  * hidden input (เหตุผลเดียวกับ CorrectionCard: ไม่แชร์ input ข้ามปุ่ม submit)
  */
-export function OvertimeCard({ item, canDecide = true }: { item: OvertimeItem; canDecide?: boolean }) {
+export function OvertimeCard({ item, canDecide = true, approvers = "" }: { item: OvertimeItem; canDecide?: boolean; approvers?: string }) {
   const [mode, setMode] = useState<"none" | "approve" | "reject">("none");
   const toggle = (next: "approve" | "reject") => setMode((m) => (m === next ? "none" : next));
 
@@ -57,7 +57,7 @@ export function OvertimeCard({ item, canDecide = true }: { item: OvertimeItem; c
         </div>
       </div>
 
-      {!canDecide && <p className="mt-2 text-xs text-(--ink-soft)">รอพี่ HR / CEO อนุมัติ (คนที่อนุมัติ OT ในเบิกจ่าย &amp; OT ได้)</p>}
+      {!canDecide && <p className="mt-2 text-xs text-(--ink-soft)">รอผู้อนุมัติ OT{approvers ? `: ${approvers}` : ""}</p>}
       {canDecide && (
       <div className="mt-3 flex flex-wrap gap-2">
         <Button type="button" variant="outline" onClick={() => toggle("approve")}>

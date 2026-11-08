@@ -35,7 +35,7 @@ export default async function SalarySettingsPage() {
         <AccessForm
           canManage={access.canManageAccess}
           users={users.map((u) => ({ id: u.id, name: u.name, roles: u.roles.map((r) => r.role.name).join(", ") }))}
-          initial={{ editorUserIds: settings.editorUserIds, superAdminAccess: settings.superAdminAccess }}
+          initial={{ editorUserIds: settings.editorUserIds, superAdminAccess: settings.superAdminAccess, editorsEditOwn: settings.editorsEditOwn }}
         />
         {/* key: สวิตช์รวมเปลี่ยนภาษีแล้ว ฟอร์มนี้ต้องอ่านค่าใหม่ ไม่งั้นกดบันทึกทีหลังจะเขียนค่าเดิมทับ */}
         <GeneralSettingsForm

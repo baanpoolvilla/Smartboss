@@ -17,10 +17,11 @@ export function AccessForm({
 }: {
   canManage: boolean;
   users: { id: string; name: string; roles: string }[];
-  initial: { editorUserIds: string[]; superAdminAccess: boolean };
+  initial: { editorUserIds: string[]; superAdminAccess: boolean; editorsEditOwn: boolean };
 }) {
   const [ids, setIds] = useState(initial.editorUserIds);
   const [superOn, setSuperOn] = useState(initial.superAdminAccess);
+  const [editOwn, setEditOwn] = useState(initial.editorsEditOwn);
   const [pick, setPick] = useState("");
   const [saved, setSaved] = useState(false);
   const { busy, error, run } = useRun();
@@ -55,6 +56,13 @@ export function AccessForm({
               ))}
             </select>
           </div>
+          <label className="flex items-start gap-3 rounded-(--radius) border border-(--line) px-3 py-2.5 text-sm text-(--ink)">
+            <input type="checkbox" className="mt-0.5 h-5 w-5" checked={editOwn} onChange={(e) => { setSaved(false); setEditOwn(e.target.checked); }} />
+            <span>
+              คนในรายชื่อแก้ข้อมูลเงินเดือนของตัวเองได้
+              <span className="block text-xs text-(--ink-soft)">เช่น HR ที่ทำเงินเดือนเอง · ทุกครั้งที่แก้ CEO ได้แจ้งเตือน หน้าอนุมัติขึ้นป้าย “แก้โดยเจ้าตัว” และรอบนั้นต้องให้ CEO อนุมัติ · ปิด = ต้องให้ CEO แก้ให้</span>
+            </span>
+          </label>
           <label className="flex min-h-11 items-center gap-3 rounded-(--radius) border border-amber-200 bg-amber-50 px-3 text-sm text-amber-950">
             <input type="checkbox" className="h-5 w-5" checked={superOn} onChange={(e) => { setSaved(false); setSuperOn(e.target.checked); }} />
             ผู้ดูแลระบบสูงสุดเห็นข้อมูลเงินเดือนได้ (ช่วงติดตั้ง/แก้ปัญหา) — ปิดเมื่อพร้อมใช้จริง
@@ -66,7 +74,7 @@ export function AccessForm({
               // เลือกชื่อไว้แต่ลืมกด "+ เพิ่ม" — นับรวมด้วย (8/11/2569 บันทึกไปแบบรายชื่อว่าง ทั้งที่เลือกพี่เซี้ยไว้)
               const next = pick && !ids.includes(pick) ? [...ids, pick] : ids;
               if (next !== ids) { setIds(next); setPick(""); }
-              run(() => saveAccessAction({ editorUserIds: next, superAdminAccess: superOn }), () => setSaved(true));
+              run(() => saveAccessAction({ editorUserIds: next, superAdminAccess: superOn, editorsEditOwn: editOwn }), () => setSaved(true));
             }}>
               {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} บันทึกรายชื่อ
             </button>

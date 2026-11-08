@@ -65,6 +65,7 @@ export async function readSettings(tx: Tx, orgId: string): Promise<SettingsView>
     diligencePartial: row.diligencePartial === "prorate" || row.diligencePartial === "full" ? row.diligencePartial : "none",
     editorUserIds: row.editorUserIds,
     superAdminAccess: row.superAdminAccess,
+    editorsEditOwn: row.editorsEditOwn,
     companyTaxId: row.companyTaxId,
     ssoEmployerNo: row.ssoEmployerNo,
     ssoBranch: row.ssoBranch,

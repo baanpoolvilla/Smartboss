@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { hasPermission, requireOrg } from "@smartboss/auth";
 import { REQ_PERMS } from "@/modules/requests/permissions";
+import { prisma } from "@smartboss/database";
+import { usersWithPermission } from "@/modules/maintenance/data/notify";
 import { withRequestsTenant } from "@/modules/requests/lib/db";
 import {
   wfTry,
@@ -100,6 +102,17 @@ export async function renderOvertimeTab(): Promise<React.ReactNode> {
   // อนุมัติ OT จากเวลาสแกนได้เฉพาะคนที่อนุมัติ OT ในเบิกจ่าย & OT ได้ (พี่เซี้ย + CEO) — ผู้ใช้ 8/11/2569
   // คนอื่นที่มีสิทธิ์จัดการพนักงานยังเปิดดูได้ แต่ไม่มีปุ่ม
   const canDecide = hasPermission(session, REQ_PERMS.approve) || hasPermission(session, REQ_PERMS.approveCeo);
+  // คนที่ไม่มีปุ่ม เห็นว่าใครอนุมัติได้ (แต่ละบริษัทตั้งเองที่ บทบาทและสิทธิ์ › เบิกจ่าย & OT: อนุมัติ)
+  const approverNames = canDecide
+    ? ""
+    : await Promise.all([usersWithPermission(orgId, REQ_PERMS.approve), usersWithPermission(orgId, REQ_PERMS.approveCeo)])
+        .then(async ([a, b]) => {
+          const ids = [...new Set([...a, ...b])];
+          if (ids.length === 0) return "ยังไม่มีใครมีสิทธิ์ — ตั้งที่ บทบาทและสิทธิ์ › “เบิกจ่าย & OT: อนุมัติ”";
+          const users = await prisma.user.findMany({ where: { orgId, id: { in: ids }, isActive: true }, select: { name: true }, orderBy: { name: "asc" } });
+          return users.map((u) => u.name).join(", ");
+        })
+        .catch(() => "");
   const linked =
     approvedIds.length === 0
       ? []
@@ -160,7 +173,7 @@ export async function renderOvertimeTab(): Promise<React.ReactNode> {
         ) : (
           <div className="space-y-3">
             {pending.map((item) => (
-              <OvertimeCard key={`${item.employmentId}|${item.workDate}`} item={item} canDecide={canDecide} />
+              <OvertimeCard key={`${item.employmentId}|${item.workDate}`} item={item} canDecide={canDecide} approvers={approverNames} />
             ))}
           </div>
         )}

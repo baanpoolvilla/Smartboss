@@ -285,6 +285,8 @@ model MoneyRequestSettings {
   receiptMaxAgeDays Int      @default(60) @map("receipt_max_age_days")
   /// เบิกเงินไปก่อน ต้องเคลียร์ภายในกี่วัน
   clearDueDays      Int      @default(7) @map("clear_due_days")
+  /// "ซื้อของเอง" จากเงินสดย่อยต้องมีคนตรวจทีหลัง — ปิด = แบบเดิม (ไม่ต้องตรวจ)
+  pettySpendReview  Boolean  @default(false) @map("petty_spend_review")
   /// เส้นทางอนุมัติรายประเภท {"ot": {"mode": "hr", "ceoAbove": 5000}, ...} — null = ค่าเริ่มต้น
   approvalRoutes    Json?    @map("approval_routes")
   updatedBy         String   @map("updated_by")

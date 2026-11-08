@@ -1998,6 +1998,8 @@ export async function addPettySpendAction(input: {
     if (!spentOn || spentOn > bangkokToday()) return { error: "วันที่จ่ายไม่ถูกต้อง" };
     const attachments = cleanAttachments(orgId, input.attachments, ["receipt", "evidence"]);
     if (attachments.length === 0) return { error: "แนบรูปใบเสร็จ / บิล" };
+    // บริษัทเปิด "ซื้อของเองต้องมีคนตรวจ" (ตั้งค่าเบิกจ่าย & OT) — ปิด = แบบเดิม ไม่ต้องตรวจ
+    const needReview = (await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId))).pettySpendReview;
     const res = await withRequestsTenant(orgId, async (tx) => {
       const balance = (await pettyBalances(tx, orgId)).get(holder.id) ?? 0;
       if (amount > balance + 0.005) return { error: `เงินในมือไม่พอ (เหลือ ${baht(balance)}) — กด “ขอเติมเงิน” ก่อน` } as const;
@@ -2014,17 +2016,17 @@ export async function addPettySpendAction(input: {
           attachments: attachments as unknown as object,
           byUserId: session.userId,
           byName: holder.name,
-          reviewStatus: "pending",
+          ...(needReview ? { reviewStatus: "pending" } : {}),
           ...(hasTax
             ? { billAmount: tax.bill, vatAmount: tax.vat, whtPercent: tax.whtPercent, whtAmount: tax.wht, payeeName: whtPercent > 0 ? payeeName : payeeName || null, payeeKind: whtPercent > 0 ? payeeKind : null }
             : {}),
         },
       });
-      await insertEvent(tx, orgId, { byUserId: session.userId, byName: holder.name, action: "petty", summary: `จ่ายจากเงินสดย่อย ${holder.name} ${baht(amount)} · ${input.category} · ${title}${hasTax ? ` · บิล ${baht(tax.bill)}${tax.vat ? ` VAT ${baht(tax.vat)}` : ""}${tax.wht ? ` หัก ณ ที่จ่าย ${tax.whtPercent}% ${baht(tax.wht)}` : ""}` : ""} · รอตรวจ` });
+      await insertEvent(tx, orgId, { byUserId: session.userId, byName: holder.name, action: "petty", summary: `จ่ายจากเงินสดย่อย ${holder.name} ${baht(amount)} · ${input.category} · ${title}${hasTax ? ` · บิล ${baht(tax.bill)}${tax.vat ? ` VAT ${baht(tax.vat)}` : ""}${tax.wht ? ` หัก ณ ที่จ่าย ${tax.whtPercent}% ${baht(tax.wht)}` : ""}` : ""}${needReview ? " · รอตรวจ" : ""}` });
       return { ok: true, entryId: entry.id } as const;
     });
     if ("error" in res) return { error: res.error ?? "ทำไม่สำเร็จ" };
-    void notifyPettySpendReviewers(orgId, { id: res.entryId, holderUserId: holder.id, holderName: holder.name, amount, title, needsCeo: await holderIsHr(orgId, holder.id) }).catch((error: unknown) =>
+    if (needReview) void notifyPettySpendReviewers(orgId, { id: res.entryId, holderUserId: holder.id, holderName: holder.name, amount, title, needsCeo: await holderIsHr(orgId, holder.id) }).catch((error: unknown) =>
       console.error("[requests] petty spend notify failed", error),
     );
     revalidatePath("/requests/petty-cash");
@@ -2158,6 +2160,7 @@ export async function saveSettingsAction(input: RequestSettings): Promise<Result
       vatPercent: vat,
       receiptMaxAgeDays: maxAge,
       clearDueDays: clearDays,
+      pettySpendReview: !!input.pettySpendReview,
       updatedBy: session.userId,
     };
     await withRequestsTenant(orgId, async (tx) => {
@@ -2166,7 +2169,7 @@ export async function saveSettingsAction(input: RequestSettings): Promise<Result
         byUserId: session.userId,
         byName,
         action: "settings",
-        summary: `ตั้งค่า: อนุมัติ ${(Object.keys(approvalRoutes) as RequestKind[]).map((k) => `${KIND_META[k].short} ${routeText(approvalRoutes[k])}`).join(", ")} · OT ${rates.map((r) => `${r.label} ${r.percent}%`).join(", ")} · เพดานเบิกล่วงหน้า ${input.advanceCapMode === "none" ? "ไม่จำกัด" : input.advanceCapMode === "baht" ? baht(capValue) : `${capValue} วัน`} · VAT ${vat}%`,
+        summary: `ตั้งค่า: อนุมัติ ${(Object.keys(approvalRoutes) as RequestKind[]).map((k) => `${KIND_META[k].short} ${routeText(approvalRoutes[k])}`).join(", ")} · OT ${rates.map((r) => `${r.label} ${r.percent}%`).join(", ")} · เพดานเบิกล่วงหน้า ${input.advanceCapMode === "none" ? "ไม่จำกัด" : input.advanceCapMode === "baht" ? baht(capValue) : `${capValue} วัน`} · VAT ${vat}% · ซื้อของเองจากเงินสดย่อย${input.pettySpendReview ? "ต้องมีคนตรวจ" : "ไม่ต้องตรวจ"}`,
       });
     });
     revalidatePath("/requests");
