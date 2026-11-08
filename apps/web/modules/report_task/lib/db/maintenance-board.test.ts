@@ -27,6 +27,10 @@ vi.mock("@smartboss/database", () => ({
     property: {
       findMany: vi.fn(async () => [{ id: "house-1" }]),
     },
+    // แผน PM ที่คนนี้สร้าง (ownPmPlanIds / งานรอฉันตรวจ) — ไม่มีในเทสต์นี้
+    pmSchedule: {
+      findMany: vi.fn(async () => []),
+    },
   },
 }));
 vi.mock("@/modules/maintenance/data/work-order-access", async (orig) => {
