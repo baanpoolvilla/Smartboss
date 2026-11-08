@@ -19,6 +19,9 @@ export const useActivityLogStore = create<ActivityLogStore>()((set) => ({
       entries: [
         { ...entry, id: `log-${uuid()}`, createdAt: new Date().toISOString() },
         ...s.entries,
-      ].slice(0, MAX_ENTRIES),
+      ]
+        // ตัดเก็บ MAX_ENTRIES รายการ "ล่าสุดจริง" — อาร์เรย์อาจไม่เรียงตามเวลา (รายการที่รวมมาจากเครื่องอื่น)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, MAX_ENTRIES),
     })),
 }));

@@ -102,7 +102,12 @@ export default function ActivityLogPage() {
     setCustomTo("");
   }
 
-  const grouped = useMemo(() => groupByDay(filtered, (e) => e.createdAt), [filtered]);
+  // เรียงใหม่ล่าสุดก่อนเสมอก่อนแบ่งตามวัน — รายการที่รวมเข้ามาจากเครื่องอื่นตอนบันทึกชนกัน (store-merge) ไปต่อท้าย/หัว
+  // ของอาร์เรย์ ไม่ตรงลำดับเวลา แล้วกลายเป็นกลุ่มวันเก่าค้างอยู่บนสุด (ผู้ใช้ 8/11/2569: 22/10 อยู่เหนือ "วันนี้")
+  const grouped = useMemo(
+    () => groupByDay([...filtered].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), (e) => e.createdAt),
+    [filtered],
+  );
 
   return (
     <div className="flex flex-col gap-4 lg:gap-6 pb-6">
