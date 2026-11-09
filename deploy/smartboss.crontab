@@ -23,6 +23,12 @@ SHELL=/bin/bash
 # ย้อนดูแค่ 3 ชม. ⇒ เปิดแล้วไม่เทรายการเก่าที่ตกหล่นเข้าแชท
 * * * * * bash /opt/smartboss/deploy/cron-run.sh attendance-chat 2>&1 | systemd-cat -t smartboss-cron
 
+# Google Ads Report — ซิงค์ทุกเช้า 06:00 · สรุปวันจันทร์ 07:00 · รอบครึ่งเดือนวันที่ 1 และ 16
+# เดิมใส่ crontab บนเครื่อง GCE ด้วยมือ ⇒ ย้ายไป DigitalOcean แล้วหายไปเงียบ ๆ ซิงค์ค้างที่ 30/10/2569 (พบ 9/11/2569)
+0 6 * * * bash /opt/smartboss/deploy/cron-run.sh sync ads 2>&1 | systemd-cat -t smartboss-cron
+0 7 * * 1 bash /opt/smartboss/deploy/cron-run.sh weekly ads 2>&1 | systemd-cat -t smartboss-cron
+0 7 1,16 * * bash /opt/smartboss/deploy/cron-run.sh half-month ads 2>&1 | systemd-cat -t smartboss-cron
+
 # ── รอบถัดไป: ยังไม่เปิด (3/11/2569 คุยกันก่อน) — ลบ # หน้าบรรทัดแล้ว deploy เพื่อเปิด ──
 # งานประจำวันที่เหลือ (เตือนค่าใช้จ่าย, แจ้งมาสาย, วันหยุด, OT รออนุมัติ, เตือนโปรเจกต์ ฯลฯ)
 #   ⚠ "all" รวมการลบรูป/วิดีโอในแชทที่หมดอายุด้วย — ลองดูก่อน: bash deploy/cron-run.sh "chat-media&dryRun=1"
