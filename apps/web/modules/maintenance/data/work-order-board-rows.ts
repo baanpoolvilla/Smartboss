@@ -72,6 +72,7 @@ export async function buildBoardRows(
       groupMemberIds: o.groupMemberIds,
       autoCreated: o.autoCreated,
       createdAtLabel: fmtThaiDate(o.createdAt),
+      createdAtIso: o.createdAt.toISOString(),
       hasExpense: expenseSet.has(o.id),
       requiresExpense: o.requiresExpense,
       pmRound: o.pmRoundDate ? pmRoundTag(o.pmRoundDate, o.dueDate, o.status) : null,

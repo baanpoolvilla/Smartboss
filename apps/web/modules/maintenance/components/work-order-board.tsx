@@ -31,6 +31,8 @@ export interface BoardOrder {
   groupMemberIds?: string[];
   autoCreated: boolean;
   createdAtLabel: string;
+  /** ใช้เรียง "ล่าสุด" บนบอร์ด */
+  createdAtIso?: string;
   hasExpense: boolean;
   /**
    * false = ใบงานนี้ตั้งไว้ว่าไม่ต้องกรอกค่าใช้จ่าย (เช่น PM ตรวจเช็คที่ไม่มีของ
@@ -456,11 +458,22 @@ function byDueDate(orders: BoardOrder[]): BoardOrder[] {
   return dated.length > 0 ? [...dated, ...orders.filter((w) => !(open(w) && w.dueDateIso))] : orders;
 }
 
+/**
+ * ตัวเลือกจัดเรียงบนแถบหัว (ผู้ใช้ 9/11/2569) — due = ใกล้ครบกำหนด (ค่าเริ่มต้น ลำดับเดิมของบอร์ด) · latest = เปิดใหม่ก่อน
+ * มีผลกับสามคอลัมน์แรก · คอลัมน์เสร็จแล้วเรียงปิดล่าสุดก่อนจากเซิร์ฟเวอร์อยู่แล้ว
+ */
+type BoardSort = "due" | "latest";
+
+function byNewest(orders: BoardOrder[]): BoardOrder[] {
+  return [...orders].sort((a, b) => (b.createdAtIso ?? "").localeCompare(a.createdAtIso ?? ""));
+}
+
 function ColumnList({
   orders,
   propertyNames,
   creatorNames,
   byPriority,
+  sort,
   gap,
   emptyClass,
   col,
@@ -470,6 +483,7 @@ function ColumnList({
   propertyNames: Record<string, string>;
   creatorNames: Record<string, string>;
   byPriority: boolean;
+  sort: BoardSort;
   gap: string;
   emptyClass: string;
   col: string;
@@ -494,7 +508,7 @@ function ColumnList({
 
   const groups = byPriority ? groupByPriority(orders) : [];
   // กลุ่มเดียวไม่ต้องขึ้นหัวกลุ่ม — หัวข้อที่คลุมทั้งคอลัมน์ไม่ได้บอกอะไรเพิ่ม
-  const sorted = groups.length <= 1 ? byDueDate(orders) : byDueDate(groups.flatMap((g) => g.orders));
+  const sorted = sort === "latest" ? byNewest(orders) : groups.length <= 1 ? byDueDate(orders) : byDueDate(groups.flatMap((g) => g.orders));
   const page = pageOf(sorted, paging.shown, unread);
   return (
     <>
@@ -588,12 +602,12 @@ function ColumnIcon({ col, color }: { col: string; color: string }) {
  * (กลับมาจากลิงก์ที่ไม่มี query) · sessionStorage = ต่อแท็บ ปิดแท็บแล้วลืมเอง
  */
 const FILTER_KEY = "sb-wo-board-filter";
-type BoardFilter = { group: string | null; house: string | null; tab: number; who?: string | null };
+type BoardFilter = { group: string | null; house: string | null; tab: number; who?: string | null; sort?: BoardSort };
 
 function readSavedFilter(): BoardFilter | null {
   const q = new URLSearchParams(window.location.search);
-  if (q.has("group") || q.has("house") || q.has("tab")) {
-    return { group: q.get("group"), house: q.get("house"), tab: Number(q.get("tab")) || 0, who: q.get("who") };
+  if (q.has("group") || q.has("house") || q.has("tab") || q.has("sort")) {
+    return { group: q.get("group"), house: q.get("house"), tab: Number(q.get("tab")) || 0, who: q.get("who"), sort: q.get("sort") === "latest" ? "latest" : "due" };
   }
   try {
     const raw = sessionStorage.getItem(FILTER_KEY);
@@ -605,7 +619,7 @@ function readSavedFilter(): BoardFilter | null {
 
 function saveFilter(f: BoardFilter) {
   const url = new URL(window.location.href);
-  for (const [k, v] of [["group", f.group], ["house", f.house], ["tab", f.tab ? String(f.tab) : null], ["who", f.who ?? null]] as const) {
+  for (const [k, v] of [["group", f.group], ["house", f.house], ["tab", f.tab ? String(f.tab) : null], ["who", f.who ?? null], ["sort", f.sort === "latest" ? "latest" : null]] as const) {
     if (v) url.searchParams.set(k, v);
     else url.searchParams.delete(k);
   }
@@ -668,6 +682,7 @@ export function WorkOrderBoard({
   const [tab, setTab] = useState(0);
   // กรองตามผู้ได้รับมอบหมาย — null = ทุกคน · UNASSIGNED = ใบที่ยังไม่มอบหมายให้ใคร
   const [assignee, setAssignee] = useState<string | null>(null);
+  const [sort, setSort] = useState<BoardSort>("due");
   const everyRow = useMemo<BoardStub[]>(() => [...orders, ...doneStubs], [orders, doneStubs]);
   const assigneeOptions = useMemo(() => {
     const ids = new Set(everyRow.flatMap((w) => [w.assignedTo, ...(w.groupMemberIds ?? [])]).filter((id): id is string => !!id));
@@ -748,12 +763,13 @@ export function WorkOrderBoard({
     setHouseId(h);
     setTab(saved.tab >= 0 && saved.tab < COLUMNS.length ? saved.tab : 0);
     setAssignee(saved.who ?? null);
+    setSort(saved.sort === "latest" ? "latest" : "due");
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [groups, propertyNames, propertyCategories]);
 
   useEffect(() => {
-    if (restored.current) saveFilter({ group, house: houseId, tab, who: assignee });
-  }, [group, houseId, tab, assignee]);
+    if (restored.current) saveFilter({ group, house: houseId, tab, who: assignee, sort });
+  }, [group, houseId, tab, assignee, sort]);
 
   const { visible, visibleDone } = useMemo(() => {
     const pick = <T extends BoardStub,>(rows: T[]): T[] => {
@@ -806,7 +822,8 @@ export function WorkOrderBoard({
   const rowsOf = (key: string): (BoardStub & Partial<BoardOrder>)[] => (key === "done" ? visibleDone : (buckets[key] ?? []));
   const boardTotal = columns.reduce((n, c) => n + rowsOf(c.key).length, 0) + hiddenCount;
   const countOf = (key: string) => rowsOf(key).length + (key === "no_expense" ? hiddenCount : 0);
-  const pagingKey = `${group}|${houseId}|${assignee}`;
+  // เปลี่ยนการเรียงแล้วเริ่มจากบนสุด — ใบที่เคยกดแสดงเพิ่มไว้ไม่ใช่ชุดเดิมแล้ว
+  const pagingKey = `${group}|${houseId}|${assignee}|${sort}`;
   const listFor = (c: (typeof COLUMNS)[number], gap: string, emptyClass: string) =>
     c.key === "done" ? (
       <DoneColumnList
@@ -828,6 +845,7 @@ export function WorkOrderBoard({
         propertyNames={propertyNames}
         creatorNames={creatorNames}
         byPriority={c.byPriority}
+        sort={sort}
         gap={gap}
         emptyClass={emptyClass}
         col={c.key}
@@ -880,6 +898,23 @@ export function WorkOrderBoard({
       </label>
     ) : null;
 
+  const sortSelect = (
+    <label className="relative inline-flex h-8 min-w-0 items-center rounded-(--radius) border border-(--line) bg-(--bg) pl-2 pr-6 text-[13px] sm:shrink-0 lg:h-9 lg:pl-3 lg:pr-8 lg:text-sm">
+      <span className="mr-1 shrink-0 text-(--ink-soft)">↕<span className="hidden sm:inline"> เรียง:</span></span>
+      <select
+        aria-label="จัดเรียงใบงาน"
+        data-testid="wo-board-sort"
+        className="min-w-0 max-w-[5.5rem] appearance-none truncate bg-transparent pr-1 font-medium text-(--ink) outline-none sm:max-w-none"
+        value={sort}
+        onChange={(e) => setSort(e.target.value === "latest" ? "latest" : "due")}
+      >
+        <option value="due">ใกล้ครบกำหนด</option>
+        <option value="latest">ล่าสุด</option>
+      </select>
+      <span className="pointer-events-none absolute right-1.5 text-(--ink-soft) lg:right-2.5" aria-hidden="true">▾</span>
+    </label>
+  );
+
   const personFilter =
     (canPickPeople && assigneeOptions.length > 0) || !!currentUserId ? (
       <PersonFilter
@@ -905,11 +940,11 @@ export function WorkOrderBoard({
      */
     <div className="flex h-full flex-col">
       {toolbarSlot &&
-        (personFilter || houseSelect) &&
         createPortal(
           <div className="flex min-w-0 items-center gap-2">
             {personFilter}
             {houseSelect}
+            {sortSelect}
           </div>,
           toolbarSlot,
         )}
