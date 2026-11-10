@@ -143,6 +143,7 @@ export default async function PmListPage({
     canMoveRounds: canEditDueDate({ userId: session.userId, viewAll: canViewAll(session) || hasPermission(session, MAINT_PERMS.pmMoveRounds) }, { createdBy: s.createdBy }) && !hiddenRoundPms.has(s.id),
     roundsHidden: hiddenRoundPms.has(s.id),
     earlyRounds: earlyBy.get(s.id) ?? [],
+    roundMode: pmUsesRounds(roundOrg, s),
     openRoundLabels: pendingWos
       .filter((w) => w.pmRoundDate && (w.pmScheduleId === s.id || w.pmScheduleIds.includes(s.id)))
       .sort((a, b) => a.pmRoundDate!.getTime() - b.pmRoundDate!.getTime())

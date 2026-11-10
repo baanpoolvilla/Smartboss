@@ -263,7 +263,11 @@ export async function applyWindowTransition(orgs: Map<string, RoundOrg>, pmIds?:
         pmScheduleId: pmIds ? { in: pmIds } : { not: null },
         status: { in: OPEN },
       },
-      select: { id: true, orgId: true, code: true, title: true, status: true, pmRoundDate: true, pmScheduleId: true, dueDate: true, autoCreated: true, memberDueDates: true },
+      select: {
+        id: true, orgId: true, code: true, title: true, status: true, pmRoundDate: true, pmScheduleId: true, dueDate: true, autoCreated: true, memberDueDates: true,
+        checklist: true, photoUrls: true, afterPhotoUrls: true,
+        _count: { select: { comments: true, externalPhotos: true } },
+      },
     }),
   );
   const today = todayBkkDate();
@@ -273,8 +277,10 @@ export async function applyWindowTransition(orgs: Map<string, RoundOrg>, pmIds?:
   for (const wo of wos) {
     const st = orgs.get(wo.orgId);
     if (!st) continue;
-    const act = windowTransition(wo, st.pmLeadDays, today);
+    let act = windowTransition(wo, st.pmLeadDays, today);
     if (!act) continue;
+    // มีร่องรอยว่าเริ่มทำแล้ว (คอมเมนต์ / รูป / ติ๊กเช็กลิสต์) — ไม่ปิดทิ้ง ขยายเวลาแทน งานที่ทำไว้ไม่หาย
+    if (act === "close" && hasWorkStarted(wo)) act = "extend";
     const round = wo.pmRoundDate!;
     if (act === "close") {
       const done = await prisma.workOrder.updateMany({
@@ -288,6 +294,8 @@ export async function applyWindowTransition(orgs: Map<string, RoundOrg>, pmIds?:
       if (done.count === 0) continue;
       closed++;
       await deleteNotificationsByReference(wo.id).catch(() => {});
+      // การ์ดมอบหมายในแชทส่วนตัว — ใบปิดแล้ว ซ่อนการ์ดด้วย ไม่ให้กดไปเจอใบที่ยกเลิก
+      await prisma.chatMessage.updateMany({ where: { orgId: wo.orgId, clientId: `wo-${wo.id}`, deletedAt: null }, data: { deletedAt: new Date() } });
       const prev = rewind.get(wo.pmScheduleId!);
       if (!prev || round.getTime() < prev.round.getTime()) rewind.set(wo.pmScheduleId!, { orgId: wo.orgId, round });
       await logActivity(wo.orgId, {
@@ -314,6 +322,12 @@ export async function applyWindowTransition(orgs: Map<string, RoundOrg>, pmIds?:
       data: { dueDate: due, ...(nextMembers ? { memberDueDates: nextMembers } : {}) },
     });
     extended++;
+    // การ์ดในแชทเก็บกำหนดส่งไว้ในตัวการ์ด — แก้ให้ตรงกับกำหนดส่งใหม่
+    const cards = await prisma.chatMessage.findMany({ where: { orgId: wo.orgId, clientId: `wo-${wo.id}`, deletedAt: null }, select: { id: true, meta: true } });
+    for (const c of cards) {
+      const meta = (c.meta ?? {}) as Record<string, unknown>;
+      await prisma.chatMessage.update({ where: { id: c.id, orgId: wo.orgId }, data: { meta: { ...meta, dueDate: due.toISOString() } } });
+    }
     // คะแนน "ไม่ทำตามรอบ" ที่ระบบหักไปแล้ว ทั้งที่ตามกติกาใหม่ยังไม่ครบเวลา — คืน (ผู้ใช้ "ให้เวลาทำไปเลย ไม่ต้องไปหักคะแนน")
     if (due.getTime() > Date.now()) {
       const ref = roundDockRefId(wo.pmScheduleId!, round, wo.id);
@@ -335,10 +349,28 @@ export async function applyWindowTransition(orgs: Map<string, RoundOrg>, pmIds?:
   for (const [pmId, { orgId, round }] of rewind) {
     await prisma.pmSchedule.updateMany({
       where: { id: pmId, orgId, nextDueDate: { gt: round } },
-      data: { nextDueDate: round, anchorDate: round },
+      // anchor ไม่แตะ — แผนตั้งวันที่ 31 ต้องไม่หดเป็น 30 ถาวรเพราะรอบที่ถอยกลับเป็นเดือน 30 วัน
+      data: { nextDueDate: round },
     });
   }
   return { closed, extended };
+}
+
+/** ใบนี้มีคนเริ่มทำแล้วไหม — คอมเมนต์ รูป หรือติ๊กเช็กลิสต์ไปบ้าง */
+function hasWorkStarted(wo: {
+  checklist: unknown;
+  photoUrls: string[];
+  afterPhotoUrls: string[];
+  _count: { comments: number; externalPhotos: number };
+}): boolean {
+  const items = Array.isArray(wo.checklist) ? (wo.checklist as { done?: boolean }[]) : [];
+  return (
+    wo._count.comments > 0 ||
+    wo._count.externalPhotos > 0 ||
+    wo.photoUrls.length > 0 ||
+    wo.afterPhotoUrls.length > 0 ||
+    items.some((i) => i?.done)
+  );
 }
 
 /** รอบถัดไปของแผนที่คนตั้ง PM เลือกทำก่อนได้ — ไม่รวมรอบที่มีใบแล้ว (ทุกสถานะ) */

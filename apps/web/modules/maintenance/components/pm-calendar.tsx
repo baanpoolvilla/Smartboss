@@ -122,6 +122,8 @@ export interface PmRow {
   roundsHidden?: boolean;
   /** รอบในอนาคตที่คนตั้ง PM เลือกทำก่อนได้ — ว่าง = ไม่มีปุ่ม (ไม่ใช่คนตั้ง / ไม่ใช่แผนนับรอบ) */
   earlyRounds?: { value: string; label: string; dueLabel: string }[];
+  /** แผนเดินแบบนับรอบ — ใบขึ้นเองในวันของรอบ ไม่ต้องกด "สร้างใบงาน" ตอนใกล้ถึง */
+  roundMode?: boolean;
 }
 
 /** ลิงก์สร้างใบงานจาก PM — คัดลอกรูปแบบ description ของเดิมทั้งหมด */
@@ -887,7 +889,7 @@ function PmDetailCard({
       )}
       {canManage &&
         !s.awaitingSchedule &&
-        (status === "overdue" || status === "dueSoon") && (
+        (status === "overdue" || (status === "dueSoon" && !s.roundMode)) && (
           <div className="mt-2">
             <Link href={workOrderHref(s, selfIdForAssign)}>
               <Button
