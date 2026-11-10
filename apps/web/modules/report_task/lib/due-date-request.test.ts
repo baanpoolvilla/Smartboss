@@ -190,4 +190,43 @@ describe("คำขอเลื่อนกำหนดส่ง", () => {
     expect(getTask().assigneeDueDates?.[STAFF]).toBe("2026-10-05");
     expect(getTask().assigneeDueDates?.[BOSS]).toBe("2026-10-10");
   });
+
+  // ผู้ใช้ 10/11/2569 "เลื่อนงานกลุ่ม ไม่ระบุ = เลื่อนทุกคน · เลือกรายคน = เลื่อนเป็นคน ๆ" — ล็อกพฤติกรรมไว้
+  describe("งานกลุ่ม: เลื่อนทั้งกลุ่ม / เลือกคน", () => {
+    const THIRD = "third";
+    beforeEach(() => {
+      useEmployeeStore.setState({ employees: [...people, { id: THIRD, name: "Tam", email: "t@x", avatar: "T", role: "พนักงาน", departmentId: "d1" }] });
+      useTaskStore.setState({ tasks: [task({ taskMode: "group", assigneeIds: [STAFF, BOSS, THIRD], assignedById: CEO })] });
+    });
+
+    it("ขอเลื่อนให้ทั้งกลุ่ม → อนุมัติ → ทุกคนได้วันใหม่", () => {
+      useTaskStore.getState().requestDueDateChange("t1", STAFF, "2026-10-07", "รออะไหล่", [STAFF, BOSS, THIRD]);
+      const r = getTask().dueDateRequests![0]!;
+      expect(r.forUserIds).toEqual([STAFF, BOSS, THIRD]);
+      useTaskStore.getState().decideDueDateRequest("t1", r.id, CEO, true);
+      expect(getTask().assigneeDueDates).toEqual({ [STAFF]: "2026-10-07", [BOSS]: "2026-10-07", [THIRD]: "2026-10-07" });
+    });
+
+    it("ขอเลื่อนให้บางคน → อนุมัติ → เฉพาะคนที่เลือก", () => {
+      useTaskStore.getState().requestDueDateChange("t1", STAFF, "2026-10-07", "รออะไหล่", [STAFF, THIRD]);
+      useTaskStore.getState().decideDueDateRequest("t1", getTask().dueDateRequests![0]!.id, CEO, true);
+      const d = getTask().assigneeDueDates ?? {};
+      expect(d[STAFF]).toBe("2026-10-07");
+      expect(d[THIRD]).toBe("2026-10-07");
+      expect(d[BOSS]).toBeUndefined();
+    });
+
+    it("คนอนุมัติเปลี่ยนเป็นทั้งกลุ่มได้ตอนกดอนุมัติ", () => {
+      useTaskStore.getState().requestDueDateChange("t1", STAFF, "2026-10-07", "รออะไหล่");
+      useTaskStore.getState().decideDueDateRequest("t1", getTask().dueDateRequests![0]!.id, CEO, true, undefined, [STAFF, BOSS, THIRD]);
+      expect(Object.keys(getTask().assigneeDueDates ?? {}).sort()).toEqual([BOSS, STAFF, THIRD].sort());
+    });
+
+    it("หัวหน้าแก้ตรง: ทั้งกลุ่มทีเดียว / รายคน", () => {
+      useTaskStore.getState().reviseAllAssigneeDueDates("t1", "2026-10-05", CEO, false);
+      expect(getTask().assigneeDueDates).toEqual({ [STAFF]: "2026-10-05", [BOSS]: "2026-10-05", [THIRD]: "2026-10-05" });
+      useTaskStore.getState().reviseAssigneeDueDate("t1", THIRD, "2026-10-12", CEO, false);
+      expect(getTask().assigneeDueDates).toEqual({ [STAFF]: "2026-10-05", [BOSS]: "2026-10-05", [THIRD]: "2026-10-12" });
+    });
+  });
 });
