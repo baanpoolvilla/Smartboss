@@ -68,7 +68,7 @@ export interface StaffInput {
   ytd: { taxable: number; tax: number; sso: number; periods: number; gapPeriods: number };
   /** ยอดยกมาที่กรอกไว้ (ใช้ตอนคำนวณงวดนี้) — เก็บลงบรรทัดไว้ให้สลิปแสดงยอดสะสมทั้งปีได้ถูก */
   opening: { income: number; tax: number; sso: number } | null;
-  info: { workedDays: number; leaveDays: number; lateCount: number; offDays: number; absentDays: number; otDays: number; otMinutes: number };
+  info: { workedDays: number; leaveDays: number; leaveByType?: Record<string, number>; lateCount: number; offDays: number; absentDays: number; otDays: number; otMinutes: number };
   /** มีข้อมูลลงเวลาในงวดไหม (0 = ไม่มีเลย — เบี้ยขยันเช็กสายไม่ได้) */
   attendanceRows: number;
   /** ข้อเตือนจากการดึงข้อมูล (ไม่ใช่จากการคำนวณ) */
@@ -265,6 +265,8 @@ export async function loadPeriodInputs(
     let offDays = 0;
     // วันลาที่ตัดเบี้ยขยัน (ลากิจ/ป่วย/ไม่รับค่าจ้าง ฯลฯ) — ไม่นับ Day-Off · Holiday · พักร้อน · WFH
     let diligenceLeaveDays = 0;
+    // วันลาแยกประเภท (ไม่รวม Day-Off) — สลิป/สรุปวันทำงานแสดงแยก ลาป่วย / ลาพักร้อน … (ผู้ใช้ 10/11/2569)
+    const leaveByType: Record<string, number> = {};
     for (const l of wf.leaves.filter((x) => x.employment_id === e.employment_id)) {
       const a = l.starts_on > from ? l.starts_on : from;
       const b = l.ends_on < to ? l.ends_on : to;
@@ -275,6 +277,10 @@ export async function loadPeriodInputs(
       d = Math.max(0, d);
       leaveDays += d;
       if (l.day_off) offDays += d;
+      else if (d > 0) {
+        const name = l.type_name || "ลา";
+        leaveByType[name] = (leaveByType[name] ?? 0) + d;
+      }
       if (!l.paid) unpaid += d;
       if (leaveCountsAgainstDiligence({ name: l.type_name, displayLabel: l.display_label, autoApprove: l.auto_approve, requiresReports: l.requires_reports })) diligenceLeaveDays += d;
     }
@@ -450,6 +456,7 @@ export async function loadPeriodInputs(
       info: {
         workedDays: att?.worked_days ?? 0,
         leaveDays,
+        ...(Object.keys(leaveByType).length > 0 ? { leaveByType } : {}),
         lateCount: att?.late_days ?? 0,
         offDays,
         absentDays: att?.absent_days ?? 0,

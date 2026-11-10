@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildDailyLines,
+  buildSummaryLines,
   classifyDay,
   summarizeDays,
   type ExportAttendanceResult,
@@ -143,5 +144,35 @@ describe("buildDailyLines", () => {
     expect(row).toContain('"02/09/2569"');
     expect(row).toContain('"08:11"');
     expect(row).toContain('"17:05"');
+  });
+});
+
+// ผู้ใช้ 10/11/2569 "ลาป่วย ลาพักร้อน ... ให้แสดงลาแยกประเภทกัน" — เดิมรวมเป็น "ลา" ตัวเดียว
+describe("วันลาแยกประเภท", () => {
+  const leaveDay = (date: string) => day({ work_date: date, actual_in_at: null, actual_out_at: null, worked_minutes: 0, is_on_leave: true });
+  const types: Record<string, { name: string; dayOff: boolean }> = {
+    "e1|2026-09-03": { name: "ลาป่วย", dayOff: false },
+    "e1|2026-09-04": { name: "ลาป่วย", dayOff: false },
+    "e1|2026-09-05": { name: "ลาพักร้อน", dayOff: false },
+    "e1|2026-09-06": { name: "Day-Off", dayOff: true },
+  };
+  const c = ctx({ leaveOf: (k) => types[k] });
+
+  it("นับวันลาแยกตามประเภท · Day-Off ไม่ปน", () => {
+    const s = summarizeDays(["2026-09-03", "2026-09-04", "2026-09-05", "2026-09-06"].map((d) => classifyDay(leaveDay(d), c)));
+    expect(s.leaveDays).toBe(3);
+    expect(s.leaveByType).toEqual({ ลาป่วย: 2, ลาพักร้อน: 1 });
+    expect(s.dayOffDays).toBe(1);
+  });
+
+  it("ไฟล์ Excel สรุปมีคอลัมน์แยกประเภทต่อจากลารวม", () => {
+    const [header, row] = buildSummaryLines(["2026-09-03", "2026-09-04", "2026-09-05"].map(leaveDay), c);
+    const cols = header!.split(",");
+    const at = cols.indexOf("ลารวม (วัน)");
+    expect(at).toBeGreaterThan(0);
+    expect(cols[at + 1]).toBe('"ลาป่วย (วัน)"');
+    expect(cols[at + 2]).toBe('"ลาพักร้อน (วัน)"');
+    const vals = row!.split(",");
+    expect([vals[at], vals[at + 1], vals[at + 2]]).toEqual(["3", "2", "1"]);
   });
 });

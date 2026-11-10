@@ -17,7 +17,10 @@ export function workDayParts(info: Partial<LineInfo> | undefined) {
     parts.push({ label: "ลา/หยุด", value: `${days(i.leaveDays ?? 0)} วัน` });
   } else {
     parts.push({ label: "หยุด", value: `${days(i.offDays)} วัน` });
-    parts.push({ label: "ลา", value: `${days(leave)} วัน` });
+    // แยกประเภทลา (ผู้ใช้ 10/11/2569) — ไม่มีวันลา หรือรอบเก่าไม่มีข้อมูลแยก = "ลา" ก้อนเดียวเหมือนเดิม
+    const byType = Object.entries(i.leaveByType ?? {}).filter(([, d]) => d > 0);
+    if (byType.length > 0) for (const [name, d] of byType.sort((a, b) => b[1] - a[1])) parts.push({ label: name, value: `${days(d)} วัน` });
+    else parts.push({ label: "ลา", value: `${days(leave)} วัน` });
   }
   if (i.absentDays !== undefined) parts.push({ label: "ขาด", value: `${i.absentDays} วัน`, tone: i.absentDays > 0 ? "bad" : undefined });
   parts.push({ label: "สาย", value: `${i.lateCount ?? 0} ครั้ง`, tone: (i.lateCount ?? 0) > 0 ? "warn" : undefined });

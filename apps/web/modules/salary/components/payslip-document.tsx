@@ -114,6 +114,12 @@ function Field({ th, en, value }: { th: string; en: string; value: string }) {
   );
 }
 
+function leaveText(i: { leaveDays?: number; offDays?: number; leaveByType?: Record<string, number> }): string {
+  const byType = Object.entries(i.leaveByType ?? {}).filter(([, d]) => d > 0).sort((a, b) => b[1] - a[1]);
+  if (byType.length > 0) return byType.map(([name, d]) => `${name} ${d} วัน`).join(" · ");
+  return `ลา ${Math.max(0, (i.leaveDays ?? 0) - (i.offDays ?? 0))} วัน`;
+}
+
 export function PayslipDocument({
   s,
   company,
@@ -137,7 +143,8 @@ export function PayslipDocument({
   const i = l.info;
   const remarks = [
     // OT แบบนับวัน: ใช้จำนวนวันที่จ่ายจริงในสลิปนี้ (ไม่ใช่วันที่มีใบ OT ทั้งหมดในงวด)
-    i ? `มาทำงาน ${i.workedDays} วัน · ลา ${Math.max(0, (i.leaveDays ?? 0) - (i.offDays ?? 0))} วัน · ขาด ${i.absentDays ?? 0} วัน · สาย ${i.lateCount} ครั้ง${(i.otDaysPay?.days ?? i.otDays) ? ` · OT ${i.otDaysPay?.days ?? i.otDays} วัน` : ""}` : "",
+    // ลาแยกประเภท (ลาป่วย 1 วัน · ลาพักร้อน 2 วัน) — รอบเก่าที่ไม่มีข้อมูลแยกยังเป็น "ลา N วัน" (10/11/2569)
+    i ? `มาทำงาน ${i.workedDays} วัน · ${leaveText(i)} · ขาด ${i.absentDays ?? 0} วัน · สาย ${i.lateCount} ครั้ง${(i.otDaysPay?.days ?? i.otDays) ? ` · OT ${i.otDaysPay?.days ?? i.otDays} วัน` : ""}` : "",
     l.payChannel === "cash" ? "รับเป็นเงินสด" : "",
   ].filter(Boolean);
   const account = l.payChannel === "cash" ? "เงินสด" : l.bankAccount ? `${l.bankName ? `${l.bankName} ` : ""}•••${l.bankAccount.slice(-4)}` : "—";

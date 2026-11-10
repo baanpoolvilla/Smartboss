@@ -42,6 +42,8 @@ export interface LineInfo {
   lateCount: number;
   /** สรุปวันทำงาน (สลิป/หน้ารอบ) — รอบที่คำนวณก่อน 27/10/2569 ไม่มี */
   offDays?: number;
+  /** วันลาแยกประเภท (ไม่รวม Day-Off) — รอบที่คำนวณก่อน 10/11/2569 ไม่มี แสดง "ลา" ก้อนเดียวเหมือนเดิม */
+  leaveByType?: Record<string, number>;
   absentDays?: number;
   otDays?: number;
   otMinutes?: number;

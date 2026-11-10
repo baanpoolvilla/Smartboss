@@ -57,6 +57,8 @@ export interface StatusTag {
 export interface ClassifiedDay {
   result: ExportAttendanceResult;
   kind: DayKind;
+  /** วันลา: ชื่อประเภท (ลาป่วย / ลาพักร้อน / ลากิจ …) — ใช้สรุปแยกประเภท */
+  leaveName?: string;
   tags: StatusTag[];
   /** tags ต่อกันเป็นข้อความเดียว เช่น "ลืมสแกนออก · มาสาย" */
   status: string;
@@ -78,6 +80,8 @@ export interface PersonSummary {
   absentDays: number;
   missingPunchCount: number;
   leaveDays: number;
+  /** วันลาแยกตามประเภท (ชื่อประเภท → วัน) — ผู้ใช้ 10/11/2569 "ลาให้แสดงแยกประเภทกันชัดเจน" · ไม่รวม Day-Off */
+  leaveByType: Record<string, number>;
   dayOffDays: number;
   offDays: number;
   workedMinutes: number;
@@ -106,10 +110,25 @@ const DAILY_HEADER = [
 
 const SUMMARY_HEADER = [
   "รหัสพนักงาน", "ชื่อ", "มาทำงาน (วัน)", "มาสาย (ครั้ง)", "สายรวม (นาที)",
-  "ออกก่อน (ครั้ง)", "ขาดงาน (วัน)", "ลืมสแกน (ครั้ง)", "ลา (วัน)",
+  "ออกก่อน (ครั้ง)", "ขาดงาน (วัน)", "ลืมสแกน (ครั้ง)", "ลารวม (วัน)",
   "วันหยุดตามสิทธิ์ (วัน)", "วันหยุด/นักขัตฤกษ์ (วัน)", "ชั่วโมงทำงานรวม",
   "OT รออนุมัติ (ชม.)", "OT อนุมัติแล้ว (ชม.)",
 ];
+
+/** ประเภทลาที่มีในรายงาน เรียงตามจำนวนวันรวมมากไปน้อย — ใช้ทำคอลัมน์/สรุปแยกประเภท */
+export function leaveTypesOf(reports: readonly { summary: PersonSummary }[]): string[] {
+  const total = new Map<string, number>();
+  for (const { summary } of reports) for (const [name, d] of Object.entries(summary.leaveByType)) total.set(name, (total.get(name) ?? 0) + d);
+  return [...total.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "th")).map(([name]) => name);
+}
+
+/** "ลาป่วย 2 · ลาพักร้อน 1" — ว่าง = ไม่มีวันลา */
+export function leaveBreakdownText(s: PersonSummary): string {
+  return Object.entries(s.leaveByType)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "th"))
+    .map(([name, d]) => `${name} ${d}`)
+    .join(" · ");
+}
 
 export function csvCell(s: string): string {
   return `"${s.replace(/"/g, '""')}"`;
@@ -209,6 +228,7 @@ export function classifyDay(r: ExportAttendanceResult, ctx: ExportContext): Clas
   return {
     result: r,
     kind,
+    ...(kind === "leave" ? { leaveName: leave?.name ?? "ลา (ไม่ระบุประเภท)" } : {}),
     tags,
     status: tags.map((t) => t.label).join(" · "),
     scanned,
@@ -231,6 +251,7 @@ export function summarizeDays(days: readonly ClassifiedDay[]): PersonSummary {
     absentDays: 0,
     missingPunchCount: 0,
     leaveDays: 0,
+    leaveByType: {},
     dayOffDays: 0,
     offDays: 0,
     workedMinutes: 0,
@@ -246,7 +267,11 @@ export function summarizeDays(days: readonly ClassifiedDay[]): PersonSummary {
     if (d.earlyOut > 0) s.earlyOutCount += 1;
     if (d.absent) s.absentDays += 1;
     if (d.missingPunch) s.missingPunchCount += 1;
-    if (d.kind === "leave") s.leaveDays += 1;
+    if (d.kind === "leave") {
+      s.leaveDays += 1;
+      const name = d.leaveName ?? "ลา (ไม่ระบุประเภท)";
+      s.leaveByType[name] = (s.leaveByType[name] ?? 0) + 1;
+    }
     if (d.kind === "dayoff") s.dayOffDays += 1;
     if (d.kind === "rest" || d.kind === "holiday") s.offDays += 1;
     s.workedMinutes += d.result.worked_minutes;
@@ -316,8 +341,13 @@ export function buildSummaryLines(
   results: readonly ExportAttendanceResult[],
   ctx: ExportContext,
 ): string[] {
-  const lines = [SUMMARY_HEADER.join(",")];
-  for (const { person: p, summary: s } of buildPersonReports(results, ctx)) {
+  const reports = buildPersonReports(results, ctx);
+  // คอลัมน์แยกประเภทลา ต่อจาก "ลารวม" — เฉพาะประเภทที่มีคนลาในไฟล์นี้
+  const types = leaveTypesOf(reports);
+  const header = [...SUMMARY_HEADER];
+  header.splice(header.indexOf("ลารวม (วัน)") + 1, 0, ...types.map((t) => csvCell(`${t} (วัน)`)));
+  const lines = [header.join(",")];
+  for (const { person: p, summary: s } of reports) {
     lines.push(
       [
         csvCell(p.code),
@@ -329,6 +359,7 @@ export function buildSummaryLines(
         String(s.absentDays),
         String(s.missingPunchCount),
         String(s.leaveDays),
+        ...types.map((t) => (s.leaveByType[t] ? String(s.leaveByType[t]) : "")),
         String(s.dayOffDays),
         String(s.offDays),
         csvCell(hhmm(s.workedMinutes)),

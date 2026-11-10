@@ -85,11 +85,15 @@ function count(n: number): string {
 function sumSummaries(reports: readonly PersonReport[]): PersonSummary {
   const total: PersonSummary = {
     workedDays: 0, lateCount: 0, lateMinutes: 0, earlyOutCount: 0, absentDays: 0,
-    missingPunchCount: 0, leaveDays: 0, dayOffDays: 0, offDays: 0, workedMinutes: 0,
+    missingPunchCount: 0, leaveDays: 0, leaveByType: {}, dayOffDays: 0, offDays: 0, workedMinutes: 0,
     otPendingMinutes: 0, otApprovedMinutes: 0,
   };
   for (const { summary } of reports) {
-    for (const key of Object.keys(total) as (keyof PersonSummary)[]) total[key] += summary[key];
+    for (const key of Object.keys(total) as (keyof PersonSummary)[]) {
+      if (key === "leaveByType") continue;
+      total[key] += summary[key];
+    }
+    for (const [name, d] of Object.entries(summary.leaveByType)) total.leaveByType[name] = (total.leaveByType[name] ?? 0) + d;
   }
   return total;
 }
@@ -203,6 +207,24 @@ export default async function AttendanceReportPage({
               <Figure label="OT รออนุมัติ" value={hhmm(total.otPendingMinutes) || "0:00"} tone={total.otPendingMinutes ? "info" : undefined} />
             </section>
 
+            {/* วันลาแยกประเภท (ผู้ใช้ 10/11/2569 "ลาให้แสดงแยกประเภทกันชัดเจน") — เดิมรวมเป็น "ลา" ตัวเดียว */}
+            <section className="mt-4" data-testid="leave-type-totals">
+              <h2 className="mb-2 text-sm font-semibold">วันลาแยกประเภท (ทั้งเดือน)</h2>
+              {Object.keys(total.leaveByType).length === 0 ? (
+                <p className="text-xs text-(--ink-soft)">ไม่มีวันลาในเดือนนี้</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(total.leaveByType)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([name, d]) => (
+                      <span key={name} className="rounded-md border border-(--line) px-3 py-1.5 text-sm">
+                        {name} <b className="tabular-nums">{d}</b> วัน
+                      </span>
+                    ))}
+                </div>
+              )}
+            </section>
+
             <section className="mt-8">
               <h2 className="mb-2 text-sm font-semibold">สรุปรายคน</h2>
               <div className="overflow-x-auto">
@@ -214,7 +236,7 @@ export default async function AttendanceReportPage({
                       <th className={`${th} text-right`}>สาย</th>
                       <th className={`${th} text-right`}>ขาดงาน</th>
                       <th className={`${th} text-right`}>ลืมสแกน</th>
-                      <th className={`${th} text-right`}>ลา</th>
+                      <th className={`${th} text-right`}>ลา (แยกประเภท)</th>
                       <th className={`${th} text-right`}>วันหยุดตามสิทธิ์</th>
                       <th className={`${th} text-right`}>ชม.ทำงาน</th>
                       <th className={`${th} text-right`}>OT อนุมัติ</th>
@@ -239,7 +261,21 @@ export default async function AttendanceReportPage({
                         <td className={`${td} text-right`} style={s.missingPunchCount ? { color: TONE.warn } : undefined}>
                           {count(s.missingPunchCount)}
                         </td>
-                        <td className={`${td} text-right`}>{count(s.leaveDays)}</td>
+                        <td className={`${td} text-right`} data-testid="leave-by-type">
+                          {s.leaveDays ? (
+                            <span className="inline-flex flex-col items-end gap-0.5">
+                              {Object.entries(s.leaveByType)
+                                .sort((a, b) => b[1] - a[1])
+                                .map(([name, d]) => (
+                                  <span key={name} className="whitespace-nowrap">
+                                    {name} <b>{d}</b>
+                                  </span>
+                                ))}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
                         <td className={`${td} text-right`}>{count(s.dayOffDays)}</td>
                         <td className={`${td} text-right`}>{hhmm(s.workedMinutes) || "—"}</td>
                         <td className={`${td} text-right`}>{hhmm(s.otApprovedMinutes) || "—"}</td>
