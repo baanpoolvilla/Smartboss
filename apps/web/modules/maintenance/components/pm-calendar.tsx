@@ -1,6 +1,7 @@
 "use client";
 
 import { PmDeleteButton } from "./pm-delete-button";
+import { PmEarlyRound } from "./pm-early-round";
 import { AssigneeAndCc } from "./multi-picker";
 import { useMemo, useState } from "react";
 import Link from "next/link";
@@ -119,6 +120,8 @@ export interface PmRow {
   canMoveRounds: boolean;
   /** มีใบรอบที่คนนี้มองไม่เห็น — แก้วันไม่ได้ (ดู pm-hidden-rounds.ts) */
   roundsHidden?: boolean;
+  /** รอบในอนาคตที่คนตั้ง PM เลือกทำก่อนได้ — ว่าง = ไม่มีปุ่ม (ไม่ใช่คนตั้ง / ไม่ใช่แผนนับรอบ) */
+  earlyRounds?: { value: string; label: string; dueLabel: string }[];
 }
 
 /** ลิงก์สร้างใบงานจาก PM — คัดลอกรูปแบบ description ของเดิมทั้งหมด */
@@ -163,6 +166,8 @@ export function PmCalendar({
   updateAction,
   frequencyOptions,
   userOptions,
+  earlyRoundAction,
+  windowDays = 14,
 }: {
   schedules: PmRow[];
   canManage: boolean;
@@ -181,6 +186,10 @@ export function PmCalendar({
   frequencyOptions: { value: string; label: string }[];
   /** ผู้ที่มอบหมายงาน PM ให้ได้ — ใช้ในกล่องแก้ไข */
   userOptions: { id: string; label: string }[];
+  /** ทำรอบล่วงหน้า (คนตั้ง PM) */
+  earlyRoundAction?: (formData: FormData) => Promise<{ error?: string; id?: string }>;
+  /** เวลาทำของใบรอบ (วัน) */
+  windowDays?: number;
 }) {
   const [ym, setYm] = useState<YearMonth>(() => monthOfIso(todayIso));
   const [pick, setPick] = useState<
@@ -560,6 +569,8 @@ export function PmCalendar({
               deleteAction={deleteAction}
               onEdit={() => setEditing(s)}
               onSchedule={() => setScheduling(s)}
+              earlyRoundAction={earlyRoundAction}
+              windowDays={windowDays}
             />
           ))}
         </div>
@@ -766,6 +777,8 @@ function PmDetailCard({
   deleteAction,
   onEdit,
   onSchedule,
+  earlyRoundAction,
+  windowDays,
 }: {
   s: PmRow;
   canManage: boolean;
@@ -773,6 +786,8 @@ function PmDetailCard({
   deleteAction: (formData: FormData) => void | Promise<void>;
   onEdit: () => void;
   onSchedule: () => void;
+  earlyRoundAction?: (formData: FormData) => Promise<{ error?: string; id?: string }>;
+  windowDays: number;
 }) {
   const status = pmStatusOf(s);
   const meta = PM_STATUS[status];
@@ -833,7 +848,7 @@ function PmDetailCard({
         {!s.awaitingSchedule && (
           <Chip
             icon={<CalendarCheck className="h-3.5 w-3.5" />}
-            label={s.openRoundLabels.length > 0 ? `ครบกำหนด ${s.openRoundLabels[0]} · รอบถัดไป ${s.nextDueLabel}` : s.nextDueLabel}
+            label={s.openRoundLabels.length > 0 ? `รอบที่เปิดอยู่ ${s.openRoundLabels[0]} · รอบถัดไป ${s.nextDueLabel}` : s.nextDueLabel}
           />
         )}
         <Chip
@@ -906,6 +921,10 @@ function PmDetailCard({
             มีใบงานรอดำเนินการอยู่แล้ว
           </p>
         )
+      )}
+
+      {earlyRoundAction && (s.earlyRounds?.length ?? 0) > 0 && (
+        <PmEarlyRound pmId={s.id} title={s.title} options={s.earlyRounds!} windowDays={windowDays} action={earlyRoundAction} />
       )}
 
       {canManage && (

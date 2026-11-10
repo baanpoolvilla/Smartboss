@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { dueRounds, overdueGraceDays, pmRepeatLabel, pmUsesRounds, roundBeforeStart, roundDueAt, shouldRemindRound, todayBkkDate } from "../pm-rounds";
+import { dueRounds, overdueGraceDays, pmRepeatLabel, pmUsesRounds, roundBeforeStart, roundDueAt, shouldRemindRound, todayBkkDate, upcomingRounds, windowTransition } from "../pm-rounds";
 import { workOrderDockRevokeReason } from "../dock-validity";
 
 const d = (s: string) => new Date(`${s}T00:00:00.000Z`);
@@ -35,20 +35,48 @@ test("ยังไม่ถึง 14 วันก่อนครบกำหน�
   assert.equal(r.nextDueDate.toISOString().slice(0, 10), "2026-12-01");
 });
 
-test("ก่อนครบกำหนด 14 วันพอดี — เปิดใบรอบ 1 ธ.ค. แล้วแผนเดินไป 1 ม.ค.", () => {
-  const r = dueRounds(monthly, 14, d("2026-11-17"));
+// กติกา 10/11/2569: ใบรอบเปิด "ในวันของรอบ" (เดิมเปิดก่อน 14 วัน)
+test("ยังไม่ถึงวันของรอบ ไม่เปิดใบ — ถึงวันแล้วเปิด 1 ธ.ค. แล้วแผนเดินไป 1 ม.ค.", () => {
+  assert.deepEqual(dueRounds(monthly, 14, d("2026-11-30")).rounds, []);
+  const r = dueRounds(monthly, 14, d("2026-12-01"));
   assert.deepEqual(r.rounds.map((x) => x.toISOString().slice(0, 10)), ["2026-12-01"]);
   assert.equal(r.nextDueDate.toISOString().slice(0, 10), "2027-01-01");
 });
 
 test("รอบถัดไปนับตามแผน ไม่ขึ้นกับวันปิดงาน — ค้างหลายรอบก็เปิดซ้อนครบทุกรอบ", () => {
   const r = dueRounds({ ...monthly, nextDueDate: d("2026-10-01"), anchorDate: d("2026-10-01") }, 14, d("2026-11-20"));
-  assert.deepEqual(r.rounds.map((x) => x.toISOString().slice(0, 10)), ["2026-10-01", "2026-11-01", "2026-12-01"]);
-  assert.equal(r.nextDueDate.toISOString().slice(0, 10), "2027-01-01");
+  assert.deepEqual(r.rounds.map((x) => x.toISOString().slice(0, 10)), ["2026-10-01", "2026-11-01"]);
+  assert.equal(r.nextDueDate.toISOString().slice(0, 10), "2026-12-01");
 });
 
-test("กำหนดส่งของใบรอบ = สิ้นวันครบกำหนดเวลาไทย", () => {
-  assert.equal(roundDueAt(d("2026-12-01")).toISOString(), "2026-12-01T16:59:59.999Z");
+test("กำหนดส่งของใบรอบ = สิ้นวัน (วันของรอบ + เวลาทำ) เวลาไทย", () => {
+  assert.equal(roundDueAt(d("2026-12-01")).toISOString(), "2026-12-15T16:59:59.999Z");
+  assert.equal(roundDueAt(d("2026-12-01"), 14).toISOString(), "2026-12-15T16:59:59.999Z");
+  assert.equal(roundDueAt(d("2026-12-01"), 0).toISOString(), "2026-12-01T16:59:59.999Z");
+});
+
+test("เปลี่ยนกติกา: ใบเปิดก่อนวัน (ยังไม่มีคนรับ) ปิดไปก่อน · ถึงวันแล้ว/รับงานแล้ว ขยายเป็นวันของรอบ + 14", () => {
+  const today = d("2026-11-10");
+  const old = (round: string, status = "open") => ({ status, pmRoundDate: d(round), dueDate: roundDueAt(d(round), 0), autoCreated: true });
+  assert.equal(windowTransition(old("2026-11-20"), 14, today), "close");
+  assert.equal(windowTransition(old("2026-11-20", "in_progress"), 14, today), "extend");
+  assert.equal(windowTransition(old("2026-11-10"), 14, today), "extend");
+  assert.equal(windowTransition(old("2026-11-03"), 14, today), "extend");
+  // ตรงกติกาใหม่แล้ว / เลื่อนไปไกลกว่าแล้ว / ไม่ใช่ใบอัตโนมัติ / ปิดแล้ว → ไม่แตะ
+  assert.equal(windowTransition({ ...old("2026-11-03"), dueDate: roundDueAt(d("2026-11-03"), 14) }, 14, today), null);
+  assert.equal(windowTransition({ ...old("2026-11-03"), dueDate: d("2026-12-31") }, 14, today), null);
+  assert.equal(windowTransition({ ...old("2026-11-20"), autoCreated: false }, 14, today), null);
+  assert.equal(windowTransition(old("2026-11-20", "completed"), 14, today), null);
+  // ใบที่คนตั้ง PM ย้ายวันไปอนาคต (กำหนดส่ง = วันของรอบ + 14 แล้ว) ไม่ปิด
+  assert.equal(windowTransition({ ...old("2026-11-20"), dueDate: roundDueAt(d("2026-11-20"), 14) }, 14, today), null);
+});
+
+test("ทำรอบล่วงหน้า: รายการรอบถัดไป ข้ามรอบที่มีใบแล้ว", () => {
+  const weekly = { nextDueDate: d("2026-11-16"), anchorDate: d("2026-11-16"), frequency: "weekly", roundsPerYear: null };
+  const all = upcomingRounds(weekly, 3).map((x) => x.toISOString().slice(0, 10));
+  assert.deepEqual(all, ["2026-11-16", "2026-11-23", "2026-11-30"]);
+  const skip = upcomingRounds(weekly, 3, new Set(["2026-11-23"])).map((x) => x.toISOString().slice(0, 10));
+  assert.deepEqual(skip, ["2026-11-16", "2026-11-30", "2026-12-07"]);
 });
 
 test("วันนี้ตามเวลาไทย — 23:30 UTC คือวันถัดไปของไทยแล้ว", () => {

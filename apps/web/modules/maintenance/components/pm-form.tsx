@@ -3,7 +3,7 @@
 import { SubmitButton } from "./submit-button";
 import { PmRulesNote } from "./pm-rules-note";
 import { fmtThaiDate } from "@/modules/maintenance/lib/format";
-import { pmRepeatLabel, roundOpensOn, ymd } from "@/modules/maintenance/lib/pm-rounds";
+import { pmRepeatLabel, roundDueAt, roundOpensOn, ymd } from "@/modules/maintenance/lib/pm-rounds";
 import { todayBangkok } from "@/modules/maintenance/lib/no-past-date";
 
 import { useState } from "react";
@@ -67,6 +67,8 @@ export function PmForm({
   const dueDate = due ? new Date(`${due}T00:00:00.000Z`) : null;
   const opens = dueDate ? roundOpensOn(dueDate, leadDays) : null;
   const opensNow = !!opens && ymd(opens) <= todayBangkok();
+  // กติกา 10/11/2569: ใบขึ้นในวันของรอบ มีเวลาทำ leadDays วัน
+  const finishBy = dueDate ? roundDueAt(dueDate, leadDays) : null;
   const assetOptions: PickOption[] = assets.map((a) => ({
     id: a.id,
     label: a.name,
@@ -249,9 +251,11 @@ export function PmForm({
           <input name="nextDueDate" type="date" required min={todayBangkok()} value={due} onChange={(e) => setDue(e.target.value)} className={inputClass} />
           {dueDate && (
             <span className="text-xs text-(--ink-soft)" data-testid="pm-due-hint">
-              ครบกำหนด {fmtThaiDate(dueDate)}
+              รอบแรก {fmtThaiDate(dueDate)}
               {repeat ? ` · ${repeat}` : ""}
-              {mode === "limitedCount" ? "" : opensNow ? " · ใบงานขึ้นทันทีหลังกดสร้าง" : ` · ใบงานขึ้นวันที่ ${fmtThaiDate(opens)}`}
+              {mode === "limitedCount"
+                ? ""
+                : `${opensNow ? " · ใบงานขึ้นทันทีหลังกดสร้าง" : ` · ใบงานขึ้นวันที่ ${fmtThaiDate(opens)}`} · ทำให้เสร็จภายใน ${fmtThaiDate(finishBy)}`}
             </span>
           )}
         </label>

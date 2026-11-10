@@ -1,7 +1,8 @@
 /**
  * PM แบบนับรอบ (ผู้ใช้ 2/11/2569) — กติกาล้วน ไม่แตะฐานข้อมูล เทสต์ได้
  *
- *   ใบงานของแต่ละรอบเปิดก่อนวันครบกำหนด leadDays วัน (ค่าเริ่มต้น 14) กำหนดส่ง = วันครบกำหนดของรอบ
+ *   ใบงานของแต่ละรอบเปิด "ในวันของรอบ" แล้วมีเวลาทำ leadDays วัน (ค่าเริ่มต้น 14) กำหนดส่ง = วันของรอบ + leadDays
+ *   (ผู้ใช้ 10/11/2569 — เดิมเปิดก่อนวันของรอบ 14 วัน กำหนดส่ง = วันของรอบ) · คนตั้ง PM เปิดรอบในอนาคตมาทำก่อนได้
  *   เลยกำหนดแล้วหักทันที (ไม่มีผ่อนผัน) ทำไม่ทันให้ "ขอเลื่อนกำหนดส่ง" พร้อมเหตุผล
  *   รอบถัดไปนับตามแผน ไม่ใช่วันปิดงาน — ใบเก่ายังค้าง ใบรอบใหม่ก็เปิดซ้อนได้
  *   ค้างพร้อมกัน 2 รอบขึ้นไป → CEO ตัดสิน (ไม่ต้องทำ / หักหรือไม่หัก / รวบเป็นใบเดียว)
@@ -28,14 +29,52 @@ export function todayBkkDate(now: Date = new Date()): Date {
   return new Date(`${new Date(now.getTime() + 7 * 3600e3).toISOString().slice(0, 10)}T00:00:00.000Z`);
 }
 
-/** กำหนดส่งของใบรอบ = สิ้นวันครบกำหนดตามเวลาไทย (เหมือนใบที่คนตั้งกำหนดส่งเอง) */
-export function roundDueAt(round: Date): Date {
-  return new Date(`${ymd(round)}T23:59:59.999+07:00`);
+/** กำหนดส่งของใบรอบ = สิ้นวัน (วันของรอบ + เวลาทำ) ตามเวลาไทย — ผู้ใช้ 10/11/2569 "ถึงวันแล้วให้เวลา 14 วัน" */
+export function roundDueAt(round: Date, windowDays: number = DEFAULT_PM_LEAD_DAYS): Date {
+  return new Date(`${ymd(new Date(round.getTime() + windowDays * DAY))}T23:59:59.999+07:00`);
 }
 
-/** วันที่เปิดใบของรอบนี้ */
-export function roundOpensOn(round: Date, leadDays: number): Date {
-  return new Date(round.getTime() - leadDays * DAY);
+/** วันที่เปิดใบของรอบนี้ = วันของรอบเอง (ไม่เปิดล่วงหน้าแล้ว) — leadDays ใช้เป็นเวลาทำหลังเปิด */
+export function roundOpensOn(round: Date, _leadDays?: number): Date {
+  return round;
+}
+
+/**
+ * ใบรอบอัตโนมัติที่ค้างจากกติกาเดิม (เปิดก่อนวัน 14 วัน กำหนดส่ง = วันของรอบ) — ตอนเปลี่ยนกติกา:
+ *   "close"  = ยังไม่ถึงวันของรอบ + ยังไม่มีคนรับงาน → ปิดไปก่อน ถึงวันแล้วระบบเปิดใหม่ (ผู้ใช้ "อันไหนเปิดมาก่อนก็ปิดไปก่อน")
+ *   "extend" = ถึงวันแล้ว หรือมีคนรับงานแล้ว แต่กำหนดส่งยังเร็วกว่ากติกาใหม่ → ขยายเป็นวันของรอบ + เวลาทำ ไม่หักคะแนน
+ * ใบที่ตรงกติกาใหม่แล้วได้ null — เรียกซ้ำกี่ครั้งก็ไม่เปลี่ยนอะไร
+ */
+export function windowTransition(
+  wo: { status: string; pmRoundDate: Date | null; dueDate: Date | null; autoCreated: boolean },
+  windowDays: number,
+  today: Date = todayBkkDate(),
+): "close" | "extend" | null {
+  if (!wo.autoCreated || !wo.pmRoundDate) return null;
+  if (wo.status !== "open" && wo.status !== "in_progress") return null;
+  // ปิดเฉพาะใบที่เปิดตามกติกาเดิมจริง ๆ (กำหนดส่ง = วันของรอบ) — ใบที่คนตั้ง PM ย้ายวัน/เลื่อนแล้ว ไม่ปิด
+  if (wo.status === "open" && wo.pmRoundDate.getTime() > today.getTime() && !!wo.dueDate && wo.dueDate.getTime() <= roundDueAt(wo.pmRoundDate, 0).getTime()) return "close";
+  const due = roundDueAt(wo.pmRoundDate, windowDays);
+  return !wo.dueDate || wo.dueDate.getTime() < due.getTime() ? "extend" : null;
+}
+
+/** บรรทัดในรายละเอียดใบรอบ — ตัวแก้วันในแผนหาบรรทัดนี้ด้วย ROUND_DESC_RE */
+export function roundDescLine(roundLabel: string, dueLabel: string): string {
+  return `รอบวันที่ ${roundLabel} · ทำให้เสร็จภายใน ${dueLabel}`;
+}
+export const ROUND_DESC_RE = /รอบ(?:ครบกำหนด|วันที่) .*/;
+
+/** รอบถัด ๆ ไปของแผน ที่คนตั้ง PM เลือกมาทำก่อนได้ (ไม่รวมรอบที่มีใบแล้ว) */
+export function upcomingRounds(pm: RoundPm, count: number, taken: Set<string> = new Set()): Date[] {
+  const out: Date[] = [];
+  let cur: RoundPm = { ...pm };
+  for (let i = 0; i < count * 3 && out.length < count; i++) {
+    if (!taken.has(ymd(cur.nextDueDate))) out.push(cur.nextDueDate);
+    const n = nextRound(cur);
+    if (n.nextDue.getTime() <= cur.nextDueDate.getTime()) break;
+    cur = { ...cur, nextDueDate: n.nextDue, anchorDate: n.anchor };
+  }
+  return out;
 }
 
 export interface RoundOrg {

@@ -33,9 +33,12 @@ import {
 } from "@/modules/maintenance/components/app-scaffold";
 import {
   deletePmAction,
+  earlyRoundAction,
   scheduleNextAction,
   updatePmAction,
 } from "./actions";
+import { earlyRoundOptions, loadRoundOrg } from "@/modules/maintenance/data/pm-rounds";
+import { pmUsesRounds, roundDueAt, ymd } from "@/modules/maintenance/lib/pm-rounds";
 
 function daysUntil(due: Date): number {
   const today = new Date();
@@ -91,6 +94,18 @@ export default async function PmListPage({
   // แผนที่มีใบรอบซึ่งคนนี้มองไม่เห็น — แก้วันไม่ได้ (updatePmAction) ล็อกช่องพร้อมบอกเหตุผลก่อนกดบันทึก
   const hiddenRoundPms = await pmIdsWithHiddenOpenRounds(session, schedules.map((s) => s.id));
 
+  // ทำรอบล่วงหน้า — เฉพาะแผนที่คนนี้ตั้งเอง และเดินแบบนับรอบ (ผู้ใช้ 10/11/2569 "ต้องเป็นคนตั้ง PM")
+  const roundOrg = await loadRoundOrg(orgId);
+  const earlyBy = new Map<string, { value: string; label: string; dueLabel: string }[]>();
+  for (const s of schedules) {
+    if (s.createdBy !== session.userId || !s.isActive || s.awaitingSchedule || !pmUsesRounds(roundOrg, s)) continue;
+    const opts = await earlyRoundOptions(orgId, s);
+    earlyBy.set(
+      s.id,
+      opts.map((d) => ({ value: ymd(d), label: fmtThaiDate(d), dueLabel: fmtThaiDate(roundDueAt(d, roundOrg!.pmLeadDays)) })),
+    );
+  }
+
   const rows: PmRow[] = schedules.map((s) => ({
     id: s.id,
     title: s.title,
@@ -127,6 +142,7 @@ export default async function PmListPage({
     })(),
     canMoveRounds: canEditDueDate({ userId: session.userId, viewAll: canViewAll(session) || hasPermission(session, MAINT_PERMS.pmMoveRounds) }, { createdBy: s.createdBy }) && !hiddenRoundPms.has(s.id),
     roundsHidden: hiddenRoundPms.has(s.id),
+    earlyRounds: earlyBy.get(s.id) ?? [],
     openRoundLabels: pendingWos
       .filter((w) => w.pmRoundDate && (w.pmScheduleId === s.id || w.pmScheduleIds.includes(s.id)))
       .sort((a, b) => a.pmRoundDate!.getTime() - b.pmRoundDate!.getTime())
@@ -182,6 +198,8 @@ export default async function PmListPage({
           label: f.label,
         }))}
         userOptions={orgUsers.map((u) => ({ id: u.id, label: u.name }))}
+        earlyRoundAction={earlyRoundAction}
+        windowDays={perf.pmLeadDays}
       />
     </AppScaffold>
   );

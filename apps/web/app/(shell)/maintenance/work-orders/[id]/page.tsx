@@ -569,7 +569,7 @@ export default async function WorkOrderDetailPage({
             className="sm:col-span-2"
             value={
               <span className="grid gap-0.5">
-                <span>ครบกำหนด {fmtThaiDate(wo.pmRoundDate)}</span>
+                <span>รอบวันที่ {fmtThaiDate(wo.pmRoundDate)}{wo.dueDate ? ` · ทำให้เสร็จภายใน ${fmtThaiDate(wo.dueDate)}` : ""}</span>
                 {isOpenOrRunning && (
                   <span className="text-[12.5px] font-normal text-(--ink-soft)">
                     {`ถ้ามีใบชื่อเดียวกันหลายใบ คือคนละรอบ ต้องปิดทุกใบ · เลยกำหนดส่งแล้วหัก ${pmMissedPoints} คะแนนทันที · ทำไม่ทันให้กด "ขอเลื่อนกำหนดส่ง" พร้อมเหตุผลก่อนถึงกำหนด`}

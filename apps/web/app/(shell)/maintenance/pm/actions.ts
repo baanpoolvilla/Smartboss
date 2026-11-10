@@ -22,7 +22,8 @@ import { getAsset } from "@/modules/maintenance/data/assets";
 import { roundsPerYearOptions } from "@/modules/maintenance/lib/pm-schedule";
 import { deleteNotificationsByReference } from "@/modules/maintenance/data/notify";
 import { isPastDay } from "@/modules/maintenance/lib/no-past-date";
-import { openRoundsNow, openRoundsOfPm, pmIsRoundMode, roundsFromDate } from "@/modules/maintenance/data/pm-rounds";
+import { loadRoundOrg, openEarlyRound, openRoundsNow, openRoundsOfPm, pmIsRoundMode, roundsFromDate } from "@/modules/maintenance/data/pm-rounds";
+import { DEFAULT_PM_LEAD_DAYS, ROUND_DESC_RE, roundDescLine, roundDueAt } from "@/modules/maintenance/lib/pm-rounds";
 import { canEditDueDate } from "@/modules/maintenance/lib/due-request-access";
 import { canSeeWorkOrder, workOrderAccess } from "@/modules/maintenance/data/work-order-access";
 import { getWorkOrder } from "@/modules/maintenance/data/work-orders";
@@ -279,6 +280,8 @@ export async function updatePmAction(formData: FormData) {
     title: title && before && title !== before.title ? { from: before.title, to: title } : undefined,
   });
   if (moveRounds) {
+    // กติกา 10/11/2569: กำหนดส่งของใบรอบ = วันของรอบ + เวลาทำ (ไม่ใช่วันของรอบ)
+    const windowDays = (await loadRoundOrg(orgId))?.pmLeadDays ?? DEFAULT_PM_LEAD_DAYS;
     const plan = roundsFromDate(
       { frequency: frequency || before!.frequency, roundsPerYear: before!.roundsPerYear },
       parseDate(nextDueDate),
@@ -287,13 +290,14 @@ export async function updatePmAction(formData: FormData) {
     for (const [i, wo] of openRounds.entries()) {
       const round = plan.rounds[i]!;
       // แก้กำหนดส่งผ่านตัวเดียวกับปุ่มในใบงาน — มีบันทึกในใบ แจ้งผู้รับผิดชอบ และเคลียร์คำขอเลื่อนที่ค้าง
-      const r = await editDueDateAction(wo.id, round.toISOString().slice(0, 10), "ตามวันที่ในแผน PM");
+      const due = roundDueAt(round, windowDays);
+      const r = await editDueDateAction(wo.id, new Date(due.getTime() + 7 * 3600e3).toISOString().slice(0, 10), "ตามวันที่ในแผน PM");
       if (r.error) throw new Error(r.error);
       await prisma.workOrder.update({
         where: { id: wo.id },
         data: {
           pmRoundDate: round,
-          description: wo.description?.replace(/รอบครบกำหนด .*/, `รอบครบกำหนด ${fmtThaiDate(round)}`) ?? wo.description,
+          description: wo.description?.replace(ROUND_DESC_RE, roundDescLine(fmtThaiDate(round), fmtThaiDate(due))) ?? wo.description,
         },
       });
     }
@@ -386,4 +390,21 @@ export async function deletePmAction(formData: FormData) {
   // deleteNotificationsByReference's doc)
   await deleteNotificationsByReference(id, "pm");
   revalidatePath("/maintenance/pm");
+}
+
+/**
+ * ทำรอบล่วงหน้า — คนตั้ง PM เลือกรอบในอนาคตมาเปิดใบตอนนี้ (ผู้ใช้ 10/11/2569 "ต้องเป็นคนตั้ง PM")
+ * ทำเสร็จ = รอบนั้นจบ ถึงวันของรอบระบบไม่เปิดซ้ำ
+ */
+export async function earlyRoundAction(formData: FormData): Promise<{ error?: string; id?: string }> {
+  const session = await requireOrg();
+  const pmId = String(formData.get("pmId") ?? "");
+  const round = String(formData.get("round") ?? "");
+  if (!pmId || !/^\d{4}-\d{2}-\d{2}$/.test(round)) return { error: "เลือกรอบก่อน" };
+  const r = await openEarlyRound(session.orgId, pmId, round, session.userId);
+  if ("error" in r) return { error: r.error };
+  revalidatePath("/maintenance/pm");
+  revalidatePath("/maintenance/work-orders");
+  // ไปหน้าใบงานที่เพิ่งเปิดเลย — router.push ฝั่งหน้าเว็บโดนการรีเฟรชหลัง revalidate ทับ (เจอตอนทดสอบ)
+  redirect(`/maintenance/work-orders/${r.id}`);
 }
