@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Check, ChevronDown, Eye, Globe, Lock, Minus, MessageSquare, PenLine, Search, AlarmClock, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/modules/report_task/components/ui/input";
+import { Switch } from "@/modules/report_task/components/ui/switch";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { useDepartmentStore } from "@/modules/report_task/store/department-store";
 import { useReportFeedStore, type ReportTopic, type ReportTopicVisibility } from "@/modules/report_task/store/report-feed-store";
@@ -66,7 +67,10 @@ export function RoomAccessPanel({
   apply,
   staged,
   viewingAsUserId,
+  hideTitle,
 }: {
+  /** อยู่ใต้แท็บ "ใครเห็นห้อง" ที่บอกชื่อไว้แล้ว — ไม่ต้องขึ้นหัวข้อซ้ำ */
+  hideTitle?: boolean;
   /** ห้อง (หรือ draft ของหน้าต่างตั้งค่าห้อง) — อ่าน visibility/postPermission/commentsDisabled/รอบส่ง จากที่นี่ */
   topic: ReportTopic;
   apply: (patch: Partial<ReportTopic>) => void;
@@ -233,17 +237,17 @@ export function RoomAccessPanel({
   }, [employees, depts]);
 
   const modeOptions: { mode: Mode; label: string; hint: string; icon: typeof Globe }[] = [
-    { mode: "open", label: "ทุกคนในบริษัท", hint: "ทุกคนเห็นและเข้าห้องได้", icon: Globe },
+    { mode: "open", label: "ทุกคนในบริษัท", hint: "ไม่ต้องเลือกอะไรเพิ่ม", icon: Globe },
     { mode: "custom", label: "เลือกเอง", hint: "ติ๊กแผนก หรือรายคน ด้านล่าง", icon: SlidersHorizontal },
     { mode: "manager", label: "หัวหน้าเท่านั้น", hint: "หัวหน้าแผนกทุกแผนก", icon: Lock },
   ];
 
   return (
     <div className="space-y-3" data-testid="room-access-panel">
-      <div>
+      {!hideTitle && <div>
         <p className="text-sm font-semibold text-[var(--ink)]">ใครเห็นห้องนี้ ทำอะไรได้บ้าง</p>
         <p className="text-[11.5px] text-[var(--ink-soft)]">ติ๊กในตารางได้เลย ช่องขวามือบอกว่าแต่ละคนทำอะไรได้</p>
-      </div>
+      </div>}
 
       {/* สรุปตัวเลข — ตอบ "มีใครเห็นบ้าง" ได้ในบรรทัดเดียว */}
       <div className="grid grid-cols-4 gap-1.5" data-testid="room-access-counts">
@@ -299,34 +303,33 @@ export function RoomAccessPanel({
 
       {/* 2) ทำอะไรได้ */}
       <div className="space-y-1.5">
-        <p className="text-xs font-medium text-[var(--ink-soft)]">2. คนที่เห็นห้อง ทำอะไรได้</p>
-        <div className="grid grid-cols-2 gap-1.5">
-          <label className="flex flex-col gap-1 rounded-lg border border-[var(--line)] px-2.5 py-2">
-            <span className="flex items-center gap-1 text-[11px] text-[var(--ink-soft)]"><PenLine className="h-3 w-3" />ใครโพสต์ได้</span>
-            <select
-              aria-label="ใครโพสต์ได้"
-              value={topic.postPermission === "managersOnly" ? "managersOnly" : "everyone"}
-              onChange={(e) => apply({ postPermission: e.target.value as "everyone" | "managersOnly" })}
-              className="rounded-md border border-[var(--line)] bg-white px-2 py-1 text-[13px]"
-            >
-              <option value="everyone">ทุกคนที่เห็นห้อง</option>
-              <option value="managersOnly">เฉพาะหัวหน้า/ผู้ดูแล</option>
-            </select>
+        <p className="text-xs font-medium text-[var(--ink-soft)]">2. จำกัดสิทธิ์ (ปกติไม่ต้องเปิด — คนที่เห็นห้องโพสต์และคอมเมนต์ได้ทุกคน)</p>
+        {/* เดิมเป็น dropdown 2 อันที่ขึ้น "ทุกคนที่เห็นห้อง" ซ้ำกับข้อ 1 (ผู้ใช้ 10/11/2569 "มันดูซ้ำซ้อนไหม") — เป็นสวิตช์ เปิดเฉพาะตอนอยากจำกัด */}
+        <div className="divide-y divide-[var(--line)] rounded-lg border border-[var(--line)]">
+          <label className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2">
+            <span className="min-w-0">
+              <span className="flex items-center gap-1.5 text-[13px] font-medium"><PenLine className="h-3.5 w-3.5" />เฉพาะหัวหน้า/ผู้ดูแลโพสต์ได้</span>
+              <span className="block text-[11px] text-[var(--ink-soft)]">เหมาะกับห้องประกาศ คนอื่นอ่านได้อย่างเดียว</span>
+            </span>
+            <Switch
+              aria-label="เฉพาะหัวหน้าโพสต์ได้"
+              checked={topic.postPermission === "managersOnly"}
+              onCheckedChange={(v) => apply({ postPermission: v ? "managersOnly" : "everyone" })}
+            />
           </label>
-          <label className="flex flex-col gap-1 rounded-lg border border-[var(--line)] px-2.5 py-2">
-            <span className="flex items-center gap-1 text-[11px] text-[var(--ink-soft)]"><MessageSquare className="h-3 w-3" />คอมเมนต์</span>
-            <select
-              aria-label="คอมเมนต์"
-              value={topic.commentsDisabled ? "off" : "on"}
-              onChange={(e) => apply({ commentsDisabled: e.target.value === "off" })}
-              className="rounded-md border border-[var(--line)] bg-white px-2 py-1 text-[13px]"
-            >
-              <option value="on">ทุกคนที่เห็นห้อง</option>
-              <option value="off">ปิด (อ่านอย่างเดียว)</option>
-            </select>
+          <label className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2">
+            <span className="min-w-0">
+              <span className="flex items-center gap-1.5 text-[13px] font-medium"><MessageSquare className="h-3.5 w-3.5" />ปิดคอมเมนต์</span>
+              <span className="block text-[11px] text-[var(--ink-soft)]">คอมเมนต์เดิมยังอยู่ แค่เพิ่มใหม่ไม่ได้</span>
+            </span>
+            <Switch
+              aria-label="ปิดคอมเมนต์"
+              checked={!!topic.commentsDisabled}
+              onCheckedChange={(v) => apply({ commentsDisabled: v })}
+            />
           </label>
         </div>
-        <p className="text-[10.5px] text-[var(--ink-soft)]">&quot;ต้องส่ง&quot; มาจากรอบส่งด้านล่าง — เห็นห้องได้ไม่ได้แปลว่าต้องส่ง</p>
+        <p className="text-[10.5px] text-[var(--ink-soft)]">ช่อง &quot;ต้องส่ง&quot; มาจากรอบส่งรายงาน — เห็นห้องได้ไม่ได้แปลว่าต้องส่ง</p>
       </div>
 
       {/* 3) รายชื่อ */}

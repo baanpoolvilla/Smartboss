@@ -286,7 +286,7 @@ export function ReportTopicSettingsPanel({
       {!section && <RoomSettingsIntroBanner viewingAsUserId={viewingAsUserId} />}
 
       {/* ใครเห็นห้อง + ทำอะไรได้ + รายชื่อติ๊กเลือก — ตารางเดียว (room-access-panel.tsx · 10/11/2569) */}
-      {section !== "rounds" && <RoomAccessPanel topic={memberTopic} apply={apply} staged={!!onUpdate} viewingAsUserId={viewingAsUserId} />}
+      {section !== "rounds" && <RoomAccessPanel topic={memberTopic} apply={apply} staged={!!onUpdate} viewingAsUserId={viewingAsUserId} hideTitle={section === "access"} />}
 
         {section !== "access" && (
         <div className="space-y-2">
