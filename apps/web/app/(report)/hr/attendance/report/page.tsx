@@ -21,6 +21,9 @@ import {
   resolveAttendanceRange,
 } from "@/modules/hr/lib/attendance-export-data";
 import { PrintButton } from "./print-button";
+import { DetailsBehaviour } from "./details-behaviour";
+import { LeavePill } from "./leave-pill";
+import { LeaveTypeTotals, type LeaveTypeGroup } from "./leave-type-totals";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "รายงานการเข้างาน · Smartboss" };
@@ -98,6 +101,28 @@ function sumSummaries(reports: readonly PersonReport[]): PersonSummary {
   return total;
 }
 
+/** ประเภทลา → ใครลา วันไหน (ป้ายด้านบนกดดูได้) · เรียงตามจำนวนวันมากไปน้อย */
+function leaveGroups(reports: readonly PersonReport[]): LeaveTypeGroup[] {
+  const map = new Map<string, LeaveTypeGroup>();
+  for (const r of reports) {
+    for (const d of r.days) {
+      if (d.kind !== "leave") continue;
+      const name = d.leaveName ?? "ลา (ไม่ระบุประเภท)";
+      let g = map.get(name);
+      if (!g) map.set(name, (g = { name, days: 0, people: [] }));
+      g.days += 1;
+      let p = g.people.find((x) => x.employmentId === r.employmentId);
+      if (!p) g.people.push((p = { employmentId: r.employmentId, name: r.person.name, code: r.person.code, dates: [] }));
+      p.dates.push(formatThaiDate(d.result.work_date));
+    }
+  }
+  return [...map.values()].sort((a, b) => b.days - a.days || a.name.localeCompare(b.name, "th"));
+}
+
+function sortedLeave(s: PersonSummary): [string, number][] {
+  return Object.entries(s.leaveByType).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "th"));
+}
+
 const th = "border-b border-(--ink) px-2 py-1.5 text-left text-[11px] font-semibold text-(--ink-soft)";
 const td = "border-b border-(--line) px-2 py-1.5 align-top";
 
@@ -131,8 +156,11 @@ export default async function AttendanceReportPage({
 
   return (
     <div data-app="hr" className="min-h-screen bg-(--bg-soft) text-(--ink) print:bg-white">
+      <DetailsBehaviour />
       <style>{`
         @page { size: A4; margin: 12mm; }
+        details[data-day-table] > summary { list-style: none; }
+        details[data-day-table] > summary::-webkit-details-marker { display: none; }
         @media print { html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
       `}</style>
 
@@ -210,19 +238,8 @@ export default async function AttendanceReportPage({
             {/* วันลาแยกประเภท (ผู้ใช้ 10/11/2569 "ลาให้แสดงแยกประเภทกันชัดเจน") — เดิมรวมเป็น "ลา" ตัวเดียว */}
             <section className="mt-4" data-testid="leave-type-totals">
               <h2 className="mb-2 text-sm font-semibold">วันลาแยกประเภท (ทั้งเดือน)</h2>
-              {Object.keys(total.leaveByType).length === 0 ? (
-                <p className="text-xs text-(--ink-soft)">ไม่มีวันลาในเดือนนี้</p>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {Object.entries(total.leaveByType)
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([name, d]) => (
-                      <span key={name} className="rounded-md border border-(--line) px-3 py-1.5 text-sm">
-                        {name} <b className="tabular-nums">{d}</b> วัน
-                      </span>
-                    ))}
-                </div>
-              )}
+              <p className="-mt-1 mb-2 text-[11px] text-(--ink-soft) print:hidden">กดที่ประเภทเพื่อดูว่าใครลา วันไหน</p>
+              <LeaveTypeTotals groups={leaveGroups(reports)} />
             </section>
 
             <section className="mt-8">
@@ -236,7 +253,7 @@ export default async function AttendanceReportPage({
                       <th className={`${th} text-right`}>สาย</th>
                       <th className={`${th} text-right`}>ขาดงาน</th>
                       <th className={`${th} text-right`}>ลืมสแกน</th>
-                      <th className={`${th} text-right`}>ลา (แยกประเภท)</th>
+                      <th className={th}>ลา (แยกประเภท)</th>
                       <th className={`${th} text-right`}>วันหยุดตามสิทธิ์</th>
                       <th className={`${th} text-right`}>ชม.ทำงาน</th>
                       <th className={`${th} text-right`}>OT อนุมัติ</th>
@@ -245,7 +262,7 @@ export default async function AttendanceReportPage({
                   <tbody>
                     {reports.map(({ employmentId, person, summary: s }) => (
                       <tr key={employmentId}>
-                        <td className={td}>
+                        <td className={`${td} whitespace-nowrap`}>
                           <a href={`#emp-${employmentId}`} className="font-medium hover:underline print:no-underline">
                             {person.name}
                           </a>
@@ -261,16 +278,12 @@ export default async function AttendanceReportPage({
                         <td className={`${td} text-right`} style={s.missingPunchCount ? { color: TONE.warn } : undefined}>
                           {count(s.missingPunchCount)}
                         </td>
-                        <td className={`${td} text-right`} data-testid="leave-by-type">
+                        <td className={td} data-testid="leave-by-type">
                           {s.leaveDays ? (
-                            <span className="inline-flex flex-col items-end gap-0.5">
-                              {Object.entries(s.leaveByType)
-                                .sort((a, b) => b[1] - a[1])
-                                .map(([name, d]) => (
-                                  <span key={name} className="whitespace-nowrap">
-                                    {name} <b>{d}</b>
-                                  </span>
-                                ))}
+                            <span className="flex flex-wrap gap-1">
+                              {sortedLeave(s).map(([name, d]) => (
+                                <LeavePill key={name} name={name} n={d} />
+                              ))}
                             </span>
                           ) : (
                             "—"
@@ -290,18 +303,42 @@ export default async function AttendanceReportPage({
               </p>
             </section>
 
+            <div className="mt-10 flex flex-wrap items-baseline gap-2 print:hidden">
+              <h2 className="text-sm font-semibold">รายวันของแต่ละคน</h2>
+              <p className="text-[11px] text-(--ink-soft)">กดชื่อเพื่อกางดู · ตอนพิมพ์ PDF กางทุกคนเหมือนเดิม</p>
+            </div>
+
             {reports.map(({ employmentId, person, days, summary: s }) => (
-              <section key={employmentId} id={`emp-${employmentId}`} className="mt-10 print:mt-0 print:break-before-page">
-                <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-(--ink) pb-2">
-                  <h2 className="text-base font-semibold">
+              <section key={employmentId} id={`emp-${employmentId}`} className="mt-3 scroll-mt-4 print:mt-0 print:break-before-page">
+                {/* พับไว้ก่อนให้หน้าไม่ยาว (ผู้ใช้ 10/11/2569) · ดูคนเดียว = กางเลย · พิมพ์ = กางทุกคน (details-behaviour) */}
+                <details
+                  data-day-table
+                  open={reports.length === 1 || undefined}
+                  className="group rounded-md border border-(--line) print:rounded-none print:border-0"
+                >
+                <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 px-3 py-2.5 hover:bg-(--bg-soft) group-open:border-b group-open:border-(--ink) print:cursor-auto print:px-0 print:pb-2 print:pt-0 print:hover:bg-transparent">
+                  <h2 className="flex items-center gap-2 text-base font-semibold">
+                    <span aria-hidden className="w-3 text-xs text-(--ink-soft) print:hidden">
+                      <span className="group-open:hidden">▸</span>
+                      <span className="hidden group-open:inline">▾</span>
+                    </span>
                     {person.name}
-                    <span className="ml-2 font-mono text-xs font-normal text-(--ink-soft)">{person.code}</span>
+                    <span className="font-mono text-xs font-normal text-(--ink-soft)">{person.code}</span>
                   </h2>
-                  <p className="text-xs text-(--ink-soft)">
-                    มาทำงาน {s.workedDays} วัน · สาย {s.lateCount} ครั้ง · ขาดงาน {s.absentDays} วัน ·
-                    ลืมสแกน {s.missingPunchCount} ครั้ง · ชม.ทำงาน {hhmm(s.workedMinutes) || "0:00"}
-                  </p>
-                </div>
+                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-(--ink-soft)">
+                    <span>
+                      มาทำงาน {s.workedDays} วัน · สาย {s.lateCount} ครั้ง · ขาดงาน {s.absentDays} วัน ·
+                      ลืมสแกน {s.missingPunchCount} ครั้ง · ชม.ทำงาน {hhmm(s.workedMinutes) || "0:00"}
+                    </span>
+                    {sortedLeave(s).map(([name, d]) => (
+                      <LeavePill key={name} name={name} n={d} />
+                    ))}
+                    <span className="ml-2 font-medium text-(--brand-navy,#1b2537) print:hidden">
+                      <span className="group-open:hidden">ดูรายวัน</span>
+                      <span className="hidden group-open:inline">พับ</span>
+                    </span>
+                  </div>
+                </summary>
                 <div className="overflow-x-auto">
                   <table className="w-full border-collapse text-xs tabular-nums">
                     <thead>
@@ -324,9 +361,13 @@ export default async function AttendanceReportPage({
                           </td>
                           <td className={td}>
                             <div className="flex flex-wrap gap-1">
-                              {d.tags.map((tag) => (
-                                <Tag key={tag.label} tag={tag} />
-                              ))}
+                              {d.tags.map((tag) =>
+                                d.kind === "leave" && tag.label === (d.leaveName ?? tag.label) ? (
+                                  <LeavePill key={tag.label} name={tag.label} />
+                                ) : (
+                                  <Tag key={tag.label} tag={tag} />
+                                ),
+                              )}
                             </div>
                           </td>
                           <td className={`${td} text-right`}>{formatClock(d.result.actual_in_at, person.timeZone) || "—"}</td>
@@ -343,6 +384,7 @@ export default async function AttendanceReportPage({
                     </tbody>
                   </table>
                 </div>
+                </details>
               </section>
             ))}
           </>
