@@ -4,7 +4,8 @@ import { randomUUID } from "node:crypto";
 
 import { recordPerformanceEvents, revokePerformanceEvents, type PerformanceEventInput } from "@/lib/performance";
 import { readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
-import { readTasks, writeTasks } from "@/modules/report_task/lib/db/task-repo";
+import { writeTasks } from "@/modules/report_task/lib/db/task-repo";
+import { readTasksCached } from "@/modules/report_task/lib/db/task-cache";
 import { LATE_PENALTY_POINTS, penaltyDueDate, sweepAutoPenalties } from "@/modules/report_task/lib/task-penalty-sweep";
 import type { ActivityItem, Task } from "@/modules/report_task/types";
 import { prisma } from "@smartboss/database";
@@ -32,7 +33,8 @@ const MAX_ACTIVITY_ENTRIES = 1000;
  */
 export async function runTaskPenaltySweep(orgId: string, actorId: string | null) {
 
-  const { tasks, version } = await readTasks(orgId);
+  // ใช้ชุดที่จำไว้ถ้าไม่มีใครแก้งาน (ได้สำเนา แก้ได้) — เลขรุ่นยังใช้กันบันทึกทับเหมือนเดิม (task-cache.ts · 10/11/2569)
+  const { tasks, version } = await readTasksCached(orgId);
   if (tasks.length === 0) {
     return Response.json({ ok: true, changed: false });
   }

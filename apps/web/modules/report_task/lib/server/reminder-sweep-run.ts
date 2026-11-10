@@ -3,7 +3,8 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import { createStoreIfAbsent, readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
-import { readTasks } from "@/modules/report_task/lib/db/task-repo";
+import { readTasksCached } from "@/modules/report_task/lib/db/task-cache";
+import { readStoreCached } from "@/modules/report_task/lib/db/store-cached-read";
 import { computeReminders } from "@/modules/report_task/lib/reminder-sweep";
 import { normalizeEarlySubmitDays } from "@/modules/report_task/lib/submission-rounds";
 import { defaultReminderSettings, type ReminderSettings } from "@/modules/report_task/store/reminder-settings-store";
@@ -32,10 +33,11 @@ const MAX_SENT_KEYS = 20_000;
 export async function runReminderSweep(orgId: string, actorId: string | null) {
   const [{ data: settingsRaw }, { tasks }, { data: meetings }, { data: todos }, { data: reportFeed }, { data: earlyRaw }] = await Promise.all([
     readStore<ReminderSettings>(orgId, SETTINGS_KEY),
-    readTasks(orgId),
+    // งานทั้งบริษัท + ฟีดรายงาน: ใช้ชุดที่จำไว้ถ้าไม่มีใครแก้ (task-cache.ts / store-cached-read.ts · 10/11/2569)
+    readTasksCached(orgId),
     readStore<CalendarEvent[]>(orgId, MEETINGS_KEY),
     readStore<TodoItem[]>(orgId, TODOS_KEY),
-    readStore<{ topics: ReportTopic[]; posts: ReportPost[]; albums: ReportAlbum[]; submitterGroups?: SubmitterGroup[] }>(orgId, REPORT_FEED_KEY),
+    readStoreCached<{ topics: ReportTopic[]; posts: ReportPost[]; albums: ReportAlbum[]; submitterGroups?: SubmitterGroup[] }>(orgId, REPORT_FEED_KEY),
     readStore<unknown>(orgId, "report-early-submit-days"),
   ]);
   // Merged field-by-field, not a plain `?? default` — a row saved before
