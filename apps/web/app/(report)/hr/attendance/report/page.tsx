@@ -16,8 +16,11 @@ import {
   type TagTone,
 } from "@/modules/hr/lib/attendance-export";
 import {
+  currentPayPeriod,
   currentThaiMonth,
   loadAttendanceReport,
+  loadPayCutoffDay,
+  payPeriodRange,
   resolveAttendanceRange,
 } from "@/modules/hr/lib/attendance-export-data";
 import { PrintButton } from "./print-button";
@@ -129,14 +132,18 @@ const td = "border-b border-(--line) px-2 py-1.5 align-top";
 export default async function AttendanceReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string; employment?: string }>;
+  searchParams: Promise<{ month?: string; employment?: string; range?: string }>;
 }) {
   const session = await requireOrg();
   if (!hasPermission(session, HR_PERMS.employeeManage)) redirect("/hr");
 
   const sp = await searchParams;
-  const thisMonth = currentThaiMonth();
-  const range = resolveAttendanceRange({ month: sp.month && sp.month <= thisMonth ? sp.month : null })!;
+  // รอบเงินเดือน (เช่น 26 ต.ค. – 25 พ.ย.) เมื่อบริษัทตั้งวันตัดรอบไว้ · ?range=month = ทั้งเดือนปฏิทินแบบเดิม
+  const cutoff = await loadPayCutoffDay(session.orgId);
+  const usePay = cutoff !== null && sp.range !== "month";
+  const thisMonth = usePay ? currentPayPeriod(cutoff) : currentThaiMonth();
+  const wanted = sp.month && /^\d{4}-\d{2}$/.test(sp.month) && sp.month <= thisMonth ? sp.month : thisMonth;
+  const range = usePay ? payPeriodRange(wanted, cutoff) : resolveAttendanceRange({ month: wanted })!;
   const data = await loadAttendanceReport(session.orgId, range.from, range.to);
 
   const allReports = data ? buildPersonReports(data.results, data.ctx) : [];
@@ -150,8 +157,11 @@ export default async function AttendanceReportPage({
     timeZone: "Asia/Bangkok",
   }).format(new Date());
 
-  const monthHref = (month: string) =>
-    `/hr/attendance/report?month=${month}${sp.employment ? `&employment=${sp.employment}` : ""}`;
+  const hrefFor = (month: string, pay: boolean) =>
+    `/hr/attendance/report?month=${month}${pay || cutoff === null ? "" : "&range=month"}${sp.employment ? `&employment=${sp.employment}` : ""}`;
+  const monthHref = (month: string) => hrefFor(month, usePay);
+  const calendarRange = resolveAttendanceRange({ month: range.month })!;
+  const payRange = cutoff !== null ? payPeriodRange(range.month, cutoff) : null;
   const next = shiftMonth(range.month, 1);
 
   return (
@@ -169,6 +179,24 @@ export default async function AttendanceReportPage({
           <Link href="/hr" className="text-sm text-(--ink-soft) hover:text-(--ink)">
             ← กลับระบบบุคคล
           </Link>
+          {payRange ? (
+            <div className="flex overflow-hidden rounded-md border border-(--line) text-xs" role="group" aria-label="ช่วงวันที่" data-testid="range-toggle">
+              <Link
+                href={hrefFor(range.month, true)}
+                aria-current={usePay ? "true" : undefined}
+                className={`px-3 py-2 ${usePay ? "bg-(--brand-navy,#1b2537) font-semibold text-white" : "hover:bg-(--bg-soft)"}`}
+              >
+                รอบเงินเดือน {formatThaiDate(payRange.from).slice(0, 5)} – {formatThaiDate(payRange.to).slice(0, 5)}
+              </Link>
+              <Link
+                href={hrefFor(range.month, false)}
+                aria-current={usePay ? undefined : "true"}
+                className={`border-l border-(--line) px-3 py-2 ${usePay ? "hover:bg-(--bg-soft)" : "bg-(--brand-navy,#1b2537) font-semibold text-white"}`}
+              >
+                ทั้งเดือน {formatThaiDate(calendarRange.from).slice(0, 5)} – {formatThaiDate(calendarRange.to).slice(0, 5)}
+              </Link>
+            </div>
+          ) : null}
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <Link href={monthHref(shiftMonth(range.month, -1))}>
               <Button type="button" variant="outline" size="sm" aria-label="เดือนก่อน">◀</Button>
@@ -183,6 +211,7 @@ export default async function AttendanceReportPage({
             )}
             <form method="get" className="flex items-center gap-2">
               <input type="hidden" name="month" value={range.month} />
+              {cutoff !== null && !usePay ? <input type="hidden" name="range" value="month" /> : null}
               <select
                 name="employment"
                 defaultValue={sp.employment ?? ""}
@@ -209,7 +238,7 @@ export default async function AttendanceReportPage({
             <p className="text-xs font-medium text-(--ink-soft)">{data?.companyName ?? "Smartboss"}</p>
             <h1 className="mt-1 text-2xl font-bold">รายงานการเข้างาน</h1>
             <p className="mt-0.5 text-sm text-(--ink-soft)">
-              ประจำเดือน {monthLabel(range.month)} · {formatThaiDate(range.from)} – {formatThaiDate(range.to)}
+              {usePay ? "รอบเงินเดือน" : "ประจำเดือน"} {monthLabel(range.month)} · {formatThaiDate(range.from)} – {formatThaiDate(range.to)}
             </p>
           </div>
           <p className="text-xs text-(--ink-soft)">ออกรายงาน {generatedAt}</p>
@@ -237,7 +266,7 @@ export default async function AttendanceReportPage({
 
             {/* วันลาแยกประเภท (ผู้ใช้ 10/11/2569 "ลาให้แสดงแยกประเภทกันชัดเจน") — เดิมรวมเป็น "ลา" ตัวเดียว */}
             <section className="mt-4" data-testid="leave-type-totals">
-              <h2 className="mb-2 text-sm font-semibold">วันลาแยกประเภท (ทั้งเดือน)</h2>
+              <h2 className="mb-2 text-sm font-semibold">วันลาแยกประเภท ({usePay ? "ทั้งรอบ" : "ทั้งเดือน"})</h2>
               <p className="-mt-1 mb-2 text-[11px] text-(--ink-soft) print:hidden">กดที่ประเภทเพื่อดูว่าใครลา วันไหน</p>
               <LeaveTypeTotals groups={leaveGroups(reports)} />
             </section>

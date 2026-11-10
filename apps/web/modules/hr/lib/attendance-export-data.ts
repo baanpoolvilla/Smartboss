@@ -15,6 +15,9 @@ import {
   type ExportOvertimeDecision,
 } from "./attendance-export";
 
+import { withSalaryTenant } from "@/modules/salary/lib/db";
+import { periodDates, periodOfDate } from "@/modules/salary/lib/types";
+
 const MONTH = /^\d{4}-\d{2}$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -49,6 +52,35 @@ export function resolveAttendanceRange(params: {
   const [y, m] = month.split("-").map(Number);
   const lastDay = new Date(Date.UTC(y!, m!, 0)).getUTCDate();
   return { from: `${month}-01`, to: `${month}-${String(lastDay).padStart(2, "0")}`, month };
+}
+
+/**
+ * วันตัดรอบเงินเดือนของบริษัท (เช่น 25 → รอบ 26 – 25) — null = บริษัทนี้ยังไม่ตั้งเงินเดือน
+ * หรือตัดสิ้นเดือนอยู่แล้ว (รอบเงินเดือน = ทั้งเดือน ไม่ต้องมีตัวเลือก)
+ * ผู้ใช้ 10/11/2569 "เดือนแยกด้วย 25 ก่อนของอีกเดือน 26 ไปของอีกเดือน"
+ */
+export async function loadPayCutoffDay(orgId: string): Promise<number | null> {
+  try {
+    const row = await withSalaryTenant(orgId, (tx) =>
+      tx.salarySettings.findUnique({ where: { orgId }, select: { cutoffDay: true } }),
+    );
+    if (!row || row.cutoffDay >= 28) return null;
+    return row.cutoffDay;
+  } catch {
+    return null; // อ่านตั้งค่าเงินเดือนไม่ได้ = ใช้ทั้งเดือนเหมือนเดิม
+  }
+}
+
+/** รอบเงินเดือน YYYY-MM = วันถัดจากวันตัดของเดือนก่อน ถึงวันตัดของเดือนนั้น (เช่น 2026-11 → 26 ต.ค. – 25 พ.ย.) */
+export function payPeriodRange(month: string, cutoffDay: number): AttendanceRange {
+  const { startsOn, endsOn } = periodDates(month, cutoffDay, 0);
+  return { from: startsOn, to: endsOn, month };
+}
+
+/** รอบเงินเดือนที่วันนี้ (เวลาไทย) ตกอยู่ */
+export function currentPayPeriod(cutoffDay: number, now = new Date()): string {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(now);
+  return periodOfDate(today, cutoffDay);
 }
 
 export interface AttendanceReportData {

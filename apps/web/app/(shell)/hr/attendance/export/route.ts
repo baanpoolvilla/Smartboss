@@ -11,6 +11,8 @@ import {
 } from "@/modules/hr/lib/attendance-export";
 import {
   loadAttendanceReport,
+  loadPayCutoffDay,
+  payPeriodRange,
   resolveAttendanceRange,
 } from "@/modules/hr/lib/attendance-export-data";
 
@@ -32,11 +34,20 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const view = searchParams.get("view") === "summary" ? "summary" : "daily";
-  const range = resolveAttendanceRange({
-    month: searchParams.get("month"),
-    from: searchParams.get("from"),
-    to: searchParams.get("to"),
-  });
+  // ?month= ตามรอบเงินเดือน (26 – 25) เหมือนหน้ารายงาน เมื่อบริษัทตั้งวันตัดรอบไว้ · ?range=month = ทั้งเดือนปฏิทิน
+  const monthParam = searchParams.get("month");
+  const cutoff =
+    monthParam && /^\d{4}-\d{2}$/.test(monthParam) && !searchParams.get("from") && searchParams.get("range") !== "month"
+      ? await loadPayCutoffDay(session.orgId)
+      : null;
+  const range =
+    cutoff !== null
+      ? payPeriodRange(monthParam!, cutoff)
+      : resolveAttendanceRange({
+          month: monthParam,
+          from: searchParams.get("from"),
+          to: searchParams.get("to"),
+        });
   if (range === null) return new NextResponse("ช่วงวันที่ไม่ถูกต้อง", { status: 400 });
 
   const data = await loadAttendanceReport(session.orgId, range.from, range.to);
