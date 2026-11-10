@@ -26,6 +26,41 @@ export interface DueRequestView {
   createdAt: string;
   /** คนที่ดูอยู่อนุมัติคำขอนี้ได้ไหม (คำนวณที่ server) */
   canDecide: boolean;
+  /** ใบกลุ่ม: ขอให้ใครบ้าง (ว่าง = คนขอคนเดียว) */
+  forUserIds: string[];
+}
+
+/**
+ * ใบกลุ่ม: เลื่อนให้ใคร — "ทั้งกลุ่ม" (กดทีเดียวเลื่อนทุกคน) หรือ "เลือกคน" (ติ๊กทีละคน)
+ * แบบเดียวกับ DueTargetPicker ของงานบนบอร์ดงาน (ผู้ใช้ 10/11/2569 "ให้เหมือนของ task") · value null = ทั้งกลุ่ม
+ */
+function DueTargetPicker({ members, value, onChange, label }: { members: { id: string; name: string }[]; value: string[] | null; onChange: (v: string[] | null) => void; label: string }) {
+  const chip = (active: boolean) =>
+    `rounded-full border px-3 py-1 text-[12px] font-medium transition-colors ${active ? "border-(--brand-navy) bg-(--brand-navy) text-white" : "border-(--line) bg-white text-(--ink) hover:bg-(--bg-soft)"}`;
+  return (
+    <div className="grid gap-1.5 text-[12.5px] text-(--ink-soft)" data-testid="due-target-picker">
+      {label}
+      <div className="flex flex-wrap gap-1.5">
+        <button type="button" className={chip(value === null)} onClick={() => onChange(null)}>
+          ทั้งกลุ่ม ({members.length} คน)
+        </button>
+        <button type="button" className={chip(value !== null)} onClick={() => onChange(value ?? members.map((m) => m.id))}>
+          เลือกคน
+        </button>
+      </div>
+      {value !== null && (
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-(--ink)">
+          {members.map((m) => (
+            <label key={m.id} className="flex items-center gap-1.5 text-[13px]">
+              <input type="checkbox" className="h-4 w-4" checked={value.includes(m.id)} onChange={(e) => onChange(e.target.checked ? [...value, m.id] : value.filter((x) => x !== m.id))} />
+              {m.name}
+            </label>
+          ))}
+        </div>
+      )}
+      {value !== null && value.length === 0 && <p className="m-0 text-[11.5px] text-red-600">เลือกอย่างน้อย 1 คน</p>}
+    </div>
+  );
 }
 
 /** YYYY-MM-DD → "18 ต.ค. 2569" */
@@ -49,6 +84,8 @@ export function WorkOrderDueRequest({
   canEdit = false,
   myId,
   requests,
+  members,
+  requestForAllByDefault = false,
 }: {
   workOrderId: string;
   /** กำหนดส่งปัจจุบัน YYYY-MM-DD (เวลาไทย) */
@@ -58,6 +95,10 @@ export function WorkOrderDueRequest({
   canEdit?: boolean;
   myId: string;
   requests: DueRequestView[];
+  /** ใบกลุ่มเท่านั้น — สมาชิกทุกคน (คนแรก = ผู้รับผิดชอบหลัก) · ไม่ส่ง = ใบเดี่ยว เหมือนเดิม */
+  members?: { id: string; name: string }[];
+  /** ใบ "ช่วยกันทำ": ขอเลื่อนเริ่มที่ทั้งกลุ่ม · แบบอื่นเริ่มที่ตัวเอง (เหมือนงาน) */
+  requestForAllByDefault?: boolean;
 }) {
   const ceo = useCeoTitle();
   const [open, setOpen] = useState(false);
@@ -68,6 +109,16 @@ export function WorkOrderDueRequest({
   const [date, setDate] = useState(addDay(dueDate, 3));
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const isGroup = !!members && members.length > 1;
+  const allIds = members?.map((m) => m.id) ?? [];
+  const nameOf = (id: string) => members?.find((m) => m.id === id)?.name ?? "?";
+  // null = ทั้งกลุ่ม
+  const [editFor, setEditFor] = useState<string[] | null>(null);
+  const [requestFor, setRequestFor] = useState<string[] | null>(requestForAllByDefault ? null : [myId]);
+  // คนอนุมัติปรับ "อนุมัติให้ใคร" ต่อคำขอ — ไม่มีคีย์ = ตามที่ขอ
+  const [approveFor, setApproveFor] = useState<Record<string, string[] | null>>({});
+  const forLabel = (ids: string[]) => (ids.length === allIds.length && ids.length > 1 ? `ทั้งกลุ่ม (${ids.length} คน)` : ids.map(nameOf).join(", "));
+  const editSome = isGroup && editFor !== null;
   const [pending, start] = useTransition();
   // ใบกลุ่มมีคำขอค้างพร้อมกันได้หลายคน · ใบเดี่ยวมีได้ใบเดียว
   const pendingReqs = requests.filter((r) => r.status === "pending");
@@ -98,6 +149,7 @@ export function WorkOrderDueRequest({
             กำหนดส่งใหม่ (ไม่ก่อนวันนี้)
             <DatePickerField value={editDate} minDate={today} onChange={(v) => v && setEditDate(v)} className="text-(--ink)" />
           </label>
+          {isGroup && <DueTargetPicker members={members!} value={editFor} onChange={setEditFor} label="ใช้กับใคร" />}
           <label className="grid gap-1 text-[12.5px] text-(--ink-soft)">
             เหตุผล (ไม่บังคับ)
             <textarea value={editReason} onChange={(e) => setEditReason(e.target.value)} rows={2}
@@ -106,10 +158,10 @@ export function WorkOrderDueRequest({
           {hasPending && <p className="m-0 text-[12px] text-amber-800">คำขอเลื่อนที่รออนุมัติอยู่จะถูกปิดไปด้วย</p>}
           <div className="flex flex-wrap justify-end gap-2">
             <button type="button" className="rounded-lg px-3 py-1.5 text-[13px] text-(--ink-soft)" onClick={() => setEditing(false)}>ยกเลิก</button>
-            <button type="button" disabled={pending || editDate < today || editDate === dueDate}
+            <button type="button" disabled={pending || editDate < today || (!isGroup && editDate === dueDate) || (editSome && editFor!.length === 0)}
               className="rounded-lg bg-[#2E7D32] px-4 py-1.5 text-[13px] font-semibold text-white disabled:opacity-50"
-              onClick={() => run(async () => { const r = await editDueDateAction(workOrderId, editDate, editReason); if (!r.error) { setEditing(false); setEditReason(""); } return r; }, `แก้กำหนดส่งแล้ว · ${th(editDate)}`)}>
-              บันทึก
+              onClick={() => run(async () => { const r = await editDueDateAction(workOrderId, editDate, editReason, editSome ? editFor! : undefined); if (!r.error) { setEditing(false); setEditReason(""); } return r; }, `แก้กำหนดส่งแล้ว · ${th(editDate)}`)}>
+              {isGroup ? (editSome ? `ใช้กับ ${editFor!.length} คน` : `ใช้กับทุกคน (${allIds.length} คน)`) : "บันทึก"}
             </button>
           </div>
         </div>
@@ -129,6 +181,14 @@ export function WorkOrderDueRequest({
             กำหนดส่งใหม่ (ต้องหลัง {th(dueDate)})
             <DatePickerField value={date} minDate={addDay(dueDate, 1)} onChange={(v) => v && setDate(v)} className="text-(--ink)" />
           </label>
+          {isGroup && (
+            <>
+              <DueTargetPicker members={members!} value={requestFor} onChange={setRequestFor} label="ขอเลื่อนให้ใคร" />
+              <p className="m-0 text-[11.5px] text-(--ink-soft)">
+                {requestForAllByDefault ? "งานนี้ช่วยกันทำ — เลือกทั้งกลุ่มไว้ให้ เปลี่ยนได้" : "เลือกไว้แค่คุณ — กด \"ทั้งกลุ่ม\" ถ้าทุกคนต้องเลื่อนด้วย"}
+              </p>
+            </>
+          )}
           <label className="grid gap-1 text-[12.5px] text-(--ink-soft)">
             เหตุผล (เช่น รออะไหล่ ช่างภายนอกยังไม่ว่าง ลูกค้าเข้าพัก)
             <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2}
@@ -136,9 +196,9 @@ export function WorkOrderDueRequest({
           </label>
           <div className="flex flex-wrap justify-end gap-2">
             <button type="button" className="rounded-lg px-3 py-1.5 text-[13px] text-(--ink-soft)" onClick={() => setOpen(false)}>ยกเลิก</button>
-            <button type="button" disabled={pending || !reason.trim() || date <= dueDate}
+            <button type="button" disabled={pending || !reason.trim() || date <= dueDate || (isGroup && requestFor !== null && requestFor.length === 0)}
               className="rounded-lg bg-[#2E7D32] px-4 py-1.5 text-[13px] font-semibold text-white disabled:opacity-50"
-              onClick={() => run(async () => { const r = await requestDueDateAction(workOrderId, date, reason); if (!r.error) { setOpen(false); setReason(""); } return r; }, `ส่งคำขอแล้ว · รอ ${ceo} / คนเปิดใบงานอนุมัติ`)}>
+              onClick={() => run(async () => { const r = await requestDueDateAction(workOrderId, date, reason, isGroup ? (requestFor ?? allIds) : undefined); if (!r.error) { setOpen(false); setReason(""); } return r; }, `ส่งคำขอแล้ว · รอ ${ceo} / คนเปิดใบงานอนุมัติ`)}>
               ส่งคำขอ
             </button>
           </div>
@@ -151,9 +211,19 @@ export function WorkOrderDueRequest({
             <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[11.5px] font-bold text-amber-900">รออนุมัติ</span>
             <span><b>{pendingReq.requestedByName}</b> ขอเลื่อน {th(pendingReq.previousDate)} → <b>{th(pendingReq.newDate)}</b></span>
           </div>
+          {isGroup && (
+            <p className="m-0 text-(--ink)" data-testid="due-request-for">
+              ขอให้: <b>{forLabel(pendingReq.forUserIds.length ? pendingReq.forUserIds : [pendingReq.requestedBy])}</b>
+            </p>
+          )}
           <p className="m-0 text-(--ink)">เหตุผล: {pendingReq.reason}</p>
           {pendingReq.canDecide && (
             <div className="grid gap-2">
+              {isGroup && (() => {
+                const asked = pendingReq.forUserIds.length ? pendingReq.forUserIds : [pendingReq.requestedBy];
+                const v = approveFor[pendingReq.id] !== undefined ? approveFor[pendingReq.id]! : asked.length === allIds.length ? null : asked;
+                return <DueTargetPicker members={members!} value={v} onChange={(nv) => setApproveFor({ ...approveFor, [pendingReq.id]: nv })} label="อนุมัติให้ใคร (เปลี่ยนได้)" />;
+              })()}
               <input value={notes[pendingReq.id] ?? ""} onChange={(e) => setNotes({ ...notes, [pendingReq.id]: e.target.value })} placeholder="เหตุผล (ไม่อนุมัติต้องใส่ · อนุมัติไม่บังคับ)"
                 className="w-full rounded-lg border border-(--line) bg-white px-2.5 py-1.5 text-base text-(--ink) sm:text-sm" />
               <div className="flex flex-wrap justify-end gap-2">
@@ -162,8 +232,8 @@ export function WorkOrderDueRequest({
                   onClick={() => run(() => decideDueRequestAction(pendingReq.id, false, notes[pendingReq.id] ?? ""), "ไม่อนุมัติแล้ว · แจ้งคนขอแล้ว")}>
                   ไม่อนุมัติ
                 </button>
-                <button type="button" disabled={pending} className="rounded-lg bg-[#2E7D32] px-4 py-1.5 font-semibold text-white disabled:opacity-50"
-                  onClick={() => run(() => decideDueRequestAction(pendingReq.id, true, notes[pendingReq.id] ?? ""), `อนุมัติแล้ว · กำหนดส่งใหม่ ${th(pendingReq.newDate)}`)}>
+                <button type="button" disabled={pending || (approveFor[pendingReq.id] ?? null)?.length === 0} className="rounded-lg bg-[#2E7D32] px-4 py-1.5 font-semibold text-white disabled:opacity-50"
+                  onClick={() => run(() => decideDueRequestAction(pendingReq.id, true, notes[pendingReq.id] ?? "", isGroup && approveFor[pendingReq.id] !== undefined ? (approveFor[pendingReq.id] ?? allIds) : undefined), `อนุมัติแล้ว · กำหนดส่งใหม่ ${th(pendingReq.newDate)}`)}>
                   อนุมัติ
                 </button>
               </div>

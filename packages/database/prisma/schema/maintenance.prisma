@@ -503,6 +503,8 @@ model WorkOrderDueRequest {
   previousDate DateTime? @map("previous_date")
   newDate      DateTime  @map("new_date")
   reason       String
+  /// ใบกลุ่ม: ขอเลื่อนให้ใครบ้าง (ว่าง = เฉพาะคนขอ — คำขอก่อน 10/11/2569)
+  forUserIds   String[]  @default([]) @map("for_user_ids")
   status       String    @default("pending") // pending|approved|rejected|cancelled
   decidedBy    String?   @map("decided_by")
   decidedAt    DateTime? @map("decided_at")

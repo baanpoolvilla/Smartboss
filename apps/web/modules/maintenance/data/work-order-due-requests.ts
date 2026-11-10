@@ -25,7 +25,7 @@ export function pendingDueRequest(orgId: string, workOrderId: string, requestedB
 
 export async function createDueRequest(
   orgId: string,
-  input: { workOrderId: string; requestedBy: string; previousDate: Date | null; newDate: Date; reason: string },
+  input: { workOrderId: string; requestedBy: string; previousDate: Date | null; newDate: Date; reason: string; forUserIds?: string[] },
   /** ใบกลุ่ม: แทนเฉพาะคำขอของคนนี้ คำขอของคนอื่นยังอยู่ */
   ownOnly = false
 ) {

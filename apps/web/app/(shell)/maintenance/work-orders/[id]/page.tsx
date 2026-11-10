@@ -291,6 +291,7 @@ export default async function WorkOrderDetailPage({
     decisionNote: r.decisionNote,
     createdAt: r.createdAt.toISOString(),
     canDecide: r.status === "pending" && isOpenOrRunning && canDecideDueRequest({ userId: session.userId, viewAll }, { createdBy: ownerId }, r.requestedBy),
+    forUserIds: r.forUserIds ?? [],
   }));
   // รอบันทึกค่าใช้จ่าย + เปิดใช้กำหนดบันทึกแล้ว — กล่องบอกเหลือกี่วัน ปุ่มบันทึก ขอเลื่อน/อนุมัติ
   const tracking = await loadExpenseTracking(orgId);
@@ -617,6 +618,9 @@ export default async function WorkOrderDetailPage({
                   canEdit={isOpenOrRunning && canEditDueDate({ userId: session.userId, viewAll }, { createdBy: ownerId })}
                   myId={session.userId}
                   requests={dueRequestViews}
+                  // ใบกลุ่ม: เลื่อนทั้งกลุ่ม/เลือกคน แบบงาน (10/11/2569) · ใบเดี่ยวไม่ส่ง = เหมือนเดิม
+                  members={isGroupWo ? workOrderMemberIds(wo).map((id) => ({ id, name: names[id] ?? "-" })) : undefined}
+                  requestForAllByDefault={sharedWo}
                 />
               </div>
             }

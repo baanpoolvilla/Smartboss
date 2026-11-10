@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@smartboss/database";
+import { Prisma, prisma } from "@smartboss/database";
 import { canViewAll, hasPermission, requireOrg } from "@smartboss/auth";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { getWorkOrder, updateWorkOrder, addWorkOrderComment, workOrderOwnerId } from "@/modules/maintenance/data/work-orders";
@@ -34,6 +34,14 @@ const ymdBkk = (d: Date) => new Date(d.getTime() + 7 * 3600e3).toISOString().sli
 const PENDING_TITLE = "ขอเลื่อนกำหนดส่งใบงาน รออนุมัติ";
 
 type Session = Awaited<ReturnType<typeof requireOrg>>;
+
+/** ใบกลุ่ม: " (ทั้งกลุ่ม N คน)" / " (ให้ ก, ข)" / "" (คนเดียว) — ข้อความเดียวกับงานบนบอร์ดงาน */
+async function whoText(ids: string[], memberCount: number): Promise<string> {
+  if (ids.length <= 1) return "";
+  if (ids.length === memberCount) return ` (ทั้งกลุ่ม ${ids.length} คน)`;
+  const names = await Promise.all(ids.map(async (id) => (await notifyActorName(id)) ?? "?"));
+  return ` (ให้ ${names.join(", ")})`;
+}
 type Wo = NonNullable<Awaited<ReturnType<typeof getWorkOrder>>>;
 
 function log(s: Session, wo: Wo, summary: string, detail?: Record<string, unknown>) {
@@ -53,7 +61,8 @@ function refresh(id: string) {
   revalidatePath("/maintenance/work-orders");
 }
 
-export async function requestDueDateAction(workOrderId: string, newDate: string, reason: string): Promise<{ error?: string }> {
+/** ใบกลุ่ม: forUserIds = ขอเลื่อนให้ใครบ้าง (ไม่ส่ง = เฉพาะตัวเอง) — แบบงานกลุ่มบนบอร์ดงาน (ผู้ใช้ 10/11/2569 "ให้เหมือนของ task") */
+export async function requestDueDateAction(workOrderId: string, newDate: string, reason: string, forUserIds?: string[]): Promise<{ error?: string }> {
   const s = await requireOrg();
   const wo = await getWorkOrder(s.orgId, workOrderId);
   if (!wo || !canSeeWorkOrder(await workOrderAccess(s), wo)) return { error: "ไม่พบใบงาน" };
@@ -73,12 +82,16 @@ export async function requestDueDateAction(workOrderId: string, newDate: string,
   if (!why) return { error: "ใส่เหตุผลที่ต้องเลื่อน" };
 
   // ขอใหม่แทนคำขอที่ค้างอยู่ ⇒ ลบ "รออนุมัติ" ของคำขอเก่าออกก่อน ไม่งั้นผู้อนุมัติเห็นสองอัน
+  const members = workOrderMemberIds(wo);
+  const forIds = isGroup && forUserIds?.length ? [...new Set(forUserIds)].filter((id) => members.includes(id)) : [];
+  const forText = await whoText(forIds, members.length);
+  const forOthers = forIds.length > 1 || (forIds.length === 1 && forIds[0] !== s.userId);
   const replaced = await pendingDueRequest(s.orgId, workOrderId, isGroup ? s.userId : undefined);
-  await createDueRequest(s.orgId, { workOrderId, requestedBy: s.userId, previousDate: ownDue, newDate: d, reason: why }, isGroup);
+  await createDueRequest(s.orgId, { workOrderId, requestedBy: s.userId, previousDate: ownDue, newDate: d, reason: why, ...(forOthers ? { forUserIds: forIds } : {}) }, isGroup);
   // ใบกลุ่มอาจมีคำขอของคนอื่นค้าง แจ้งเตือนแยกต่อคำขอไม่ได้ จึงปล่อยไว้จนไม่เหลือคำขอ
   if (replaced && !isGroup) await deleteActionNotifications(wo.id, "work_order", [PENDING_TITLE], replaced.createdAt);
-  await addWorkOrderComment(s.orgId, workOrderId, s.userId, `ขอเลื่อนกำหนดส่ง ${fmtThaiDate(ownDue)} → ${fmtThaiDate(d)} · ${why}`, null, { kind: "log" });
-  await log(s, wo, `ขอเลื่อนกำหนดส่ง ${fmtThaiDate(ownDue)} → ${fmtThaiDate(d)} ของ`, { reason: why });
+  await addWorkOrderComment(s.orgId, workOrderId, s.userId, `ขอเลื่อนกำหนดส่ง${forText} ${fmtThaiDate(ownDue)} → ${fmtThaiDate(d)} · ${why}`, null, { kind: "log" });
+  await log(s, wo, `ขอเลื่อนกำหนดส่ง${forText} ${fmtThaiDate(ownDue)} → ${fmtThaiDate(d)} ของ`, { reason: why });
 
   // แจ้งคนเปิดใบงาน (อนุมัติเองได้) — CEO/ผู้ดูทั้งบริษัทได้แจ้งเตือนเฉพาะเมื่อไม่มีคนอื่นอนุมัติ: คนเปิดใบคือคนขอเอง
   // ใบไม่มีคนเปิด หรือคนเปิดปิดบัญชีไปแล้ว (เดิมแจ้ง CEO ทุกใบ ผู้ใช้ขอตัด 21/10/2569 "ไม่เกี่ยวกับ CEO ทำไมยังแจ้ง")
@@ -93,10 +106,10 @@ export async function requestDueDateAction(workOrderId: string, newDate: string,
   const who = (await notifyActorName(s.userId)) ?? "ผู้รับผิดชอบ";
   await notifyUsers(s.orgId, [...approvers], {
     title: `${who} · ⏰ ขอเลื่อนกำหนดส่งใบงาน รออนุมัติ`,
-    body: `${wo.title} · ${fmtThaiDate(ownDue)} → ${fmtThaiDate(d)} · ${why}`,
+    body: `${wo.title}${forText} · ${fmtThaiDate(ownDue)} → ${fmtThaiDate(d)} · ${why}`,
     type: "work_order",
     referenceId: wo.id,
-    line: `⏰ ขอเลื่อนกำหนดส่งใบงาน (รออนุมัติ)\n📝 ${wo.title}\n📅 ${fmtThaiDate(ownDue)} → ${fmtThaiDate(d)}\n💬 ${why}\n👤 ${who}`,
+    line: `⏰ ขอเลื่อนกำหนดส่งใบงาน (รออนุมัติ)${forText}\n📝 ${wo.title}\n📅 ${fmtThaiDate(ownDue)} → ${fmtThaiDate(d)}\n💬 ${why}\n👤 ${who}`,
   });
   refresh(workOrderId);
   return {};
@@ -120,7 +133,8 @@ export async function cancelDueRequestAction(requestId: string): Promise<{ error
   return {};
 }
 
-export async function decideDueRequestAction(requestId: string, approve: boolean, note: string): Promise<{ error?: string }> {
+/** ใบกลุ่ม: applyTo = คนที่จะเลื่อนจริง (ไม่ส่ง = ตามที่ขอ · คำขอเก่า = คนขอคนเดียว) */
+export async function decideDueRequestAction(requestId: string, approve: boolean, note: string, applyTo?: string[]): Promise<{ error?: string }> {
   const s = await requireOrg();
   const r = await getDueRequest(s.orgId, requestId);
   if (!r || r.status !== "pending") return { error: "คำขอนี้ถูกตัดสินไปแล้ว" };
@@ -136,17 +150,30 @@ export async function decideDueRequestAction(requestId: string, approve: boolean
   // คนหนึ่งอนุมัติ/ไม่อนุมัติแล้ว ⇒ "รออนุมัติ" ที่ผู้อนุมัติคนอื่นจะไม่ขึ้นแล้ว (ผู้ใช้ขอ 18/10/2569)
   const isGroup = wo.groupMemberIds.length > 0;
   if (!isGroup || !(await pendingDueRequest(s.orgId, wo.id))) await resolveActionNotifications(wo.id, "work_order", [PENDING_TITLE]);
-  // ใบกลุ่ม: อนุมัติแล้วเลื่อนเฉพาะคนที่ขอ คนอื่นยังใช้วันเดิม ไม่งั้นคนไม่ได้ขอรอดหักไปด้วย
+  // ใบกลุ่ม: เลื่อนเฉพาะคนที่ขอให้ (ทั้งกลุ่ม/บางคน/ตัวเอง) — คนที่ไม่อยู่ในคำขอยังใช้วันเดิม ไม่รอดหักไปด้วย
+  // ใครมีวันที่ช้ากว่าวันที่ขออยู่แล้ว ไม่ดึงเข้ามา (เลื่อนออกอย่างเดียว เหมือนงานบนบอร์ดงาน)
   const requesterDue = memberDueAt(wo, r.requestedBy);
+  const members = workOrderMemberIds(wo);
+  const targets = isGroup
+    ? (applyTo?.length ? applyTo : r.forUserIds?.length ? r.forUserIds : [r.requestedBy]).filter((id) => members.includes(id))
+    : [];
+  const moved: string[] = [];
   if (approve && isGroup) {
-    const ownDues = (wo.memberDueDates ?? {}) as Record<string, string>;
-    await prisma.workOrder.update({ where: { id: wo.id }, data: { memberDueDates: { ...ownDues, [r.requestedBy]: ymdBkk(r.newDate) } } });
+    const ownDues = { ...((wo.memberDueDates ?? {}) as Record<string, string>) };
+    const day = ymdBkk(r.newDate);
+    for (const id of targets) {
+      const cur = memberDueAt(wo, id);
+      if (cur && ymdBkk(cur) >= day) continue;
+      ownDues[id] = day;
+      moved.push(id);
+    }
+    if (moved.length > 0) await prisma.workOrder.update({ where: { id: wo.id }, data: { memberDueDates: ownDues } });
   } else if (approve) {
     await updateWorkOrder(s.orgId, wo.id, { dueDate: r.newDate });
   }
 
   const text = approve
-    ? `อนุมัติเลื่อนกำหนดส่ง${isGroup ? ` ของ ${(await notifyActorName(r.requestedBy)) ?? ""}` : ""} ${fmtThaiDate(requesterDue)} → ${fmtThaiDate(r.newDate)}${memo ? ` · ${memo}` : ""}`
+    ? `อนุมัติเลื่อนกำหนดส่ง${isGroup ? (await whoText(moved, members.length)) || ` ของ ${(await notifyActorName(moved[0] ?? r.requestedBy)) ?? ""}` : ""} ${fmtThaiDate(requesterDue)} → ${fmtThaiDate(r.newDate)}${memo ? ` · ${memo}` : ""}`
     : `ไม่อนุมัติเลื่อนกำหนดส่ง (ขอ ${fmtThaiDate(r.newDate)})${memo ? ` · ${memo}` : ""}`;
   await addWorkOrderComment(s.orgId, wo.id, s.userId, text, null, { kind: "log" });
   await log(s, wo, `${text} ของ`);
@@ -159,6 +186,17 @@ export async function decideDueRequestAction(requestId: string, approve: boolean
     referenceId: wo.id,
     line: `${approve ? "✅ อนุมัติ" : "❌ ไม่อนุมัติ"}เลื่อนกำหนดส่งใบงาน\n📝 ${wo.title}\n📅 ${approve ? `กำหนดส่งใหม่ ${fmtThaiDate(r.newDate)}` : `ยังเป็น ${fmtThaiDate(requesterDue)}`}${memo ? `\n💬 ${memo}` : ""}`,
   });
+  // คนอื่นในกลุ่มที่ถูกเลื่อนไปด้วย (ไม่ใช่คนขอ) — แจ้งว่าวันส่งของตัวเองเปลี่ยน
+  const others = moved.filter((id) => id !== r.requestedBy && id !== s.userId);
+  if (approve && others.length > 0) {
+    await notifyUsers(s.orgId, others, {
+      title: `${who} · 📅 ปรับกำหนดส่งของคุณในใบงาน`,
+      body: `${wo.title} · กำหนดส่งใหม่ ${fmtThaiDate(r.newDate)}`,
+      type: "work_order",
+      referenceId: wo.id,
+      line: `📅 ปรับกำหนดส่งของคุณในใบงาน\n📝 ${wo.title}\n📅 กำหนดส่งใหม่ ${fmtThaiDate(r.newDate)}\n👤 ${who}`,
+    });
+  }
   refresh(wo.id);
   return {};
 }
@@ -169,7 +207,11 @@ export async function decideDueRequestAction(requestId: string, approve: boolean
  *   มีคำขอเลื่อนค้างอยู่ ⇒ ปิดคำขอนั้นไปด้วย (กำหนดส่งถูกตั้งใหม่แล้ว)
  *   บันทึกในความคิดเห็น (log) + แจ้งผู้รับผิดชอบ
  */
-export async function editDueDateAction(workOrderId: string, newDate: string, reason: string): Promise<{ error?: string }> {
+/**
+ * ใบกลุ่ม (ผู้ใช้ 10/11/2569 "ให้เหมือนของ task"): targets ไม่ส่ง/ครบทุกคน = ทั้งกลุ่ม ทุกคนได้วันนี้ (ล้างวันรายคน)
+ * · ส่งบางคน = ตั้งวันของคนนั้น ๆ คนอื่นคงเดิม · ใบเดี่ยวเหมือนเดิมทุกอย่าง
+ */
+export async function editDueDateAction(workOrderId: string, newDate: string, reason: string, targets?: string[]): Promise<{ error?: string }> {
   const ceo = await ceoTitle();
   const s = await requireOrg();
   const wo = await getWorkOrder(s.orgId, workOrderId);
@@ -181,23 +223,40 @@ export async function editDueDateAction(workOrderId: string, newDate: string, re
   const d = endOfDayBkk(newDate);
   if (!d) return { error: "วันที่ไม่ถูกต้อง" };
   if (isPastDay(newDate)) return { error: "กำหนดส่งต้องไม่ก่อนวันนี้" };
-  if (wo.dueDate && ymdBkk(d) === ymdBkk(wo.dueDate)) return {};
+  const isGroup = wo.groupMemberIds.length > 0;
+  const members = workOrderMemberIds(wo);
+  const picked = isGroup && targets?.length ? [...new Set(targets)].filter((id) => members.includes(id)) : [];
+  const someOnly = picked.length > 0 && picked.length < members.length;
+  const ownDues = (wo.memberDueDates ?? {}) as Record<string, string>;
+  const hasOwnDues = Object.keys(ownDues).length > 0;
+  if (!someOnly && wo.dueDate && ymdBkk(d) === ymdBkk(wo.dueDate) && !(isGroup && hasOwnDues)) return {};
   const why = reason.trim();
 
-  await updateWorkOrder(s.orgId, wo.id, { dueDate: d });
-  const pending = (await listDueRequests(s.orgId, wo.id)).filter((r) => r.status === "pending");
+  let range: string;
+  if (someOnly) {
+    // เลือกคน: ตั้งวันของคนนั้น ๆ — กำหนดส่งของใบไม่เปลี่ยน
+    const day = ymdBkk(d);
+    const one = picked.length === 1 ? ` ของ ${(await notifyActorName(picked[0]!)) ?? ""} ${fmtThaiDate(memberDueAt(wo, picked[0]!))}` : await whoText(picked, members.length);
+    await prisma.workOrder.update({ where: { id: wo.id }, data: { memberDueDates: { ...ownDues, ...Object.fromEntries(picked.map((id) => [id, day])) } } });
+    range = `${one.trim()} → ${fmtThaiDate(d)}`;
+  } else {
+    await updateWorkOrder(s.orgId, wo.id, { dueDate: d });
+    // ทั้งกลุ่ม: คนที่ตั้งวันของตัวเองไว้ก็ได้วันใหม่ด้วย (เดิมไม่เลื่อนตาม)
+    if (isGroup && hasOwnDues) await prisma.workOrder.update({ where: { id: wo.id }, data: { memberDueDates: Prisma.DbNull } });
+    range = `${isGroup ? `(ทั้งกลุ่ม ${members.length} คน) ` : ""}${wo.dueDate ? fmtThaiDate(wo.dueDate) : "-"} → ${fmtThaiDate(d)}`;
+  }
+  const pending = (await listDueRequests(s.orgId, wo.id)).filter((r) => r.status === "pending" && (!someOnly || picked.includes(r.requestedBy)));
   for (const r of pending) {
     await decideDueRequest(s.orgId, r.id, { status: "cancelled", decidedBy: s.userId, decisionNote: "แก้กำหนดส่งโดยตรงแล้ว" });
   }
   if (pending.length > 0) await resolveActionNotifications(wo.id, "work_order", [PENDING_TITLE]);
 
-  const range = `${wo.dueDate ? fmtThaiDate(wo.dueDate) : "-"} → ${fmtThaiDate(d)}`;
   const text = `แก้กำหนดส่ง ${range}${why ? ` · ${why}` : ""}`;
   await addWorkOrderComment(s.orgId, wo.id, s.userId, text, null, { kind: "log" });
   await log(s, wo, `แก้กำหนดส่ง ${range} ของ`, why ? { reason: why } : undefined);
 
   // แจ้งผู้รับผิดชอบ + CC (ไม่รวมคนเปิดใบงาน และคนที่แก้เอง) — ผู้ใช้ขอ 19/10/2569
-  const recipients = [...new Set([...workOrderMemberIds(wo), ...wo.ccUserIds])].filter(
+  const recipients = [...new Set(someOnly ? picked : [...workOrderMemberIds(wo), ...wo.ccUserIds])].filter(
     (u): u is string => !!u && u !== s.userId && u !== wo.createdBy
   );
   if (recipients.length > 0) {
