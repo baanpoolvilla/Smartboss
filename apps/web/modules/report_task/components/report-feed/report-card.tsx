@@ -190,6 +190,41 @@ const REPLY_FORMAT_BTN =
  * ปุ่มส่งอยู่ขวาสุดคนเดียว ไม่มีปุ่มอื่นติดกันให้แตะพลาด */
 const REPLY_TOUCH_BTN = "[@media(pointer:coarse)]:h-10 [@media(pointer:coarse)]:w-8";
 
+/** แท็กใหม่ถึงเราแดงนานเท่านี้ แล้วหาย (ผู้ใช้ 10/11/2569) */
+const MENTION_RED_MS = 60_000;
+const MENTION_SEEN_MAX = 3000;
+const mentionSeenCache = new Map<string, Set<string>>();
+/** `${userId}|${key}` → เวลาที่เริ่มแดง (นับ 1 นาทีต่อเนื่อง แม้การ์ดถูกวาดใหม่) */
+const mentionFirstShown = new Map<string, number>();
+/** การ์ดถูกถอด → รอ tick ถัดไปค่อยนับว่าเห็นแล้ว (กลับมาทันที = ยกเลิก) */
+const mentionPendingExpire = new Map<string, ReturnType<typeof setTimeout>>();
+
+/** แท็กที่เห็นแล้ว (ไม่แดงอีก) ของผู้ใช้คนนี้ในเครื่องนี้ — อ่าน localStorage ครั้งแรกครั้งเดียว อ่านไม่ได้ = เริ่มว่าง */
+function mentionSeenStore(userId: string): Set<string> {
+  let set = mentionSeenCache.get(userId);
+  if (!set) {
+    set = new Set();
+    try {
+      const raw = typeof window === "undefined" ? null : window.localStorage.getItem(`report-mention-seen:${userId}`);
+      if (raw) for (const k of JSON.parse(raw) as string[]) set.add(k);
+    } catch {
+      /* ไม่มี localStorage — จำแค่ในแท็บนี้ */
+    }
+    mentionSeenCache.set(userId, set);
+  }
+  return set;
+}
+
+function markMentionsSeen(userId: string, keys: string[]) {
+  const set = mentionSeenStore(userId);
+  for (const k of keys) set.add(k);
+  try {
+    window.localStorage.setItem(`report-mention-seen:${userId}`, JSON.stringify([...set].slice(-MENTION_SEEN_MAX)));
+  } catch {
+    /* เต็ม/ถูกบล็อก — ยังจำในแท็บนี้ */
+  }
+}
+
 export function ReportCard({
   post,
   topic,
@@ -247,13 +282,61 @@ export function ReportCard({
   const isOwn = post.authorId === viewingAsUserId;
   const isSaved = post.savedBy.includes(viewingAsUserId);
   const isUnread = post.unreadFor.includes(viewingAsUserId);
-  // Mentioned by someone else — in the post body or any reply under it.
-  const mentionsMe = useMemo(
-    () =>
-      (!isOwn && post.sections.some((s) => s.bullets.some((b) => textMentionsUser(b, viewingAsUserId, topic)))) ||
-      post.replies.some((r) => r.authorId !== viewingAsUserId && textMentionsUser(r.body, viewingAsUserId, topic)),
-    [isOwn, post.sections, post.replies, viewingAsUserId, topic]
-  );
+  // แท็กถึงเรา = แดงแค่ช่วงสั้น ๆ (ผู้ใช้ 10/11/2569 "แสดงสีแดงแค่ 1 นาทีพอ เปลี่ยนหน้าแล้วให้หายไป ตอนนี้โพสไหนมีแท็กแดงหมด มองยาก")
+  // แดงเฉพาะแท็ก "ใหม่" — ยังไม่อ่านตอนเปิดห้อง หรือเข้ามาระหว่างเปิดค้างไว้ · ครบ 1 นาที / เปลี่ยนห้อง / ออกจากหน้า = หาย
+  // และจำไว้ในเครื่อง (report-mention-seen) กลับมาก็ไม่แดงอีก · แท็กเก่าที่อ่านแล้วไม่แดงเลย
+  const mentionItems = useMemo(() => {
+    const items: { key: string; unread: boolean }[] = [];
+    if (!isOwn && post.sections.some((sec) => sec.bullets.some((b) => textMentionsUser(b, viewingAsUserId, topic)))) {
+      items.push({ key: `p:${post.id}`, unread: post.unreadFor.includes(viewingAsUserId) });
+    }
+    for (const r of post.replies) {
+      if (r.authorId !== viewingAsUserId && textMentionsUser(r.body, viewingAsUserId, topic)) {
+        items.push({ key: `r:${r.id}`, unread: (r.unreadFor ?? []).includes(viewingAsUserId) });
+      }
+    }
+    return items;
+  }, [isOwn, post.id, post.sections, post.replies, post.unreadFor, viewingAsUserId, topic]);
+  const [readMentionsAtOpen] = useState(() => new Set(mentionItems.filter((m) => !m.unread).map((m) => m.key)));
+  const [, setMentionTick] = useState(0);
+  const seenMentions = mentionSeenStore(viewingAsUserId);
+  const freshMentionSig = mentionItems
+    .map((m) => m.key)
+    .filter((k) => !readMentionsAtOpen.has(k) && !seenMentions.has(k))
+    .join("|");
+  useEffect(() => {
+    if (!freshMentionSig) return;
+    const keys = freshMentionSig.split("|");
+    const now = Date.now();
+    let firstShown = now;
+    for (const k of keys) {
+      const id = `${viewingAsUserId}|${k}`;
+      clearTimeout(mentionPendingExpire.get(id));
+      mentionPendingExpire.delete(id);
+      if (!mentionFirstShown.has(id)) mentionFirstShown.set(id, now);
+      firstShown = Math.min(firstShown, mentionFirstShown.get(id)!);
+    }
+    const timer = setTimeout(() => {
+      markMentionsSeen(viewingAsUserId, keys);
+      setMentionTick((n) => n + 1);
+    }, Math.max(0, firstShown + MENTION_RED_MS - now));
+    // เปลี่ยนห้อง / ออกจากหน้า (การ์ดถูกถอด) = ถือว่าเห็นแล้ว ไม่แดงอีก
+    // เลื่อนไป tick ถัดไป — ถ้าการ์ดกลับมาทันที (React StrictMode ถอด-ใส่ซ้ำ / แท็กใหม่เพิ่มเข้ามา) ยกเลิกได้ทัน
+    return () => {
+      clearTimeout(timer);
+      for (const k of keys) {
+        const id = `${viewingAsUserId}|${k}`;
+        mentionPendingExpire.set(
+          id,
+          setTimeout(() => {
+            mentionPendingExpire.delete(id);
+            markMentionsSeen(viewingAsUserId, [k]);
+          }, 0)
+        );
+      }
+    };
+  }, [freshMentionSig, viewingAsUserId]);
+  const mentionRed = freshMentionSig !== "";
   const postDay = localDateStr(new Date(post.createdAt));
   // Scoped to this post's own author, not just "some cutoff was active that
   // day" — a round only obligates the people it actually names as
@@ -672,6 +755,15 @@ export function ReportCard({
     replyDividerRef.current = firstUnreadReply ? firstUnreadReply.id : null;
   }
   const newReplyDividerBeforeId = replyDividerRef.current;
+  // คนอื่นตอบโพสต์ "ของเรา" — บรรทัดการตอบกลับเป็นสีแดง + ป้าย "ใหม่ N" จนกว่าจะกางเธรดอ่าน (ผู้ใช้ 10/11/2569)
+  // จดตอนเปิดห้องว่าคำตอบไหนอ่านแล้ว (เปิดห้องแล้วระบบล้าง "ยังไม่อ่าน" ทันที ดูตรง ๆ จะไม่ทันเห็น) ·
+  // คำตอบที่เข้ามาระหว่างเปิดห้องค้างไว้นับเป็นใหม่ด้วย · กางเธรดแล้ว = อ่านหมด
+  const [seenReplyIds, setSeenReplyIds] = useState<Set<string>>(
+    () => new Set(post.replies.filter((r) => r.authorId === viewingAsUserId || !r.unreadFor?.includes(viewingAsUserId)).map((r) => r.id))
+  );
+  const newRepliesOnMine =
+    post.authorId === viewingAsUserId ? post.replies.filter((r) => r.authorId !== viewingAsUserId && !seenReplyIds.has(r.id)).length : 0;
+  const markRepliesSeen = () => setSeenReplyIds(new Set(post.replies.map((r) => r.id)));
   // Teams-style "Reply in thread" — replies + the compose box used to render
   // unconditionally under every single post (a permanently-open text box on
   // a room with 50 posts read as a wall of empty input fields, not a chat
@@ -1192,13 +1284,13 @@ export function ReportCard({
         // @mention ถึงเรา — แถบแดงซ้าย + พื้นแดงอ่อน (เดิมเหลือง — 20/10/2569 แจ้งเตือนทุกแบบในหน้ารายงานเป็นสีแดงสีเดียว) แบบ Discord · เดิม 4px สี amber-400 บนพื้นเหลือง
         // แถมมุมโค้งของการ์ดกินหัวท้ายแถบ แทบมองไม่เห็น ("อยากได้แถบสีข้าง ๆ แบบดิสคอร์ดเข้ม ๆ")
         // มุมซ้ายโค้งน้อยลงให้แถบตรงเต็มความสูง
-        mentionsMe && "bg-red-50 hover:bg-red-50",
+        mentionRed && "bg-red-50 hover:bg-red-50",
         flashTargetId === post.id && "bg-[var(--accent)] border-[var(--brand-green)]/40",
         // เปิดมาจากแจ้งเตือน/ลิงก์ — สีแดงค้างไว้ (เดิมฟ้า)จนกว่าจะเปลี่ยนห้องหรือออกจากหน้า (ตอนนี้สีเดียวกับ "แท็กถึงเรา")
         // แจ้งเตือนชี้ไปที่ความคิดเห็น — โพสต์เหลือแค่แถบแดงซ้าย (พื้นแดงอ่อนอยู่ที่ความคิดเห็นแทน ไม่ซ้อนกัน แบบ Discord)
         // 20/10/2569: กดมาจากแจ้งเตือน = แถบแดงซ้ายอย่างเดียว ข้างในขาว (หายเมื่อเปลี่ยนห้อง/ออกจากหน้า)
         // ต่างจาก @แท็กถึงเรา ที่พื้นแดงอ่อนค้างตลอด ("ข้างในขาว ... ต่างจาก mention จะอยู่ตลอด")
-        highlighted && !mentionsMe && "bg-white hover:bg-white",
+        highlighted && !mentionRed && "bg-white hover:bg-white",
         // Unread keeps its own accent, now as a ring around the whole card
         // (a plain border-l reads oddly once the corners are rounded).
         isUnread && "ring-2 ring-[var(--danger)]/65 ring-offset-0"
@@ -1207,7 +1299,7 @@ export function ReportCard({
       // (border-l-[5px] / rounded-l-md!) แล้วบนเครื่องจริงสีขึ้นแต่ความหนา/มุมโดนคลาสพื้นฐาน (border,
       // rounded-2xl) ที่ CSS อีกไฟล์โหลดทีหลังทับ แถบเลยบาง 1px มุมยังโค้ง — inline ชนะทุกคลาสแน่นอน
       style={
-        highlighted || mentionsMe
+        highlighted || mentionRed
           ? {
               borderLeft: "5px solid #dc2626",
               borderTopLeftRadius: 6,
@@ -1826,12 +1918,24 @@ export function ReportCard({
             <div className="ml-1 border-l border-[var(--line)] pl-3 sm:pl-4">
               {!repliesExpanded ? (
                 <>
-                  {post.replies.length > 1 && (
+                  {(post.replies.length > 1 || newRepliesOnMine > 0) && (
                     <button
-                      onClick={() => setRepliesExpanded(true)}
-                      className="mb-1.5 block cursor-pointer text-left text-xs font-medium text-[#4752c4] hover:text-[#5865f2] hover:underline"
+                      onClick={() => {
+                        setRepliesExpanded(true);
+                        markRepliesSeen();
+                      }}
+                      className={cn(
+                        "mb-1.5 flex cursor-pointer items-center gap-1.5 text-left text-xs font-medium hover:underline",
+                        newRepliesOnMine > 0 ? "text-[var(--chart-red)]" : "text-[#4752c4] hover:text-[#5865f2]"
+                      )}
+                      data-testid={newRepliesOnMine > 0 ? "new-replies-on-mine" : undefined}
                     >
-                      {replySummary}
+                      <span>{replySummary}</span>
+                      {newRepliesOnMine > 0 && (
+                        <span className="shrink-0 rounded-full bg-[var(--chart-red)] px-1.5 py-px text-[10px] font-bold leading-4 text-white">
+                          ใหม่ {newRepliesOnMine}
+                        </span>
+                      )}
                     </button>
                   )}
                   <ReportReply
@@ -1894,7 +1998,10 @@ export function ReportCard({
                     ))}
                   </div>
                   <button
-                    onClick={() => setRepliesExpanded(false)}
+                    onClick={() => {
+                      setRepliesExpanded(false);
+                      markRepliesSeen(); // กางอ่านแล้ว — พับกลับไม่แดงอีก
+                    }}
                     className="mt-2 text-[11px] font-medium text-[var(--brand-green-dark)] hover:underline"
                   >
                     ซ่อนการตอบกลับ

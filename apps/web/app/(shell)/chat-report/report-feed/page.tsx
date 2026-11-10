@@ -89,13 +89,15 @@ function pinnedChip(p: ReportPost, onUnpin: (id: string) => void) {
  */
 type TopicTab = "posts" | "files" | "stats" | "notes" | "albums";
 const topicTabs: { id: TopicTab; label: string; icon: typeof MessageSquareText }[] = [
+  // ลำดับเดียวกับข้อมูลห้องแชท (โน้ต · อัลบั้ม · ไฟล์) — โน้ตกับอัลบั้มติดกันถัดจากโพสต์ (ผู้ใช้ 10/11/2569
+  // "album note ควรอยู่ใกล้กันแบบของ chat ... ให้อยู่ติดกันเลยจะได้สะดวก") · เดิม โพสต์ · ไฟล์ · สรุป · โน้ต · อัลบั้ม
   { id: "posts", label: "โพสต์", icon: MessageSquareText },
-  { id: "files", label: "ไฟล์", icon: FolderOpen },
-  { id: "stats", label: "สรุป", icon: BarChart3 },
   // สมุดโน้ตของห้อง (แบบแท็บ Notes ใน Teams) — notes-tab.tsx
   { id: "notes", label: "โน้ต", icon: NotebookPen },
-  // อัลบั้มแยกเป็นแท็บติดกับโน้ต แบบข้อมูลห้องแชท (โน้ต · อัลบั้ม) — เดิมเป็นตัวกรองในแท็บไฟล์ ต้องกดสองชั้น (ผู้ใช้ขอ 26/10/2569)
+  // อัลบั้มแยกเป็นแท็บติดกับโน้ต — เดิมเป็นตัวกรองในแท็บไฟล์ ต้องกดสองชั้น (ผู้ใช้ขอ 26/10/2569)
   { id: "albums", label: "อัลบั้ม", icon: FolderHeart },
+  { id: "files", label: "ไฟล์", icon: FolderOpen },
+  { id: "stats", label: "สรุป", icon: BarChart3 },
 ];
 
 /**
