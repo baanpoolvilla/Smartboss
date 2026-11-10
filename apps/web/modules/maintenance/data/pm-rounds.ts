@@ -359,16 +359,17 @@ export async function applyWindowTransition(orgs: Map<string, RoundOrg>, pmIds?:
 /** ใบนี้มีคนเริ่มทำแล้วไหม — คอมเมนต์ รูป หรือติ๊กเช็กลิสต์ไปบ้าง */
 function hasWorkStarted(wo: {
   checklist: unknown;
-  photoUrls: string[];
-  afterPhotoUrls: string[];
+  photoUrls: string[] | null;
+  afterPhotoUrls: string[] | null;
   _count: { comments: number; externalPhotos: number };
 }): boolean {
   const items = Array.isArray(wo.checklist) ? (wo.checklist as { done?: boolean }[]) : [];
+  // บนเซิร์ฟเวอร์จริงช่องรูปของใบอัตโนมัติเป็น NULL (ไม่ใช่ []) — เจอจากผลเช็คก่อนดีพอย 10/11/2569
   return (
     wo._count.comments > 0 ||
     wo._count.externalPhotos > 0 ||
-    wo.photoUrls.length > 0 ||
-    wo.afterPhotoUrls.length > 0 ||
+    (wo.photoUrls?.length ?? 0) > 0 ||
+    (wo.afterPhotoUrls?.length ?? 0) > 0 ||
     items.some((i) => i?.done)
   );
 }
