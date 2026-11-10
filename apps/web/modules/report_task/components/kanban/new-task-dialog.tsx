@@ -59,7 +59,7 @@ import type { Attachment, CalendarEvent, ChecklistItem, LeaveType, Task, TaskPri
 import { describeRule, formatThaiDate, occurrenceDate, templateFromTask, validateRule } from "@/modules/report_task/lib/task-recurrence";
 import { defaultRecurrenceRule, RecurrenceFields, RecurrencePreview } from "@/modules/report_task/components/kanban/recurrence-fields";
 import { cn } from "@/modules/report_task/lib/utils";
-import { CompletionRuleGuide } from "./completion-rule-guide";
+import { CompletionRuleInfo, SharedItemInfo } from "./completion-rule-guide";
 import { todayIso } from "@/modules/report_task/lib/now";
 import { isPersonalTask } from "@/modules/report_task/lib/personal-task";
 import { SHARED_CHECKLIST_OWNER } from "@/modules/report_task/lib/task-completion";
@@ -1033,6 +1033,7 @@ export function NewTaskDialog({
                   ) : taskMode === "group" && ownerOf(c.ownerId) ? (
                     <span className="text-[10px] text-[var(--ink-soft)] shrink-0">{getUser(ownerOf(c.ownerId))?.name}</span>
                   ) : null}
+                  {groupMany && ownerOf(c.ownerId) === SHARED_CHECKLIST_OWNER ? <SharedItemInfo /> : null}
                   <button
                     type="button"
                     onClick={() => removeChecklistDraft(c.id)}
@@ -1398,12 +1399,13 @@ export function NewTaskDialog({
                           </button>
                         ))}
                       </div>
+                      {/* (i) → ป๊อปอัปอธิบายความต่าง (ผู้ใช้ 10/11/2569) */}
+                      <CompletionRuleInfo selected={completionRule === "any" ? "any" : "all"} />
                     </div>
                     {completionRule === "any" && (
                       <p className="text-[10px] leading-snug text-[var(--ink-soft)]">ใครทำส่วนของตัวเองครบก่อน งานปิดทันที · มีคนเสร็จทันกำหนด ที่เหลือไม่ถูกหัก</p>
                     )}
                     <p className="text-[10px] leading-snug text-[var(--ink-soft)]">อยากให้ช่วยกันทำ — เลือก &quot;ช่วยกันทำ&quot; ที่เช็คลิสต์แต่ละข้อ (ใครติ๊กก็ได้)</p>
-                    <CompletionRuleGuide selected={completionRule === "any" ? "any" : "all"} hasChecklist={checklistItems.length > 0} />
 
                   </div>
                 );

@@ -60,6 +60,7 @@ import { isPersonalTask } from "@/modules/report_task/lib/personal-task";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { getUser, displayName, getDepartment, users, isOwner, canManage, departmentIdsOf } from "@/modules/report_task/lib/directory";
 import { statusMeta, priorityMeta, taskStatusOrder, taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
+import { SharedItemInfo } from "./completion-rule-guide";
 import { completedAssigneeIdsOf, isSharedItem, isTaskFullyDone, remainingChecklistCount, SHARED_CHECKLIST_OWNER } from "@/modules/report_task/lib/task-completion";
 import { formatDate, formatDateTime } from "@/modules/report_task/lib/format";
 import { AssigneeHistory } from "./assignee-history";
@@ -2134,6 +2135,9 @@ export function TaskDetailSheet({
                           <div className="min-w-0 flex-1">{renderItem({ ...c }, false)}</div>
                           <span className="mt-1 shrink-0 rounded-full bg-[var(--bg-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--ink-soft)]" title="ใครในงานติ๊กก็ได้">
                             ช่วยกันทำ
+                          </span>
+                          <span className="mt-0.5">
+                            <SharedItemInfo />
                           </span>
                         </div>
                       ))}
