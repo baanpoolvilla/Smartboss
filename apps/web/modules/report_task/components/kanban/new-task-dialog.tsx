@@ -61,6 +61,7 @@ import { defaultRecurrenceRule, RecurrenceFields, RecurrencePreview } from "@/mo
 import { cn } from "@/modules/report_task/lib/utils";
 import { todayIso } from "@/modules/report_task/lib/now";
 import { isPersonalTask } from "@/modules/report_task/lib/personal-task";
+import { useCeoTitle } from "@/lib/ceo-title-client";
 import { formatFileSize, formatDate } from "@/modules/report_task/lib/format";
 import { uploadTaskAttachment } from "@/modules/report_task/lib/task-attachment-upload";
 import {
@@ -259,6 +260,7 @@ export function NewTaskDialog({
   const routineDeptQuotas = useRoutineDayOffStore((s) => s.departmentQuotas);
   const notifyMany = useNotificationStore((s) => s.notifyMany);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
+  const ceo = useCeoTitle();
   const projectTopics = useProjectTopicStore((s) => s.topics);
   const addProjectTopic = useProjectTopicStore((s) => s.addTopic);
   const [selectedTopicId, setSelectedTopicId] = useState<string>("none");
@@ -1120,7 +1122,7 @@ export function NewTaskDialog({
                   "flex shrink-0 cursor-pointer items-center gap-1.5 text-xs font-medium",
                   personalMode ? "text-[var(--brand-green-dark)]" : "text-[var(--ink-soft)]"
                 )}
-                title="งานส่วนตัว — เห็นเฉพาะคุณ ไม่มีผลกับคะแนน ยังเตือนตามกำหนดส่ง"
+                title={`งานส่วนตัว — เห็นเฉพาะคุณกับ ${ceo} ไม่มีผลกับคะแนน ยังเตือนตามกำหนดส่ง`}
               >
                 <Checkbox
                   checked={personalMode}
@@ -1130,7 +1132,7 @@ export function NewTaskDialog({
                       changeTaskMode("individual");
                       setAssigneeIds([viewingAsUserId]);
                       // คำอธิบายใน title ไม่ขึ้นบนจอสัมผัส — บอกครั้งเดียวตอนติ๊ก
-                      toast("งานส่วนตัว · เห็นเฉพาะคุณ ไม่มีผลกับคะแนน", { description: "ยังเตือนตามกำหนดส่งเหมือนงานปกติ" });
+                      toast(`งานส่วนตัว · เห็นเฉพาะคุณกับ ${ceo} ไม่มีผลกับคะแนน`, { description: "ยังเตือนตามกำหนดส่งเหมือนงานปกติ" });
                     } else {
                       setAssigneeIds([]);
                     }
@@ -1333,12 +1335,12 @@ export function NewTaskDialog({
                   </p>
                   {personalMode && taskMode === "group" && (
                     <p className="text-[11px] text-[var(--brand-green-dark)] flex items-center gap-1" data-testid="personal-group-hint">
-                      <Lock className="h-3 w-3" /> งานส่วนตัวแบบกลุ่ม · เห็นเฉพาะคนในงาน ไม่มีผลกับคะแนน · คุณอยู่ในงานด้วยเสมอ
+                      <Lock className="h-3 w-3" /> งานส่วนตัวแบบกลุ่ม · เห็นเฉพาะคนในงานกับ {ceo} ไม่มีผลกับคะแนน · คุณอยู่ในงานด้วยเสมอ
                     </p>
                   )}
                   {!(personalMode && taskMode === "group") && isPersonalTask({ assignedById: viewingAsUserId, assigneeIds }) && (
                     <p className="text-[11px] text-[var(--brand-green-dark)] flex items-center gap-1">
-                      <Lock className="h-3 w-3" /> เลือกตัวเองคนเดียว = งานส่วนตัว · เห็นเฉพาะคุณ ไม่มีผลกับคะแนน
+                      <Lock className="h-3 w-3" /> เลือกตัวเองคนเดียว = งานส่วนตัว · เห็นเฉพาะคุณกับ {ceo} ไม่มีผลกับคะแนน
                     </p>
                   )}
                 </div>

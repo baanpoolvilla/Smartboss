@@ -570,6 +570,8 @@ export interface ActivityItem {
   /** Extra "how" context — e.g. "-3 คะแนน", "21 ก.ค. 2026 → 27 ก.ค. 2026", a reason string. */
   detail?: string;
   taskId?: string;
+  /** งานส่วนตัว: เห็นบรรทัดนี้ได้เฉพาะคนเหล่านี้ (คนสร้าง + คนในงาน) กับ Boss — หัวหน้าแผนก/คนอื่นไม่เห็น (10/11/2569) */
+  privateTo?: string[];
   createdAt: string;
 }
 

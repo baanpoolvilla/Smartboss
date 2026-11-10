@@ -113,9 +113,10 @@ describe("canSeeReportTopic", () => {
 
 describe("canSeeTask — personal tasks", () => {
   const personal = { assignedById: OTHER_ENG, assigneeIds: [OTHER_ENG], departmentIds: ["dep-eng"] };
-  it("only its creator sees a task they opened for themselves — not the owner or their department head", () => {
+  // 10/11/2569 ผู้ใช้ "บอสต้องเห็นงานส่วนตัวของทุกคน จะได้แพลนถูก" — เจ้าของบริษัท (Boss) เห็น · หัวหน้าแผนกยังไม่เห็น
+  it("its creator and the owner (Boss) see a task opened for oneself — not their department head", () => {
     expect(canSeeTask(personal, OTHER_ENG)).toBe(true);
-    expect(canSeeTask(personal, OWNER)).toBe(false);
+    expect(canSeeTask(personal, OWNER)).toBe(true);
     expect(canSeeTask(personal, ENG_HEAD)).toBe(false);
   });
   it("becomes a normal task as soon as someone else is added", () => {

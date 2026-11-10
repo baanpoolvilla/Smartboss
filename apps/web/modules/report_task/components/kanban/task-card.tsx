@@ -51,6 +51,7 @@ function ProjectChip({ projectId, sectionId }: { projectId: string; sectionId: s
   );
 }
 import { isPersonalTask } from "@/modules/report_task/lib/personal-task";
+import { useCeoTitle } from "@/lib/ceo-title-client";
 import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
 import { StickerConfirmDialog } from "@/modules/report_task/components/shared/sticker-confirm-dialog";
 import type { Sticker } from "@/modules/report_task/types";
@@ -81,6 +82,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
   const toggleAssigneeChecklist = useTaskStore((s) => s.toggleAssigneeChecklist);
   const stickers = useStickerStore((s) => s.stickers);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
+  const ceo = useCeoTitle();
   const notifications = useNotificationStore((s) => s.notifications);
   const unreadComments = useMemo(
     () => unreadTaskCommentCounts(notifications, viewingAsUserId).get(task.id) ?? 0,
@@ -572,10 +574,10 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
           {isPersonalTask(task) && (
             <span
               className="inline-flex items-center gap-0.5 h-5 rounded-md px-1.5 text-[10px] font-semibold bg-[var(--accent)] text-[var(--brand-green-dark)] whitespace-nowrap"
-              title="งานส่วนตัว · เห็นเฉพาะคุณ ไม่มีผลกับคะแนน"
+              title={task.personalGroup ? `งานส่วนตัวแบบกลุ่ม · เห็นเฉพาะคนในงานกับ ${ceo} ไม่มีผลกับคะแนน` : `งานส่วนตัว · เห็นเฉพาะเจ้าของกับ ${ceo} ไม่มีผลกับคะแนน`}
             >
               <Lock className="h-2.5 w-2.5" />
-              ส่วนตัว
+              {task.personalGroup ? "ส่วนตัว · กลุ่ม" : "ส่วนตัว"}
             </span>
           )}
           {isWatching && (

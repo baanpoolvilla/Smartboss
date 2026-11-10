@@ -33,8 +33,11 @@ import { finishedTaskOnTime, penaltyDueDate } from "@/modules/report_task/lib/ta
  * comment actions, which are lower-stakes than status/date/penalty/sticker
  * changes.
  */
-function logActivity(userId: string, action: string, target: string, taskId: string, detail?: string) {
-  useActivityLogStore.getState().log({ userId, action, target, taskId, detail });
+function logActivity(userId: string, action: string, target: string, taskId: string, detail?: string, task?: Task) {
+  // งานส่วนตัว: ติดรายชื่อคนที่เห็นได้ไว้กับบรรทัด — หน้าบันทึกกิจกรรมซ่อนจากหัวหน้า/คนอื่น (Boss ยังเห็น)
+  const t = task ?? useTaskStore.getState().tasks.find((x) => x.id === taskId);
+  const privateTo = t && isPersonalTask(t) ? [...new Set([t.assignedById, ...t.assigneeIds])] : undefined;
+  useActivityLogStore.getState().log({ userId, action, target, taskId, detail, ...(privateTo ? { privateTo } : {}) });
 }
 
 /** a/b เป็นวันที่ ("YYYY-MM-DD" หรือ ISO) — a อยู่หลัง b ระดับวัน */
@@ -971,7 +974,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   selectTask: (id) => set({ selectedTaskId: id }),
   addTask: (task) => {
     const assigneeNames = task.assigneeIds.map((id) => getUser(id)?.name).filter(Boolean).join(", ");
-    logActivity(task.assignedById, "สร้างงาน", task.title, task.id, assigneeNames ? `มอบให้ ${assigneeNames}` : "ยังไม่มีผู้รับผิดชอบ");
+    logActivity(task.assignedById, "สร้างงาน", task.title, task.id, assigneeNames ? `มอบให้ ${assigneeNames}` : "ยังไม่มีผู้รับผิดชอบ", task);
     // งานที่เพิ่งสร้างไม่เคยแจ้งผู้รับผิดชอบเลยมาก่อน — เห็นแค่ตอนเปิดบอร์ด
     // เอง ไม่มีอะไรขึ้นทั้งกระดิ่งและ badge เมนู ("เวลามีคนมอบหมายงานมาทำไม
     // ตรงที่วงไม่ขึ้นแดง") notifyMany เองก็ข้าม self-notify ให้แล้ว (คนสร้าง

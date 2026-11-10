@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { isOthersPersonalTask, isPersonalTask } from "@/modules/report_task/lib/personal-task";
 import { taskSchema } from "@/modules/report_task/lib/db/task-schema";
+import { canSeeTask } from "@/modules/report_task/lib/permissions";
+import { useActivityLogStore } from "@/modules/report_task/store/activity-log-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
@@ -79,6 +81,25 @@ describe("งานส่วนตัวแบบกลุ่ม", () => {
     useTaskStore.getState().addTask(task());
     expect(notifsFor(FRIEND)).toHaveLength(1);
     expect(notifsFor(CEO)).toHaveLength(0);
+  });
+
+  it("Boss (เจ้าของบริษัท) เห็นงานส่วนตัวของทุกคน · พนักงานอื่นไม่เห็น", () => {
+    const outsider: User = { id: "out", name: "Kim", email: "k@x", avatar: "K", role: "พนักงาน", departmentId: "d1" };
+    useEmployeeStore.setState({ employees: [...people, outsider] });
+    expect(canSeeTask(task(), CEO)).toBe(true);
+    expect(canSeeTask(task({ personalGroup: undefined, taskMode: "individual", assigneeIds: [ME] }), CEO)).toBe(true);
+    expect(canSeeTask(task(), "out")).toBe(false);
+    expect(canSeeTask(task(), FRIEND)).toBe(true);
+  });
+
+  it("บันทึกกิจกรรมของงานส่วนตัว ติดรายชื่อคนที่เห็นได้ (คนสร้าง + คนในงาน)", () => {
+    useActivityLogStore.setState({ entries: [] });
+    useTaskStore.getState().addTask(task());
+    const entry = useActivityLogStore.getState().entries[0]!;
+    expect(entry.privateTo?.sort()).toEqual([FRIEND, ME].sort());
+    useActivityLogStore.setState({ entries: [] });
+    useTaskStore.getState().addTask(task({ id: "t2", personalGroup: undefined }));
+    expect(useActivityLogStore.getState().entries[0]!.privateTo).toBeUndefined();
   });
 
   it("เพื่อนขอเลื่อน → คนสร้างได้แจ้ง · แท็ก CEO ในคอมเมนต์ไม่หลุดไปหา CEO", () => {

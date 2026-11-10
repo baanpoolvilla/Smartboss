@@ -50,6 +50,8 @@ export default function ActivityLogPage() {
     if (isOwner(viewingAsUserId)) return entries;
     return entries.filter((e) => {
       if (e.userId === SYSTEM_USER_ID) return false;
+      // งานส่วนตัว — หัวหน้าแผนกไม่เห็นบรรทัดของงานส่วนตัวที่ตัวเองไม่ได้อยู่ในงาน (Boss เห็นทุกบรรทัดข้างบน)
+      if (e.privateTo && !e.privateTo.includes(viewingAsUserId)) return false;
       const dept = getUser(e.userId)?.departmentId;
       return !!dept && headedDeptIds.has(dept);
     });

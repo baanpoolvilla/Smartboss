@@ -4,6 +4,7 @@ import { audit, hasPermission, requireOrg } from "@smartboss/auth";
 
 import { clearTasks, readTasks, writeTasks } from "@/modules/report_task/lib/db/task-repo";
 import { isOthersPersonalTask } from "@/modules/report_task/lib/personal-task";
+import { listDirectory } from "@/modules/report_task/lib/db/employee-directory";
 import { taskListSchema } from "@/modules/report_task/lib/db/task-schema";
 import { REPORT_TASK_PERMS } from "@/modules/report_task/permissions";
 import type { Task } from "@/modules/report_task/types";
@@ -28,6 +29,15 @@ const putBodySchema = z.object({
   tasks: taskListSchema,
   expectedVersion: z.number().nullable(),
 });
+
+/**
+ * Boss = "เจ้าของบริษัท" ของโมดูลนี้ (CEO/ADMIN/SUPER_ADMIN หรือคนที่ติ๊กไว้) — ตัวเดียวกับ isOwner ฝั่งหน้าจอ
+ * เห็นงานส่วนตัวของทุกคน (ผู้ใช้ 10/11/2569 "บอสต้องเห็นงานส่วนตัวของทุกคน จะได้แพลนถูก")
+ */
+async function viewerIsBoss(orgId: string, userId: string): Promise<boolean> {
+  const users = await listDirectory(orgId);
+  return users.some((u) => u.id === userId && u.isOwner === true);
+}
 
 function safeJsonParse(raw: string): unknown {
   try {
@@ -57,7 +67,9 @@ async function putTasks(request: NextRequest) {
     // กติกาทำซ้ำ/แม่แบบรอบในสคีมาเป็น looseObject (ตรวจแค่โครง) — ชนิดเต็มอยู่ที่ Task
     parsed.data.tasks as Task[],
     parsed.data.expectedVersion,
-    session.userId
+    session.userId,
+    // Boss ได้งานส่วนตัวของทุกคนไปแล้ว — แก้แล้วบันทึกกลับได้ ไม่ต้องกันไว้เป็น "งานที่เครื่องนี้ไม่มี"
+    await viewerIsBoss(session.orgId, session.userId)
   );
   if (!result.ok) {
     return Response.json(
@@ -70,10 +82,10 @@ async function putTasks(request: NextRequest) {
 
 export async function GET() {
   const session = await requireOrg();
-  const { tasks: all, version } = await readTasks(session.orgId);
+  const [{ tasks: all, version }, boss] = await Promise.all([readTasks(session.orgId), viewerIsBoss(session.orgId, session.userId)]);
   // งานส่วนตัวของคนอื่นไม่ส่งออกไปเลย (personal-task.ts) — ซ่อนแค่ในหน้าจอยังเปิด DevTools อ่านได้
-  // ฝั่งบันทึก (writeTasks) รู้ว่าเครื่องนี้ไม่มีงานพวกนี้ จึงไม่ลบทิ้ง
-  const tasks = all.filter((t) => !isOthersPersonalTask(t, session.userId));
+  // ฝั่งบันทึก (writeTasks) รู้ว่าเครื่องนี้ไม่มีงานพวกนี้ จึงไม่ลบทิ้ง · Boss (เจ้าของบริษัท) ได้ครบทุกงาน (10/11/2569)
+  const tasks = boss ? all : all.filter((t) => !isOthersPersonalTask(t, session.userId));
   // บริษัทที่ยังไม่เคยบันทึก = ยังไม่มีงาน — คืนอาร์เรย์ว่าง ไม่ใช่ข้อมูลตัวอย่าง
   // (ต้นฉบับ seed ข้อมูลสาธิตให้ ซึ่งใช้กับบริษัทลูกค้าจริงไม่ได้)
   return Response.json(tasks, { headers: { "Cache-Control": "no-store", "X-Data-Version": String(version) } });

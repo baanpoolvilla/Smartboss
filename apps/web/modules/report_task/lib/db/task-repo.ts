@@ -229,7 +229,9 @@ export async function writeTasks(
   orgId: string,
   tasks: Task[],
   expectedVersion: number | null,
-  userId: string | null
+  userId: string | null,
+  /** Boss (เจ้าของบริษัท) — เครื่องนี้มีงานส่วนตัวของทุกคน ไม่ต้องกันไว้ */
+  seesAllPersonal = false
 ): Promise<WriteResult> {
   const stickerChanges: { task: Task; newReactions: TaskReaction[] }[] = [];
   // สติกเกอร์ที่หายไปจากงาน (ยกเลิกเอง หรือทั้งงานถูกลบ) — ต้องคืนคะแนนที่เคยหักไว้
@@ -266,10 +268,15 @@ export async function writeTasks(
     const codeById = new Map(existing.map((r) => [r.id, r.code]));
     // งานส่วนตัวของคนอื่น — เครื่องที่บันทึกไม่เคยได้รับ (GET กรองออก) ⇒ ไม่มีใน `tasks` ไม่ได้แปลว่าถูกลบ
     // และถ้ามีส่งมา (แก้ request เอง) ก็ไม่รับ · userId null = งานของระบบ (sweep) ที่อ่านครบทุกงาน
+    // Boss (seesAllPersonal): แก้งานส่วนตัวของคนอื่นที่ส่งมาได้ — แต่ที่ "ไม่ได้ส่งมา" ห้ามนับว่าถูกลบ
+    // (แท็บที่เปิดค้างตั้งแต่ก่อน Boss เห็นงานส่วนตัว ไม่มีงานพวกนี้ในเครื่อง — บันทึกครั้งเดียวจะลบงานส่วนตัวทั้งบริษัท)
+    const sentIds = new Set(tasks.map((t) => t.id));
     const hiddenIds = new Set(
       userId === null
         ? []
-        : existing.filter((r) => isOthersPersonalTask(r.data as unknown as Task, userId)).map((r) => r.id)
+        : existing
+            .filter((r) => isOthersPersonalTask(r.data as unknown as Task, userId) && !(seesAllPersonal && sentIds.has(r.id)))
+            .map((r) => r.id)
     );
     tasks = tasks.filter((t) => !hiddenIds.has(t.id));
     const priorById = new Map(existing.map((r) => [r.id, r.data as unknown as Task]));

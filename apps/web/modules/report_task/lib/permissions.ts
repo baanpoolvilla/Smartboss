@@ -158,8 +158,9 @@ export function canSeeTask(
   task: Pick<Task, "assigneeIds" | "assignedById" | "departmentIds">,
   viewingAsUserId: string
 ): boolean {
-  // งานส่วนตัวของคนอื่น — CEO/หัวหน้าก็ไม่เห็น (เซิร์ฟเวอร์กรองออกอยู่แล้ว กันซ้ำที่นี่)
-  if (isOthersPersonalTask(task, viewingAsUserId)) return false;
+  // งานส่วนตัวของคนอื่น — หัวหน้า/คนอื่นไม่เห็น (เซิร์ฟเวอร์กรองออกอยู่แล้ว กันซ้ำที่นี่)
+  // Boss (เจ้าของบริษัท) เห็นทุกงาน รวมงานส่วนตัว — ผู้ใช้ 10/11/2569 "บอสต้องเห็นงานส่วนตัวของทุกคน จะได้แพลนถูก"
+  if (isOthersPersonalTask(task, viewingAsUserId) && !isOwner(viewingAsUserId)) return false;
   if (isOwner(viewingAsUserId)) return true;
   if (task.assigneeIds.includes(viewingAsUserId) || task.assignedById === viewingAsUserId) return true;
   const deptIds = new Set(task.departmentIds.filter(Boolean));
