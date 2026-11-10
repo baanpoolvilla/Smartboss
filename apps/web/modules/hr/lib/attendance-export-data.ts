@@ -56,7 +56,7 @@ export function resolveAttendanceRange(params: {
 
 /**
  * วันตัดรอบเงินเดือนของบริษัท (เช่น 25 → รอบ 26 – 25) — null = บริษัทนี้ยังไม่ตั้งเงินเดือน
- * หรือตัดสิ้นเดือนอยู่แล้ว (รอบเงินเดือน = ทั้งเดือน ไม่ต้องมีตัวเลือก)
+ * หรือตัดสิ้นเดือน (31) อยู่แล้ว (รอบเงินเดือน = ทั้งเดือน ไม่ต้องมีตัวเลือก)
  * ผู้ใช้ 10/11/2569 "เดือนแยกด้วย 25 ก่อนของอีกเดือน 26 ไปของอีกเดือน"
  */
 export async function loadPayCutoffDay(orgId: string): Promise<number | null> {
@@ -71,7 +71,7 @@ export async function loadPayCutoffDay(orgId: string): Promise<number | null> {
       ]);
       return run || profile ? DEFAULT_SETTINGS.cutoffDay : null;
     });
-    if (cutoffDay === null || cutoffDay >= 28) return null;
+    if (cutoffDay === null || cutoffDay >= 31) return null; // 31 = "สิ้นเดือน" ในหน้าตั้งค่าเงินเดือน · 28–30 ยังเป็นรอบจริง (เช่น 29 – 28)
     return cutoffDay;
   } catch {
     return null; // อ่านตั้งค่าเงินเดือนไม่ได้ = ใช้ทั้งเดือนเหมือนเดิม
