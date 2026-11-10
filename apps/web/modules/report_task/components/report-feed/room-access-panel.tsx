@@ -79,7 +79,11 @@ export function RoomAccessPanel({
   const depts = useDepartmentStore((s) => s.departments);
   const submitterGroups = useReportFeedStore((s) => s.submitterGroups);
   const [search, setSearch] = useState("");
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // คนเยอะ (ผู้ใช้ 10/11/2569 "ถ้าคนในแผนกเยอะ มันไม่ขึ้นยาวเลยหรอ") — เกิน SMALL_ORG คน แผนกพับไว้ก่อน เห็นแค่หัวแผนก+ตัวเลข
+  // กดเปิดทีละแผนก · แผนกหนึ่งโชว์ทีละ PAGE คน แล้วกด "ดูอีก N คน" · ตารางสูงสุด ~60% จอ เลื่อนในกรอบ หัวตารางค้างไว้
+  const [toggled, setToggled] = useState<Set<string>>(new Set());
+  const [showAll, setShowAll] = useState<Set<string>>(new Set());
+  const [filter, setFilter] = useState<"all" | "in" | "out">("all");
 
   const vis = topic.visibility;
   const legacyMode = topicModeOf(vis);
@@ -209,6 +213,9 @@ export function RoomAccessPanel({
   }
 
   const q = search.trim().toLowerCase();
+  const SMALL_ORG = 15;
+  const PAGE = 10;
+  const smallOrg = employees.length <= SMALL_ORG;
   const groups = useMemo(() => {
     const byDept = new Map<string, User[]>();
     for (const u of employees) {
@@ -326,19 +333,32 @@ export function RoomAccessPanel({
       <div className="space-y-1.5">
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs font-medium text-[var(--ink-soft)]">3. รายชื่อ{mode === "custom" ? " — ติ๊กเพื่อเลือก" : ""}</p>
+          {!smallOrg && <p className="text-[10.5px] text-[var(--ink-soft)]">กดชื่อแผนกเพื่อดูรายชื่อ</p>}
         </div>
         {mode !== "custom" && (
           <p className="rounded-md bg-[var(--bg-soft)] px-2.5 py-1.5 text-[11px] text-[var(--ink-soft)]">
             {owner ? "อยากติ๊กเลือกรายคน/รายแผนก กด \"เลือกเอง\" ด้านบนก่อน" : "ดูอย่างเดียว"}
           </p>
         )}
-        <div className="relative">
+        <div className="flex gap-1.5">
+        <div className="relative flex-1">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--ink-soft)]" />
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ค้นหาชื่อหรือตำแหน่ง" className="pl-8 h-8 text-sm" />
         </div>
+          <select
+            aria-label="แสดงเฉพาะ"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value as "all" | "in" | "out")}
+            className="h-8 rounded-md border border-[var(--line)] bg-white px-2 text-[12.5px]"
+          >
+            <option value="all">ทุกคน</option>
+            <option value="in">เฉพาะคนที่เห็น</option>
+            <option value="out">เฉพาะคนที่ไม่เห็น</option>
+          </select>
+        </div>
 
-        <div className="rounded-lg border border-[var(--line)] overflow-hidden">
-          <div className="flex items-center gap-2 border-b border-[var(--line)] bg-[var(--bg-soft)] px-2.5 py-1.5 text-[10.5px] font-medium text-[var(--ink-soft)]">
+        <div className="rounded-lg border border-[var(--line)] overflow-y-auto max-h-[60vh] sm:max-h-[440px]" data-testid="room-access-list">
+          <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-[var(--line)] bg-[var(--bg-soft)] px-2.5 py-1.5 text-[10.5px] font-medium text-[var(--ink-soft)]">
             <span className="flex-1">ชื่อ</span>
             {[
               { icon: Eye, label: "เห็น" },
@@ -356,13 +376,19 @@ export function RoomAccessPanel({
             <p className="px-3 py-6 text-center text-sm text-[var(--ink-soft)]">กำลังโหลดรายชื่อ…</p>
           ) : (
             groups.map((g) => {
-              const shown = q ? g.users.filter((u) => u.name.toLowerCase().includes(q) || u.role.toLowerCase().includes(q)) : g.users;
-              if (shown.length === 0) return null;
+              const matched = g.users.filter(
+                (u) =>
+                  (!q || u.name.toLowerCase().includes(q) || u.role.toLowerCase().includes(q)) &&
+                  (filter === "all" || (filter === "in" ? sees(u) : !sees(u)))
+              );
+              if (matched.length === 0) return null;
+              const narrowed = !!q || filter !== "all";
+              const shown = showAll.has(g.id) || narrowed ? matched : matched.slice(0, PAGE);
               const nonOwners = g.users.filter((u) => !u.isOwner);
               const seeing = g.users.filter((u) => sees(u)).length;
               const nonOwnerSeeing = nonOwners.filter((u) => sees(u)).length;
               const deptState: boolean | "some" = deptIds.has(g.id) ? true : nonOwnerSeeing === 0 ? false : nonOwnerSeeing === nonOwners.length ? true : "some";
-              const isCollapsed = collapsed.has(g.id) && !q;
+              const isCollapsed = !narrowed && (smallOrg ? toggled.has(g.id) : !toggled.has(g.id));
               const deptLocked = mode !== "custom" || !g.id || (!owner && g.id === ownDeptId);
               return (
                 <div key={g.id || "none"} className="border-b border-[var(--line)] last:border-b-0">
@@ -375,11 +401,11 @@ export function RoomAccessPanel({
                     />
                     <button
                       type="button"
-                      onClick={() => setCollapsed((s) => { const n = new Set(s); if (n.has(g.id)) n.delete(g.id); else n.add(g.id); return n; })}
+                      onClick={() => setToggled((s) => { const n = new Set(s); if (n.has(g.id)) n.delete(g.id); else n.add(g.id); return n; })}
                       className="flex flex-1 items-center gap-1.5 text-left"
                     >
                       <span className="text-[13px] font-semibold">{g.name}</span>
-                      <span className="text-[11px] text-[var(--ink-soft)]">เห็น {seeing}/{g.users.length}</span>
+                      <span className="text-[11px] text-[var(--ink-soft)]">เห็น {seeing}/{g.users.length} คน</span>
                       {deptIds.has(g.id) && <span className="rounded-full bg-[var(--bg-soft)] px-1.5 text-[10px] text-[var(--ink-soft)]">ทั้งแผนก</span>}
                       <ChevronDown className={cn("ml-auto h-3.5 w-3.5 text-[var(--ink-soft)] transition-transform", isCollapsed && "-rotate-90")} />
                     </button>
@@ -405,6 +431,15 @@ export function RoomAccessPanel({
                         </div>
                       );
                     })}
+                  {!isCollapsed && shown.length < matched.length && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAll((s) => new Set(s).add(g.id))}
+                      className="w-full px-2.5 py-1.5 pl-7 text-left text-[12px] font-medium text-[var(--brand-navy,#1f3a5f)] hover:bg-[var(--bg-soft)]"
+                    >
+                      ดูอีก {matched.length - shown.length} คน
+                    </button>
+                  )}
                 </div>
               );
             })
