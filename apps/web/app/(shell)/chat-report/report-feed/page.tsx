@@ -19,6 +19,7 @@ import { useSetAppBarLeading } from "@/modules/report_task/components/shared/app
 import { TaskDetailSheet } from "@/modules/report_task/components/kanban/task-detail-sheet";
 import { Button, buttonVariants } from "@/modules/report_task/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/modules/report_task/components/ui/dialog";
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/modules/report_task/components/ui/sheet";
 import { useReportFeedStore, isOpenchatTopic, type ReportPost, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { useReportTagStore } from "@/modules/report_task/store/report-tag-store";
@@ -30,7 +31,7 @@ import { cn } from "@/modules/report_task/lib/utils";
 import { canEditReportTopic, canManageReportTopics, canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { useSettingsAccessStore } from "@/modules/report_task/store/settings-access-store";
 import { topicModeOf } from "@/modules/report_task/lib/report-topic-membership";
-import { RoomMembersDialog } from "@/modules/report_task/components/report-feed/room-members-dialog";
+import { RoomAccessPanel } from "@/modules/report_task/components/report-feed/room-access-panel";
 import { currentCutoff, cutoffsOnDay } from "@/modules/report_task/lib/report-cutoff";
 import { roundsForUserOnDay, attributePostToRound, effectiveRoundsOf, attributionRounds } from "@/modules/report_task/lib/submission-rounds";
 import { localDateStr } from "@/modules/report_task/lib/now";
@@ -180,7 +181,6 @@ function ReportFeedPageInner() {
   const submitterGroups = useReportFeedStore((s) => s.submitterGroups);
   const reportTags = useReportTagStore((s) => s.tags);
   const togglePin = useReportFeedStore((s) => s.togglePin);
-  const updateTopicSettings = useReportFeedStore((s) => s.updateTopicSettings);
   const markTopicRead = useReportFeedStore((s) => s.markTopicRead);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   // subscribe ข้อมูลพนักงาน/แผนกด้วย — canSeeReportTopic (ในตัวกรอง visibleTopics)
@@ -894,6 +894,12 @@ function ReportFeedPageInner() {
   // Opens the full settings sheet for a topic straight from its sidebar row
   // menu — switches the active room to it first (the sheet reads `activeTopic`,
   // not an id of its own) then opens the same sheet the ⚙ icon uses.
+  /** ปุ่มจำนวนสมาชิก: แก้ห้องได้ = เปิดตั้งค่าห้อง (เปิดมาที่แท็บใครเห็นห้องเสมอ) · แก้ไม่ได้ = ตารางดูอย่างเดียว */
+  function openMembers() {
+    if (activeTopic && canEditReportTopic(activeTopic.visibility, viewingAsUserId)) setRoomSettingsOpen(true);
+    else setMembersDialogOpen(true);
+  }
+
   function openTopicSettings(id: string) {
     selectView(id);
     setRoomSettingsOpen(true);
@@ -1073,7 +1079,7 @@ function ReportFeedPageInner() {
             <button
               type="button"
               data-tour="member-count"
-              onClick={() => setMembersDialogOpen(true)}
+              onClick={() => openMembers()}
               className="flex h-8 shrink-0 items-center gap-1 rounded-md px-2 text-xs tabular-nums text-[var(--ink-soft)] transition-colors hover:bg-[#e9edf2] hover:text-[var(--ink)]"
               title={canManageMembers ? "จัดการสมาชิกในหัวข้อนี้" : "ดูรายชื่อสมาชิกในหัวข้อนี้"}
             >
@@ -1290,13 +1296,18 @@ function ReportFeedPageInner() {
               <div className="shrink-0">
                 {/* หัวห้องทั้งแถวย้ายขึ้นไปอยู่บนแถบบน (topicSwitcherLeading) แบบแถบเดียวของ Discord
                     เหลือไว้ตรงนี้แค่หน้าต่างที่ปุ่มบนแถบนั้นเปิด */}
-                <RoomMembersDialog
-                  open={membersDialogOpen}
-                  onOpenChange={setMembersDialogOpen}
-                  topic={activeTopic}
-                  updateTopicSettings={updateTopicSettings}
-                  canManage={canManageMembers}
-                />
+                {/* ปุ่มจำนวนสมาชิก — คนแก้ห้องได้ไปแท็บ "ใครเห็นห้อง" ในตั้งค่าห้อง (openMembers) · คนอื่นเห็นตารางเดียวกันแบบดูอย่างเดียว
+                    (10/11/2569 เดิมเป็นรายชื่ออีกแบบที่บอกแค่ชื่อ ไม่บอกว่าใครทำอะไรได้) */}
+                <Dialog open={membersDialogOpen} onOpenChange={setMembersDialogOpen}>
+                  <DialogContent className="p-0 gap-0 sm:max-w-xl w-full max-h-[85vh] flex flex-col overflow-hidden">
+                    <DialogHeader className="px-5 py-3.5 border-b border-[var(--line)]">
+                      <DialogTitle className="truncate">ใครเห็นห้อง &quot;{activeTopic.name}&quot;</DialogTitle>
+                    </DialogHeader>
+                    <div className="flex-1 overflow-y-auto px-5 py-4" data-testid="room-access-view">
+                      <RoomAccessPanel topic={activeTopic} apply={() => {}} staged viewingAsUserId={viewingAsUserId} hideTitle readOnly />
+                    </div>
+                  </DialogContent>
+                </Dialog>
                 <RoomSettingsSheet open={roomSettingsOpen} onOpenChange={setRoomSettingsOpen} topic={activeTopic} />
 
 
@@ -1388,7 +1399,7 @@ function ReportFeedPageInner() {
                           type="button"
                           onClick={() => {
                             setRoomInfoOpen(false);
-                            setMembersDialogOpen(true);
+                            openMembers();
                           }}
                           className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--line)] py-3 text-sm font-medium"
                         >

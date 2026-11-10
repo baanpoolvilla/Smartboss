@@ -68,9 +68,12 @@ export function RoomAccessPanel({
   staged,
   viewingAsUserId,
   hideTitle,
+  readOnly,
 }: {
   /** อยู่ใต้แท็บ "ใครเห็นห้อง" ที่บอกชื่อไว้แล้ว — ไม่ต้องขึ้นหัวข้อซ้ำ */
   hideTitle?: boolean;
+  /** ดูอย่างเดียว — คนที่แก้ห้องนี้ไม่ได้ กดปุ่มจำนวนสมาชิกบนหัวห้อง (ไม่มีอะไรกดเปลี่ยนได้) */
+  readOnly?: boolean;
   /** ห้อง (หรือ draft ของหน้าต่างตั้งค่าห้อง) — อ่าน visibility/postPermission/commentsDisabled/รอบส่ง จากที่นี่ */
   topic: ReportTopic;
   apply: (patch: Partial<ReportTopic>) => void;
@@ -145,6 +148,7 @@ export function RoomAccessPanel({
   }
 
   function setMode(next: Mode) {
+    if (readOnly) return;
     if (next === mode) return;
     if (!owner) return;
     if (next === "open") return applyVisibility(undefined);
@@ -168,6 +172,7 @@ export function RoomAccessPanel({
   }
 
   function toggleDept(deptId: string) {
+    if (readOnly) return;
     if (mode !== "custom") return;
     if (!owner && deptId === ownDeptId) return;
     const nextDepts = new Set(deptIds);
@@ -186,6 +191,7 @@ export function RoomAccessPanel({
   }
 
   function togglePerson(u: User) {
+    if (readOnly) return;
     if (mode !== "custom" || u.isOwner) return;
     const nextDepts = new Set(deptIds);
     const nextPeople = new Set(people);
@@ -273,7 +279,7 @@ export function RoomAccessPanel({
         <div className="grid grid-cols-3 gap-1.5" role="radiogroup" aria-label="ใครเห็นห้องนี้">
           {modeOptions.map(({ mode: m, label, hint, icon: Icon }) => {
             const active = mode === m;
-            const locked = !owner && m !== mode;
+            const locked = (readOnly || !owner) && m !== mode;
             return (
               <button
                 key={m}
@@ -303,7 +309,7 @@ export function RoomAccessPanel({
 
       {/* 2) ทำอะไรได้ */}
       <div className="space-y-1.5">
-        <p className="text-xs font-medium text-[var(--ink-soft)]">2. จำกัดสิทธิ์ (ปกติไม่ต้องเปิด — คนที่เห็นห้องโพสต์และคอมเมนต์ได้ทุกคน)</p>
+        <p className="text-xs font-medium text-[var(--ink-soft)]">{readOnly ? "2. จำกัดสิทธิ์ในห้องนี้" : "2. จำกัดสิทธิ์ (ปกติไม่ต้องเปิด — คนที่เห็นห้องโพสต์และคอมเมนต์ได้ทุกคน)"}</p>
         {/* เดิมเป็น dropdown 2 อันที่ขึ้น "ทุกคนที่เห็นห้อง" ซ้ำกับข้อ 1 (ผู้ใช้ 10/11/2569 "มันดูซ้ำซ้อนไหม") — เป็นสวิตช์ เปิดเฉพาะตอนอยากจำกัด */}
         <div className="divide-y divide-[var(--line)] rounded-lg border border-[var(--line)]">
           <label className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2">
@@ -313,6 +319,7 @@ export function RoomAccessPanel({
             </span>
             <Switch
               aria-label="เฉพาะหัวหน้าโพสต์ได้"
+              disabled={readOnly}
               checked={topic.postPermission === "managersOnly"}
               onCheckedChange={(v) => apply({ postPermission: v ? "managersOnly" : "everyone" })}
             />
@@ -324,6 +331,7 @@ export function RoomAccessPanel({
             </span>
             <Switch
               aria-label="ปิดคอมเมนต์"
+              disabled={readOnly}
               checked={!!topic.commentsDisabled}
               onCheckedChange={(v) => apply({ commentsDisabled: v })}
             />
@@ -335,12 +343,12 @@ export function RoomAccessPanel({
       {/* 3) รายชื่อ */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-medium text-[var(--ink-soft)]">3. รายชื่อ{mode === "custom" ? " — ติ๊กเพื่อเลือก" : ""}</p>
+          <p className="text-xs font-medium text-[var(--ink-soft)]">3. รายชื่อ{mode === "custom" && !readOnly ? " — ติ๊กเพื่อเลือก" : ""}</p>
           {!smallOrg && <p className="text-[10.5px] text-[var(--ink-soft)]">กดชื่อแผนกเพื่อดูรายชื่อ</p>}
         </div>
         {mode !== "custom" && (
           <p className="rounded-md bg-[var(--bg-soft)] px-2.5 py-1.5 text-[11px] text-[var(--ink-soft)]">
-            {owner ? "อยากติ๊กเลือกรายคน/รายแผนก กด \"เลือกเอง\" ด้านบนก่อน" : "ดูอย่างเดียว"}
+            {owner && !readOnly ? "อยากติ๊กเลือกรายคน/รายแผนก กด \"เลือกเอง\" ด้านบนก่อน" : "ดูอย่างเดียว"}
           </p>
         )}
         <div className="flex gap-1.5">
@@ -392,7 +400,7 @@ export function RoomAccessPanel({
               const nonOwnerSeeing = nonOwners.filter((u) => sees(u)).length;
               const deptState: boolean | "some" = deptIds.has(g.id) ? true : nonOwnerSeeing === 0 ? false : nonOwnerSeeing === nonOwners.length ? true : "some";
               const isCollapsed = !narrowed && (smallOrg ? toggled.has(g.id) : !toggled.has(g.id));
-              const deptLocked = mode !== "custom" || !g.id || (!owner && g.id === ownDeptId);
+              const deptLocked = !!readOnly || mode !== "custom" || !g.id || (!owner && g.id === ownDeptId);
               return (
                 <div key={g.id || "none"} className="border-b border-[var(--line)] last:border-b-0">
                   <div className="flex items-center gap-2 bg-white px-2.5 py-1.5" data-testid={`room-access-dept-${g.name}`}>
@@ -419,7 +427,7 @@ export function RoomAccessPanel({
                       const reason = reasonOf(u);
                       return (
                         <div key={u.id} className={cn("flex items-center gap-2 px-2.5 py-1.5 pl-7", !s && "bg-[var(--bg-soft)]/40")} data-testid={`room-access-row-${u.name}`}>
-                          <Tick state={s} disabled={mode !== "custom" || !!u.isOwner} onClick={() => togglePerson(u)} label={`${u.name} เห็นห้องนี้`} />
+                          <Tick state={s} disabled={!!readOnly || mode !== "custom" || !!u.isOwner} onClick={() => togglePerson(u)} label={`${u.name} เห็นห้องนี้`} />
                           <div className="min-w-0 flex-1">
                             <p className={cn("truncate text-[13px]", s ? "text-[var(--ink)]" : "text-[var(--ink-soft)]")}>{u.name}</p>
                             <p className="truncate text-[10.5px] text-[var(--ink-soft)]">
