@@ -8,7 +8,7 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useActivityLogStore } from "@/modules/report_task/store/activity-log-store";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useTaskReviewSettingsStore } from "@/modules/report_task/store/task-review-settings-store";
-import { deriveCompletedAssigneeIds, isDoneByRule, isTaskFullyDone } from "@/modules/report_task/lib/task-completion";
+import { deriveCompletedAssigneeIds, isDoneByRule, isTaskFullyDone, SHARED_CHECKLIST_OWNER } from "@/modules/report_task/lib/task-completion";
 import { reactionRecipients } from "@/modules/report_task/lib/sticker-target";
 import type { Attachment, ChecklistItem, Task, TaskPriority, TaskProjectLink, TaskRecurrenceRule, TaskStatus } from "@/modules/report_task/types";
 import {
@@ -1438,7 +1438,13 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
           const nextChecklist = [
             ...t.checklist,
             // ช่วยกันทำ — ข้อไม่เป็นของใคร
-            { id: `${taskId}-chk-${new Date().toISOString().replace(/\D/g, "")}`, text, done: false, ...(t.completionRule === "shared" ? {} : { ownerId }) },
+            // ข้อช่วยกันทำในงานแยกคน (ownerId = SHARED_CHECKLIST_OWNER) — ใครในงานก็ติ๊กได้
+            {
+              id: `${taskId}-chk-${new Date().toISOString().replace(/\D/g, "")}`,
+              text,
+              done: false,
+              ...(t.completionRule === "shared" ? {} : ownerId === SHARED_CHECKLIST_OWNER ? { shared: true } : { ownerId }),
+            },
           ];
           return applyChecklistDerivedCompletion(t, nextChecklist, actorId);
         }),

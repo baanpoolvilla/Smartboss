@@ -12,7 +12,7 @@ import { getUser, getDepartment, isOwner } from "@/modules/report_task/lib/direc
 import { priorityMeta, statusMeta } from "@/modules/report_task/lib/task-meta";
 import { chartColors } from "@/modules/report_task/lib/chart-colors";
 import { isSuspiciousRevision, reactionCounts } from "@/modules/report_task/lib/task-flags";
-import { completedAssigneeIdsOf, isTaskFullyDone, remainingChecklistCount } from "@/modules/report_task/lib/task-completion";
+import { completedAssigneeIdsOf, isSharedItem, isTaskFullyDone, remainingChecklistCount } from "@/modules/report_task/lib/task-completion";
 import { toast } from "sonner";
 import { daysUntil } from "@/modules/report_task/lib/format";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -197,7 +197,8 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
   // they're an assignee (their own progress is what matters to them);
   // anyone else (a non-assignee lead, the CEO) sees the aggregate across
   // everyone, same as before.
-  const visibleChecklist = isShared && iAmAssignee ? task.checklist.filter((c) => c.ownerId === viewingAsUserId) : task.checklist;
+  // ข้อช่วยกันทำ (ไม่มีเจ้าของ) เป็นของทุกคน — นับรวมในส่วนของคนดูด้วย
+  const visibleChecklist = isShared && iAmAssignee ? task.checklist.filter((c) => c.ownerId === viewingAsUserId || isSharedItem(c)) : task.checklist;
   const doneChecklist = visibleChecklist.filter((c) => c.done).length;
 
   // ทุกการ์ด (มี/ไม่มี checklist) อยู่แถวเดียวกับคอมเมนต์เหนือเส้นคั่น — ผู้ใช้ขอ 21/10/2569 "เอาแค่สีพอ อยู่แถวเดียวกับคอมเมนต์"

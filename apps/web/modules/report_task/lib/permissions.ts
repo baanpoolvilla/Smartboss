@@ -122,6 +122,8 @@ export function canToggleOwnChecklistItem(
 ): boolean {
   // ช่วยกันทำ — ทุกคนในงานติ๊กได้ทุกข้อ
   if (task?.completionRule === "shared" && task.assigneeIds.includes(viewingAsUserId)) return true;
+  // ข้อช่วยกันทำ (ปนกับข้อรายคน) — ทุกคนในงานติ๊กได้
+  if (item.shared && !item.ownerId && task?.assigneeIds.includes(viewingAsUserId)) return true;
   return item.ownerId === viewingAsUserId || isOwner(viewingAsUserId);
 }
 

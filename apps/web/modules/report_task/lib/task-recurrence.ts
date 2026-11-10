@@ -218,7 +218,9 @@ export function templateFromTask(task: Task): TaskRecurrenceTemplate {
     assignedById: task.assignedById,
     departmentIds: [...task.departmentIds],
     ...(task.dueTime ? { dueTime: task.dueTime } : {}),
-    checklist: task.checklist.map((c) => ({ text: c.text, ownerId: c.ownerId ?? task.assigneeIds[0] ?? "" })),
+    checklist: task.checklist.map((c) =>
+      c.shared && !c.ownerId ? { text: c.text, ownerId: "", shared: true } : { text: c.text, ownerId: c.ownerId ?? task.assigneeIds[0] ?? "" },
+    ),
     // เฉพาะไฟล์ตั้งต้นที่ผู้สั่งงานแนบ — ไฟล์ส่งงานของแต่ละรอบไม่ก๊อป
     attachments: task.attachments.filter((a) => a.role !== "submission"),
     ...(task.projectTopicId ? { projectTopicId: task.projectTopicId } : {}),
@@ -281,7 +283,11 @@ export function buildRoundTask(
     reactions: [],
     checklist: t.checklist
       .filter((c) => !activeUserIds || !c.ownerId || assigneeIds.includes(c.ownerId))
-      .map((c) => ({ id: ids.checklistId(), text: c.text, done: false, ownerId: c.ownerId || assigneeIds[0] })),
+      .map((c) =>
+        c.shared
+          ? { id: ids.checklistId(), text: c.text, done: false, shared: true }
+          : { id: ids.checklistId(), text: c.text, done: false, ownerId: c.ownerId || assigneeIds[0] },
+      ),
     completedAssigneeIds: [],
     showChecklistOnCard: t.showChecklistOnCard,
     ...(t.projectTopicId ? { projectTopicId: t.projectTopicId } : {}),

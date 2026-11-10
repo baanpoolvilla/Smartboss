@@ -58,6 +58,7 @@ const checklistItemSchema = z.object({
   text: z.string(),
   done: z.boolean(),
   ownerId: z.string().optional(),
+  shared: z.boolean().optional(),
 });
 
 const taskReactionSchema = z.object({

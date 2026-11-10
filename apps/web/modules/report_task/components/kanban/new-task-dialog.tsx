@@ -61,6 +61,7 @@ import { defaultRecurrenceRule, RecurrenceFields, RecurrencePreview } from "@/mo
 import { cn } from "@/modules/report_task/lib/utils";
 import { todayIso } from "@/modules/report_task/lib/now";
 import { isPersonalTask } from "@/modules/report_task/lib/personal-task";
+import { SHARED_CHECKLIST_OWNER } from "@/modules/report_task/lib/task-completion";
 import { useCeoTitle } from "@/lib/ceo-title-client";
 import { formatFileSize, formatDate } from "@/modules/report_task/lib/format";
 import { uploadTaskAttachment } from "@/modules/report_task/lib/task-attachment-upload";
@@ -363,11 +364,18 @@ export function NewTaskDialog({
   const [personalMode, setPersonalMode] = useState(false);
   // งานกลุ่ม: ปิดงานเมื่อครบทุกคน (ค่าเดิม) หรือคนใดคนหนึ่งเสร็จก็พอ
   const [completionRule, setCompletionRule] = useState<"all" | "any" | "shared">("all");
-  // ช่วยกันทำ — เช็คลิสต์ไม่แยกคน ไม่ต้องเลือกเจ้าของแต่ละข้อ
-  const sharedChecklist = taskMode === "group" && assigneeIds.length > 1 && completionRule === "shared";
+  // ช่วยกันทำ ย้ายมาอยู่ในเช็คลิสต์ (ผู้ใช้ 10/11/2569) — เลือกได้ทีละข้อว่าเป็นของใคร หรือ "ช่วยกันทำ" (ใครในงานติ๊กก็ได้)
+  // ทุกข้อเป็นช่วยกันทำ = บันทึกเป็นกติกา "ช่วยกันทำ" แบบเดิมทุกอย่าง · ปน = ข้อช่วยกันทำต้องเสร็จก่อนทุกคนถึงครบ
+  const groupMany = taskMode === "group" && assigneeIds.length > 1;
   // เจ้าของแต่ละข้อ = คนที่เลือกอยู่ตอนนี้เสมอ — เดิมใช้คนที่เลือกไว้ตอนพิมพ์ข้อนั้นตลอด (เลือก A แล้วเอาออก/สลับเป็นกลุ่ม
   // รายการยังขึ้น A ทั้งที่ไม่ได้อยู่ในงาน และส่งไปเป็นเจ้าของจริงด้วย) · งานเดี่ยว = ทุกข้อเป็นของคนเดียว · คนที่ถูกเอาออก = คนแรก
-  const ownerOf = (ownerId: string) => (taskMode === "individual" || !assigneeIds.includes(ownerId) ? (assigneeIds[0] ?? "") : ownerId);
+  const ownerOf = (ownerId: string) =>
+    ownerId === SHARED_CHECKLIST_OWNER && groupMany
+      ? SHARED_CHECKLIST_OWNER
+      : taskMode === "individual" || !assigneeIds.includes(ownerId)
+        ? (assigneeIds[0] ?? "")
+        : ownerId;
+  const ownerLabel = (ownerId: string) => (ownerId === SHARED_CHECKLIST_OWNER ? "ช่วยกันทำ" : getUser(ownerId)?.name);
   // ตัวเลือกขั้นสูง (เช็คลิสต์ · เดี่ยว/กลุ่ม · หัวข้อโปรเจค · ไฟล์แนบ) — เริ่มพับไว้ทุกครั้ง ไม่จำโหมดล่าสุด
   const [showAdvanced, setShowAdvanced] = useState(false);
   // ติ๊ก "มีเช็คลิสต์" ถึงจะเห็นช่องเพิ่มรายการ — ไม่ติ๊ก = ไม่มีเช็คลิสต์ ไม่กินที่
@@ -611,13 +619,18 @@ export function NewTaskDialog({
     // ไฟล์ที่แนบตอนสั่งงานเป็นของผู้สั่งงานเสมอ (แม้สั่งงานให้ตัวเอง) — ไม่ให้ไปนับเป็น "ไฟล์ส่งงาน"
     const attachments = (await buildAttachments(taskFiles, viewingAsUserId)).map((a) => ({ ...a, role: "brief" as const }));
     const now = new Date().toISOString();
-    const checklist: ChecklistItem[] = checklistItems.map((c) => ({
-      id: `task-chk-${uuid()}`,
-      text: c.text,
-      done: false,
-      // ช่วยกันทำ — ข้อไม่เป็นของใคร (ใครในงานติ๊กก็ได้)
-      ...(sharedChecklist ? {} : { ownerId: ownerOf(c.ownerId) || assigneeIds[0] }),
-    }));
+    const allShared = groupMany && checklistItems.length > 0 && checklistItems.every((c) => ownerOf(c.ownerId) === SHARED_CHECKLIST_OWNER);
+    const closeRule = allShared ? "shared" : completionRule;
+    const checklist: ChecklistItem[] = checklistItems.map((c) => {
+      const owner = ownerOf(c.ownerId);
+      return {
+        id: `task-chk-${uuid()}`,
+        text: c.text,
+        done: false,
+        // ทุกข้อช่วยกันทำ = กติกา "ช่วยกันทำ" เดิม (ข้อไม่มีเจ้าของ) · ปนกัน = ข้อนั้นติด shared
+        ...(allShared ? {} : owner === SHARED_CHECKLIST_OWNER ? { shared: true } : { ownerId: owner || assigneeIds[0] }),
+      };
+    });
     // Only keep overrides for assignees still picked and whose date actually
     // diverges from the shared due date — keeps the field sparse.
     const assigneeDueDates =
@@ -646,7 +659,7 @@ export function NewTaskDialog({
       // งานส่วนตัวแบบกลุ่ม — เห็นเฉพาะคนในงาน ไม่นับคะแนน (personal-task.ts)
       ...(personalMode && taskMode === "group" && assigneeIds.length > 1 ? { personalGroup: true } : {}),
       ...(taskMode === "group" && mainAssigneeId && assigneeIds.includes(mainAssigneeId) ? { mainAssigneeId } : {}),
-      ...(taskMode === "group" && assigneeIds.length > 1 && completionRule !== "all" ? { completionRule } : {}),
+      ...(groupMany && closeRule !== "all" ? { completionRule: closeRule } : {}),
       assignedById: viewingAsUserId,
       departmentIds: derivedDepartmentIds,
       startDate: new Date(startDate).toISOString(),
@@ -954,7 +967,7 @@ export function NewTaskDialog({
             />
             <span className="font-medium">มีเช็คลิสต์</span>
             {checklistOn ? (
-              <span className="text-xs text-[var(--ink-soft)]">({checklistItems.length}{sharedChecklist ? " · ช่วยกันทำ" : taskMode === "group" ? " · แยกตามคน" : ""})</span>
+              <span className="text-xs text-[var(--ink-soft)]">({checklistItems.length}{groupMany ? " · เลือกคนหรือช่วยกันทำได้ทีละข้อ" : ""})</span>
             ) : (
               <span className="text-xs text-[var(--ink-soft)]">ไม่บังคับ — ไม่ติ๊ก = ไม่มีเช็คลิสต์</span>
             )}
@@ -973,15 +986,16 @@ export function NewTaskDialog({
               placeholder="เพิ่มรายการเช็คลิสต์..."
               className="flex-1"
             />
-            {taskMode === "group" && assigneeIds.length > 1 && !sharedChecklist && (
+            {groupMany && (
               <Select value={ownerOf(newChecklistOwnerId)} onValueChange={(v) => v && setNewChecklistOwnerId(v)}>
-                <SelectTrigger className="w-32 shrink-0">
-                  <SelectValue>{getUser(ownerOf(newChecklistOwnerId))?.name ?? "ผู้รับผิดชอบ"}</SelectValue>
+                <SelectTrigger className="w-32 shrink-0" data-testid="new-checklist-owner">
+                  <SelectValue>{ownerLabel(ownerOf(newChecklistOwnerId)) ?? "ผู้รับผิดชอบ"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {assigneeIds.map((uid) => (
                     <SelectItem key={uid} value={uid}>{getUser(uid)?.name}</SelectItem>
                   ))}
+                  <SelectItem value={SHARED_CHECKLIST_OWNER}>ช่วยกันทำ (ใครก็ติ๊กได้)</SelectItem>
                 </SelectContent>
               </Select>
             )}
@@ -990,21 +1004,29 @@ export function NewTaskDialog({
             </Button>
           </div>
           )}
+          {checklistOn && groupMany && checklistItems.some((c) => ownerOf(c.ownerId) === SHARED_CHECKLIST_OWNER) && (
+            <p className="text-[10px] leading-snug text-[var(--ink-soft)]" data-testid="shared-items-hint">
+              {checklistItems.every((c) => ownerOf(c.ownerId) === SHARED_CHECKLIST_OWNER)
+                ? "ทุกข้อช่วยกันทำ — ใครในงานติ๊กข้อไหนก็ได้ ครบทุกข้อแล้วงานปิด · เลยกำหนดหักทุกคน"
+                : "ข้อ \"ช่วยกันทำ\" ใครในงานติ๊กก็ได้ และต้องเสร็จก่อน ทุกคนถึงจะครบส่วนของตัวเอง"}
+            </p>
+          )}
           {checklistOn && checklistItems.length > 0 && (
             <div className="space-y-1 pt-1">
               {checklistItems.map((c) => (
                 <div key={c.id} className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-white px-2.5 py-1.5 text-xs">
                   <span className="flex-1 truncate">{c.text}</span>
-                  {sharedChecklist ? null : taskMode === "group" && assigneeIds.length > 1 ? (
-                    // เปลี่ยนคนของข้อนี้ได้ตรงนี้เลย — ตัวเล็กพอให้รู้ ไม่ต้องลบแล้วพิมพ์ใหม่
+                  {groupMany ? (
+                    // เปลี่ยนคนของข้อนี้ได้ตรงนี้เลย — ตัวเล็กพอให้รู้ ไม่ต้องลบแล้วพิมพ์ใหม่ · หรือ "ช่วยกันทำ"
                     <Select value={ownerOf(c.ownerId)} onValueChange={(v) => v && setChecklistDraftOwner(c.id, v)}>
-                      <SelectTrigger className="h-6 w-auto shrink-0 gap-1 border-none bg-transparent px-1.5 text-[10px] text-[var(--ink-soft)] shadow-none hover:bg-[var(--bg-soft)]">
-                        <SelectValue>{getUser(ownerOf(c.ownerId))?.name ?? "เลือกคน"}</SelectValue>
+                      <SelectTrigger className="h-6 w-auto shrink-0 gap-1 border-none bg-transparent px-1.5 text-[10px] text-[var(--ink-soft)] shadow-none hover:bg-[var(--bg-soft)]" data-testid="draft-checklist-owner">
+                        <SelectValue>{ownerLabel(ownerOf(c.ownerId)) ?? "เลือกคน"}</SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         {assigneeIds.map((uid) => (
                           <SelectItem key={uid} value={uid}>{getUser(uid)?.name}</SelectItem>
                         ))}
+                        <SelectItem value={SHARED_CHECKLIST_OWNER}>ช่วยกันทำ (ใครก็ติ๊กได้)</SelectItem>
                       </SelectContent>
                     </Select>
                   ) : taskMode === "group" && ownerOf(c.ownerId) ? (
@@ -1356,12 +1378,11 @@ export function NewTaskDialog({
                       <span className="shrink-0 text-xs text-[var(--ink-soft)]">ปิดงานเมื่อ</span>
                       <div
                         className="inline-flex gap-0.5 rounded-md border border-[var(--line)] bg-[var(--bg-soft)] p-0.5"
-                        title="ครบทุกคน: ทุกคนต้องทำส่วนของตัวเองครบ · คนใดคนหนึ่ง: ใครครบก่อน งานปิดทันที · ช่วยกันทำ: ใครติ๊กข้อไหนก็ได้ ครบทุกข้อปิดงาน"
+                        title="ครบทุกคน: ทุกคนต้องทำส่วนของตัวเองครบ · คนใดคนหนึ่ง: ใครครบก่อน งานปิดทันที · อยากให้ช่วยกันทำ เลือก &quot;ช่วยกันทำ&quot; ที่เช็คลิสต์แต่ละข้อ"
                       >
                         {([
                           { v: "all", label: "ครบทุกคน" },
                           { v: "any", label: "คนใดคนหนึ่ง" },
-                          { v: "shared", label: "ช่วยกันทำ" },
                         ] as const).map((o) => (
                           <button
                             key={o.v}
@@ -1380,9 +1401,7 @@ export function NewTaskDialog({
                     {completionRule === "any" && (
                       <p className="text-[10px] leading-snug text-[var(--ink-soft)]">ใครทำส่วนของตัวเองครบก่อน งานปิดทันที (ที่เหลือไม่ถูกหักคะแนน)</p>
                     )}
-                    {completionRule === "shared" && (
-                      <p className="text-[10px] leading-snug text-[var(--ink-soft)]">เช็คลิสต์ไม่แยกคน — ใครในงานติ๊กข้อไหนก็ได้ ครบทุกข้อแล้วงานปิด · เลยกำหนดหักทุกคน</p>
-                    )}
+                    <p className="text-[10px] leading-snug text-[var(--ink-soft)]">อยากให้ช่วยกันทำ — เลือก &quot;ช่วยกันทำ&quot; ที่เช็คลิสต์แต่ละข้อ (ใครติ๊กก็ได้)</p>
 
                   </div>
                 );

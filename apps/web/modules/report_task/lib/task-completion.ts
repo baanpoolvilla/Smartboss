@@ -13,6 +13,14 @@ import type { ChecklistItem } from "@/modules/report_task/types";
  * "shared" = ช่วยกันทำ — เช็คลิสต์ไม่แยกคน ใครในงานก็ติ๊กข้อไหนก็ได้ ครบทุกข้อ = ทุกคนเสร็จ */
 export type CompletionRule = "all" | "any" | "shared";
 
+/** ค่าในช่องเลือกคนของเช็คลิสต์ที่แปลว่า "ช่วยกันทำ" (ใครในงานก็ติ๊กได้) — ไม่ใช่ id คนจริง */
+export const SHARED_CHECKLIST_OWNER = "__shared__";
+
+/** ข้อเช็คลิสต์ที่ใครในงานก็ติ๊กได้ (ข้อช่วยกันทำในงานกลุ่มแบบแยกคน) */
+export function isSharedItem(c: ChecklistItem): boolean {
+  return c.shared === true && !c.ownerId;
+}
+
 /** ตามกติกา rule แล้วงานนี้ถือว่าครบหรือยัง เมื่อรู้แล้วว่าใครทำส่วนตัวเองครบบ้าง */
 export function isDoneByRule(assigneeIds: string[], completedIds: string[], rule: CompletionRule = "all"): boolean {
   if (assigneeIds.length === 0) return false;
@@ -34,10 +42,14 @@ export function deriveCompletedAssigneeIds(
 ): string[] {
   // ช่วยกันทำ: ไม่มีส่วนของใคร — ครบทุกข้อ = ทุกคนเสร็จพร้อมกัน (เลยกำหนด = หักทุกคน ตามที่ตกลง 26/10/2569)
   if (rule === "shared" && checklist.length > 0) return checklist.every((c) => c.done) ? [...assigneeIds] : [];
+  // ข้อ "ช่วยกันทำ" ปนกับข้อรายคน (10/11/2569) — เป็นของทุกคน: ต้องติ๊กครบก่อน ส่วนของใครก็ยังไม่ครบ
+  // คนที่ไม่มีข้อของตัวเองเลย = ครบเมื่อข้อช่วยกันทำครบ · ไม่มีข้อช่วยกันทำ = เหมือนเดิมทุกอย่าง
+  const shared = checklist.filter(isSharedItem);
+  const sharedDone = shared.every((c) => c.done);
   return assigneeIds.filter((id) => {
     const mine = checklist.filter((c) => c.ownerId === id);
-    if (mine.length === 0) return manuallyDone.includes(id);
-    return mine.every((c) => c.done);
+    if (mine.length === 0) return shared.length > 0 ? sharedDone : manuallyDone.includes(id);
+    return sharedDone && mine.every((c) => c.done);
   });
 }
 

@@ -128,6 +128,9 @@ export interface ChecklistItem {
    * Drives `completedAssigneeIds` (see task-completion.ts): an assignee's
    * part is done once every item they own is checked. */
   ownerId?: string;
+  /** ข้อ "ช่วยกันทำ" ในงานกลุ่ม (ไม่มี ownerId) — ใครในงานก็ติ๊กได้ ต้องเสร็จก่อนทุกคนถึงจะครบส่วนของตัวเอง
+   * (ผู้ใช้ 10/11/2569 "เพิ่มเช็คลิสต์ เลือกได้ว่าช่วยกันทำ ใครคนใดคนหนึ่งปิดก็ได้") */
+  shared?: boolean;
 }
 
 export interface Sticker {
@@ -343,7 +346,7 @@ export interface TaskRecurrenceTemplate {
   assignedById: string;
   departmentIds: string[];
   dueTime?: string;
-  checklist: { text: string; ownerId: string }[];
+  checklist: { text: string; ownerId: string; shared?: boolean }[];
   attachments: Attachment[];
   projectTopicId?: string;
   showChecklistOnCard: boolean;

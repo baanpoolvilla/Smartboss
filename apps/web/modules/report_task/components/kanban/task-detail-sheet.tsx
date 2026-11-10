@@ -60,7 +60,7 @@ import { isPersonalTask } from "@/modules/report_task/lib/personal-task";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { getUser, displayName, getDepartment, users, isOwner, canManage, departmentIdsOf } from "@/modules/report_task/lib/directory";
 import { statusMeta, priorityMeta, taskStatusOrder, taskPriorityOrder } from "@/modules/report_task/lib/task-meta";
-import { completedAssigneeIdsOf, isTaskFullyDone, remainingChecklistCount } from "@/modules/report_task/lib/task-completion";
+import { completedAssigneeIdsOf, isSharedItem, isTaskFullyDone, remainingChecklistCount, SHARED_CHECKLIST_OWNER } from "@/modules/report_task/lib/task-completion";
 import { formatDate, formatDateTime } from "@/modules/report_task/lib/format";
 import { AssigneeHistory } from "./assignee-history";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -1019,7 +1019,14 @@ export function TaskDetailSheet({
           {isShared && iAmAssignee && task.status !== "done" && (() => {
             // ข้อความตามกติกาปิดงาน — "คนใดคนหนึ่ง" ไม่ต้องรอคนอื่น ใครครบก่อนงานปิดเลย
             const hasOwnItems = task.checklist.some((c) => c.ownerId === viewingAsUserId);
-            const how = hasOwnItems ? "ติ๊กเช็คลิสต์ของคุณด้านล่างให้ครบ" : "ติ๊กช่องที่ชื่อคุณในเช็คลิสต์ด้านล่าง";
+            const hasSharedItems = task.checklist.some(isSharedItem);
+            const how = hasSharedItems
+              ? hasOwnItems
+                ? "ติ๊กเช็คลิสต์ของคุณ และข้อช่วยกันทำ (ใครติ๊กก็ได้) ให้ครบ"
+                : "ช่วยกันติ๊กข้อช่วยกันทำ (ใครติ๊กก็ได้) ให้ครบ"
+              : hasOwnItems
+                ? "ติ๊กเช็คลิสต์ของคุณด้านล่างให้ครบ"
+                : "ติ๊กช่องที่ชื่อคุณในเช็คลิสต์ด้านล่าง";
             return (
               <div className="rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-3">
                 <p className="text-xs font-medium text-[var(--ink-soft)]">
@@ -2116,14 +2123,38 @@ export function TaskDetailSheet({
               }
               // งานกลุ่ม: แถวละรายการ [ติ๊ก] [ชื่อเจ้าของ] ข้อความงาน — จัดเป็นกลุ่มทีละคน มีเส้นบาง ๆ คั่นระหว่างคน
               // (ไม่มีหัวข้อแยก) คนที่ยังไม่มีรายการขึ้นบรรทัด "ยังไม่มีรายการ" ให้รู้ว่าเป็นของใคร
+              // ข้อ "ช่วยกันทำ" (10/11/2569) — ของทุกคน ใครในงานติ๊กก็ได้ · อยู่บนสุดก่อนรายคน
+              const sharedItems = task.checklist.filter(isSharedItem);
               return (
                 <div className="divide-y divide-[var(--line)]">
+                  {sharedItems.length > 0 && (
+                    <div className="space-y-0.5 py-1.5 first:pt-0 last:pb-0" data-testid="shared-checklist-items">
+                      {sharedItems.map((c) => (
+                        <div key={c.id} className="flex items-start gap-2">
+                          <div className="min-w-0 flex-1">{renderItem({ ...c }, false)}</div>
+                          <span className="mt-1 shrink-0 rounded-full bg-[var(--bg-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--ink-soft)]" title="ใครในงานติ๊กก็ได้">
+                            ช่วยกันทำ
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {checklistOwnerIds.map((ownerId) => {
                     const items = task.checklist.filter((c) => c.ownerId === ownerId);
                     const ownerName = getUser(ownerId)?.name ?? ownerId;
                     return (
                       <div key={ownerId} className="space-y-0.5 py-1.5 first:pt-0 last:pb-0">
-                        {items.length === 0 ? (() => {
+                        {items.length === 0 && sharedItems.length > 0 ? (
+                          // ไม่มีข้อของตัวเอง แต่มีข้อช่วยกันทำ — ส่วนของคนนี้ครบเมื่อข้อช่วยกันทำครบ (ติ๊กเองไม่ได้)
+                          <div className="flex items-center gap-2 rounded-md px-1 py-0.5">
+                            <span className="max-w-[8rem] shrink-0 truncate rounded-full bg-[var(--bg-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--ink-soft)]" title={ownerName}>
+                              {ownerName}
+                            </span>
+                            <span className="text-xs text-[var(--ink-soft)]">
+                              {completedAssigneeIdsOf(task).includes(ownerId) ? "ส่วนนี้เสร็จแล้ว" : "ไม่มีรายการของตัวเอง — ครบเมื่อข้อช่วยกันทำเสร็จ"}
+                            </span>
+                          </div>
+                        ) : items.length === 0 ? (() => {
                           // No items of their own — they mark their part done
                           // by hand instead, otherwise a group task where only
                           // some people got items could never close.
@@ -2185,13 +2216,18 @@ export function TaskDetailSheet({
                 </Button>
                 {isShared && task.completionRule !== "shared" && (
                   <Select value={newChecklistOwnerId || task.assigneeIds[0]!} onValueChange={(v) => v && setNewChecklistOwnerId(v)}>
-                    <SelectTrigger className="w-32 h-8 text-xs shrink-0">
-                      <SelectValue>{getUser(newChecklistOwnerId || task.assigneeIds[0]!)?.name ?? "ผู้รับผิดชอบ"}</SelectValue>
+                    <SelectTrigger className="w-32 h-8 text-xs shrink-0" data-testid="checklist-owner-picker">
+                      <SelectValue>
+                        {newChecklistOwnerId === SHARED_CHECKLIST_OWNER
+                          ? "ช่วยกันทำ"
+                          : (getUser(newChecklistOwnerId || task.assigneeIds[0]!)?.name ?? "ผู้รับผิดชอบ")}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {task.assigneeIds.map((uid) => (
                         <SelectItem key={uid} value={uid}>{getUser(uid)?.name}</SelectItem>
                       ))}
+                      <SelectItem value={SHARED_CHECKLIST_OWNER}>ช่วยกันทำ (ใครก็ติ๊กได้)</SelectItem>
                     </SelectContent>
                   </Select>
                 )}
