@@ -14,7 +14,9 @@ import {
   AppScaffold,
   AppBarLink,
 } from "@/modules/maintenance/components/app-scaffold";
-import { saveExpenseTrackingAction, saveLineConfigAction } from "./actions";
+import { saveExpenseTrackingAction, saveLineConfigAction, saveWoReviewAction } from "./actions";
+import { loadWoReviewEnabled } from "@/modules/maintenance/data/work-order-review";
+import { ClipboardCheck } from "lucide-react";
 
 import { ceoTitle } from "@/lib/ceo-title";
 export default async function MaintenanceSettingsPage() {
@@ -31,6 +33,7 @@ export default async function MaintenanceSettingsPage() {
   // ติ๊กไว้แต่ทำงานไม่ได้แล้ว (ปิดบัญชี/ถอนสิทธิ์) — ไม่มีใครรับงาน ไม่มีใครโดนหัก ต้องบอกให้รู้
   const lostRecorders = tracking.recorderIds.filter((id) => !expenseHolders.includes(id)).length;
   const noRecorder = !!tracking.from && tracking.recorderIds.length === lostRecorders;
+  const reviewOn = await loadWoReviewEnabled(session.orgId);
 
   return (
     <AppScaffold
@@ -42,6 +45,24 @@ export default async function MaintenanceSettingsPage() {
         </AppBarLink>
       }
     >
+      {/* ─── ตรวจใบงานก่อนบันทึกค่าใช้จ่าย (10/11/2569 · ค่าตั้งต้นเปิด) ─── */}
+      <Card className="mb-4 p-5" data-testid="wo-review-settings">
+        <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-(--ink)">
+          <ClipboardCheck className="h-4 w-4 text-(--brand-green)" /> ตรวจใบงานก่อนบันทึกค่าใช้จ่าย
+        </h2>
+        <p className="mb-3 text-xs text-(--ink-soft)">
+          ใบแจ้งซ่อมที่คนเปิด เมื่อช่างกดยืนยันงานเสร็จ จะไปรอให้คนเปิดใบกด ผ่าน / ไม่ผ่าน ก่อน (แบบงานบนบอร์ด) ผ่านแล้วถึงไปขั้นบันทึกค่าใช้จ่าย
+          · ใบ PM อัตโนมัติและใบส่วนตัวไม่ต้องตรวจ · ปิดแล้วใบที่รอตรวจอยู่ยังรอตรวจต่อจนกว่าจะกด
+        </p>
+        <form action={saveWoReviewAction} className="flex flex-col gap-3">
+          <label className="flex w-fit items-center gap-2 text-sm text-(--ink)">
+            <input type="checkbox" name="enabled" value="1" defaultChecked={reviewOn} className="h-4 w-4" data-testid="wo-review-enabled" />
+            เปิดใช้การตรวจใบงาน
+          </label>
+          <Button type="submit" className="w-fit">บันทึก</Button>
+        </form>
+      </Card>
+
       {/* ─── กำหนดบันทึกค่าใช้จ่าย ─── */}
       <Card className="mb-4 p-5">
         <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-(--ink)">

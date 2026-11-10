@@ -67,8 +67,8 @@ export default async function WorkOrdersPage({
     propertyCategoryMap(orgId),
   ]);
   // บอร์ด: คอลัมน์เสร็จแล้วมีได้เป็นพันใบ ส่งแค่แถวเบาไว้นับ/กรอง การ์ดโหลดตอนกดแสดงเพิ่มเติม (ผู้ใช้ 4/11/2569 "โหลดข้อมูลนานเกิน")
-  const isDone = (o: { id: string; status: string; requiresExpense: boolean }) =>
-    o.status === "cancelled" || (o.status === "completed" && (expenseSet.has(o.id) || !o.requiresExpense));
+  const isDone = (o: { id: string; status: string; requiresExpense: boolean; reviewState: string }) =>
+    o.status === "cancelled" || (o.status === "completed" && o.reviewState !== "pending" && (expenseSet.has(o.id) || !o.requiresExpense));
   const doneStubRows = stubs.filter(isDone);
   const doneFirstIds = new Set(doneStubRows.slice(0, DONE_PRELOAD).map((o) => o.id));
   const allOrders = await listWorkOrders(
@@ -114,7 +114,7 @@ export default async function WorkOrdersPage({
         filter !== "no-expense" ||
         // ใบที่ตั้งไว้ว่าไม่ต้องกรอกค่าใช้จ่ายไม่ใช่งานค้าง — ไม่ควรโผล่ในลิสต์
         // ทวงค่าใช้จ่ายจากแดชบอร์ด (กติกาเดียวกับตัวเตือน LINE ใน data/cron.ts)
-        (o.status === "completed" && o.requiresExpense && !expenseSet.has(o.id))
+        (o.status === "completed" && o.reviewState !== "pending" && o.requiresExpense && !expenseSet.has(o.id))
     ),
     expenseSet,
     tracking,

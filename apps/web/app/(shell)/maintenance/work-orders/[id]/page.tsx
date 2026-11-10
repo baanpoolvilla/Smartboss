@@ -40,6 +40,8 @@ import {
 } from "@/modules/maintenance/data/work-order-access";
 import { getAsset } from "@/modules/maintenance/data/assets";
 import { userNameMap } from "@/modules/maintenance/data/users";
+import { WorkOrderReviewBox } from "@/modules/maintenance/components/work-order-review-box";
+import { canReviewOrder } from "@/modules/maintenance/lib/work-order-review";
 import { workOrderMentionPeople } from "@/modules/maintenance/data/wo-mentions";
 import { listExpenses } from "@/modules/maintenance/data/expenses";
 import { listPurchaseOrdersForWorkOrder } from "@/modules/maintenance/data/purchase-orders";
@@ -74,6 +76,7 @@ import {
   deleteWorkOrderAction,
   generateUploadLinkAction,
   updateWorkOrderPropertiesAction,
+  reviewWorkOrderAction,
 } from "../actions";
 import { EditWorkOrderProperties } from "@/modules/maintenance/components/edit-work-order-properties";
 import { WoChecklist, WoTeamEditButton, type ChecklistView } from "@/modules/maintenance/components/work-order-team";
@@ -198,6 +201,7 @@ export default async function WorkOrderDetailPage({
     wo.assignedTo,
     ...wo.groupMemberIds,
     wo.createdBy,
+    wo.reviewedBy,
     ...wo.ccUserIds,
     ...comments.map((c) => c.userId),
     ...dueRequests.flatMap((r) => [r.requestedBy, r.decidedBy]),
@@ -296,7 +300,7 @@ export default async function WorkOrderDetailPage({
   // รอบันทึกค่าใช้จ่าย + เปิดใช้กำหนดบันทึกแล้ว — กล่องบอกเหลือกี่วัน ปุ่มบันทึก ขอเลื่อน/อนุมัติ
   const tracking = await loadExpenseTracking(orgId);
   const expenseOn = trackingActive(tracking);
-  const noExpenseYet = expenseOn && wo.status === "completed" && wo.requiresExpense && !wo.isPrivate && !hasExpense;
+  const noExpenseYet = expenseOn && wo.status === "completed" && wo.reviewState !== "pending" && wo.requiresExpense && !wo.isPrivate && !hasExpense;
   const expenseLink = noExpenseYet ? (await expenseLinks(orgId, [id])).get(id) : undefined;
   // ยังมี PR/PO หรือใบเบิกไม่จบ: ต้นทางจะลงยอดให้เอง ถ้าลงที่นี่ด้วยยอดจะเบิ้ล
   const expenseHeld = !!expenseLink?.hold;
@@ -408,13 +412,30 @@ export default async function WorkOrderDetailPage({
           </div>
         </div>
 
+        {/* ตรวจงาน (10/11/2569 แบบงานบนบอร์ด) — รอตรวจ / ผ่านแล้ว / ไม่ผ่าน กลับมาแก้ */}
+        {(wo.reviewState === "pending" && wo.status === "completed") || wo.reviewState === "passed" || wo.reviewState === "failed" ? (
+          <WorkOrderReviewBox
+            id={wo.id}
+            state={wo.reviewState === "pending" ? "pending" : (wo.reviewState as "passed" | "failed")}
+            canReview={canReviewOrder(wo, session.userId, canViewAll(session))}
+            reviewerName={wo.createdBy ? (names[wo.createdBy] ?? "คนเปิดใบ") : "คนเปิดใบ"}
+            reviewedByName={wo.reviewedBy ? (names[wo.reviewedBy] ?? null) : null}
+            reviewedAtLabel={wo.reviewedAt ? fmtThaiDateTime(wo.reviewedAt) : null}
+            note={wo.reviewNote}
+            dueLabel={wo.dueDate ? fmtThaiDate(wo.dueDate) : null}
+            today={new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date())}
+            open={wo.status === "open" || wo.status === "in_progress"}
+            action={reviewWorkOrderAction}
+          />
+        ) : null}
+
         <div className="mt-3 grid gap-x-6 sm:grid-cols-2">
 
         <InfoRow
             stacked
           icon={<Info className="h-5 w-5" />}
           label="สถานะ"
-          value={STATUS_LABEL[wo.status] ?? wo.status}
+          value={wo.status === "completed" && wo.reviewState === "pending" ? "เสร็จ · รอตรวจ" : (STATUS_LABEL[wo.status] ?? wo.status)}
           valueColor={STATUS_COLOR[wo.status]}
         />
         <InfoRow

@@ -73,6 +73,7 @@ export function listWorkOrderStubs(orgId: string, f: WorkOrderFilters = {}) {
     select: {
       id: true,
       status: true,
+      reviewState: true,
       requiresExpense: true,
       propertyId: true,
       additionalPropertyIds: true,

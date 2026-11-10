@@ -5,7 +5,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { checklistAllowsClose, checklistFromTemplate, itemsOf, readChecklist, readChecklistTemplate, remainingCount } from "@/modules/maintenance/lib/work-order-checklist";
 import { z } from "zod";
 import { prisma } from "@smartboss/database";
-import type { Prisma } from "@smartboss/database";
+import { Prisma } from "@smartboss/database";
 import { loadExpenseTracking } from "@/modules/maintenance/data/expense-tracking";
 import { buildBoardRows } from "@/modules/maintenance/data/work-order-board-rows";
 import { listWorkOrders, workOrderIdsWithExpenses } from "@/modules/maintenance/data/work-orders";
@@ -14,7 +14,9 @@ import { trackingActive } from "@/modules/maintenance/lib/expense-deadline";
 import { receiptDataFromForm } from "@/modules/maintenance/lib/receipt-read";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireOrg, hasPermission } from "@smartboss/auth";
+import { requireOrg, hasPermission, canViewAll } from "@smartboss/auth";
+import { canReviewOrder, isAwaitingReview, needsReview, reviewerOf, validRedoDate } from "@/modules/maintenance/lib/work-order-review";
+import { loadWoReviewEnabled } from "@/modules/maintenance/data/work-order-review";
 import { isWorkOrderSourceLink } from "@/modules/maintenance/lib/report-prefill";
 import { postWorkOrderCard } from "@/modules/chat/data/task-cards";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
@@ -305,6 +307,18 @@ export async function updateStatusAction(formData: FormData) {
     throw new Error("ยังปิดไม่ได้ รอสมาชิกในกลุ่มทำส่วนของตัวเองให้เสร็จก่อน");
   }
   const changed = await updateWorkOrderStatus(s.orgId, id, status);
+  // ตรวจงาน (10/11/2569): ปิดผ่านช่องสถานะก็ต้องรอคนเปิดใบตรวจเหมือนกดยืนยันงานเสร็จ
+  if (changed && status === "completed" && needsReview(wo, await loadWoReviewEnabled(s.orgId))) {
+    await submitForReview(s, wo, { advancePm: pmNotAdvancedYet(wo), names: [], prices: [], quickNone: false });
+    revalidatePath(`/maintenance/work-orders/${id}`);
+    revalidatePath("/maintenance/work-orders");
+    return;
+  }
+  // เปลี่ยนสถานะออกจาก "รอตรวจ" (เปิดกลับ/ยกเลิก) — ไม่ต้องตรวจแล้ว แจ้งเตือนให้ตรวจไม่ต้องค้าง
+  if (changed && status !== "completed" && wo.reviewState === "pending") {
+    await prisma.workOrder.updateMany({ where: { orgId: s.orgId, id, reviewState: "pending" }, data: { reviewState: "none", reviewClose: Prisma.DbNull } });
+    await resolveActionNotifications(id, "work_order", ["รอคุณตรวจ"]);
+  }
   // ปิดงาน = เดิน PM ที่ผูกไว้ไปรอบถัดไป (batch → single → fallback ตามอุปกรณ์)
   // ใบที่ปิดไปแล้วถูกกดปิดซ้ำ ต้องไม่เดิน PM ซ้ำ ไม่งั้นรอบกระโดดข้ามไปอีกช่วง
   //
@@ -340,7 +354,9 @@ async function notifyStatusChanged(
   orgId: string,
   wo: { id: string; title: string; propertyId: string; assignedTo: string | null; groupMemberIds?: string[]; createdBy: string | null; ccUserIds: string[]; pmRoundDate?: Date | null; isPrivate?: boolean },
   status: string,
-  actorId: string
+  actorId: string,
+  /** ตรวจงาน (10/11/2569): ป้ายสถานะแทน "เสร็จแล้ว" + คนที่ได้แจ้งเตือนเฉพาะแยกไปแล้ว (ไม่ส่งซ้ำ) */
+  opts: { label?: string; emoji?: string; skip?: string[] } = {},
 ) {
   // ใบส่วนตัว — ไม่มีใครต้องรู้ (ผู้ดูแลบ้านก็ไม่เห็นใบนี้) · ใบส่วนตัวแบบกลุ่ม: แจ้งคนในกลุ่มกันเอง
   if (wo.isPrivate) {
@@ -363,7 +379,8 @@ async function notifyStatusChanged(
   if (status === "in_progress" && wo.pmRoundDate) {
     await resolveActionNotifications(wo.id, "work_order", ["ได้รับมอบหมายงานใหม่"]);
   }
-  const st = STATUS_TEXT[status] ?? { emoji: "📋", label: status };
+  const base = STATUS_TEXT[status] ?? { emoji: "📋", label: status };
+  const st = { emoji: opts.emoji ?? base.emoji, label: opts.label ?? base.label };
   const property = await getProperty(orgId, wo.propertyId);
   const propertyName = property?.name ?? "-";
   const targets = new Set<string>([
@@ -373,6 +390,7 @@ async function notifyStatusChanged(
     ...(await propertyCaretaker(orgId, wo.propertyId)),
   ]);
   targets.delete(actorId);
+  for (const id of opts.skip ?? []) targets.delete(id);
   await notifyUsers(orgId, await withoutUninvolvedCeos(orgId, targets, wo), {
     title: `${st.emoji} ใบงานอัปเดตสถานะ: ${wo.title}`,
     body: `บ้าน: ${propertyName} • สถานะ: ${st.label}`,
@@ -511,43 +529,32 @@ export async function completeWorkOrderAction(formData: FormData) {
       : {}),
     ...(notes ? { completionNotes: notes } : {}),
   });
+  // ใบเสร็จอัปโหลดตอนส่งงานเลย (ไฟล์อยู่ในคำขอนี้เท่านั้น) — ลงขั้นค่าใช้จ่ายตอนปิดจริง
+  const receipt = formData.get("expenseReceipt");
+  // รับเฉพาะรูป — ฟอร์มกรองแล้ว แต่คำขอยิงตรงได้ ไฟล์อื่นจะถูกเปิดจากโดเมนเรา
+  const hasReceipt = receipt instanceof File && receipt.size > 0 && receipt.type.startsWith("image/");
+  const close: CloseData = {
+    advancePm: pmNotAdvancedYet(wo),
+    names,
+    prices,
+    quickNone: formData.get("noExpense") === "1",
+    noReceipt: formData.get("noReceipt") === "1",
+    receiptUrl: hasReceipt ? await putFile(`${s.orgId}/maintenance/receipts`, receipt) : null,
+    receiptSha256: hasReceipt ? createHash("sha256").update(Buffer.from(await receipt.arrayBuffer())).digest("hex") : null,
+    ai: parseReceiptAi(formData.get("receiptAi")),
+    by: s.userId,
+  };
   const changed = await updateWorkOrderStatus(s.orgId, id, "completed");
-  if (changed) {
-    // เคยปิดแล้วถูกเปิดกลับ = รอบ PM เดินไปแล้วตอนปิดครั้งแรก (ดู updateStatusAction)
-    if (wo.completedAt === null) await advanceLinkedPm(s.orgId, wo);
-    await notifyStatusChanged(s.orgId, wo, "completed", s.userId);
-  }
 
-  // เปิดใช้กำหนดบันทึกแล้ว: ช่างแจ้ง ผู้บันทึกลงยอด (ผู้ใช้ 3/11/2569) — เก็บที่กรอกไว้รอตรวจ ยังไม่ลงยอด
-  // ติ๊กไม่มีค่าใช้จ่าย/ใส่ 0 จบเลย ไม่เป็นงานของผู้บันทึก (เห็นในคอลัมน์เสร็จ แก้ได้)
-  const tracked = wo.requiresExpense && !wo.isPrivate && trackingActive(await loadExpenseTracking(s.orgId));
-  const quickNone = formData.get("noExpense") === "1";
-  const estimate = names.map((name, i) => ({ name: name.trim(), price: (prices[i] ?? "").trim() }));
-  const allZero = estimate.some((x) => x.name !== "" && x.price !== "") && estimate.filter((x) => x.price !== "").every((x) => parseBaht(x.price) === 0);
-  if (tracked && !quickNone && !allZero) {
-    const receipt = formData.get("expenseReceipt");
-    // รับเฉพาะรูป — ฟอร์มกรองแล้ว แต่คำขอยิงตรงได้ ไฟล์อื่นจะถูกเปิดจากโดเมนเรา
-    const hasReceipt = receipt instanceof File && receipt.size > 0 && receipt.type.startsWith("image/");
-    const first = estimate.find((x) => x.name !== "" || x.price !== "");
-    const firstPrice = first ? parseBaht(first.price) : NaN;
-    await updateWorkOrder(s.orgId, id, {
-      expenseDraft: {
-        name: (first?.name ?? "").slice(0, 300),
-        // ราคาอ่านไม่ออก/ติดลบ/เกินหลัก = ไม่รู้ราคา ให้ผู้บันทึกลงเอง
-        price: first && first.price !== "" && Number.isFinite(firstPrice) && firstPrice >= 0 && firstPrice <= MAX_EXPENSE ? String(firstPrice) : "",
-        noReceipt: formData.get("noReceipt") === "1",
-        receiptUrl: hasReceipt ? await putFile(`${s.orgId}/maintenance/receipts`, receipt) : null,
-        receiptSha256: hasReceipt ? createHash("sha256").update(Buffer.from(await receipt.arrayBuffer())).digest("hex") : null,
-        ai: parseReceiptAi(formData.get("receiptAi")),
-        by: s.userId,
-        at: new Date().toISOString(),
-      },
-    });
+  // ตรวจงาน (ผู้ใช้ 10/11/2569): ใบที่คนเปิด รอคนเปิดใบกด ผ่าน/ไม่ผ่าน ก่อน — ยังไม่เดิน PM ไม่ลงค่าใช้จ่าย
+  if (changed && needsReview(wo, await loadWoReviewEnabled(s.orgId))) {
+    await submitForReview(s, wo, close, afterPhotoUrls.length);
+    revalidatePath(`/maintenance/work-orders/${id}`);
+    revalidatePath("/maintenance/work-orders");
+    return;
   }
-  const recorded =
-    tracked && !quickNone && !allZero
-      ? false
-      : await recordEstimateAsExpense(s.orgId, wo, quickNone ? [{ name: "ไม่มีค่าใช้จ่าย", price: "0" }] : estimate, s.userId);
+  if (changed) await notifyStatusChanged(s.orgId, wo, "completed", s.userId);
+  const recorded = await finishClose(s.orgId, wo, close, s.userId, changed);
   await woLog(
     s,
     wo,
@@ -559,6 +566,185 @@ export async function completeWorkOrderAction(formData: FormData) {
   revalidatePath(`/maintenance/work-orders/${id}`);
   revalidatePath("/maintenance/work-orders");
   if (recorded) revalidatePath("/maintenance/expenses");
+}
+
+/**
+ * รอบ PM ที่ผูกไว้ยังไม่ได้เดิน — ปิดครั้งแรก (completedAt ว่าง) · ไม่ผ่านการตรวจแล้วส่งใหม่ใช้ค่าที่จำไว้
+ * (ใบที่เคยปิดก่อนเปิดใช้การตรวจแล้วเปิดกลับ = เดินไปแล้ว ห้ามเดินซ้ำ)
+ */
+function pmNotAdvancedYet(wo: { completedAt: Date | null; reviewClose?: unknown }): boolean {
+  const kept = (wo.reviewClose as { advancePm?: boolean } | null | undefined)?.advancePm;
+  return typeof kept === "boolean" ? kept && wo.completedAt === null : wo.completedAt === null;
+}
+
+/** ที่ช่างกรอกตอนส่งงาน — ลงขั้นค่าใช้จ่ายทันที (ไม่ต้องตรวจ) หรือเก็บไว้ลงตอน "ผ่าน" */
+interface CloseData {
+  /** ปิดครั้งแรก = เดินรอบ PM ที่ผูกไว้ (เคยปิดแล้วเปิดกลับ = เดินไปแล้ว) */
+  advancePm: boolean;
+  names: string[];
+  prices: string[];
+  quickNone: boolean;
+  noReceipt?: boolean;
+  receiptUrl?: string | null;
+  receiptSha256?: string | null;
+  ai?: Prisma.InputJsonValue | null;
+  /** คนกรอกประมาณการ (ช่างที่ส่งงาน) — ร่าง/รายการค่าใช้จ่ายเป็นชื่อคนนี้ แม้คนกด "ผ่าน" จะเป็นคนเปิดใบ */
+  by?: string;
+}
+
+/**
+ * ปิดงานจริง: เดินรอบ PM + ขั้นค่าใช้จ่าย — เดิมอยู่ใน completeWorkOrderAction ตรง ๆ
+ * แยกออกมาให้ "ผ่าน" ของการตรวจเรียกตัวเดียวกัน (ผลเหมือนปิดงานแบบเดิมทุกอย่าง)
+ */
+async function finishClose(orgId: string, wo: NonNullable<Awaited<ReturnType<typeof getWorkOrder>>>, close: CloseData, actorId: string, changed: boolean): Promise<boolean> {
+  // เคยปิดแล้วถูกเปิดกลับ = รอบ PM เดินไปแล้วตอนปิดครั้งแรก (ดู updateStatusAction)
+  if (changed && close.advancePm) await advanceLinkedPm(orgId, wo);
+
+  // เปิดใช้กำหนดบันทึกแล้ว: ช่างแจ้ง ผู้บันทึกลงยอด (ผู้ใช้ 3/11/2569) — เก็บที่กรอกไว้รอตรวจ ยังไม่ลงยอด
+  // ติ๊กไม่มีค่าใช้จ่าย/ใส่ 0 จบเลย ไม่เป็นงานของผู้บันทึก (เห็นในคอลัมน์เสร็จ แก้ได้)
+  const tracked = wo.requiresExpense && !wo.isPrivate && trackingActive(await loadExpenseTracking(orgId));
+  const estimate = close.names.map((name, i) => ({ name: name.trim(), price: (close.prices[i] ?? "").trim() }));
+  const allZero = estimate.some((x) => x.name !== "" && x.price !== "") && estimate.filter((x) => x.price !== "").every((x) => parseBaht(x.price) === 0);
+  if (tracked && !close.quickNone && !allZero) {
+    const first = estimate.find((x) => x.name !== "" || x.price !== "");
+    const firstPrice = first ? parseBaht(first.price) : NaN;
+    await updateWorkOrder(orgId, wo.id, {
+      expenseDraft: {
+        name: (first?.name ?? "").slice(0, 300),
+        // ราคาอ่านไม่ออก/ติดลบ/เกินหลัก = ไม่รู้ราคา ให้ผู้บันทึกลงเอง
+        price: first && first.price !== "" && Number.isFinite(firstPrice) && firstPrice >= 0 && firstPrice <= MAX_EXPENSE ? String(firstPrice) : "",
+        noReceipt: !!close.noReceipt,
+        receiptUrl: close.receiptUrl ?? null,
+        receiptSha256: close.receiptSha256 ?? null,
+        ai: close.ai ?? null,
+        by: close.by ?? actorId,
+        at: new Date().toISOString(),
+      },
+    });
+  }
+  return tracked && !close.quickNone && !allZero
+    ? false
+    : await recordEstimateAsExpense(orgId, wo, close.quickNone ? [{ name: "ไม่มีค่าใช้จ่าย", price: "0" }] : estimate, close.by ?? actorId);
+}
+
+/**
+ * ส่งงานเข้ารอตรวจ — สถานะเป็น "เสร็จแล้ว" แต่ยังไม่ไปขั้นค่าใช้จ่าย (ไม่เดิน PM ไม่ลงยอด) จนกว่าคนเปิดใบกด "ผ่าน"
+ * แจ้งเตือน: คนเปิดใบได้ "รอคุณตรวจ" (ค้างจนกดตรวจ + LINE) ถ้าไม่ได้เป็นคนส่งเอง · คนอื่นในใบได้ "ส่งงานแล้ว รอตรวจ"
+ * บอสไม่ได้แจ้งเตือน (ยกเว้นเป็นคนเปิดใบ) แต่เข้ามาตรวจได้ (ผู้ใช้ 10/11/2569)
+ */
+async function submitForReview(
+  s: { orgId: string; userId: string },
+  wo: NonNullable<Awaited<ReturnType<typeof getWorkOrder>>>,
+  close: CloseData,
+  photos = 0,
+) {
+  await prisma.workOrder.updateMany({
+    where: { orgId: s.orgId, id: wo.id },
+    data: { reviewState: "pending", reviewSubmittedAt: new Date(), reviewClose: close as unknown as Prisma.InputJsonValue },
+  });
+  // ไม่ผ่านรอบก่อน — ส่งงานใหม่แล้ว แจ้งเตือน "ไม่ผ่าน" ไม่ต้องค้าง
+  await resolveActionNotifications(wo.id, "work_order", ["งานไม่ผ่าน"]);
+  const reviewer = reviewerOf(wo);
+  const who = (await notifyActorName(s.userId)) ?? "ผู้รับผิดชอบ";
+  if (reviewer && reviewer !== s.userId) {
+    const property = await getProperty(s.orgId, wo.propertyId);
+    await notifyUser(s.orgId, reviewer, {
+      title: `📋 รอคุณตรวจ: ${wo.title}`,
+      body: `${wo.code ?? ""} · ${who} ส่งงานแล้ว — กด ผ่าน / ไม่ผ่าน`,
+      type: "work_order",
+      referenceId: wo.id,
+      line: `📋 รอคุณตรวจใบแจ้งซ่อม\n📝 ${wo.title}\n🏠 ${property?.name ?? "-"}\n👤 ${who} ส่งงานแล้ว\n✅ เข้าไปกด ผ่าน / ไม่ผ่าน ในใบงาน ${wo.code ?? ""}`,
+    });
+  }
+  await notifyStatusChanged(s.orgId, wo, "completed", s.userId, { emoji: "📨", label: "ส่งงานแล้ว · รอตรวจ", skip: reviewer ? [reviewer] : [] });
+  await addWorkOrderComment(s.orgId, wo.id, s.userId, "ส่งงานแล้ว · รอคนเปิดใบตรวจ", null, { kind: "log" });
+  await woLog(s, wo, "status", `ส่งงานรอตรวจ${photos > 0 ? ` (รูปหลังแก้ไข ${photos} รูป)` : ""}`);
+}
+
+/**
+ * ตรวจใบงาน: ผ่าน → ปิดงานจริง (เดิน PM + ขั้นค่าใช้จ่าย นับกำหนดบันทึกจากตอนนี้)
+ * ไม่ผ่าน → กลับ "กำลังทำ" พร้อมเหตุผล + กำหนดส่งใหม่ (คะแนนเลยกำหนดนับจากวันใหม่) — แบบงานบนบอร์ด
+ */
+export async function reviewWorkOrderAction(formData: FormData): Promise<{ error?: string }> {
+  const s = await requireOrg();
+  const id = String(formData.get("id") ?? "");
+  const decision = String(formData.get("decision") ?? "");
+  const wo = id ? await getWorkOrder(s.orgId, id) : null;
+  if (!wo || !canSeeWorkOrder(await workOrderAccess(s), wo)) return { error: "ไม่พบใบงานนี้" };
+  if (!isAwaitingReview(wo)) return { error: "ใบนี้ไม่ได้รอตรวจแล้ว" };
+  if (!canReviewOrder(wo, s.userId, canViewAll(s))) return { error: "ตรวจได้เฉพาะคนเปิดใบ" };
+  const now = new Date();
+
+  if (decision === "pass") {
+    // completedAt = ตอนผ่าน — กำหนดบันทึกค่าใช้จ่ายนับจากตอนนี้ (ไม่ใช่ตอนส่งงาน)
+    const done = await prisma.workOrder.updateMany({
+      where: { orgId: s.orgId, id, reviewState: "pending" },
+      data: { reviewState: "passed", reviewedBy: s.userId, reviewedAt: now, reviewNote: null, completedAt: now },
+    });
+    if (done.count === 0) return { error: "มีคนตรวจใบนี้ไปแล้ว" };
+    const close = (wo.reviewClose ?? { advancePm: wo.completedAt === null, names: [], prices: [], quickNone: false }) as unknown as CloseData;
+    const recorded = await finishClose(s.orgId, wo, close, s.userId, true);
+    await prisma.workOrder.updateMany({ where: { orgId: s.orgId, id }, data: { reviewClose: Prisma.DbNull } });
+    await resolveActionNotifications(id, "work_order", ["รอคุณตรวจ"]);
+    const members = workOrderMemberIds(wo).filter((m) => m !== s.userId);
+    const who = (await notifyActorName(s.userId)) ?? "คนเปิดใบ";
+    if (members.length > 0) {
+      await notifyUsers(s.orgId, members, {
+        title: `✅ งานผ่านแล้ว: ${wo.title}`,
+        body: `${wo.code ?? ""} · ${who} ตรวจแล้ว ผ่าน`,
+        type: "work_order",
+        referenceId: id,
+      });
+    }
+    await notifyStatusChanged(s.orgId, wo, "completed", s.userId, { emoji: "✅", label: "เสร็จแล้ว · ผ่านการตรวจ", skip: members });
+    await addWorkOrderComment(s.orgId, id, s.userId, "ตรวจแล้ว ผ่าน", null, { kind: "log" });
+    await woLog(s, wo, "status", `ตรวจแล้ว ผ่าน${recorded ? " + ลงค่าใช้จ่ายจากประมาณการ" : ""}`);
+  } else if (decision === "fail") {
+    const note = String(formData.get("note") ?? "").trim().slice(0, 500);
+    const day = String(formData.get("dueDate") ?? "");
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(now);
+    if (note.length < 2) return { error: "ใส่เหตุผลที่ไม่ผ่าน" };
+    if (!validRedoDate(day, today)) return { error: "เลือกกำหนดส่งใหม่ (วันนี้หรือหลังจากนี้)" };
+    const due = parseDueDate(day)!;
+    // กลับไปทำ: completedAt ล้าง (ยังไม่เสร็จจริง — รอบ PM ยังไม่เดิน) · วันรายคนของใบกลุ่มใช้วันใหม่ทั้งใบ
+    const done = await prisma.workOrder.updateMany({
+      where: { orgId: s.orgId, id, reviewState: "pending" },
+      data: {
+        status: "in_progress",
+        reviewState: "failed",
+        reviewedBy: s.userId,
+        reviewedAt: now,
+        reviewNote: note,
+        // จำไว้ว่ารอบ PM เดินไปแล้วหรือยัง — completedAt ถูกล้าง ส่งใหม่ต้องไม่เดินซ้ำ
+        reviewClose: { advancePm: pmNotAdvancedYet(wo), names: [], prices: [], quickNone: false },
+        completedAt: null,
+        dueDate: due,
+        memberDueDates: Prisma.DbNull,
+      },
+    });
+    if (done.count === 0) return { error: "มีคนตรวจใบนี้ไปแล้ว" };
+    await resolveActionNotifications(id, "work_order", ["รอคุณตรวจ"]);
+    const members = workOrderMemberIds(wo).filter((m) => m !== s.userId);
+    const who = (await notifyActorName(s.userId)) ?? "คนเปิดใบ";
+    if (members.length > 0) {
+      await notifyUsers(s.orgId, members, {
+        title: `❌ งานไม่ผ่าน: ${wo.title}`,
+        body: `${wo.code ?? ""} · ${who}: ${clip(note)} · กำหนดส่งใหม่ ${fmtThaiDate(due)}`,
+        type: "work_order",
+        referenceId: id,
+        line: `❌ งานไม่ผ่าน ต้องแก้\n📝 ${wo.title}\n💬 ${clip(note)}\n📅 กำหนดส่งใหม่ ${fmtThaiDate(due)}\n👤 ตรวจโดย ${who}`,
+      });
+    }
+    await notifyStatusChanged(s.orgId, wo, "in_progress", s.userId, { emoji: "↩️", label: "ไม่ผ่านการตรวจ · กลับไปแก้", skip: members });
+    await addWorkOrderComment(s.orgId, id, s.userId, `ตรวจแล้วไม่ผ่าน — ${note} · กำหนดส่งใหม่ ${fmtThaiDate(due)}`, null, { kind: "log" });
+    await woLog(s, wo, "status", `ตรวจแล้วไม่ผ่าน · กำหนดส่งใหม่ ${day}`, { note });
+  } else {
+    return { error: "เลือก ผ่าน หรือ ไม่ผ่าน" };
+  }
+  revalidatePath(`/maintenance/work-orders/${id}`);
+  revalidatePath("/maintenance/work-orders");
+  revalidatePath("/maintenance/expenses");
+  return {};
 }
 
 /** "1,500" / "฿ 1,500.50" → 1500.5 · ว่าง/อ่านไม่ได้ = NaN (เหมือน parseAmount ของหน้าค่าใช้จ่าย) */

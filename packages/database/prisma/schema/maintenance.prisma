@@ -133,6 +133,16 @@ model WorkOrder {
   expenseDueDate        DateTime? @map("expense_due_date")
   /// ที่ช่างกรอกตอนปิดงาน รอผู้บันทึกตรวจและลงยอด { name, price, receiptUrl, receiptSha256, noReceipt, ai, by, at }
   expenseDraft          Json?     @map("expense_draft")
+  /// ตรวจงานก่อนบันทึกค่าใช้จ่าย (ผู้ใช้ 10/11/2569 "แบบ task") — none = ไม่ต้องตรวจ/ใบเก่า · pending = ส่งงานแล้วรอคนเปิดใบตรวจ
+  /// passed = ผ่าน (ไปขั้นค่าใช้จ่าย) · failed = ไม่ผ่าน กลับไปทำ · ใบ PM อัตโนมัติ/ใบรอบ PM/ใบส่วนตัวไม่ต้องตรวจ (lib/work-order-review.ts)
+  reviewState           String    @default("none") @map("review_state")
+  reviewSubmittedAt     DateTime? @map("review_submitted_at")
+  reviewedBy            String?   @map("reviewed_by")
+  reviewedAt            DateTime? @map("reviewed_at")
+  /// เหตุผลล่าสุดที่ไม่ผ่าน
+  reviewNote            String?   @map("review_note")
+  /// ที่ช่างกรอกตอนส่งงาน (ประมาณการ/ใบเสร็จ) — เก็บไว้ลงขั้นค่าใช้จ่ายตอน "ผ่าน"
+  reviewClose           Json?     @map("review_close")
   createdAt             DateTime  @default(now()) @map("created_at")
 
   property       Property                 @relation(fields: [propertyId], references: [id], onDelete: Cascade)

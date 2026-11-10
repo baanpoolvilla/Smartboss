@@ -58,7 +58,7 @@ export default async function NewExpensePage({
    * ค่าใช้จ่าย (ที่ต้องกรอกจริง ๆ) ขึ้นก่อน ใบยกเลิกไม่ต้องมี
    */
   const needsExpense = (o: (typeof orders)[number]) =>
-    o.status === "completed" && o.requiresExpense && !withExpense.has(o.id);
+    o.status === "completed" && o.reviewState !== "pending" && o.requiresExpense && !withExpense.has(o.id);
   const woOptions = orders
     .filter((o) => o.status !== "cancelled" || o.id === workOrderId)
     .sort((a, b) => Number(needsExpense(b)) - Number(needsExpense(a)))

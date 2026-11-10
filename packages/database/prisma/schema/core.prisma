@@ -495,6 +495,8 @@ model PerformanceSetting {
    * ผู้บันทึกค่าใช้จ่าย — งานขึ้นบอร์ดของคนเหล่านี้ เลยกำหนดโดนหักทุกคน
    */
   expenseRecorderIds String[] @map("expense_recorder_ids")
+  /// ใบแจ้งซ่อมที่คนเปิด ต้องให้คนเปิดใบตรวจ ผ่าน/ไม่ผ่าน ก่อนไปบันทึกค่าใช้จ่าย (ผู้ใช้ 10/11/2569 · ค่าตั้งต้นเปิด เหมือนงาน)
+  woReviewEnabled Boolean @default(true) @map("wo_review_enabled")
 
   /**
    * ย้อนดูผลลงเวลากี่วันในแต่ละรอบ cron

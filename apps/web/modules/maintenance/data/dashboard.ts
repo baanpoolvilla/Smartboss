@@ -66,6 +66,7 @@ export async function noExpenseWorkOrderCount(
     where: {
       orgId,
       status: "completed",
+      reviewState: { not: "pending" }, // รอตรวจ ยังไม่ถึงขั้นค่าใช้จ่าย
       AND: visible(access),
       // ใบที่ตั้งไว้ว่าไม่ต้องกรอกค่าใช้จ่ายไม่ใช่งานค้าง — ถ้านับด้วย ตัวเลขแดง
       // บนแดชบอร์ดจะไม่มีวันลงถึงศูนย์ (กติกาเดียวกับ notifyMissingExpenses)

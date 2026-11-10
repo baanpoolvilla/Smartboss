@@ -45,6 +45,20 @@ export async function saveExpenseTrackingAction(formData: FormData) {
   revalidatePath("/maintenance/work-orders");
 }
 
+/** ตรวจใบงานก่อนบันทึกค่าใช้จ่าย (lib/work-order-review.ts) — ค่าตั้งต้นเปิด */
+export async function saveWoReviewAction(formData: FormData) {
+  const orgId = await requireAdmin();
+  const enabled = formData.get("enabled") === "1";
+  await prisma.performanceSetting.upsert({ where: { orgId }, create: { orgId, woReviewEnabled: enabled }, update: { woReviewEnabled: enabled } });
+  await logActivity(orgId, {
+    userId: (await requireOrg()).userId,
+    entity: "settings",
+    action: "update",
+    summary: `${enabled ? "เปิด" : "ปิด"}การตรวจใบงานก่อนบันทึกค่าใช้จ่าย`,
+  });
+  revalidatePath("/maintenance/settings");
+}
+
 export async function saveLineConfigAction(formData: FormData) {
   const orgId = await requireAdmin();
   const token = String(formData.get("token") ?? "").trim() || null;

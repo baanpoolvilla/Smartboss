@@ -64,6 +64,7 @@ export async function queryPendingExpenseOrders(orgId: string) {
     where: {
       orgId,
       status: "completed",
+      reviewState: { not: "pending" }, // รอคนเปิดใบตรวจ — ยังไม่เป็นงานของผู้บันทึก (ตรวจงาน 10/11/2569)
       requiresExpense: true,
       isPrivate: false,
       ...(withExpense.length > 0 ? { id: { notIn: withExpense } } : {}),
@@ -102,7 +103,7 @@ export const recordedExpenseWorkOrders = cache(async (orgId: string) => {
   const ids = recent.map((r) => r.workOrderId!);
   if (ids.length === 0) return [];
   const done = await prisma.workOrder.findMany({
-    where: { orgId, id: { in: ids }, status: "completed", isPrivate: false },
+    where: { orgId, id: { in: ids }, status: "completed", reviewState: { not: "pending" }, isPrivate: false },
     select: { id: true },
   });
   const rows = await prisma.expense.findMany({
@@ -168,7 +169,7 @@ export interface StuckExpenseSource {
 export async function stuckExpenseSources(orgId: string, now = new Date()): Promise<StuckExpenseSource[]> {
   const before = new Date(now.getTime() - EXPENSE_STUCK_DAYS * 86_400_000);
   const age = (at: Date) => Math.floor((now.getTime() - at.getTime()) / 86_400_000);
-  const closed = { status: "completed", requiresExpense: true, isPrivate: false };
+  const closed = { status: "completed", reviewState: { not: "pending" }, requiresExpense: true, isPrivate: false };
   const pos = await prisma.purchaseOrder.findMany({
     where: { orgId, status: { in: PO_OPEN }, updatedAt: { lt: before }, workOrder: closed },
     select: { code: true, status: true, updatedAt: true, poAssignedTo: true, receiverAssignedTo: true, workOrderId: true },

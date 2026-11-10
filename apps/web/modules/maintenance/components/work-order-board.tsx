@@ -64,6 +64,10 @@ export interface BoardOrder {
   pendingDueTo?: string | null;
   /** คนที่ดูอยู่ต้องอนุมัติ — แถบแดงค้างจนกว่าจะตัดสิน */
   pendingDueWaitsMe?: boolean;
+  /** ตรวจงาน (10/11/2569): none | pending | passed | failed */
+  reviewState?: string;
+  /** คนที่ดูอยู่คือคนเปิดใบ และใบรอตรวจ */
+  reviewWaitsMe?: boolean;
 }
 
 /** แถวเบาของใบในคอลัมน์เสร็จแล้ว — พอสำหรับนับและกรอง ข้อมูลการ์ดโหลดตอนจะแสดง */
@@ -285,6 +289,9 @@ function OrderCard({
       pendingDue={wo.pendingDue ?? 0}
       pendingDueTo={wo.pendingDueTo}
       pendingDueWaitsMe={wo.pendingDueWaitsMe}
+      awaitingReview={wo.status === "completed" && wo.reviewState === "pending"}
+      reviewWaitsMe={wo.reviewWaitsMe}
+      reviewFailed={wo.reviewState === "failed"}
       score={wo.score}
       isPrivate={wo.isPrivate}
       subline={wo.pmRound ? <>รอบ {wo.pmRound.label}</> : undefined}
@@ -356,6 +363,8 @@ function MoreExpenseLink({ href, count }: { href: string; count: number }) {
 const COLUMNS = [
   { key: "open", title: "ยังไม่ทำ", short: "🔴 ยังไม่ทำ", color: M.red, byPriority: true },
   { key: "in_progress", title: "กำลังทำ", short: "🟡 กำลังทำ", color: M.orange, byPriority: true },
+  // ส่งงานแล้ว รอคนเปิดใบตรวจ (10/11/2569 แบบคอลัมน์ "รอตรวจสอบ" ของบอร์ดงาน) — ผ่านแล้วถึงไปขั้นค่าใช้จ่าย
+  { key: "review", title: "รอตรวจ", short: "🟢 รอตรวจ", color: "#16a34a", byPriority: false },
   {
     key: "no_expense",
     title: "ยังไม่บันทึกค่าใช้จ่าย",
@@ -802,6 +811,10 @@ export function WorkOrderBoard({
   const buckets: Record<string, BoardOrder[]> = {
     open: visible.filter((w) => w.status === "open"),
     in_progress: visible.filter((w) => w.status === "in_progress"),
+    // รอคนเปิดใบตรวจ — คนตรวจเห็นของตัวเองก่อน
+    review: visible
+      .filter((w) => w.status === "completed" && w.reviewState === "pending")
+      .sort((a, b) => Number(!!b.reviewWaitsMe) - Number(!!a.reviewWaitsMe)),
     /*
      * "ยังไม่บันทึกค่าใช้จ่าย" = ปิดงานแล้ว ต้องกรอกค่าใช้จ่าย แต่ยังไม่ได้กรอก
      *
@@ -812,7 +825,7 @@ export function WorkOrderBoard({
      * กรองด้วย requiresExpense ถูกอยู่แล้ว ตกหล่นเฉพาะฝั่งหน้าจอ)
      */
     no_expense: visible
-      .filter((w) => w.status === "completed" && w.requiresExpense && !w.hasExpense)
+      .filter((w) => w.status === "completed" && w.reviewState !== "pending" && w.requiresExpense && !w.hasExpense)
       // ครบกำหนดบันทึกใกล้สุดขึ้นก่อน (ใบที่ไม่มีกำหนดคงลำดับเดิม)
       .sort((a, b) => (a.expenseDeadlineIso && b.expenseDeadlineIso ? a.expenseDeadlineIso.localeCompare(b.expenseDeadlineIso) : 0)),
   };

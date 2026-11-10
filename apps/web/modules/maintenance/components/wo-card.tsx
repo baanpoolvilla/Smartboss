@@ -76,6 +76,12 @@ export interface WoCardProps {
   expenseDeadline?: string | Date | null;
   /** บันทึกค่าใช้จ่ายแล้ว ยอดรวม (0 = ไม่มีค่าใช้จ่าย) — แถบบอกว่าเสร็จแล้ว */
   expenseRecorded?: number | null;
+  /** ตรวจงาน (10/11/2569 แบบการ์ดงาน): ส่งงานแล้ว รอคนเปิดใบตรวจ */
+  awaitingReview?: boolean;
+  /** คนที่ดูอยู่คือคนเปิดใบ — แถบแดง "รอคุณตรวจ" ค้างจนกด ผ่าน/ไม่ผ่าน */
+  reviewWaitsMe?: boolean;
+  /** ตรวจแล้วไม่ผ่าน กลับมาแก้ (ยังไม่ส่งใหม่) */
+  reviewFailed?: boolean;
 }
 
 function bkkDay(d: Date): number {
@@ -130,7 +136,17 @@ export function WoCard(p: WoCardProps) {
   const pending = p.pendingDueWaitsMe ? allPending.filter((n) => !splitNotifTitle(n.title).kind.includes("ขอเลื่อน")) : allPending;
   const dueTo = p.pendingDueTo ? `${Number(p.pendingDueTo.slice(8, 10))}/${Number(p.pendingDueTo.slice(5, 7))}` : null;
   const dueWaitBand = p.pendingDueWaitsMe && pending.length === 0;
-  const topBand = dueWaitBand ? (
+  // รอคุณตรวจ — แบบแถบ "รอคุณตรวจ · กด ผ่าน / ไม่ผ่าน" ของการ์ดงาน (ไม่ทับแถบยังไม่ได้อ่าน)
+  const reviewBand = !!p.reviewWaitsMe && !!p.awaitingReview && pending.length === 0 && !dueWaitBand;
+  const topBand = reviewBand ? (
+    <div
+      className={`flex items-center gap-1 bg-[#fde3e3] px-3 py-1 text-[11px] font-bold leading-4 text-[#b91c1c] ${expenseBandClass(p)}`}
+      title="ส่งงานแล้ว · เปิดใบงานแล้วกด ผ่าน / ไม่ผ่าน"
+      data-testid="wo-review-wait"
+    >
+      <span className="truncate">📋 รอคุณตรวจ · กด ผ่าน / ไม่ผ่าน</span>
+    </div>
+  ) : dueWaitBand ? (
     <div
       className={`flex items-center gap-1 bg-[#fde3e3] px-3 py-1 text-[11px] font-bold leading-4 text-[#b91c1c] ${expenseBandClass(p)}`}
       title="มีคนขอเลื่อนกำหนดส่ง · เปิดใบงานแล้วกด อนุมัติ / ไม่อนุมัติ"
@@ -175,7 +191,7 @@ export function WoCard(p: WoCardProps) {
       href={p.href}
       prefetch={false}
       className={`group block overflow-hidden rounded-xl border shadow-[0_4px_14px_rgba(16,24,40,0.13),0_1px_3px_rgba(16,24,40,0.10)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_-10px_rgba(16,24,40,0.22)] sm:rounded-2xl ${
-        pending.length > 0 || dueWaitBand ? "border-[#f3a4a4] bg-[#fdecec]" : "border-[#b7e3dd] bg-white"
+        pending.length > 0 || dueWaitBand || reviewBand ? "border-[#f3a4a4] bg-[#fdecec]" : "border-[#b7e3dd] bg-white"
       } ${done ? "opacity-90" : ""}`}
       aria-label={`ใบงานซ่อม ${p.code} ${p.title}`}
     >
@@ -202,14 +218,33 @@ export function WoCard(p: WoCardProps) {
       </div>
 
       <div className="p-3 sm:px-4 sm:py-3">
-        {done && (
+        {done && p.awaitingReview ? (
+          // ส่งงานแล้ว รอตรวจ — ป้ายสองท่อน "✓ เสร็จ | ⏱ รอตรวจสอบ" แบบการ์ดงาน (คนตรวจเห็นแถบแดงข้างบนแทน)
+          !reviewBand && (
+            <div className="mb-1.5">
+              <span className="inline-flex items-stretch overflow-hidden whitespace-nowrap rounded-full text-[10px] font-semibold ring-1 ring-inset ring-[#c6ead1]" data-testid="wo-review-pill">
+                <span className="flex items-center gap-1 bg-[#effaf2] px-2.5 py-0.5 text-[#15803d]">
+                  <Check className="h-2.5 w-2.5 shrink-0" strokeWidth={3} />
+                  เสร็จ
+                </span>
+                <span className="flex items-center gap-1 bg-[#bfe8cb] px-2.5 py-0.5 text-[#2f5b3b]">⏱ รอตรวจสอบ</span>
+              </span>
+            </div>
+          )
+        ) : done ? (
           <div className="mb-1.5">
             <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${toneCls}`}>
               <Check className="h-2.5 w-2.5" strokeWidth={3} />
               {p.doneLabel ?? (p.status === "cancelled" ? "ยกเลิก" : "เสร็จแล้ว")}
             </span>
           </div>
-        )}
+        ) : p.reviewFailed && open ? (
+          <div className="mb-1.5">
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#fdecea] px-2.5 py-0.5 text-[10px] font-semibold text-[#b42318] ring-1 ring-inset ring-[#f5c2bd]" data-testid="wo-review-failed">
+              ↩ ไม่ผ่าน · กลับมาแก้
+            </span>
+          </div>
+        ) : null}
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
             <p className={`line-clamp-2 text-[14px] font-semibold leading-snug text-(--ink)`}>{p.title}</p>

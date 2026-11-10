@@ -568,6 +568,8 @@ export async function notifyMissingExpenses(): Promise<{ reminded: number }> {
     prisma.workOrder.findMany({
       where: {
         status: "completed",
+        // รอคนเปิดใบตรวจอยู่ — ยังไม่ถึงขั้นค่าใช้จ่าย (ตรวจงาน 10/11/2569)
+        reviewState: { not: "pending" },
         // ใบงานที่ตั้งไว้ว่าไม่มีค่าใช้จ่ายต้องไม่ถูกทวง — ไม่งั้นทวงไปก็ไม่มีอะไรให้กรอก
         // แล้วคนจะบันทึก 0 บาทเพื่อให้เตือนหาย ซึ่งทำให้รายงานค่าใช้จ่ายเชื่อไม่ได้
         requiresExpense: true,
