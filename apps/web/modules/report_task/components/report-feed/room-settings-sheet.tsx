@@ -28,6 +28,7 @@ import { canManage, getUser, users } from "@/modules/report_task/lib/directory";
 import { canSeeReportTopic } from "@/modules/report_task/lib/permissions";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { toast } from "sonner";
+import { cn } from "@/modules/report_task/lib/utils";
 import { Archive, ArchiveRestore, Info, Lock } from "lucide-react";
 
 /** Explains "เก็บเข้าคลัง/กู้คืน" on tap — a `Popover` (click-based), not a
@@ -63,6 +64,25 @@ function ArchiveInfoButton() {
     </Popover>
   );
 }
+
+type SheetTab = "access" | "rounds" | "general";
+const SHEET_TABS: { key: SheetTab; label: string; hint: string }[] = [
+  { key: "access", label: "ใครเห็นห้อง", hint: "และทำอะไรได้" },
+  { key: "rounds", label: "รอบส่งรายงาน", hint: "ใครต้องส่ง กี่โมง" },
+  { key: "general", label: "ทั่วไป", hint: "ชื่อ แจ้งเตือน อื่น ๆ" },
+];
+/** ช่องไหนอยู่แท็บไหน — ไว้ขึ้นจุดแดง "ยังไม่บันทึก" ที่แท็บ */
+const TAB_OF_FIELD: Record<string, SheetTab> = {
+  visibility: "access",
+  postPermission: "access",
+  commentsDisabled: "access",
+  submissionRounds: "rounds",
+  hardCutoffTime: "rounds",
+  hardCutoffExemptFromGlobal: "rounds",
+  remindBeforeCutoffMinutes: "rounds",
+  minImages: "rounds",
+  cutoffs: "rounds",
+};
 
 /** ป้ายไทยของแต่ละช่องที่แก้ได้ในชีทนี้ (รวมช่องที่มาจาก ReportTopicSettingsPanel ด้วย) — ใช้สรุปว่า "แก้อะไรไปบ้าง" ตอน log */
 const FIELD_LABELS: Record<string, string> = {
@@ -124,6 +144,9 @@ export function RoomSettingsSheet({
   const setNotifyPreference = useReportFeedStore((s) => s.setNotifyPreference);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const [archiveConfirm, setArchiveConfirm] = useState(false);
+  // แบ่งแท็บ (ผู้ใช้ 10/11/2569 "ใช้งานง่าย ๆ ไม่งง เวลาเข้าไปแก้ไขห้องรีพอร์ต") — เดิมทุกอย่างยาวต่อกันหน้าเดียว ~2,000px
+  const [tab, setTab] = useState<SheetTab>("access");
+  const [closeConfirm, setCloseConfirm] = useState(false);
 
   const [draft, setDraft] = useState<ReportTopic>(topic);
   const [dirtyKeys, setDirtyKeys] = useState<Set<string>>(new Set());
@@ -139,6 +162,7 @@ export function RoomSettingsSheet({
     setResetKey(topic.id);
     setDraft(topic);
     setDirtyKeys(new Set());
+    setTab("access");
   } else if (!open && resetKey !== null) {
     setResetKey(null);
   }
@@ -185,15 +209,72 @@ export function RoomSettingsSheet({
   const myNotifyPreference = topic.notifyPreference?.[viewingAsUserId] ?? "all";
   const isManager = canManage(viewingAsUserId);
 
+  // ปิดหน้าต่างตอนยังไม่บันทึก — เดิมหายเงียบ ๆ ตอนนี้ถามก่อน
+  function requestOpenChange(next: boolean) {
+    if (!next && dirtyKeys.size > 0) {
+      setCloseConfirm(true);
+      return;
+    }
+    onOpenChange(next);
+  }
+  const dirtyTabs = new Set([...dirtyKeys].map((k) => TAB_OF_FIELD[k] ?? "general"));
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+    <AlertDialog open={closeConfirm} onOpenChange={setCloseConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>ยังไม่ได้บันทึก</AlertDialogTitle>
+          <AlertDialogDescription>แก้ไว้ {dirtyKeys.size} รายการ ถ้าปิดตอนนี้ที่แก้ไว้จะหายไป</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>กลับไปแก้ต่อ</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => {
+              handleCancel();
+              onOpenChange(false);
+            }}
+          >
+            ปิดโดยไม่บันทึก
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    <Dialog open={open} onOpenChange={requestOpenChange}>
       <DialogContent className="p-0 gap-0 sm:max-w-xl w-full max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader className="px-5 py-3.5 border-b border-[var(--line)]">
           <DialogTitle className="truncate">ตั้งค่าห้อง &quot;{topic.name}&quot;</DialogTitle>
         </DialogHeader>
 
+        <div role="tablist" aria-label="หมวดตั้งค่าห้อง" className="flex shrink-0 gap-1 border-b border-[var(--line)] px-3 pt-2">
+          {SHEET_TABS.map((t) => {
+            const active = tab === t.key;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setTab(t.key)}
+                className={cn(
+                  "relative flex-1 rounded-t-lg px-2 pb-2 pt-1.5 text-center transition-colors",
+                  active ? "text-[var(--brand-navy,#1f3a5f)]" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
+                )}
+              >
+                <span className="block text-[13px] font-semibold">
+                  {t.label}
+                  {dirtyTabs.has(t.key) && <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-[var(--chart-red,#dc2626)] align-middle" title="มีที่แก้ยังไม่บันทึก" />}
+                </span>
+                <span className="block text-[10.5px] font-normal text-[var(--ink-soft)]">{t.hint}</span>
+                {active && <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-[var(--brand-navy,#1f3a5f)]" />}
+              </button>
+            );
+          })}
+        </div>
+
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
           {/* ทั่วไป */}
+          {tab === "general" && (
           <section className="space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)]">ทั่วไป</p>
             <div className="space-y-1.5">
@@ -211,6 +292,7 @@ export function RoomSettingsSheet({
               />
             </div>
           </section>
+          )}
 
           {/* สิทธิ์การโพสต์/คอมเมนต์ ย้ายไปอยู่ในตาราง "ใครเห็นห้องนี้ ทำอะไรได้บ้าง" (room-access-panel.tsx · 10/11/2569) */}
           {/* สิทธิ์การมองเห็น + กติกาการส่งรายงาน (จำนวนรูป/รอบตัดยอด) — มาจาก
@@ -219,19 +301,15 @@ export function RoomSettingsSheet({
               กับหมวดอื่นๆ ใน Sheet นี้ — ส่ง draft + patchDraft ผ่าน onUpdate
               แทนการเซฟทันที (onUpdate ไม่ระบุ = เซฟทันทีเหมือนเดิมที่ /settings)
               รวมโหมด/แผนก/สมาชิกด้วย — ทุกอย่างติดตอนกด "บันทึก" ด้านล่างเท่านั้น */}
-          <section className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)]">ใครเห็นห้อง &amp; รอบส่งรายงาน</p>
-            <ReportTopicSettingsPanel topic={draft} hideHeading onUpdate={patchDraft} />
-          </section>
-
-          {/* การแจ้งเตือน */}
-          <section className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)]">การแจ้งเตือน</p>
+          {tab === "access" && <ReportTopicSettingsPanel topic={draft} hideHeading onUpdate={patchDraft} section="access" />}
+          {tab === "rounds" && (
+            <section className="space-y-4">
+              <ReportTopicSettingsPanel topic={draft} hideHeading onUpdate={patchDraft} section="rounds" />
             {isManager && (
               <>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <Label className="text-xs text-[var(--ink-soft)]">เตือนก่อนถึงรอบส่ง (คนที่ยังไม่ส่ง)</Label>
+                    <Label className="text-sm font-medium text-[var(--ink)]">เตือนคนที่ยังไม่ส่ง ก่อนถึงเวลา</Label>
                     <p className="mt-1 text-[11px] text-[var(--ink-soft)]">
                       {draft.remindBeforeCutoffMinutes === 0
                         ? "ปิดอยู่ — ห้องนี้ไม่แจ้งเตือนใกล้ถึงกำหนดเลย"
@@ -246,6 +324,13 @@ export function RoomSettingsSheet({
                 </div>
               </>
             )}
+            </section>
+          )}
+
+          {/* การแจ้งเตือน */}
+          {tab === "general" && (
+          <section className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)]">การแจ้งเตือนของฉัน</p>
             {/* ส่วนตัว ไม่กระทบคนอื่น — เซฟทันทีเหมือนเดิม ไม่รวมอยู่ใน draft/บันทึกด้านล่าง */}
             <div className="space-y-1.5">
               <Label className="text-xs text-[var(--ink-soft)]">การแจ้งเตือนของฉันในห้องนี้</Label>
@@ -264,7 +349,10 @@ export function RoomSettingsSheet({
             </div>
           </section>
 
+          )}
+
           {/* ข้อมูล */}
+          {tab === "general" && (
           <section className="space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)]">ข้อมูล</p>
             {/* รูปแบบห้อง — ทุกคนในห้องเห็นเหมือนกันหมด ไม่ใช่ค่าที่แต่ละคนสลับเอง
@@ -274,8 +362,7 @@ export function RoomSettingsSheet({
               <div className="min-w-0 pr-3">
                 <p className="text-sm font-medium">รูปแบบห้อง</p>
                 <p className="text-xs text-[var(--ink-soft)]">
-                  &quot;Openchat&quot; = แชทเรียงเวลา เห็นเนื้อหาเต็ม · &quot;Thread&quot; = ย่อเป็นหัวข้อ
-                  เรียงตามที่เพิ่งมีคนตอบล่าสุด — สมาชิกทุกคนในห้องเห็นแบบเดียวกัน
+                  Openchat = เรียงตามเวลาแบบแชท · Thread = ย่อเป็นหัวข้อ เรียงตามที่มีคนตอบล่าสุด
                 </p>
               </div>
               {/* Locked (read-only) for a room created via the create-dialog's
@@ -306,9 +393,7 @@ export function RoomSettingsSheet({
               <div className="min-w-0 pr-3">
                 <p className="text-sm font-medium">อายุไฟล์แนบในแท็บ &quot;ไฟล์&quot;</p>
                 <p className="text-xs text-[var(--ink-soft)]">
-                  รูป/เอกสารที่แนบในโพสต์เก่ากว่านี้จะไม่แสดงในตัวกรอง &quot;รูปภาพ&quot; และ &quot;เอกสาร&quot;
-                  (อัลบั้ม ลิงก์ปักหมุด และเอกสารของห้องไม่มีวันหมดอายุ) — เลือก &quot;ไม่จำกัด&quot;
-                  ถ้าอยากให้แท็บนี้เป็นคลังเก็บไฟล์ถาวรแบบ SharePoint แทนมุมมองไฟล์ล่าสุด
+                  รูป/เอกสารในโพสต์ที่เก่ากว่านี้ไม่ขึ้นในแท็บไฟล์ (อัลบั้มและเอกสารของห้องอยู่ตลอด) · เลือก &quot;ไม่จำกัด&quot; ถ้าอยากเก็บทุกไฟล์
                 </p>
               </div>
               <Select
@@ -400,6 +485,7 @@ export function RoomSettingsSheet({
               )}
             </div>
           </section>
+          )}
         </div>
 
         {/* Save/Cancel bar (Phase 6) — everything above except member
@@ -425,5 +511,6 @@ export function RoomSettingsSheet({
         </div>
       </DialogContent>
     </Dialog>
+    </>
   );
 }

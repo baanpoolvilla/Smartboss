@@ -136,9 +136,12 @@ export function ReportTopicSettingsPanel({
   hideHeading,
   onUpdate,
   liveVisibility,
+  section,
 }: {
   topic: ReportTopic;
   hideHeading?: boolean;
+  /** หน้าต่างตั้งค่าห้องแบ่งแท็บ (10/11/2569) — "access" = ใครเห็นห้องอย่างเดียว · "rounds" = รอบส่ง+ปิดรับอย่างเดียว · ไม่ระบุ = ทั้งหมด (หน้า /settings) */
+  section?: "access" | "rounds";
   onUpdate?: (patch: Partial<ReportTopic>) => void;
   /** Override for what "who can see this room" (mode buttons, department
    * picker, and the member section) reads — only needed when `topic` is a
@@ -280,22 +283,25 @@ export function ReportTopicSettingsPanel({
         </div>
       )}
 
-      <RoomSettingsIntroBanner viewingAsUserId={viewingAsUserId} />
+      {!section && <RoomSettingsIntroBanner viewingAsUserId={viewingAsUserId} />}
 
       {/* ใครเห็นห้อง + ทำอะไรได้ + รายชื่อติ๊กเลือก — ตารางเดียว (room-access-panel.tsx · 10/11/2569) */}
-      <RoomAccessPanel topic={memberTopic} apply={apply} staged={!!onUpdate} viewingAsUserId={viewingAsUserId} />
+      {section !== "rounds" && <RoomAccessPanel topic={memberTopic} apply={apply} staged={!!onUpdate} viewingAsUserId={viewingAsUserId} />}
 
+        {section !== "access" && (
         <div className="space-y-2">
           <div>
-            <Label className="text-xs text-[var(--ink-soft)]">รอบส่ง — ใครต้องส่ง + กี่โมง</Label>
-            <p className="text-[11px] text-[var(--ink-soft)]">แยกจาก &quot;ใครเห็นห้อง&quot; — เว้นว่าง = ไม่มีใครต้องส่ง ไม่หัก/ไม่นับ</p>
-            <p className="text-[11px] text-[var(--ink-soft)]">
-              ป้าย ⏰ &quot;ยังไม่ส่ง&quot; ในแถบข้างเห็นเฉพาะคนที่ต้องส่งรอบนี้จริง + เจ้าของบริษัท + หัวหน้าแผนกของห้อง (ตามสิทธิ) — คนอื่นที่แค่เห็นห้องไม่เห็นป้ายนี้
-            </p>
-            <p className="text-[11px] text-[var(--ink-soft)]">
-              ทุกครั้งที่เพิ่ม/แก้ไข/ลบรอบ ระบบแจ้งเตือนให้อัตโนมัติ — เฉพาะคนที่ได้รับผลกระทบจริง (ถูกเพิ่มเป็นผู้ส่ง/ถูกถอด/เวลาเปลี่ยน) เท่านั้น ไม่ต้องไปบอกเองนอกระบบ
+            <Label className="text-sm font-semibold text-[var(--ink)]">รอบส่ง — ใครต้องส่ง กี่โมง</Label>
+            <p className="text-[11.5px] text-[var(--ink-soft)]">
+              ไม่มีรอบส่ง = ไม่มีใครต้องส่ง ไม่หักคะแนน · เพิ่ม/แก้รอบแล้ว ระบบแจ้งคนที่เกี่ยวข้องให้เอง
             </p>
           </div>
+
+          {rounds.length === 0 && (
+            <p className="rounded-lg border border-dashed border-[var(--line)] px-3 py-3 text-center text-[12px] text-[var(--ink-soft)]" data-testid="no-rounds">
+              ห้องนี้ยังไม่มีรอบส่ง — ใช้คุย/ประกาศอย่างเดียว ไม่มีใครต้องส่ง
+            </p>
+          )}
 
           {rounds.length > 0 && (
             <div className="space-y-1.5">
@@ -459,6 +465,7 @@ export function ReportTopicSettingsPanel({
             )}
           </div>
         </div>
+        )}
 
         <SubmissionRoundDialog
           // key forces a remount whenever which round is being edited
