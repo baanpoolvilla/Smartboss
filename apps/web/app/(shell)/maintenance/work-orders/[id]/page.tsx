@@ -557,7 +557,7 @@ export default async function WorkOrderDetailPage({
             icon={<Info className="h-5 w-5" />}
             label="ส่วนตัว"
             className="sm:col-span-2"
-            value={`🔒 ใบกันลืมของคนเปิด · เห็นเฉพาะคนเปิดกับ ${ceo} · ไม่หักคะแนน ไม่นับสถิติ`}
+            value={isGroupWo ? `🔒 ใบส่วนตัวแบบกลุ่ม · เห็นเฉพาะคนในใบกับ ${ceo} · ไม่หักคะแนน ไม่นับสถิติ · คนในใบได้แจ้งเตือนกันเอง` : `🔒 ใบกันลืมของคนเปิด · เห็นเฉพาะคนเปิดกับ ${ceo} · ไม่หักคะแนน ไม่นับสถิติ`}
             valueColor="#1b2537"
           />
         )}

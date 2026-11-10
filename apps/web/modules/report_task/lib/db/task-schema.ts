@@ -91,6 +91,8 @@ export const taskSchema = z.object({
   status: z.enum(["todo", "in_progress", "done"]),
   priority: z.enum(["critical", "high", "medium", "low"]),
   taskMode: z.enum(["individual", "group"]),
+  // งานส่วนตัวแบบกลุ่ม — ไม่ใส่ตรงนี้ zod ตัดทิ้งตอนบันทึก งานจะกลายเป็นงานปกติที่ทุกคนเห็น
+  personalGroup: z.boolean().optional(),
   assigneeIds: z.array(z.string()),
   mainAssigneeId: z.string().optional(),
   assignedById: z.string(),

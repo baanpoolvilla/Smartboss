@@ -378,27 +378,35 @@ async function notifyOverdueWorkOrders(soon: Date): Promise<number> {
 async function notifyDuePrivateWorkOrders(soon: Date): Promise<number> {
   const wos = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
     prisma.workOrder.findMany({
-      where: { isPrivate: true, status: { in: ["open", "in_progress"] }, dueDate: { lte: soon }, createdBy: { not: null } },
-      select: { id: true, orgId: true, code: true, title: true, dueDate: true, createdBy: true },
+      // ใบส่วนตัวแบบกลุ่ม: แต่ละคนมีวันของตัวเองได้ — ดึงมาทุกใบที่ยังเปิด แล้วคิดรายคน
+      where: { isPrivate: true, status: { in: ["open", "in_progress"] }, dueDate: { not: null }, createdBy: { not: null }, OR: [{ dueDate: { lte: soon } }, { groupMemberIds: { isEmpty: false } }] },
+      select: { id: true, orgId: true, code: true, title: true, dueDate: true, createdBy: true, assignedTo: true, groupMemberIds: true, memberDueDates: true, completedMemberIds: true, completionRule: true },
     })
   );
   const today = ymd(todayBkkDate());
   let notified = 0;
   for (const wo of wos) {
-    const dueDay = new Date(wo.dueDate!.getTime() + 7 * 3600e3).toISOString().slice(0, 10);
-    const days = Math.round((Date.parse(dueDay) - Date.parse(today)) / 86_400_000);
-    if (!shouldNotifyPmToday(days)) continue;
-    const statusText = days < 0 ? `เกินกำหนด ${-days} วัน` : days === 0 ? "ถึงกำหนดวันนี้" : `อีก ${days} วัน`;
-    await notifyUser(wo.orgId, wo.createdBy, {
-      title: `🔒 ${days <= 0 ? "🔴" : "🟡"} ใบส่วนตัว ${statusText}: ${wo.title}`,
-      body: `${wo.code} · กำหนด ${fmtThaiDate(wo.dueDate!)}`,
-      type: "work_order",
-      referenceId: wo.id,
-      line: `🔒 เตือนใบส่วนตัว (${statusText})
+    // ใบส่วนตัวคนเดียว = คนเปิดคนเดียว (เหมือนเดิม) · แบบกลุ่ม (10/11/2569) = คนในใบที่ยังไม่เสร็จ ตามวันของแต่ละคน
+    const isGroup = wo.groupMemberIds.length > 0;
+    const people = isGroup ? pendingMemberIds(wo) : [wo.createdBy!];
+    for (const uid of people) {
+      const due = isGroup ? memberDueAt(wo, uid) : wo.dueDate;
+      if (!due) continue;
+      const dueDay = new Date(due.getTime() + 7 * 3600e3).toISOString().slice(0, 10);
+      const days = Math.round((Date.parse(dueDay) - Date.parse(today)) / 86_400_000);
+      if (!shouldNotifyPmToday(days)) continue;
+      const statusText = days < 0 ? `เกินกำหนด ${-days} วัน` : days === 0 ? "ถึงกำหนดวันนี้" : `อีก ${days} วัน`;
+      await notifyUser(wo.orgId, uid, {
+        title: `🔒 ${days <= 0 ? "🔴" : "🟡"} ใบส่วนตัว ${statusText}: ${wo.title}`,
+        body: `${wo.code} · กำหนด ${fmtThaiDate(due)}`,
+        type: "work_order",
+        referenceId: wo.id,
+        line: `🔒 เตือนใบส่วนตัว (${statusText})
 📝 ${wo.title}
-📅 กำหนด ${fmtThaiDate(wo.dueDate!)}`,
-    });
-    notified++;
+📅 กำหนด ${fmtThaiDate(due)}`,
+      });
+      notified++;
+    }
   }
   return notified;
 }

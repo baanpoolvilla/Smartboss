@@ -224,6 +224,8 @@ export function computeReminders(input: {
       if (isPersonalTask(t)) {
         recipients.clear();
         recipients.add(t.assignedById);
+        // งานส่วนตัวแบบกลุ่ม: เตือนทุกคนในงาน (คนสร้างอยู่ในงานด้วย) — ไม่มีหัวหน้า/คนนอก
+        if (t.personalGroup) for (const id of t.assigneeIds) recipients.add(id);
       } else if (settings.task.notifyDeptHead) {
         for (const d of departments) {
           // CEO ที่เป็นหัวหน้าแผนกด้วย ไม่ได้เตือนงานคนอื่น (27/10/2569) — งานตัวเองได้จาก notifyAssignee อยู่แล้ว

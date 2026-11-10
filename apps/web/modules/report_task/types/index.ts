@@ -193,6 +193,8 @@ export interface Task {
    * — a lead could in principle drop a group task down to one remaining
    * assignee without it silently becoming "individual". */
   taskMode: "individual" | "group";
+  /** งานส่วนตัวแบบกลุ่ม (10/11/2569) — เห็นเฉพาะคนในงาน + คนสร้าง ไม่นับคะแนน · คนสร้างต้องอยู่ในงานด้วย (personal-task.ts) */
+  personalGroup?: boolean;
   assigneeIds: string[];
   /** Which of `assigneeIds` is the lead on a group task — a label only, no
    * permission implications (edit rights still come from `assignedById`/

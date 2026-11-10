@@ -641,6 +641,8 @@ export function NewTaskDialog({
       priority,
       taskMode,
       assigneeIds,
+      // งานส่วนตัวแบบกลุ่ม — เห็นเฉพาะคนในงาน ไม่นับคะแนน (personal-task.ts)
+      ...(personalMode && taskMode === "group" && assigneeIds.length > 1 ? { personalGroup: true } : {}),
       ...(taskMode === "group" && mainAssigneeId && assigneeIds.includes(mainAssigneeId) ? { mainAssigneeId } : {}),
       ...(taskMode === "group" && assigneeIds.length > 1 && completionRule !== "all" ? { completionRule } : {}),
       assignedById: viewingAsUserId,
@@ -771,6 +773,8 @@ export function NewTaskDialog({
   }
 
   function toggleAssignee(userId: string) {
+    // งานส่วนตัวแบบกลุ่ม: คนสร้างต้องอยู่ในงานด้วยเสมอ (ผู้ใช้ 10/11/2569 "คนสร้างต้องทำด้วย")
+    if (personalMode && userId === viewingAsUserId) return;
     if (taskMode === "individual") {
       setAssigneeIds((prev) => (prev[0] === userId ? [] : [userId]));
       return;
@@ -782,7 +786,10 @@ export function NewTaskDialog({
 
   function changeTaskMode(mode: "individual" | "group") {
     setTaskMode(mode);
-    if (mode === "individual" && assigneeIds.length > 1) {
+    if (personalMode) {
+      // งานส่วนตัว: เดี่ยว = ตัวเองคนเดียว · กลุ่ม = ตัวเอง + คนที่เลือกเพิ่ม (เริ่มจากตัวเอง)
+      setAssigneeIds((prev) => (mode === "individual" ? [viewingAsUserId] : [viewingAsUserId, ...prev.filter((id) => id !== viewingAsUserId)]));
+    } else if (mode === "individual" && assigneeIds.length > 1) {
       setAssigneeIds((prev) => prev.slice(0, 1));
     }
     setUseAssigneeDueDates(false);
@@ -1134,6 +1141,26 @@ export function NewTaskDialog({
                 ส่วนตัว
               </label>
             )}
+            {/* งานส่วนตัวทำเป็นกลุ่มได้ (10/11/2569) — คนสร้างอยู่ในงานด้วยเสมอ คนในงานเห็น/แจ้งเตือนกันเอง */}
+            {itemType === "task" && personalMode && (
+              <div className="inline-flex h-7 items-center gap-0.5 rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] p-0.5" role="radiogroup" aria-label="งานส่วนตัวแบบ">
+                {(["individual", "group"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    role="radio"
+                    aria-checked={taskMode === m}
+                    onClick={() => changeTaskMode(m)}
+                    className={cn(
+                      "h-full rounded-md px-2 text-[11.5px] font-medium transition-colors",
+                      taskMode === m ? "bg-white shadow-sm text-[var(--ink)]" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
+                    )}
+                  >
+                    {m === "individual" ? "คนเดียว" : "ทำเป็นกลุ่ม"}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           {/* Outlook-style type toggle (only the allowed types) */}
           {allowedTypes.length > 1 && (
@@ -1216,7 +1243,7 @@ export function NewTaskDialog({
 
           {itemType === "task" && (
             <>
-              {!personalMode && (
+              {(!personalMode || taskMode === "group") && (
               <Row icon={User}>
                 <div className="flex items-start gap-2">
                 <div className="shrink-0 space-y-1">
@@ -1304,7 +1331,12 @@ export function NewTaskDialog({
                     </span>{" "}
                     (ตามผู้รับผิดชอบ)
                   </p>
-                  {isPersonalTask({ assignedById: viewingAsUserId, assigneeIds }) && (
+                  {personalMode && taskMode === "group" && (
+                    <p className="text-[11px] text-[var(--brand-green-dark)] flex items-center gap-1" data-testid="personal-group-hint">
+                      <Lock className="h-3 w-3" /> งานส่วนตัวแบบกลุ่ม · เห็นเฉพาะคนในงาน ไม่มีผลกับคะแนน · คุณอยู่ในงานด้วยเสมอ
+                    </p>
+                  )}
+                  {!(personalMode && taskMode === "group") && isPersonalTask({ assignedById: viewingAsUserId, assigneeIds }) && (
                     <p className="text-[11px] text-[var(--brand-green-dark)] flex items-center gap-1">
                       <Lock className="h-3 w-3" /> เลือกตัวเองคนเดียว = งานส่วนตัว · เห็นเฉพาะคุณ ไม่มีผลกับคะแนน
                     </p>

@@ -139,13 +139,19 @@ export async function createWorkOrderAction(formData: FormData) {
   // ใบส่วนตัว (ติ๊ก "ส่วนตัว" แบบหน้าสร้างงาน) — กันลืมของตัวเอง: ผู้รับผิดชอบคือคนเปิด ไม่มี CC
   // ไม่มีค่าใช้จ่ายให้ทวง ไม่แจ้งใคร ไม่ลงแชท · เห็นแค่คนเปิดกับ CEO · ไม่หักคะแนน ไม่นับสถิติ
   const isPrivate = formData.get("isPrivate") === "1";
+  // ใบส่วนตัวแบบกลุ่ม (ผู้ใช้ 10/11/2569 "งานส่วนตัวทำเป็นกลุ่มได้ คนสร้างต้องทำด้วย แจ้งเตือนด้วย")
+  //   คนเปิดเป็นผู้รับผิดชอบหลักเสมอ · คนที่เลือกเพิ่ม = สมาชิกกลุ่ม · เห็นเฉพาะคนในใบ (+CEO เหมือนใบส่วนตัวเดิม) · ไม่หักคะแนน
+  const privateGroup = isPrivate && formData.get("privateGroup") === "1";
+  const privatePicked = privateGroup
+    ? [d.assignedTo, ...formData.getAll("groupMemberIds").map(String)].filter((id): id is string => !!id && id !== s.userId)
+    : [];
   const assignedTo = isPrivate ? s.userId : d.assignedTo || null;
   // ทุกใบต้องมีผู้รับผิดชอบ (ผู้ใช้ 2/11/2569) — ฟอร์มบังคับเลือกแล้ว ตรงนี้กันคำขอที่ยิงตรงมา
   if (!assignedTo) throw new Error("เลือกผู้รับผิดชอบก่อนสร้างใบแจ้งซ่อม");
   // ใบกลุ่ม: ใบส่วนตัวและใบจากแผน PM เป็นกลุ่มไม่ได้ · รับเฉพาะคนในบริษัทที่ยังใช้งาน
-  const pickedMembers = formData.getAll("groupMemberIds").map(String).filter((id) => id && id !== assignedTo);
-  // ใบจาก PM เป็นกลุ่มได้แล้ว (แผนแบบกลุ่ม 5/11/2569) · ใบส่วนตัวยังเป็นกลุ่มไม่ได้
-  const groupAllowed = !isPrivate && formData.get("woMode") === "group";
+  const pickedMembers = privateGroup ? privatePicked : formData.getAll("groupMemberIds").map(String).filter((id) => id && id !== assignedTo);
+  // ใบจาก PM เป็นกลุ่มได้แล้ว (แผนแบบกลุ่ม 5/11/2569) · ใบส่วนตัวเป็นกลุ่มได้เมื่อเลือก "ทำเป็นกลุ่ม" (10/11/2569)
+  const groupAllowed = privateGroup || (!isPrivate && formData.get("woMode") === "group");
   const groupMemberIds = groupAllowed && pickedMembers.length > 0
     ? (await prisma.user.findMany({ where: { orgId: s.orgId, isActive: true, id: { in: [...new Set(pickedMembers)] } }, select: { id: true } })).map((u) => u.id)
     : [];
@@ -235,8 +241,8 @@ export async function createWorkOrderAction(formData: FormData) {
 
   await woLog(s, wo, "create", "สร้างใบงาน", { propertyIds: d.propertyIds, assignedTo, groupMemberIds, cc, priority: d.priority, photos: photoUrls.length });
 
-  // แจ้งเตือนผู้รับผิดชอบ + CC (in-app + LINE) · ใบส่วนตัวไม่แจ้งใคร (คนเปิดเป็นคนรับเอง)
-  const notifyTargets = new Set<string>(isPrivate ? [] : [...(assignedTo ? [assignedTo] : []), ...groupMemberIds, ...cc]);
+  // แจ้งเตือนผู้รับผิดชอบ + CC (in-app + LINE) · ใบส่วนตัวไม่แจ้งใคร (คนเปิดเป็นคนรับเอง) · ใบส่วนตัวแบบกลุ่มแจ้งคนในกลุ่ม
+  const notifyTargets = new Set<string>(isPrivate ? groupMemberIds : [...(assignedTo ? [assignedTo] : []), ...groupMemberIds, ...cc]);
   for (const uid of notifyTargets) {
     await notifyUser(s.orgId, uid, {
       title: `📋 ได้รับมอบหมายงานใหม่: ${d.title}`,
@@ -336,8 +342,19 @@ async function notifyStatusChanged(
   status: string,
   actorId: string
 ) {
-  // ใบส่วนตัว — ไม่มีใครต้องรู้ (ผู้ดูแลบ้านก็ไม่เห็นใบนี้)
-  if (wo.isPrivate) return;
+  // ใบส่วนตัว — ไม่มีใครต้องรู้ (ผู้ดูแลบ้านก็ไม่เห็นใบนี้) · ใบส่วนตัวแบบกลุ่ม: แจ้งคนในกลุ่มกันเอง
+  if (wo.isPrivate) {
+    const inGroup = [...new Set([...workOrderMemberIds(wo), ...(wo.createdBy ? [wo.createdBy] : [])])].filter((id) => id !== actorId);
+    if ((wo.groupMemberIds ?? []).length > 0 && inGroup.length > 0) {
+      const who = (await notifyActorName(actorId)) ?? "มีคน";
+      await notifyUsers(orgId, inGroup, {
+        title: `🔒 ${who} · ${STATUS_TEXT[status]?.emoji ?? "📋"} ${STATUS_TEXT[status]?.label ?? status}: ${wo.title}`,
+        type: "work_order",
+        referenceId: wo.id,
+      });
+    }
+    return;
+  }
   // ปิดงาน/ยกเลิกแล้ว ⇒ "ได้รับมอบหมาย" / "ขอเลื่อน…รออนุมัติ" ของใบนี้ไม่มีอะไรให้ทำแล้ว ไม่ต้องค้างที่ใคร
   if (status === "completed" || status === "cancelled") {
     await resolveActionNotifications(wo.id, "work_order", ["ได้รับมอบหมายงานใหม่", "ขอเลื่อนกำหนดส่งใบงาน รออนุมัติ"]);
@@ -659,8 +676,10 @@ export async function addCommentAction(workOrderId: string, formData: FormData) 
 
   // ใบส่วนตัว: มีแค่คนเปิดที่ต้องรู้ (เช่น CEO เข้ามาเขียน) — ไม่แจ้ง/แท็กคนอื่น เขาเปิดใบนี้ไม่ได้
   if (wo.isPrivate) {
-    if (wo.createdBy && wo.createdBy !== s.userId) {
-      await notifyUser(s.orgId, wo.createdBy, {
+    // ใบส่วนตัวแบบกลุ่ม: คนในกลุ่มทุกคนได้แจ้ง (10/11/2569) · ใบส่วนตัวคนเดียว = คนเปิดคนเดียวเหมือนเดิม
+    const inPrivate = [...new Set([...(wo.createdBy ? [wo.createdBy] : []), ...((wo.groupMemberIds ?? []).length > 0 ? workOrderMemberIds(wo) : [])])].filter((id) => id !== s.userId);
+    if (inPrivate.length > 0) {
+      await notifyUsers(s.orgId, inPrivate, {
         title: `💬 ความคิดเห็นใหม่ในใบงานส่วนตัว: ${wo.title}`,
         body: content ? clip(content, 120) : undefined,
         type: "work_order",

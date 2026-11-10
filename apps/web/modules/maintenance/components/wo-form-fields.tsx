@@ -56,7 +56,21 @@ export function WoRequiredGuard() {
 export function WoPrivateToggle() {
   const ceo = useCeoTitle();
   const [on, setOn] = useState(false);
+  // ใบส่วนตัวแบบกลุ่ม (ผู้ใช้ 10/11/2569) — data-private="g": ช่องผู้รับผิดชอบกลับมาให้เลือกคนที่ทำด้วย, CC/ค่าใช้จ่ายยังซ่อน
+  const [asGroup, setAsGroup] = useState(false);
   const ref = useRef<HTMLLabelElement>(null);
+  const apply = (nextOn: boolean, nextGroup: boolean) => {
+    setOn(nextOn);
+    setAsGroup(nextGroup);
+    const form = ref.current?.closest("form");
+    if (form) {
+      form.dataset.private = !nextOn ? "0" : nextGroup ? "g" : "1";
+      // ใบส่วนตัว: ผู้รับผิดชอบคือคนเปิดเอง — ช่องผู้รับผิดชอบซ่อนอยู่และบังคับเลือก ต้องปิดไว้ ไม่งั้นส่งฟอร์มไม่ได้
+      // แบบกลุ่ม: เปิดไว้ — ต้องเลือกคนที่ทำด้วยอย่างน้อย 1 คน (คุณอยู่ในใบเสมอ)
+      const sel = form.querySelector<HTMLSelectElement>('select[name="assignedTo"]');
+      if (sel) sel.disabled = nextOn && !nextGroup;
+    }
+  };
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
       <label
@@ -67,16 +81,7 @@ export function WoPrivateToggle() {
         <input
           type="checkbox"
           checked={on}
-          onChange={(e) => {
-            setOn(e.target.checked);
-            const form = ref.current?.closest("form");
-            if (form) {
-              form.dataset.private = e.target.checked ? "1" : "0";
-              // ใบส่วนตัว: ผู้รับผิดชอบคือคนเปิดเอง — ช่องผู้รับผิดชอบซ่อนอยู่และบังคับเลือก ต้องปิดไว้ ไม่งั้นส่งฟอร์มไม่ได้
-              const sel = form.querySelector<HTMLSelectElement>('select[name="assignedTo"]');
-              if (sel) sel.disabled = e.target.checked;
-            }
-          }}
+          onChange={(e) => apply(e.target.checked, false)}
           aria-label="ใบงานส่วนตัว"
           className="h-4 w-4"
         />
@@ -84,11 +89,30 @@ export function WoPrivateToggle() {
         ส่วนตัว
       </label>
       {on && (
-        <span className="text-xs text-(--ink-soft)">
-          กันลืมของคุณเอง · เห็นเฉพาะคุณกับ {ceo} · ไม่หักคะแนน ไม่นับสถิติ ไม่แจ้งใคร
+        <div className="inline-flex h-7 items-center gap-0.5 rounded-lg border border-(--line) bg-(--bg-soft) p-0.5" role="radiogroup" aria-label="ใบส่วนตัวแบบ">
+          {([[false, "คนเดียว"], [true, "ทำเป็นกลุ่ม"]] as const).map(([g, text]) => (
+            <button
+              key={text}
+              type="button"
+              role="radio"
+              aria-checked={asGroup === g}
+              onClick={() => apply(true, g)}
+              className={`h-full rounded-md px-2 text-[11.5px] font-medium ${asGroup === g ? "bg-white text-(--brand-navy) shadow-sm" : "text-(--ink-soft)"}`}
+            >
+              {text}
+            </button>
+          ))}
+        </div>
+      )}
+      {on && (
+        <span className="text-xs text-(--ink-soft)" data-testid="wo-private-hint">
+          {asGroup
+            ? `ใบส่วนตัวแบบกลุ่ม · เลือกคนที่ทำด้วยที่ช่องผู้รับผิดชอบ (คุณอยู่ในใบเสมอ) · เห็นเฉพาะคนในใบกับ ${ceo} · ไม่หักคะแนน · คนในใบได้แจ้งเตือน`
+            : `กันลืมของคุณเอง · เห็นเฉพาะคุณกับ ${ceo} · ไม่หักคะแนน ไม่นับสถิติ ไม่แจ้งใคร`}
         </span>
       )}
       {on && <input type="hidden" name="isPrivate" value="1" />}
+      {on && asGroup && <input type="hidden" name="privateGroup" value="1" />}
     </div>
   );
 }
@@ -239,7 +263,7 @@ export function WoAdvancedOptions({
           {checklistSlotId && <div id={checklistSlotId} className="flex flex-col gap-1 empty:hidden" />}
           {children}
           {/* ใบส่วนตัวไม่มี CC / ค่าใช้จ่าย / PR (เหมือนเดิม) — เช็กลิสต์กับรูปยังใช้ได้ */}
-          <div className="contents group-data-[private=1]/wo:hidden">
+          <div className="contents group-data-[private=1]/wo:hidden group-data-[private=g]/wo:hidden">
           <MultiPicker
             name="ccUserIds"
             title="เพิ่ม CC (แจ้งสำเนา)"

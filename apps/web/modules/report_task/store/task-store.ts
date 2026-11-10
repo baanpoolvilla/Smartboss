@@ -721,7 +721,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
         // คนอนุมัติได้: คนสร้าง/มอบหมายงาน หรือ CEO (canDecideTaskDueRequest) — ไม่ใช้หัวหน้าแผนก
         // แจ้งเฉพาะคนมอบหมายงาน (ผู้ใช้ 29/10/2569 "แจ้งเตือนก็เอาเป็นแค่เกี่ยวกับตัวเองพอ") — CEO ได้แจ้งเฉพาะงานที่ตัวเองมอบหมาย
         // ไม่มีส่งหาเจ้าของบริษัทแทนแล้ว (prod 30 วัน: งานที่คนขอสร้างให้ตัวเอง = 0) · CEO ยังเห็น ⏰ บนบอร์ดและกดอนุมัติได้ทุกงาน
-        const approverIds = t.assignedById && t.assignedById !== requesterId && !isPersonalTask(t) ? [t.assignedById] : [];
+        // งานส่วนตัวแบบกลุ่ม: คนสร้างอยู่ในงานด้วย ได้แจ้งขอเลื่อนได้ (ไม่หลุดไปหาคนนอก)
+        const approverIds = t.assignedById && t.assignedById !== requesterId && (!isPersonalTask(t) || t.personalGroup) ? [t.assignedById] : [];
         useNotificationStore
           .getState()
           .notifyMany(
@@ -1343,7 +1344,9 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
         const commentId = `${taskId}-cmt-${uuid()}`;
         const commentLink = `/report-task/tasks?task=${t.id}&comment=${encodeURIComponent(commentId)}`;
         // งานส่วนตัว: คนที่ถูกแท็กเปิดงานนี้ไม่ได้ ไม่แจ้ง (ชื่องานห้ามหลุด — personal-task.ts)
-        if (mentioned.size > 0 && !isPersonalTask(t)) {
+        // งานส่วนตัวแบบกลุ่ม: แท็กกันเองในงานได้ — คนนอกงานตัดทิ้ง
+        if (isPersonalTask(t)) for (const id of [...mentioned]) if (id !== t.assignedById && !t.assigneeIds.includes(id)) mentioned.delete(id);
+        if (mentioned.size > 0 && (!isPersonalTask(t) || t.personalGroup)) {
           useNotificationStore
             .getState()
             .notifyMany(
