@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/modules/report_task/components/ui/button";
 import { Label } from "@/modules/report_task/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
-import { RoomMembersSummaryCard, RoomMembersDialog } from "@/modules/report_task/components/report-feed/room-members-dialog";
+import { RoomAccessPanel } from "@/modules/report_task/components/report-feed/room-access-panel";
 import { useReportFeedStore, type ReportTopic, type SubmissionRound } from "@/modules/report_task/store/report-feed-store";
 import { SubmissionRoundDialog } from "@/modules/report_task/components/report-feed/submission-round-dialog";
 import { TimePickerField } from "@/modules/report_task/components/shared/time-picker-field";
@@ -130,15 +130,6 @@ function whoLabel(r: SubmissionRound, groups: { id: string; name: string }[]): s
   return base + (extra.length ? " (" + extra.join(" ") + ")" : "");
 }
 
-type VisibilityMode = "open" | "department" | "manager" | "person";
-
-const modeOptions: { mode: VisibilityMode; label: string; icon: typeof Globe }[] = [
-  { mode: "open", label: "ทุกคน", icon: Globe },
-  { mode: "department", label: "เฉพาะแผนก", icon: Users },
-  { mode: "person", label: "เฉพาะบุคคล", icon: User },
-  { mode: "manager", label: "หัวหน้า/ผู้บริหาร", icon: Lock },
-];
-
 /** One room's settings — lives on the settings page (src/app/settings/page.tsx), with a room picker above it since it's per-topic, not company-wide (there, every change still saves instantly — `onUpdate` isn't passed). Also reused inside room-settings-sheet.tsx, which batches everything into its own draft/Save-Cancel bar instead — passes `onUpdate` so visibility/min-images/cutoff changes land in that draft rather than the store directly, and `hideHeading` drops this component's own duplicate "ตั้งค่าห้อง X" line there. Member management (RoomMembersDialog below) follows the same rule — instant here, staged into the sheet draft there (its button reads "ตกลง"). */
 export function ReportTopicSettingsPanel({
   topic,
@@ -158,7 +149,6 @@ export function ReportTopicSettingsPanel({
   const updateTopicSettings = useReportFeedStore((s) => s.updateTopicSettings);
   const lockSettings = useReminderSettingsStore((s) => s.settings.submissionLock);
   const apply = onUpdate ?? ((patch: Partial<ReportTopic>) => updateTopicSettings(topic.id, patch));
-  const [membersDialogOpen, setMembersDialogOpen] = useState(false);
   const submitterGroups = useReportFeedStore((s) => s.submitterGroups);
   const allTopics = useReportFeedStore((s) => s.topics);
   const [roundDialogOpen, setRoundDialogOpen] = useState(false);
@@ -185,49 +175,6 @@ export function ReportTopicSettingsPanel({
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const owner = isOwner(viewingAsUserId);
   const ownDeptId = getUser(viewingAsUserId)?.departmentId;
-
-  // A department head only ever reaches this dialog for a room scoped to
-  // their own department (see canEditReportTopic) — switching to any other
-  // mode, or unchecking their own department, would edit them out of the
-  // room with no way back short of the company owner reopening it for them.
-  // The owner has no such restriction; every mode/department stays theirs.
-  function setMode(next: VisibilityMode) {
-    if (!owner && next !== "department") return;
-    // apply = เข้า draft ในหน้าต่างตั้งค่าห้อง (ติดเมื่อกด "บันทึก") / เซฟทันทีที่ /settings
-    apply({
-      visibility:
-        next === "open"
-          ? undefined
-          : next === "manager"
-            ? { managerOnly: true }
-            : next === "person"
-              // An empty userIds array reads as "no restriction" everywhere
-              // (canSeeReportTopic, modeOf) — same failure mode as the
-              // department list hitting zero, so seed it with whoever's
-              // picking the mode rather than leaving it empty and silently
-              // falling back to open-to-everyone.
-              ? { userIds: visibility?.userIds?.length ? visibility.userIds : [viewingAsUserId] }
-              : { departmentIds: visibility?.departmentIds?.length ? visibility.departmentIds : [departments[0]?.id].filter((x): x is string => !!x) },
-    });
-  }
-
-  function toggleDept(deptId: string) {
-    if (!owner && deptId === ownDeptId) return;
-    const current = visibility?.departmentIds ?? [];
-    const selected = current.includes(deptId);
-    const next = selected ? current.filter((id) => id !== deptId) : [...current, deptId];
-    // Never leave the room with zero departments selected — that would
-    // silently lock everyone but the owner out with no way back short of
-    // reopening this dialog and re-adding one.
-    if (next.length === 0) return;
-    apply({
-      visibility: {
-        departmentIds: next,
-        extraUserIds: visibility?.extraUserIds,
-        exemptUserIds: visibility?.exemptUserIds,
-      },
-    });
-  }
 
   const rounds = topic.submissionRounds ?? [];
   function saveRound(round: SubmissionRound) {
@@ -335,92 +282,8 @@ export function ReportTopicSettingsPanel({
 
       <RoomSettingsIntroBanner viewingAsUserId={viewingAsUserId} />
 
-      <div className="space-y-2">
-          <Label className="text-xs text-[var(--ink-soft)]">ใครเห็นห้องนี้ได้บ้าง</Label>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {modeOptions.map(({ mode: m, label, icon: Icon }) => {
-              const active = mode === m;
-              const locked = !owner && m !== "department";
-              return (
-                <button
-                  key={m}
-                  type="button"
-                  disabled={locked}
-                  onClick={() => setMode(m)}
-                  title={locked ? "หัวหน้าแผนกเปลี่ยนเป็นโหมดนี้ไม่ได้ — จะทำให้แก้ห้องนี้เองไม่ได้อีก ต้องให้เจ้าของบริษัทเปลี่ยนแทน" : undefined}
-                  className={cn(
-                    "flex flex-col items-center gap-1 rounded-lg border px-2 py-2.5 text-center transition-colors",
-                    active
-                      ? "border-[var(--brand-green)] bg-[var(--accent)]"
-                      : locked
-                        ? "border-[var(--line)] opacity-40 cursor-not-allowed"
-                        : "border-[var(--line)] hover:bg-[var(--bg-soft)]"
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span className="text-xs font-medium">{label}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {mode === "department" && (
-            <div className="grid grid-cols-2 gap-1 pt-1">
-              {departments.map((d) => {
-                const selected = visibility?.departmentIds?.includes(d.id) ?? false;
-                const locked = !owner && d.id === ownDeptId;
-                return (
-                  <button
-                    key={d.id}
-                    type="button"
-                    disabled={locked}
-                    onClick={() => toggleDept(d.id)}
-                    title={locked ? "ถอดแผนกตัวเองออกไม่ได้ — จะทำให้แก้ห้องนี้เองไม่ได้อีก" : undefined}
-                    className={cn(
-                      "flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
-                      locked ? "opacity-60 cursor-not-allowed" : "hover:bg-[var(--bg-soft)]"
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "h-4 w-4 rounded border flex items-center justify-center shrink-0",
-                        selected ? "bg-[var(--brand-green)] border-[var(--brand-green)]" : "border-[var(--line)]"
-                      )}
-                    >
-                      {selected && <Check className="h-3 w-3 text-white" />}
-                    </span>
-                    <span className="truncate">{d.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          <div className="pt-1.5">
-            {/* This panel is only ever reached for a topic the viewer can
-                edit — the owner for any mode, a department head only ever
-                for their own department (see canEditReportTopic) — so
-                whichever mode is showing, "can manage" is exactly that. */}
-            <RoomMembersSummaryCard topic={memberTopic} canManage={owner || mode === "department"} onManage={() => setMembersDialogOpen(true)} />
-            <RoomMembersDialog
-              open={membersDialogOpen}
-              onOpenChange={setMembersDialogOpen}
-              topic={memberTopic}
-              // หน้าต่างตั้งค่าห้อง (มี onUpdate): เลือกสมาชิกแล้วเข้า draft รอกด "บันทึก" ด้านล่างเหมือนช่องอื่น
-              // ("กดแล้วเลือก แล้วมากดบันทึกถึงจะเปลี่ยน") — แจ้งเตือน "เพิ่มคุณเข้าห้อง" ส่งตอนบันทึกจริง
-              updateTopicSettings={onUpdate ? (_id, patch) => apply(patch) : updateTopicSettings}
-              staged={!!onUpdate}
-              canManage={owner || mode === "department"}
-            />
-          </div>
-
-          <p className="text-[11px] text-[var(--ink-soft)]">
-            {mode === "open" && "ทุกคนในบริษัทเห็นและโพสต์ในห้องนี้ได้"}
-            {mode === "department" && "เฉพาะคนในแผนกที่เลือก บวกคนที่เพิ่มเองด้านบน เห็นห้องนี้ได้ — เจ้าของบริษัทเห็นทุกห้องเสมอ"}
-            {mode === "person" && "เฉพาะคนที่เลือกไว้ด้านบนเห็นห้องนี้ — เจ้าของบริษัทเห็นทุกห้องเสมอ"}
-            {mode === "manager" && "เฉพาะหัวหน้าแผนกและเจ้าของบริษัทเห็นห้องนี้"}
-          </p>
-        </div>
+      {/* ใครเห็นห้อง + ทำอะไรได้ + รายชื่อติ๊กเลือก — ตารางเดียว (room-access-panel.tsx · 10/11/2569) */}
+      <RoomAccessPanel topic={memberTopic} apply={apply} staged={!!onUpdate} viewingAsUserId={viewingAsUserId} />
 
         <div className="space-y-2">
           <div>

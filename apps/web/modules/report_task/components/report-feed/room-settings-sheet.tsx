@@ -187,7 +187,7 @@ export function RoomSettingsSheet({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="p-0 gap-0 sm:max-w-md w-full max-h-[85vh] flex flex-col overflow-hidden">
+      <DialogContent className="p-0 gap-0 sm:max-w-xl w-full max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader className="px-5 py-3.5 border-b border-[var(--line)]">
           <DialogTitle className="truncate">ตั้งค่าห้อง &quot;{topic.name}&quot;</DialogTitle>
         </DialogHeader>
@@ -212,31 +212,7 @@ export function RoomSettingsSheet({
             </div>
           </section>
 
-          {/* สิทธิ์ (เพิ่มเติมจาก visibility ด้านล่าง) */}
-          <section className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)]">สิทธิ์การโพสต์</p>
-            <div className="flex items-center justify-between rounded-lg bg-[var(--bg-soft)] px-3 py-2.5">
-              <div className="min-w-0 pr-3">
-                <p className="text-sm font-medium">เฉพาะผู้ดูแลโพสต์ได้</p>
-                <p className="text-xs text-[var(--ink-soft)]">เหมาะกับห้องประกาศ/นโยบาย — คนอื่นยังอ่านและคอมเมนต์ได้ตามปกติ</p>
-              </div>
-              <Switch
-                checked={draft.postPermission === "managersOnly"}
-                onCheckedChange={(v) => patchDraft({ postPermission: v ? "managersOnly" : "everyone" })}
-              />
-            </div>
-            <div className="flex items-center justify-between rounded-lg bg-[var(--bg-soft)] px-3 py-2.5">
-              <div className="min-w-0 pr-3">
-                <p className="text-sm font-medium">ปิดคอมเมนต์ (อ่านอย่างเดียว)</p>
-                <p className="text-xs text-[var(--ink-soft)]">ความคิดเห็นเดิมยังแสดงอยู่ แค่เพิ่มใหม่ไม่ได้</p>
-              </div>
-              <Switch
-                checked={!!draft.commentsDisabled}
-                onCheckedChange={(v) => patchDraft({ commentsDisabled: v })}
-              />
-            </div>
-          </section>
-
+          {/* สิทธิ์การโพสต์/คอมเมนต์ ย้ายไปอยู่ในตาราง "ใครเห็นห้องนี้ ทำอะไรได้บ้าง" (room-access-panel.tsx · 10/11/2569) */}
           {/* สิทธิ์การมองเห็น + กติกาการส่งรายงาน (จำนวนรูป/รอบตัดยอด) — มาจาก
               ReportTopicSettingsPanel ที่ใช้ร่วมกับหน้า /settings ด้วย จึงคง
               โครงสร้างภายในไว้ตามเดิม แค่ครอบหัวข้อกลุ่มไว้จากภายนอกให้สอดคล้อง
@@ -244,7 +220,7 @@ export function RoomSettingsSheet({
               แทนการเซฟทันที (onUpdate ไม่ระบุ = เซฟทันทีเหมือนเดิมที่ /settings)
               รวมโหมด/แผนก/สมาชิกด้วย — ทุกอย่างติดตอนกด "บันทึก" ด้านล่างเท่านั้น */}
           <section className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)]">สิทธิ์การมองเห็น &amp; กติกาการส่งรายงาน</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)]">ใครเห็นห้อง &amp; รอบส่งรายงาน</p>
             <ReportTopicSettingsPanel topic={draft} hideHeading onUpdate={patchDraft} />
           </section>
 
