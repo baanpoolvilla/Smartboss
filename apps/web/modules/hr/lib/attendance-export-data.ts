@@ -16,7 +16,7 @@ import {
 } from "./attendance-export";
 
 import { withSalaryTenant } from "@/modules/salary/lib/db";
-import { periodDates, periodOfDate } from "@/modules/salary/lib/types";
+import { DEFAULT_SETTINGS, periodDates, periodOfDate } from "@/modules/salary/lib/types";
 
 const MONTH = /^\d{4}-\d{2}$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -61,11 +61,18 @@ export function resolveAttendanceRange(params: {
  */
 export async function loadPayCutoffDay(orgId: string): Promise<number | null> {
   try {
-    const row = await withSalaryTenant(orgId, (tx) =>
-      tx.salarySettings.findUnique({ where: { orgId }, select: { cutoffDay: true } }),
-    );
-    if (!row || row.cutoffDay >= 28) return null;
-    return row.cutoffDay;
+    const cutoffDay = await withSalaryTenant(orgId, async (tx) => {
+      const row = await tx.salarySettings.findUnique({ where: { orgId }, select: { cutoffDay: true } });
+      if (row) return row.cutoffDay;
+      // ไม่เคยกดบันทึกตั้งค่า แต่ใช้เงินเดือนอยู่ (มีรอบ/มีคนตั้งเงินเดือน) → ระบบเงินเดือนใช้ค่าเริ่มต้น ให้รายงานตรงกัน
+      const [run, profile] = await Promise.all([
+        tx.salaryRun.findFirst({ where: { orgId }, select: { id: true } }),
+        tx.salaryProfile.findFirst({ where: { orgId }, select: { orgId: true } }),
+      ]);
+      return run || profile ? DEFAULT_SETTINGS.cutoffDay : null;
+    });
+    if (cutoffDay === null || cutoffDay >= 28) return null;
+    return cutoffDay;
   } catch {
     return null; // อ่านตั้งค่าเงินเดือนไม่ได้ = ใช้ทั้งเดือนเหมือนเดิม
   }
