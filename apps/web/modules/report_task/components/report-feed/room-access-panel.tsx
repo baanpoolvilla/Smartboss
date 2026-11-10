@@ -275,7 +275,7 @@ export function RoomAccessPanel({
                 className={cn(
                   "flex flex-col items-center gap-0.5 rounded-lg border px-1.5 py-2 text-center transition-colors",
                   active
-                    ? "border-[var(--brand-navy,#1f3a5f)] bg-[var(--brand-navy,#1f3a5f)]/[0.07] text-[var(--brand-navy,#1f3a5f)]"
+                    ? "border-[var(--brand-navy,#1f3a5f)] bg-[var(--brand-navy,#1f3a5f)] text-white"
                     : locked
                       ? "border-[var(--line)] opacity-40 cursor-not-allowed"
                       : "border-[var(--line)] hover:bg-[var(--bg-soft)]"
@@ -283,7 +283,7 @@ export function RoomAccessPanel({
               >
                 <Icon className="h-4 w-4" />
                 <span className="text-xs font-semibold">{label}</span>
-                <span className="text-[10px] leading-tight text-[var(--ink-soft)]">{hint}</span>
+                <span className={cn("text-[10px] leading-tight", active ? "text-white/80" : "text-[var(--ink-soft)]")}>{hint}</span>
               </button>
             );
           })}
