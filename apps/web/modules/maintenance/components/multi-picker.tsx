@@ -1,6 +1,7 @@
 "use client";
 
 import { createPortal } from "react-dom";
+import { WoRuleInfo } from "./wo-rule-info";
 import { useRef, useState, useEffect } from "react";
 import { Check, ChevronDown, ChevronRight, ListChecks, Plus, Search, UserPlus, X } from "lucide-react";
 import { Button } from "@smartboss/ui/components/button";
@@ -440,6 +441,8 @@ export function AssigneeAndCc({
                 </button>
               ))}
             </div>
+            {/* (i) อธิบายความต่าง แบบหน้าสร้างงาน (10/11/2569) */}
+            <WoRuleInfo selected={rule as "all" | "any" | "shared"} />
           </div>
           <p className="text-[10px] leading-snug text-(--ink-soft)" data-testid="group-rule-hint">
             {rule === "all"
