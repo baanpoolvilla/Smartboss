@@ -25,6 +25,7 @@ export function WoTeamEditButton({
   rule,
   memberDue,
   lockMode,
+  privateOrder = false,
 }: {
   id: string;
   users: PickOption[];
@@ -33,6 +34,8 @@ export function WoTeamEditButton({
   rule: string;
   memberDue: Record<string, string>;
   lockMode: boolean;
+  /** ใบส่วนตัวแบบกลุ่ม — คนเปิดใบเป็นผู้รับผิดชอบหลักเสมอ เพิ่ม/เอาคนอื่นออกได้ */
+  privateOrder?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [pending, start] = useTransition();
@@ -76,10 +79,17 @@ export function WoTeamEditButton({
               defaultMemberDue={memberDue}
               lockMode={lockMode}
             />
-            <ul className="list-disc space-y-0.5 pl-4 text-[11px] text-(--ink-soft)">
-              <li>คนที่เพิ่มได้แจ้งเตือน · ถ้าใบเลยกำหนดแล้วต้องตั้งวันส่งของคนใหม่</li>
-              <li>คนที่เอาออก ถ้าโดนหักคะแนนไปแล้ว คะแนนยังอยู่ (ขอแก้ไขคะแนนได้ตามปกติ)</li>
-            </ul>
+            {privateOrder ? (
+              <ul className="list-disc space-y-0.5 pl-4 text-[11px] text-(--ink-soft)" data-testid="team-private-note">
+                <li>ใบส่วนตัว: คุณเป็นผู้รับผิดชอบหลักเสมอ เพิ่มหรือเอาคนอื่นออกได้</li>
+                <li>คนที่เพิ่มเห็นใบนี้และได้แจ้งเตือน · คนที่เอาออกจะไม่เห็นใบนี้แล้ว · ไม่นับคะแนน</li>
+              </ul>
+            ) : (
+              <ul className="list-disc space-y-0.5 pl-4 text-[11px] text-(--ink-soft)">
+                <li>คนที่เพิ่มได้แจ้งเตือน · ถ้าใบเลยกำหนดแล้วต้องตั้งวันส่งของคนใหม่</li>
+                <li>คนที่เอาออก ถ้าโดนหักคะแนนไปแล้ว คะแนนยังอยู่ (ขอแก้ไขคะแนนได้ตามปกติ)</li>
+              </ul>
+            )}
             {error && (
               <p className="rounded-md bg-red-50 px-2.5 py-2 text-xs text-red-700" role="alert" data-testid="team-error">
                 {error}

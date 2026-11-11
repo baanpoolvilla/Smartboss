@@ -247,7 +247,8 @@ export default async function WorkOrderDetailPage({
   // ใบที่โดนหักคะแนนแล้ว: ลบต้องใส่เหตุผล คนที่โดนหักได้รู้ (ผู้ใช้ 6/11/2569)
   const scoreChip = (await workOrderScoreChips(orgId, [wo])).get(wo.id);
   const deleteDocked = scoreChip?.kind === "docked" ? scoreChip.points : 0;
-  const canEditTeam = isOpenNow && !wo.isPrivate && canEditDueDate({ userId: session.userId, viewAll }, { createdBy: ownerId });
+  // ใบส่วนตัว: คนเปิดใบแก้ทีมเองได้ (เพิ่ม/เอาคนออก · คนเปิดอยู่ในใบเสมอ) — ผู้ใช้ 10/11/2569
+  const canEditTeam = isOpenNow && (wo.isPrivate ? wo.createdBy === session.userId : canEditDueDate({ userId: session.userId, viewAll }, { createdBy: ownerId }));
   const teamUsers = canEditTeam
     ? (await listOrgUsers(orgId))
         // เลือกได้ทั้งองค์กร — เดิมผู้ดูแลบ้านเห็นแค่ช่าง/ผู้ดูแลบ้าน (ผู้ใช้ 6/11/2569)
@@ -501,6 +502,7 @@ export default async function WorkOrderDetailPage({
                       rule={wo.completionRule ?? "all"}
                       memberDue={(wo.memberDueDates ?? {}) as Record<string, string>}
                       lockMode={wo.completedMemberIds.length > 0}
+                      privateOrder={wo.isPrivate}
                     />
                   </>
                 )}

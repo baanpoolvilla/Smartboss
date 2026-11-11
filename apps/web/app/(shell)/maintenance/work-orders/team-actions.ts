@@ -71,11 +71,14 @@ export async function updateWorkOrderTeamAction(formData: FormData): Promise<Res
   const loaded = await loadOpen(s, id);
   if (typeof loaded === "string") return { error: loaded };
   const wo = loaded;
-  if (wo.isPrivate) return { error: "ใบส่วนตัวแก้ผู้รับผิดชอบไม่ได้" };
-  if (!(await canEditTeam(s, wo))) return { error: "แก้ผู้รับผิดชอบได้เฉพาะคนเปิดใบหรือผู้ดูแล" };
+  // ใบส่วนตัว (แบบกลุ่ม): คนเปิดใบเพิ่ม/เอาคนออกเองได้ (ผู้ใช้ 10/11/2569) — คนเปิดอยู่ในใบเสมอ ไม่มีคนอื่นแก้แทน
+  if (wo.isPrivate) {
+    if (wo.createdBy !== s.userId) return { error: "ใบส่วนตัว แก้ทีมได้เฉพาะคนเปิดใบ" };
+  } else if (!(await canEditTeam(s, wo))) return { error: "แก้ผู้รับผิดชอบได้เฉพาะคนเปิดใบหรือผู้ดูแล" };
 
   const assignedTo = String(formData.get("assignedTo") ?? "");
   if (!assignedTo) return { error: "เลือกผู้รับผิดชอบก่อน" };
+  if (wo.isPrivate && assignedTo !== wo.createdBy) return { error: "ใบส่วนตัว คนเปิดใบต้องเป็นผู้รับผิดชอบหลักเสมอ — เพิ่ม/เอาคนอื่นออกได้" };
   const wantGroup = formData.get("woMode") === "group";
   const picked = wantGroup ? [...new Set(formData.getAll("groupMemberIds").map(String).filter((x) => x && x !== assignedTo))] : [];
   const valid = new Set(
@@ -124,7 +127,8 @@ export async function updateWorkOrderTeamAction(formData: FormData): Promise<Res
   const names = await userNameMap(s.orgId, [...newMembers, ...removed]);
   for (const uid of added) {
     const due = memberDueAt(next, uid);
-    if (due && due.getTime() < Date.now()) {
+    // ใบส่วนตัวไม่นับคะแนน — เพิ่มคนตอนเลยกำหนดได้ ไม่ต้องตั้งวันใหม่ก่อน
+    if (!wo.isPrivate && due && due.getTime() < Date.now()) {
       return {
         error: isGroupNow
           ? `ใบนี้เลยกำหนดแล้ว ตั้งกำหนดส่งของ ${names[uid] ?? "คนที่เพิ่ม"} ใน "กำหนดส่งแยกรายคน" ก่อน`
@@ -179,6 +183,10 @@ export async function updateWorkOrderTeamAction(formData: FormData): Promise<Res
       line: `📢 งานใหม่: ${wo.title}\n${due ? `📅 ครบกำหนด ${fmtThaiDate(due)}\n` : ""}เข้าดูรายละเอียดในระบบ`,
     });
     await postWorkOrderCard(s.orgId, { assignerId: s.userId, assigneeId: uid, workOrderId: wo.id, title: wo.title, dueDate: due });
+  }
+  // ใบส่วนตัว: คนที่ถูกเอาออกไม่เห็นใบนี้แล้ว — แจ้งเตือนเก่าของใบนี้ไม่ต้องค้าง (กดไปก็เปิดไม่ได้)
+  if (wo.isPrivate && removed.length > 0) {
+    await prisma.notification.deleteMany({ where: { orgId: s.orgId, referenceId: wo.id, userId: { in: removed } } });
   }
   for (const uid of removed) {
     await notifyUser(s.orgId, uid, {
