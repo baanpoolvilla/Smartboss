@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { audit } from "@smartboss/auth";
 import { prisma } from "@smartboss/database";
 
 import { AppScaffold } from "@/components/module/app-scaffold";
@@ -19,6 +20,8 @@ export default async function RunSlipPage({ params, searchParams }: { params: Pr
   const detail = (await searchParams).view === "detail";
   const slip = await loadSlip(session.orgId, id, { employmentId });
   if (!slip) notFound();
+  // ใครเปิดดูสลิปของใคร เมื่อไหร่ — ดูได้ที่ หลังบ้าน › ประวัติการใช้งาน (ไม่บันทึกยอดเงิน)
+  await audit({ userId: session.userId, action: "PAYSLIP_VIEWED", targetId: slip.line.userId ?? null, detail: { runId: id, employmentId, name: slip.line.name } });
   const org = await prisma.organization.findUnique({ where: { id: session.orgId }, select: { name: true } });
   const settings = await withSalaryTenant(session.orgId, (tx) => readSettings(tx, session.orgId));
   const position = await positionOf(session.orgId, employmentId, slip.endsOn);

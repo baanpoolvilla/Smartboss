@@ -44,6 +44,21 @@ export type AuditAction =
   | "SCORE_PERIOD_UPDATED"
   | "SECURITY_SETTINGS_UPDATED"
   | "ACCOUNT_UNLOCKED"
+  // ── ยืนยันตัวตน 2 ชั้น / อุปกรณ์ ──
+  | "TWO_FACTOR_ENABLED"
+  | "TWO_FACTOR_DISABLED"
+  | "TWO_FACTOR_RESET_BY_ADMIN"
+  | "TWO_FACTOR_FAILED"
+  | "TWO_FACTOR_RECOVERY_USED"
+  | "TWO_FACTOR_RECOVERY_REGENERATED"
+  | "SESSION_REVOKED"
+  | "SESSION_IDLE_LOGOUT"
+  | "LOGIN_NEW_DEVICE"
+  // ── เปิดดู/ส่งออกข้อมูลเงินเดือน (ใครดูของใคร เมื่อไหร่) ──
+  | "PAYSLIP_VIEWED"
+  | "SALARY_PROFILE_VIEWED"
+  | "SALARY_EXPORTED"
+  | "SALARY_ACCESS_BLOCKED_IP"
   // ── เงินเดือน ──
   | "PAYROLL_RUN_CREATED"
   | "PAYROLL_RUN_RECALCULATED"
@@ -99,6 +114,19 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   SCORE_PERIOD_UPDATED: "แก้ไขวันตัดรอบเกรด",
   SECURITY_SETTINGS_UPDATED: "แก้ไขการตั้งค่าความปลอดภัย",
   ACCOUNT_UNLOCKED: "ปลดล็อกบัญชี",
+  TWO_FACTOR_ENABLED: "เปิดยืนยันตัวตน 2 ชั้น",
+  TWO_FACTOR_DISABLED: "ปิดยืนยันตัวตน 2 ชั้น (เจ้าตัวปิดเอง)",
+  TWO_FACTOR_RESET_BY_ADMIN: "ล้างยืนยันตัวตน 2 ชั้น (แอดมินทำให้)",
+  TWO_FACTOR_FAILED: "รหัสยืนยันตัวตน 2 ชั้นไม่ถูกต้อง",
+  TWO_FACTOR_RECOVERY_USED: "เข้าสู่ระบบด้วยรหัสสำรอง",
+  TWO_FACTOR_RECOVERY_REGENERATED: "ออกรหัสสำรองชุดใหม่",
+  SESSION_REVOKED: "ออกจากระบบอุปกรณ์อื่น",
+  SESSION_IDLE_LOGOUT: "ออกจากระบบเองเพราะไม่ได้ใช้งาน",
+  LOGIN_NEW_DEVICE: "เข้าสู่ระบบจากอุปกรณ์ใหม่",
+  PAYSLIP_VIEWED: "เปิดดูสลิปเงินเดือนของพนักงาน",
+  SALARY_PROFILE_VIEWED: "เปิดดูข้อมูลเงินเดือนรายคน",
+  SALARY_EXPORTED: "ส่งออกไฟล์เงินเดือน",
+  SALARY_ACCESS_BLOCKED_IP: "ถูกกันจากหน้าเงินเดือน (IP ไม่อยู่ในรายการ)",
   PAYROLL_RUN_CREATED: "สร้างรอบจ่ายเงินเดือน",
   PAYROLL_RUN_RECALCULATED: "คำนวณรอบจ่ายใหม่",
   PAYROLL_RUN_APPROVED: "อนุมัติรอบจ่าย",

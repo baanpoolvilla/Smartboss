@@ -4,6 +4,9 @@ import type { Session } from "@smartboss/auth";
 
 import { withWorkforceTenant } from "@/modules/report_task/lib/db/workforce-calendar";
 import { readSettings, withSalaryTenant } from "./db";
+import { headers } from "next/headers";
+import { ipAllowed, loadSecuritySettings } from "@/lib/security-settings";
+import { twoFactorMissing } from "@/lib/security-guards";
 
 /**
  * ใครเห็น/แก้ข้อมูลเงินเดือนของคนอื่นได้ — ที่ตัดสินที่เดียวของทั้งระบบ
@@ -31,6 +34,12 @@ export interface SalaryAccess {
   canEditOwn: boolean;
   /** มาจากไหน — แสดงในหน้าตั้งค่า/บันทึกประวัติ */
   via: "ceo" | "editor" | "super_admin" | null;
+  /**
+   * มีสิทธิ์จัดการเงินเดือน แต่ถูกกันไว้ชั่วคราวตามที่บริษัทตั้ง (หลังบ้าน › ความปลอดภัย) — สิทธิ์ทุกตัวข้างบนเป็น false
+   * ip = เปิดจากที่ที่ไม่อยู่ในรายการ IP · two_factor = บทบาทถูกบังคับยืนยันตัวตน 2 ชั้นแต่ยังไม่ได้เปิด
+   * บริษัทที่ไม่ได้ตั้งอะไร = ไม่มีทางเป็นค่าอื่นนอกจาก undefined (พฤติกรรมเดิม)
+   */
+  blocked?: "ip" | "two_factor";
 }
 
 const NONE: SalaryAccess = { canEdit: false, canApprove: false, canManageAccess: false, canEditOwn: false, isCeo: false, isSuperAdmin: false, via: null };
@@ -45,7 +54,33 @@ export function accessFrom(session: Pick<Session, "userId" | "roles">, settings:
   return { ...NONE, isCeo, isSuperAdmin };
 }
 
+/**
+ * สิทธิ์ของคนที่กำลังใช้งานอยู่ (คำขอนี้) — สิทธิ์ตามบทบาท/รายชื่อ แล้วผ่านด่านที่บริษัทเปิดไว้อีกชั้น
+ * ที่เดียวที่ทุกหน้า/ทุก action/ไฟล์ส่งออกของเงินเดือนเรียก จึงกันครบโดยไม่ต้องไล่ใส่ทีละจุด
+ */
 export async function salaryAccess(session: Pick<Session, "userId" | "roles" | "orgId">): Promise<SalaryAccess> {
+  const base = await salaryAccessBase(session);
+  if (!session.orgId || !(base.canEdit || base.canApprove || base.canManageAccess)) return base;
+  const security = await loadSecuritySettings(session.orgId).catch(() => null);
+  if (!security) return base;
+  const locked = (blocked: "ip" | "two_factor"): SalaryAccess => ({ ...NONE, isCeo: base.isCeo, isSuperAdmin: base.isSuperAdmin, blocked });
+  if (security.salaryAllowedIps.length > 0) {
+    let ip: string | null = null;
+    let inRequest = true;
+    try {
+      const h = await headers();
+      ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip");
+    } catch {
+      inRequest = false; // เรียกนอกคำขอ (งานเบื้องหลัง) — ไม่มี IP ให้ตัดสิน
+    }
+    if (inRequest && !ipAllowed(security.salaryAllowedIps, ip)) return locked("ip");
+  }
+  if (await twoFactorMissing(session.userId, session.roles, security)) return locked("two_factor");
+  return base;
+}
+
+/** สิทธิ์ตามบทบาท/รายชื่อล้วน ๆ ไม่ดูว่าเปิดจากที่ไหน — ใช้กับ "ผู้ใช้คนอื่น" (sync สิทธิ์) ที่ไม่ใช่คนส่งคำขอนี้ */
+async function salaryAccessBase(session: Pick<Session, "userId" | "roles" | "orgId">): Promise<SalaryAccess> {
   if (!session.orgId) return NONE;
   const settings = await withSalaryTenant(session.orgId, (tx) => readSettings(tx, session.orgId!)).catch((error: unknown) => {
     // ตารางยังไม่มี (ยังไม่ได้ migrate) = ไม่ให้ใครเห็นนอกจาก CEO — ปลอดภัยไว้ก่อน
@@ -66,7 +101,7 @@ export async function userCanEditSalary(orgId: string, userId: string): Promise<
   });
   if (!user) return false;
   const roles = user.roles.map((r) => r.role.code);
-  return (await salaryAccess({ userId, orgId, roles })).canEdit;
+  return (await salaryAccessBase({ userId, orgId, roles })).canEdit;
 }
 
 /**

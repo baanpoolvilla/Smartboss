@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { audit } from "@smartboss/auth";
 
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { ProfileSection, RecurringSection, SalarySection } from "@/modules/salary/components/employee-forms";
@@ -19,6 +20,7 @@ export default async function SalaryEmployeePage({ params }: { params: Promise<{
   const orgId = session.orgId;
   const [row] = await listStaff(orgId, id);
   if (!row) notFound();
+  await audit({ userId: session.userId, action: "SALARY_PROFILE_VIEWED", targetId: row.userId ?? null, detail: { employmentId: row.employmentId, name: row.name } });
   const { items, settings } = await withSalaryTenant(orgId, async (tx) => ({
     items: await tx.salaryItem.findMany({ where: { orgId, active: true }, orderBy: [{ kind: "asc" }, { sort: "asc" }, { name: "asc" }] }),
     settings: await readSettings(tx, orgId),

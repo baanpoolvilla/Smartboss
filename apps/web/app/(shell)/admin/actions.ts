@@ -16,7 +16,8 @@ import { prisma } from "@smartboss/database";
 import { ADMIN_PERMS } from "@/modules/admin/permissions";
 import { organizationExists } from "@/modules/admin/data/orgs";
 import { PERFORMANCE_CATEGORIES } from "@/lib/performance";
-import { clampSecuritySetting, loadSecuritySettings } from "@/lib/security-settings";
+import { clampIdleLogout, clampSecuritySetting, loadSecuritySettings, parseIpList } from "@/lib/security-settings";
+import { notifyUser } from "@/modules/maintenance/data/notify";
 import { nextOrganizationCode } from "@/lib/document-code";
 import {
   provisionWorkforceTenant,
@@ -899,6 +900,13 @@ export async function saveSecuritySettingsAction(formData: FormData) {
       "passwordMinLength",
       Number(formData.get("passwordMinLength"))
     ),
+    // ── สวิตช์เพิ่ม 11/11/2569 — ไม่ติ๊ก/เว้นว่าง = ปิด (พฤติกรรมเดิม) ──
+    requireCurrentPassword: formData.get("requireCurrentPassword") === "on",
+    idleLogoutMinutes: clampIdleLogout(Number(formData.get("idleLogoutMinutes"))),
+    // รับเฉพาะรหัสบทบาทที่มีจริงในบริษัทนี้ — กันยิงค่าแปลก ๆ เข้ามา
+    twoFactorRoles: await validRoleCodes(orgId, formData.getAll("twoFactorRoles").map(String)),
+    salaryAllowedIps: parseIpList(String(formData.get("salaryAllowedIps") ?? "")),
+    notifyNewDevice: formData.get("notifyNewDevice") === "on",
     updatedBy: session.userId,
   };
 
@@ -915,6 +923,41 @@ export async function saveSecuritySettingsAction(formData: FormData) {
     detail: data,
   });
   revalidatePath("/admin/security");
+}
+
+async function validRoleCodes(orgId: string, codes: string[]): Promise<string[]> {
+  if (codes.length === 0) return [];
+  const roles = await prisma.role.findMany({
+    where: { OR: [{ orgId }, { orgId: null }], code: { in: codes } },
+    select: { code: true },
+  });
+  return Array.from(new Set(roles.map((r) => r.code)));
+}
+
+/**
+ * ล้างยืนยันตัวตน 2 ชั้นให้ผู้ใช้ (มือถือหาย + ไม่มีรหัสสำรอง) — เจ้าตัวเข้าได้ด้วยรหัสผ่านแล้วตั้งใหม่เอง
+ * บันทึกประวัติ + แจ้งเจ้าของบัญชีทุกครั้ง เพราะเป็นการลดการป้องกันของบัญชีคนอื่น
+ */
+export async function resetTwoFactorAction(formData: FormData) {
+  const session = await guard(ADMIN_PERMS.userManage);
+  const userId = String(formData.get("userId") ?? "");
+  await assertManageableUser(session, userId);
+  const target = await prisma.user.findUnique({ where: { id: userId }, select: { orgId: true, totpEnabledAt: true } });
+  if (!target?.totpEnabledAt) return;
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { totpSecret: null, totpEnabledAt: null, totpRecoveryHashes: [], totpLastStep: null },
+  });
+  await audit({ userId: session.userId, action: "TWO_FACTOR_RESET_BY_ADMIN", targetId: userId });
+  if (target.orgId) {
+    await notifyUser(target.orgId, userId, {
+      title: "ผู้ดูแลล้างยืนยันตัวตน 2 ชั้นของคุณแล้ว",
+      body: "ตอนนี้เข้าสู่ระบบได้ด้วยรหัสผ่านอย่างเดียว — ตั้งใหม่ได้ที่ บัญชีของฉัน › ความปลอดภัย · ถ้าคุณไม่ได้ขอ แจ้งผู้ดูแลทันที",
+      type: "account_security",
+    }).catch(() => undefined);
+  }
+  revalidatePath(`/admin/users/${userId}`);
 }
 
 /**

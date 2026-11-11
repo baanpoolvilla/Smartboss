@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireOrg } from "@smartboss/auth";
+import { audit, requireOrg } from "@smartboss/auth";
 
 import { salaryAccess } from "@/modules/salary/lib/access";
 import { insertEvent, readSettings, withSalaryTenant } from "@/modules/salary/lib/db";
@@ -108,6 +108,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   const actor = await actorOf(session.userId);
   await withSalaryTenant(orgId, (tx) => insertEvent(tx, orgId, { runId: id, byUserId: actor.userId, byName: actor.name, action: "export", summary: `ดาวน์โหลดไฟล์ ${type}` }));
+  // ลงประวัติกลางของบริษัทด้วย (หลังบ้าน › ประวัติการใช้งาน) — เดิมเห็นเฉพาะในประวัติของรอบเงินเดือน
+  await audit({ userId: session.userId, action: "SALARY_EXPORTED", targetId: id, detail: { type, period: run.period } });
   const csv = "﻿" + [head.map(esc).join(","), ...rows.map((r) => r.map(esc).join(","))].join("\r\n");
   return new NextResponse(csv, {
     headers: {

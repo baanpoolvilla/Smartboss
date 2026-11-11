@@ -46,6 +46,11 @@
 	# ข้อความแชท/แจ้งเตือนสด (ไม่กี่ร้อยไบต์) จะค้างอยู่ที่ Caddy ไม่ถึงเครื่อง ต้องรีเฟรชเอง
 	@compress not path /api/realtime
 	encode @compress zstd gzip
+
+	# บังคับ HTTPS ฝั่งเบราว์เซอร์ 1 ปี — เข้าครั้งถัดไปเบราว์เซอร์จะไม่ยอมต่อ http เลย
+	# (กันดักรหัสผ่าน/cookie บน Wi-Fi สาธารณะด้วยการบังคับลดเป็น http) Caddy ออกใบรับรองและ
+	# เด้ง http→https ให้อยู่แล้ว จึงไม่กระทบการใช้งาน · ไม่ใส่ includeSubDomains เพราะโดเมนย่อยอื่นไม่ได้อยู่ใต้ไฟล์นี้ทั้งหมด
+	header Strict-Transport-Security "max-age=31536000"
 	reverse_proxy 127.0.0.1:3000 {
 		# ส่งต่อทันทีทุกไบต์ ไม่พักไว้ (Caddy ทำเองกับ text/event-stream อยู่แล้ว ใส่ไว้ให้ชัด)
 		flush_interval -1

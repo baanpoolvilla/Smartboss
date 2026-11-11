@@ -25,8 +25,33 @@ export interface RateLimitResult {
 }
 
 /**
+ * ตัวนับสำรองในหน่วยความจำของโปรเซสนี้ — ใช้เฉพาะตอน Redis ใช้ไม่ได้
+ * เดิม Redis ล่ม = ไม่จำกัดเลย (คนยิงสุ่มรหัสได้ไม่อั้นตลอดช่วงที่ล่ม) ตอนนี้ยังจำกัดได้ระดับโปรเซส
+ * ไม่ทำให้ระบบล่มตาม Redis เหมือนเดิม: ผู้ใช้ปกติไม่ถึงเพดานอยู่แล้ว
+ */
+const memoryWindows = new Map<string, { count: number; resetAt: number }>();
+
+function memoryRateLimit(key: string, limit: number, windowSeconds: number): RateLimitResult {
+  const now = Date.now();
+  if (memoryWindows.size > 5000) {
+    for (const [k, w] of memoryWindows) if (w.resetAt <= now) memoryWindows.delete(k);
+  }
+  let w = memoryWindows.get(key);
+  if (!w || w.resetAt <= now) {
+    w = { count: 0, resetAt: now + windowSeconds * 1000 };
+    memoryWindows.set(key, w);
+  }
+  w.count += 1;
+  return {
+    allowed: w.count <= limit,
+    remaining: Math.max(0, limit - w.count),
+    resetSeconds: Math.max(1, Math.ceil((w.resetAt - now) / 1000)),
+  };
+}
+
+/**
  * Fixed-window rate limit บน Redis
- * ถ้า Redis ใช้ไม่ได้ → **fail-open** (ยอมให้ผ่าน) เพื่อไม่ให้ระบบล่มตาม Redis
+ * ถ้า Redis ใช้ไม่ได้ → นับในหน่วยความจำของโปรเซสแทน (memoryRateLimit) ระบบไม่ล่มตาม Redis
  * @param key   identifier เช่น `login:{ip}`
  * @param limit จำนวนครั้งสูงสุดต่อ window
  * @param windowSeconds ขนาด window (วินาที)
@@ -37,9 +62,7 @@ export async function rateLimit(
   windowSeconds: number
 ): Promise<RateLimitResult> {
   const client = getRedis();
-  if (!client) {
-    return { allowed: true, remaining: limit, resetSeconds: windowSeconds };
-  }
+  if (!client) return memoryRateLimit(key, limit, windowSeconds);
   const redisKey = `ratelimit:${key}`;
   try {
     const count = await client.incr(redisKey);
@@ -53,7 +76,7 @@ export async function rateLimit(
       resetSeconds: ttl >= 0 ? ttl : windowSeconds,
     };
   } catch {
-    // Redis ล่ม/timeout → ปล่อยผ่าน (ดีกว่าให้ล็อกอินพังทั้งระบบ)
-    return { allowed: true, remaining: limit, resetSeconds: windowSeconds };
+    // Redis ล่ม/timeout → นับในโปรเซสนี้แทน (ล็อกอินยังใช้ได้ และยังจำกัดความถี่อยู่)
+    return memoryRateLimit(key, limit, windowSeconds);
   }
 }

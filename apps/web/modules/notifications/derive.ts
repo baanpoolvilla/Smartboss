@@ -303,6 +303,6 @@ export function maintenanceHrefFor(type: string, referenceId: string | null): st
   if (type === "hr_late_self") return "/hr";
   if (type === "hr_late_team" && referenceId) return `/hr?date=${encodeURIComponent(referenceId.slice(0, 10))}`;
   // แจ้งความปลอดภัยของบัญชี (เช่น รหัสผ่านถูกเปลี่ยน) → หน้าบัญชีของฉัน
-  if (type === "account_security") return "/account";
+  if (type === "account_security") return "/account/security";
   return null;
 }

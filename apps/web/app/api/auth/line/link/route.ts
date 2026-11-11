@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
     detail: { hadPreviousLink: user.lineUserId !== null },
   });
 
-  const authUser = await establishSession(user.id, ua);
+  const authUser = await establishSession(user.id, ua, ip);
   if (!authUser) return jsonError("บัญชีนี้ถูกปิดใช้งาน", 401);
 
   return NextResponse.json({

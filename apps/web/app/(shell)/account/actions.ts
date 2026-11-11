@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireAuth, hashPassword, audit } from "@smartboss/auth";
+import { requireAuth, hashPassword, verifyPassword, audit } from "@smartboss/auth";
 import { prisma } from "@smartboss/database";
 import { loadSecuritySettings } from "@/lib/security-settings";
 import { deleteFile, putFile } from "@/lib/storage";
@@ -52,6 +52,16 @@ export async function changeOwnPasswordAction(formData: FormData) {
 
   const user = await prisma.user.findUnique({ where: { id: session.userId } });
   if (!user) throw new Error("ไม่พบบัญชีผู้ใช้");
+
+  // บริษัทที่เปิด "เปลี่ยนรหัสผ่านต้องกรอกรหัสปัจจุบัน" (หลังบ้าน › ความปลอดภัย) — ค่าเริ่มต้นปิด = ไม่ถามเหมือนเดิม
+  // พากลับหน้าเดิมพร้อมข้อความ แทนการโยน error (หน้าจอจะขึ้นหน้าพังที่ไม่บอกว่าผิดตรงไหน)
+  if (security.requireCurrentPassword) {
+    const current = String(formData.get("currentPassword") ?? "");
+    if (!current || !(await verifyPassword(user.passwordHash, current))) {
+      await audit({ userId: user.id, action: "LOGIN_FAILED", targetId: user.id, detail: { stage: "change_password" } });
+      redirect("/account?pw=wrong#change-password");
+    }
+  }
 
   await prisma.user.update({
     where: { id: user.id },

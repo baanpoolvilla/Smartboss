@@ -3,13 +3,14 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import { redirect } from "next/navigation";
-import { requireOrg, hasPermission, type OrgSession } from "@smartboss/auth";
+import { cookies } from "next/headers";
+import { requireOrg, hasPermission, rateLimit, type OrgSession } from "@smartboss/auth";
 import { prisma } from "@smartboss/database";
 import { deleteFile as deleteStoredFile } from "@/lib/storage";
 import { canUserAccessReportTopic, listAccessibleTopicIds } from "@/modules/report_task/lib/room-access-server";
 import { COMPANY_FILES_PERMS } from "../permissions";
 import type { ShareLinkRole, ShareLinkScope } from "../types";
-import { hashSharePassword, verifySharePasswordHash } from "../lib/share-password";
+import { hashSharePassword, shareUnlockCookieName, shareUnlockMatches, shareUnlockValue, verifySharePasswordHash } from "../lib/share-password";
 
 /**
  * Server actions for the "ไฟล์บริษัท" module — one place that owns every
@@ -479,14 +480,19 @@ export type ShareAccessResult =
  * viewerOrgId = orgId ของ session ผู้เปิด (null ถ้าไม่ล็อกอิน) */
 export async function resolveShareAccess(
   token: string,
-  viewer: { viewerOrgId: string | null; password?: string | null }
+  viewer: { viewerOrgId: string | null; password?: string | null; unlockCookie?: string | null }
 ): Promise<ShareAccessResult> {
   const link = await resolveShareLink(token);
   if (!link) return { ok: false, reason: "invalid" };
   if (link.scope === "org" && (!viewer.viewerOrgId || viewer.viewerOrgId !== link.file.orgId)) {
     return { ok: false, reason: "scope" };
   }
-  if (link.passwordHash && !(viewer.password && verifySharePasswordHash(link.passwordHash, viewer.password))) {
+  // ผ่านได้สองทาง: cookie ปลดล็อก (ทางปกติ — ได้ตอนกรอกรหัสถูกในหน้าลิงก์) หรือรหัสผ่านตรง ๆ (หน้าเว็บรุ่นเก่าที่ยังเปิดค้าง)
+  if (
+    link.passwordHash &&
+    !shareUnlockMatches(token, link.passwordHash, viewer.unlockCookie) &&
+    !(viewer.password && verifySharePasswordHash(link.passwordHash, viewer.password))
+  ) {
     return { ok: false, reason: "password" };
   }
   return { ok: true, link };
@@ -511,10 +517,23 @@ export async function getShareLinkGate(token: string): Promise<
 
 /** ตรวจรหัสผ่านลิงก์ (เรียกจากฟอร์มฝั่งผู้เปิด) — คืน true ถ้าถูกหรือไม่มีรหัส */
 export async function verifyShareLinkPassword(token: string, password: string): Promise<boolean> {
+  // ลิงก์นี้เปิดได้โดยไม่ต้องล็อกอิน — จำกัดการลองรหัส 10 ครั้ง/นาทีต่อลิงก์ กันไล่เดารหัสผ่าน
+  if (!(await rateLimit(`share-pw:${token.slice(0, 32)}`, 10, 60)).allowed) return false;
   const link = await resolveShareLink(token);
   if (!link) return false;
   if (!link.passwordHash) return true;
-  return verifySharePasswordHash(link.passwordHash, password);
+  if (!verifySharePasswordHash(link.passwordHash, password)) return false;
+  // จำว่าเครื่องนี้ปลดล็อกแล้ว 1 ชั่วโมง — ลิงก์ไฟล์ไม่ต้องพกรหัสผ่านไปใน URL อีก
+  (await cookies()).set({
+    name: shareUnlockCookieName(token),
+    value: shareUnlockValue(token, link.passwordHash),
+    httpOnly: true,
+    secure: process.env.COOKIE_SECURE === "true",
+    sameSite: "lax",
+    path: `/api/company-files/share/${token}`,
+    maxAge: 3600,
+  });
+  return true;
 }
 
 /** อัปโหลดเวอร์ชันใหม่จากลิงก์แชร์แบบ "แก้ไขได้" — คนถือลิงก์นี้ไม่มี session

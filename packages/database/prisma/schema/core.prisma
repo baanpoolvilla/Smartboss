@@ -21,6 +21,12 @@ model User {
   isActive     Boolean   @default(true) @map("is_active")
   failedLogins Int       @default(0) @map("failed_logins")
   lockedUntil  DateTime? @map("locked_until")
+  /// ยืนยันตัวตน 2 ชั้น (แอป Authenticator) — secret เก็บแบบเข้ารหัส (packages/database/field-crypto.ts)
+  /// totpEnabledAt = null คือยังไม่เปิด · totpLastStep กันรหัสเดิมถูกใช้ซ้ำภายใน 30 วินาทีเดียวกัน
+  totpSecret         String?   @map("totp_secret")
+  totpEnabledAt      DateTime? @map("totp_enabled_at")
+  totpRecoveryHashes String[]  @default([]) @map("totp_recovery_hashes")
+  totpLastStep       Int?      @map("totp_last_step")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
@@ -203,6 +209,8 @@ model RefreshToken {
   userId     String    @map("user_id")
   tokenHash  String    @unique @map("token_hash")
   deviceInfo String?   @map("device_info")
+  /// IP ตอนออกใบนี้ — แสดงในหน้า "อุปกรณ์ที่เข้าสู่ระบบอยู่" ให้เจ้าของบัญชีดูเอง
+  ip         String?   @map("ip")
   expiresAt  DateTime  @map("expires_at")
   revokedAt  DateTime? @map("revoked_at")
   /// ถูก revoke เพราะหมุนเป็นใบใหม่ (ไม่ใช่ออกจากระบบ/เปลี่ยนรหัส/แอดมินตัด) — ใบนี้เท่านั้นที่กู้คืนได้
@@ -610,6 +618,18 @@ model SecuritySetting {
    * รหัสผ่านต้องยาวอย่างน้อยกี่ตัวอักษร
    */
   passwordMinLength Int @default(12) @map("password_min_length")
+
+  /// ── เพิ่ม 11/11/2569 (ตรวจความปลอดภัยระบบ HR) — ทุกตัวค่าเริ่มต้น = พฤติกรรมเดิม ──
+  /// เปลี่ยนรหัสผ่านของตัวเองต้องกรอกรหัสปัจจุบันก่อน
+  requireCurrentPassword Boolean  @default(false) @map("require_current_password")
+  /// ไม่แตะหน้าจอกี่นาทีแล้วออกจากระบบเอง · 0 = ไม่ใช้
+  idleLogoutMinutes      Int      @default(0) @map("idle_logout_minutes")
+  /// รหัสบทบาท (Role.code) ที่ต้องเปิดยืนยันตัวตน 2 ชั้น · ว่าง = ไม่บังคับใคร (เปิดเองได้ทุกคน)
+  twoFactorRoles         String[] @default([]) @map("two_factor_roles")
+  /// IP ที่เปิดหน้าจัดการเงินเดือนได้ · ว่าง = ไม่จำกัด
+  salaryAllowedIps       String[] @default([]) @map("salary_allowed_ips")
+  /// แจ้งเจ้าของบัญชีเมื่อมีการเข้าสู่ระบบจากอุปกรณ์ที่ไม่เคยใช้
+  notifyNewDevice        Boolean  @default(false) @map("notify_new_device")
 
   updatedAt DateTime @updatedAt @map("updated_at")
   updatedBy String?  @map("updated_by")

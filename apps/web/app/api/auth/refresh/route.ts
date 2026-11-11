@@ -27,7 +27,7 @@ async function refreshSession(req: NextRequest): Promise<string | null> {
   const raw = store.get(COOKIE_REFRESH)?.value;
   if (!raw) return "ไม่พบ session";
 
-  const result = await rotateRefreshToken(raw, ua);
+  const result = await rotateRefreshToken(raw, ua, ip);
 
   if (result.status === "reuse") {
     clearAuthCookies(store);

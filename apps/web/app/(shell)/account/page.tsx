@@ -23,8 +23,9 @@ import { PasswordInput } from "@/components/password-input";
  */
 export const dynamic = "force-dynamic";
 
-export default async function AccountPage() {
+export default async function AccountPage({ searchParams }: { searchParams: Promise<{ pw?: string }> }) {
   const session = await requireAuth();
+  const { pw } = await searchParams;
 
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: session.userId },
@@ -43,7 +44,7 @@ export default async function AccountPage() {
   const nameParts = session.orgId ? await loadOwnNameParts(session.orgId, session.userId, user.email) : null;
 
   // ต้องตรงกับที่ changeOwnPasswordAction ใช้ตรวจจริง (ตั้งได้ที่ /admin/security)
-  const { passwordMinLength } = await loadSecuritySettings(session.orgId ?? null);
+  const { passwordMinLength, requireCurrentPassword } = await loadSecuritySettings(session.orgId ?? null);
 
   return (
     <LauncherPage title="บัญชีของฉัน" width="max-w-none">
@@ -140,12 +141,31 @@ export default async function AccountPage() {
       </form>
       )}
 
-      <form action={changeOwnPasswordAction} className="mt-4">
+      <form action={changeOwnPasswordAction} className="mt-4 scroll-mt-20" id="change-password">
         <SectionCard
           title="เปลี่ยนรหัสผ่าน"
-          description="ลืมรหัสเดิมก็ตั้งใหม่ได้เลย ไม่ต้องกรอกรหัสผ่านปัจจุบัน"
+          description={
+            requireCurrentPassword
+              ? "บริษัทของคุณกำหนดให้กรอกรหัสผ่านปัจจุบันก่อน — ลืมรหัสให้แจ้งผู้ดูแลของบริษัทตั้งให้ใหม่"
+              : "ลืมรหัสเดิมก็ตั้งใหม่ได้เลย ไม่ต้องกรอกรหัสผ่านปัจจุบัน"
+          }
         >
           <div className="grid gap-3">
+            {pw === "wrong" && (
+              <p role="alert" className="rounded-(--radius) border border-(--danger-line) bg-(--danger-bg) px-3 py-2 text-sm text-(--danger)">
+                รหัสผ่านปัจจุบันไม่ถูกต้อง — ยังไม่ได้เปลี่ยนรหัส ลองใหม่อีกครั้ง
+              </p>
+            )}
+            {requireCurrentPassword && (
+              <Field label="รหัสผ่านปัจจุบัน">
+                <PasswordInput
+                  name="currentPassword"
+                  required
+                  autoComplete="current-password"
+                  className={inputClass}
+                />
+              </Field>
+            )}
             <Field label="รหัสผ่านใหม่" hint={`อย่างน้อย ${passwordMinLength} ตัวอักษร`}>
               <PasswordInput
                 name="newPassword"

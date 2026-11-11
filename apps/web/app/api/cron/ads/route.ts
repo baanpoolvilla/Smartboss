@@ -20,10 +20,12 @@ export async function GET(req: NextRequest) {
       return new NextResponse("CRON_SECRET is not configured", { status: 503 });
     }
   } else {
+    // รับรหัสทาง header เท่านั้น — เดิมรับ ?key= ด้วย ซึ่งทำให้รหัสลับไปค้างใน log ของ Caddy ทุกครั้งที่เรียก
+    // (deploy/cron-run.sh ส่งทาง header อยู่แล้ว จึงไม่กระทบงานตั้งเวลา)
     const auth = req.headers.get("authorization");
-    const key = url.searchParams.get("key");
-    if (auth !== `Bearer ${secret}` && key !== secret) {
-      return new NextResponse("Unauthorized", { status: 401 });
+    if (auth !== `Bearer ${secret}`) {
+      const hint = url.searchParams.has("key") ? " — ?key= เลิกรับแล้ว ส่งทาง header: Authorization: Bearer <CRON_SECRET>" : "";
+      return new NextResponse(`Unauthorized${hint}`, { status: 401 });
     }
   }
 

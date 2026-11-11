@@ -14,12 +14,13 @@ export function hashToken(raw: string): string {
 
 export async function issueRefreshToken(
   userId: string,
-  deviceInfo?: string | null
+  deviceInfo?: string | null,
+  ip?: string | null
 ): Promise<string> {
   const { raw, hash } = generateRefreshToken();
   const expiresAt = new Date(Date.now() + ttlToSeconds(REFRESH_TOKEN_TTL) * 1000);
   await prisma.refreshToken.create({
-    data: { userId, tokenHash: hash, deviceInfo: deviceInfo ?? null, expiresAt },
+    data: { userId, tokenHash: hash, deviceInfo: deviceInfo ?? null, ip: ip ?? null, expiresAt },
   });
   return raw;
 }
@@ -37,7 +38,7 @@ export type RotationResult =
  */
 const ROTATION_RECOVERY_MS = 5 * 60_000;
 
-async function issueSuccessor(existing: { id: string; userId: string; deviceInfo: string | null }, deviceInfo?: string | null, markRotated = true) {
+async function issueSuccessor(existing: { id: string; userId: string; deviceInfo: string | null; ip: string | null }, deviceInfo?: string | null, markRotated = true, ip?: string | null) {
   return prisma.$transaction(async (tx) => {
     // เวลาเดียวกันทั้งคู่ — rotateRefreshToken เช็ค "ใบลูก createdAt >= rotatedAt" นาฬิกาต่างกันนิดเดียวก็พลาด
     const now = new Date();
@@ -50,6 +51,7 @@ async function issueSuccessor(existing: { id: string; userId: string; deviceInfo
         userId: existing.userId,
         tokenHash: next.hash,
         deviceInfo: deviceInfo ?? existing.deviceInfo,
+        ip: ip ?? existing.ip,
         expiresAt: new Date(now.getTime() + ttlToSeconds(REFRESH_TOKEN_TTL) * 1000),
         createdAt: now,
       },
@@ -70,7 +72,8 @@ async function issueSuccessor(existing: { id: string; userId: string; deviceInfo
  */
 export async function rotateRefreshToken(
   rawToken: string,
-  deviceInfo?: string | null
+  deviceInfo?: string | null,
+  ip?: string | null
 ): Promise<RotationResult> {
   const hash = hashToken(rawToken);
   const existing = await prisma.refreshToken.findUnique({
@@ -82,7 +85,7 @@ export async function rotateRefreshToken(
   }
 
   if (!existing.revokedAt) {
-    return { status: "ok", userId: existing.userId, raw: await issueSuccessor(existing, deviceInfo) };
+    return { status: "ok", userId: existing.userId, raw: await issueSuccessor(existing, deviceInfo, true, ip) };
   }
 
   if (!existing.rotatedAt) return { status: "invalid" };
@@ -93,7 +96,7 @@ export async function rotateRefreshToken(
       where: { userId: existing.userId, revokedAt: null, createdAt: { gte: existing.rotatedAt } },
     });
     if (alive > 0) {
-      return { status: "ok", userId: existing.userId, raw: await issueSuccessor(existing, deviceInfo, false) };
+      return { status: "ok", userId: existing.userId, raw: await issueSuccessor(existing, deviceInfo, false, ip) };
     }
     return { status: "invalid" };
   }

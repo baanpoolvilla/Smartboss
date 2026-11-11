@@ -21,7 +21,8 @@ export function SharedFileView({ token, file, role, needsPassword = false }: { t
   const [unlockedPw, setUnlockedPw] = useState<string | null>(needsPassword ? null : "");
   const [pwError, setPwError] = useState<string | null>(null);
   const locked = needsPassword && unlockedPw === null;
-  const shareUrl = `/api/company-files/share/${token}${unlockedPw ? `?pw=${encodeURIComponent(unlockedPw)}` : ""}`;
+  // รหัสผ่านไม่ไปกับ URL แล้ว — กรอกถูกครั้งเดียว เซิร์ฟเวอร์วาง cookie ปลดล็อกให้ (verifyShareLinkPassword)
+  const shareUrl = `/api/company-files/share/${token}`;
 
   function handleUnlock() {
     setPwError(null);

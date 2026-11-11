@@ -16,6 +16,7 @@ import { loadScorePeriodConfig } from "@/lib/score-period-config";
 import { bangkokDay, scorePeriodRange } from "@/lib/score-period";
 
 import { ceoTitle } from "@/lib/ceo-title";
+import { audit } from "@smartboss/auth";
 import { ceoText } from "@/lib/ceo-title-shared";
 export const dynamic = "force-dynamic";
 
@@ -27,8 +28,28 @@ export default async function SalaryHome() {
   const ceo = await ceoTitle();
   const { session, access } = await salaryPage();
   if (!access.canEdit) {
+    if (access.blocked === "ip") {
+      await audit({ userId: session.userId, action: "SALARY_ACCESS_BLOCKED_IP", targetId: session.orgId });
+    }
     return (
       <AppScaffold title="สลิปเงินเดือน" width="max-w-none">
+        {access.blocked && (
+          <div role="alert" className="mb-4 rounded-(--radius) border border-(--tone-warn) p-3 sm:p-4">
+            <p className="text-sm font-semibold text-(--ink)">
+              {access.blocked === "ip" ? "เปิดหน้าจัดการเงินเดือนจากที่นี่ไม่ได้" : "ต้องเปิดยืนยันตัวตน 2 ชั้นก่อนจัดการเงินเดือน"}
+            </p>
+            <p className="mt-1 text-sm text-(--ink-soft)">
+              {access.blocked === "ip"
+                ? "บริษัทจำกัดให้จัดการเงินเดือนได้เฉพาะจากเครือข่ายที่กำหนด (เช่น ที่ออฟฟิศ) — สิทธิ์ของคุณยังอยู่ครบ กลับไปใช้เครือข่ายนั้นแล้วจะเห็นเมนูตามเดิม · สลิปของคุณเองดูได้ตามปกติด้านล่าง · ผู้ดูแลแก้รายการได้ที่ หลังบ้าน › ความปลอดภัย"
+                : "บริษัทกำหนดให้บทบาทของคุณต้องเปิดก่อน — สิทธิ์ของคุณยังอยู่ครบ ตั้งเสร็จแล้วเมนูจัดการเงินเดือนจะกลับมาทันที"}
+            </p>
+            {access.blocked === "two_factor" && (
+              <Link href="/account/security?setup=required" className="mt-3 inline-flex h-11 items-center rounded-(--radius) bg-(--brand-navy,var(--ink)) px-4 text-sm font-semibold text-white">
+                ไปตั้งค่า 2 ชั้น (ราว 2 นาที)
+              </Link>
+            )}
+          </div>
+        )}
         <MySlipList orgId={session.orgId} userId={session.userId} />
       </AppScaffold>
     );
@@ -73,6 +94,18 @@ export default async function SalaryHome() {
     <AppScaffold title="เงินเดือน" width="max-w-none">
       <div className="flex flex-col gap-4">
         <SalaryTabs active="runs" />
+        {/* เตือนเฉพาะคนที่ปิดเองได้ — สวิตช์นี้เปิดไว้ตั้งแต่ติดตั้ง ถ้าไม่มีใครบอก จะไม่มีใครรู้ว่ายังเปิดอยู่ */}
+        {access.canManageAccess && access.isCeo && settings.superAdminAccess && (
+          <div role="status" className="flex flex-col gap-2 rounded-(--radius) border border-(--tone-warn) p-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-(--ink)">
+              <strong>ผู้ดูแลระบบสูงสุด (ผู้ให้บริการระบบ) ยังเห็นข้อมูลเงินเดือนของบริษัทนี้ได้</strong>
+              <span className="text-(--ink-soft)"> — เปิดไว้สำหรับช่วงติดตั้ง ใช้งานจริงแล้วควรปิด</span>
+            </p>
+            <Link href="/salary/settings" className="inline-flex h-10 shrink-0 items-center justify-center rounded-(--radius) border border-(--line) px-3 text-sm font-medium text-(--ink) hover:bg-(--bg-soft)">
+              ไปปิดที่ตั้งค่า
+            </Link>
+          </div>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-lg font-bold text-(--ink)">รายการเงินเดือน</h1>

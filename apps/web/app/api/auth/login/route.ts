@@ -11,8 +11,9 @@ import {
   rateLimit,
   audit,
   loadAuthUser,
+  checkSecondFactor,
 } from "@smartboss/auth";
-import { clientIp, userAgent, jsonError } from "../_lib";
+import { clientIp, userAgent, jsonError, isNewDevice, announceNewDevice } from "../_lib";
 import { loadSecuritySettings } from "@/lib/security-settings";
 
 export const runtime = "nodejs";
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
       fields: parsed.error.flatten().fieldErrors,
     });
   }
-  const { email, password } = parsed.data;
+  const { email, password, code } = parsed.data;
 
   // 2) หา user — ไม่พบ ตอบ 401 กลาง ๆ
   const user = await prisma.user.findUnique({ where: { email } });
@@ -97,6 +98,38 @@ export async function POST(req: NextRequest) {
     return jsonError(GENERIC_INVALID, 401);
   }
 
+  /*
+   * 4.5) ยืนยันตัวตน 2 ชั้น — เฉพาะบัญชีที่เปิดไว้ (บัญชีที่ไม่เปิด ผ่านตรงนี้เหมือนเดิมทุกอย่าง)
+   * ยังไม่ส่งรหัสมา = ตอบ TOTP_REQUIRED ให้หน้าจอถามรหัส 6 หลัก (ไม่นับเป็นกรอกผิด เพราะรหัสผ่านถูกแล้ว)
+   * รหัสผิด = นับรวมกับการกรอกรหัสผ่านผิด ล็อกบัญชีตามเกณฑ์เดียวกัน — กันคนที่ได้รหัสผ่านไปแล้วไล่เดา 6 หลัก
+   */
+  const second = await checkSecondFactor(user, code);
+  if (!second.ok) {
+    if (second.reason === "required") {
+      return jsonError("กรอกรหัส 6 หลักจากแอป Authenticator", 401, { code: "TOTP_REQUIRED" });
+    }
+    const failed = user.failedLogins + 1;
+    const shouldLock = failed >= security.maxFailedLogins;
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        failedLogins: shouldLock ? 0 : failed,
+        lockedUntil: shouldLock ? new Date(Date.now() + security.lockMinutes * 60_000) : user.lockedUntil,
+      },
+    });
+    await audit({
+      userId: user.id,
+      action: shouldLock ? "ACCOUNT_LOCKED" : "TWO_FACTOR_FAILED",
+      ip,
+      userAgent: ua,
+      detail: { attempts: failed, stage: "two_factor" },
+    });
+    return jsonError("รหัสยืนยันไม่ถูกต้องหรือหมดอายุแล้ว — ดูรหัสล่าสุดในแอปแล้วลองใหม่", 401, { code: "TOTP_INVALID" });
+  }
+  if (second.used === "recovery") {
+    await audit({ userId: user.id, action: "TWO_FACTOR_RECOVERY_USED", ip, userAgent: ua, detail: { left: second.recoveryLeft } });
+  }
+
   // 5) reset failedLogins
   await prisma.user.update({
     where: { id: user.id },
@@ -113,7 +146,9 @@ export async function POST(req: NextRequest) {
     roles: authUser.roles,
     permissions: authUser.permissions,
   });
-  const refreshToken = await issueRefreshToken(authUser.id, ua);
+  const newDevice = await isNewDevice(authUser.id, ua);
+  const refreshToken = await issueRefreshToken(authUser.id, ua, ip);
+  if (newDevice) await announceNewDevice(authUser, ua, ip);
 
   // 8) set cookies
   const store = await cookies();
@@ -131,5 +166,7 @@ export async function POST(req: NextRequest) {
       email: authUser.email,
       roles: authUser.roles,
     },
+    // เข้าด้วยรหัสสำรอง — บอกจำนวนที่เหลือให้หน้าจอเตือน (ใช้แล้วหมดไปทีละรหัส)
+    ...(second.used === "recovery" ? { recoveryLeft: second.recoveryLeft } : {}),
   });
 }

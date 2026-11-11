@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { requireOrg } from "@smartboss/auth";
+import { audit, requireOrg } from "@smartboss/auth";
 import { prisma } from "@smartboss/database";
 
 import { PrintButton } from "@/modules/daily_worker/components/print-button";
@@ -37,6 +37,7 @@ export default async function PrintSlips({ params, searchParams }: { params: Pro
       if (s) slips.push(s);
     }
     if (slips.length === 0) notFound();
+    await audit({ userId: session.userId, action: "PAYSLIP_VIEWED", targetId: sp.only ? (slips[0]?.line.userId ?? null) : null, detail: { runId, print: true, count: slips.length, ...(sp.only ? { employmentId: sp.only, name: slips[0]?.line.name } : {}) } });
   }
   const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { name: true } });
   const settings = await withSalaryTenant(orgId, (tx) => readSettings(tx, orgId));

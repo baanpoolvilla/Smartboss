@@ -9,18 +9,19 @@ import Link from "next/link";
 const TABS = [
   { href: "/account", label: "โปรไฟล์" },
   { href: "/account/work", label: "งานของฉัน" },
+  { href: "/account/security", label: "ความปลอดภัย" },
 ] as const;
 
 export function AccountTabs({ active }: { active: (typeof TABS)[number]["href"] }) {
   return (
-    <nav className="mb-4 flex gap-1 border-b border-(--line)">
+    <nav className="mb-4 flex gap-1 overflow-x-auto border-b border-(--line)">
       {TABS.map((t) => {
         const isActive = t.href === active;
         return (
           <Link
             key={t.href}
             href={t.href}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm transition-colors ${
+            className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors ${
               isActive
                 ? "border-(--app-strong,var(--ink)) font-semibold text-(--app-strong,var(--ink))"
                 : "border-transparent text-(--ink-soft) hover:text-(--ink)"

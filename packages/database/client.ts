@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { tenantGuardExtension } from "./tenant-guard";
+import { fieldCryptoExtension } from "./field-crypto";
 
 /**
  * Prisma client เดี่ยวของทั้งแอป — cache ไว้บน globalThis ตอน dev กัน hot-reload
@@ -44,7 +45,7 @@ function makeClient() {
   return new PrismaClient({
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
     ...(url ? { datasources: { db: { url } } } : {}),
-  }).$extends(tenantGuardExtension);
+  }).$extends(tenantGuardExtension).$extends(fieldCryptoExtension);
 }
 
 const globalForPrisma = globalThis as unknown as {

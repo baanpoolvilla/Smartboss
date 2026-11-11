@@ -9,7 +9,8 @@
     ".": "./client.ts",
     "./client": "./client.ts",
     "./defaults": "./defaults.ts",
-    "./cross-org": "./cross-org.ts"
+    "./cross-org": "./cross-org.ts",
+    "./field-crypto": "./field-crypto.ts"
   },
   "scripts": {
     "postinstall": "prisma generate",

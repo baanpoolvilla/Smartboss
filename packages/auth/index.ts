@@ -11,3 +11,6 @@ export * from "./schema";
 export * from "./user";
 export * from "./scope";
 export * from "./sso";
+export * from "./totp";
+export * from "./two-factor";
+export * from "./device";

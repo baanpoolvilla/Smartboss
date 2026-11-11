@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { getSession } from "@smartboss/auth";
+import { shareUnlockCookieName } from "@/modules/company-files/lib/share-password";
 import { getSignedFileUrl, readStoredFile } from "@/lib/storage";
 import { resolveShareAccess } from "@/modules/company-files/data/files";
 
@@ -12,9 +14,11 @@ export const runtime = "nodejs";
  */
 export async function GET(req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
+  // ?pw= เหลือไว้ให้หน้าเว็บรุ่นเก่าที่ยังเปิดค้างอยู่เท่านั้น — หน้าปัจจุบันใช้ cookie ปลดล็อก (ไม่ทิ้งรหัสไว้ใน URL/log)
   const password = new URL(req.url).searchParams.get("pw");
   const session = await getSession();
-  const access = await resolveShareAccess(token, { viewerOrgId: session?.orgId ?? null, password });
+  const unlockCookie = (await cookies()).get(shareUnlockCookieName(token))?.value ?? null;
+  const access = await resolveShareAccess(token, { viewerOrgId: session?.orgId ?? null, password, unlockCookie });
   if (!access.ok) {
     if (access.reason === "invalid") return new NextResponse("ลิงก์นี้ใช้ไม่ได้แล้ว", { status: 404 });
     if (access.reason === "scope") return new NextResponse("ลิงก์นี้เปิดเฉพาะคนในบริษัท", { status: 403 });

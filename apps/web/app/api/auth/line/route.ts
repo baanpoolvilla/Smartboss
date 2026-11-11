@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const authUser = await establishSession(user.id, ua);
+  const authUser = await establishSession(user.id, ua, ip);
   if (!authUser) return jsonError("บัญชีนี้ถูกปิดใช้งาน", 401);
 
   await audit({ userId: user.id, action: "LOGIN_SUCCESS_LINE", ip, userAgent: ua });

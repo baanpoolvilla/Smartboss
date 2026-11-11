@@ -23,6 +23,7 @@ import {
   deleteUserAction,
   moveUserOrgAction,
   resetPasswordAction,
+  resetTwoFactorAction,
   setUserActiveAction,
   setUserDepartmentAction,
   setUserRolesAction,
@@ -339,6 +340,33 @@ export default async function AdminUserDetailPage({
                   </Button>
                 </div>
               </form>
+            </SectionCard>
+
+            {/* ─── ยืนยันตัวตน 2 ชั้น ─── */}
+            <SectionCard
+              title="ยืนยันตัวตน 2 ชั้น"
+              description="ผู้ใช้เปิด/ปิดเองที่ บัญชีของฉัน › ความปลอดภัย"
+            >
+              {user.totpEnabledAt ? (
+                <form action={resetTwoFactorAction} className="flex flex-col gap-3">
+                  <input type="hidden" name="userId" value={user.id} />
+                  <p className="text-sm text-(--ink)">
+                    เปิดอยู่ตั้งแต่ {fmt(user.totpEnabledAt)}
+                  </p>
+                  <p className="text-xs text-(--ink-soft)">
+                    ใช้เมื่อผู้ใช้ทำมือถือหายและไม่มีรหัสสำรอง — ล้างแล้วเข้าได้ด้วยรหัสผ่านอย่างเดียว
+                    แล้วให้เจ้าตัวตั้งใหม่เอง · ระบบบันทึกประวัติและแจ้งเจ้าของบัญชี
+                    <strong className="text-(--ink)"> ยืนยันตัวตนของคนขอให้แน่ใจก่อนกด</strong>
+                  </p>
+                  <div>
+                    <Button type="submit" size="sm" variant="outline">
+                      ล้างยืนยันตัวตน 2 ชั้น
+                    </Button>
+                  </div>
+                </form>
+              ) : (
+                <p className="text-sm text-(--ink-soft)">ยังไม่ได้เปิด</p>
+              )}
             </SectionCard>
 
             {/* ─── สถานะ / ลบ ─── */}

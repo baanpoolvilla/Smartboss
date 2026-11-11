@@ -19,7 +19,8 @@ export function LogoutButton({
     try {
       // แชทที่จำไว้ในเครื่อง — คนถัดไปที่ใช้เครื่องนี้ต้องไม่เห็น
       clearChatCache();
-      await fetch("/api/auth/logout", { method: "POST" });
+      // ใต้ /api/auth/refresh — ที่เดียวที่เบราว์เซอร์ส่ง cookie ของ refresh token มาให้เพิกถอนได้จริง
+      await fetch("/api/auth/refresh/logout", { method: "POST" });
     } finally {
       // โหลดหน้าใหม่ทั้งหน้า ไม่ใช่ router.replace — หน้าที่มีตัวซิงก์เบื้องหลัง
       // (Kanban: TaskSync/realtime) ค้างสถานะฝั่ง client และ router cache ไว้
