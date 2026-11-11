@@ -37,6 +37,7 @@ import { createOtFromHrApproval } from "@/modules/requests/lib/hr-ot-link";
 import { salaryAccess } from "@/modules/salary/lib/access";
 
 import { ceoTitle } from "@/lib/ceo-title";
+import { accountOfEmployment, bangkokDay, offboardAccount } from "@/lib/offboarding";
 /**
  * อนุมัติลา / แก้เวลาแล้ว → คำนวณผลลงเวลาใหม่และคืนคะแนนที่หักไปแล้วทันที ไม่ต้องรอ cron 08:00/17:00
  * (เจอจริง: อนุมัติ WFH ย้อนหลังแล้วหน้าคะแนนยังขึ้น "ขาดงาน" อยู่จนรอบถัดไป)
@@ -590,7 +591,7 @@ export async function updateEmploymentTypeAction(formData: FormData) {
 }
 
 export async function terminateEmploymentAction(formData: FormData) {
-  await guard(HR_PERMS.employeeManage);
+  const session = await guard(HR_PERMS.employeeManage);
   const employmentId = String(formData.get("employment_id") ?? "");
   const terminatedOn = String(formData.get("terminated_on") ?? "");
   const reason = String(formData.get("reason") ?? "").trim();
@@ -604,8 +605,33 @@ export async function terminateEmploymentAction(formData: FormData) {
   } catch (error) {
     throw new Error(toMessage(error));
   }
+
+  // พ้นสภาพสำเร็จแล้ว — ขั้นต่อจากนี้พลาดต้องไม่ทำให้ฟอร์มขึ้นว่าไม่สำเร็จ (หน้าพนักงานแสดงสถานะที่ค้างให้เห็นเอง)
+  if (formData.get("disable_account") === "on") {
+    await offboardAccount(session.orgId, employmentId, terminatedOn, session.userId).catch((err) =>
+      console.error("[offboarding] ปิดบัญชีไม่สำเร็จ:", err instanceof Error ? err.message : err),
+    );
+  }
+  // วันสุดท้ายผ่านไปแล้ว = ไม่ต้องสแกนนิ้วอีก ลบออกจากทุกเครื่องเลย (ข้อมูลชีวภาพไม่ควรค้างหลังหมดความจำเป็น)
+  // วันสุดท้ายยังไม่ถึง: ยังต้องลงเวลาอยู่ — หน้าพนักงานจะเตือนให้กดลบเมื่อพ้นวันนั้น
+  if (terminatedOn < bangkokDay()) {
+    await wfFetch(`/employments/${employmentId}/biometric-enrollments:delete`, {
+      method: "POST",
+      body: { reason: "พ้นสภาพ — ลบอัตโนมัติจาก Smartboss" },
+    }).catch(() => undefined);
+  }
   revalidatePath(`/hr/employees/${employmentId}`);
   revalidatePath("/hr/employees");
+}
+
+/** ปิดบัญชีเข้าสู่ระบบของพนักงานที่พ้นสภาพไปแล้ว (คนที่แจ้งพ้นสภาพไว้ก่อนมีฟังก์ชันนี้ / ตอนนั้นไม่ได้ติ๊ก) */
+export async function closeTerminatedAccountAction(formData: FormData) {
+  const session = await guard(HR_PERMS.employeeManage);
+  const employmentId = String(formData.get("employment_id") ?? "");
+  const account = await accountOfEmployment(session.orgId, employmentId);
+  if (!account?.terminatedOn) throw new Error("พนักงานคนนี้ยังไม่ได้แจ้งพ้นสภาพ");
+  await offboardAccount(session.orgId, employmentId, account.terminatedOn, session.userId);
+  revalidatePath(`/hr/employees/${employmentId}`);
 }
 
 /**

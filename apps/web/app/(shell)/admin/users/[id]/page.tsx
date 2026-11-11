@@ -371,6 +371,13 @@ export default async function AdminUserDetailPage({
 
             {/* ─── สถานะ / ลบ ─── */}
             <SectionCard title="สถานะบัญชี">
+              {user.isActive && user.disableOn && (
+                <p className="mb-3 rounded-md border border-(--tone-warn) p-3 text-xs text-(--ink)">
+                  บัญชีนี้จะถูกปิดเองหลังวันที่{" "}
+                  {user.disableOn.toLocaleDateString("th-TH", { dateStyle: "medium", timeZone: "UTC" })}{" "}
+                  (ตั้งไว้ตอนแจ้งพ้นสภาพในระบบบุคคล) — ยกเลิกได้โดยกดปิดใช้งานแล้วเปิดใช้งานใหม่
+                </p>
+              )}
               {user.lockedUntil && user.lockedUntil > new Date() && (
                 <div className="mb-3 rounded-md border border-(--warn)/30 bg-(--warn)/5 p-3">
                   <p className="mb-2 text-xs text-(--ink)">

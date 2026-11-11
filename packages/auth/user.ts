@@ -37,6 +37,9 @@ export async function loadAuthUser(userId: string): Promise<AuthUser | null> {
   });
 
   if (!user || !user.isActive) return null;
+  // พนักงานพ้นสภาพที่ตั้งวันปิดบัญชีไว้ — ใช้ได้ถึงสิ้นวันนั้น (เวลาไทย) พ้นแล้วเข้าไม่ได้ทันที
+  // ไม่รองานตั้งเวลา: ตัวพลิกสถานะเป็น "ปิดใช้งาน" (apps/web/lib/offboarding.ts) ตามมาทีหลังได้
+  if (user.disableOn && Date.now() >= user.disableOn.getTime() + (24 - 7) * 3600_000) return null;
 
   const roles = user.roles.map((ur) => ur.role.code);
   // สิทธิ์การใช้งานระบบมาจาก Role อย่างเดียว — แผนก/ตำแหน่งไม่มีสิทธิ์ของตัวเอง

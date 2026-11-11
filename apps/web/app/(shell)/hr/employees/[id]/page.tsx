@@ -38,6 +38,7 @@ import {
 } from "@/modules/hr/lib/labels";
 import {
   addCompensationRateAction,
+  closeTerminatedAccountAction,
   deleteEnrollmentsAction,
   terminateEmploymentAction,
   updateEmploymentTypeAction,
@@ -55,6 +56,7 @@ import { loadDayOffOverrides, resolveDayOffDays } from "@/lib/day-off-quota";
 import { ScoreBreakdown } from "@/components/performance/score-breakdown";
 import { resolveScorePeriodParam, scorePeriodOf } from "@/lib/score-period";
 import { loadScorePeriodConfig } from "@/lib/score-period-config";
+import { accountOfEmployment, bangkokDay } from "@/lib/offboarding";
 
 interface CompensationRate {
   id: string;
@@ -319,6 +321,10 @@ export default async function EmployeeDetailPage({
         );
         const activeDevices = (devices?.items ?? []).filter((d) => d.status === "ACTIVE");
 
+        // พ้นสภาพแล้ว: บัญชีเข้าสู่ระบบ/ลายนิ้วมือยังค้างอยู่ไหม — แสดงให้คนจัดการพนักงานเห็นและปิดได้จากหน้านี้
+        const offboard = canManage && employment.terminated_on ? await accountOfEmployment(session.orgId, id).catch(() => null) : null;
+        const lastDayPassed = !!employment.terminated_on && employment.terminated_on < bangkokDay();
+
         /*
          * คะแนนผลงานอยู่ใน core.performance_events ซึ่งผูกกับ core.users.id
          * ส่วนทะเบียนจ้างงานอยู่ฝั่ง workforce — จับคู่ด้วยอีเมล ค่าเดียวที่ทั้งสอง
@@ -456,6 +462,54 @@ export default async function EmployeeDetailPage({
                 />
               )}
               <Row label="เขตเวลา" value={employment.time_zone} />
+              {offboard && (
+                <div className="mt-2 border-t border-(--line) pt-2">
+                  <Row
+                    label="บัญชีเข้าสู่ระบบ"
+                    value={
+                      !offboard.user
+                        ? "ไม่มีบัญชี"
+                        : !offboard.user.isActive
+                          ? "ปิดแล้ว"
+                          : offboard.user.disableOn
+                            ? `จะปิดเองหลังวันที่ ${formatDate(offboard.user.disableOn)}`
+                            : "ยังเปิดอยู่"
+                    }
+                  />
+                  {offboard.user?.isActive && !offboard.user.disableOn && (
+                    <div role="alert" className="mt-2 rounded-(--radius) border border-(--tone-warn) p-3">
+                      <p className="text-sm font-semibold text-(--ink)">
+                        พ้นสภาพแล้ว แต่ยังเข้าสู่ระบบได้
+                      </p>
+                      {offboard.user.protectedRole ? (
+                        <p className="mt-1 text-xs text-(--ink-soft)">
+                          บัญชีนี้ถือบทบาทสูงสุดของบริษัท ระบบไม่ปิดให้จากหน้านี้ — ให้ผู้ดูแลปิดที่ หลังบ้าน › ผู้ใช้งาน
+                        </p>
+                      ) : offboard.user.id === session.userId ? (
+                        <p className="mt-1 text-xs text-(--ink-soft)">นี่คือบัญชีของคุณเอง — ปิดบัญชีตัวเองไม่ได้</p>
+                      ) : (
+                        <form action={closeTerminatedAccountAction} className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <input type="hidden" name="employment_id" value={id} />
+                          <p className="text-xs text-(--ink-soft)">
+                            {lastDayPassed
+                              ? "ปิดแล้วเข้าระบบไม่ได้ทุกเครื่องทันที และไม่ขึ้นให้แท็ก/มอบหมายงานอีก — แชท งาน รายงาน และสลิปเดิมยังอยู่ครบ"
+                              : "ตั้งให้ปิดเองหลังวันพ้นสภาพ — ระหว่างนี้ยังใช้งานได้ตามปกติ"}
+                          </p>
+                          <Button type="submit" size="sm" variant="danger" className="h-10 shrink-0">
+                            {lastDayPassed ? "ปิดบัญชีเข้าสู่ระบบ" : "ตั้งให้ปิดหลังวันพ้นสภาพ"}
+                          </Button>
+                        </form>
+                      )}
+                    </div>
+                  )}
+                  {lastDayPassed && liveEnrollments.length > 0 && (
+                    <p role="alert" className="mt-2 rounded-(--radius) border border-(--tone-warn) p-3 text-xs text-(--ink)">
+                      ยังมีลายนิ้วมือของคนนี้ค้างในเครื่องสแกน {liveEnrollments.length} รายการ —
+                      กด “ลบทุกเครื่อง” ที่หัวข้อลายนิ้วมือด้านล่าง (ข้อมูลลายนิ้วมือไม่ควรเก็บไว้หลังพ้นสภาพ)
+                    </p>
+                  )}
+                </div>
+              )}
             </SectionCard>
 
             {canManage && (
@@ -849,7 +903,19 @@ export default async function EmployeeDetailPage({
                   <Field label="เหตุผล">
                     <input name="reason" maxLength={200} className={inputClass} />
                   </Field>
-                  <div className="flex items-end">
+                  <label className="flex items-start gap-3 rounded-lg border border-(--line) p-3 text-sm text-(--ink) sm:col-span-3">
+                    <input type="checkbox" name="disable_account" defaultChecked className="mt-0.5 h-5 w-5 shrink-0 accent-(--brand-navy)" />
+                    <span>
+                      <span className="block font-medium">ปิดบัญชีเข้าสู่ระบบเมื่อพ้นวันสุดท้าย</span>
+                      <span className="block text-xs text-(--ink-soft)">
+                        ใช้งานได้ถึงสิ้นวันพ้นสภาพ จากนั้นเข้าระบบไม่ได้ทุกเครื่อง และไม่ขึ้นให้แท็ก/มอบหมายงานอีก ·
+                        แชท งาน รายงาน และสลิปเดิมยังอยู่ครบ · เปิดคืนได้ที่ หลังบ้าน › ผู้ใช้งาน ·
+                        วันพ้นสภาพที่ผ่านมาแล้วจะปิดทันทีและลบลายนิ้วมือออกจากเครื่องสแกนให้ด้วย ·
+                        เอาติ๊กออกถ้าคนนี้ยังต้องเข้าระบบต่อ (เช่น เปลี่ยนเป็นสัญญาจ้างใหม่)
+                      </span>
+                    </span>
+                  </label>
+                  <div className="flex items-end sm:col-span-3">
                     <Button type="submit" variant="danger">
                       แจ้งพ้นสภาพ
                     </Button>

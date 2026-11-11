@@ -1,4 +1,5 @@
 import { maybeNotifyPendingOvertime } from "@/modules/hr/lib/hr-notify";
+import { sweepDueAccountDisables } from "@/lib/offboarding";
 import { cache } from "react";
 import { getSession, loadAuthUser } from "@smartboss/auth";
 import { prisma } from "@smartboss/database";
@@ -45,6 +46,8 @@ export const loadShellNav = cache(async (): Promise<ShellNav | null> => {
   if (!user) return null;
   // แจ้ง "มี OT รออนุมัติ" — prod ไม่มี cron จึงพ่วงกับการเปิดแอป (ไม่รอผล · บริษัทละไม่เกิน 1 ครั้ง/30 นาที)
   if (user.orgId) maybeNotifyPendingOvertime(user.orgId);
+  // ปิดบัญชีพนักงานที่พ้นวันสุดท้ายแล้ว (ตั้งไว้ตอนแจ้งพ้นสภาพ) — ไม่รอผล · บริษัทละไม่เกิน 1 ครั้ง/10 นาที
+  if (user.orgId) sweepDueAccountDisables(user.orgId);
 
   // โมดูลที่บริษัทของผู้ใช้เปิดใช้งาน (subscription) — platform user (ไม่มี org) = ว่าง
   const enabledCodes = user.orgId

@@ -287,7 +287,8 @@ export async function setUserActiveAction(formData: FormData) {
 
   await prisma.user.update({
     where: { id: userId },
-    data: { isActive, ...(isActive ? { failedLogins: 0, lockedUntil: null } : {}) },
+    // เปิดคืน = ล้างวันปิดอัตโนมัติที่ตั้งไว้ตอนแจ้งพ้นสภาพด้วย ไม่งั้นจะถูกปิดซ้ำเอง
+    data: { isActive, disableOn: null, ...(isActive ? { failedLogins: 0, lockedUntil: null } : {}) },
   });
 
   // ปิดใช้งาน = ตัด session ที่ค้างอยู่ทิ้งด้วย ไม่งั้น token เดิมยังใช้ได้จนหมดอายุ
