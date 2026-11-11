@@ -18,8 +18,26 @@ import {
 } from "@/lib/security-settings";
 
 const checkRow = "flex items-start gap-3 rounded-lg border border-(--line) p-3 text-sm text-(--ink)";
-const checkBox = "mt-0.5 h-5 w-5 shrink-0 accent-(--brand-navy)";
 import { saveSecuritySettingsAction } from "../actions";
+
+const checkBox = "mt-0.5 h-5 w-5 shrink-0 accent-(--brand-navy)";
+
+/**
+ * คำอธิบายของสวิตช์แต่ละตัว แบบหัวข้อคงที่ — เปิดแล้วเกิดอะไร / ระวัง / ยกเลิก
+ * (ผู้ใช้ 11/11/2569 "มีไว้ก็ได้แต่อยากให้อธิบายให้ชัดเจน" — เดิมเป็นย่อหน้าเดียวคั่นด้วยจุด อ่านยาก)
+ */
+function Explain({ rows }: { rows: [label: string, text: React.ReactNode][] }) {
+  return (
+    <dl className="mt-3 grid gap-x-4 gap-y-2 rounded-lg bg-(--bg-soft) p-3 text-sm sm:grid-cols-[7.5rem_1fr]">
+      {rows.map(([label, text]) => (
+        <div key={label} className="sm:contents">
+          <dt className="font-semibold text-(--ink)">{label}</dt>
+          <dd className="text-(--ink-soft)">{text}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
 
 /**
  * ตั้งค่าความปลอดภัยตอนเข้าสู่ระบบ
@@ -66,6 +84,19 @@ export default async function SecuritySettingsPage() {
   return (
     <AppScaffold title="ความปลอดภัยการเข้าสู่ระบบ" width="max-w-none" backHref="/admin">
       <form action={saveSecuritySettingsAction} className="flex flex-col gap-4">
+        <Card className="p-4">
+          <p className="text-sm font-semibold text-(--ink)">หน้านี้ใช้ทำอะไร</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-(--ink-soft)">
+            <li>สองหัวข้อแรกคือเกณฑ์ล็อกบัญชีและความยาวรหัสผ่าน ใช้อยู่แล้วทุกบริษัท</li>
+            <li>
+              หัวข้อที่เหลือเป็น<strong className="text-(--ink)">ตัวเลือกเสริม ปิดไว้ทั้งหมด</strong>{" "}
+              ไม่แตะ ระบบก็ทำงานเหมือนเดิม
+            </li>
+            <li>เปลี่ยนอะไรแล้วต้องกดปุ่มบันทึกการตั้งค่าท้ายหน้า ถึงจะมีผล และมีผลทันที</li>
+            <li>ยกเลิกได้ทุกตัวที่หน้านี้ เอาติ๊กออกหรือลบค่าทิ้งแล้วบันทึก</li>
+          </ul>
+        </Card>
+
         <SectionCard
           title="ล็อกบัญชีเมื่อกรอกรหัสผิด"
           description="กันคนเดารหัสผ่านไปเรื่อย ๆ — ตั้งให้พอดีกับหน้างานจริง"
@@ -158,13 +189,22 @@ export default async function SecuritySettingsPage() {
               );
             })}
           </div>
-          <p className="mt-3 text-xs text-(--ink-soft)">
-            ไม่ติ๊กเลย = ไม่บังคับใคร (แบบเดิม) · คนในบทบาทที่ติ๊กและยังไม่ได้เปิด
-            เปิดหน้าไหนก็จะถูกพาไปหน้าตั้งค่าก่อน (ราว 2 นาที ใช้แอป Google/Microsoft Authenticator)
-            และเปิดหน้าจัดการเงินเดือนไม่ได้จนกว่าจะตั้งเสร็จ ·{" "}
-            <strong className="text-(--ink)">แนะนำ: บอกทีมล่วงหน้าแล้วค่อยติ๊ก</strong> เริ่มจากคนที่เห็นเงินเดือนและผู้ดูแลระบบ ·
-            มือถือหาย ผู้ดูแลล้างให้ได้ที่หน้าผู้ใช้งาน · เข้าผ่านแอป LINE ไม่ถามรหัส (LINE ในมือถือถือเป็นชั้นที่สอง)
-          </p>
+          <Explain
+            rows={[
+              ["คืออะไร", "ตอนเข้าสู่ระบบด้วยอีเมลและรหัสผ่าน ต้องพิมพ์เลข 6 หลักจากแอปในมือถือของตัวเองเพิ่มอีกขั้น รหัสผ่านหลุดอย่างเดียวคนอื่นจึงเข้าไม่ได้"],
+              ["ไม่ติ๊กเลย", "ไม่บังคับใคร ใครอยากใช้ก็เปิดเองได้ ใครไม่เปิดก็เข้าระบบแบบเดิม"],
+              ["ติ๊กบทบาทไหน", "คนในบทบาทนั้นที่ยังไม่ได้เปิด จะถูกพาไปหน้าตั้งค่าทันทีที่เปิดระบบ ใช้เวลาราว 2 นาที ตั้งเสร็จใช้งานต่อได้เลย ระหว่างยังไม่ตั้ง เปิดหน้าจัดการเงินเดือนไม่ได้"],
+              [
+                "ก่อนติ๊ก",
+                <>
+                  บอกคนในบทบาทนั้นล่วงหน้า และให้โหลดแอป Google Authenticator หรือ Microsoft Authenticator ไว้ก่อน{" "}
+                  <strong className="text-(--ink)">ติ๊กแล้วมีผลทันทีที่บันทึก</strong>
+                </>,
+              ],
+              ["มือถือหาย", "ใช้รหัสสำรองที่ได้ตอนเปิด หรือให้ผู้ดูแลกดล้างยืนยันตัวตน 2 ชั้น ที่หน้าผู้ใช้งานของคนนั้น"],
+              ["เข้าทาง LINE", "ไม่ถามเลข 6 หลัก เพราะต้องถือมือถือที่ล็อกอิน LINE ของตัวเองอยู่แล้ว"],
+            ]}
+          />
         </SectionCard>
 
         <SectionCard
@@ -176,8 +216,12 @@ export default async function SecuritySettingsPage() {
               <input type="checkbox" name="requireCurrentPassword" defaultChecked={s.requireCurrentPassword} className={checkBox} />
               <span>
                 <span className="block font-medium">เปลี่ยนรหัสผ่านต้องกรอกรหัสปัจจุบันก่อน</span>
+                <span className="mt-1 block text-xs text-(--ink-soft)">
+                  <strong className="text-(--ink)">เปิดแล้ว:</strong> หน้าเปลี่ยนรหัสผ่านมีช่องรหัสผ่านปัจจุบันเพิ่ม
+                  คนที่หยิบเครื่องที่ล็อกอินค้างไว้จึงเปลี่ยนรหัสยึดบัญชีไม่ได้
+                </span>
                 <span className="block text-xs text-(--ink-soft)">
-                  กันคนที่หยิบเครื่องที่ล็อกอินค้างไว้เปลี่ยนรหัสยึดบัญชี · แลกกับ: คนที่ลืมรหัสต้องให้ผู้ดูแลตั้งให้ใหม่
+                  <strong className="text-(--ink)">ข้อเสีย:</strong> คนที่ลืมรหัสเปลี่ยนเองไม่ได้ ต้องให้ผู้ดูแลตั้งรหัสใหม่ให้
                 </span>
               </span>
             </label>
@@ -185,8 +229,12 @@ export default async function SecuritySettingsPage() {
               <input type="checkbox" name="notifyNewDevice" defaultChecked={s.notifyNewDevice} className={checkBox} />
               <span>
                 <span className="block font-medium">แจ้งเจ้าของบัญชีเมื่อเข้าสู่ระบบจากอุปกรณ์ใหม่</span>
+                <span className="mt-1 block text-xs text-(--ink-soft)">
+                  <strong className="text-(--ink)">เปิดแล้ว:</strong> เมื่อบัญชีถูกเข้าจากเครื่องหรือเบราว์เซอร์ชนิดที่ไม่เคยใช้
+                  เจ้าของบัญชีได้แจ้งเตือน ถ้าไม่ใช่ตัวเองจะรู้ทันที
+                </span>
                 <span className="block text-xs text-(--ink-soft)">
-                  เตือนเฉพาะอุปกรณ์/เบราว์เซอร์ชนิดที่บัญชีนั้นไม่เคยใช้ · ไม่เปิดก็ยังบันทึกไว้ในประวัติการใช้งาน
+                  <strong className="text-(--ink)">ไม่เปิด:</strong> ไม่แจ้งเตือน แต่ยังบันทึกไว้ให้ผู้ดูแลดูได้ที่ ประวัติการใช้งาน
                 </span>
               </span>
             </label>
@@ -204,11 +252,15 @@ export default async function SecuritySettingsPage() {
                 className={`${inputClass} sm:w-40`}
               />
             </Field>
-            <p className="-mt-1 text-xs text-(--ink-soft)">
-              มีผลกับทุกคนในบริษัท ทั้งคอมและมือถือ (ไม่รวมหน้าลงเวลาในแอป LINE) · เตือนบนจอ 1 นาทีก่อนออก ·
-              ปิดแอปมือถือทิ้งไว้นานเกินเวลานี้ เปิดใหม่ต้องเข้าสู่ระบบใหม่ · กำลังโทร/ดูวิดีโอไม่นับว่าไม่ได้ใช้งาน ·
-              เครื่องที่ใช้ร่วมกันหลายคนแนะนำ 15–30 นาที
-            </p>
+            <Explain
+              rows={[
+                ["ใส่ 0", "ไม่ใช้ ล็อกอินค้างไว้ได้เหมือนเดิม"],
+                ["ใส่ตัวเลข", "ไม่แตะหน้าจอครบจำนวนนาทีนั้น ระบบออกจากระบบให้เอง มีกล่องเตือนนับถอยหลัง 1 นาทีก่อน กดใช้งานต่อได้"],
+                ["มีผลกับ", "ทุกคนในบริษัท ทั้งคอมและมือถือ ยกเว้นหน้าลงเวลาในแอป LINE"],
+                ["ควรรู้", "ปิดแอปมือถือทิ้งไว้นานเกินเวลานี้ เปิดใหม่ต้องเข้าสู่ระบบใหม่ทุกครั้ง ข้อมูลที่พิมพ์ค้างไว้และยังไม่บันทึกจะหาย ส่วนตอนโทรหรือดูวิดีโอไม่นับว่าไม่ได้ใช้งาน"],
+                ["แนะนำ", "เครื่องที่ใช้ร่วมกันหลายคน 15–30 นาที ถ้าทุกคนใช้เครื่องตัวเอง ไม่ต้องตั้งก็ได้"],
+              ]}
+            />
           </div>
         </SectionCard>
 
@@ -218,7 +270,7 @@ export default async function SecuritySettingsPage() {
         >
           <Field
             label="IP ที่อนุญาต (บรรทัดละ 1 รายการ)"
-            hint="ลงท้าย * ได้ เช่น 203.0.113.* · มีผลกับหน้าจัดการเงินเดือน สลิปของคนอื่น และไฟล์ส่งออก — สลิปของตัวเองดูได้จากทุกที่"
+            hint="เว้นว่าง = ไม่จำกัด · ลงท้าย * ได้ เช่น 203.0.113.*"
           >
             <textarea
               name="salaryAllowedIps"
@@ -229,11 +281,25 @@ export default async function SecuritySettingsPage() {
               className={`${inputClass} h-auto py-2 font-mono`}
             />
           </Field>
-          <p className="mt-2 text-xs text-(--ink-soft)">
-            IP ของคุณตอนนี้: <strong className="font-mono text-(--ink)">{myIp || "ไม่ทราบ"}</strong> ·
-            ใช้ได้เมื่อออฟฟิศมี IP คงที่ (ถามผู้ให้บริการอินเทอร์เน็ต) — เน็ตบ้าน/มือถือ IP เปลี่ยนบ่อย
-            ตั้งแล้วจะเข้าไม่ได้เอง · ตั้งผิดแก้ได้ที่หน้านี้เสมอ (หน้านี้ไม่ถูกจำกัด)
+          <p className="mt-2 text-sm text-(--ink)">
+            IP ของคุณตอนนี้: <strong className="font-mono">{myIp || "ไม่ทราบ"}</strong>
+            <span className="text-xs text-(--ink-soft)"> (นั่งอยู่ที่ออฟฟิศ ใส่เลขนี้ได้เลย)</span>
           </p>
+          <Explain
+            rows={[
+              ["IP คืออะไร", "เลขประจำเครือข่ายอินเทอร์เน็ต ทุกเครื่องที่ต่อ Wi-Fi ออฟฟิศเดียวกันจะเป็นเลขเดียวกัน"],
+              ["ใส่แล้ว", "หน้าจัดการเงินเดือน สลิปของคนอื่น และไฟล์ส่งออก เปิดได้เฉพาะจากเครือข่ายในรายการ คนที่อยู่นอกรายการเห็นข้อความบอกเหตุผล และยังดูสลิปของตัวเองได้"],
+              ["ไม่กระทบ", "สิทธิ์ของแต่ละคนยังอยู่ครบ กลับมาใช้เครือข่ายในรายการก็เห็นเมนูเดิมทันที พนักงานทั่วไปไม่เกี่ยวเลย"],
+              [
+                "ระวัง",
+                <>
+                  ใช้ได้เฉพาะออฟฟิศที่มี <strong className="text-(--ink)">IP คงที่</strong> ถามผู้ให้บริการอินเทอร์เน็ตก่อน
+                  เน็ตบ้านและเน็ตมือถือเลขเปลี่ยนเอง วันที่เลขเปลี่ยนจะเปิดหน้าเงินเดือนไม่ได้จนกว่าจะมาแก้ที่นี่
+                </>,
+              ],
+              ["ตั้งผิด", "แก้หรือลบได้ที่หน้านี้เสมอ หน้านี้ไม่ถูกจำกัดด้วย IP"],
+            ]}
+          />
           {myIpBlocked && (
             <p role="alert" className="mt-2 rounded-(--radius) border border-(--tone-warn) p-2 text-xs text-(--ink)">
               ⚠ IP ของคุณตอนนี้ไม่อยู่ในรายการ — คุณเปิดหน้าจัดการเงินเดือนจากที่นี่ไม่ได้
