@@ -14,7 +14,7 @@ import { resolveRoundSubmitters } from "@/modules/report_task/lib/submission-rou
 import { cn } from "@/modules/report_task/lib/utils";
 import { Globe, Users, Building2, User as UserIcon, Search, Plus, Minus, Check, ImagePlus, Bell, UserCheck } from "lucide-react";
 import { uuid } from "@/modules/report_task/lib/uuid";
-import { normalizeTopics } from "@/modules/report_task/lib/report-format";
+import { normalizeTopics, topicLabel } from "@/modules/report_task/lib/report-format";
 
 const WEEKDAYS = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 const MAX_IMAGES = 6;
@@ -338,13 +338,18 @@ export function SubmissionRoundDialog({
           {/* รูปแบบรายงานของรอบนี้ — หัวข้อที่ต้องมี + สีสถานะ */}
           <div className="space-y-1.5">
             <Label htmlFor="round-topics" className="text-xs text-[var(--ink-soft)]">หัวข้อที่รายงานรอบนี้ต้องมี (บรรทัดละ 1 หัวข้อ)</Label>
+            <p className="text-[11px] text-[var(--ink-soft)]">
+              คนเขียนชื่อหัวข้อต่างกันได้ ใส่ชื่อเรียกอื่นต่อท้ายในบรรทัดเดียวกัน คั่นด้วย <b className="text-[var(--ink)]">|</b> เช่น
+              <span className="mt-0.5 block font-mono text-[var(--ink)]">วันนี้ส่งงานอะไร | วันนี้ส่งงาน | งานที่ดำเนินการวันนี้</span>
+              ชื่อแรกคือชื่อหลักที่ขึ้นในแถบตรวจและปุ่มใส่หัวข้อ
+            </p>
             <textarea
               id="round-topics"
               value={topicsText}
               onChange={(e) => setTopicsText(e.target.value)}
-              rows={5}
+              rows={6}
               spellCheck={false}
-              placeholder={"เว้นว่าง = ไม่ตรวจรูปแบบ โพสต์ได้เหมือนเดิม\nเช่น\nวันนี้ส่งงานอะไร\nปัญหาและความเสี่ยง"}
+              placeholder={"เว้นว่าง = ไม่ตรวจรูปแบบ โพสต์ได้เหมือนเดิม\nเช่น\nวันนี้ส่งงานอะไร | วันนี้ส่งงาน\nปัญหาและความเสี่ยง"}
               className="w-full rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--ink-soft)]"
             />
             {topicsPreview.length > 0 ? (
@@ -357,7 +362,7 @@ export function SubmissionRoundDialog({
                   </span>
                 </label>
                 <p className="rounded-lg bg-[var(--bg-soft)] px-3 py-2 text-[11px] leading-relaxed text-[var(--ink-soft)]">
-                  <b className="text-[var(--ink)]">ตั้งแล้วเกิดอะไร:</b> คนส่งยังพิมพ์หรือวางรายงานในช่องเดิม ระบบตรวจให้ว่ามีหัวข้อครบ {topicsPreview.length} ข้อ
+                  <b className="text-[var(--ink)]">ตั้งแล้วเกิดอะไร:</b> คนส่งยังพิมพ์หรือวางรายงานในช่องเดิม ระบบตรวจให้ว่ามีหัวข้อครบ {topicsPreview.length} ข้อ ({topicsPreview.map((t) => topicLabel(t)).join(" · ")})
                   {requireColor ? " ใส่สีครบ" : ""} และมีรายละเอียดใต้ทุกหัวข้อ <b className="text-[var(--ink)]">ไม่ครบโพสต์เป็นรายงานของรอบนี้ไม่ได้</b> ·
                   ชื่อหัวข้อต้องตรงตามที่ตั้ง (ไม่สนเว้นวรรค เลขข้อ หรือตัวหนา) · โพสต์ที่ติ๊กว่าไม่ใช่รีพอตของวันนี้ไม่ถูกตรวจ ·
                   มีผลกับโพสต์ใหม่ รายงานที่ส่งไปแล้วไม่เปลี่ยน

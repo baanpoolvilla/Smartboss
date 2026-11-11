@@ -38,9 +38,36 @@ export interface FormatCheck {
 const COLOR_OF: Record<string, StatusColor> = { "🔴": "red", "🟡": "yellow", "🟢": "green" };
 export const COLOR_EMOJI: Record<StatusColor, string> = { red: "🔴", yellow: "🟡", green: "🟢" };
 
-/** หัวข้อสูงสุดต่อรอบ / ความยาวสูงสุดต่อหัวข้อ — กันตั้งค่าจนตรวจไม่ไหวหรือแถบตรวจยาวล้นจอ */
+/** หัวข้อสูงสุดต่อรอบ / ความยาวสูงสุดต่อชื่อ / ชื่อเรียกอื่นสูงสุดต่อหัวข้อ — กันตั้งค่าจนตรวจไม่ไหวหรือแถบตรวจยาวล้นจอ */
 export const MAX_TOPICS = 15;
 export const MAX_TOPIC_LENGTH = 80;
+export const MAX_ALIASES = 10;
+
+/**
+ * ชื่อเรียกอื่นของหัวข้อ — 1 บรรทัดในตั้งค่า = 1 หัวข้อ คั่นชื่อด้วย "|"
+ *   "วันนี้ส่งงานอะไร | วันนี้ส่งงาน | งานที่ดำเนินการวันนี้"
+ * ชื่อแรก = ชื่อหลัก (แสดงในแถบตรวจ และใช้ตอนกด "ใส่หัวข้อที่ขาดให้") ชื่อถัดไปนับว่าเป็นหัวข้อเดียวกัน
+ * มีไว้เพราะรายงานจริงเขียนชื่อหัวข้อต่างกันเล็กน้อย (ทดลองกับรายงานจริง 24 ฉบับ 11/11/2569:
+ * ชื่อตรงตัวผ่าน 7 · ใส่ชื่อเรียกอื่นที่พบบ่อยผ่าน 17)
+ */
+export function topicNames(line: string): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const part of line.split("|")) {
+    const name = stripLead(part.replace(/[🔴🟡🟢]/gu, "")).trim().slice(0, MAX_TOPIC_LENGTH);
+    const key = squash(name);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    names.push(name);
+    if (names.length > MAX_ALIASES) break;
+  }
+  return names;
+}
+
+/** ชื่อหลักของหัวข้อ (ชื่อแรกก่อน "|") */
+export function topicLabel(line: string): string {
+  return topicNames(line)[0] ?? "";
+}
 
 /**
  * รหัสจัดรูปแบบที่ตัวแก้ข้อความเก็บไว้ในเนื้อหา (lib/report-feed-rich-text.tsx):
@@ -74,10 +101,11 @@ export function normalizeTopics(input: readonly string[] | string | undefined | 
   const out: string[] = [];
   const seen = new Set<string>();
   for (const line of raw) {
-    const topic = stripLead(String(line).replace(/[🔴🟡🟢]/gu, "")).trim().slice(0, MAX_TOPIC_LENGTH);
-    const key = squash(topic);
+    const names = topicNames(String(line));
+    const key = names[0] ? squash(names[0]) : "";
     if (!key || seen.has(key)) continue;
     seen.add(key);
+    const topic = names.join(" | ");
     out.push(topic);
     if (out.length >= MAX_TOPICS) break;
   }
@@ -92,9 +120,11 @@ export function normalizeTopics(input: readonly string[] | string | undefined | 
  */
 export function checkReportFormat(text: string, topics: readonly string[], requireColor: boolean): FormatCheck {
   const wanted = normalizeTopics(topics);
-  // หัวข้อยาวก่อน — "ปัญหา" ต้องไม่ไปแย่งบรรทัดของ "ปัญหาและความเสี่ยง"
-  const byLength = wanted.map((topic, index) => ({ topic, index, key: squash(topic) })).sort((a, b) => b.key.length - a.key.length);
-  const items: TopicCheck[] = wanted.map((topic) => ({ topic, found: false, color: null, hasContent: false }));
+  // ทุกชื่อ (หลัก + เรียกอื่น) ของทุกหัวข้อ เรียงชื่อยาวก่อน — "ปัญหา" ต้องไม่ไปแย่งบรรทัดของ "ปัญหาและความเสี่ยง"
+  const byLength = wanted
+    .flatMap((line, index) => topicNames(line).map((name) => ({ index, key: squash(name) })))
+    .sort((a, b) => b.key.length - a.key.length);
+  const items: TopicCheck[] = wanted.map((line) => ({ topic: topicLabel(line), found: false, color: null, hasContent: false }));
 
   let current: TopicCheck | null = null;
   for (const rawLine of text.split(/\r?\n/)) {
@@ -123,7 +153,7 @@ export function checkReportFormat(text: string, topics: readonly string[], requi
 /** ข้อความหัวข้อเปล่าตามรูปแบบ — ปุ่ม "ใส่หัวข้อตามรูปแบบ" และไว้คัดลอกไปให้ AI เขียนตาม */
 export function formatTemplate(topics: readonly string[], requireColor: boolean): string {
   return normalizeTopics(topics)
-    .map((t) => `${requireColor ? "🟢" : ""}${t}\n`)
+    .map((t) => `${requireColor ? "🟢" : ""}${topicLabel(t)}\n`)
     .join("\n");
 }
 
