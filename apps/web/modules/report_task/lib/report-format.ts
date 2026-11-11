@@ -22,6 +22,11 @@ export interface TopicCheck {
   color: StatusColor | null;
   /** มีเนื้อหาใต้หัวข้อ (หรือต่อท้ายบนบรรทัดเดียวกัน) อย่างน้อย 1 ตัวอักษร */
   hasContent: boolean;
+  /**
+   * หัวส่วน เช่น 🏁Common Report🏁 / 🏁Department Module🏁 (ตั้งค่าโดยใส่ 🏁 ในบรรทัดหัวข้อ)
+   * ไม่ต้องมีสี · "มีเนื้อหา" = มีอะไรก็ได้ต่อจากหัวส่วนจนถึงหัวส่วนถัดไป (รวมหัวข้อย่อยข้างใน)
+   */
+  section: boolean;
 }
 
 export interface FormatCheck {
@@ -62,6 +67,11 @@ export function topicNames(line: string): string[] {
     if (names.length > MAX_ALIASES) break;
   }
   return names;
+}
+
+/** บรรทัดตั้งค่าที่มี 🏁 = หัวส่วน (ไม่ต้องใส่สี) */
+export function isSectionTopic(line: string): boolean {
+  return line.includes("🏁");
 }
 
 /** ชื่อหลักของหัวข้อ (ชื่อแรกก่อน "|") */
@@ -124,28 +134,40 @@ export function checkReportFormat(text: string, topics: readonly string[], requi
   const byLength = wanted
     .flatMap((line, index) => topicNames(line).map((name) => ({ index, key: squash(name) })))
     .sort((a, b) => b.key.length - a.key.length);
-  const items: TopicCheck[] = wanted.map((line) => ({ topic: topicLabel(line), found: false, color: null, hasContent: false }));
+  const items: TopicCheck[] = wanted.map((line) => ({ topic: topicLabel(line), found: false, color: null, hasContent: false, section: isSectionTopic(line) }));
 
   let current: TopicCheck | null = null;
+  let currentSection: TopicCheck | null = null;
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line) continue;
     const head = squash(stripLead(line.replace(/[🔴🟡🟢🏁]/gu, "")));
     const hit = head ? byLength.find((t) => !items[t.index]!.found && head.startsWith(t.key)) : undefined;
     if (hit) {
-      current = items[hit.index]!;
-      current.found = true;
-      for (const emoji of Object.keys(COLOR_OF)) if (line.includes(emoji)) current.color = COLOR_OF[emoji]!;
+      const item = items[hit.index]!;
+      item.found = true;
+      if (item.section) {
+        // หัวส่วนใหม่ปิดหัวข้อเดิม — เนื้อหาใต้ "Department Module" ไม่ใช่รายละเอียดของหัวข้อสุดท้ายในส่วนก่อน
+        currentSection = item;
+        current = null;
+        if (head.length > hit.key.length) item.hasContent = true;
+        continue;
+      }
+      current = item;
+      for (const emoji of Object.keys(COLOR_OF)) if (line.includes(emoji)) item.color = COLOR_OF[emoji]!;
       // เนื้อหาต่อท้ายบรรทัดเดียวกับหัวข้อ เช่น "🟢 วันนี้ส่งงานอะไร: ปิดงาน 4 ใบ"
-      if (head.length > hit.key.length) current.hasContent = true;
+      if (head.length > hit.key.length) item.hasContent = true;
+      if (currentSection) currentSection.hasContent = true;
       continue;
     }
     // เส้นคั่น/จุดไข่ปลาที่ใช้เว้นบรรทัดไม่นับเป็นเนื้อหา
-    if (current && squash(line)) current.hasContent = true;
+    if (!squash(line)) continue;
+    if (current) current.hasContent = true;
+    if (currentSection) currentSection.hasContent = true;
   }
 
   const missing = items.filter((i) => !i.found).map((i) => i.topic);
-  const missingColor = requireColor ? items.filter((i) => i.found && !i.color).map((i) => i.topic) : [];
+  const missingColor = requireColor ? items.filter((i) => i.found && !i.section && !i.color).map((i) => i.topic) : [];
   const empty = items.filter((i) => i.found && !i.hasContent).map((i) => i.topic);
   return { items, missing, missingColor, empty, ok: missing.length === 0 && missingColor.length === 0 && empty.length === 0 };
 }
@@ -153,7 +175,7 @@ export function checkReportFormat(text: string, topics: readonly string[], requi
 /** ข้อความหัวข้อเปล่าตามรูปแบบ — ปุ่ม "ใส่หัวข้อตามรูปแบบ" และไว้คัดลอกไปให้ AI เขียนตาม */
 export function formatTemplate(topics: readonly string[], requireColor: boolean): string {
   return normalizeTopics(topics)
-    .map((t) => `${requireColor ? "🟢" : ""}${topicLabel(t)}\n`)
+    .map((t) => (isSectionTopic(t) ? `${topicLabel(t)}\n` : `${requireColor ? "🟢" : ""}${topicLabel(t)}\n`))
     .join("\n");
 }
 

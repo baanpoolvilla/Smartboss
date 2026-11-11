@@ -549,7 +549,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
           <div data-testid="report-format-check" className={cn("mb-2 rounded-lg border px-3 py-2", formatBlocked ? "border-[var(--chart-red)]/50 bg-[var(--chart-red)]/5" : "border-[var(--line)] bg-[var(--bg-soft)]/60")}>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <p className="text-xs font-semibold text-[var(--ink)]">
-                รูปแบบของรอบ &quot;{formatRound?.label}&quot; — {formatCheck.items.filter((i) => i.found && i.hasContent && (!formatNeedsColor || i.color)).length}/{formatCheck.items.length} หัวข้อ
+                รูปแบบของรอบ &quot;{formatRound?.label}&quot; — {formatCheck.items.filter((i) => i.found && i.hasContent && (!formatNeedsColor || i.section || i.color)).length}/{formatCheck.items.length} หัวข้อ
               </p>
               {formatCheck.missing.length > 0 && (
                 <button type="button" onClick={insertFormatTopics} className="rounded-full border border-[var(--line)] bg-white px-2.5 py-1 text-[11px] font-medium text-[var(--ink)] hover:bg-[var(--bg-soft)]">
@@ -559,8 +559,8 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
             </div>
             <ul className="mt-1.5 flex flex-wrap gap-1.5">
               {formatCheck.items.map((i) => {
-                const done = i.found && i.hasContent && (!formatNeedsColor || !!i.color);
-                const why = !i.found ? "ยังไม่มีหัวข้อนี้" : formatNeedsColor && !i.color ? "ยังไม่ได้ใส่สี 🔴🟡🟢" : !i.hasContent ? "ยังไม่มีรายละเอียด" : "ครบ";
+                const done = i.found && i.hasContent && (!formatNeedsColor || i.section || !!i.color);
+                const why = !i.found ? "ยังไม่มีหัวข้อนี้" : formatNeedsColor && !i.section && !i.color ? "ยังไม่ได้ใส่สี 🔴🟡🟢" : !i.hasContent ? "ยังไม่มีรายละเอียด" : "ครบ";
                 return (
                   <li key={i.topic} title={why} className={cn("inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]", done ? "border-[var(--line)] bg-white text-[var(--ink)]" : "border-[var(--chart-red)]/50 bg-white text-[var(--chart-red)]")}>
                     {done ? <Check className="h-3 w-3 shrink-0" /> : <TriangleAlert className="h-3 w-3 shrink-0" />}

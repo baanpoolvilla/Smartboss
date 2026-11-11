@@ -341,7 +341,9 @@ export function SubmissionRoundDialog({
             <p className="text-[11px] text-[var(--ink-soft)]">
               คนเขียนชื่อหัวข้อต่างกันได้ ใส่ชื่อเรียกอื่นต่อท้ายในบรรทัดเดียวกัน คั่นด้วย <b className="text-[var(--ink)]">|</b> เช่น
               <span className="mt-0.5 block font-mono text-[var(--ink)]">วันนี้ส่งงานอะไร | วันนี้ส่งงาน | งานที่ดำเนินการวันนี้</span>
-              ชื่อแรกคือชื่อหลักที่ขึ้นในแถบตรวจและปุ่มใส่หัวข้อ
+              ชื่อแรกคือชื่อหลักที่ขึ้นในแถบตรวจและปุ่มใส่หัวข้อ ·
+              บรรทัดที่มี <b className="text-[var(--ink)]">🏁</b> เช่น <span className="font-mono text-[var(--ink)]">🏁Common Report🏁</span> คือหัวส่วน
+              ต้องมีในรายงานแต่ไม่ต้องใส่สี
             </p>
             <textarea
               id="round-topics"

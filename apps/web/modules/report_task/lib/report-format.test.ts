@@ -127,6 +127,46 @@ describe("checkReportFormat", () => {
   });
 });
 
+describe("หัวส่วน 🏁 (Common Report / Department Module)", () => {
+  const WITH_SECTIONS = ["🏁Common Report🏁", ...TOPICS, "🏁Department Module🏁"];
+
+  it("รายงานจริงที่มีทั้งสองหัวส่วน ผ่าน และหัวส่วนไม่ต้องใส่สี", () => {
+    const r = checkReportFormat(REAL, WITH_SECTIONS, true);
+    expect(r.ok).toBe(true);
+    expect(r.items[0]!.section).toBe(true);
+    expect(r.items[0]!.color).toBe(null);
+  });
+
+  it("ไม่มี 🏁Department Module🏁 = ขาด", () => {
+    const text = REAL.split("   🏁Department Module🏁")[0]!;
+    expect(checkReportFormat(text, WITH_SECTIONS, true).missing).toEqual(["🏁Department Module🏁"]);
+  });
+
+  it("ไม่มี 🏁Common Report🏁 = ขาด", () => {
+    const text = REAL.replace("   🏁Common Report 🏁\n", "");
+    expect(checkReportFormat(text, WITH_SECTIONS, true).missing).toEqual(["🏁Common Report🏁"]);
+  });
+
+  it("มี Department Module แต่ไม่เขียนอะไรต่อ = ยังไม่มีรายละเอียด", () => {
+    const text = REAL.replace("ตรวจสระ 3 หลัง", "");
+    expect(checkReportFormat(text, WITH_SECTIONS, true).empty).toEqual(["🏁Department Module🏁"]);
+  });
+
+  it("เนื้อหาใต้ Department Module ไม่ถูกนับเป็นรายละเอียดของหัวข้อสุดท้าย", () => {
+    const text = REAL.replace("A 3,500 / B 12,000 แนะนำ A\n", "");
+    expect(checkReportFormat(text, WITH_SECTIONS, true).empty).toEqual(["เรื่องที่ต้องการให้ Boss ตัดสินใจ"]);
+  });
+
+  it("เขียนหัวส่วนแบบตัวหนา ตัวพิมพ์ใหญ่ หรือมีชื่อแผนกต่อท้าย ก็จับได้", () => {
+    const text = "🏁 **COMMON REPORT** 🏁\n" + REAL.split("\n").slice(1).join("\n").replace("   🏁Department Module🏁", "🏁 **Department Module — IT / Development** 🏁");
+    expect(checkReportFormat(text, WITH_SECTIONS, true).ok).toBe(true);
+  });
+
+  it("ปุ่มใส่หัวข้อ: หัวส่วนไม่มีสีนำหน้า", () => {
+    expect(formatTemplate(["🏁Common Report🏁", "วันนี้ส่งงานอะไร", "🏁Department Module🏁"], true)).toBe("🏁Common Report🏁\n\n🟢วันนี้ส่งงานอะไร\n\n🏁Department Module🏁\n");
+  });
+});
+
 describe("ชื่อเรียกอื่น (คั่นด้วย |)", () => {
   const WITH_ALIASES = [
     "วันนี้ส่งงานอะไร | วันนี้ส่งงาน | งานที่ดำเนินการวันนี้",
