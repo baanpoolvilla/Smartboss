@@ -396,6 +396,7 @@ export function ReportTopicSettingsPanel({
                     <Users className="h-3 w-3 shrink-0" />
                     <span className="truncate">{whoLabel(r, submitterGroups)}</span>
                     {(r.minImages ?? 0) > 0 && <span className="shrink-0">· รูป ≥ {r.minImages ?? 0}</span>}
+                    {(r.requiredTopics?.length ?? 0) > 0 && <span className="shrink-0">· ต้องมี {r.requiredTopics!.length} หัวข้อ{r.requireStatusColor !== false ? " + สี" : ""}</span>}
                   </div>
                 </div>
               ))}

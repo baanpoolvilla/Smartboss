@@ -14,6 +14,7 @@ import { resolveRoundSubmitters } from "@/modules/report_task/lib/submission-rou
 import { cn } from "@/modules/report_task/lib/utils";
 import { Globe, Users, Building2, User as UserIcon, Search, Plus, Minus, Check, ImagePlus, Bell, UserCheck } from "lucide-react";
 import { uuid } from "@/modules/report_task/lib/uuid";
+import { normalizeTopics } from "@/modules/report_task/lib/report-format";
 
 const WEEKDAYS = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 const MAX_IMAGES = 6;
@@ -121,6 +122,10 @@ export function SubmissionRoundDialog({
     initial?.dayOfMonth ? "monthly" : initial?.weekdays && initial.weekdays.length > 0 ? "weekly" : "daily"
   );
   const [minImages, setMinImages] = useState<number>(initial?.minImages ?? 0);
+  // รูปแบบรายงานของรอบ — บรรทัดละ 1 หัวข้อ · ว่าง = ไม่ตรวจรูปแบบ (lib/report-format.ts)
+  const [topicsText, setTopicsText] = useState<string>((initial?.requiredTopics ?? []).join("\n"));
+  const [requireColor, setRequireColor] = useState<boolean>(initial?.requireStatusColor !== false);
+  const topicsPreview = normalizeTopics(topicsText);
   const [mode, setMode] = useState<Mode>(initial?.submitters.mode ?? "everyone");
   const [groupIds, setGroupIds] = useState<Set<string>>(new Set(initial?.submitters.groupIds ?? []));
   const [departmentIds, setDepartmentIds] = useState<Set<string>>(new Set(initial?.submitters.departmentIds ?? []));
@@ -178,6 +183,8 @@ export function SubmissionRoundDialog({
       weekdays: frequency === "weekly" && weekdays.size > 0 ? [...weekdays].sort((a, b) => a - b) : undefined,
       dayOfMonth: frequency === "monthly" ? dayOfMonth : undefined,
       minImages,
+      requiredTopics: topicsPreview.length > 0 ? topicsPreview : undefined,
+      requireStatusColor: topicsPreview.length > 0 ? requireColor : undefined,
       // A brand-new round stamps "now" so the compliance checker never judges
       // days before it existed as missed; editing an existing round keeps
       // its original stamp — only creation resets the clock, not every save.
@@ -326,6 +333,39 @@ export function SubmissionRoundDialog({
                 <button type="button" className="flex h-6 w-6 items-center justify-center text-[var(--ink-soft)] disabled:opacity-30" disabled={minImages >= MAX_IMAGES} onClick={() => setMinImages(Math.min(MAX_IMAGES, minImages + 1))} aria-label="เพิ่มรูป"><Plus className="h-3 w-3" /></button>
               </div>
             </div>
+          </div>
+
+          {/* รูปแบบรายงานของรอบนี้ — หัวข้อที่ต้องมี + สีสถานะ */}
+          <div className="space-y-1.5">
+            <Label htmlFor="round-topics" className="text-xs text-[var(--ink-soft)]">หัวข้อที่รายงานรอบนี้ต้องมี (บรรทัดละ 1 หัวข้อ)</Label>
+            <textarea
+              id="round-topics"
+              value={topicsText}
+              onChange={(e) => setTopicsText(e.target.value)}
+              rows={5}
+              spellCheck={false}
+              placeholder={"เว้นว่าง = ไม่ตรวจรูปแบบ โพสต์ได้เหมือนเดิม\nเช่น\nวันนี้ส่งงานอะไร\nปัญหาและความเสี่ยง"}
+              className="w-full rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--ink-soft)]"
+            />
+            {topicsPreview.length > 0 ? (
+              <>
+                <label className="flex items-start gap-2 text-sm">
+                  <Checkbox checked={requireColor} onCheckedChange={(v) => setRequireColor(v === true)} className="mt-0.5" />
+                  <span>
+                    ต้องใส่สีสถานะ 🟢🟡🔴 หน้าทุกหัวข้อ
+                    <span className="block text-[11px] text-[var(--ink-soft)]">🔴 มีปัญหาชัดเจน · 🟡 ก้ำกึ่ง/ต้องการให้ตัดสินใจ · 🟢 เรียบร้อย</span>
+                  </span>
+                </label>
+                <p className="rounded-lg bg-[var(--bg-soft)] px-3 py-2 text-[11px] leading-relaxed text-[var(--ink-soft)]">
+                  <b className="text-[var(--ink)]">ตั้งแล้วเกิดอะไร:</b> คนส่งยังพิมพ์หรือวางรายงานในช่องเดิม ระบบตรวจให้ว่ามีหัวข้อครบ {topicsPreview.length} ข้อ
+                  {requireColor ? " ใส่สีครบ" : ""} และมีรายละเอียดใต้ทุกหัวข้อ <b className="text-[var(--ink)]">ไม่ครบโพสต์เป็นรายงานของรอบนี้ไม่ได้</b> ·
+                  ชื่อหัวข้อต้องตรงตามที่ตั้ง (ไม่สนเว้นวรรค เลขข้อ หรือตัวหนา) · โพสต์ที่ติ๊กว่าไม่ใช่รีพอตของวันนี้ไม่ถูกตรวจ ·
+                  มีผลกับโพสต์ใหม่ รายงานที่ส่งไปแล้วไม่เปลี่ยน
+                </p>
+              </>
+            ) : (
+              <p className="text-[11px] text-[var(--ink-soft)]">ไม่ได้ตั้งหัวข้อ — รอบนี้โพสต์ได้อิสระเหมือนเดิม</p>
+            )}
           </div>
 
           {/* ความถี่ — 3 ตัวเลือกแยกกันชัดเจน ("รายสัปดาห์ แยกจากรายวันสิ") */}

@@ -28,6 +28,7 @@ import { ReportPostFields, newSection, type DraftSection } from "@/modules/repor
 import { Checkbox } from "@/modules/report_task/components/ui/checkbox";
 import { Check, Clock, Lock, Maximize2, Minimize2, Send, SquarePen, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
+import { COLOR_EMOJI, checkReportFormat, formatProblem, formatTemplate } from "@/modules/report_task/lib/report-format";
 import { uuid } from "@/modules/report_task/lib/uuid";
 import { bulletsFromText } from "@/modules/report_task/lib/report-feed-rich-text";
 import { useRetroSubmitStore } from "@/modules/report_task/store/retro-submit-store";
@@ -268,6 +269,21 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   // declared not to be that.
   const minImagesRequired = retro ? (retroRound?.minImages ?? 0) : excludeFromSubmission ? 0 : (activeRound?.minImages ?? 0);
   const missingRequiredImage = photoCount(images) < minImagesRequired;
+  // รูปแบบรายงานของรอบ (หัวข้อที่ต้องมี + สี) — หลักเดียวกับรูปขั้นต่ำด้านบน: โพสต์ที่บอกว่า "ไม่ใช่รีพอตของวันนี้"
+  // ไม่ถูกตรวจ · รอบที่ไม่ได้ตั้งหัวข้อ = ไม่ตรวจ (พฤติกรรมเดิม) · ดู lib/report-format.ts
+  const formatRound = retro ? retroRound : excludeFromSubmission ? null : activeRound;
+  const formatTopics = formatRound?.requiredTopics ?? [];
+  const formatNeedsColor = formatRound?.requireStatusColor !== false;
+  const formatText = [title, ...sections.flatMap((s) => [s.heading, s.bulletsText])].join("\n");
+  const formatCheck = checkReportFormat(formatText, formatTopics, formatNeedsColor);
+  const formatBlocked = formatTopics.length > 0 && !formatCheck.ok;
+  const formatWhy = formatBlocked ? formatProblem(formatCheck) : null;
+  function insertFormatTopics() {
+    // ใส่เฉพาะหัวข้อที่ยังขาด ต่อท้ายของที่พิมพ์ไว้ — ใช้ section ใหม่ (id ใหม่) เพราะตัวแก้ข้อความโหลดเนื้อหาครั้งเดียวต่อ id
+    const existing = sections.map((s) => [s.heading, s.bulletsText].filter((x) => x.trim()).join("\n")).filter(Boolean).join("\n").trim();
+    const template = formatTemplate(formatCheck.missing, formatNeedsColor);
+    setSections([{ ...newSection(), bulletsText: existing ? `${existing}\n${template}` : template }]);
+  }
   // Hard "ปิดรับ" deadline — unlike a round's own `time` (which only ever
   // badges a late post), this actually blocks the submit button once passed.
   // Skipped for a post opted out of counting as the report (a stray comment
@@ -321,7 +337,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   }
 
   function handleSubmit() {
-    if (!title.trim() || missingRequiredImage || submissionLocked) return;
+    if (!title.trim() || missingRequiredImage || submissionLocked || formatBlocked) return;
     doSubmit();
   }
 
@@ -529,6 +545,40 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
           </div>
         )}
 
+        {formatTopics.length > 0 && (
+          <div data-testid="report-format-check" className={cn("mb-2 rounded-lg border px-3 py-2", formatBlocked ? "border-[var(--chart-red)]/50 bg-[var(--chart-red)]/5" : "border-[var(--line)] bg-[var(--bg-soft)]/60")}>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <p className="text-xs font-semibold text-[var(--ink)]">
+                รูปแบบของรอบ &quot;{formatRound?.label}&quot; — {formatCheck.items.filter((i) => i.found && i.hasContent && (!formatNeedsColor || i.color)).length}/{formatCheck.items.length} หัวข้อ
+              </p>
+              {formatCheck.missing.length > 0 && (
+                <button type="button" onClick={insertFormatTopics} className="rounded-full border border-[var(--line)] bg-white px-2.5 py-1 text-[11px] font-medium text-[var(--ink)] hover:bg-[var(--bg-soft)]">
+                  + ใส่หัวข้อที่ขาดให้
+                </button>
+              )}
+            </div>
+            <ul className="mt-1.5 flex flex-wrap gap-1.5">
+              {formatCheck.items.map((i) => {
+                const done = i.found && i.hasContent && (!formatNeedsColor || !!i.color);
+                const why = !i.found ? "ยังไม่มีหัวข้อนี้" : formatNeedsColor && !i.color ? "ยังไม่ได้ใส่สี 🔴🟡🟢" : !i.hasContent ? "ยังไม่มีรายละเอียด" : "ครบ";
+                return (
+                  <li key={i.topic} title={why} className={cn("inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]", done ? "border-[var(--line)] bg-white text-[var(--ink)]" : "border-[var(--chart-red)]/50 bg-white text-[var(--chart-red)]")}>
+                    {done ? <Check className="h-3 w-3 shrink-0" /> : <TriangleAlert className="h-3 w-3 shrink-0" />}
+                    {i.color && <span aria-hidden="true">{COLOR_EMOJI[i.color]}</span>}
+                    <span className="truncate">{i.topic}</span>
+                    {/* หัวข้อที่ยังไม่มีเลย: ชิปแดงพอแล้ว · มีหัวข้อแต่ขาดสี/รายละเอียด ต้องบอกว่าขาดอะไร */}
+                    {!done && i.found && <span className="shrink-0 text-[10px] opacity-80">· {why}</span>}
+                  </li>
+                );
+              })}
+            </ul>
+            {/* คำอธิบายเต็มแสดงตอนยังไม่มีหัวข้อเลยเท่านั้น — พอเริ่มมีหัวข้อแล้วชิปบอกเองว่าขาดอะไร ไม่กินที่ช่องพิมพ์บนมือถือ */}
+            <p className={cn("mt-1.5 text-[10.5px] text-[var(--ink-soft)]", formatCheck.items.some((i) => i.found) && "hidden")}>
+              พิมพ์หรือวางรายงานตามปกติ ให้มีบรรทัดหัวข้อครบ{formatNeedsColor ? " ใส่สี 🟢🟡🔴 หน้าหัวข้อ" : ""} และมีรายละเอียดใต้ทุกหัวข้อ (ไม่มีอะไรให้พิมพ์ว่า ไม่มี) — ครบแล้วจึงโพสต์ได้
+            </p>
+          </div>
+        )}
+
         <ReportPostFields
           topicId={topic.id}
           title={title}
@@ -564,13 +614,15 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
         {/* คอมเท่านั้น (มือถือ Enter = ขึ้นบรรทัด) — บอกให้รู้ว่า Enter โพสต์เลย */}
         <span className="mr-auto hidden min-w-0 truncate text-[11px] text-[var(--ink-faint)] [@media(hover:hover)]:inline">{wt("enterHint")}</span>
         {/* P3 — why the button's disabled, not just that it is. */}
-        {!busy && (!title.trim() || missingRequiredImage || submissionLocked) && (
+        {!busy && (!title.trim() || missingRequiredImage || submissionLocked || formatBlocked) && (
           <p className="min-w-0 truncate text-xs text-[var(--ink-soft)]">
             {submissionLocked
               ? wt("closedToday", { time: hardCutoff ?? "" })
               : !title.trim()
                 ? wt("needTitle")
-                : wt("needPhotos", { n: minImagesRequired - photoCount(images) })}
+                : missingRequiredImage
+                  ? wt("needPhotos", { n: minImagesRequired - photoCount(images) })
+                  : formatWhy}
           </p>
         )}
         <Button data-tour="composer-cancel" variant="ghost" size="lg" onClick={reset} className="text-[var(--ink-soft)]">
@@ -579,7 +631,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
         <Button
           size="lg"
           className="rounded-lg px-5 gap-1.5 bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-[var(--ink)] hover:text-white disabled:opacity-40 transition-transform active:scale-[0.99]"
-          disabled={!title.trim() || missingRequiredImage || busy || submissionLocked}
+          disabled={!title.trim() || missingRequiredImage || busy || submissionLocked || formatBlocked}
           onClick={handleSubmit}
           title={
             submissionLocked
@@ -588,7 +640,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
                 ? wt("needTitle")
                 : missingRequiredImage
                   ? wt("needPhotos", { n: minImagesRequired - photoCount(images) })
-                  : undefined
+                  : (formatWhy ?? undefined)
           }
         >
           <Send className="h-4 w-4" />
