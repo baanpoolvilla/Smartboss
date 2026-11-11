@@ -42,9 +42,21 @@ export const COLOR_EMOJI: Record<StatusColor, string> = { red: "🔴", yellow: "
 export const MAX_TOPICS = 15;
 export const MAX_TOPIC_LENGTH = 80;
 
+/**
+ * รหัสจัดรูปแบบที่ตัวแก้ข้อความเก็บไว้ในเนื้อหา (lib/report-feed-rich-text.tsx):
+ * สีตัวอักษร/ไฮไลต์/ขนาด `{{c:red}}…{{/c}}` `{{h:yellow}}…{{/h}}` `{{s:lg}}…{{/s}}` และแท็กคน `@[ชื่อ](user:id)`
+ * ต้องตัดออกก่อนเทียบ — ไม่งั้นหัวข้อที่ทำตัวใหญ่/ใส่สีไว้จะกลายเป็น "slgวันนี้…" แล้วถูกนับว่าขาด
+ * (เขียนซ้ำที่นี่แทนการ import จากไฟล์นั้น เพราะไฟล์นั้นเป็นคอมโพเนนต์ React ตัวตรวจนี้ต้องรันได้ทุกที่)
+ */
+function stripMarkup(s: string): string {
+  let t = s;
+  for (let i = 0; i < 4 && /\{\{\/?[chs](?::[a-z]+)?\}\}/.test(t); i++) t = t.replace(/\{\{\/?[chs](?::[a-z]+)?\}\}/g, "");
+  return t.replace(/@\[([^\]]*)\]\([a-z]+:[^)]*\)/g, "@$1");
+}
+
 /** ตัดสิ่งที่ไม่ใช่ตัวหนังสือออกให้เทียบกันได้: ช่องว่าง วรรคตอน อีโมจิ สัญลักษณ์จัดรูปแบบ */
 function squash(s: string): string {
-  return s
+  return stripMarkup(s)
     .normalize("NFC")
     .toLowerCase()
     .replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu, "")
@@ -53,7 +65,7 @@ function squash(s: string): string {
 
 /** เลขข้อ/สัญลักษณ์นำหน้าที่คนชอบใส่หน้าหัวข้อ: "1.", "1.2 —", "2)", "-", "•", "ข้อ 3" */
 function stripLead(line: string): string {
-  return line.replace(/^\s*(?:[-–—•*▪◦>]+\s*)?(?:ข้อ\s*)?(?:\d+(?:[.．]\d+)*\s*[.):）\-–—]?\s*)?/u, "");
+  return stripMarkup(line).replace(/^\s*(?:[-–—•*▪◦>☐☑]+\s*)?(?:ข้อ\s*)?(?:\d+(?:[.．]\d+)*\s*[.):）\-–—]?\s*)?/u, "");
 }
 
 /** แปลงรายการหัวข้อที่พิมพ์มา (บรรทัดละหัวข้อ) ให้สะอาด ไม่ซ้ำ ไม่ว่าง ไม่เกินเพดาน */

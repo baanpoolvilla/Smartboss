@@ -82,6 +82,25 @@ describe("checkReportFormat", () => {
     expect(r.ok).toBe(true);
   });
 
+  it("หัวข้อที่ทำตัวใหญ่ ใส่สีตัวอักษร/ไฮไลต์ หรือเป็นเช็กลิสต์ ยังจับได้", () => {
+    const text = [
+      "{{s:lg}}🟢วันนี้ส่งงานอะไร{{/s}}",
+      "ปิดงาน 4 ใบ",
+      "{{c:orange}}🟡งานที่ล่าช้า ผิดพลาด ไม่เป็นไปตามแผน{{/c}}",
+      "ไม่มี",
+      "{{h:yellow}}{{s:xl}}🔴ปัญหาและความเสี่ยง{{/s}}{{/h}}",
+      "หลังคารั่ว",
+      "☐ 🟢วิธีแก้ไขและความรับผิดชอบ",
+      "นัดช่างแล้ว @[ต้น (ช่าง)](user:3f2a)",
+      "• 🟡 เรื่องที่ต้องการให้ Boss ตัดสินใจ",
+      "{{c:red}}เลือก A{{/c}}",
+    ].join("\n");
+    const r = checkReportFormat(text, TOPICS, true);
+    expect(r.missing).toEqual([]);
+    expect(r.ok).toBe(true);
+    expect(r.items.map((i) => i.color)).toEqual(["green", "yellow", "red", "green", "yellow"]);
+  });
+
   it("เปลี่ยนคำหัวข้อเอง = นับว่าขาด (ต้องใช้ชื่อหัวข้อตามที่ตั้ง)", () => {
     const r = checkReportFormat("🟢งานวันนี้\nปิดงาน 4 ใบ", ["วันนี้ส่งงานอะไร"], true);
     expect(r.missing).toEqual(["วันนี้ส่งงานอะไร"]);
