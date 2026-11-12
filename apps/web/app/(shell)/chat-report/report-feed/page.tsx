@@ -1560,30 +1560,9 @@ function ReportFeedPageInner() {
                        ReportComposer's title/sections/images form doesn't
                        apply here at all, so it's skipped entirely, not just
                        hidden. */
-                    <>
-                      <BossBriefCard
-                        key={activeTopic.id}
-                        topic={activeTopic}
-                        onJumpToPost={(postId) => {
-                          setHighlightReplyId(null);
-                          setHighlightPostId(postId);
-                          setPostJumpNonce((n) => n + 1);
-                        }}
-                      />
-                      <OpenchatFeed topic={activeTopic} topicPosts={filteredTopicPosts} onOpenTask={setOpenTaskId} />
-                    </>
+                    <OpenchatFeed topic={activeTopic} topicPosts={filteredTopicPosts} onOpenTask={setOpenTaskId} />
                   ) : (
                     <>
-                      {/* สรุปให้ Boss (12/11/2569) — การ์ดคืนค่า null ถ้าไม่ใช่ CEO / ห้องไม่ได้ตั้งหัวข้อบังคับ */}
-                      <BossBriefCard
-                        key={activeTopic.id}
-                        topic={activeTopic}
-                        onJumpToPost={(postId) => {
-                          setHighlightReplyId(null);
-                          setHighlightPostId(postId);
-                          setPostJumpNonce((n) => n + 1);
-                        }}
-                      />
                       <ReportFeed
                         topic={activeTopic}
                         topicPosts={filteredTopicPosts}
@@ -1622,6 +1601,19 @@ function ReportFeedPageInner() {
                   topic={activeTopic}
                   topicPosts={topicPosts}
                   initialFileFilter={initialFileFilter}
+                  statsTop={
+                    // สรุปให้ Boss อยู่ในแท็บสรุป ไม่ใช่หัวฟีด (12/11/2569 "ไม่เอาหัวแบบนี้ เดี๋ยวงง") — null ถ้าไม่ใช่ CEO / ห้องไม่ได้ตั้งหัวข้อบังคับ
+                    <BossBriefCard
+                      key={activeTopic.id}
+                      topic={activeTopic}
+                      onJumpToPost={(postId) => {
+                        setActiveTab("posts");
+                        setHighlightReplyId(null);
+                        setHighlightPostId(postId);
+                        setPostJumpNonce((n) => n + 1);
+                      }}
+                    />
+                  }
                   onOpenPost={(postId) => {
                     setActiveTab("posts");
                     setHighlightReplyId(null);

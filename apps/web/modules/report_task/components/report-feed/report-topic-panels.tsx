@@ -196,8 +196,11 @@ export function ReportTopicPanels({
   topicPosts,
   initialFileFilter,
   onOpenPost,
+  statsTop,
 }: {
   tab: "files" | "stats" | "albums";
+  /** วางบนสุดของแท็บสรุป — การ์ดสรุปให้ Boss (คืนค่า null ถ้าไม่ใช่ Boss) */
+  statsTop?: React.ReactNode;
   topic: ReportTopic;
   topicPosts: ReportPost[];
   /** Which filter the "ไฟล์" tab opens on — set by a legacy `?tab=album` /
@@ -1194,6 +1197,7 @@ export function ReportTopicPanels({
 
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      {statsTop}
       <div className={cn("grid gap-3", hasSchedule ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3")}>
         {hasSchedule && (
           <StatCard

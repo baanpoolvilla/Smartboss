@@ -1,13 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Loader2, Send, Settings2, Sparkles, X } from "lucide-react";
+import { Loader2, Send, Settings2, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { useReportFeedStore, type ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { todayStatusEntries } from "@/modules/report_task/lib/report-feed-compliance";
 import { localDateStr } from "@/modules/report_task/lib/now";
-import { safeLocalStorage } from "@/modules/report_task/lib/safe-storage";
 import { BRIEF_KINDS, MODEL_PRICES_USD, type BossBrief, type BossBriefView, type BriefColor, type BriefKind } from "@/modules/report_task/lib/boss-brief/types";
 
 /**
@@ -21,14 +20,13 @@ const TH_M = ["", "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค
 const thDay = (d: string) => `${Number(d.slice(8, 10))} ${TH_M[Number(d.slice(5, 7))]}`;
 const baht = (n: number) => (n < 10 ? n.toFixed(2) : Math.round(n).toLocaleString("th-TH"));
 
+/** อยู่ในแท็บ "สรุป" ของห้อง (12/11/2569 "อยากได้เป็นแท็บสรุป ไม่เอาหัวแบบนี้ เดี๋ยวงง") — ไม่ย่อ/ไม่จำกัดความสูง ไม่เว้นขอบนอก */
 export function BossBriefCard({ topic, onJumpToPost }: { topic: ReportTopic; onJumpToPost: (postId: string) => void }) {
   const [view, setView] = useState<BossBriefView | null>(null);
   const [briefId, setBriefId] = useState<string | null>(null);
   const [kind, setKind] = useState<BriefKind>("stuck");
   const [more, setMore] = useState(false);
   const [panel, setPanel] = useState<"none" | "ask" | "settings">("none");
-  const collapseKey = `boss-brief-collapsed:${topic.id}:${localDateStr(new Date())}`;
-  const [collapsed, setCollapsed] = useState(() => safeLocalStorage.getItem(collapseKey) === "1");
   const [busy, setBusy] = useState(false);
   const [question, setQuestion] = useState("");
 
@@ -79,7 +77,7 @@ export function BossBriefCard({ topic, onJumpToPost }: { topic: ReportTopic; onJ
     }
   }
 
-  const shell = "mx-3 mt-2 sm:mx-5 rounded-xl border border-[var(--line)] bg-white shadow-sm";
+  const shell = "rounded-xl border border-[var(--line)] bg-white shadow-sm";
 
   // ยังไม่เปิดในห้องนี้ — แถบบาง ๆ ให้ Boss เปิดเอง
   if (!enabled) {
@@ -111,15 +109,10 @@ export function BossBriefCard({ topic, onJumpToPost }: { topic: ReportTopic; onJ
 
   const list = brief.items[kind];
   const reds = (k: BriefKind) => brief.items[k].filter((i) => i.color === "red").length;
-  const toggleCollapsed = () => {
-    const v = !collapsed;
-    setCollapsed(v);
-    try { safeLocalStorage.setItem(collapseKey, v ? "1" : "0"); } catch { /* ไม่เป็นไร */ }
-  };
   const roundName = `รอบ ${brief.roundLabel} · ${thDay(brief.day)}`;
 
   return (
-    <div className={`${shell} max-h-[66vh] overflow-y-auto`} data-testid="boss-brief-card">
+    <div className={shell} data-testid="boss-brief-card">
       {/* หัว */}
       <div className="flex items-start gap-3 px-4 pt-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--brand-navy)] text-white"><Sparkles className="h-4 w-4" /></span>
@@ -130,28 +123,20 @@ export function BossBriefCard({ topic, onJumpToPost }: { topic: ReportTopic; onJ
               ส่งแล้ว {brief.postCount} คน{missing && missing.length > 0 ? ` · ยังไม่ส่ง: ${missing.join(", ")}` : ""}
             </span>
             <span className="ml-auto flex items-center gap-1">
-              {view.briefs.length > 1 && !collapsed &&
+              {view.briefs.length > 1 &&
                 view.briefs.slice(0, 3).map((b) => (
                   <button key={b.id} type="button" onClick={() => { setBriefId(b.id); setMore(false); }}
                     className={`rounded-full border px-2.5 py-0.5 text-[11px] ${b.id === brief.id ? "border-[var(--brand-navy)] bg-[var(--brand-navy)] text-white" : "border-[var(--line)] text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]"}`}>
                     {b.roundLabel}{b.day !== localDateStr(new Date()) ? ` (${thDay(b.day)})` : ""}
                   </button>
                 ))}
-              <button type="button" onClick={toggleCollapsed} className="rounded-full p-1 text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]" aria-label={collapsed ? "ขยายสรุป" : "ย่อสรุป"}>
-                {collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-              </button>
             </span>
           </div>
           {brief.headline && <p className="mt-1 text-[14px] leading-snug text-[var(--ink)]">{brief.headline}</p>}
-          {collapsed && (
-            <p className="mt-1 pb-2.5 text-xs text-[var(--ink-soft)]">
-              {BRIEF_KINDS.map((k) => `${k.icon} ${brief.items[k.id].length}`).join("  ·  ")}
-            </p>
-          )}
         </div>
       </div>
 
-      {!collapsed && (
+      {(
         <>
           {/* กล่องนับ 4 ประเภท */}
           <div className="grid grid-cols-2 gap-2 px-4 pt-3 sm:grid-cols-4">

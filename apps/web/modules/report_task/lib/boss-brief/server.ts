@@ -323,7 +323,7 @@ export async function runBossBriefSweep(orgId: string, now = new Date()): Promis
             userId: uid,
             byUserId: "system",
             message: `[${topic.name}] ${notifyText(brief)}`,
-            link: `/chat-report/report-feed?topic=${encodeURIComponent(topic.id)}`,
+            link: `/chat-report/report-feed?topic=${encodeURIComponent(topic.id)}&tab=stats`,
           }))
         );
       }
