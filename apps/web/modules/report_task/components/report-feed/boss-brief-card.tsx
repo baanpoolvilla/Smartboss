@@ -7,6 +7,7 @@ import { useReportFeedStore, type ReportTopic } from "@/modules/report_task/stor
 import { useReportComplianceExemptions } from "@/modules/report_task/hooks/use-report-compliance-exemptions";
 import { todayStatusEntries } from "@/modules/report_task/lib/report-feed-compliance";
 import { localDateStr } from "@/modules/report_task/lib/now";
+import { safeLocalStorage } from "@/modules/report_task/lib/safe-storage";
 import { BRIEF_KINDS, MODEL_PRICES_USD, type BossBrief, type BossBriefView, type BriefColor, type BriefKind } from "@/modules/report_task/lib/boss-brief/types";
 
 /**
@@ -27,6 +28,13 @@ export function BossBriefCard({ topic, onJumpToPost }: { topic: ReportTopic; onJ
   const [view, setView] = useState<BossBriefView | null>(null);
   const [briefId, setBriefId] = useState<string | null>(null);
   const [kind, setKind] = useState<BriefKind>("stuck");
+  // รายคน = ใครเจออะไร งานไหน ยังไง คนละบรรทัด (12/11/2569 "อยากได้แบบสรุปมาให้เลยใครเจออะไรยังไงงานไหน")
+  const [mode, setModeState] = useState<"kind" | "person">(() => (safeLocalStorage.getItem("boss-brief-mode") === "kind" ? "kind" : "person"));
+  const setMode = (m: "kind" | "person") => {
+    setModeState(m);
+    setMore(false);
+    try { safeLocalStorage.setItem("boss-brief-mode", m); } catch { /* ไม่เป็นไร */ }
+  };
   const [more, setMore] = useState(false);
   const [panel, setPanel] = useState<"none" | "ask" | "settings">("none");
   const [busy, setBusy] = useState(false);
@@ -155,8 +163,31 @@ export function BossBriefCard({ topic, onJumpToPost }: { topic: ReportTopic; onJ
           )}
         </div>
         {brief.headline && <p className="mt-1 text-[13px] leading-snug text-[var(--ink)] sm:text-[14px]">{brief.headline}</p>}
+        <div role="tablist" aria-label="ดูสรุปแบบ" className="mt-2 inline-flex rounded-lg bg-[var(--bg-soft)] p-0.5 text-[13px]">
+          {([["person", `รายคน (${brief.people.length})`], ["kind", "ตามเรื่อง"]] as const).map(([m, label]) => (
+            <button key={m} type="button" role="tab" aria-selected={mode === m} onClick={() => setMode(m)}
+              className={`rounded-md px-3 py-1 font-medium transition-colors ${mode === m ? "bg-[var(--brand-navy)] text-white" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
+      {mode === "person" && (
+        <div className="px-3 pb-1 pt-1.5 sm:px-4" data-testid="boss-brief-people">
+          <div className="flex flex-col divide-y divide-[var(--line)]">
+            {brief.people.map((pp) => (
+              <button key={pp.postId} type="button" onClick={() => onJumpToPost(pp.postId)} title="ไปที่รายงานของคนนี้" className="flex items-start gap-2 py-1.5 text-left hover:bg-[var(--bg-soft)] sm:gap-2.5">
+                <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: DOT[pp.worst] }} />
+                <span className="min-w-0 flex-1 text-[13px] leading-snug text-[var(--ink)] sm:text-[14px]"><b>{pp.name}</b> · {pp.oneLine}</span>
+                <span className="shrink-0 pt-0.5 text-xs text-[var(--ink-faint,var(--ink-soft))]">›</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {mode === "kind" && (<>
       {/* 4 ประเภท — แถวเดียว ทั้งคอมและมือถือ (12/11/2569 "ยังกินพื้นที่เยอะไป") */}
       <div className="grid grid-cols-4 gap-1.5 px-3 pt-2.5 sm:gap-2 sm:px-4">
         {BRIEF_KINDS.map((k) => {
@@ -199,6 +230,8 @@ export function BossBriefCard({ topic, onJumpToPost }: { topic: ReportTopic; onJ
           </p>
         )}
       </div>
+
+      </>)}
 
       {/* ปุ่มหลัก 2 ปุ่ม */}
       <div className="flex gap-2 border-t border-[var(--line)] px-3 py-2 sm:px-4">
