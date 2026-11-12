@@ -34,6 +34,7 @@ import { fmtDays, yearlyText } from "@/modules/hr/lib/leave-type-choice";
 import { loadOtMarks } from "./calendar-ot";
 import { loadLeaveHistory, type LeaveHistoryRow } from "@/modules/hr/lib/leave-history";
 import { ScrollToElement } from "./scroll-to-element";
+import { LeaveHistoryTable } from "./leave-history-table";
 import {
   LeaveCalendar,
   type DayEntry,
@@ -421,7 +422,7 @@ export async function renderCalendarTab(
           {history.length === 0 ? (
             <EmptyState>ยังไม่มีการเปลี่ยนแปลงในเดือนนี้</EmptyState>
           ) : (
-            <DataTable head={["เวลาที่กด", "ใครทำ", "ทำอะไร", "ของใคร", "วันหยุด", "หมายเหตุ"]}>
+            <LeaveHistoryTable head={["เวลาที่กด", "ใครทำ", "ทำอะไร", "ของใคร", "วันหยุด", "หมายเหตุ"]}>
               {history.map((h) => {
                 const late = h.action === "cancel" && h.occurredOn >= h.startsOn;
                 const backdated = h.action === "submit" && h.occurredOn > h.startsOn;
@@ -445,7 +446,7 @@ export async function renderCalendarTab(
                   </tr>
                 );
               })}
-            </DataTable>
+            </LeaveHistoryTable>
           )}
         </SectionCard>
       )}
