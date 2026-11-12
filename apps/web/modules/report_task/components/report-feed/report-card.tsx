@@ -85,6 +85,7 @@ import { REPORT_ATTACHMENT_ACCEPT, attachmentKind } from "@/modules/report_task/
 import { photoCount } from "@/modules/report_task/lib/report-attachment-kind";
 import { NewMessagesDivider } from "@/modules/report_task/components/report-feed/report-new-divider";
 import { ReportPostFields, newSection, type DraftSection } from "@/modules/report_task/components/report-feed/report-post-fields";
+import { checkReportFormat, formatProblem, formatTemplate } from "@/modules/report_task/lib/report-format";
 import { useReportTagStore } from "@/modules/report_task/store/report-tag-store";
 import { ReportTagChip } from "@/modules/report_task/components/report-feed/report-tag-chip";
 import { ReportImageLightbox } from "@/modules/report_task/components/report-feed/report-image-lightbox";
@@ -2790,6 +2791,19 @@ function EditPostForm({
   const postDayCutoffs = cutoffsOnDay(topic, localDateStr(new Date(post.createdAt)));
   const minImagesRequired = minImagesNow({ cutoffs: cutoffsOnDay(topic, localDateStr(new Date())) });
   const missingRequiredImage = photoCount(images) < minImagesRequired;
+  // แก้โพสต์ต้องผ่านรูปแบบของรอบเหมือนตอนโพสต์ — ไม่งั้นโพสต์ให้ผ่านก่อนแล้วค่อยลบหัวข้อทีหลังได้ (ผู้ใช้ 12/11/2569)
+  // ตรวจเฉพาะโพสต์ที่นับเป็นรีพอตของรอบที่ตั้งหัวข้อไว้ · โพสต์เก่าที่ติ๊ก "ไม่ใช่รีพอต" ไว้แล้วยังแก้ได้เหมือนเดิม
+  const formatRound = post.roundId && !post.retroFor ? (effectiveRoundsOf(topic).find((r) => r.id === post.roundId) ?? null) : null;
+  const formatTopics = formatRound?.requiredTopics ?? [];
+  const roundFormatLocked = formatTopics.length > 0 && !post.excludeFromSubmission;
+  const formatNeedsColor = formatRound?.requireStatusColor !== false;
+  const formatCheck = checkReportFormat([title, ...sections.flatMap((s) => [s.heading, s.bulletsText])].join("\n"), formatTopics, formatNeedsColor);
+  const formatBlocked = roundFormatLocked && !excludeFromSubmission && !formatCheck.ok;
+  function insertFormatTopics() {
+    const existing = sections.map((s) => [s.heading, s.bulletsText].filter((x) => x.trim()).join("\n")).filter(Boolean).join("\n").trim();
+    const template = formatTemplate(formatCheck.missing, formatNeedsColor);
+    setSections([{ ...newSection(), bulletsText: existing ? `${existing}\n${template}` : template }]);
+  }
 
   async function handleFiles(files: File[]) {
     if (files.length === 0) return;
@@ -2815,7 +2829,7 @@ function EditPostForm({
   }
 
   function handleSave() {
-    if (!title.trim() || missingRequiredImage) return;
+    if (!title.trim() || missingRequiredImage || formatBlocked) return;
     onSave({
       title: title.trim(),
       sections: buildSections(sections),
@@ -2847,7 +2861,17 @@ function EditPostForm({
         busy={busy}
         onFilesSelected={handleFiles}
       />
-      {postDayCutoffs.length > 0 && (
+      {formatBlocked && (
+        <div data-testid="edit-format-check" className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--chart-red)]/50 bg-[var(--chart-red)]/5 px-3 py-2">
+          <p className="text-xs text-[var(--chart-red)]">{formatProblem(formatCheck)} — แก้ให้ครบตามรูปแบบของรอบ &quot;{formatRound?.label}&quot; ก่อนบันทึก</p>
+          {formatCheck.missing.length > 0 && (
+            <button type="button" onClick={insertFormatTopics} className="rounded-full border border-[var(--line)] bg-white px-2.5 py-1 text-[11px] font-medium text-[var(--ink)] hover:bg-[var(--bg-soft)]">
+              + ใส่หัวข้อที่ขาดให้
+            </button>
+          )}
+        </div>
+      )}
+      {postDayCutoffs.length > 0 && !roundFormatLocked && (
         <div className="w-fit">
           <label className="flex items-center gap-1.5 text-[11px] text-[var(--ink-soft)] cursor-pointer">
             <Checkbox
@@ -2868,7 +2892,7 @@ function EditPostForm({
         <Button variant="ghost" size="sm" onClick={onCancel}>
           ยกเลิก
         </Button>
-        <Button size="sm" disabled={!title.trim() || missingRequiredImage || busy} onClick={handleSave}>
+        <Button size="sm" disabled={!title.trim() || missingRequiredImage || busy || formatBlocked} onClick={handleSave}>
           บันทึกการแก้ไข
         </Button>
       </div>

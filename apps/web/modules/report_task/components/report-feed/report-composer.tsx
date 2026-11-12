@@ -104,7 +104,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
   // other), just not counted toward this round's compliance. For a casual
   // update/question that isn't "the report" itself, so it doesn't need to
   // be buried as a reply just to avoid getting scored.
-  const [excludeFromSubmission, setExcludeFromSubmission] = useState(false);
+  const [excludeTicked, setExcludeFromSubmission] = useState(false);
   // โหมดส่งย้อนหลัง — กด "ส่งย้อนหลัง" ที่แถบเหนือช่องนี้ (retro-submit-banner.tsx) หลัง CEO อนุมัติคำร้อง
   const retroTarget = useRetroSubmitStore((s) => s.target);
   const setRetroTarget = useRetroSubmitStore((s) => s.setTarget);
@@ -245,6 +245,10 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
       : (dueTodayCutoffs.find((r) => roundMinutesOf(r.time) >= nowMinutes) ?? dueTodayCutoffs[dueTodayCutoffs.length - 1])!.id;
   const activeRoundId = selectedRoundId && todayCutoffs.some((r) => r.id === selectedRoundId) ? selectedRoundId : defaultRoundId;
   const activeRound = todayCutoffs.find((r) => r.id === activeRoundId) ?? null;
+  // รอบที่ตั้ง "หัวข้อที่ต้องมี" = ล็อกฟอร์ม: ไม่มีช่อง "ไม่ใช่รีพอตของวันนี้" — ทุกโพสต์ต้องเป็นรีพอตตามฟอร์ม
+  // คุยกันให้ตอบในคอมเมนต์แทน (ผู้ใช้ 12/11/2569) · รอบที่ไม่ได้ตั้งหัวข้อ = มีช่องติ๊กเหมือนเดิม
+  const roundFormatLocked = !retro && (activeRound?.requiredTopics?.length ?? 0) > 0;
+  const excludeFromSubmission = excludeTicked && !roundFormatLocked;
   // 1 round today → picked automatically, no picker shown (C4's own
   // acceptance criterion) — only 2+ rounds is genuinely ambiguous enough to
   // ask "ส่งของรอบไหน?" for.
@@ -527,7 +531,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
             way to tell from "ไม่นับเป็นการส่งรีพอต" alone that this is what
             it meant, since that phrase alone reads as neutral/technical
             rather than as a warning. */}
-        {!retro && todayCutoffs.length > 0 && (
+        {!retro && todayCutoffs.length > 0 && !roundFormatLocked && (
           <div className="w-fit">
             <label className="flex items-center gap-1.5 text-[11px] text-[var(--ink-soft)] cursor-pointer">
               <Checkbox
