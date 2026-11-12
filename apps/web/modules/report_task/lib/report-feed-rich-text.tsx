@@ -423,16 +423,16 @@ function renderPlainRichText(text: string): ReactNode[] {
           </span>
         )
       );
-    } else if (match[4] !== undefined) nodes.push(<strong key={key++}>{match[4]}</strong>);
-    else if (match[5] !== undefined) nodes.push(<em key={key++}>{match[5]}</em>);
-    else if (match[6] !== undefined) nodes.push(<u key={key++}>{match[6]}</u>);
+    } else if (match[4] !== undefined) nodes.push(<strong key={key++}>{renderPlainRichText(match[4])}</strong>);
+    else if (match[5] !== undefined) nodes.push(<em key={key++}>{renderPlainRichText(match[5])}</em>);
+    else if (match[6] !== undefined) nodes.push(<u key={key++}>{renderPlainRichText(match[6])}</u>);
     else if (match[7] !== undefined)
       nodes.push(
         <code key={key++} className="bg-[var(--bg-soft)] ring-1 ring-inset ring-[var(--line)] rounded px-1 py-0.5 text-[12px] font-mono">
           {match[7]}
         </code>
       );
-    else if (match[8] !== undefined) nodes.push(<s key={key++}>{match[8]}</s>);
+    else if (match[8] !== undefined) nodes.push(<s key={key++}>{renderPlainRichText(match[8])}</s>);
     else if (match[9] !== undefined)
       nodes.push(
         <a
