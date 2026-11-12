@@ -75,15 +75,17 @@ export function HolidayBalances({
         {sorted.length === 0 ? (
           <EmptyState>ยังไม่มีพนักงานในทะเบียน</EmptyState>
         ) : (
-          <DataTable head={["พนักงาน", "ใช้ไปเดือนนี้", "เหลือลงได้", "มาจากสิทธิ์ของเดือน", "ต้องใช้ในเดือนนี้", ...(leaveTypeId ? [""] : [])]}>
+          <DataTable head={["พนักงาน", "ใช้ไปเดือนนี้", "เหลือลงได้", "มาจากสิทธิ์ของเดือน", "ต้องใช้ในเดือนนี้", ...(leaveTypeId ? [""] : [])]}
+            headAlign={["left", "center", "center", "left", "center", "right"]}
+          >
             {sorted.map((r) => (
               <tr key={r.employment_id} className="border-b border-(--line) last:border-b-0">
                 <Td>
                   <span className="font-medium">{r.name}</span>{" "}
                   <span className="text-xs text-(--ink-soft)">{r.code}</span>
                 </Td>
-                <Td numeric>{r.used_days}</Td>
-                <Td numeric>
+                <Td align="center" className="tabular-nums">{r.used_days}</Td>
+                <Td align="center" className="tabular-nums">
                   <span className={r.available_days > 0 ? "font-semibold" : "text-(--ink-soft)"}>{r.available_days}</span>
                 </Td>
                 <Td>
@@ -100,7 +102,7 @@ export function HolidayBalances({
                     </div>
                   )}
                 </Td>
-                <Td>
+                <Td align="center">
                   {r.expiring_days > 0 ? (
                     <Pill tone="var(--tone-warn)">{r.expiring_days} วัน</Pill>
                   ) : (
@@ -108,7 +110,7 @@ export function HolidayBalances({
                   )}
                 </Td>
                 {leaveTypeId && (
-                  <Td>
+                  <Td align="right">
                     <AddHolidayDays leaveTypeId={leaveTypeId} employmentId={r.employment_id} name={r.name} month={month} />
                   </Td>
                 )}

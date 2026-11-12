@@ -267,9 +267,12 @@ export function DataTable({
   head,
   children,
   stackOnMobile = false,
+  headAlign,
 }: {
   head: React.ReactNode[];
   children: React.ReactNode;
+  /** จัดหัวคอลัมน์ให้ตรงกับตัวเลขข้างใต้ (ไม่ใส่ = ชิดซ้ายเหมือนเดิม) */
+  headAlign?: ("left" | "center" | "right")[];
   /** มือถือ: ซ่อนหัวตาราง เรียงแต่ละแถวเป็นการ์ด ไม่ต้องปัดซ้ายขวา — แถวต้องจัดช่องเองด้วย max-sm:* */
   stackOnMobile?: boolean;
 }) {
@@ -282,7 +285,9 @@ export function DataTable({
               {head.map((cell, i) => (
                 <th
                   key={i}
-                  className="px-3 py-2.5 text-left text-xs font-semibold text-(--ink-soft)"
+                  className={`px-3 py-2.5 text-xs font-semibold text-(--ink-soft) ${
+                    headAlign?.[i] === "center" ? "text-center" : headAlign?.[i] === "right" ? "text-right" : "text-left"
+                  }`}
                 >
                   {cell}
                 </th>
