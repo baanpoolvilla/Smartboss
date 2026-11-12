@@ -72,6 +72,8 @@ export async function readBriefSettings(orgId: string): Promise<BossBriefSetting
 }
 
 export async function saveBriefSettings(orgId: string, patch: Partial<BossBriefSettings>): Promise<BossBriefSettings> {
+  // เพดานที่ตั้งเกินแพ็กเกจไม่ได้ (เดิมเก็บได้ถึง ฿5,000 แล้วค่อยตัดตอนใช้ — ช่องในตั้งค่าเลยโชว์เลขที่ไม่ได้ใช้จริง)
+  const planMax = PLAN_MAX_CAP_THB[await getOrgPlan(orgId)];
   for (let i = 0; i < 3; i++) {
     const { data, version } = await readStore<Partial<BossBriefSettings>>(orgId, SETTINGS_KEY);
     const cur = { ...DEFAULT_BRIEF_SETTINGS, ...(data ?? {}) };
@@ -79,7 +81,7 @@ export async function saveBriefSettings(orgId: string, patch: Partial<BossBriefS
       enabled: typeof patch.enabled === "boolean" ? patch.enabled : cur.enabled,
       topicIds: Array.isArray(patch.topicIds) ? [...new Set(patch.topicIds.filter((x) => typeof x === "string"))].slice(0, 50) : cur.topicIds,
       monthlyCapThb:
-        typeof patch.monthlyCapThb === "number" && Number.isFinite(patch.monthlyCapThb) ? Math.max(0, Math.min(5000, Math.round(patch.monthlyCapThb))) : cur.monthlyCapThb,
+        typeof patch.monthlyCapThb === "number" && Number.isFinite(patch.monthlyCapThb) ? Math.max(0, Math.min(5000, planMax, Math.round(patch.monthlyCapThb))) : cur.monthlyCapThb,
       summaryModel: patch.summaryModel && MODEL_PRICES_USD[patch.summaryModel] ? patch.summaryModel : cur.summaryModel,
       askModel: patch.askModel && MODEL_PRICES_USD[patch.askModel] ? patch.askModel : cur.askModel,
     };
