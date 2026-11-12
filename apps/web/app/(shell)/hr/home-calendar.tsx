@@ -522,23 +522,37 @@ function bangkokDateTime(iso: string): string {
   return `${shortThaiDate(d.slice(0, 10))} ${d.slice(11, 16)}`;
 }
 
-/** บรรทัดเล็กใต้ "ทำอะไร": ประเภท + วันที่ / วันที่เท่าไหร่ของสิทธิ์ เช่น "ลาพักร้อน 29 พ.ย. · วันที่ 2/3 ของปี" */
+/**
+ * บรรทัดเล็กใต้ "ทำอะไร" — เขียนให้อ่านเป็นประโยค ไม่ใช้ตัวย่อ/เครื่องหมาย (ผู้ใช้ 12/11/2569 "คำพูดให้เข้าใจง่าย ไม่งง")
+ *   ลาพักร้อน วันที่ 29 พ.ย.
+ *   ใช้สิทธิ์ไปแล้ว 2 จาก 3 วัน (ปี 2569)       ← นับรวมใบนี้กับใบก่อนหน้า
+ *   ใช้สิทธิ์ไปแล้ว 7 จาก 6 วัน (พ.ย.) · เกินสิทธิ์ 1 วัน
+ *   ลาไปแล้ว 3 วันใน พ.ย. (ประเภทนี้ไม่จำกัดจำนวน)
+ *   ใบนี้ถูกยกเลิกหรือไม่อนุมัติแล้ว จึงไม่นับเป็นวันลา
+ */
 function UsageLine({ h, u }: { h: LeaveHistoryRow; u: LeaveUsage | undefined }) {
-  const dates = `${shortThaiDate(h.startsOn)}${h.endsOn !== h.startsOn ? `–${shortThaiDate(h.endsOn)}` : ""}`;
-  const of = u?.period === "year" ? "ของปี" : "ของเดือน";
-  const count = !u
-    ? null
-    : !u.counted
-      ? "ไม่นับแล้ว"
-      : u.quota !== null
-        ? `วันที่ ${u.nth}/${fmtDays(u.quota)} ${of}`
-        : `วันที่ ${u.nth} ${of}`;
-  const over = u?.counted && u.quota !== null && Number(u.nth.split("–").pop()) > u.quota;
+  const dates = `${shortThaiDate(h.startsOn)}${h.endsOn !== h.startsOn ? ` ถึง ${shortThaiDate(h.endsOn)}` : ""}`;
+  const used = u ? Number(u.nth.split("–").pop()) : 0;
+  const where = u?.period === "year" ? `ปี ${formatBuddhistYear(Number(h.startsOn.slice(0, 4)))}` : SHORT_MONTH[Number(h.startsOn.slice(5, 7)) - 1]!;
+  const over = !!u?.counted && u.quota !== null && used > u.quota;
+  let count: string | null = null;
+  if (u && !u.counted) count = "ใบนี้ถูกยกเลิกหรือไม่อนุมัติแล้ว จึงไม่นับเป็นวันลา";
+  else if (u && u.quota !== null) count = `ใช้สิทธิ์ไปแล้ว ${fmtDays(used)} จาก ${fmtDays(u.quota)} วัน (${where})`;
+  else if (u) count = `ลาประเภทนี้ไปแล้ว ${fmtDays(used)} วันใน${u.period === "year" ? where : `เดือน ${where}`}`;
   return (
-    <span className="block text-[11px] text-(--ink-soft)" data-testid="leave-history-usage">
-      {h.typeName || "วันหยุด"} {dates}
-      {count && <span className={over ? "font-medium text-(--danger)" : "font-medium text-(--ink)"}> · {count}</span>}
-      {over && <span className="text-(--danger)"> · เกินสิทธิ์</span>}
+    <span className="mt-0.5 block text-[11px] leading-snug text-(--ink-soft)" data-testid="leave-history-usage">
+      <span className="block">
+        {h.typeName || "วันหยุด"} วันที่ {dates}
+      </span>
+      {count && (
+        <span
+          className={`block ${over ? "font-medium text-(--danger)" : u?.counted ? "text-(--ink)" : ""}`}
+          title={u?.counted ? "นับรวมใบนี้กับใบที่ลงไว้ก่อนหน้าในช่วงเดียวกัน (ไม่นับใบที่ยกเลิก)" : undefined}
+        >
+          {count}
+          {over && ` · เกินสิทธิ์ ${fmtDays(used - u!.quota!)} วัน`}
+        </span>
+      )}
     </span>
   );
 }
