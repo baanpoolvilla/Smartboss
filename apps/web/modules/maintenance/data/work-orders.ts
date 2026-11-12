@@ -72,6 +72,9 @@ export function listWorkOrderStubs(orgId: string, f: WorkOrderFilters = {}) {
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
+      // ค้นหาบนบอร์ด (ชื่อหัวข้อ / เลขใบ) ต้องรวมคอลัมน์เสร็จแล้วที่ส่งมาแค่แถวเบาด้วย
+      code: true,
+      title: true,
       status: true,
       reviewState: true,
       requiresExpense: true,

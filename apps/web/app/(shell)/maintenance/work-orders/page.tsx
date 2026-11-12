@@ -125,6 +125,8 @@ export default async function WorkOrdersPage({
   const doneFirst = builtRows.filter((o) => doneFirstIds.has(o.id));
   const doneStubs = doneStubRows.map((o) => ({
     id: o.id,
+    code: o.code,
+    title: o.title,
     propertyId: o.propertyId,
     additionalPropertyIds: o.additionalPropertyIds,
     assignedTo: o.assignedTo,

@@ -8,7 +8,7 @@ import { ASSIGNED_BY_ME, ASSIGNED_TO_ME, PersonFilter, UNASSIGNED } from "./pers
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { InitialAvatar, WoCard } from "./wo-card";
-import { RefreshCw, ReceiptText, Check, CheckCircle2, Clock, MessageCircle } from "lucide-react";
+import { RefreshCw, ReceiptText, Check, CheckCircle2, Clock, MessageCircle, Search, X } from "lucide-react";
 import { useUnreadCommentCounts } from "@/modules/notifications/pending-for-you";
 import type { NotifCategory } from "@/modules/notifications/types";
 import { groupByPriority } from "@/modules/maintenance/lib/priority";
@@ -71,7 +71,9 @@ export interface BoardOrder {
 }
 
 /** แถวเบาของใบในคอลัมน์เสร็จแล้ว — พอสำหรับนับและกรอง ข้อมูลการ์ดโหลดตอนจะแสดง */
-export type BoardStub = Pick<BoardOrder, "id" | "propertyId" | "additionalPropertyIds" | "assignedTo" | "groupMemberIds" | "createdBy">;
+export type BoardStub = Pick<BoardOrder, "id" | "propertyId" | "additionalPropertyIds" | "assignedTo" | "groupMemberIds" | "createdBy"> &
+  /** ค้นหาบนบอร์ด — ไม่มี (ข้อมูลเก่าในแคช) = ค้นไม่เจอใบนั้นเท่านั้น ไม่พัง */
+  Partial<Pick<BoardOrder, "code" | "title">>;
 
 
 const NO_STUBS: BoardStub[] = [];
@@ -692,6 +694,9 @@ export function WorkOrderBoard({
   // กรองตามผู้ได้รับมอบหมาย — null = ทุกคน · UNASSIGNED = ใบที่ยังไม่มอบหมายให้ใคร
   const [assignee, setAssignee] = useState<string | null>(null);
   const [sort, setSort] = useState<BoardSort>("due");
+  // ค้นหาชื่อหัวข้อ / เลขใบ / ชื่อบ้าน (ผู้ใช้ 12/11/2569) — ซ่อนเป็นไอคอนไว้ กดแล้วค่อยกาง ไม่ให้แถบหัวรก
+  const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   const everyRow = useMemo<BoardStub[]>(() => [...orders, ...doneStubs], [orders, doneStubs]);
   const assigneeOptions = useMemo(() => {
     const ids = new Set(everyRow.flatMap((w) => [w.assignedTo, ...(w.groupMemberIds ?? [])]).filter((id): id is string => !!id));
@@ -793,20 +798,26 @@ export function WorkOrderBoard({
               return !!currentUserId && w.createdBy === currentUserId && !!w.assignedTo && w.assignedTo !== currentUserId;
             return w.assignedTo === assignee || !!w.groupMemberIds?.includes(assignee);
           });
+    const q = query.trim().toLowerCase();
+    const byText = !q
+      ? byPerson
+      : byPerson.filter((w) =>
+          [w.title, w.code, ...[w.propertyId, ...w.additionalPropertyIds].map((id) => propertyNames[id])].some((t) => !!t && t.toLowerCase().includes(q)),
+        );
     if (houseId) {
-      return byPerson.filter(
+      return byText.filter(
         (w) => w.propertyId === houseId || w.additionalPropertyIds.includes(houseId)
       );
     }
-    if (!group) return byPerson;
-    return byPerson.filter((w) =>
+    if (!group) return byText;
+    return byText.filter((w) =>
       [w.propertyId, ...w.additionalPropertyIds].some(
         (id) => (propertyCategories[id] ?? NO_CATEGORY) === group
       )
     );
     };
     return { visible: pick(orders), visibleDone: pick(doneStubs) };
-  }, [orders, doneStubs, group, houseId, propertyCategories, assignee, currentUserId]);
+  }, [orders, doneStubs, group, houseId, propertyCategories, propertyNames, assignee, currentUserId, query]);
 
   const buckets: Record<string, BoardOrder[]> = {
     open: visible.filter((w) => w.status === "open"),
@@ -835,8 +846,16 @@ export function WorkOrderBoard({
   const rowsOf = (key: string): (BoardStub & Partial<BoardOrder>)[] => (key === "done" ? visibleDone : (buckets[key] ?? []));
   const boardTotal = columns.reduce((n, c) => n + rowsOf(c.key).length, 0) + hiddenCount;
   const countOf = (key: string) => rowsOf(key).length + (key === "no_expense" ? hiddenCount : 0);
+  // มือถือเห็นทีละแท็บ — ค้นแล้วแท็บที่เปิดอยู่ไม่มีผล ให้ไปแท็บแรกที่มีผล ไม่งั้นเห็น "ไม่มีใบงาน" ทั้งที่เจอ
+  const firstHit = query.trim() ? columns.findIndex((c) => countOf(c.key) > 0) : -1;
+  const tabEmpty = query.trim() !== "" && countOf(columns[tab]?.key ?? "") === 0;
+  const [jumpedFor, setJumpedFor] = useState("");
+  if (tabEmpty && firstHit >= 0 && firstHit !== tab && jumpedFor !== query) {
+    setJumpedFor(query);
+    setTab(firstHit);
+  }
   // เปลี่ยนการเรียงแล้วเริ่มจากบนสุด — ใบที่เคยกดแสดงเพิ่มไว้ไม่ใช่ชุดเดิมแล้ว
-  const pagingKey = `${group}|${houseId}|${assignee}|${sort}`;
+  const pagingKey = `${group}|${houseId}|${assignee}|${sort}|${query.trim().toLowerCase()}`;
   const listFor = (c: (typeof COLUMNS)[number], gap: string, emptyClass: string) =>
     c.key === "done" ? (
       <DoneColumnList
@@ -928,6 +947,49 @@ export function WorkOrderBoard({
     </label>
   );
 
+  const closeSearch = () => {
+    setQuery("");
+    setSearchOpen(false);
+  };
+  const searchBox =
+    searchOpen || query ? (
+      <label className="relative inline-flex h-8 w-36 min-w-0 shrink items-center rounded-(--radius) border border-(--brand-navy) bg-(--bg) pl-2 pr-7 text-[13px] sm:w-52 lg:h-9 lg:text-sm">
+        <Search className="mr-1.5 h-3.5 w-3.5 shrink-0 text-(--ink-soft)" aria-hidden="true" />
+        <input
+          autoFocus
+          type="search"
+          data-testid="wo-board-search"
+          aria-label="ค้นหาใบงาน"
+          placeholder="ค้นชื่องาน เลขใบ บ้าน"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => e.key === "Escape" && closeSearch()}
+          onBlur={() => !query.trim() && setSearchOpen(false)}
+          className="min-w-0 flex-1 bg-transparent text-(--ink) outline-none placeholder:text-(--ink-faint) [&::-webkit-search-cancel-button]:hidden"
+        />
+        <button
+          type="button"
+          aria-label="ล้างคำค้น"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={closeSearch}
+          className="absolute right-1.5 rounded p-0.5 text-(--ink-soft) hover:bg-(--bg-soft) hover:text-(--ink)"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </label>
+    ) : (
+      <button
+        type="button"
+        data-testid="wo-board-search-open"
+        aria-label="ค้นหาใบงาน"
+        title="ค้นหาใบงาน"
+        onClick={() => setSearchOpen(true)}
+        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius) border border-(--line) bg-(--bg) text-(--ink-soft) hover:text-(--ink) lg:h-9 lg:w-9"
+      >
+        <Search className="h-4 w-4" />
+      </button>
+    );
+
   const personFilter =
     (canPickPeople && assigneeOptions.length > 0) || !!currentUserId ? (
       <PersonFilter
@@ -958,6 +1020,7 @@ export function WorkOrderBoard({
             {personFilter}
             {houseSelect}
             {sortSelect}
+            {searchBox}
           </div>,
           toolbarSlot,
         )}
