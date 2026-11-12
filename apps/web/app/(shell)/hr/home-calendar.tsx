@@ -32,7 +32,7 @@ import { RejectLeaveButton } from "./reject-leave-button";
 import { canSeeYearlyEntitlements } from "@/modules/hr/lib/yearly-entitlement-access";
 import { fmtDays, yearlyText } from "@/modules/hr/lib/leave-type-choice";
 import { loadOtMarks } from "./calendar-ot";
-import { loadLeaveHistory, type LeaveHistoryRow } from "@/modules/hr/lib/leave-history";
+import { loadLeaveHistory, loadLeaveUsage, type LeaveHistoryRow, type LeaveUsage } from "@/modules/hr/lib/leave-history";
 import { ScrollToElement } from "./scroll-to-element";
 import { LeaveHistoryTable } from "./leave-history-table";
 import {
@@ -251,6 +251,22 @@ export async function renderCalendarTab(
       for (const row of rows?.items ?? []) pendingYearly.set(`${row.employment_id}|${key}`, row);
     }),
   );
+  // ประวัติ: ใบนี้เป็นวันที่เท่าไหร่ของสิทธิ์ ("ลาพักร้อน · วันที่ 2/3") — อ่านไม่ได้ = ไม่โชว์เลข ไม่ทำให้หน้าพัง
+  const overridesCache = new Map<string, ReturnType<typeof loadDayOffOverrides>>();
+  const usage: Map<string, LeaveUsage> = history?.length
+    ? await loadLeaveUsage(session.orgId, history, {
+        showYearly: canSeeYearlyEntitlements(session),
+        monthlyQuotaFor: async (employmentId, leaveTypeId, mo, typeDefault, isDayOff) => {
+          if (!isDayOff) return typeDefault;
+          const key = `${employmentId}|${mo}`;
+          if (!overridesCache.has(key)) overridesCache.set(key, loadDayOffOverrides(session.orgId, employmentId, mo));
+          return overrideDaysFor(await overridesCache.get(key)!, leaveTypeId) ?? typeDefault;
+        },
+      }).catch((error: unknown) => {
+        console.error("[hr] leave usage failed", error);
+        return new Map<string, LeaveUsage>();
+      })
+    : new Map();
   const [y, m] = month.split("-").map(Number);
 
   return (
@@ -434,6 +450,7 @@ export async function renderCalendarTab(
                       <span className={`font-medium ${late ? "text-(--danger)" : ""}`}>{historyVerb(h)}</span>
                       {late && <span className="ml-1 text-xs text-(--danger)">· หลังถึงวันแล้ว</span>}
                       {backdated && <span className="ml-1 text-xs text-amber-700">· ลงย้อนหลัง</span>}
+                      <UsageLine h={h} u={usage.get(h.requestId)} />
                     </Td>
                     <Td className="whitespace-nowrap font-medium">{nameOf.get(h.employmentId) || h.ownerName || "—"}</Td>
                     <Td className="whitespace-nowrap text-xs">
@@ -503,6 +520,27 @@ function shortThaiDate(ymd: string): string {
 function bangkokDateTime(iso: string): string {
   const d = new Date(new Date(iso).getTime() + 7 * 3_600_000).toISOString();
   return `${shortThaiDate(d.slice(0, 10))} ${d.slice(11, 16)}`;
+}
+
+/** บรรทัดเล็กใต้ "ทำอะไร": ประเภท + วันที่ / วันที่เท่าไหร่ของสิทธิ์ เช่น "ลาพักร้อน 29 พ.ย. · วันที่ 2/3 ของปี" */
+function UsageLine({ h, u }: { h: LeaveHistoryRow; u: LeaveUsage | undefined }) {
+  const dates = `${shortThaiDate(h.startsOn)}${h.endsOn !== h.startsOn ? `–${shortThaiDate(h.endsOn)}` : ""}`;
+  const of = u?.period === "year" ? "ของปี" : "ของเดือน";
+  const count = !u
+    ? null
+    : !u.counted
+      ? "ไม่นับแล้ว"
+      : u.quota !== null
+        ? `วันที่ ${u.nth}/${fmtDays(u.quota)} ${of}`
+        : `วันที่ ${u.nth} ${of}`;
+  const over = u?.counted && u.quota !== null && Number(u.nth.split("–").pop()) > u.quota;
+  return (
+    <span className="block text-[11px] text-(--ink-soft)" data-testid="leave-history-usage">
+      {h.typeName || "วันหยุด"} {dates}
+      {count && <span className={over ? "font-medium text-(--danger)" : "font-medium text-(--ink)"}> · {count}</span>}
+      {over && <span className="text-(--danger)"> · เกินสิทธิ์</span>}
+    </span>
+  );
 }
 
 function historyVerb(h: LeaveHistoryRow): string {
