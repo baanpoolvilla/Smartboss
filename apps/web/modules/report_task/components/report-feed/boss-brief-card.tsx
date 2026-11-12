@@ -21,6 +21,8 @@ const thDay = (d: string) => `${Number(d.slice(8, 10))} ${TH_M[Number(d.slice(5,
 const baht = (n: number) => (n < 10 ? n.toFixed(2) : Math.round(n).toLocaleString("th-TH"));
 
 /** อยู่ในแท็บ "สรุป" ของห้อง (12/11/2569 "อยากได้เป็นแท็บสรุป ไม่เอาหัวแบบนี้ เดี๋ยวงง") — ไม่ย่อ/ไม่จำกัดความสูง ไม่เว้นขอบนอก */
+const SHORT: Record<BriefKind, string> = { stuck: "ปัญหา", late: "ล่าช้า", ask: "รอคุณ", done: "เสร็จ" };
+
 export function BossBriefCard({ topic, onJumpToPost }: { topic: ReportTopic; onJumpToPost: (postId: string) => void }) {
   const [view, setView] = useState<BossBriefView | null>(null);
   const [briefId, setBriefId] = useState<string | null>(null);
@@ -114,11 +116,11 @@ export function BossBriefCard({ topic, onJumpToPost }: { topic: ReportTopic; onJ
   return (
     <div className={shell} data-testid="boss-brief-card">
       {/* หัว */}
-      <div className="flex items-start gap-3 px-4 pt-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--brand-navy)] text-white"><Sparkles className="h-4 w-4" /></span>
+      <div className="flex items-start gap-3 px-3 pt-2.5 sm:px-4 sm:pt-3">
+        <span className="hidden h-9 w-9 shrink-0 sm:flex items-center justify-center rounded-full bg-[var(--brand-navy)] text-white"><Sparkles className="h-4 w-4" /></span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <b className="text-[15px] text-[var(--ink)]">สรุป{roundName}</b>
+            <b className="text-[14px] text-[var(--ink)] sm:text-[15px]">สรุป{roundName}</b>
             <span className="text-xs text-[var(--ink-soft)]">
               ส่งแล้ว {brief.postCount} คน{missing && missing.length > 0 ? ` · ยังไม่ส่ง: ${missing.join(", ")}` : ""}
             </span>
@@ -132,39 +134,42 @@ export function BossBriefCard({ topic, onJumpToPost }: { topic: ReportTopic; onJ
                 ))}
             </span>
           </div>
-          {brief.headline && <p className="mt-1 text-[14px] leading-snug text-[var(--ink)]">{brief.headline}</p>}
+          {brief.headline && <p className="mt-1 text-[13px] leading-snug text-[var(--ink)] sm:text-[14px]">{brief.headline}</p>}
         </div>
       </div>
 
       {(
         <>
           {/* กล่องนับ 4 ประเภท */}
-          <div className="grid grid-cols-2 gap-2 px-4 pt-3 sm:grid-cols-4">
+          {/* มือถือ: 4 ช่องแถวเดียว ไอคอน+ตัวเลข+คำสั้น (12/11/2569 "mobile กินพื้นที่เกินไป") */}
+          <div className="grid grid-cols-4 gap-1.5 px-3 pt-2.5 sm:gap-2 sm:px-4 sm:pt-3">
             {BRIEF_KINDS.map((k) => {
               const on = kind === k.id;
               const red = reds(k.id);
               return (
                 <button key={k.id} type="button" onClick={() => { setKind(k.id); setMore(false); }}
-                  className={`flex flex-col items-start gap-0.5 rounded-lg border-2 px-3 py-2 text-left transition-colors ${on ? "border-[var(--brand-navy)] bg-[var(--bg-soft)]" : "border-[var(--line)] hover:bg-[var(--bg-soft)]"}`}>
-                  <span className="text-xs text-[var(--ink-soft)]">{k.icon} {k.label}</span>
-                  <span className="flex items-baseline gap-1.5">
-                    <span className="text-2xl font-bold text-[var(--ink)]">{brief.items[k.id].length}</span>
-                    <span className="text-xs text-[var(--ink-soft)]">เรื่อง</span>
-                    {red > 0 && <span className="rounded bg-[var(--bg-soft)] px-1 text-[11px] font-semibold" style={{ color: DOT.red }}>🔴 {red}</span>}
+                  className={`flex flex-col items-center gap-0 rounded-lg border-2 px-1 py-1.5 text-center sm:items-start sm:gap-0.5 sm:px-3 sm:py-2 sm:text-left transition-colors ${on ? "border-[var(--brand-navy)] bg-[var(--bg-soft)]" : "border-[var(--line)] hover:bg-[var(--bg-soft)]"}`}>
+                  <span className="hidden text-xs text-[var(--ink-soft)] sm:inline">{k.icon} {k.label}</span>
+                  <span className="flex items-baseline gap-1 sm:gap-1.5">
+                    <span className="text-[13px] sm:hidden">{k.icon}</span>
+                    <span className="text-lg font-bold text-[var(--ink)] sm:text-2xl">{brief.items[k.id].length}</span>
+                    <span className="hidden text-xs text-[var(--ink-soft)] sm:inline">เรื่อง</span>
+                    {red > 0 && <span className="rounded bg-[var(--bg-soft)] px-1 text-[10px] font-semibold sm:text-[11px]" style={{ color: DOT.red }}>🔴{red}</span>}
                   </span>
+                  <span className="text-[11px] leading-tight text-[var(--ink-soft)] sm:hidden">{SHORT[k.id]}</span>
                 </button>
               );
             })}
           </div>
 
           {/* รายการของประเภทที่เลือก */}
-          <div className="px-4 pb-2 pt-3">
+          <div className="px-3 pb-1.5 pt-2 sm:px-4 sm:pb-2 sm:pt-3">
             {list.length === 0 && <p className="py-2 text-sm text-[var(--ink-soft)]">{BRIEF_KINDS.find((k) => k.id === kind)!.empty}</p>}
             <div className="flex flex-col divide-y divide-[var(--line)]">
               {(more ? list : list.slice(0, 5)).map((it, i) => (
-                <button key={`${it.postId}-${i}`} type="button" onClick={() => onJumpToPost(it.postId)} className="flex items-start gap-2.5 py-2 text-left hover:bg-[var(--bg-soft)]">
+                <button key={`${it.postId}-${i}`} type="button" onClick={() => onJumpToPost(it.postId)} className="flex items-start gap-2 py-1.5 text-left hover:bg-[var(--bg-soft)] sm:gap-2.5 sm:py-2">
                   <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: DOT[it.color] }} />
-                  <span className="min-w-0 flex-1 text-[14px] leading-snug text-[var(--ink)]"><b>{it.name}</b> · {it.text}</span>
+                  <span className="min-w-0 flex-1 text-[13px] leading-snug sm:text-[14px] text-[var(--ink)]"><b>{it.name}</b> · {it.text}</span>
                 </button>
               ))}
             </div>
@@ -180,8 +185,8 @@ export function BossBriefCard({ topic, onJumpToPost }: { topic: ReportTopic; onJ
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-[var(--line)] px-4 py-2 text-xs text-[var(--ink-soft)]">
-            <span>จุดสี = สีที่คนเขียนใส่เอง · แตะบรรทัดเพื่อไปที่โพสต์</span>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-[var(--line)] px-3 py-1.5 text-xs text-[var(--ink-soft)] sm:px-4 sm:py-2">
+            <span className="hidden sm:inline">จุดสี = สีที่คนเขียนใส่เอง · แตะบรรทัดเพื่อไปที่โพสต์</span>
             <span className="ml-auto">{usageLine}</span>
             <button type="button" onClick={() => setPanel(panel === "ask" ? "none" : "ask")} className="font-medium text-[var(--brand-navy)] hover:underline">
               💬 ถาม AI{brief.qa.length ? ` (${brief.qa.length})` : ""}
