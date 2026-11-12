@@ -394,7 +394,7 @@ export function ReportComposer({ topic }: { topic: ReportTopic }) {
     >
       <div
         className={cn(
-          "overflow-y-auto overscroll-contain px-5 pt-4 space-y-3",
+          "overflow-y-auto overscroll-contain px-5 pt-4 space-y-3 [--sticky-top:-1rem]",
           // เต็มจอ: เหลือที่ให้แถบบน + แถบปุ่มของฟอร์ม + เมนูล่างของมือถือ (dvh = หดตามคีย์บอร์ด)
           tall ? "h-[calc(100dvh-13rem)] lg:h-[calc(100dvh-9rem)]" : "max-h-[50vh]"
         )}

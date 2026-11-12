@@ -743,7 +743,8 @@ export function ReportPostFields({
             );
           return (
             <div key={s.id} className="rounded-lg border border-[var(--line)] p-2.5 space-y-2">
-              <div className="flex flex-wrap items-center gap-0.5">
+              {/* sticky — โพสต์ยาวเลื่อนลงไปแก้ท้ายๆ แถบจัดรูปแบบยังตามมาอยู่บนสุด ไม่ต้องเลื่อนกลับขึ้นไป */}
+              <div className="sticky top-[var(--sticky-top,0px)] z-10 -mx-2.5 -mt-2.5 flex flex-wrap items-center gap-0.5 rounded-t-lg bg-white px-2.5 pt-2.5 pb-1.5">
                 <button type="button" onMouseDown={preserveSelection} onClick={() => exec(s.id, "bold")} className={toolbarBtn(fmt.bold)} aria-label="ตัวหนา" title="ตัวหนา">
                   <Bold className="h-3 w-3" />
                 </button>

@@ -223,7 +223,7 @@ export function ReportFeed({
           undifferentiated column. A bordered card needs something to
           contrast against, which flattening this to plain white specifically
           removed. */}
-      <div ref={scrollRef} onScroll={handleScroll} {...dismissKeyboard} className="flex-1 overflow-y-auto bg-[var(--bg-soft)] py-3 scroll-pt-4">
+      <div ref={scrollRef} onScroll={handleScroll} {...dismissKeyboard} className="flex-1 overflow-y-auto bg-[var(--bg-soft)] py-3 scroll-pt-4 [--sticky-top:-0.75rem]">
         {topicPosts.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center gap-3 text-center px-6">
             <div
