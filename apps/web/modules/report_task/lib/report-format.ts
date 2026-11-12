@@ -172,6 +172,50 @@ export function checkReportFormat(text: string, topics: readonly string[], requi
   return { items, missing, missingColor, empty, ok: missing.length === 0 && missingColor.length === 0 && empty.length === 0 };
 }
 
+export interface TopicBlock {
+  /** ชื่อหลักของหัวข้อตามที่ตั้งไว้ (ไม่ใช่ชื่อที่คนพิมพ์) */
+  topic: string;
+  section: boolean;
+  color: StatusColor | null;
+  /** เนื้อหาใต้หัวข้อจนถึงหัวข้อถัดไป (รวมข้อความต่อท้ายบรรทัดหัวข้อ) */
+  content: string;
+}
+
+/**
+ * แยกรายงานเป็นก้อนตามหัวข้อที่ตั้งไว้ — กติกาเดียวกับ checkReportFormat ทุกอย่าง (12/11/2569 สรุปให้ Boss)
+ * หัวข้อที่ไม่เจอในรายงานจะไม่มีในผลลัพธ์ · ข้อความก่อนหัวข้อแรกถูกทิ้ง
+ */
+export function splitReportTopics(text: string, topics: readonly string[]): TopicBlock[] {
+  const wanted = normalizeTopics(topics);
+  const byLength = wanted
+    .flatMap((line, index) => topicNames(line).map((name) => ({ index, key: squash(name) })))
+    .sort((a, b) => b.key.length - a.key.length);
+  const found = new Set<number>();
+  const out: (TopicBlock & { lines: string[] })[] = [];
+  let current: (TopicBlock & { lines: string[] }) | null = null;
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const head = squash(stripLead(line.replace(/[🔴🟡🟢🏁]/gu, "")));
+    const hit = head ? byLength.find((t) => !found.has(t.index) && head.startsWith(t.key)) : undefined;
+    if (hit) {
+      found.add(hit.index);
+      const def = wanted[hit.index]!;
+      let color: StatusColor | null = null;
+      for (const emoji of Object.keys(COLOR_OF)) if (line.includes(emoji)) color = COLOR_OF[emoji]!;
+      current = { topic: topicLabel(def), section: isSectionTopic(def), color, content: "", lines: [] };
+      out.push(current);
+      // ข้อความต่อท้ายบรรทัดหัวข้อ เช่น "🟢 วันนี้ส่งงานอะไร: ปิดงาน 4 ใบ"
+      const rest = stripMarkup(line).replace(/^[^:：]*[:：]\s*/, "");
+      if (rest !== stripMarkup(line) && rest.trim()) current.lines.push(rest.trim());
+      continue;
+    }
+    if (!squash(line)) continue; // เส้นคั่น/จุดไข่ปลา
+    current?.lines.push(stripMarkup(line));
+  }
+  return out.map(({ lines, ...b }) => ({ ...b, content: lines.join("\n") }));
+}
+
 /** ข้อความหัวข้อเปล่าตามรูปแบบ — ปุ่ม "ใส่หัวข้อตามรูปแบบ" และไว้คัดลอกไปให้ AI เขียนตาม */
 export function formatTemplate(topics: readonly string[], requireColor: boolean): string {
   return normalizeTopics(topics)

@@ -21,6 +21,7 @@ import { runTaskPenaltySweep } from "@/modules/report_task/lib/server/task-penal
 import { remindProjectStatusUpdates } from "@/modules/report_task/lib/server/project-reminders";
 import { remindRequests } from "@/modules/requests/lib/cron";
 import { runCutoffReminders } from "@/lib/score-requests";
+import { runBossBriefAllOrgs } from "@/modules/report_task/lib/boss-brief/server";
 
 export const runtime = "nodejs";
 
@@ -137,6 +138,16 @@ export async function GET(req: NextRequest) {
   }
   if (task === "attendance-chat") {
     Object.assign(result, { attendanceChat: await postAttendanceToChat() });
+  }
+  if (task === "boss-brief" || task === "attendance-chat") {
+    // สรุปรายงานให้ Boss (12/11/2569) — พ่วงรอบทุกนาที · ปิดเป็นค่าเริ่มต้น ไม่มีรอบถึงเวลา = จบเร็ว
+    // ล้มเองได้ ไม่ทำให้งานอื่นในรอบเดียวกันล้มตาม
+    try {
+      Object.assign(result, { bossBrief: await runBossBriefAllOrgs() });
+    } catch (error) {
+      console.error("[cron] boss-brief", error);
+      Object.assign(result, { bossBrief: { error: error instanceof Error ? error.message : String(error) } });
+    }
   }
   if (task === "reminders" || task === "attendance-chat") {
     // พ่วงกับรอบทุกนาทีของ attendance-chat — ล้มเองได้ ไม่ทำให้การเด้งเวลาเข้า/ออกงานล้มตาม

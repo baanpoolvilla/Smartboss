@@ -10,6 +10,7 @@ import { ReportFeed } from "@/modules/report_task/components/report-feed/report-
 import { OpenchatFeed } from "@/modules/report_task/components/report-feed/openchat-feed";
 import { ReportAllPostsFeed } from "@/modules/report_task/components/report-feed/report-all-posts-feed";
 import { ReportViewSwitcher } from "@/modules/report_task/components/report-feed/report-view-switcher";
+import { BossBriefCard } from "@/modules/report_task/components/report-feed/boss-brief-card";
 import { ReportComplianceBar } from "@/modules/report_task/components/report-feed/report-header";
 import { RoomSettingsSheet } from "@/modules/report_task/components/report-feed/room-settings-sheet";
 import { NotesTab } from "@/modules/report_task/components/report-feed/notes/notes-tab";
@@ -1559,9 +1560,30 @@ function ReportFeedPageInner() {
                        ReportComposer's title/sections/images form doesn't
                        apply here at all, so it's skipped entirely, not just
                        hidden. */
-                    <OpenchatFeed topic={activeTopic} topicPosts={filteredTopicPosts} onOpenTask={setOpenTaskId} />
+                    <>
+                      <BossBriefCard
+                        key={activeTopic.id}
+                        topic={activeTopic}
+                        onJumpToPost={(postId) => {
+                          setHighlightReplyId(null);
+                          setHighlightPostId(postId);
+                          setPostJumpNonce((n) => n + 1);
+                        }}
+                      />
+                      <OpenchatFeed topic={activeTopic} topicPosts={filteredTopicPosts} onOpenTask={setOpenTaskId} />
+                    </>
                   ) : (
                     <>
+                      {/* สรุปให้ Boss (12/11/2569) — การ์ดคืนค่า null ถ้าไม่ใช่ CEO / ห้องไม่ได้ตั้งหัวข้อบังคับ */}
+                      <BossBriefCard
+                        key={activeTopic.id}
+                        topic={activeTopic}
+                        onJumpToPost={(postId) => {
+                          setHighlightReplyId(null);
+                          setHighlightPostId(postId);
+                          setPostJumpNonce((n) => n + 1);
+                        }}
+                      />
                       <ReportFeed
                         topic={activeTopic}
                         topicPosts={filteredTopicPosts}
