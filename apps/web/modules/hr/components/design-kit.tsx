@@ -83,6 +83,7 @@ const SETTINGS_NAV: { href: string; label: string }[] = [
   { href: "/hr/settings/scoring", label: "เกณฑ์คะแนน" },
   { href: "/hr/settings/statutory", label: "ค่าจ้างและกฎหมาย" },
   { href: "/hr/settings/audit", label: "ประวัติการใช้งาน" },
+  { href: "/hr/settings/retention", label: "ข้อมูลครบกำหนด (PDPA)" },
 ];
 
 /**
