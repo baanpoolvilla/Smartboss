@@ -5,7 +5,7 @@ import { createStoreIfAbsent, readStore, writeStore } from "@/modules/report_tas
 import { readStoreCached } from "@/modules/report_task/lib/db/store-cached-read";
 import { writeOwnNotificationsForUsers } from "@/modules/report_task/lib/server/retro-notify";
 import { claimSweep, releaseSweep } from "@/modules/report_task/lib/server/sweep-throttle";
-import { getOrgPlan, planAtLeast } from "@/modules/report_task/lib/plan";
+import { getOrgPlan, planAtLeast, type PlanCode } from "@/modules/report_task/lib/plan";
 import { splitReportTopics } from "@/modules/report_task/lib/report-format";
 import { attributePostToRound, effectiveRoundsOf, roundRunsOnDay } from "@/modules/report_task/lib/submission-rounds";
 import { localDateStr } from "@/modules/report_task/lib/now";
@@ -35,6 +35,17 @@ import {
  *
  * ใช้คีย์ OpenAI กลางของแพลตฟอร์ม (เหมือน AI Insight) · แพ็กเกจ PRO ขึ้นไป · ปิดเป็นค่าเริ่มต้น
  */
+
+/**
+ * เพดานสูงสุดต่อเดือนตามแพ็กเกจ (บาท) — บริษัทลูกค้าตั้งเพดานเองได้ไม่เกินนี้ เพราะเงินออกจากบัญชี OpenAI ของเรา
+ * (ใช้จริงประมาณ ฿30–150/เดือน/ห้อง) · เปลี่ยนตัวเลขที่นี่ที่เดียว
+ */
+export const PLAN_MAX_CAP_THB: Record<PlanCode, number> = { FREE: 0, PRO: 500, ENTERPRISE: 3000 };
+
+async function effectiveCap(orgId: string, settings: BossBriefSettings): Promise<{ cap: number; planMax: number }> {
+  const planMax = PLAN_MAX_CAP_THB[await getOrgPlan(orgId)];
+  return { cap: Math.min(settings.monthlyCapThb, planMax), planMax };
+}
 
 const SETTINGS_KEY = "boss-brief-settings";
 const RESULTS_KEY = "boss-brief-results";
@@ -161,7 +172,7 @@ async function buildBrief(
   let cost = 0;
   let aiSkipped: BossBrief["aiSkipped"];
   const usage = await readUsage(orgId, monthOf(day));
-  if (usage.thb >= settings.monthlyCapThb) {
+  if (usage.thb >= (await effectiveCap(orgId, settings)).cap) {
     aiSkipped = "cap";
   } else if (parsed.length > 0) {
     const input = parsed.map((x) => ({
@@ -362,7 +373,8 @@ export async function briefViewFor(orgId: string, topicId: string, isBoss: boole
   const briefs = Object.values(stored?.briefs ?? {})
     .filter((b) => b.topicId === topicId && b.day >= yesterday)
     .sort((a, b) => b.day.localeCompare(a.day) || minutesOf(b.roundTime) - minutesOf(a.roundTime));
-  return { allowed: true, settings, roundsWithTopics, briefs, usage: { month, thb: usage.thb, calls: usage.calls, capThb: settings.monthlyCapThb }, generating: false };
+  const { cap, planMax } = await effectiveCap(orgId, settings);
+  return { allowed: true, settings, roundsWithTopics, briefs, usage: { month, thb: usage.thb, calls: usage.calls, capThb: cap, planMaxThb: planMax }, generating: false };
 }
 
 /** Boss ถามต่อในการ์ด — ตอบจากรายงานของรอบนั้น + 3 วันก่อนหน้าของห้องเดียวกัน */
@@ -372,7 +384,8 @@ export async function askBrief(orgId: string, briefId: string, question: string)
   const settings = await readBriefSettings(orgId);
   const day = briefId.split("|")[0] ?? localDateStr(new Date());
   const usage = await readUsage(orgId, monthOf(day));
-  if (usage.thb >= settings.monthlyCapThb) return { ok: false, error: `ใช้ครบเพดาน ฿${settings.monthlyCapThb} ของเดือนนี้แล้ว — เพิ่มเพดานได้ที่ตั้งค่าของการ์ด` };
+  const { cap } = await effectiveCap(orgId, settings);
+  if (usage.thb >= cap) return { ok: false, error: `ใช้ครบเพดาน ฿${cap} ของเดือนนี้แล้ว` };
   const { data: stored } = await readStore<Results>(orgId, RESULTS_KEY);
   const brief = stored?.briefs?.[briefId];
   if (!brief) return { ok: false, error: "ไม่พบสรุปนี้" };

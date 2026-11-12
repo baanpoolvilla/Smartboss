@@ -121,6 +121,7 @@ export interface BossBriefView {
   /** ห้องนี้ตั้งหัวข้อบังคับไว้ในรอบไหนบ้าง — ไม่มี = เปิดสรุปไม่ได้ (ไม่รู้ว่าหัวข้อไหนคืออะไร) */
   roundsWithTopics: { id: string; label: string; time: string }[];
   briefs: BossBrief[];
-  usage: { month: string; thb: number; calls: number; capThb: number };
+  /** capThb = เพดานที่ใช้จริง (ที่ตั้ง ไม่เกินเพดานของแพ็กเกจ) · planMaxThb = สูงสุดที่แพ็กเกจให้ตั้งได้ */
+  usage: { month: string; thb: number; calls: number; capThb: number; planMaxThb?: number };
   generating: boolean;
 }

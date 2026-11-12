@@ -262,7 +262,8 @@ function SettingsPanel({
       <p className="text-xs text-[var(--ink-soft)]">
         เดือนนี้ใช้ไป <b className="text-[var(--ink)]">฿{baht(view.usage.thb)}</b> จาก {view.usage.calls} ครั้ง · ถึงเพดานแล้ว AI หยุดย่อ แต่การ์ดยังนับประเภทและสีให้
       </p>
-      <label className="flex items-center justify-between gap-3">เพดานต่อเดือน (บาท)
+      <label className="flex items-center justify-between gap-3">
+        <span>เพดานต่อเดือน (บาท){view.usage.planMaxThb != null && <span className="block text-[11px] text-[var(--ink-soft)]">แพ็กเกจของคุณตั้งได้สูงสุด ฿{view.usage.planMaxThb.toLocaleString("th-TH")}</span>}</span>
         <input id="boss-brief-cap" inputMode="numeric" value={cap} onChange={(e) => setCap(e.target.value.replace(/\D/g, ""))} className={`${box} w-24 text-right`} />
       </label>
       <label className="flex items-center justify-between gap-3">ย่อสรุปหลังปิดรอบ
