@@ -221,8 +221,13 @@ async function buildBrief(
       const color: BriefColor = b.color ?? "none";
       if (RANK[color] < RANK[worst]) worst = color;
       if (!b.kind || b.nothing) return;
-      const text = shorts.get(`${x.post.id}|${i}`) ?? firstLine(b.content);
-      if (isNothing(text)) return; // AI ย่อแล้วเหลือแค่ "ไม่มี…" = ไม่ใช่เรื่อง
+      let text = shorts.get(`${x.post.id}|${i}`) ?? firstLine(b.content);
+      if (isNothing(text)) {
+        // AI ย่อแล้วเหลือแค่ "ไม่มี…" — ตัดทิ้งได้เฉพาะที่คนเขียนไม่ได้ใส่สีเตือน
+        // ถ้าคนเขียนใส่ 🔴/🟡 เอง AI ต้องไม่ทำให้เรื่องหายจากการ์ด → ใช้ข้อความจริงบรรทัดแรกแทน (12/11/2569)
+        if (color !== "red" && color !== "yellow") return;
+        text = firstLine(b.content);
+      }
       items[b.kind].push({ postId: x.post.id, userId: x.post.authorId, name: x.name, text, color });
     });
     return { postId: x.post.id, userId: x.post.authorId, name: x.name, oneLine: oneLine.get(x.post.id) ?? firstLine(x.post.title), worst };
