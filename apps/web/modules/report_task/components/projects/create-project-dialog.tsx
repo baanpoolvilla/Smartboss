@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
-import { departmentIdsOf, users } from "@/modules/report_task/lib/directory";
+import { departmentIdsOf, isOwner, users } from "@/modules/report_task/lib/directory";
 import { dayToIso, shiftDays, templateDate, templateEnd, templateStartFromEnd } from "@/modules/report_task/lib/project-schedule";
 import { uuid } from "@/modules/report_task/lib/uuid";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -123,6 +123,11 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
       });
     }
     const members = [...new Set([...memberIds, ...newTasks.flatMap((t) => t.assigneeIds)])].filter((id) => id !== ownerId).map((userId) => ({ userId, role: defaultMemberRole(userId) }));
+    // ทุกคนสร้างโปรเจกต์ได้ (13/11/2569) — คนสร้างที่ไม่ใช่ CEO และไม่ได้เป็นผู้ดูแล ต้องยังเห็น/แก้โปรเจกต์ที่ตัวเองสร้างได้
+    if (me !== ownerId && !isOwner(me)) {
+      const mine = members.find((m) => m.userId === me);
+      if (mine) mine.role = "editor"; else members.push({ userId: me, role: "editor" });
+    }
     const project: Project = {
       id: pid, name: name.trim(), description: desc.trim(), ownerId, members,
       startDate: effStart, endDate: tpl ? (effEnd > end && tpl.anchor === "start" ? effEnd : end) : end,
