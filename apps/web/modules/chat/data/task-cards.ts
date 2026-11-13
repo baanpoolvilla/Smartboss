@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@smartboss/database";
 
 import type { ChatTaskCard } from "../types";
-import { broadcastToChannel, getChannelAccess, getOrCreateDm } from "./channels";
+import { broadcastToChannel, getChannelAccess, getOrCreateDm, postSystemMessage } from "./channels";
 import { hydrateMessages } from "./serialize";
 import { readStore } from "@/modules/report_task/lib/db/org-store";
 
@@ -244,6 +244,40 @@ async function projectOf(orgId: string, task: { data: unknown } | null): Promise
   } catch {
     return {};
   }
+}
+
+const TH_MON = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+
+/**
+ * งานใหม่ในโปรเจกต์ → แถบข้อความระบบเล็ก ๆ ในห้องโปรเจกต์ (ผู้ใช้ 13/11/2569 "การ์ดเยอะไป ให้เตือนเบา ๆ ให้รู้")
+ * เช่น "กาย เพิ่มงาน "เช็คแอร์ทุกห้อง" ให้ ต้น · ส่ง 13 พ.ย." — ข้อความระบบไม่เด้ง/ไม่นับยังไม่อ่าน กระดิ่งแจ้งรายงานอยู่แล้ว
+ * คนส่งต้องอยู่ในห้อง · เฉพาะงานที่ผูกกับโปรเจกต์ · ไม่ throw ออกไปถ้างานยังไม่ลงตาราง
+ */
+export async function postProjectTaskNotice(
+  orgId: string,
+  input: { channelId: string; authorId: string; taskId: string }
+): Promise<{ posted: boolean }> {
+  const access = await getChannelAccess({ orgId, userId: input.authorId, isChatAdmin: false }, input.channelId);
+  if (access.type === "dm") return { posted: false };
+  const readTask = () =>
+    prisma.reportTask
+      .findUnique({ where: { orgId_id: { orgId, id: input.taskId } }, select: { title: true, dueDate: true, data: true, assigneeIds: true } })
+      .catch(() => null);
+  let task = await readTask();
+  if (!task) {
+    await new Promise((r) => setTimeout(r, 2500));
+    task = await readTask();
+  }
+  if (!task || !isProjectTask(task)) return { posted: false };
+  const [{ assignees }, actor] = await Promise.all([
+    assigneeNames(orgId, task.assigneeIds ?? []),
+    prisma.user.findUnique({ where: { id: input.authorId }, select: { name: true } }),
+  ]);
+  const d = /^(\d{4})-(\d{2})-(\d{2})/.exec(task.dueDate || "");
+  const due = d ? ` · ส่ง ${Number(d[3])} ${TH_MON[Number(d[2]) - 1]}` : "";
+  const who = assignees?.length ? ` ให้ ${assignees.join(", ")}` : "";
+  await postSystemMessage(orgId, input.channelId, input.authorId, `${actor?.name ?? "มีคน"} เพิ่มงาน "${task.title.slice(0, 120)}"${who}${due}`);
+  return { posted: true };
 }
 
 async function assigneeNames(orgId: string, ids: string[]): Promise<{ assignees?: string[] }> {

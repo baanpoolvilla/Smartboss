@@ -32,7 +32,7 @@ import type { Project, ProjectStatus } from "@/modules/report_task/types";
 import { ProjectTimeline } from "./project-timeline";
 import { BoardTab, CalendarTab, DashboardTab, FilesTab, ListTab, MessagesTab } from "./project-tabs";
 import { updateChannel } from "@/modules/chat/lib/api";
-import { PCT_HELP, PersonDot, ProjectStatusChip, STATE_COLOR, STATE_LABEL, StatePill, fmtDay, askProjectUpdate, defaultMemberRole, ensureProjectMembers, notifyAddedToProject, postProjectTaskCards, syncChatMember, todayBkk, useCompanyHolidays } from "./project-ui";
+import { PCT_HELP, PersonDot, ProjectStatusChip, STATE_COLOR, STATE_LABEL, StatePill, fmtDay, askProjectUpdate, defaultMemberRole, ensureProjectMembers, notifyAddedToProject, postProjectTaskNotices, syncChatMember, todayBkk, useCompanyHolidays } from "./project-ui";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { ROLE_OF_DEFAULT } from "./project-roles";
 import { useSetAppBarLeading } from "@/modules/report_task/components/shared/app-bar-leading";
@@ -241,10 +241,9 @@ export function ProjectView({ projectId }: { projectId: string }) {
           onCreated={(taskId) => {
             setTaskProject(taskId, { projectId: project.id, sectionId: newTaskSection || project.sections[0]?.id || "", dependsOn: [] }, me);
             ensureProjectMembers(project.id, useTaskStore.getState().tasks.find((t) => t.id === taskId)?.assigneeIds ?? [], me);
-            // งานใหม่ในโปรเจกต์ → การ์ดลงห้องแชทของโปรเจกต์ (ถ้ามีห้อง) · รอให้งานบันทึกก่อน
-            const created = useTaskStore.getState().tasks.find((t) => t.id === taskId);
+            // งานใหม่ในโปรเจกต์ → แถบเล็กในห้องแชทของโปรเจกต์ (ถ้ามีห้อง) · รอให้งานบันทึกก่อน
             const room = useProjectStore.getState().projects.find((x) => x.id === project.id)?.chatChannelId;
-            if (created && room) setTimeout(() => void postProjectTaskCards(room, [{ id: created.id, title: created.title }]), 2500);
+            if (room) setTimeout(() => void postProjectTaskNotices(room, [taskId]), 2500);
             setNewTaskSection(null);
           }}
         />

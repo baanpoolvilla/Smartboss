@@ -31,47 +31,40 @@ export function notifyAddedToProject(project: { id: string; name: string }, user
 }
 
 /**
- * การ์ด "งานใหม่" ลงห้องแชทของโปรเจกต์ (ผู้ใช้ 13/11/2569 "มีงานอะไรอัปเดตก็ส่งมาในหัวข้อนั้นว่างานนี้ถูกสร้าง")
- * ทีละใบตามลำดับ · ไม่มีห้อง = ไม่ทำอะไร · พลาด = เงียบ (งานบันทึกไปแล้ว การ์ดไม่สำคัญเท่า)
- * เลื่อนวัน/ตามงาน/คอมเมนต์ ยังแจ้งในกระดิ่งเหมือนเดิม ไม่ลงห้อง
+ * งานใหม่ในโปรเจกต์ → แถบเล็กในห้องแชทของโปรเจกต์ "กาย เพิ่มงาน "…" ให้ ต้น · ส่ง 13 พ.ย." (ผู้ใช้ 13/11/2569 "เตือนเบา ๆ ให้รู้")
+ * ไม่มีห้อง = ไม่ทำอะไร · พลาด = เงียบ · เลื่อนวัน/ตามงาน/คอมเมนต์ ยังแจ้งในกระดิ่งเหมือนเดิม ไม่ลงห้อง
  */
-export async function postProjectTaskCards(channelId: string | undefined, tasks: { id: string; title: string }[]) {
+export async function postProjectTaskNotices(channelId: string | undefined, taskIds: string[]) {
   if (!channelId) return;
-  for (const t of tasks) {
+  for (const taskId of taskIds) {
     await fetch(`/api/chat/channels/${encodeURIComponent(channelId)}/task-card`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ taskId: t.id, title: t.title, assigned: true }),
+      body: JSON.stringify({ taskId, notice: true }),
     }).catch(() => {});
   }
 }
 
 /**
- * สร้างโปรเจกต์ใหม่ → เปิดห้องแชทของโปรเจกต์ให้เลย (เดิมต้องกดสร้างเองในแท็บข้อความ) + ข้อความเปิดโปรเจกต์ + การ์ดงานทุกงาน
- * ห้องกลุ่มแจ้ง "เพิ่มคุณเข้ากลุ่ม" ให้ทุกคนเอง (chat/data/channels.ts) · ทำเบื้องหลัง ไม่ให้หน้าสร้างโปรเจกต์รอ
+ * สร้างโปรเจกต์ใหม่ → เปิดห้องแชทของโปรเจกต์ให้เลย (เดิมต้องกดสร้างเองในแท็บข้อความ) + ข้อความเดียวสรุปงานทั้งหมด บรรทัดละงาน
+ * (ผู้ใช้ 13/11/2569: การ์ดทีละงานเยอะไป) · ห้องกลุ่มแจ้ง "เพิ่มคุณเข้ากลุ่ม" ให้ทุกคนเอง · ทำเบื้องหลัง
  */
 export async function openProjectRoom(
-  project: { id: string; name: string; ownerId: string; startDate: string; endDate: string },
+  project: { id: string; name: string; ownerId: string },
   memberIds: string[],
   actorId: string,
-  tasks: { id: string; title: string }[],
+  tasks: { title: string; assigneeIds: string[]; dueDate: string }[],
 ) {
   try {
     const others = [...new Set(memberIds)].filter((id) => id && id !== actorId);
     if (!others.length) return;
     const { channelId } = await createGroupChannel(`📁 ${project.name}`, others);
     useProjectStore.getState().updateProject(project.id, { chatChannelId: channelId });
-    const owner = getUser(project.ownerId)?.name ?? "-";
-    const names = [...new Set([project.ownerId, ...memberIds])].map((id) => getUser(id)?.name).filter(Boolean).join(", ");
+    const lines = tasks.map((t) => `• ${t.title} — ${t.assigneeIds.map((id) => getUser(id)?.name ?? "").filter(Boolean).join(", ") || "-"} · ส่ง ${fmtDay(t.dueDate.slice(0, 10))}`);
     await sendMessage(channelId, {
       clientId: `project-open-${project.id}`,
-      body: `เปิดโปรเจกต์ "${project.name}"
-ผู้ดูแล: ${owner}
-ช่วงเวลา: ${fmtDay(project.startDate)} – ${fmtDay(project.endDate, true)}
-สมาชิก: ${names}
-มีงาน ${tasks.length} งาน — การ์ดงานแต่ละงานอยู่ด้านล่าง`,
+      body: [`เปิดโปรเจกต์ "${project.name}" · ผู้ดูแล ${getUser(project.ownerId)?.name ?? "-"} · ${tasks.length} งาน`, ...lines].join("\n"),
     }).catch(() => {});
-    await postProjectTaskCards(channelId, tasks);
   } catch {
     toast.error("สร้างห้องแชทของโปรเจกต์ไม่สำเร็จ — กดสร้างเองได้ในแท็บข้อความของโปรเจกต์");
   }
