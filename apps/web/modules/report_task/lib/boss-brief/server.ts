@@ -7,6 +7,7 @@ import { writeOwnNotificationsForUsers } from "@/modules/report_task/lib/server/
 import { claimSweep, releaseSweep } from "@/modules/report_task/lib/server/sweep-throttle";
 import { getOrgPlan, planAtLeast, type PlanCode } from "@/modules/report_task/lib/plan";
 import { askCompany } from "./company-ai";
+import { withAiLock, worstCaseThb } from "./ai-budget";
 import { readStoredBytes } from "@/lib/storage";
 import { splitReportTopics } from "@/modules/report_task/lib/report-format";
 import { attributePostToRound, effectiveRoundsOf, roundRunsOnDay } from "@/modules/report_task/lib/submission-rounds";
@@ -272,8 +273,10 @@ async function buildDetail(
   teamOf: Map<string, string>,
   period: NonNullable<BriefDetail["period"]> = "daily",
   /** ข้อความที่อ่านจากรูปแนบ (รายงาน weekly/monthly ที่ข้อมูลอยู่ในรูป) key = postId */
-  imageText: Map<string, string> = new Map()
-): Promise<{ detail: BriefDetail; headline: string; oneLine: Map<string, string>; cost: number } | null> {
+  imageText: Map<string, string> = new Map(),
+  /** เงินที่เหลือของเดือนนี้ (บาท) — ค่ากรณีแย่สุดของการเรียกครั้งนี้เกิน = ไม่เรียก ("cap") */
+  budgetLeft = Number.POSITIVE_INFINITY
+): Promise<{ detail: BriefDetail; headline: string; oneLine: Map<string, string>; cost: number } | null | "cap"> {
   const byRef = new Map<number, ReportPost>();
   const row = (p: ReportPost, max: number) => {
     const ref = byRef.size + 1;
@@ -310,11 +313,14 @@ ${JSON.stringify(now)}
 "carry":[{"what":"≤80","since":"YYYY-MM-DD หรือว่าง","ref":0}],
 "fixed":[{"what":"เรื่องที่เคยค้างแต่แก้แล้ว ≤70","ref":0}]}
 ${kind === "range" ? "people หนึ่งรายการต่อคน ครบทุกคนที่ส่งในช่วงนี้" : "people ต้องมีครบทุกรายงานในรอบนี้ ref ของ people/urgent/decisions ต้องเป็นรายงานรอบนี้"} did ไม่เกิน 5 ข้อ รวมงานเล็กๆ เข้าด้วยกัน ไม่มี = []`;
+  // ค่ากรณีแย่สุด = ขนาดข้อความที่ส่งจริง + ตอบยาวสุด 8,000 token — เกินเงินที่เหลือ = ไม่เรียกเลย (ไม่เสี่ยงเกินเพดาน)
+  const MAX_OUT = 8000;
+  if (worstCaseThb(MODEL_PRICES_USD[settings.detailModel] ?? MODEL_PRICES_USD["gpt-6-sol"]!, prompt.length, MAX_OUT, THB_PER_USD) > budgetLeft) return "cap";
   try {
     const res = await openai().chat.completions.create({
       model: settings.detailModel,
       response_format: { type: "json_object" },
-      max_completion_tokens: 12000,
+      max_completion_tokens: MAX_OUT,
       messages: [{ role: "user", content: prompt }],
     });
     const cost = costThb(settings.detailModel, res.usage);
@@ -421,34 +427,49 @@ async function buildBrief(
   const shorts = new Map<string, string>(); // `${postId}|${i}`
   let cost = 0;
   let aiSkipped: BossBrief["aiSkipped"];
-  const usage = await readUsage(orgId, monthOf(day));
   let detail: BriefDetail | undefined;
-  // เหลือเงินไม่พอสรุป 1 รอบ (ประมาณการ) = ไม่เรียก AI — เดิมเช็กแค่ "ยังไม่ถึงเพดาน" แล้วสรุปจนเกิน (เพดาน ฿1 ใช้ไป ฿2.22)
-  if (usage.thb + estimateThb(settings.detailModel, "summary") > (await effectiveCap(orgId, settings)).cap) {
-    aiSkipped = "cap";
-  } else if (parsed.length > 0) {
+  // คุมเงิน (13/11/2569 "เกินได้นิดหน่อย ห้ามบานปลาย"): ต่อคิวต่อบริษัท + เช็กเงินที่เหลือกับค่ากรณีแย่สุดของแต่ละการเรียก (ai-budget.ts)
+  let left = 0;
+  await withAiLock(orgId, async () => {
+    left = (await effectiveCap(orgId, settings)).cap - (await readUsage(orgId, monthOf(day))).thb;
+    if (left < estimateThb(settings.detailModel, "summary")) {
+      aiSkipped = "cap";
+      return;
+    }
+    if (parsed.length === 0) return;
     // รอบรายสัปดาห์/รายเดือน: ข้อมูลมักอยู่ในรูป (คนละ 1 รูป) → อ่านรูปเป็นข้อความครั้งเดียว เก็บไว้ใช้ซ้ำ · รอบรายวันไม่อ่านรูป (รูปหน้างาน)
     let imageText = new Map<string, string>();
     if (period !== "daily") {
-      const r = await readReportImages(orgId, [...posts, ...history], settings);
+      const r = await readReportImages(orgId, [...posts, ...history], settings, left);
       imageText = r.text;
-      cost += r.cost;
+      left -= r.spent;
     }
     // สรุปละเอียดก่อน (13/11/2569) — ได้ = ใช้ภาพรวม/บรรทัดต่อคนจากตัวนี้ ไม่ต้องเรียกแบบเดิมซ้ำ · ล้ม = ตกไปใช้แบบเดิม
-    const d = await buildDetail(orgId, kind, `${round.label} ${day}`, day, posts, history, settings, nameOf, teamOf, period, imageText);
+    const d = await buildDetail(orgId, kind, `${round.label} ${day}`, day, posts, history, settings, nameOf, teamOf, period, imageText, left);
+    if (d === "cap") {
+      aiSkipped = "cap";
+      return;
+    }
     if (d) {
       detail = d.detail;
       headline = d.headline;
       for (const [id, line] of d.oneLine) oneLine.set(id, line);
       cost += d.cost;
+      left -= d.cost;
+      return;
     }
-  }
-  if (!aiSkipped && !detail && parsed.length > 0) {
+    await legacySummary();
+  });
+  async function legacySummary() {
     const input = parsed.map((x) => ({
       id: x.post.id,
       name: x.name,
       topics: x.blocks.map((b, i) => ({ i, topic: b.topic, text: b.nothing ? "ไม่มี" : b.content.slice(0, MAX_CONTENT) })),
     }));
+    if (worstCaseThb(MODEL_PRICES_USD[settings.summaryModel] ?? MODEL_PRICES_USD["gpt-6-sol"]!, JSON.stringify(input).length + 800, 6000, THB_PER_USD) > left) {
+      aiSkipped = "cap";
+      return;
+    }
     try {
       const res = await openai().chat.completions.create({
         model: settings.summaryModel,
@@ -466,14 +487,15 @@ async function buildBrief(
           },
         ],
       });
-      cost += costThb(settings.summaryModel, res.usage);
+      const legacyCost = costThb(settings.summaryModel, res.usage);
+      cost += legacyCost;
       const out = JSON.parse(res.choices[0]?.message?.content ?? "{}") as { headline?: string; posts?: { id: string; oneLine?: string; shorts?: { i: number; short: string }[] }[] };
       headline = String(out.headline ?? "").slice(0, 200);
       for (const p of out.posts ?? []) {
         if (p.oneLine) oneLine.set(p.id, String(p.oneLine).slice(0, 160));
         for (const s of p.shorts ?? []) if (s && typeof s.short === "string") shorts.set(`${p.id}|${s.i}`, s.short.slice(0, 200));
       }
-      await addUsage(orgId, monthOf(day), cost);
+      await addUsage(orgId, monthOf(day), legacyCost);
     } catch (e) {
       console.error("[boss-brief] AI", orgId, e instanceof Error ? e.message : e);
       aiSkipped = "error";
@@ -727,19 +749,24 @@ export async function askBrief(orgId: string, briefId: string, question: string)
   if (usage.thb + estimateThb(settings.askModel, "ask") > cap) return { ok: false, error: `ใกล้ครบเพดาน ฿${cap} ของเดือนนี้แล้ว` };
   const brief = await getBrief(orgId, briefId);
   if (!brief) return { ok: false, error: "ไม่พบสรุปนี้" };
+  return withAiLock(orgId, async () => {
+  // อ่านยอดใหม่ในคิว — อีกงานอาจเพิ่งใช้เงินไป
+  const leftNow = (await effectiveCap(orgId, settings)).cap - (await readUsage(orgId, monthOf(today))).thb;
+  if (leftNow < estimateThb(settings.askModel, "ask")) return { ok: false as const, error: `ใกล้ครบเพดาน ฿${cap} ของเดือนนี้แล้ว` };
   try {
-    const r = await askCompany({ orgId, question: q, model: settings.askModel, brief, history: brief.qa, costOf: costThb });
+    const r = await askCompany({ orgId, question: q, model: settings.askModel, brief, history: brief.qa, costOf: costThb, budgetThb: leftNow });
     await addUsage(orgId, monthOf(today), r.costThb);
     console.log("[boss-brief] ask", orgId, `฿${r.costThb.toFixed(2)}`, r.tools.join(","));
     // อ่านล่าสุดอีกรอบก่อนต่อท้าย (รอบตรวจอาจสรุปใหม่ระหว่าง AI กำลังตอบ) — แถวเดียว ไม่ต้องเขียนทั้งก้อนแล้ว
     const cur = (await getBrief(orgId, briefId)) ?? brief;
     const next = { ...cur, qa: [...cur.qa, { at: new Date().toISOString(), q, a: r.answer, costThb: r.costThb, sources: [...new Set(r.tools)] }].slice(-20) };
     await saveBrief(orgId, next);
-    return { ok: true, brief: next };
+    return { ok: true as const, brief: next };
   } catch (e) {
     console.error("[boss-brief] ask", orgId, e instanceof Error ? e.message : e);
-    return { ok: false, error: "AI ตอบไม่สำเร็จ ลองใหม่อีกครั้ง" };
+    return { ok: false as const, error: "AI ตอบไม่สำเร็จ ลองใหม่อีกครั้ง" };
   }
+  });
 }
 
 /* ───────── สรุปรวมหลายวัน (13/11/2569 ผู้ใช้: "ต้องมีสรุปรวมสิ") ─────────
@@ -802,7 +829,11 @@ export async function startRangeBrief(
       });
       const nameOf = new Map(users.map((u) => [u.id, u.name]));
       const teamOf = new Map(users.map((u) => [u.id, u.department?.name ?? ""]));
-      const d = await buildDetail(orgId, "range", `ช่วง ${from} ถึง ${to}`, to, posts, [], settings, nameOf, teamOf);
+      const d = await withAiLock(orgId, async () => {
+        const leftNow = (await effectiveCap(orgId, settings)).cap - (await readUsage(orgId, monthOf(localDateStr(new Date())))).thb;
+        return buildDetail(orgId, "range", `ช่วง ${from} ถึง ${to}`, to, posts, [], settings, nameOf, teamOf, "daily", new Map(), leftNow);
+      });
+      if (d === "cap") throw new Error("เงินที่เหลือของเดือนนี้ไม่พอสำหรับสรุปช่วงนี้ — เลือกช่วงสั้นลงหรือเพิ่มเพดาน");
       if (!d) throw new Error("AI สรุปไม่สำเร็จ ลองใหม่อีกครั้ง");
       const byId = new Map(posts.map((p) => [p.id, p]));
       const people = Object.entries(d.detail.people)
@@ -873,7 +904,7 @@ async function imageDataUrl(img: ReportPost["images"][number]): Promise<string |
   return `data:${mime};base64,${Buffer.from(bytes).toString("base64")}`;
 }
 
-async function readReportImages(orgId: string, posts: ReportPost[], settings: BossBriefSettings): Promise<{ text: Map<string, string>; cost: number }> {
+async function readReportImages(orgId: string, posts: ReportPost[], settings: BossBriefSettings, budgetLeft = Number.POSITIVE_INFINITY): Promise<{ text: Map<string, string>; spent: number }> {
   const store = await readImageTextStore(orgId);
   const out = new Map<string, string>();
   const fresh: ImageTextStore = {};
@@ -891,7 +922,9 @@ async function readReportImages(orgId: string, posts: ReportPost[], settings: Bo
         if (url) todo.push({ img, url });
       }
     }
-    if (todo.length) {
+    // รูปละราว 1,500 token (ความละเอียดสูง) + ตอบยาวสุด 2,500 token — เงินเหลือไม่พอ = ไม่อ่านรูปนี้ (สรุปจากข้อความแทน)
+    const worst = worstCaseThb(MODEL_PRICES_USD[settings.summaryModel] ?? MODEL_PRICES_USD["gpt-6-sol"]!, 1500 * 1.2 * todo.length + 800, 2500, THB_PER_USD);
+    if (todo.length && cost + worst <= budgetLeft) {
       try {
         const res = await openai().responses.create({
           model: settings.summaryModel,
@@ -934,7 +967,7 @@ async function readReportImages(orgId: string, posts: ReportPost[], settings: Bo
       if (w.ok) break;
     }
   }
-  return { text: out, cost: 0 };
+  return { text: out, spent: cost };
 }
 
 /* ───────── ย่อสรุปเก่ากว่า 12 เดือน (13/11/2569) ─────────

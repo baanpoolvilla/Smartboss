@@ -447,6 +447,8 @@ export async function askCompany(opts: {
   pages?: { label: string; path: string }[];
   /** หน้าที่ Boss เปิดอยู่ตอนถาม เช่น /maintenance/work-orders */
   currentPath?: string;
+  /** เงินที่เหลือของเดือนนี้ (บาท) — รอบถัดไปอาจเกิน = หยุดค้น ตอบจากที่ได้ (ไม่เกินเพดาน) */
+  budgetThb?: number;
   costOf: (model: string, usage: { prompt_tokens?: number; completion_tokens?: number } | undefined) => number;
 }): Promise<{ answer: string; costThb: number; tools: string[] }> {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -483,17 +485,26 @@ export async function askCompany(opts: {
     { role: "user", content: opts.question },
   ];
   let cost = 0;
+  let lastStep = 0;
+  const budget = opts.budgetThb ?? Number.POSITIVE_INFINITY;
   const used: string[] = [];
   for (let step = 0; step < MAX_STEPS; step++) {
-    const last = step === MAX_STEPS - 1;
+    // รอบถัดไปใช้ราวเท่ารอบก่อน + ข้อมูลที่เพิ่งค้นมา ⇒ เผื่อ 1.5 เท่า · ไม่พอ = รอบนี้ต้องเป็นรอบตอบ (ไม่ค้นต่อ)
+    const near = step > 0 && cost + lastStep * 1.5 > budget;
+    if (step > 0 && cost + lastStep > budget) {
+      return { answer: "ค้นข้อมูลได้บางส่วน แต่ค่า AI เดือนนี้ใกล้ถึงเพดานแล้ว จึงหยุดก่อน ลองถามให้แคบลง หรือเพิ่มเพดานในตั้งค่าสรุป", costThb: cost, tools: used };
+    }
+    const last = step === MAX_STEPS - 1 || near;
     const res = await client.responses.create({
       model: opts.model,
       instructions,
       input,
       ...(last ? {} : { tools: TOOLS }),
-      max_output_tokens: 6000,
+      max_output_tokens: 2500,
     });
-    cost += opts.costOf(opts.model, { prompt_tokens: res.usage?.input_tokens, completion_tokens: res.usage?.output_tokens });
+    const stepCost = opts.costOf(opts.model, { prompt_tokens: res.usage?.input_tokens, completion_tokens: res.usage?.output_tokens });
+    cost += stepCost;
+    lastStep = stepCost;
     const calls = res.output.filter((o): o is OpenAI.Responses.ResponseFunctionToolCall => o.type === "function_call");
     if (calls.length === 0 || last) {
       return { answer: (res.output_text ?? "").replaceAll("**", "").trim() || "ตอบไม่ได้ ลองถามใหม่อีกครั้ง", costThb: cost, tools: used };
