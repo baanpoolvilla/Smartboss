@@ -951,9 +951,14 @@ export function WorkOrderBoard({
     setQuery("");
     setSearchOpen(false);
   };
-  const searchBox =
-    searchOpen || query ? (
-      <label className="relative inline-flex h-8 w-36 min-w-0 shrink items-center rounded-(--radius) border border-(--brand-navy) bg-(--bg) pl-2 pr-7 text-[13px] sm:w-52 lg:h-9 lg:text-sm">
+  const searchActive = searchOpen || !!query;
+  // มือถือ: แถบหัวแคบ ช่องค้นหาไปเบียดตัวกรองจนชิดกันหมด (ผู้ใช้ 13/11/2569) — บนหัวคงเป็นไอคอน กดแล้วช่องค้นหาลงมาเป็นแถวเต็มกว้างใต้หัว
+  const searchInput = (wide: boolean) => (
+      <label
+        className={`relative inline-flex min-w-0 items-center rounded-(--radius) border border-(--brand-navy) bg-(--bg) pl-2 pr-7 ${
+          wide ? "h-10 w-full text-sm" : "h-8 w-36 shrink text-[13px] sm:w-52 lg:h-9 lg:text-sm"
+        }`}
+      >
         <Search className="mr-1.5 h-3.5 w-3.5 shrink-0 text-(--ink-soft)" aria-hidden="true" />
         <input
           autoFocus
@@ -977,14 +982,23 @@ export function WorkOrderBoard({
           <X className="h-3.5 w-3.5" />
         </button>
       </label>
+  );
+  const searchBox =
+    searchActive && !isMobile ? (
+      searchInput(false)
     ) : (
       <button
         type="button"
         data-testid="wo-board-search-open"
         aria-label="ค้นหาใบงาน"
+        aria-pressed={isMobile ? searchActive : undefined}
         title="ค้นหาใบงาน"
-        onClick={() => setSearchOpen(true)}
-        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius) border border-(--line) bg-(--bg) text-(--ink-soft) hover:text-(--ink) lg:h-9 lg:w-9"
+        onClick={() => (isMobile && searchActive ? closeSearch() : setSearchOpen(true))}
+        className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius) border lg:h-9 lg:w-9 ${
+          isMobile && searchActive
+            ? "border-(--brand-navy) bg-(--brand-navy) text-white"
+            : "border-(--line) bg-(--bg) text-(--ink-soft) hover:text-(--ink)"
+        }`}
       >
         <Search className="h-4 w-4" />
       </button>
@@ -1026,6 +1040,7 @@ export function WorkOrderBoard({
         )}
       {/* ─── มือถือ: แท็บ 4 สถานะ ─── */}
       <div className="flex min-h-0 flex-1 flex-col lg:hidden">
+        {isMobile && searchActive && <div className="shrink-0 px-3 pt-3">{searchInput(true)}</div>}
         <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-(--line)">
           {columns.map((c, i) => (
             <button
