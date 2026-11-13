@@ -66,14 +66,14 @@ export async function postTaskCard(
  */
 export async function postTaskCardToRoom(
   orgId: string,
-  input: { channelId: string; authorId: string; taskId: string; title: string; replyToId?: string | null }
+  input: { channelId: string; authorId: string; taskId: string; title: string; replyToId?: string | null; assigned?: boolean }
 ): Promise<{ posted: boolean }> {
   const access = await getChannelAccess({ orgId, userId: input.authorId, isChatAdmin: false }, input.channelId);
   if (access.type === "dm") return { posted: false };
   // งานใหม่บันทึกจากฝั่งเบราว์เซอร์ อาจยังไม่ลงตาราง — รอแป๊บแล้วอ่านอีกรอบ (แบบ postTaskCard)
   const readTask = () =>
     prisma.reportTask
-      .findUnique({ where: { orgId_id: { orgId, id: input.taskId } }, select: { title: true, dueDate: true, code: true, parentId: true, data: true } })
+      .findUnique({ where: { orgId_id: { orgId, id: input.taskId } }, select: { title: true, dueDate: true, code: true, parentId: true, data: true, assigneeIds: true } })
       .catch(() => null);
   let task = await readTask();
   if (!task) {
@@ -88,6 +88,7 @@ export async function postTaskCardToRoom(
     ...(task?.code ? { code: task.code } : {}),
     tags: taskTags(task),
     ...(await projectOf(orgId, task)),
+    ...(await assigneeNames(orgId, task?.assigneeIds ?? [])),
   };
   const replyTo = input.replyToId
     ? await prisma.chatMessage.findFirst({ where: { orgId, channelId: input.channelId, id: input.replyToId }, select: { id: true } })
@@ -100,7 +101,8 @@ export async function postTaskCardToRoom(
           channelId: input.channelId,
           authorId: input.authorId,
           kind: "task",
-          body: `เปิดงาน "${card.title}"`,
+          // "มอบหมายงาน" = หัวการ์ด "งานใหม่" (ห้องโปรเจกต์ — ผู้ใช้ 13/11/2569) · เปิดจากข้อความในห้อง = "เปิดงาน" เหมือนเดิม
+          body: input.assigned ? `มอบหมายงาน "${card.title}"` : `เปิดงาน "${card.title}"`,
           meta: card as unknown as Prisma.InputJsonValue,
           clientId: `room-task-${input.taskId}`,
           ...(replyTo ? { replyToId: replyTo.id } : {}),
@@ -242,6 +244,14 @@ async function projectOf(orgId: string, task: { data: unknown } | null): Promise
   } catch {
     return {};
   }
+}
+
+async function assigneeNames(orgId: string, ids: string[]): Promise<{ assignees?: string[] }> {
+  if (!ids.length) return {};
+  const rows = await prisma.user.findMany({ where: { orgId, id: { in: ids } }, select: { id: true, name: true } }).catch(() => []);
+  const byId = new Map(rows.map((r) => [r.id, r.name]));
+  const names = ids.map((id) => byId.get(id)).filter((n): n is string => !!n);
+  return names.length ? { assignees: names } : {};
 }
 
 function isProjectTask(task: { data: unknown } | null): boolean {

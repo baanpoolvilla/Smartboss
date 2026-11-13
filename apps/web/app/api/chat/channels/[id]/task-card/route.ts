@@ -11,7 +11,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const actor = await chatActor();
     const { id } = await params;
-    const body = (await request.json().catch(() => ({}))) as { taskId?: unknown; title?: unknown; replyToId?: unknown };
+    const body = (await request.json().catch(() => ({}))) as { taskId?: unknown; title?: unknown; replyToId?: unknown; assigned?: unknown };
     if (typeof body.taskId !== "string" || !body.taskId) return Response.json({ error: "taskId" }, { status: 400 });
     return Response.json(
       await postTaskCardToRoom(actor.orgId, {
@@ -20,6 +20,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         taskId: body.taskId,
         title: typeof body.title === "string" ? body.title : "งาน",
         replyToId: typeof body.replyToId === "string" ? body.replyToId : null,
+        assigned: body.assigned === true,
       }),
     );
   } catch (err) {

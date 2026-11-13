@@ -55,7 +55,7 @@ import { expandRule, projectedRoutineQuotaTotal, quotaForDepartment, weekdayLabe
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useProjectTopicStore } from "@/modules/report_task/store/project-topic-store";
-import type { Attachment, CalendarEvent, ChecklistItem, LeaveType, Task, TaskPriority, TaskRecurrenceRule, TaskSource } from "@/modules/report_task/types";
+import type { Attachment, CalendarEvent, ChecklistItem, LeaveType, Task, TaskPriority, TaskProjectLink, TaskRecurrenceRule, TaskSource } from "@/modules/report_task/types";
 import { describeRule, formatThaiDate, occurrenceDate, templateFromTask, validateRule } from "@/modules/report_task/lib/task-recurrence";
 import { defaultRecurrenceRule, RecurrenceFields, RecurrencePreview } from "@/modules/report_task/components/kanban/recurrence-fields";
 import { cn } from "@/modules/report_task/lib/utils";
@@ -227,6 +227,7 @@ export function NewTaskDialog({
   defaultAssigneeIds,
   defaultFiles,
   source,
+  project,
   onCreated,
 }: {
   open: boolean;
@@ -243,6 +244,8 @@ export function NewTaskDialog({
   defaultFiles?: File[];
   /** ต้นทางของงาน (โพสต์/ความคิดเห็น/แชท) — เก็บในงาน กดกลับไปดูได้จากหน้ารายละเอียดงาน */
   source?: TaskSource;
+  /** เปิดจากหน้าโปรเจกต์ — ผูกงานกับโปรเจกต์ตั้งแต่สร้าง ให้แจ้งเตือนมอบหมายงานบอกชื่อโปรเจกต์ได้ (13/11/2569) · ไม่ส่ง = เหมือนเดิม */
+  project?: TaskProjectLink;
   /** Fires with the new task's id right after a task (not meeting/leave) is created — lets a caller that opened this dialog for a specific purpose (e.g. linking a report post to the task it spawned) follow up without guessing the id. */
   onCreated?: (taskId: string, title?: string) => void;
 }) {
@@ -676,6 +679,7 @@ export function NewTaskDialog({
       completedAssigneeIds: [],
       showChecklistOnCard: false,
       ...(selectedTopicId !== "none" ? { projectTopicId: selectedTopicId } : {}),
+      ...(project ? { project } : {}),
       createdAt: now,
       updatedAt: now,
     };

@@ -8,15 +8,73 @@ import { cn } from "@/modules/report_task/lib/utils";
 import { useHolidayStore } from "@/modules/report_task/store/holiday-store";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { useProjectStore } from "@/modules/report_task/store/project-store";
-import { addChannelMembers, removeChannelMember } from "@/modules/chat/lib/api";
+import { addChannelMembers, createGroupChannel, removeChannelMember, sendMessage } from "@/modules/chat/lib/api";
 import { toast } from "sonner";
 import type { ProjectStatus } from "@/modules/report_task/types";
 
 /** แจ้งคนที่ถูกเพิ่มเข้าโปรเจกต์ (แบบ Asana "added you to project") — ข้ามคนที่กดเอง */
-export function notifyAddedToProject(project: { id: string; name: string }, userIds: string[], actorId: string) {
+export function notifyAddedToProject(project: { id: string; name: string }, userIds: string[], actorId: string, taskCountOf?: (userId: string) => number) {
   if (!userIds.length) return;
   const actor = getUser(actorId)?.name ?? "มีคน";
-  useNotificationStore.getState().notifyMany(userIds, actorId, `${actor} เพิ่มคุณเข้าโปรเจกต์ "${project.name}"`, undefined, `/report-task/projects/${project.id}`);
+  const link = `/report-task/projects/${project.id}`;
+  const base = `${actor} เพิ่มคุณเข้าโปรเจกต์ "${project.name}"`;
+  if (!taskCountOf) {
+    useNotificationStore.getState().notifyMany(userIds, actorId, base, undefined, link);
+    return;
+  }
+  // ตอนสร้างโปรเจกต์ บอกด้วยว่าได้งานกี่งาน (ผู้ใช้ 13/11/2569 "แจ้งให้ชัดเจนว่าถูกสร้างงานอะไร") — รายงานแต่ละงานแจ้งแยกอยู่แล้ว
+  const byCount = new Map<number, string[]>();
+  for (const id of new Set(userIds)) byCount.set(taskCountOf(id), [...(byCount.get(taskCountOf(id)) ?? []), id]);
+  for (const [n, ids] of byCount) {
+    useNotificationStore.getState().notifyMany(ids, actorId, n > 0 ? `${base} · คุณได้รับ ${n} งานในโปรเจกต์นี้` : base, undefined, link);
+  }
+}
+
+/**
+ * การ์ด "งานใหม่" ลงห้องแชทของโปรเจกต์ (ผู้ใช้ 13/11/2569 "มีงานอะไรอัปเดตก็ส่งมาในหัวข้อนั้นว่างานนี้ถูกสร้าง")
+ * ทีละใบตามลำดับ · ไม่มีห้อง = ไม่ทำอะไร · พลาด = เงียบ (งานบันทึกไปแล้ว การ์ดไม่สำคัญเท่า)
+ * เลื่อนวัน/ตามงาน/คอมเมนต์ ยังแจ้งในกระดิ่งเหมือนเดิม ไม่ลงห้อง
+ */
+export async function postProjectTaskCards(channelId: string | undefined, tasks: { id: string; title: string }[]) {
+  if (!channelId) return;
+  for (const t of tasks) {
+    await fetch(`/api/chat/channels/${encodeURIComponent(channelId)}/task-card`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ taskId: t.id, title: t.title, assigned: true }),
+    }).catch(() => {});
+  }
+}
+
+/**
+ * สร้างโปรเจกต์ใหม่ → เปิดห้องแชทของโปรเจกต์ให้เลย (เดิมต้องกดสร้างเองในแท็บข้อความ) + ข้อความเปิดโปรเจกต์ + การ์ดงานทุกงาน
+ * ห้องกลุ่มแจ้ง "เพิ่มคุณเข้ากลุ่ม" ให้ทุกคนเอง (chat/data/channels.ts) · ทำเบื้องหลัง ไม่ให้หน้าสร้างโปรเจกต์รอ
+ */
+export async function openProjectRoom(
+  project: { id: string; name: string; ownerId: string; startDate: string; endDate: string },
+  memberIds: string[],
+  actorId: string,
+  tasks: { id: string; title: string }[],
+) {
+  try {
+    const others = [...new Set(memberIds)].filter((id) => id && id !== actorId);
+    if (!others.length) return;
+    const { channelId } = await createGroupChannel(`📁 ${project.name}`, others);
+    useProjectStore.getState().updateProject(project.id, { chatChannelId: channelId });
+    const owner = getUser(project.ownerId)?.name ?? "-";
+    const names = [...new Set([project.ownerId, ...memberIds])].map((id) => getUser(id)?.name).filter(Boolean).join(", ");
+    await sendMessage(channelId, {
+      clientId: `project-open-${project.id}`,
+      body: `เปิดโปรเจกต์ "${project.name}"
+ผู้ดูแล: ${owner}
+ช่วงเวลา: ${fmtDay(project.startDate)} – ${fmtDay(project.endDate, true)}
+สมาชิก: ${names}
+มีงาน ${tasks.length} งาน — การ์ดงานแต่ละงานอยู่ด้านล่าง`,
+    }).catch(() => {});
+    await postProjectTaskCards(channelId, tasks);
+  } catch {
+    toast.error("สร้างห้องแชทของโปรเจกต์ไม่สำเร็จ — กดสร้างเองได้ในแท็บข้อความของโปรเจกต์");
+  }
 }
 
 /** เพิ่ม/เอาสมาชิกออกจากโปรเจกต์ → ทำตามในห้องแชทโปรเจกต์ด้วย (ถ้ามีห้องแล้ว) — ทำไม่ได้ก็แค่บอก ไม่ย้อนการเปลี่ยนสมาชิก */

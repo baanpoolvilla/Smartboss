@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarClock, ChevronRight, ClipboardList, FolderKanban, Wrench } from "lucide-react";
+import { CalendarClock, ChevronRight, ClipboardList, FolderKanban, UserRound, Wrench } from "lucide-react";
 import { cn } from "@smartboss/ui/cn";
 
 import { formatShortDate } from "@/modules/report_task/lib/format";
@@ -57,6 +57,12 @@ export function TaskCard({ card, body, mine }: { card: ChatTaskCard; body: strin
           </div>
         )}
         <div className="line-clamp-2 text-[15px] font-semibold text-(--ink)">{card.title}</div>
+        {card.assignees?.length ? (
+          <div className="flex min-w-0 items-center gap-1 text-xs text-(--ink)">
+            <UserRound className="h-3.5 w-3.5 shrink-0 text-(--ink-soft)" aria-hidden="true" />
+            <span className="truncate">มอบให้ {card.assignees.join(", ")}</span>
+          </div>
+        ) : null}
         {(card.dueDate || card.code) && (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-(--ink-soft)">
             {/* เลขที่อยู่บรรทัดนี้ ไม่ใช่หัวการ์ด — หัวการ์ดมีป้ายประเภทแล้วเลขถูกตัดเป็น "WO-..." */}

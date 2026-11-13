@@ -117,6 +117,9 @@ function taskCard(row: MessageRow): ChatTaskCard | null {
           },
         }
       : {}),
+    ...(Array.isArray(m.assignees) && m.assignees.length
+      ? { assignees: m.assignees.filter((n): n is string => typeof n === "string").slice(0, 8).map((n) => n.slice(0, 60)) }
+      : {}),
   };
 }
 
