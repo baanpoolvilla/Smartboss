@@ -44,6 +44,7 @@ export async function POST(req: Request) {
       monthlyCapThb: typeof body.monthlyCapThb === "number" ? body.monthlyCapThb : undefined,
       summaryModel: typeof body.summaryModel === "string" ? body.summaryModel : undefined,
       askModel: typeof body.askModel === "string" ? body.askModel : undefined,
+      detailModel: typeof body.detailModel === "string" ? body.detailModel : undefined,
     });
     return Response.json({ settings: s });
   }

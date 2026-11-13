@@ -22,8 +22,11 @@ import { listBriefs, readImageTextStore } from "./server";
  * ข้อมูล HR (ลงเวลา/ลา) อยู่บน workforce — เรียกด้วย token ของ Boss ที่กำลังถาม (cookie) สิทธิ์เท่ากับที่ Boss เห็นเอง
  */
 
-const MAX_STEPS = 6;
-const MAX_TOOL_CHARS = 14_000;
+// คิดได้ไม่เกิน 4 รอบ (เดิม 6) — ค่าใช้จ่ายโตตามจำนวนรอบ เพราะทุกรอบส่งข้อมูลที่ค้นมาแล้วซ้ำ (วัดจริง: sol ค้น tasks 4 รอบ = ฿2.14)
+const MAX_STEPS = 4;
+// ข้อมูลที่ส่งให้ AI ต่อเครื่องมือ — ส่วนใหญ่ของค่าใช้จ่ายคือ "ข้อมูลที่ AI อ่าน" (ส่งซ้ำทุกรอบที่คิด)
+// 13/11/2569 ผู้ใช้: "ทำไมราคาแพงจัง" (฿0.89/คำถาม) → ลดจาก 14k ตัวอักษร
+const MAX_TOOL_CHARS = 8_000;
 const DAY = 86_400_000;
 
 type Ctx = { orgId: string; today: string; names: Map<string, string>; teams: Map<string, string>; pages?: { label: string; path: string }[] };
@@ -155,9 +158,9 @@ async function runTool(name: string, a: Args, ctx: Ctx): Promise<string> {
           date: dayOf(p.createdAt),
           room: topicName.get(p.topicId) ?? "",
           person: nameOf(ctx, p.authorId),
-          text: postText(p).slice(0, kw ? 1200 : 700),
+          text: postText(p).slice(0, kw ? 900 : 450),
           imageText: imgText.get(p.id)?.slice(0, kw ? 1500 : 600) || undefined,
-          comments: (p.replies ?? []).slice(-3).map((r) => `${nameOf(ctx, r.authorId)}: ${r.body.slice(0, 160)}`),
+          comments: (p.replies ?? []).slice(-2).map((r) => `${nameOf(ctx, r.authorId)}: ${r.body.slice(0, 120)}`),
         }));
       const more = total > page * 80 && page < 3 ? ` · มีอีก ${total - page * 80} ฉบับ (ขอ page ${page + 1} ได้)` : "";
       return clip(pageRows, `รายงาน ${from} ถึง ${to} · ทั้งหมด ${total} ฉบับ · หน้า ${page}${more}`);
@@ -246,11 +249,11 @@ async function runTool(name: string, a: Args, ctx: Ctx): Promise<string> {
           ...(who ? { authorId: { in: [...who] } } : {}),
         },
         orderBy: { createdAt: "desc" },
-        take: 150,
+        take: 100,
         select: { channelId: true, authorId: true, body: true, createdAt: true },
       });
       return clip(
-        msgs.map((m) => ({ at: new Date(m.createdAt).toLocaleString("th-TH", { timeZone: "Asia/Bangkok", dateStyle: "short", timeStyle: "short" }), room: chName.get(m.channelId), person: nameOf(ctx, m.authorId), text: (m.body ?? "").slice(0, 300) })),
+        msgs.map((m) => ({ at: new Date(m.createdAt).toLocaleString("th-TH", { timeZone: "Asia/Bangkok", dateStyle: "short", timeStyle: "short" }), room: chName.get(m.channelId), person: nameOf(ctx, m.authorId), text: (m.body ?? "").slice(0, 200) })),
         `แชทกลุ่ม ${from} ถึง ${to}`
       );
     }
@@ -275,7 +278,7 @@ async function runTool(name: string, a: Args, ctx: Ctx): Promise<string> {
           if (dueSpan && (due < dueSpan.from || due > dueSpan.to)) return false;
           return has(t.title, kw);
         })
-        .slice(0, 120)
+        .slice(0, 60)
         .map((t) => {
           const d = t.data as { description?: string; projectId?: string } | null;
           return {
@@ -464,16 +467,18 @@ export async function askCompany(opts: {
   // Responses API — รุ่นที่ใช้ (gpt-6-sol) เรียกเครื่องมือพร้อมคิดก่อนตอบได้เฉพาะทางนี้ (chat/completions ไม่ให้ใช้ tools คู่กับ reasoning)
   const instructions = `คุณเป็นผู้ช่วยส่วนตัวของ Boss (เจ้าของบริษัท) วันนี้คือ ${ctx.today} (เวลาไทย)
 ตอบจากข้อมูลจริงของบริษัทเท่านั้น โดยเรียกเครื่องมือค้นข้อมูลก่อนตอบทุกครั้งที่คำถามเกี่ยวกับข้อมูล เลือกเครื่องมือและช่วงวันให้ตรงคำถาม เรียกหลายเครื่องมือได้
-ประหยัด: คำถามแบบนับ/บ่อยแค่ไหน/ช่วงเวลายาว ใช้ count_mentions ก่อน · ภาพรวมหลายวันใช้ report_summaries ก่อน · อ่านรายงานเต็ม (search_reports) เฉพาะเมื่อต้องการรายละเอียด และระบุ keyword/คน/ช่วงวันให้แคบที่สุด
-ตอบภาษาไทยง่าย สั้น เป็นข้อ ๆ ไม่เกิน 10 บรรทัด บอกชื่อคนและวันที่ (เช่น 12 พ.ย.) ทุกข้อ ตัวเลขเงินใส่ ฿ ไม่ใช้ตัวหนา ถ้าค้นแล้วไม่มีข้อมูลให้บอกตรง ๆ ว่าไม่พบ ห้ามเดา ห้ามแต่ง
+ประหยัด: ค้นให้ครบในครั้งเดียว เรียกหลายเครื่องมือพร้อมกันในรอบเดียวได้ ห้ามเรียกเครื่องมือเดิมซ้ำด้วยเงื่อนไขเดิม ถ้าข้อมูลถูกตัดให้ตอบจากที่มีและบอกว่ามีอีกกี่รายการ · คำถามแบบนับ/บ่อยแค่ไหน/ช่วงเวลายาว ใช้ count_mentions ก่อน · ภาพรวมหลายวันใช้ report_summaries ก่อน · อ่านรายงานเต็ม (search_reports) เฉพาะเมื่อต้องการรายละเอียด และระบุ keyword/คน/ช่วงวันให้แคบที่สุด
+ตอบภาษาไทยง่าย สั้น บอกชื่อคนและวันที่ (เช่น 12 พ.ย.) ทุกข้อ ตัวเลขเงินใส่ ฿ ไม่ใช้ตัวหนา/หัวข้อ markdown ถ้าค้นแล้วไม่มีข้อมูลให้บอกตรง ๆ ว่าไม่พบ ห้ามเดา ห้ามแต่ง
+รูปแบบคำตอบ (หน้าจอจัดให้สวยตามนี้): บรรทัดแรก = สรุปคำตอบ 1 ประโยค · จากนั้นข้อย่อยขึ้นต้นด้วย "- " ข้อละเรื่อง ไม่เกิน 6 ข้อ แต่ละข้อขึ้นต้นด้วยชื่อคน/ชื่องานสั้น ๆ ตามด้วย " — " แล้วรายละเอียด ลิงก์ไว้ท้ายข้อ · ถ้ามีข้อเสนอ ให้ขึ้นบรรทัดใหม่ที่ขึ้นต้นด้วย "💡 " บรรทัดเดียว
 คำนวณได้ (รวม เฉลี่ย เทียบ เปอร์เซ็นต์) — คิดจากตัวเลขที่ค้นได้ และบอกว่าคิดจากอะไร
 ช่วยคิดแผน/ข้อเสนอได้ — อิงข้อมูลจริงที่ค้นได้ แยกให้ชัดว่าส่วนไหนคือข้อมูล ส่วนไหนคือข้อเสนอ
 พาไปหน้า: ข้อมูลที่ค้นได้มี link ให้ใส่ลิงก์ในคำตอบแบบ [ข้อความสั้น](link) เฉพาะ link ที่ได้จากเครื่องมือเท่านั้น (ห้ามแต่งลิงก์เอง) ถ้า Boss อยากไปหน้าไหนให้ใช้ app_pages
 ไม่มีสิทธิ์อ่านแชทส่วนตัว และไม่มีเลขบัญชีธนาคาร ถ้าถูกถามให้บอกว่าไม่มีข้อมูลส่วนนี้${opts.currentPath ? `\nตอนนี้ Boss เปิดหน้า ${opts.currentPath} อยู่ (คำว่า "หน้านี้" หมายถึงหน้านี้)` : ""}${briefCtx}`;
   const input: OpenAI.Responses.ResponseInputItem[] = [
-    ...opts.history.slice(-4).flatMap((x) => [
+    // ประวัติคุย 3 คำถามล่าสุด คำตอบเก่าตัดเหลือ 600 ตัวอักษร (พอให้ถามต่อเนื่องได้ ไม่ต้องส่งคำตอบยาว ๆ ซ้ำทุกครั้ง)
+    ...opts.history.slice(-3).flatMap((x) => [
       { role: "user" as const, content: x.q },
-      { role: "assistant" as const, content: x.a },
+      { role: "assistant" as const, content: x.a.slice(0, 600) },
     ]),
     { role: "user", content: opts.question },
   ];

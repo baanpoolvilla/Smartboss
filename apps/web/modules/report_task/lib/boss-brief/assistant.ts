@@ -4,7 +4,7 @@ import { getOrgPlan, planAtLeast } from "@/modules/report_task/lib/plan";
 import { localDateStr } from "@/modules/report_task/lib/now";
 import { askCompany } from "./company-ai";
 import { addUsage, costThb, effectiveCap, readBriefSettings, readUsage } from "./server";
-import type { BriefQa } from "./types";
+import { estimateThb, type BriefQa } from "./types";
 
 /**
  * ผู้ช่วย AI ลอยมุมซ้ายล่างทุกหน้า (น้อง SmartBoss) — เฉพาะ Boss (13/11/2569)
@@ -44,7 +44,7 @@ export async function askAssistant(
   const month = localDateStr(new Date()).slice(0, 7);
   const usage = await readUsage(orgId, month);
   const { cap } = await effectiveCap(orgId, settings);
-  if (usage.thb >= cap) return { ok: false, error: `ใช้ครบเพดาน ฿${cap} ของเดือนนี้แล้ว (ตั้งเพิ่มได้ที่ตั้งค่าสรุปในห้องรายงาน)` };
+  if (usage.thb + estimateThb(settings.askModel, "ask") > cap) return { ok: false, error: `ใกล้ครบเพดาน ฿${cap} ของเดือนนี้แล้ว (ตั้งเพิ่มได้ที่ตั้งค่าสรุปในห้องรายงาน)` };
   const { data } = await readStore<Chat>(orgId, keyOf(userId));
   try {
     const r = await askCompany({ orgId, question: q, model: settings.askModel, brief: null, history: data?.messages ?? [], pages, currentPath: currentPath.slice(0, 200), costOf: costThb });

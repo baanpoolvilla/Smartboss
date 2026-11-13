@@ -140,6 +140,8 @@ export interface BossBriefSettings {
   askModel: string;
   /** สรุปละเอียด (ด่วน/รอคุณ/ค้าง/ทีม/รายคน) — ต้องตัดสินว่าอะไรอันตราย ใช้รุ่นแม่น · ค่าเดิมของบริษัทที่ไม่มีช่องนี้ = ค่าเริ่มต้น */
   detailModel: string;
+  /** 2 = ตั้งค่าหลัง 13/11/2569 ที่เปลี่ยนรุ่นเริ่มต้นเป็น terra — ไม่มี/น้อยกว่า = ใช้รุ่นเริ่มต้นใหม่แทนค่าเก่าที่บันทึกไว้ */
+  modelVersion?: number;
 }
 
 export const DEFAULT_BRIEF_SETTINGS: BossBriefSettings = {
@@ -147,9 +149,18 @@ export const DEFAULT_BRIEF_SETTINGS: BossBriefSettings = {
   topicIds: [],
   monthlyCapThb: 300,
   summaryModel: "gpt-6-luna",
-  askModel: "gpt-6-sol",
-  detailModel: "gpt-6-sol",
+  // 13/11/2569 ผู้ใช้: "ทำไมราคาแพงจัง" — sol ฿1.3–2.4/รอบสรุป ฿0.9–2.1/คำถาม → terra ถูกราวครึ่ง คุณภาพยังดี (วัดจริง ฿0.33–0.45/คำถาม)
+  askModel: "gpt-6.1-terra",
+  detailModel: "gpt-6.1-terra",
+  modelVersion: 2,
 };
+
+/** ประมาณการค่าต่อครั้งตามรุ่น (บาท) — ใช้กันไม่ให้เกินเพดาน: เหลือเงินไม่พอครั้งหนึ่ง = ไม่เรียก AI */
+export function estimateThb(model: string, kind: "summary" | "ask"): number {
+  const inPrice = MODEL_PRICES_USD[model]?.input ?? 2;
+  const base = kind === "summary" ? 2.4 : 1.5; // ค่าสูงสุดที่เคยวัดได้ด้วย sol ($2/1M token ขาเข้า)
+  return Math.max(0.05, (base * inPrice) / 2);
+}
 
 /** ราคาต่อ 1 ล้าน token (ดอลลาร์) จากหน้าราคา OpenAI 12/11/2569 — ใช้แสดง/คุมเพดานเท่านั้น บิลจริงดูที่ OpenAI */
 export const MODEL_PRICES_USD: Record<string, { input: number; output: number; label: string }> = {

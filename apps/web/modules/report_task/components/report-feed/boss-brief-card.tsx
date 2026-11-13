@@ -542,12 +542,12 @@ function SettingsPanel({
 }) {
   const planMax = view.usage.planMaxThb ?? 5000;
   const [cap, setCap] = useState(String(Math.min(view.settings.monthlyCapThb, planMax)));
-  const [sum, setSum] = useState(view.settings.summaryModel);
+  const [sum, setSum] = useState(view.settings.detailModel);
   const [ask, setAsk] = useState(view.settings.askModel);
   const [advanced, setAdvanced] = useState(false);
   const capNum = Number(cap || 0);
   const overMax = capNum > planMax;
-  const dirty = capNum !== Math.min(view.settings.monthlyCapThb, planMax) || sum !== view.settings.summaryModel || ask !== view.settings.askModel;
+  const dirty = capNum !== Math.min(view.settings.monthlyCapThb, planMax) || sum !== view.settings.detailModel || ask !== view.settings.askModel;
   const pct = view.usage.capThb > 0 ? Math.min(100, (view.usage.thb / view.usage.capThb) * 100) : 100;
   const box = "h-9 rounded-md border border-[var(--line)] bg-white px-2 text-sm";
   const section = "flex flex-col gap-2 rounded-lg border border-[var(--line)] bg-white p-3";
@@ -591,7 +591,7 @@ function SettingsPanel({
             className={`${box} w-24 shrink-0 text-right ${overMax ? "border-[var(--chart-red)]" : ""}`} />
         </label>
         {overMax && <p className="text-xs" style={{ color: DOT.red }}>เกินที่แพ็กเกจให้ จะบันทึกเป็น ฿{planMax.toLocaleString("th-TH")}</p>}
-        <p className="text-[11px] text-[var(--ink-soft)]">ประมาณการ: สรุปละเอียด 1 รอบ ≈ ฿1.5–2.5 · ถาม AI 1 ครั้ง ≈ ฿0.4 → เช้า+เย็นทุกวัน ≈ ฿110–130/เดือน</p>
+        <p className="text-[11px] text-[var(--ink-soft)]">ประมาณการ (รุ่นกลาง): สรุป 1 รอบ ≈ ฿0.6–1.2 · ถาม AI 1 ครั้ง ≈ ฿0.3–0.5 → เช้า+เย็นทุกวัน ≈ ฿40–70/เดือน</p>
       </div>
 
       <div className={section}>
@@ -601,7 +601,7 @@ function SettingsPanel({
         </button>
         {advanced && (
           <>
-            <label className="flex items-center justify-between gap-3">ย่อสรุปหลังปิดรอบ
+            <label className="flex items-center justify-between gap-3">สรุปหลังปิดรอบ
               <select id="boss-brief-sum" value={sum} onChange={(e) => setSum(e.target.value)} className={box}>
                 {Object.entries(MODEL_PRICES_USD).map(([id, m]) => <option key={id} value={id}>{m.label}</option>)}
               </select>
@@ -611,14 +611,14 @@ function SettingsPanel({
                 {Object.entries(MODEL_PRICES_USD).map(([id, m]) => <option key={id} value={id}>{m.label}</option>)}
               </select>
             </label>
-            <p className="text-[11px] text-[var(--ink-soft)]">ค่าเริ่มต้นเหมาะแล้ว: ย่อสรุปใช้รุ่นประหยัด ตอบคำถามใช้รุ่นแม่นที่สุด รุ่นแพงขึ้น = ค่าใช้จ่ายต่อครั้งสูงขึ้น 10–20 เท่า</p>
+            <p className="text-[11px] text-[var(--ink-soft)]">ค่าเริ่มต้น (กลาง) คุ้มสุด: สรุป 1 รอบ ≈ ฿0.6–1.2 · ถาม 1 ครั้ง ≈ ฿0.3–0.5 · รุ่นแม่นที่สุดแพงขึ้นราว 2 เท่า · รุ่นประหยัดถูกมากแต่ตอบตื้นกว่า</p>
           </>
         )}
       </div>
 
       <div className="flex items-center justify-end gap-2">
         <button type="button" onClick={close} className="rounded-full px-3 py-1.5 text-xs text-[var(--ink-soft)] hover:text-[var(--ink)]">ยกเลิก</button>
-        <button type="button" disabled={busy || !dirty} onClick={async () => { const r = await post({ action: "settings", monthlyCapThb: Math.min(capNum, planMax), summaryModel: sum, askModel: ask }); if (r) { toast.success("บันทึกแล้ว"); close(); } }}
+        <button type="button" disabled={busy || !dirty} onClick={async () => { const r = await post({ action: "settings", monthlyCapThb: Math.min(capNum, planMax), detailModel: sum, askModel: ask }); if (r) { toast.success("บันทึกแล้ว"); close(); } }}
           className="rounded-full bg-[var(--brand-navy)] px-4 py-1.5 text-xs font-medium text-white disabled:opacity-50">บันทึก</button>
       </div>
     </div>

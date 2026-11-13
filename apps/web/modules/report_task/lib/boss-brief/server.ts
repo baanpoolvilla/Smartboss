@@ -27,6 +27,7 @@ import {
   type BriefItem,
   type BriefKind,
   type BriefUsageMonth,
+  estimateThb,
 } from "./types";
 
 /**
@@ -73,15 +74,18 @@ const minutesOf = (hhmm: string) => {
 
 export async function readBriefSettings(orgId: string): Promise<BossBriefSettings> {
   const { data } = await readStore<Partial<BossBriefSettings>>(orgId, SETTINGS_KEY);
-  return { ...DEFAULT_BRIEF_SETTINGS, ...(data ?? {}) };
+  const s = { ...DEFAULT_BRIEF_SETTINGS, ...(data ?? {}) };
+  // ตั้งค่าที่บันทึกก่อนเปลี่ยนรุ่นเริ่มต้น (มีแต่ค่า sol ติดมาจากค่าเริ่มต้นเดิม) → ใช้รุ่นเริ่มต้นใหม่ · บันทึกใหม่เมื่อไรก็ใช้ค่าที่เลือก
+  if ((data?.modelVersion ?? 0) < 2) return { ...s, askModel: DEFAULT_BRIEF_SETTINGS.askModel, detailModel: DEFAULT_BRIEF_SETTINGS.detailModel, modelVersion: 2 };
+  return s;
 }
 
 export async function saveBriefSettings(orgId: string, patch: Partial<BossBriefSettings>): Promise<BossBriefSettings> {
   // เพดานที่ตั้งเกินแพ็กเกจไม่ได้ (เดิมเก็บได้ถึง ฿5,000 แล้วค่อยตัดตอนใช้ — ช่องในตั้งค่าเลยโชว์เลขที่ไม่ได้ใช้จริง)
   const planMax = PLAN_MAX_CAP_THB[await getOrgPlan(orgId)];
   for (let i = 0; i < 3; i++) {
-    const { data, version } = await readStore<Partial<BossBriefSettings>>(orgId, SETTINGS_KEY);
-    const cur = { ...DEFAULT_BRIEF_SETTINGS, ...(data ?? {}) };
+    const { version } = await readStore<Partial<BossBriefSettings>>(orgId, SETTINGS_KEY);
+    const cur = await readBriefSettings(orgId);
     const next: BossBriefSettings = {
       enabled: typeof patch.enabled === "boolean" ? patch.enabled : cur.enabled,
       topicIds: Array.isArray(patch.topicIds) ? [...new Set(patch.topicIds.filter((x) => typeof x === "string"))].slice(0, 50) : cur.topicIds,
@@ -90,6 +94,7 @@ export async function saveBriefSettings(orgId: string, patch: Partial<BossBriefS
       summaryModel: patch.summaryModel && MODEL_PRICES_USD[patch.summaryModel] ? patch.summaryModel : cur.summaryModel,
       askModel: patch.askModel && MODEL_PRICES_USD[patch.askModel] ? patch.askModel : cur.askModel,
       detailModel: patch.detailModel && MODEL_PRICES_USD[patch.detailModel] ? patch.detailModel : cur.detailModel,
+      modelVersion: 2,
     };
     const w = version === 0 ? await createStoreIfAbsent(orgId, SETTINGS_KEY, next) : await writeStore(orgId, SETTINGS_KEY, next, version);
     if (w.ok) return next;
@@ -414,7 +419,8 @@ async function buildBrief(
   let aiSkipped: BossBrief["aiSkipped"];
   const usage = await readUsage(orgId, monthOf(day));
   let detail: BriefDetail | undefined;
-  if (usage.thb >= (await effectiveCap(orgId, settings)).cap) {
+  // เหลือเงินไม่พอสรุป 1 รอบ (ประมาณการ) = ไม่เรียก AI — เดิมเช็กแค่ "ยังไม่ถึงเพดาน" แล้วสรุปจนเกิน (เพดาน ฿1 ใช้ไป ฿2.22)
+  if (usage.thb + estimateThb(settings.detailModel, "summary") > (await effectiveCap(orgId, settings)).cap) {
     aiSkipped = "cap";
   } else if (parsed.length > 0) {
     // รอบรายสัปดาห์/รายเดือน: ข้อมูลมักอยู่ในรูป (คนละ 1 รูป) → อ่านรูปเป็นข้อความครั้งเดียว เก็บไว้ใช้ซ้ำ · รอบรายวันไม่อ่านรูป (รูปหน้างาน)
@@ -664,7 +670,7 @@ export async function askBrief(orgId: string, briefId: string, question: string)
   const today = localDateStr(new Date());
   const usage = await readUsage(orgId, monthOf(today));
   const { cap } = await effectiveCap(orgId, settings);
-  if (usage.thb >= cap) return { ok: false, error: `ใช้ครบเพดาน ฿${cap} ของเดือนนี้แล้ว` };
+  if (usage.thb + estimateThb(settings.askModel, "ask") > cap) return { ok: false, error: `ใกล้ครบเพดาน ฿${cap} ของเดือนนี้แล้ว` };
   const brief = await getBrief(orgId, briefId);
   if (!brief) return { ok: false, error: "ไม่พบสรุปนี้" };
   try {
