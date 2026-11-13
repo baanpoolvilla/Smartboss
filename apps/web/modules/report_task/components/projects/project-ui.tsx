@@ -47,7 +47,7 @@ export async function postProjectTaskNotices(channelId: string | undefined, task
 
 /**
  * สร้างโปรเจกต์ใหม่ → เปิดห้องแชทของโปรเจกต์ให้เลย (เดิมต้องกดสร้างเองในแท็บข้อความ) + ข้อความเดียวสรุปงานทั้งหมด บรรทัดละงาน
- * (ผู้ใช้ 13/11/2569: การ์ดทีละงานเยอะไป) · ห้องกลุ่มแจ้ง "เพิ่มคุณเข้ากลุ่ม" ให้ทุกคนเอง · ทำเบื้องหลัง
+ * (ผู้ใช้ 13/11/2569: การ์ดทีละงานเยอะไป) · ไม่เด้ง "เพิ่มคุณเข้ากลุ่ม" ซ้ำ (กระดิ่งแจ้งเข้าโปรเจกต์แล้ว) · ทำเบื้องหลัง
  */
 export async function openProjectRoom(
   project: { id: string; name: string; ownerId: string },
@@ -58,7 +58,7 @@ export async function openProjectRoom(
   try {
     const others = [...new Set(memberIds)].filter((id) => id && id !== actorId);
     if (!others.length) return;
-    const { channelId } = await createGroupChannel(`📁 ${project.name}`, others);
+    const { channelId } = await createGroupChannel(`📁 ${project.name}`, others, { quietAdd: true });
     useProjectStore.getState().updateProject(project.id, { chatChannelId: channelId });
     const lines = tasks.map((t) => `• ${t.title} — ${t.assigneeIds.map((id) => getUser(id)?.name ?? "").filter(Boolean).join(", ") || "-"} · ส่ง ${fmtDay(t.dueDate.slice(0, 10))}`);
     await sendMessage(channelId, {

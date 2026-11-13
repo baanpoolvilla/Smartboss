@@ -57,8 +57,8 @@ export function startDm(memberId: string): Promise<{ channelId: string }> {
   return send("/api/chat/channels", "POST", { type: "dm", memberId });
 }
 
-export function createGroupChannel(name: string, memberIds: string[]): Promise<{ channelId: string }> {
-  return send("/api/chat/channels", "POST", { type: "group", name, memberIds });
+export function createGroupChannel(name: string, memberIds: string[], opts?: { quietAdd?: boolean }): Promise<{ channelId: string }> {
+  return send("/api/chat/channels", "POST", { type: "group", name, memberIds, ...(opts?.quietAdd ? { quietAdd: true } : {}) });
 }
 
 export function updateChannel(

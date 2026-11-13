@@ -537,7 +537,7 @@ async function notifyAddedToGroup(orgId: string, channelId: string, groupName: s
   }
 }
 
-export async function createGroup(orgId: string, callerId: string, name: string, memberIds: string[]): Promise<string> {
+export async function createGroup(orgId: string, callerId: string, name: string, memberIds: string[], opts?: { quietAdd?: boolean }): Promise<string> {
   const valid = await activeOrgUserIds(orgId, memberIds.filter((id) => id !== callerId));
   const allIds = Array.from(new Set([callerId, ...valid]));
   if (allIds.length < 2) throw new ChatError("เลือกสมาชิกกลุ่มอย่างน้อย 1 คน", 400);
@@ -555,7 +555,8 @@ export async function createGroup(orgId: string, callerId: string, name: string,
   const names = await userNames(orgId, [callerId]);
   await postSystemMessage(orgId, created.id, callerId, `${names.get(callerId) ?? "ผู้ใช้"} สร้างกลุ่ม "${created.name}"`);
   publishToUsers(allIds, { type: "chat.channel", channelId: created.id });
-  await notifyAddedToGroup(orgId, created.id, created.name ?? "กลุ่ม", callerId, allIds);
+  // ห้องโปรเจกต์ที่เปิดให้อัตโนมัติ — กระดิ่ง "เพิ่มคุณเข้าโปรเจกต์" แจ้งแล้ว ไม่ต้องเด้ง "เพิ่มคุณเข้ากลุ่ม" ซ้ำ (13/11/2569)
+  if (!opts?.quietAdd) await notifyAddedToGroup(orgId, created.id, created.name ?? "กลุ่ม", callerId, allIds);
   return created.id;
 }
 

@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     }
     if (body?.type === "group" && typeof body.name === "string" && Array.isArray(body.memberIds)) {
       const memberIds = body.memberIds.filter((id: unknown): id is string => typeof id === "string");
-      return Response.json({ channelId: await createGroup(actor.orgId, actor.userId, body.name, memberIds) });
+      return Response.json({ channelId: await createGroup(actor.orgId, actor.userId, body.name, memberIds, { quietAdd: body.quietAdd === true }) });
     }
     return Response.json({ error: "รูปแบบข้อมูลไม่ถูกต้อง" }, { status: 400 });
   } catch (err) {

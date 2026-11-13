@@ -432,7 +432,8 @@ interface TaskStore {
   /** งานกลุ่ม: applyTo = คนที่จะเลื่อนจริง (ไม่ส่ง = ตามที่ขอ) */
   decideDueDateRequest: (taskId: string, requestId: string, deciderId: string, approve: boolean, note?: string, applyTo?: string[]) => void;
   selectTask: (id: string | null) => void;
-  addTask: (task: Task) => void;
+  /** opts.quiet = แจ้งเตือนมอบหมายงานลงกระดิ่งแต่ไม่เด้ง (งานชุดแรกตอนสร้างโปรเจกต์) */
+  addTask: (task: Task, opts?: { quiet?: boolean }) => void;
   removeTask: (taskId: string) => void;
   /** งานทำซ้ำ: ข้ามรอบนี้ (ลบ ไม่หักคะแนน) แล้วเอารอบถัดไปขึ้นบอร์ดทันที — คืน id รอบใหม่ (null = ไม่มีรอบถัดไป) */
   skipRecurringRound: (taskId: string, actorId: string) => string | null;
@@ -981,7 +982,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       }),
     })),
   selectTask: (id) => set({ selectedTaskId: id }),
-  addTask: (task) => {
+  addTask: (task, opts) => {
     const assigneeNames = task.assigneeIds.map((id) => getUser(id)?.name).filter(Boolean).join(", ");
     logActivity(task.assignedById, "สร้างงาน", task.title, task.id, assigneeNames ? `มอบให้ ${assigneeNames}` : "ยังไม่มีผู้รับผิดชอบ", task);
     // งานที่เพิ่งสร้างไม่เคยแจ้งผู้รับผิดชอบเลยมาก่อน — เห็นแค่ตอนเปิดบอร์ด
@@ -1000,7 +1001,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
           `/report-task/tasks?task=${task.id}`,
           undefined,
           "task_assigned",
-          task.id
+          task.id,
+          opts?.quiet ? { quiet: true } : undefined
         );
     }
     set((s) => ({ tasks: [task, ...s.tasks] }));

@@ -290,6 +290,7 @@ interface StoredNotification {
   kind?: unknown;
   topicName?: unknown;
   grouped?: unknown;
+  quiet?: unknown;
   taskId?: unknown;
   meetingId?: unknown;
 }
@@ -313,7 +314,9 @@ function announceNewNotifications(orgId: string, beforeData: unknown, afterData:
         // "room_post" = สรุปทุกโพสต์ให้เจ้าของดูภาพรวม ไม่ใช่เรื่องถึงตัว — อยู่ในกระดิ่งแต่ไม่เด้ง
         n.kind !== "room_post" &&
         // แนบไฟล์ต่อในงานเดิม (รวมเข้าแถวเดิมแล้ว) — อันแรกเด้งไปแล้ว ไม่เด้งซ้ำทุกไฟล์
-        n.grouped !== true
+        n.grouped !== true &&
+        // แถวเงียบ (งานชุดแรกตอนสร้างโปรเจกต์) — อยู่ในกระดิ่ง นับเลขแดง แต่ไม่เด้ง ไม่ส่งมือถือ
+        n.quiet !== true
     )
     // กันก้อนแปลก ๆ (เช่น เครื่องเก่าบันทึกทับ) ยิงเป็นร้อย — ของจริงต่อครั้งมีไม่กี่แถว
     .slice(0, 100);

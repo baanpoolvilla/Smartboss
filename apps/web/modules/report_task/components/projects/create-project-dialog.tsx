@@ -134,14 +134,15 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
       sections, milestones, updates: [], shiftMode: "ask", createdBy: me, createdAt: now, updatedAt: now,
     };
     addProject(project);
-    newTasks.forEach((t) => addTask(t));
+    // งานชุดแรกแจ้งแบบเงียบ — เด้งแค่ "เพิ่มคุณเข้าโปรเจกต์ · ได้ N งาน" + สรุปในห้องแชท (ผู้ใช้ 13/11/2569 แจ้งเตือนเยอะไป)
+    newTasks.forEach((t) => addTask(t, { quiet: true }));
     notifyAddedToProject(project, [ownerId, ...members.map((m) => m.userId)], me, (id) => newTasks.filter((t) => t.assigneeIds.includes(id)).length);
     // ห้องแชทของโปรเจกต์ + ข้อความเดียวสรุปงานทั้งหมด (ผู้ใช้ 13/11/2569) — ทำเบื้องหลังทันที (ใช้ข้อมูลในเครื่อง ไม่ต้องรองานบันทึก)
     const cardTasks = [...newTasks].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
     void openProjectRoom(project, [ownerId, ...members.map((m) => m.userId)], me, cardTasks);
     // นับการใช้ที่แม่แบบต้นฉบับ (ไม่เอาสำเนาที่ปรับไปทับต้นฉบับ)
     if (tpl0) upsertTemplate({ ...tpl0, usedCount: tpl0.usedCount + 1 });
-    toast.success(`สร้างโปรเจกต์แล้ว${newTasks.length ? ` · สร้างงาน ${newTasks.length} งานบนบอร์ดงานให้` : ""}`);
+    toast.success(`สร้างโปรเจกต์แล้ว${newTasks.length ? ` · สร้างงาน ${newTasks.length} งานในโปรเจกต์นี้แล้ว` : ""}`);
     onClose();
     onCreated(pid);
   }
@@ -228,7 +229,7 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
                     </span>
                   </div>
                 ))}
-                <span className="text-xs text-[var(--ink-soft)]">จะสร้างงาน {tpl.items.filter((i) => !i.milestone).length} งานบนบอร์ดงาน + {tpl.items.filter((i) => i.milestone).length} จุดสำคัญ · จบประมาณ {fmtDay(effEnd, true)}</span>
+                <span className="text-xs text-[var(--ink-soft)]">จะสร้างงาน {tpl.items.filter((i) => !i.milestone).length} งาน + {tpl.items.filter((i) => i.milestone).length} จุดสำคัญ · จบประมาณ {fmtDay(effEnd, true)}</span>
               </div>
             )}
           </div>

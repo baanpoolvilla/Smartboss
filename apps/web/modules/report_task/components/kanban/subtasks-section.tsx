@@ -83,7 +83,8 @@ export function SubtasksSection({ task }: { task: Task }) {
     // งานย่อยของงานโปรเจกต์ = อยู่ในโปรเจกต์ด้วย → แถบเล็กในห้องแชทของโปรเจกต์ (ผู้ใช้ 13/11/2569) · งานทั่วไปไม่มีผล
     const pid = task.project?.projectId;
     if (pid) void postProjectTaskNotices(useProjectStore.getState().projects.find((x) => x.id === pid)?.chatChannelId, [sub.id]);
-    toast.success(`เพิ่มงานย่อยแล้ว · ขึ้นบอร์ดงานของ ${getUser(who)?.name ?? ""}`);
+    // งานในโปรเจกต์ไม่ขึ้นบอร์ดงาน (แยกกัน 17/10/2569) — บอกให้ตรงที่อยู่จริง
+    toast.success(pid ? `เพิ่มงานย่อยแล้ว · ${getUser(who)?.name ?? ""} เห็นงานในเมนูโปรเจกต์` : `เพิ่มงานย่อยแล้ว · ขึ้นบอร์ดงานของ ${getUser(who)?.name ?? ""}`);
     setTitle("");
   }
 
@@ -147,7 +148,7 @@ export function SubtasksSection({ task }: { task: Task }) {
             <DatePickerField value={due} minDate={todayBkk()} onChange={(v) => v && setDue(v)} className="text-[var(--ink)]" />
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[11.5px] text-[var(--ink-soft)]">งานย่อยขึ้นบอร์ดงานของคนที่ได้รับ · เลยกำหนดถูกหักคะแนนเหมือนงานปกติ</span>
+            <span className="text-[11.5px] text-[var(--ink-soft)]">{task.project ? "งานย่อยอยู่ในโปรเจกต์นี้ คนที่ได้รับเห็นในเมนูโปรเจกต์" : "งานย่อยขึ้นบอร์ดงานของคนที่ได้รับ"} · เลยกำหนดถูกหักคะแนนเหมือนงานปกติ</span>
             <button type="button" className="ml-auto rounded-lg px-3 py-1 text-xs" onClick={() => { setAdding(false); setTitle(""); }}>ปิด</button>
             <button type="button" className="rounded-lg bg-[var(--brand-green)] px-3 py-1 text-xs font-semibold text-white disabled:opacity-50" disabled={!title.trim()} onClick={add}>
               เพิ่ม

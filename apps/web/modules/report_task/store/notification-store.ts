@@ -40,6 +40,9 @@ export interface AppNotification {
   taskId?: string;
   /** แถวคอมเมนต์ที่เซิร์ฟเวอร์รวมไว้ (lib/db/comment-notif-group.ts) — นับเป็นกี่ความคิดเห็น */
   commentCount?: number;
+  /** อยู่ในกระดิ่ง + นับเลขแดงตามปกติ แต่ไม่เด้ง/ไม่ส่งมือถือ — งานชุดแรกตอนสร้างโปรเจกต์ (ผู้ใช้ 13/11/2569:
+   *  แจ้งแค่ "เพิ่มเข้าโปรเจกต์ · ได้ N งาน" + สรุปในห้องแชท ไม่เด้งทีละงาน) · ดู org-store announceNewNotifications */
+  quiet?: boolean;
 }
 
 interface NotificationStore {
@@ -56,7 +59,8 @@ interface NotificationStore {
     link?: string,
     topicName?: string,
     kind?: "room_post" | "task_comment" | "task_attachment" | "task_assigned" | "task_due_request" | "sticker_settings",
-    taskId?: string
+    taskId?: string,
+    opts?: { quiet?: boolean }
   ) => void;
   markAllRead: (userId: string) => void;
   /** ทำเครื่องหมายอ่านทีละรายการ — ใช้ตอนคลิกการ์ดแจ้งเตือน (สไตล์ Facebook) */
@@ -104,7 +108,7 @@ export const useNotificationStore = create<NotificationStore>()(
             ],
           };
         }),
-      notifyMany: (userIds, byUserId, message, meetingId, link, topicName, kind, taskId) =>
+      notifyMany: (userIds, byUserId, message, meetingId, link, topicName, kind, taskId, opts) =>
         set((s) => {
           const now = Date.now();
           const fresh = userIds
@@ -119,6 +123,7 @@ export const useNotificationStore = create<NotificationStore>()(
               topicName,
               kind,
               taskId,
+              ...(opts?.quiet ? { quiet: true } : {}),
               createdAt: new Date(now).toISOString(),
               read: false,
             }));

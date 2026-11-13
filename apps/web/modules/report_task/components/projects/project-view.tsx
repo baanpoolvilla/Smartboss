@@ -292,7 +292,7 @@ function EmptyProject({ canEdit, onAddTask, onTemplates }: { canEdit: boolean; o
       <b>ยังไม่มีงานในโปรเจกต์นี้</b>
       {canEdit ? (
         <>
-          <p className="m-0 max-w-md text-sm text-[var(--ink-soft)]">เพิ่มงานแรก แล้วงานจะขึ้นทั้งที่นี่และบนบอร์ดงานของคนที่ได้รับ · ครั้งหน้าสร้างโปรเจกต์จากแม่แบบได้ งานจะมาครบพร้อมวัน</p>
+          <p className="m-0 max-w-md text-sm text-[var(--ink-soft)]">เพิ่มงานแรก คนที่ได้รับงานจะได้แจ้งเตือน และเห็นงานในเมนูโปรเจกต์ · ครั้งหน้าสร้างโปรเจกต์จากแม่แบบได้ งานจะมาครบพร้อมวัน</p>
           <div className="flex flex-wrap justify-center gap-2">
             <button type="button" className="rounded-lg bg-[var(--brand-green)] px-4 py-1.5 text-sm font-semibold text-white" onClick={onAddTask}>+ เพิ่มงานแรก</button>
             <button type="button" className="rounded-lg border border-[var(--line)] px-4 py-1.5 text-sm" onClick={onTemplates}>ดูแม่แบบ</button>
