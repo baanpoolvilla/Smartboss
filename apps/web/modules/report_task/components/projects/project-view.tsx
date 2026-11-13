@@ -660,6 +660,8 @@ function ProjectSettingsButton({ project }: { project: Project }) {
                 <button type="button" className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-semibold text-white"
                   onClick={() => {
                     tasks.filter((t) => t.project?.projectId === project.id).forEach((t) => setTaskProject(t.id, null, me));
+                    // ห้องแชทของโปรเจกต์ → ปิด (อ่านย้อนหลังได้ ส่งใหม่ไม่ได้) ไม่ค้างเป็นห้องลอย ๆ (13/11/2569)
+                    if (project.chatChannelId) updateChannel(project.chatChannelId, { closed: true }).catch(() => {});
                     removeProject(project.id);
                     toast.success("ลบโปรเจกต์แล้ว · งานยังอยู่บนบอร์ดงาน");
                     router.push("/report-task/projects");

@@ -735,7 +735,12 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
         // แจ้งเฉพาะคนมอบหมายงาน (ผู้ใช้ 29/10/2569 "แจ้งเตือนก็เอาเป็นแค่เกี่ยวกับตัวเองพอ") — CEO ได้แจ้งเฉพาะงานที่ตัวเองมอบหมาย
         // ไม่มีส่งหาเจ้าของบริษัทแทนแล้ว (prod 30 วัน: งานที่คนขอสร้างให้ตัวเอง = 0) · CEO ยังเห็น ⏰ บนบอร์ดและกดอนุมัติได้ทุกงาน
         // งานส่วนตัวแบบกลุ่ม: คนสร้างอยู่ในงานด้วย ได้แจ้งขอเลื่อนได้ (ไม่หลุดไปหาคนนอก)
-        const approverIds = t.assignedById && t.assignedById !== requesterId && (!isPersonalTask(t) || t.personalGroup) ? [t.assignedById] : [];
+        let approverIds = t.assignedById && t.assignedById !== requesterId && (!isPersonalTask(t) || t.personalGroup) ? [t.assignedById] : [];
+        // งานในโปรเจกต์ที่คนมอบหมายเป็นคนขอเอง (มอบให้ตัวเอง) → แจ้งผู้ดูแลโปรเจกต์แทน (13/11/2569) — เดิมไม่มีใครได้แจ้ง คำขอค้าง
+        if (!approverIds.length && t.project) {
+          const owner = useProjectStore.getState().projects.find((p) => p.id === t.project!.projectId)?.ownerId;
+          if (owner && owner !== requesterId) approverIds = [owner];
+        }
         useNotificationStore
           .getState()
           .notifyMany(

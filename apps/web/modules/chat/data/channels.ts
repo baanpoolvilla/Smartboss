@@ -675,7 +675,10 @@ export async function addMembers(actor: ChatActor, channelId: string, userIds: s
   await postSystemMessage(actor.orgId, channelId, actor.userId, `${names.get(actor.userId) ?? "ผู้ใช้"} เพิ่ม ${added} เข้ากลุ่ม`);
   await broadcastToChannel(actor.orgId, channelId, { type: "chat.channel", channelId });
   const channel = await prisma.chatChannel.findFirst({ where: { id: channelId, orgId: actor.orgId }, select: { name: true } });
-  await notifyAddedToGroup(actor.orgId, channelId, channel?.name ?? "กลุ่ม", actor.userId, toAdd);
+  // ห้องของโปรเจกต์: คนที่ถูกเพิ่มได้กระดิ่ง "เพิ่มคุณเข้าโปรเจกต์" แล้ว — ไม่เด้ง "เพิ่มคุณเข้ากลุ่ม" ซ้ำ (13/11/2569) · กลุ่มอื่นเหมือนเดิม
+  if (!(await projectRoomOf(actor.orgId, channelId).catch(() => null))) {
+    await notifyAddedToGroup(actor.orgId, channelId, channel?.name ?? "กลุ่ม", actor.userId, toAdd);
+  }
 }
 
 /** ลบสมาชิก (แอดมิน) หรือออกจากกลุ่มเอง (userId = ตัวเอง) */

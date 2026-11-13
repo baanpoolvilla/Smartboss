@@ -245,10 +245,12 @@ export async function writeOwnNotifications(
  * (writeOwnNotifications ไม่ให้แตะของคนอื่น) เดิมผู้รับคนอื่นยังเห็น "ประชุม … เริ่มในอีก 1 วัน" ของประชุมที่ลบแล้ว
  * (ผู้ใช้ 30/10/2569 "เวลาลบหรือยกเลิกอะไรแล้วแจ้งเตือนนั้นต้องหายไปด้วย") · ไม่ throw — การลบสำเร็จไปแล้ว
  */
-export async function removeNotificationsFor(orgId: string, ref: { taskIds?: string[]; meetingIds?: string[] }): Promise<void> {
+export async function removeNotificationsFor(orgId: string, ref: { taskIds?: string[]; meetingIds?: string[]; projectIds?: string[] }): Promise<void> {
   const taskIds = new Set(ref.taskIds ?? []);
   const meetingIds = new Set(ref.meetingIds ?? []);
-  if (taskIds.size === 0 && meetingIds.size === 0) return;
+  // ลบโปรเจกต์ → แจ้งเตือนที่ลิงก์ไปหน้าโปรเจกต์นั้น ("เพิ่มคุณเข้าโปรเจกต์" ฯลฯ) ลบตาม (13/11/2569) · งานยังอยู่ แจ้งเตือนงานไม่แตะ
+  const projectIds = new Set(ref.projectIds ?? []);
+  if (taskIds.size === 0 && meetingIds.size === 0 && projectIds.size === 0) return;
   const linkIds = (link: string, param: string) =>
     [...link.matchAll(new RegExp(`[?&]${param}=([^&#]+)`, "g"))].map((m) => decodeURIComponent(m[1]!));
   const matches = (n: StoredNotification) => {
@@ -256,9 +258,11 @@ export async function removeNotificationsFor(orgId: string, ref: { taskIds?: str
     if (typeof n?.meetingId === "string" && meetingIds.has(n.meetingId)) return true;
     if (typeof n?.link !== "string") return false;
     // ลิงก์งานมีทั้ง task= (ตัวเตือนใกล้ถึงกำหนด) และ highlight= (แจ้งเตือนงานรุ่นเก่า) — เหมือน removeTaskNotifications ฝั่งเครื่อง
+    const projectInLink = /^\/report-task\/projects\/([^/?#]+)/.exec(n.link)?.[1];
     return (
       [...linkIds(n.link, "task"), ...linkIds(n.link, "highlight")].some((id) => taskIds.has(id)) ||
-      linkIds(n.link, "meeting").some((id) => meetingIds.has(id))
+      linkIds(n.link, "meeting").some((id) => meetingIds.has(id)) ||
+      (!!projectInLink && projectIds.has(decodeURIComponent(projectInLink)))
     );
   };
   try {

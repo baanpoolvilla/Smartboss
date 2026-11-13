@@ -46,6 +46,7 @@ import { TaskProjectInfo } from "@/modules/report_task/components/projects/task-
 import { SubtasksSection } from "@/modules/report_task/components/kanban/subtasks-section";
 import { canManageSeries } from "@/modules/report_task/lib/task-recurrence";
 import { canDecideTaskDueRequest } from "@/modules/report_task/lib/pending-due-request";
+import { useProjectStore } from "@/modules/report_task/store/project-store";
 import { canEditRecord, canRemoveReaction, canReviewTaskRecord, canSeePenaltyStatus, canToggleOwnChecklistItem } from "@/modules/report_task/lib/permissions";
 import { useTaskReviewSettingsStore } from "@/modules/report_task/store/task-review-settings-store";
 import { todayIso } from "@/modules/report_task/lib/now";
@@ -1820,7 +1821,7 @@ export function TaskDetailSheet({
                   </p>
                 )}
                 <p className="text-xs text-[var(--ink-soft)] italic">&quot;{r.reason}&quot;</p>
-                {canDecideTaskDueRequest(task, viewingAsUserId) && r.requestedBy !== viewingAsUserId && (
+                {canDecideTaskDueRequest(task, viewingAsUserId, task.project ? useProjectStore.getState().projects.find((p) => p.id === task.project!.projectId)?.ownerId : undefined) && r.requestedBy !== viewingAsUserId && (
                   <div className="space-y-2 pt-1">
                     {task.taskMode === "group" && (
                       <div className="space-y-1 rounded-md bg-white p-2">

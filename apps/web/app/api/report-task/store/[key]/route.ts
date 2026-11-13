@@ -222,6 +222,7 @@ async function put(request: NextRequest, key: string) {
         (await readStore<{ posts?: unknown[]; topics?: unknown[] }>(session.orgId, key));
   // ประชุมที่ถูกลบในรอบนี้ — ต้องรู้ก้อนเก่าเพื่อลบแจ้งเตือนของประชุมนั้นจากกระดิ่งทุกคน
   const meetingsBefore = key === MEETINGS_KEY ? await readStore<{ id?: unknown }[]>(session.orgId, key) : null;
+  const projectsBefore = key === "projects" ? await readStore<{ id?: unknown }[]>(session.orgId, key) : null;
 
   const result = await writeStore(
     session.orgId,
@@ -242,6 +243,12 @@ async function put(request: NextRequest, key: string) {
     const kept = new Set((body.data as { id?: unknown }[]).map((m) => m?.id));
     const removed = meetingsBefore.data.map((m) => m?.id).filter((id): id is string => typeof id === "string" && !kept.has(id));
     await removeNotificationsFor(session.orgId, { meetingIds: removed });
+  }
+  // ลบโปรเจกต์ → ลบแจ้งเตือนที่ชี้ไปหน้าโปรเจกต์นั้น (กฎ "ลบแล้วแจ้งเตือนหายด้วย")
+  if (projectsBefore && Array.isArray(projectsBefore.data) && Array.isArray(body.data)) {
+    const kept = new Set((body.data as { id?: unknown }[]).map((x) => x?.id));
+    const removed = projectsBefore.data.map((x) => x?.id).filter((id): id is string => typeof id === "string" && !kept.has(id));
+    if (removed.length) await removeNotificationsFor(session.orgId, { projectIds: removed });
   }
 
   if (key === REPORT_FEED_KEY) {

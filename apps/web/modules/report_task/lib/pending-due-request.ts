@@ -9,8 +9,11 @@ export const pendingDueRequestsOf = (task: Task) => (task.dueDateRequests ?? [])
  * (ผู้ใช้ 29/10/2569 "ให้คนสร้างงานเลื่อนได้และ ceo" — ตรงกับใบงานซ่อม maintenance/lib/due-request-access.ts)
  * คนขอเองอนุมัติของตัวเองไม่ได้ — ผู้เรียกเช็ค requestedBy เอง
  */
-export const canDecideTaskDueRequest = (task: Pick<Task, "assignedById">, userId: string) =>
-  isOwner(userId) || (!!task.assignedById && task.assignedById === userId);
+export const canDecideTaskDueRequest = (task: Pick<Task, "assignedById"> & { project?: Task["project"] }, userId: string, projectOwnerId?: string) =>
+  isOwner(userId) ||
+  (!!task.assignedById && task.assignedById === userId) ||
+  // งานในโปรเจกต์: ผู้ดูแลโปรเจกต์อนุมัติได้ด้วย (คุมแผน/เลื่อนวันบนไทม์ไลน์อยู่แล้ว) — ไม่งั้นงานที่คนมอบหมายให้ตัวเองแล้วขอเลื่อน ไม่มีใครอนุมัติ (13/11/2569)
+  (!!task.project && !!projectOwnerId && projectOwnerId === userId);
 
 /**
  * การ์ดแดง "รอคุณอนุมัติ" — เฉพาะคนมอบหมายงาน (เรื่องของตัวเอง) · CEO อนุมัติงานคนอื่นได้ แต่เห็นเป็นป้ายเล็กแทน
