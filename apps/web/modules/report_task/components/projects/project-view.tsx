@@ -241,9 +241,8 @@ export function ProjectView({ projectId }: { projectId: string }) {
           onCreated={(taskId) => {
             setTaskProject(taskId, { projectId: project.id, sectionId: newTaskSection || project.sections[0]?.id || "", dependsOn: [] }, me);
             ensureProjectMembers(project.id, useTaskStore.getState().tasks.find((t) => t.id === taskId)?.assigneeIds ?? [], me);
-            // งานใหม่ในโปรเจกต์ → แถบเล็กในห้องแชทของโปรเจกต์ (ถ้ามีห้อง) · รอให้งานบันทึกก่อน
-            const room = useProjectStore.getState().projects.find((x) => x.id === project.id)?.chatChannelId;
-            if (room) setTimeout(() => void postProjectTaskNotices(room, [taskId]), 2500);
+            // งานใหม่ในโปรเจกต์ → แถบเล็กในห้องแชทของโปรเจกต์ทันที (ถ้ามีห้อง) · เซิร์ฟเวอร์รองานบันทึกเอง
+            void postProjectTaskNotices(useProjectStore.getState().projects.find((x) => x.id === project.id)?.chatChannelId, [taskId]);
             setNewTaskSection(null);
           }}
         />

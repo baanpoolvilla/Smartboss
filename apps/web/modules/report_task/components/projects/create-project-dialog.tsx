@@ -136,9 +136,9 @@ export function CreateProjectDialog({ onClose, onCreated }: { onClose: () => voi
     addProject(project);
     newTasks.forEach((t) => addTask(t));
     notifyAddedToProject(project, [ownerId, ...members.map((m) => m.userId)], me, (id) => newTasks.filter((t) => t.assigneeIds.includes(id)).length);
-    // ห้องแชทของโปรเจกต์ + ข้อความเดียวสรุปงานทั้งหมด (ผู้ใช้ 13/11/2569) — ทำเบื้องหลัง
+    // ห้องแชทของโปรเจกต์ + ข้อความเดียวสรุปงานทั้งหมด (ผู้ใช้ 13/11/2569) — ทำเบื้องหลังทันที (ใช้ข้อมูลในเครื่อง ไม่ต้องรองานบันทึก)
     const cardTasks = [...newTasks].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-    setTimeout(() => void openProjectRoom(project, [ownerId, ...members.map((m) => m.userId)], me, cardTasks), 2500);
+    void openProjectRoom(project, [ownerId, ...members.map((m) => m.userId)], me, cardTasks);
     // นับการใช้ที่แม่แบบต้นฉบับ (ไม่เอาสำเนาที่ปรับไปทับต้นฉบับ)
     if (tpl0) upsertTemplate({ ...tpl0, usedCount: tpl0.usedCount + 1 });
     toast.success(`สร้างโปรเจกต์แล้ว${newTasks.length ? ` · สร้างงาน ${newTasks.length} งานบนบอร์ดงานให้` : ""}`);

@@ -261,11 +261,12 @@ export async function postProjectTaskNotice(
   if (access.type === "dm") return { posted: false };
   const readTask = () =>
     prisma.reportTask
-      .findUnique({ where: { orgId_id: { orgId, id: input.taskId } }, select: { title: true, dueDate: true, data: true, assigneeIds: true } })
+      .findUnique({ where: { orgId_id: { orgId, id: input.taskId } }, select: { title: true, dueDate: true, data: true, assigneeIds: true, parentId: true } })
       .catch(() => null);
+  // เครื่องเรียกทันทีที่กดสร้าง (ผู้ใช้ 13/11/2569 "ให้ขึ้นเลย") — งานอาจยังบันทึกไม่เสร็จ เช็คถี่ ๆ ไม่เกิน ~6 วิ
   let task = await readTask();
-  if (!task) {
-    await new Promise((r) => setTimeout(r, 2500));
+  for (let i = 0; i < 15 && !task; i++) {
+    await new Promise((r) => setTimeout(r, 400));
     task = await readTask();
   }
   if (!task || !isProjectTask(task)) return { posted: false };
@@ -276,7 +277,7 @@ export async function postProjectTaskNotice(
   const d = /^(\d{4})-(\d{2})-(\d{2})/.exec(task.dueDate || "");
   const due = d ? ` · ส่ง ${Number(d[3])} ${TH_MON[Number(d[2]) - 1]}` : "";
   const who = assignees?.length ? ` ให้ ${assignees.join(", ")}` : "";
-  await postSystemMessage(orgId, input.channelId, input.authorId, `${actor?.name ?? "มีคน"} เพิ่มงาน "${task.title.slice(0, 120)}"${who}${due}`);
+  await postSystemMessage(orgId, input.channelId, input.authorId, `${actor?.name ?? "มีคน"} ${isSubtask(task) ? "เพิ่มงานย่อย" : "เพิ่มงาน"} "${task.title.slice(0, 120)}"${who}${due}`);
   return { posted: true };
 }
 
@@ -286,6 +287,12 @@ async function assigneeNames(orgId: string, ids: string[]): Promise<{ assignees?
   const byId = new Map(rows.map((r) => [r.id, r.name]));
   const names = ids.map((id) => byId.get(id)).filter((n): n is string => !!n);
   return names.length ? { assignees: names } : {};
+}
+
+/** งานย่อย — ตัวลิงก์อยู่ใน data.parentId (คอลัมน์ parent_id ไม่ได้ถูกเขียนจาก task-repo) */
+function isSubtask(task: { parentId?: string | null; data: unknown }): boolean {
+  const data = task.data && typeof task.data === "object" ? (task.data as Record<string, unknown>) : null;
+  return !!task.parentId || (typeof data?.parentId === "string" && !!data.parentId);
 }
 
 function isProjectTask(task: { data: unknown } | null): boolean {
@@ -299,6 +306,6 @@ function taskTags(task: { parentId: string | null; data: unknown } | null): stri
   const data = task?.data && typeof task.data === "object" ? (task.data as Record<string, unknown>) : null;
   const project = data?.project && typeof data.project === "object" ? (data.project as Record<string, unknown>) : null;
   if (project && typeof project.projectId === "string" && project.projectId) tags.push("โปรเจกต์");
-  if (task?.parentId) tags.push("งานย่อย");
+  if (task && isSubtask(task)) tags.push("งานย่อย");
   return tags;
 }

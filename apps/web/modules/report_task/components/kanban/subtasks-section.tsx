@@ -7,7 +7,8 @@ import { toast } from "sonner";
 
 import { Separator } from "@/modules/report_task/components/ui/separator";
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
-import { PersonDot, fmtDay } from "@/modules/report_task/components/projects/project-ui";
+import { PersonDot, fmtDay, postProjectTaskNotices } from "@/modules/report_task/components/projects/project-ui";
+import { useProjectStore } from "@/modules/report_task/store/project-store";
 import { getUser, users } from "@/modules/report_task/lib/directory";
 import { canEditRecord } from "@/modules/report_task/lib/permissions";
 import { buildSubtask, subtasksOf } from "@/modules/report_task/lib/subtasks";
@@ -77,7 +78,11 @@ export function SubtasksSection({ task }: { task: Task }) {
   function add() {
     const t = title.trim();
     if (!t) return;
-    addTask(buildSubtask(task, { title: t, assigneeId: who, dueDate: due }, me, { taskId: `task-${uuid()}` }, new Date().toISOString()));
+    const sub = buildSubtask(task, { title: t, assigneeId: who, dueDate: due }, me, { taskId: `task-${uuid()}` }, new Date().toISOString());
+    addTask(sub);
+    // งานย่อยของงานโปรเจกต์ = อยู่ในโปรเจกต์ด้วย → แถบเล็กในห้องแชทของโปรเจกต์ (ผู้ใช้ 13/11/2569) · งานทั่วไปไม่มีผล
+    const pid = task.project?.projectId;
+    if (pid) void postProjectTaskNotices(useProjectStore.getState().projects.find((x) => x.id === pid)?.chatChannelId, [sub.id]);
     toast.success(`เพิ่มงานย่อยแล้ว · ขึ้นบอร์ดงานของ ${getUser(who)?.name ?? ""}`);
     setTitle("");
   }
