@@ -517,7 +517,7 @@ async function buildBrief(
     people,
     items,
     qa: keepQa,
-    model: settings.summaryModel,
+    model: detail ? settings.detailModel : settings.summaryModel,
     costThb: cost,
     ...(detail ? { detail } : {}),
     ...(aiSkipped ? { aiSkipped } : {}),
