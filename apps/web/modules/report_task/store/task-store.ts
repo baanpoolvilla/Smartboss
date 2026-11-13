@@ -22,6 +22,7 @@ import {
   templateFromTask,
 } from "@/modules/report_task/lib/task-recurrence";
 import { uuid } from "@/modules/report_task/lib/uuid";
+import { useProjectStore } from "@/modules/report_task/store/project-store";
 import { isPersonalTask } from "@/modules/report_task/lib/personal-task";
 import { finishedTaskOnTime, penaltyDueDate } from "@/modules/report_task/lib/task-penalty-sweep";
 
@@ -112,6 +113,14 @@ function notifyReviewReady(task: Task) {
  * done. */
 function clearedChecklist(checklist: ChecklistItem[]): ChecklistItem[] {
   return checklist.map((c) => ({ ...c, done: false }));
+}
+
+/** งานในโปรเจกต์ → ต่อท้ายแจ้งเตือนว่าอยู่โปรเจกต์ไหน (ผู้ใช้ 13/11/2569) · หาไม่เจอ = ไม่ต่อ (ข้อความเดิม) */
+function projectSuffix(task: Task): string {
+  const pid = task.project?.projectId;
+  if (!pid) return "";
+  const name = useProjectStore.getState().projects.find((p) => p.id === pid)?.name;
+  return name ? ` (โปรเจกต์ ${name})` : "";
 }
 
 /**
@@ -986,7 +995,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
         .notifyMany(
           task.assigneeIds,
           task.assignedById,
-          `${actorName} มอบหมายงาน "${task.title}" ให้คุณ`,
+          `${actorName} มอบหมายงาน "${task.title}" ให้คุณ${projectSuffix(task)}`,
           undefined,
           `/report-task/tasks?task=${task.id}`,
           undefined,

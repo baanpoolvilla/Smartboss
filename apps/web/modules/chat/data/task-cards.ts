@@ -5,6 +5,7 @@ import { prisma } from "@smartboss/database";
 import type { ChatTaskCard } from "../types";
 import { broadcastToChannel, getChannelAccess, getOrCreateDm } from "./channels";
 import { hydrateMessages } from "./serialize";
+import { readStore } from "@/modules/report_task/lib/db/org-store";
 
 /**
  * การ์ด "งานใหม่" ลงแชทส่วนตัว คนมอบหมาย ↔ ผู้รับผิดชอบ (ผู้ใช้ 30/10/2569)
@@ -40,6 +41,7 @@ export async function postTaskCard(
       link: input.link,
       ...(task?.code ? { code: task.code } : {}),
       tags: taskTags(task),
+      ...(await projectOf(orgId, task)),
     };
     await insertCard(orgId, {
       assignerId: input.assignerId,
@@ -83,6 +85,7 @@ export async function postTaskCardToRoom(
     link: `/report-task/tasks?task=${encodeURIComponent(input.taskId)}`,
     ...(task?.code ? { code: task.code } : {}),
     tags: taskTags(task),
+    ...(await projectOf(orgId, task)),
   };
   const replyTo = input.replyToId
     ? await prisma.chatMessage.findFirst({ where: { orgId, channelId: input.channelId, id: input.replyToId }, select: { id: true } })
@@ -211,6 +214,34 @@ function workOrderTags(
 }
 
 /** ป้ายของการ์ดงาน: Task เสมอ · งานในโปรเจกต์ / งานย่อย บอกเพิ่ม */
+/**
+ * งานในโปรเจกต์ → ชื่อโปรเจกต์ + ช่วงงาน ใส่ในการ์ด · ตอนสร้างโปรเจกต์ ตัวโปรเจกต์กับงานบันทึกคนละจังหวะ
+ * อ่านไม่เจอรอบแรกรอแป๊บแล้วอ่านอีกรอบ · ไม่เจอ/พลาด = การ์ดไม่มีบรรทัดโปรเจกต์ (ป้าย "โปรเจกต์" ยังอยู่)
+ */
+async function projectOf(orgId: string, task: { data: unknown } | null): Promise<{ project?: ChatTaskCard["project"] }> {
+  const data = task?.data && typeof task.data === "object" ? (task.data as Record<string, unknown>) : null;
+  const link = data?.project && typeof data.project === "object" ? (data.project as Record<string, unknown>) : null;
+  const projectId = typeof link?.projectId === "string" ? link.projectId : "";
+  if (!projectId) return {};
+  type P = { id?: string; name?: string; sections?: { id?: string; name?: string }[] };
+  const find = async () => {
+    const { data: list } = await readStore<P[]>(orgId, "projects").catch(() => ({ data: null }));
+    return Array.isArray(list) ? list.find((x) => x?.id === projectId) : undefined;
+  };
+  try {
+    let p = await find();
+    if (!p) {
+      await new Promise((r) => setTimeout(r, 2500));
+      p = await find();
+    }
+    if (!p || typeof p.name !== "string") return {};
+    const section = p.sections?.find((s) => s?.id === link?.sectionId)?.name;
+    return { project: { id: projectId, name: p.name, ...(typeof section === "string" && section ? { section } : {}) } };
+  } catch {
+    return {};
+  }
+}
+
 function taskTags(task: { parentId: string | null; data: unknown } | null): string[] {
   const tags = ["Task"];
   const data = task?.data && typeof task.data === "object" ? (task.data as Record<string, unknown>) : null;

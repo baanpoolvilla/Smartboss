@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarClock, ChevronRight, ClipboardList, Wrench } from "lucide-react";
+import { CalendarClock, ChevronRight, ClipboardList, FolderKanban, Wrench } from "lucide-react";
 import { cn } from "@smartboss/ui/cn";
 
 import { formatShortDate } from "@/modules/report_task/lib/format";
@@ -46,6 +46,16 @@ export function TaskCard({ card, body, mine }: { card: ChatTaskCard; body: strin
         ))}
       </div>
       <div className="flex flex-col gap-1 px-3 py-2.5">
+        {/* งานในโปรเจกต์ — บอกว่าอยู่โปรเจกต์ไหน ช่วงไหน (ผู้ใช้ 13/11/2569) */}
+        {card.project && (
+          <div className="flex min-w-0 items-center gap-1 text-xs font-semibold text-[#0e7490]">
+            <FolderKanban className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span className="truncate">
+              {card.project.name}
+              {card.project.section ? <span className="font-normal text-(--ink-soft)"> · {card.project.section}</span> : null}
+            </span>
+          </div>
+        )}
         <div className="line-clamp-2 text-[15px] font-semibold text-(--ink)">{card.title}</div>
         {(card.dueDate || card.code) && (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-(--ink-soft)">

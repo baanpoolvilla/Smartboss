@@ -108,6 +108,15 @@ function taskCard(row: MessageRow): ChatTaskCard | null {
     ...(m.target === "work_order" ? { target: "work_order" as const } : {}),
     ...(typeof m.code === "string" && m.code ? { code: m.code.slice(0, 40) } : {}),
     ...(Array.isArray(m.tags) ? { tags: m.tags.filter((t): t is string => typeof t === "string").slice(0, 4) } : {}),
+    ...(m.project && typeof m.project === "object" && typeof m.project.id === "string" && typeof m.project.name === "string"
+      ? {
+          project: {
+            id: m.project.id,
+            name: m.project.name.slice(0, 120),
+            ...(typeof m.project.section === "string" && m.project.section ? { section: m.project.section.slice(0, 80) } : {}),
+          },
+        }
+      : {}),
   };
 }
 
