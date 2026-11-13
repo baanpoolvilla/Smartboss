@@ -61,6 +61,10 @@ const INDEX_DAYS = 60;
 const AFTER_CLOSE_MIN = 5;
 /** มีโพสต์ใหม่/แก้ไขหลังสรุปแล้ว — สรุปใหม่ได้ไม่ถี่กว่านี้ (ประหยัดเงิน) */
 const REGEN_GAP_MS = 10 * 60_000;
+/** สรุปซ้ำ (มีคนส่งช้า/แก้โพสต์หลังสรุปแล้ว) ได้ไม่เกินกี่ครั้งต่อรอบ และภายในกี่ชั่วโมงหลังปิดรอบ — 13/11/2569 กันเงินรั่ว
+ *  (เดิมสรุปใหม่ทุกครั้งที่มีการแก้ ห่างกัน 10 นาที ไม่จำกัดจำนวน) */
+const MAX_REGENS = 2;
+const REGEN_WINDOW_MIN = 3 * 60;
 const MAX_CONTENT = 500;
 
 type Results = { briefs: Record<string, BossBrief> };
@@ -578,9 +582,11 @@ export async function runBossBriefSweep(orgId: string, now = new Date()): Promis
       const prev = briefs[id];
       if (prev && prev.signature === signature) continue;
       if (prev && Date.now() - Date.parse(prev.generatedAt) < REGEN_GAP_MS) continue;
+      if (prev && ((prev.regens ?? 0) >= MAX_REGENS || nowMin > minutesOf(round.time) + REGEN_WINDOW_MIN)) continue;
       // จองในฐานข้อมูลก่อนเรียก AI — การเปิดหน้ากับ cron อาจเริ่มพร้อมกัน (ตัวกันในหน่วยความจำไม่ข้ามกันระหว่าง route)
       if (!(await claimBriefLock(orgId, id))) continue;
       const brief = await buildBrief(orgId, topic, round, today, posts, settings, signature, prev?.qa ?? [], historyFor(topic, feed.posts ?? [], posts, roundKindOf(round, rounds), today, periodOf(round)), roundKindOf(round, rounds));
+      if (prev) brief.regens = (prev.regens ?? 0) + 1;
       await saveBrief(orgId, brief);
       if (prev) {
         result.updated++;
@@ -735,7 +741,8 @@ export async function startRangeBrief(
   if (jobs.running.has(jobKey)) return { ok: true, id, status: "pending" };
   const usage = await readUsage(orgId, monthOf(today));
   const { cap } = await effectiveCap(orgId, settings);
-  if (usage.thb >= cap) return { ok: false, error: `ใช้ครบเพดาน ฿${cap} ของเดือนนี้แล้ว` };
+  // สรุปรวมอ่านหลายวัน แพงกว่าสรุปรอบเดียว ⇒ เผื่อ 1.5 เท่า · เงินเหลือไม่พอ = ไม่เริ่ม (ไม่สรุปจนเกินเพดาน)
+  if (usage.thb + estimateThb(settings.detailModel, "summary") * 1.5 > cap) return { ok: false, error: `เงินที่เหลือของเดือนนี้ไม่พอสำหรับสรุปรวม (เพดาน ฿${cap})` };
   if (!(await claimBriefLock(orgId, id))) return { ok: true, id, status: "pending" };
   jobs.running.add(jobKey);
   jobs.failed.delete(jobKey);
