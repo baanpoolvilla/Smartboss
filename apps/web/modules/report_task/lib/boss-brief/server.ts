@@ -546,7 +546,27 @@ async function bossUserIds(orgId: string): Promise<string[]> {
   return rows.map((r) => r.id);
 }
 
+/**
+ * สรุปซ้ำมีอะไรใหม่ที่ Boss ควรรู้ — "" = ไม่มี (ไม่ต้องแจ้ง)
+ * เทียบจาก "รายงานต้นทาง" ไม่ใช่ถ้อยคำ — AI เขียนเรื่องเดิมด้วยคำใหม่ได้ทุกครั้ง ถ้าเทียบคำจะแจ้งเตือนผิด
+ * เรื่องด่วน/รอตัดสินใจใหม่ = มาจากรายงานที่รอบก่อนไม่มีเรื่องประเภทนั้นเลย
+ */
+function briefChangeText(prev: BossBrief, next: BossBrief): string {
+  const freshPosts = (a: { postId: string }[], b: { postId: string }[]) => {
+    const old = new Set(a.map((x) => x.postId));
+    return new Set(b.filter((x) => !old.has(x.postId)).map((x) => x.postId)).size;
+  };
+  const more = next.postCount - prev.postCount;
+  const urgent = freshPosts(prev.detail?.urgent ?? [], next.detail?.urgent ?? []);
+  const decide = freshPosts(prev.detail?.decisions ?? [], next.detail?.decisions ?? []);
+  return [more > 0 ? `ส่งเพิ่ม ${more} คน` : "", urgent > 0 ? `🚨 เรื่องด่วนใหม่ ${urgent}` : "", decide > 0 ? `🙋 รอคุณตัดสินใจเพิ่ม ${decide}` : ""].filter(Boolean).join(" · ");
+}
+
 function notifyText(b: BossBrief): string {
+  if (b.detail) {
+    const d = b.detail;
+    return `สรุปรอบ ${b.roundLabel} พร้อมแล้ว · ส่ง ${b.postCount} คน · 🚨 ด่วน ${d.urgent.length} · 🙋 รอคุณ ${d.decisions.length} · ⏳ ค้าง ${d.carry.length}`;
+  }
   const n = (k: BriefKind) => b.items[k].length;
   const red = b.items.stuck.filter((i) => i.color === "red").length + b.items.late.filter((i) => i.color === "red").length;
   return `สรุปรอบ ${b.roundLabel} พร้อมแล้ว · ⚠️ ปัญหา ${n("stuck")}${red ? ` (🔴 ${red})` : ""} · ⏰ ล่าช้า ${n("late")} · 🙋 รอคุณ ${n("ask")}`;
@@ -580,16 +600,41 @@ export async function runBossBriefSweep(orgId: string, now = new Date()): Promis
       const signature = posts.map((p) => `${p.id}@${p.editedAt ?? p.createdAt}`).join(",");
       const id = `${today}|${topic.id}|${round.id}`;
       const prev = briefs[id];
-      if (prev && prev.signature === signature) continue;
-      if (prev && Date.now() - Date.parse(prev.generatedAt) < REGEN_GAP_MS) continue;
-      if (prev && ((prev.regens ?? 0) >= MAX_REGENS || nowMin > minutesOf(round.time) + REGEN_WINDOW_MIN)) continue;
+      // รอบที่เคยข้าม AI เพราะเงินไม่พอ แล้ว Boss เพิ่มเพดานทีหลัง → สรุปให้ใหม่ (ไม่นับเป็นสรุปซ้ำ) แต่เฉพาะตอนเงินพอแล้วจริง
+      // (13/11/2569 ผู้ใช้: "ถึงเพดานแล้ว จนกว่าจะปรับ" — เดิมรอบนั้นค้าง "ไม่มีใจความย่อ" ไปตลอดเพราะโพสต์ไม่เปลี่ยน)
+      const capRetry = prev?.aiSkipped === "cap";
+      if (capRetry) {
+        const used = (await readUsage(orgId, monthOf(today))).thb;
+        if (used + estimateThb(settings.detailModel, "summary") > (await effectiveCap(orgId, settings)).cap) continue;
+      } else {
+        if (prev && prev.signature === signature) continue;
+        if (prev && Date.now() - Date.parse(prev.generatedAt) < REGEN_GAP_MS) continue;
+        if (prev && ((prev.regens ?? 0) >= MAX_REGENS || nowMin > minutesOf(round.time) + REGEN_WINDOW_MIN)) continue;
+      }
       // จองในฐานข้อมูลก่อนเรียก AI — การเปิดหน้ากับ cron อาจเริ่มพร้อมกัน (ตัวกันในหน่วยความจำไม่ข้ามกันระหว่าง route)
       if (!(await claimBriefLock(orgId, id))) continue;
       const brief = await buildBrief(orgId, topic, round, today, posts, settings, signature, prev?.qa ?? [], historyFor(topic, feed.posts ?? [], posts, roundKindOf(round, rounds), today, periodOf(round)), roundKindOf(round, rounds));
-      if (prev) brief.regens = (prev.regens ?? 0) + 1;
+      if (prev) brief.regens = (prev.regens ?? 0) + (capRetry ? 0 : 1);
       await saveBrief(orgId, brief);
+      const link = `/chat-report/report-feed?topic=${encodeURIComponent(topic.id)}&tab=stats`;
       if (prev) {
         result.updated++;
+        // สรุปซ้ำแจ้ง Boss เฉพาะเมื่อมีของใหม่จริง (คนส่งเพิ่ม / เรื่องด่วน / เรื่องรอตัดสินใจใหม่) — แค่แก้คำในโพสต์ไม่แจ้ง ไม่กวน
+        // (13/11/2569 ผู้ใช้: "ถ้ารอบแรกยังไม่ครบ แล้วสรุปซ้ำ บอสไม่ได้แจ้งเตือนใหม่เลยหรอ")
+        const change = capRetry ? notifyText(brief) : briefChangeText(prev, brief);
+        if (change) {
+          const bosses = await bossUserIds(orgId);
+          await writeOwnNotificationsForUsers(
+            orgId,
+            bosses.map((uid) => ({
+              id: `boss-brief|${id}|${capRetry ? "cap" : `u${brief.regens}`}|${uid}`,
+              userId: uid,
+              byUserId: "system",
+              message: `[${topic.name}] ${capRetry ? "" : `อัปเดตสรุปรอบ ${brief.roundLabel}: `}${change}`,
+              link,
+            }))
+          );
+        }
       } else {
         result.made++;
         const bosses = await bossUserIds(orgId);
@@ -599,8 +644,11 @@ export async function runBossBriefSweep(orgId: string, now = new Date()): Promis
             id: `boss-brief|${id}|${uid}`,
             userId: uid,
             byUserId: "system",
-            message: `[${topic.name}] ${notifyText(brief)}`,
-            link: `/chat-report/report-feed?topic=${encodeURIComponent(topic.id)}&tab=stats`,
+            // ข้าม AI เพราะเงินไม่พอ = บอกตรง ๆ ไม่ใช่ "พร้อมแล้ว · ปัญหา 0" (ชวนเข้าใจว่าไม่มีเรื่องอะไร)
+            message: brief.aiSkipped === "cap"
+              ? `[${topic.name}] สรุปรอบ ${brief.roundLabel} ยังไม่ได้ย่อ: ค่า AI เดือนนี้ใกล้ถึงเพดานแล้ว · เพิ่มเพดานในตั้งค่าสรุป แล้วระบบจะสรุปรอบนี้ให้เองภายใน 1 นาที`
+              : `[${topic.name}] ${notifyText(brief)}`,
+            link,
           }))
         );
       }
