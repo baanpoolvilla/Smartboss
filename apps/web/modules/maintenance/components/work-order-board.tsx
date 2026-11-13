@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { ReactNode } from "react";
 import { useIsMobile } from "@/modules/report_task/hooks/use-is-mobile";
 import { ASSIGNED_BY_ME, ASSIGNED_TO_ME, PersonFilter, UNASSIGNED } from "./person-filter";
+import { FilterButton, FilterSheet } from "./wo-filter-sheet";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { InitialAvatar, WoCard } from "./wo-card";
@@ -697,6 +698,8 @@ export function WorkOrderBoard({
   // ค้นหาชื่อหัวข้อ / เลขใบ / ชื่อบ้าน (ผู้ใช้ 12/11/2569) — ซ่อนเป็นไอคอนไว้ กดแล้วค่อยกาง ไม่ให้แถบหัวรก
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const closeFilter = useCallback(() => setFilterOpen(false), []);
   const everyRow = useMemo<BoardStub[]>(() => [...orders, ...doneStubs], [orders, doneStubs]);
   const assigneeOptions = useMemo(() => {
     const ids = new Set(everyRow.flatMap((w) => [w.assignedTo, ...(w.groupMemberIds ?? [])]).filter((id): id is string => !!id));
@@ -888,13 +891,24 @@ export function WorkOrderBoard({
 
   // ช่องเลือกบ้านบนแถบหัว — ทุกบ้าน / ทั้งหมวด / รายหลัง ในช่องเดียว แบบช่องผู้รับผิดชอบ (ผู้ใช้ 3/11/2569 แบบ B)
   // มือถือใช้ช่องนี้ด้วย แถวปุ่มบ้านเดิมกินที่ดูการ์ด (ผู้ใช้ 4/11/2569 "ลกเกินไป เอาไปไว้ข้างบน")
-  const houseSelect =
+  // wide = อยู่ในแผ่นตัวกรองบนมือถือ — เต็มความกว้าง ไม่ต้องตัดชื่อ
+  const houseSelectEl = (wide: boolean) =>
     groups.length > 1 ? (
-      <label className="relative inline-flex h-8 min-w-0 items-center rounded-(--radius) border border-(--line) bg-(--bg) pl-2 pr-6 text-[13px] sm:shrink-0 lg:h-9 lg:pl-3 lg:pr-8 lg:text-sm">
-        <span className="mr-1 shrink-0 text-(--ink-soft)">🏠<span className="hidden sm:inline"> บ้าน:</span></span>
+      <label
+        className={
+          wide
+            ? "relative flex h-10 w-full items-center rounded-(--radius) border border-(--line) bg-(--bg) pl-3 pr-8 text-sm"
+            : "relative inline-flex h-8 min-w-0 items-center rounded-(--radius) border border-(--line) bg-(--bg) pl-2 pr-6 text-[13px] sm:shrink-0 lg:h-9 lg:pl-3 lg:pr-8 lg:text-sm"
+        }
+      >
+        <span className="mr-1 shrink-0 text-(--ink-soft)">🏠<span className={wide ? "hidden" : "hidden sm:inline"}> บ้าน:</span></span>
         <select
           aria-label="กรองตามบ้าน"
-          className="min-w-0 max-w-[5.5rem] appearance-none truncate bg-transparent pr-1 font-medium text-(--ink) outline-none sm:max-w-none"
+          className={
+            wide
+              ? "w-full min-w-0 appearance-none truncate bg-transparent pr-1 font-medium text-(--ink) outline-none"
+              : "min-w-0 max-w-[5.5rem] appearance-none truncate bg-transparent pr-1 font-medium text-(--ink) outline-none sm:max-w-none"
+          }
           value={houseId ? `h:${houseId}` : group ? `g:${group}` : ""}
           onChange={(e) => {
             const v = e.target.value;
@@ -926,9 +940,10 @@ export function WorkOrderBoard({
             </optgroup>
           ))}
         </select>
-        <span className="pointer-events-none absolute right-1.5 text-(--ink-soft) lg:right-2.5" aria-hidden="true">▾</span>
+        <span className={`pointer-events-none absolute text-(--ink-soft) ${wide ? "right-3" : "right-1.5 lg:right-2.5"}`} aria-hidden="true">▾</span>
       </label>
     ) : null;
+  const houseSelect = houseSelectEl(false);
 
   const sortSelect = (
     <label className="relative inline-flex h-8 min-w-0 items-center rounded-(--radius) border border-(--line) bg-(--bg) pl-2 pr-6 text-[13px] sm:shrink-0 lg:h-9 lg:pl-3 lg:pr-8 lg:text-sm">
@@ -952,7 +967,8 @@ export function WorkOrderBoard({
     setSearchOpen(false);
   };
   const searchActive = searchOpen || !!query;
-  // มือถือ: แถบหัวแคบ ช่องค้นหาไปเบียดตัวกรองจนชิดกันหมด (ผู้ใช้ 13/11/2569) — บนหัวเป็นไอคอน กดแล้วช่องค้นหาขึ้นแทนตัวกรองเต็มแถบหัว
+  // มือถือ: ช่องค้นหาอยู่บนแถบหัวตลอด + ปุ่ม "กรอง" ปุ่มเดียวเปิดแผ่นตัวกรอง (ผู้ใช้ 13/11/2569 เลือกแบบ 1)
+  // จอใหญ่: ไอคอนแว่นขยาย กดแล้วค่อยกางช่องค้นหา เหมือนเดิม
   const searchInput = (wide: boolean) => (
       <label
         className={`relative inline-flex min-w-0 items-center rounded-(--radius) border border-(--brand-navy) bg-(--bg) pl-2 pr-7 ${
@@ -961,7 +977,8 @@ export function WorkOrderBoard({
       >
         <Search className="mr-1.5 h-3.5 w-3.5 shrink-0 text-(--ink-soft)" aria-hidden="true" />
         <input
-          autoFocus
+          // มือถือ: ช่องค้นหาโชว์ตลอด ห้ามโฟกัสเองตอนเปิดหน้า (คีย์บอร์ดจะเด้งขึ้นมา)
+          autoFocus={!isMobile}
           type="search"
           data-testid="wo-board-search"
           aria-label="ค้นหาใบงาน"
@@ -972,6 +989,8 @@ export function WorkOrderBoard({
           onBlur={() => !query.trim() && setSearchOpen(false)}
           className="min-w-0 flex-1 bg-transparent text-(--ink) outline-none placeholder:text-(--ink-faint) [&::-webkit-search-cancel-button]:hidden"
         />
+        {/* มือถือ: ช่องว่างอยู่แล้ว ไม่ต้องมีปุ่มล้าง · จอใหญ่: ✕ = ปิดช่องค้นหา */}
+        {(!isMobile || query) && (
         <button
           type="button"
           aria-label="ล้างคำค้น"
@@ -981,6 +1000,7 @@ export function WorkOrderBoard({
         >
           <X className="h-3.5 w-3.5" />
         </button>
+        )}
       </label>
   );
   const searchBox =
@@ -999,8 +1019,10 @@ export function WorkOrderBoard({
       </button>
     );
 
+  const hasPersonFilter = (canPickPeople && assigneeOptions.length > 0) || !!currentUserId;
+  const filterCount = (assignee !== null ? 1 : 0) + (group || houseId ? 1 : 0) + (sort !== "due" ? 1 : 0);
   const personFilter =
-    (canPickPeople && assigneeOptions.length > 0) || !!currentUserId ? (
+    hasPersonFilter ? (
       <PersonFilter
         label="ผู้รับผิดชอบ"
         value={assignee}
@@ -1025,9 +1047,11 @@ export function WorkOrderBoard({
     <div className="flex h-full flex-col">
       {toolbarSlot &&
         createPortal(
-          isMobile && searchActive ? (
-            // มือถือ: ช่องค้นหาขึ้นแทนตัวกรองบนแถบหัวชั่วคราว (ผู้ใช้ 13/11/2569 เลือกแบบ ก) — กด ✕ ตัวกรองกลับมา
-            <div className="flex w-full min-w-0 items-center">{searchInput(true)}</div>
+          isMobile ? (
+            <div className="flex w-full min-w-0 items-center gap-2">
+              {searchInput(true)}
+              <FilterButton count={filterCount} onClick={() => setFilterOpen(true)} />
+            </div>
           ) : (
             <div className="flex min-w-0 items-center gap-2">
               {personFilter}
@@ -1038,6 +1062,28 @@ export function WorkOrderBoard({
           ),
           toolbarSlot,
         )}
+      {isMobile && (
+        <FilterSheet
+          open={filterOpen}
+          onClose={closeFilter}
+          assignee={assignee}
+          onAssignee={setAssignee}
+          people={assigneeOptions}
+          showMine={!!currentUserId}
+          showPeople={canPickPeople && hasPersonFilter}
+          showUnassigned={hasUnassigned}
+          houseSelect={houseSelectEl(true)}
+          sort={sort}
+          onSort={setSort}
+          resultCount={boardTotal}
+          onClearAll={() => {
+            setAssignee(null);
+            setGroup(null);
+            setHouseId(null);
+            setSort("due");
+          }}
+        />
+      )}
       {/* ─── มือถือ: แท็บ 4 สถานะ ─── */}
       <div className="flex min-h-0 flex-1 flex-col lg:hidden">
         <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-(--line)">
