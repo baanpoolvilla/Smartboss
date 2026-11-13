@@ -663,7 +663,13 @@ export function TaskDetailSheet({
   const decidedDueRequests = dueRequests.filter((r) => r.status === "approved" || r.status === "rejected");
   const myPendingDueRequest = pendingDueRequests.find((r) => r.requestedBy === viewingAsUserId);
   // งานส่วนตัว (เปิดให้ตัวเอง) เลื่อนกำหนดส่งเองได้เลย ไม่ต้องขอใคร — ไม่มีผลกับคะแนนอยู่แล้ว (ผู้ใช้ 5/11/2569)
-  const canReviseDueDirect = owner || (isPersonalTask(task) && task.assignedById === viewingAsUserId);
+  // คนสร้าง/มอบหมายงานให้คนอื่นแก้กำหนดส่งเองได้เหมือน CEO (ผู้ใช้ 13/11/2569 "คนที่มอบหมายให้คนอื่นต้องแก้ได้")
+  // — ถ้าตัวเองเป็นผู้รับผิดชอบในงานนั้นด้วย (ไม่ใช่งานส่วนตัว) ยังต้องขอเลื่อน ไม่งั้นเลื่อนกำหนดตัวเองหนีหักคะแนนได้
+  const canReviseDueDirect =
+    owner ||
+    (!!task.assignedById &&
+      task.assignedById === viewingAsUserId &&
+      (isPersonalTask(task) || !task.assigneeIds.includes(viewingAsUserId)));
   const canRequestDueDate = !canReviseDueDirect && task.assigneeIds.includes(viewingAsUserId) && task.status !== "done";
   // ขอเลื่อนได้แค่ "ไปข้างหน้า" — เดิมเลือกวันก่อนกำหนดปัจจุบันได้ (เจอจริง: ขอ 30/09 → 04/09
   // ตั้งใจพิมพ์ 04/10) อนุมัติแล้วกำหนดส่งย้อนไปอยู่ในอดีต ⇒ โดนหักคะแนนทันที
@@ -1715,7 +1721,7 @@ export function TaskDetailSheet({
                   ขอเลื่อนกำหนดส่ง
                 </Button>
               )}
-              {isShared && owner && (
+              {isShared && canReviseDueDirect && (
                 <div className="flex items-center gap-1.5">
                   {!perPersonRevising && (
                     <Button
@@ -1871,7 +1877,7 @@ export function TaskDetailSheet({
               </div>
             ))}
 
-            {isShared && bulkRevising && owner && (
+            {isShared && bulkRevising && canReviseDueDirect && (
               <div className="rounded-lg border border-[var(--line)] p-3 space-y-2.5">
                 <div className="space-y-1.5">
                   <Label className="text-xs">กำหนดส่งใหม่ (ใช้กับทุกคน)</Label>
@@ -1894,7 +1900,7 @@ export function TaskDetailSheet({
                 of a live date picker sitting open on every row, which just
                 repeated the same date the read-only list below already
                 shows and got noisy on a task with several people. */}
-            {isShared && perPersonRevising && owner && (
+            {isShared && perPersonRevising && canReviseDueDirect && (
               <div className="rounded-lg border border-[var(--line)] p-3 space-y-2.5">
                 <div className="space-y-1.5">
                   <Label className="text-xs">คน</Label>
