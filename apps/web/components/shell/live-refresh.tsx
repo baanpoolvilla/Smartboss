@@ -38,7 +38,11 @@ export function LiveRefresh() {
   const lastRefresh = useRef(0); // ตั้งค่าจริงใน effect ข้างล่าง (เปลี่ยนหน้า = ข้อมูลใหม่)
   const pending = useRef(false);
   const hiddenAt = useRef<number | null>(null);
-  const live = LIVE_PREFIXES.some((p) => pathname.startsWith(p));
+  // หน้าแอปที่ฝังในกรอบ (multipost / Baanpool-Chat / ใช้รถบริษัท ฯลฯ — /sales-marketing/app/<key>) ห้ามดึงหน้าใหม่เอง:
+  // ดึงใหม่ = เซ็นลิงก์ล็อกอินใหม่ = กรอบโหลดแอปใหม่ทั้งหน้า (จอแวบ สิ่งที่ติ๊ก/พิมพ์ในแอปหาย) — ผู้ใช้ 13/11/2569 "multipost มันแวบ ๆ ไปมา"
+  // ข้อมูลในกรอบเป็นของแอปปลายทาง SmartBoss ไม่มีอะไรต้องดึงใหม่ · ปุ่ม 🔄 บนแถบกรอบยังโหลดใหม่ได้เมื่อกดเอง
+  const embedded = pathname.startsWith("/sales-marketing/app/");
+  const live = embedded || LIVE_PREFIXES.some((p) => pathname.startsWith(p));
 
   useEffect(() => {
     lastRefresh.current = Date.now(); // เพิ่งเปลี่ยนหน้า = ข้อมูลใหม่อยู่แล้ว
