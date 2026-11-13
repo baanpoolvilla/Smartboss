@@ -34,6 +34,8 @@ export async function postTaskCard(
       await new Promise((r) => setTimeout(r, 2500));
       task = await readTask();
     }
+    // งานในโปรเจกต์ไม่ลงแชท (ผู้ใช้ 13/11/2569 "ไม่ขึ้นบนบอร์ดก็ไม่ต้องขึ้นในแชท งั้นงง") — แจ้งเตือนกระดิ่งยังมีตามปกติ
+    if (isProjectTask(task)) return;
     const card: ChatTaskCard = {
       taskId: input.taskId,
       title: task?.title ?? input.title,
@@ -240,6 +242,12 @@ async function projectOf(orgId: string, task: { data: unknown } | null): Promise
   } catch {
     return {};
   }
+}
+
+function isProjectTask(task: { data: unknown } | null): boolean {
+  const data = task?.data && typeof task.data === "object" ? (task.data as Record<string, unknown>) : null;
+  const link = data?.project && typeof data.project === "object" ? (data.project as Record<string, unknown>) : null;
+  return typeof link?.projectId === "string" && !!link.projectId;
 }
 
 function taskTags(task: { parentId: string | null; data: unknown } | null): string[] {

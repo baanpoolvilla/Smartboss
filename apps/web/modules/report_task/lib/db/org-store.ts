@@ -325,6 +325,8 @@ function announceNewNotifications(orgId: string, beforeData: unknown, afterData:
     const message = typeof n.message === "string" ? n.message : "";
     const title = /มอบหมายงาน "(.*)" ให้คุณ/.exec(message)?.[1];
     if (!title) continue;
+    // งานในโปรเจกต์ (แจ้งเตือนต่อท้าย "(โปรเจกต์ …)") ไม่ลงแชท — ผู้ใช้ 13/11/2569 · postTaskCard เช็คจากตัวงานซ้ำอีกชั้น
+    if (/ให้คุณ \(โปรเจกต์ /.test(message)) continue;
     void postTaskCard(orgId, {
       assignerId: n.byUserId,
       assigneeId: n.userId as string,
