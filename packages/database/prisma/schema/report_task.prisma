@@ -95,6 +95,27 @@ model ReportTaskStore {
   @@schema("report_task")
 }
 
+/// สรุปรายงานให้ Boss (13/11/2569) — แถวละ 1 สรุป (รอบ หรือ สรุปรวมหลายวัน) เก็บถาวร
+/// เดิมอยู่ใน stores key "boss-brief-results" ก้อนเดียว เก็บได้แค่ 14 วัน และต้องเขียนทั้งก้อนทุกครั้ง
+/// id = `${day}|${topicId}|${roundId}` หรือ `range|${topicId}|${from}|${to}` · data = BossBrief ทั้งก้อน (lib/boss-brief/types.ts)
+model ReportBossBrief {
+  orgId       String   @map("org_id")
+  id          String
+  topicId     String   @map("topic_id")
+  /// วันของรอบ (สรุปรวม = วันสุดท้ายของช่วง) "YYYY-MM-DD"
+  day         String
+  isRange     Boolean  @default(false) @map("is_range")
+  data        Json
+  generatedAt DateTime @map("generated_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@id([orgId, id])
+  @@index([orgId, topicId, day])
+  @@map("boss_briefs")
+  @@schema("report_task")
+}
+
 // ═════════════════════ โน้ตของห้องรายงาน (แบบ Notes ใน Teams) ═════════════════════
 //
 // แก้พร้อมกันได้หลายคน (ผู้ใช้เลือก 23/10/2569) — เนื้อหาเป็นเอกสาร Yjs (CRDT):

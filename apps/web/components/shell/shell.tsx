@@ -36,6 +36,7 @@ import { SaveFeedback } from "./save-feedback";
 import { SessionRefresher } from "./session-refresher";
 import { FileSizeGuard } from "./file-size-guard";
 import { SystemNotify } from "./system-notify";
+import { AiAssistant } from "./ai-assistant";
 import { LiveRefresh } from "./live-refresh";
 import { ChatNotifyListener } from "@/modules/chat/components/chat-nav-badge";
 import { CallManager } from "@/modules/chat/components/call-manager";
@@ -117,6 +118,8 @@ export function Shell({
       <SaveFeedback />
       {/* เสียง + เด้งแจ้งเตือนของทุกโมดูล (ท่อสด notify.new) */}
       <SystemNotify />
+      {/* น้อง SmartBoss — ผู้ช่วย AI ลอยมุมซ้ายล่าง (เฉพาะ Boss · API ตอบไม่ให้ = ไม่แสดง) */}
+      <AiAssistant />
       <LiveRefresh />
       {/* แชทเข้า → เสียง + เด้ง ทุกหน้า ทุกโมดูล (ไม่ใช่แค่ตอนเห็นเมนูแชท) */}
       {hasChat && <ChatNotifyListener />}

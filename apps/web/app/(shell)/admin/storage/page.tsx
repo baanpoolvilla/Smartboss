@@ -9,6 +9,20 @@ import { EmptyState, Pill } from "@/modules/admin/components/ui";
 import { listAllOrganizations } from "@/modules/admin/data/orgs";
 import { getOrgStorageUsage, orgQuotaBytes, toGB } from "@/modules/company-files/lib/quota";
 import { setOrgStorageQuotaAction } from "./actions";
+import { prisma } from "@smartboss/database";
+
+/**
+ * จำนวนรายงานของแต่ละบริษัท (13/11/2569) — รายงานทั้งหมดเก็บเป็นก้อนเดียวต่อบริษัท (stores key "report-feed")
+ * ถึงหลักหมื่นฉบับห้องรายงานจะเริ่มช้า ⇒ ขึ้นเตือนที่ 8,000 ให้วางแผนย้ายไปเก็บเป็นตารางก่อนผู้ใช้รู้สึก
+ * นับด้วย jsonb_array_length ในฐานข้อมูล ไม่ดึงก้อน JSON มาที่เว็บ · หน้านี้เห็นเฉพาะผู้ให้บริการ (SUPER_ADMIN)
+ */
+const REPORT_WARN = 8000;
+async function reportCounts(): Promise<Map<string, number>> {
+  const rows = await prisma.$queryRaw<{ org_id: string; n: number }[]>`
+    SELECT org_id, COALESCE(jsonb_array_length(data->'posts'), 0)::int AS n
+    FROM report_task.stores WHERE key = 'report-feed' AND jsonb_typeof(data->'posts') = 'array'`;
+  return new Map(rows.map((r) => [r.org_id, Number(r.n)]));
+}
 
 /**
  * พื้นที่จัดเก็บไฟล์ (ทุกบริษัท) — หน้าจอระดับผู้ให้บริการ (SUPER_ADMIN เท่านั้น)
@@ -24,7 +38,7 @@ export default async function StorageAdminPage() {
 
   const orgs = await listAllOrganizations();
   const globalLimit = orgQuotaBytes();
-  const breakdown = await Promise.all(orgs.map((o) => getOrgStorageUsage(o.id)));
+  const [breakdown, reports] = await Promise.all([Promise.all(orgs.map((o) => getOrgStorageUsage(o.id))), reportCounts()]);
   const usages = breakdown.map((b) => b.total);
 
   const rows = orgs
@@ -37,7 +51,8 @@ export default async function StorageAdminPage() {
       const near = !over && used >= limit * 0.75;
       const customGb = custom ? (o.storageQuotaMb! / 1024).toString() : "";
       const { companyFiles, chat } = breakdown[i] ?? { companyFiles: 0, chat: 0 };
-      return { ...o, used, companyFiles, chat, limit, custom, customGb, pct, over, near };
+      const reportCount = reports.get(o.id) ?? 0;
+      return { ...o, used, companyFiles, chat, limit, custom, customGb, pct, over, near, reportCount };
     })
     .sort((a, b) => b.used - a.used);
 
@@ -119,6 +134,14 @@ export default async function StorageAdminPage() {
                       <Link href={`/admin/storage/${r.id}`} className="font-medium text-(--ink) underline">
                         ดูแยกตามระบบ (รวมรูปรีพอร์ต/ใบงาน) →
                       </Link>
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-(--ink-soft)">
+                      รายงานในห้องรายงาน <span className="font-medium text-(--ink)">{r.reportCount.toLocaleString("th-TH")}</span> ฉบับ
+                      {r.reportCount >= REPORT_WARN && (
+                        <span className="ml-1.5 font-semibold" style={{ color: "var(--tone-warn)" }}>
+                          · ใกล้หลักหมื่น ห้องรายงานจะเริ่มช้า ควรวางแผนย้ายรายงานไปเก็บเป็นตาราง
+                        </span>
+                      )}
                     </p>
                   </div>
 

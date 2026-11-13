@@ -1198,7 +1198,8 @@ export function ReportTopicPanels({
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4">
       {statsTop}
-      <div className={cn("grid gap-3", hasSchedule ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3")}>
+      {/* มือถือ: 4 กล่องเรียงแถวเดียว (13/11/2569 "กินพื้นที่ทั้งหน้า") — จอใหญ่เหมือนเดิม */}
+      <div className={cn("grid gap-1.5 sm:gap-3", hasSchedule ? "grid-cols-4" : "grid-cols-3")}>
         {hasSchedule && (
           <StatCard
             icon={TriangleAlert}
@@ -1474,13 +1475,14 @@ function StatCard({
   title?: string;
 }) {
   return (
-    <div className="rounded-xl border border-[var(--line)] p-3.5 flex items-center gap-3" title={title}>
-      <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `color-mix(in srgb, ${color} 14%, white)` }}>
+    <div className="flex min-w-0 flex-col items-center gap-0.5 rounded-xl border border-[var(--line)] px-1 py-1.5 text-center sm:flex-row sm:items-center sm:gap-3 sm:p-3.5 sm:text-left" title={title}>
+      <div className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:flex" style={{ backgroundColor: `color-mix(in srgb, ${color} 14%, white)` }}>
         <Icon className="h-4 w-4" style={{ color }} />
       </div>
-      <div>
-        <p className="text-[11px] text-[var(--ink-soft)]">{label}</p>
-        <p className="text-lg font-semibold tabular-nums leading-tight">{value}</p>
+      <div className="min-w-0">
+        <p className="text-base font-semibold tabular-nums leading-tight sm:hidden" style={{ color }}>{value}</p>
+        <p className="truncate text-[10.5px] leading-tight text-[var(--ink-soft)] sm:text-[11px]">{label}</p>
+        <p className="hidden text-lg font-semibold tabular-nums leading-tight sm:block">{value}</p>
       </div>
     </div>
   );

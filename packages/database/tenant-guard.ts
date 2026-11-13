@@ -30,7 +30,7 @@ export const TENANT_SCOPED_MODELS = new Set<string>([
   "DayOffQuotaSetting", "EmployeeDayOffQuota", "EmployeeDayOffQuotaDefault",
   "WebPushSubscription", "AppInstall", "NotificationPreference",
   // report_task
-  "ReportTask", "ReportTaskCollection", "ReportTaskStore",
+  "ReportTask", "ReportTaskCollection", "ReportTaskStore", "ReportBossBrief",
   // chat
   "ChatChannel", "ChatChannelMember", "ChatMessage", "ChatReadState", "ChatReaction", "ChatFile",
   "ChatAlbum", "ChatAlbumItem", "ChatNote", "ChatNoteComment", "ChatNoteLike", "ChatCall",

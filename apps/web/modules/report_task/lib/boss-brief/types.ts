@@ -58,6 +58,47 @@ export interface BriefQa {
   q: string;
   a: string;
   costThb: number;
+  /** เครื่องมือค้นข้อมูลที่ AI ใช้ตอบ (ชื่อเครื่องมือใน company-ai.ts) — โชว์ "ค้นจาก: …" ใต้คำตอบ */
+  sources?: string[];
+}
+
+/** ชื่อเครื่องมือค้นข้อมูล → คำที่ Boss อ่านเข้าใจ */
+export const SOURCE_LABEL: Record<string, string> = {
+  search_reports: "รายงาน",
+  count_mentions: "นับจำนวนครั้ง",
+  report_summaries: "สรุปรายรอบ",
+  search_group_chat: "แชทกลุ่ม",
+  tasks: "งาน",
+  work_orders: "ใบแจ้งซ่อม",
+  purchases_expenses: "สั่งซื้อ/ค่าใช้จ่าย",
+  money_requests: "คำขอเงิน",
+  attendance: "ลงเวลา",
+  leave: "ใบลา",
+  salary: "เงินเดือน",
+  scores: "คะแนน",
+  people: "รายชื่อพนักงาน",
+  app_pages: "หน้าในระบบ",
+};
+
+/**
+ * สรุปแบบละเอียด (13/11/2569 ผู้ใช้: "boss เข้ามาแล้วรู้ว่าคนนี้ทำอะไร กลุ่มไหนเป็นยังไง ติดอะไร รออะไรจากเรา อะไรด่วน/อันตราย")
+ * อ่านตามลำดับ 1 ด่วน/อันตราย → 2 รอคุณตัดสินใจ → 3 ค้าง → 4 ทีม/คน · ทุกข้อชี้กลับโพสต์ต้นทาง
+ * ไม่มี = สรุปรุ่นเก่า (ก่อน 13/11) หรือ AI ล้ม → การ์ดแสดงแบบเดิม
+ */
+export type BriefImpact = "เงิน" | "ลูกค้า" | "ความปลอดภัย" | "กฎหมาย" | "งานเดินไม่ได้";
+export interface BriefDetail {
+  /** plan = รอบเช้า (แผนงานวันนี้) · result = รอบเย็น (ผลงานวันนี้) · range = สรุปรวมหลายวัน (Boss กดสั่งเอง) */
+  roundKind: "plan" | "result" | "range";
+  /** รอบรายวัน / รายสัปดาห์ (ส่งวันเดียวในสัปดาห์) / รายเดือน (ตั้งวันที่) — ใช้บอกว่า "ผลงานของวันนี้/สัปดาห์นี้/เดือนนี้" */
+  period?: "daily" | "weekly" | "monthly";
+  urgent: { title: string; postId: string; name: string; impact: BriefImpact; why: string; level: "ด่วนมาก" | "ด่วน"; writerRed: boolean }[];
+  decisions: { what: string; postId: string; name: string; since: string }[];
+  /** result: ค้างมาหลายวัน (since = วันแรกที่เจอ) · plan: เมื่อวานยังค้าง แต่แผนเช้านี้ไม่มีใครพูดถึง */
+  carry: { what: string; postId: string; name: string; since?: string }[];
+  fixed: { what: string; name: string }[];
+  teams: { team: string; color: BriefColor; line: string; names: string[] }[];
+  /** รายละเอียดรายคน key = postId */
+  people: Record<string, { team: string; color: BriefColor; did: string[]; stuck: string[]; waiting: { what: string; from: string }[]; next: string[] }>;
 }
 
 export interface BossBrief {
@@ -79,6 +120,13 @@ export interface BossBrief {
   qa: BriefQa[];
   model: string;
   costThb: number;
+  detail?: BriefDetail;
+  /** สรุปรวมหลายวัน: วันแรกของช่วง (day = วันสุดท้าย) · ไม่มี = สรุปรอบปกติ */
+  rangeFrom?: string;
+  /** แบบย่อ (รายการวัน) — ไม่มีรายละเอียด ต้องขอแบบเต็มก่อนแสดง */
+  light?: boolean;
+  /** เก่ากว่า 12 เดือน ระบบย่อเก็บแล้ว (เหลือภาพรวม/เรื่องที่ต้องรู้/บรรทัดต่อคน ไม่มีรายละเอียดรายคน) */
+  compact?: boolean;
   /** AI ล้ม/เกินเพดาน — แสดงแบบไม่มีใจความย่อ (ใช้ข้อความจริงตัดสั้นแทน) */
   aiSkipped?: "cap" | "error";
 }
@@ -90,6 +138,8 @@ export interface BossBriefSettings {
   monthlyCapThb: number;
   summaryModel: string;
   askModel: string;
+  /** สรุปละเอียด (ด่วน/รอคุณ/ค้าง/ทีม/รายคน) — ต้องตัดสินว่าอะไรอันตราย ใช้รุ่นแม่น · ค่าเดิมของบริษัทที่ไม่มีช่องนี้ = ค่าเริ่มต้น */
+  detailModel: string;
 }
 
 export const DEFAULT_BRIEF_SETTINGS: BossBriefSettings = {
@@ -98,6 +148,7 @@ export const DEFAULT_BRIEF_SETTINGS: BossBriefSettings = {
   monthlyCapThb: 300,
   summaryModel: "gpt-6-luna",
   askModel: "gpt-6-sol",
+  detailModel: "gpt-6-sol",
 };
 
 /** ราคาต่อ 1 ล้าน token (ดอลลาร์) จากหน้าราคา OpenAI 12/11/2569 — ใช้แสดง/คุมเพดานเท่านั้น บิลจริงดูที่ OpenAI */
@@ -120,8 +171,16 @@ export interface BossBriefView {
   settings: BossBriefSettings;
   /** ห้องนี้ตั้งหัวข้อบังคับไว้ในรอบไหนบ้าง — ไม่มี = เปิดสรุปไม่ได้ (ไม่รู้ว่าหัวข้อไหนคืออะไร) */
   roundsWithTopics: { id: string; label: string; time: string }[];
+  /** รายการสรุปรอบ 60 วันล่าสุดแบบย่อ (light) — ใหม่สุดก่อน */
   briefs: BossBrief[];
+  /** สรุปที่กำลังดูแบบเต็ม (ตาม ?briefId= หรืออันล่าสุด) */
+  current?: BossBrief | null;
   /** capThb = เพดานที่ใช้จริง (ที่ตั้ง ไม่เกินเพดานของแพ็กเกจ) · planMaxThb = สูงสุดที่แพ็กเกจให้ตั้งได้ */
   usage: { month: string; thb: number; calls: number; capThb: number; planMaxThb?: number };
   generating: boolean;
+  /** สรุปรวมหลายวันของห้องนี้ที่เคยสั่งไว้ (ใหม่สุดก่อน) — เปิดดูซ้ำได้ไม่เสียเงิน */
+  ranges: BossBrief[];
+  /** id ของสรุปรวมที่กำลังทำอยู่ / เพิ่งล้ม (`range|topic|from|to`) */
+  rangePending: string[];
+  rangeFailed: { id: string; error: string }[];
 }

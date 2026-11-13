@@ -70,6 +70,7 @@ model Organization {
   departments Department[]
 
   reportTaskStores     ReportTaskStore[]
+  reportBossBriefs     ReportBossBrief[]
   reportTasks          ReportTask[]
   reportTaskCollection ReportTaskCollection?
   performanceEvents    PerformanceEvent[]
