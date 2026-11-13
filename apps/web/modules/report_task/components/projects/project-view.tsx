@@ -28,10 +28,10 @@ import { cn } from "@/modules/report_task/lib/utils";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useProjectStore } from "@/modules/report_task/store/project-store";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
-import type { Project, ProjectStatus } from "@/modules/report_task/types";
+import type { Project, ProjectStatus, Task } from "@/modules/report_task/types";
 import { ProjectTimeline } from "./project-timeline";
 import { BoardTab, CalendarTab, DashboardTab, FilesTab, ListTab, MessagesTab } from "./project-tabs";
-import { updateChannel } from "@/modules/chat/lib/api";
+import { sendMessage, updateChannel } from "@/modules/chat/lib/api";
 import { PCT_HELP, PersonDot, ProjectStatusChip, STATE_COLOR, STATE_LABEL, StatePill, fmtDay, askProjectUpdate, defaultMemberRole, ensureProjectMembers, notifyAddedToProject, postProjectTaskNotices, syncChatMember, todayBkk, useCompanyHolidays } from "./project-ui";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { ROLE_OF_DEFAULT } from "./project-roles";
@@ -227,7 +227,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
       {tab === "dashboard" && <DashboardTab project={project} items={allItems} today={today} onOpen={(id) => openTask(id)} />}
       {tab === "messages" && <MessagesTab project={project} canEdit={canEdit} />}
       {tab === "files" && <FilesTab items={allItems} onOpen={(id) => openTask(id)} />}
-      {tab === "updates" && <UpdatesTab project={project} canEdit={canEdit} />}
+      {tab === "updates" && <UpdatesTab project={project} canEdit={canEdit} onOpen={(id) => openTask(id)} />}
       </>}
 
       <TaskDetailSheet taskId={openTaskId} onOpenChange={(o) => !o && closeTask()} />
@@ -508,6 +508,85 @@ function AskUpdateButton({ project }: { project: Project }) {
   );
 }
 
+/**
+ * ปิดโปรเจกต์ไม่ได้ ยังมีงานค้าง — รายการงานที่ต้องจัดการก่อน (ผู้ใช้ 13/11/2569)
+ * ทางออกต่อชิ้น: เปิดไปทำให้เสร็จ/ตรวจ หรือ (ผู้ดูแลโปรเจกต์/CEO) ยกเลิกงานที่ไม่ต้องทำแล้ว โดยต้องเขียนเหตุผล
+ * ยกเลิก = ลบงาน (งานที่ยังไม่เลยกำหนดจะไม่ถูกหักคะแนน) + แจ้งคนทำ/คนสั่งงานพร้อมเหตุผล + บันทึกในห้องแชทของโปรเจกต์
+ * งานที่เลยกำหนดไปแล้วถูกหักไปแล้ว ยกเลิกก็ไม่คืนเอง — บอกตรง ๆ ให้คนทำขอแก้ไขคะแนนได้ ไม่ให้ใครเสียประโยชน์โดยไม่รู้ตัว
+ */
+function CloseBlocker({ project, openTasks, onOpen, closingAs }: { project: Project; openTasks: Task[]; onOpen: (taskId: string) => void; closingAs: ProjectStatus }) {
+  const me = useIdentityStore((s) => s.viewingAsUserId);
+  const removeTask = useTaskStore((s) => s.removeTask);
+  const canCancel = canPlanProject(project, me);
+  const [cancelId, setCancelId] = useState<string | null>(null);
+  const [why, setWhy] = useState("");
+  const today = todayBkk();
+  const verb = closingAs === "dropped" ? "ยกเลิกโปรเจกต์" : "ปิดโปรเจกต์";
+
+  function cancelTask(t: Task) {
+    const reason = why.trim();
+    if (!reason) return;
+    const actor = getUser(me)?.name ?? "ผู้ดูแลโปรเจกต์";
+    const who = t.assigneeIds.map((id) => getUser(id)?.name).filter(Boolean).join(", ");
+    removeTask(t.id);
+    // แจ้งเป็นลายลักษณ์อักษร: คนทำ + คนสั่งงาน (ลิงก์ไปหน้าโปรเจกต์ — งานถูกลบแล้ว)
+    const notifyIds = [...new Set([...t.assigneeIds, t.assignedById].filter((id): id is string => !!id))];
+    useNotificationStore
+      .getState()
+      .notifyMany(notifyIds, me, `${actor} ยกเลิกงาน "${t.title}" ในโปรเจกต์ "${project.name}" — เหตุผล: ${reason}`, undefined, `/report-task/projects/${project.id}`);
+    if (project.chatChannelId) {
+      sendMessage(project.chatChannelId, { clientId: `cancel-${t.id}`, body: `ยกเลิกงาน "${t.title}"${who ? ` (${who})` : ""}\nเหตุผล: ${reason}` }).catch(() => {});
+    }
+    toast.success(`ยกเลิกงาน "${t.title}" แล้ว · แจ้งคนทำและคนสั่งงานแล้ว`);
+    setCancelId(null);
+    setWhy("");
+  }
+
+  return (
+    <div role="alert" className="grid gap-2 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950/40">
+      <b className="text-sm text-red-700 dark:text-red-300">{verb}ไม่ได้ ยังมีงานค้าง {openTasks.length} งาน</b>
+      <p className="m-0 text-xs text-[var(--ink-soft)]">
+        งานที่ค้างยังนับกำหนดส่งและหักคะแนนตามปกติ ให้ทำงานให้เสร็จ หรือ
+        {canCancel ? "ยกเลิกงานที่ไม่ต้องทำแล้ว" : "ขอให้ผู้ดูแลโปรเจกต์ยกเลิกงานที่ไม่ต้องทำแล้ว"} ก่อน{verb}
+      </p>
+      <ul className="m-0 grid list-none gap-1 p-0">
+        {openTasks.map((t) => {
+          const late = t.dueDate.slice(0, 10) < today;
+          const docked = !!t.penalty || Object.keys(t.penalties ?? {}).length > 0;
+          return (
+            <li key={t.id} className="grid gap-1.5 rounded-md bg-[var(--bg)] px-2.5 py-2">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <button type="button" className="min-w-0 flex-1 truncate text-left text-sm font-semibold hover:underline" onClick={() => onOpen(t.id)}>{t.title}</button>
+                <span className="text-xs text-[var(--ink-soft)]">{t.assigneeIds.map((id) => getUser(id)?.name ?? "").filter(Boolean).join(", ") || "-"} · ส่ง {fmtDay(t.dueDate.slice(0, 10))}</span>
+                {late && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700 dark:bg-red-950/60 dark:text-red-300">เลยกำหนด</span>}
+                <button type="button" className="rounded-md border border-[var(--line)] px-2 py-0.5 text-xs" onClick={() => onOpen(t.id)}>เปิดงาน</button>
+                {canCancel && cancelId !== t.id && (
+                  <button type="button" className="rounded-md border border-[var(--line)] px-2 py-0.5 text-xs text-red-600" onClick={() => { setCancelId(t.id); setWhy(""); }}>ยกเลิกงานนี้</button>
+                )}
+              </div>
+              {cancelId === t.id && (
+                <div className="grid gap-1.5">
+                  {docked ? (
+                    <p className="m-0 text-xs text-red-700 dark:text-red-300">งานนี้โดนหักคะแนนไปแล้ว ยกเลิกงานแล้วคะแนนไม่คืนเอง ถ้าไม่ใช่ความผิดของคนทำ ให้คนทำกด &quot;ขอแก้ไข&quot; ในหน้าคะแนนของฉัน</p>
+                  ) : (
+                    <p className="m-0 text-xs text-[var(--ink-soft)]">ยกเลิกแล้วงานจะถูกลบ คนทำไม่โดนหักคะแนนจากงานนี้ ระบบแจ้งคนทำและคนสั่งงานพร้อมเหตุผล</p>
+                  )}
+                  <textarea value={why} onChange={(e) => setWhy(e.target.value)} rows={2} aria-label="เหตุผลที่ยกเลิกงาน" placeholder="เหตุผลที่ยกเลิก (จำเป็น) เช่น ลูกค้ายกเลิกส่วนนี้แล้ว"
+                    className="w-full rounded-lg border border-[var(--line)] bg-[var(--bg)] px-2.5 py-1.5 text-base sm:text-sm" />
+                  <div className="flex justify-end gap-2">
+                    <button type="button" className="rounded-lg px-3 py-1 text-xs" onClick={() => setCancelId(null)}>ไม่ยกเลิก</button>
+                    <button type="button" className="rounded-lg bg-red-600 px-3 py-1 text-xs font-semibold text-white disabled:opacity-50" disabled={!why.trim()} onClick={() => cancelTask(t)}>ยืนยันยกเลิกงาน</button>
+                  </div>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 function UpdatePost({ u }: { u: Project["updates"][number] }) {
   const tone = PROJECT_STATUS_META[u.status].tone;
   const border = { ok: "border-green-500", risk: "border-amber-500", late: "border-red-500", info: "border-sky-500", muted: "border-slate-400" }[tone];
@@ -522,11 +601,19 @@ function UpdatePost({ u }: { u: Project["updates"][number] }) {
   );
 }
 
-function UpdatesTab({ project, canEdit }: { project: Project; canEdit: boolean }) {
+function UpdatesTab({ project, canEdit, onOpen }: { project: Project; canEdit: boolean; onOpen: (taskId: string) => void }) {
   const me = useIdentityStore((s) => s.viewingAsUserId);
   const addUpdate = useProjectStore((s) => s.addUpdate);
   const [st, setSt] = useState<ProjectStatus>("ok");
   const [text, setText] = useState("");
+  const allTasks = useTaskStore((s) => s.tasks);
+  // งานที่ยังไม่เสร็จในโปรเจกต์ — ปิดโปรเจกต์ (เสร็จแล้ว/ยกเลิก) ไม่ได้จนกว่าจะจัดการหมด (ผู้ใช้ 13/11/2569 "ถ้ามีค้างจะปิดได้ไง")
+  const openTasks = useMemo(
+    () => allTasks.filter((t) => t.project?.projectId === project.id && t.status !== "done").sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
+    [allTasks, project.id]
+  );
+  const closing = st === "done" || st === "dropped";
+  const blocked = closing && openTasks.length > 0;
   const list = [...project.updates].sort((a, b) => b.at.localeCompare(a.at));
   return (
     <div className="grid max-w-3xl gap-4">
@@ -541,11 +628,18 @@ function UpdatesTab({ project, canEdit }: { project: Project; canEdit: boolean }
               </button>
             ))}
           </div>
+          {blocked && <CloseBlocker project={project} openTasks={openTasks} onOpen={onOpen} closingAs={st} />}
           <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4} placeholder="สัปดาห์นี้ทำอะไรไปแล้ว ติดอะไร ต้องการให้ใครช่วย"
             className="w-full rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 py-2 text-base sm:text-sm" />
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-[var(--ink-soft)]">{st === "done" || st === "dropped" || st === "hold" ? "สถานะนี้จะปิดโปรเจกต์ (เปิดใหม่ได้ด้วยอัปเดตครั้งถัดไป)" : ""}</span>
-            <button type="button" className="ml-auto rounded-lg bg-[var(--brand-green)] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50" disabled={!text.trim()}
+            <span className="text-xs text-[var(--ink-soft)]">
+              {blocked
+                ? ""
+                : st === "hold" && openTasks.length > 0
+                  ? `พักโปรเจกต์ได้ แต่งานค้าง ${openTasks.length} งานยังนับกำหนดส่งตามปกติ ถ้าจะพักนาน ให้เลื่อนกำหนดส่งงานก่อน`
+                  : st === "done" || st === "dropped" || st === "hold" ? "สถานะนี้จะปิดโปรเจกต์ (เปิดใหม่ได้ด้วยอัปเดตครั้งถัดไป)" : ""}
+            </span>
+            <button type="button" className="ml-auto rounded-lg bg-[var(--brand-green)] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50" disabled={!text.trim() || blocked}
               onClick={() => {
                 addUpdate(project.id, st, text.trim(), me);
                 setText("");

@@ -740,6 +740,9 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
         if (!approverIds.length && t.project) {
           const owner = useProjectStore.getState().projects.find((p) => p.id === t.project!.projectId)?.ownerId;
           if (owner && owner !== requesterId) approverIds = [owner];
+          // ผู้ดูแลโปรเจกต์ขอเลื่อนงานที่ตัวเองมอบให้ตัวเอง → ส่งให้ CEO อนุมัติ (ผู้ใช้ 13/11/2569 "ขอเลื่อนได้แต่ต้องเป็นลายลักษณ์อักษร กันข้อครหา")
+          // เหตุผลบันทึกในคอมเมนต์ของงาน (แท็ก CEO) + ประวัติการเลื่อนเหมือนคำขอปกติ
+          else approverIds = users.filter((u) => u.isCeo && u.id !== requesterId).map((u) => u.id);
         }
         useNotificationStore
           .getState()
