@@ -173,8 +173,14 @@ export const MODEL_PRICES_USD: Record<string, { input: number; output: number; l
 export const THB_PER_USD = 36;
 
 export interface BriefUsageMonth {
+  /** ยอดที่ใช้ตัดสินเพดาน = ค่าที่สูงกว่าระหว่างยอดที่ระบบนับเอง กับยอดจริงจาก OpenAI (แปลงเป็นบาท) */
   thb: number;
   calls: number;
+  /** ยอดที่ระบบนับเอง (token จริงที่ OpenAI ตอบมา × ตารางราคา) */
+  trackedThb?: number;
+  /** ยอดจริงจาก OpenAI (Costs API) — ไม่มี = ยังไม่ได้ตั้ง admin key / ยังไม่เคยดึง */
+  actualUsd?: number;
+  actualSyncedAt?: string;
 }
 
 /** สิ่งที่ API ส่งให้การ์ด */
@@ -189,7 +195,7 @@ export interface BossBriefView {
   /** สรุปที่กำลังดูแบบเต็ม (ตาม ?briefId= หรืออันล่าสุด) */
   current?: BossBrief | null;
   /** capThb = เพดานที่ใช้จริง (ที่ตั้ง ไม่เกินเพดานของแพ็กเกจ) · planMaxThb = สูงสุดที่แพ็กเกจให้ตั้งได้ */
-  usage: { month: string; thb: number; calls: number; capThb: number; planMaxThb?: number };
+  usage: { month: string; thb: number; calls: number; capThb: number; planMaxThb?: number; trackedThb?: number; actualUsd?: number; actualSyncedAt?: string };
   generating: boolean;
   /** สรุปรวมหลายวันของห้องนี้ที่เคยสั่งไว้ (ใหม่สุดก่อน) — เปิดดูซ้ำได้ไม่เสียเงิน */
   ranges: BossBrief[];

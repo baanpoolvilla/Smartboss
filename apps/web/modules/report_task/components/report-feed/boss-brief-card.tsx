@@ -579,6 +579,18 @@ function SettingsPanel({
           <span>เดือนนี้ใช้ไป <b className="text-[18px] tabular-nums">฿{baht(view.usage.thb)}</b> <span className="text-xs text-[var(--ink-soft)]">({view.usage.calls} ครั้ง)</span></span>
           <span className="text-xs tabular-nums text-[var(--ink-soft)]">เพดาน ฿{view.usage.capThb.toLocaleString("th-TH")}</span>
         </div>
+        {/* ยอดจริงจาก OpenAI (13/11/2569 "อยากได้ตัวเลขจริง") — เพดานยึดค่าที่สูงกว่าระหว่างยอดจริงกับยอดที่ระบบนับเอง */}
+        <div className="grid gap-0.5 rounded-md bg-[var(--bg-soft)] px-2.5 py-1.5 text-[11.5px] text-[var(--ink-soft)]">
+          {view.usage.actualUsd !== undefined ? (
+            <span>
+              ยอดจริงจาก OpenAI: <b className="tabular-nums text-[var(--ink)]">${view.usage.actualUsd.toFixed(2)}</b> (≈ ฿{baht(view.usage.actualUsd * 36)}) · อัปเดต{" "}
+              {new Date(view.usage.actualSyncedAt!).toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+            </span>
+          ) : (
+            <span>ยอดจริงจาก OpenAI: ยังไม่ได้เชื่อม (ผู้ให้บริการตั้งค่า)</span>
+          )}
+          <span>ระบบนับเอง (รวมวันนี้): <b className="tabular-nums text-[var(--ink)]">฿{baht(view.usage.trackedThb ?? view.usage.thb)}</b> · เพดานใช้ตัวเลขที่สูงกว่า</span>
+        </div>
         <span className="block h-2 overflow-hidden rounded-full bg-[var(--line)]">
           <span className="block h-full rounded-full" style={{ width: `${Math.max(pct, 2)}%`, background: pct >= 90 ? DOT.red : pct >= 70 ? DOT.yellow : "var(--brand-navy)" }} />
         </span>

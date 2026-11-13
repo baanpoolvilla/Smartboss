@@ -8,6 +8,7 @@ import { claimSweep, releaseSweep } from "@/modules/report_task/lib/server/sweep
 import { getOrgPlan, planAtLeast, type PlanCode } from "@/modules/report_task/lib/plan";
 import { askCompany } from "./company-ai";
 import { withAiLock, worstCaseThb } from "./ai-budget";
+import { aiClientFor, readActualCost, syncActualCost } from "./ai-billing";
 import { readStoredBytes } from "@/lib/storage";
 import { splitReportTopics } from "@/modules/report_task/lib/report-format";
 import { attributePostToRound, effectiveRoundsOf, roundRunsOnDay } from "@/modules/report_task/lib/submission-rounds";
@@ -107,9 +108,17 @@ export async function saveBriefSettings(orgId: string, patch: Partial<BossBriefS
   throw new Error("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง");
 }
 
+/** ยอดใช้เดือนนี้ — เพดานยึด "ค่าที่สูงกว่า" ระหว่างยอดที่นับเองกับยอดจริงจาก OpenAI (ai-billing.ts) */
 export async function readUsage(orgId: string, month: string): Promise<BriefUsageMonth> {
-  const { data } = await readStore<Record<string, BriefUsageMonth>>(orgId, USAGE_KEY);
-  return data?.[month] ?? { thb: 0, calls: 0 };
+  const [{ data }, actual] = await Promise.all([readStore<Record<string, BriefUsageMonth>>(orgId, USAGE_KEY), readActualCost(orgId, month)]);
+  const tracked = data?.[month] ?? { thb: 0, calls: 0 };
+  const actualThb = actual ? actual.usd * THB_PER_USD : 0;
+  return {
+    thb: Math.max(tracked.thb, actualThb),
+    calls: tracked.calls,
+    trackedThb: tracked.thb,
+    ...(actual ? { actualUsd: actual.usd, actualSyncedAt: actual.syncedAt } : {}),
+  };
 }
 
 export async function addUsage(orgId: string, month: string, thb: number): Promise<void> {
@@ -193,10 +202,9 @@ export function costThb(model: string, usage: { prompt_tokens?: number; completi
   return (((usage?.prompt_tokens ?? 0) * p.input + (usage?.completion_tokens ?? 0) * p.output) / 1_000_000) * THB_PER_USD;
 }
 
-function openai(): OpenAI {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error("OPENAI_API_KEY ยังไม่ได้ตั้งค่า");
-  return new OpenAI({ apiKey });
+/** client ของบริษัทนี้ — คีย์/Project แยกต่อบริษัทได้ (ai-billing.ts) */
+async function openai(orgId: string): Promise<OpenAI> {
+  return aiClientFor(orgId);
 }
 
 const postText = (p: ReportPost) =>
@@ -317,7 +325,7 @@ ${kind === "range" ? "people หนึ่งรายการต่อคน �
   const MAX_OUT = 8000;
   if (worstCaseThb(MODEL_PRICES_USD[settings.detailModel] ?? MODEL_PRICES_USD["gpt-6-sol"]!, prompt.length, MAX_OUT, THB_PER_USD) > budgetLeft) return "cap";
   try {
-    const res = await openai().chat.completions.create({
+    const res = await (await openai(orgId)).chat.completions.create({
       model: settings.detailModel,
       response_format: { type: "json_object" },
       max_completion_tokens: MAX_OUT,
@@ -471,7 +479,7 @@ async function buildBrief(
       return;
     }
     try {
-      const res = await openai().chat.completions.create({
+      const res = await (await openai(orgId)).chat.completions.create({
         model: settings.summaryModel,
         response_format: { type: "json_object" },
         max_completion_tokens: 6000,
@@ -688,6 +696,8 @@ export async function runBossBriefAllOrgs(now = new Date()) {
     try {
       // ย่อสรุปเก่ากว่า 12 เดือน — วันละครั้งต่อบริษัท (ไม่เรียก AI)
       if (claimSweep("boss-brief-compact", id, 12 * 3_600_000)) await compactOldBriefs(id).catch((e) => console.error("[cron] boss-brief compact", id, e));
+      // ยอดจริงจาก OpenAI ทุก 3 ชม. (ต้องมี OPENAI_ADMIN_KEY + projectId) — ไม่มี = ข้ามเงียบ ๆ
+      if (claimSweep("boss-brief-cost-sync", id, 3 * 3_600_000)) await syncActualCost(id, now).catch((e) => console.error("[cron] ai cost sync", id, e));
       const r = await runBossBriefSweep(id, now);
       out.made += r.made;
       out.updated += r.updated;
@@ -732,7 +742,11 @@ export async function briefViewFor(orgId: string, topicId: string, isBoss: boole
   const rangePending = [...jobs.running].filter((k) => k.startsWith(prefix)).map(strip);
   const rangeFailed = [...jobs.failed.entries()].filter(([k, f]) => k.startsWith(prefix) && Date.now() - f.at < 10 * 60_000).map(([k, f]) => ({ id: strip(k), error: f.error }));
   const { cap, planMax } = await effectiveCap(orgId, settings);
-  return { allowed: true, settings, roundsWithTopics, briefs, current: curFull, usage: { month, thb: usage.thb, calls: usage.calls, capThb: cap, planMaxThb: planMax }, generating: false, ranges: ranges.map(lightOf), rangePending, rangeFailed };
+  return {
+    allowed: true, settings, roundsWithTopics, briefs, current: curFull,
+    usage: { month, thb: usage.thb, calls: usage.calls, capThb: cap, planMaxThb: planMax, trackedThb: usage.trackedThb, actualUsd: usage.actualUsd, actualSyncedAt: usage.actualSyncedAt },
+    generating: false, ranges: ranges.map(lightOf), rangePending, rangeFailed,
+  };
 }
 
 /**
@@ -926,7 +940,7 @@ async function readReportImages(orgId: string, posts: ReportPost[], settings: Bo
     const worst = worstCaseThb(MODEL_PRICES_USD[settings.summaryModel] ?? MODEL_PRICES_USD["gpt-6-sol"]!, 1500 * 1.2 * todo.length + 800, 2500, THB_PER_USD);
     if (todo.length && cost + worst <= budgetLeft) {
       try {
-        const res = await openai().responses.create({
+        const res = await (await openai(orgId)).responses.create({
           model: settings.summaryModel,
           input: [
             {

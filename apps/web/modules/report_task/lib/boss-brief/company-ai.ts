@@ -9,6 +9,7 @@ import { withRequestsTenant } from "@/modules/requests/lib/db";
 import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import type { BossBrief } from "./types";
 import { listBriefs, readImageTextStore } from "./server";
+import { aiClientFor } from "./ai-billing";
 
 /**
  * ผู้ช่วย AI ที่รู้ข้อมูลทั้งบริษัท — เฉพาะ Boss (13/11/2569)
@@ -451,9 +452,8 @@ export async function askCompany(opts: {
   budgetThb?: number;
   costOf: (model: string, usage: { prompt_tokens?: number; completion_tokens?: number } | undefined) => number;
 }): Promise<{ answer: string; costThb: number; tools: string[] }> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error("OPENAI_API_KEY ยังไม่ได้ตั้งค่า");
-  const client = new OpenAI({ apiKey });
+  // คีย์/Project ของบริษัทนี้ (แยกบิลต่อบริษัทได้ — ai-billing.ts)
+  const client = await aiClientFor(opts.orgId);
   const users = await prisma.user.findMany({ where: { orgId: opts.orgId }, select: { id: true, name: true, isActive: true, department: { select: { name: true } } } });
   const ctx: Ctx = {
     orgId: opts.orgId,
