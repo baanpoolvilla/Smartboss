@@ -142,7 +142,7 @@ export default async function WorkOrdersPage({
       // บอร์ด: ไม่มีชื่อหน้ากลางแถบ ตัวกรองผู้รับผิดชอบขึ้นไปอยู่ซ้ายของแถบหัว แบบบอร์ดงาน (ผู้ใช้ 2/11/2569)
       // โหมดกรอง (งานวันนี้/งานด่วน/ยังไม่บันทึกค่าใช้จ่าย) ยังมีชื่อหน้าบอกว่ากรองอะไรอยู่
       hideTitle={!isFilterMode && hasRows}
-      leading={!isFilterMode && hasRows ? <div id="wo-board-toolbar" className="flex min-w-0 items-center" /> : undefined}
+      leading={!isFilterMode && hasRows ? <div id="wo-board-toolbar" className="flex min-w-0 flex-1 items-center" /> : undefined}
       fill
       actions={
         isFilterMode ? <ClearFilterLink href="/maintenance/work-orders" /> : null

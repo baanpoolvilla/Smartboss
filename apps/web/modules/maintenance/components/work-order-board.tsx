@@ -952,11 +952,11 @@ export function WorkOrderBoard({
     setSearchOpen(false);
   };
   const searchActive = searchOpen || !!query;
-  // มือถือ: แถบหัวแคบ ช่องค้นหาไปเบียดตัวกรองจนชิดกันหมด (ผู้ใช้ 13/11/2569) — บนหัวคงเป็นไอคอน กดแล้วช่องค้นหาลงมาเป็นแถวเต็มกว้างใต้หัว
+  // มือถือ: แถบหัวแคบ ช่องค้นหาไปเบียดตัวกรองจนชิดกันหมด (ผู้ใช้ 13/11/2569) — บนหัวเป็นไอคอน กดแล้วช่องค้นหาขึ้นแทนตัวกรองเต็มแถบหัว
   const searchInput = (wide: boolean) => (
       <label
         className={`relative inline-flex min-w-0 items-center rounded-(--radius) border border-(--brand-navy) bg-(--bg) pl-2 pr-7 ${
-          wide ? "h-10 w-full text-sm" : "h-8 w-36 shrink text-[13px] sm:w-52 lg:h-9 lg:text-sm"
+          wide ? "h-9 w-full text-sm" : "h-8 w-36 shrink text-[13px] sm:w-52 lg:h-9 lg:text-sm"
         }`}
       >
         <Search className="mr-1.5 h-3.5 w-3.5 shrink-0 text-(--ink-soft)" aria-hidden="true" />
@@ -991,14 +991,9 @@ export function WorkOrderBoard({
         type="button"
         data-testid="wo-board-search-open"
         aria-label="ค้นหาใบงาน"
-        aria-pressed={isMobile ? searchActive : undefined}
         title="ค้นหาใบงาน"
-        onClick={() => (isMobile && searchActive ? closeSearch() : setSearchOpen(true))}
-        className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius) border lg:h-9 lg:w-9 ${
-          isMobile && searchActive
-            ? "border-(--brand-navy) bg-(--brand-navy) text-white"
-            : "border-(--line) bg-(--bg) text-(--ink-soft) hover:text-(--ink)"
-        }`}
+        onClick={() => setSearchOpen(true)}
+        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius) border border-(--line) bg-(--bg) text-(--ink-soft) hover:text-(--ink) lg:h-9 lg:w-9"
       >
         <Search className="h-4 w-4" />
       </button>
@@ -1030,17 +1025,21 @@ export function WorkOrderBoard({
     <div className="flex h-full flex-col">
       {toolbarSlot &&
         createPortal(
-          <div className="flex min-w-0 items-center gap-2">
-            {personFilter}
-            {houseSelect}
-            {sortSelect}
-            {searchBox}
-          </div>,
+          isMobile && searchActive ? (
+            // มือถือ: ช่องค้นหาขึ้นแทนตัวกรองบนแถบหัวชั่วคราว (ผู้ใช้ 13/11/2569 เลือกแบบ ก) — กด ✕ ตัวกรองกลับมา
+            <div className="flex w-full min-w-0 items-center">{searchInput(true)}</div>
+          ) : (
+            <div className="flex min-w-0 items-center gap-2">
+              {personFilter}
+              {houseSelect}
+              {sortSelect}
+              {searchBox}
+            </div>
+          ),
           toolbarSlot,
         )}
       {/* ─── มือถือ: แท็บ 4 สถานะ ─── */}
       <div className="flex min-h-0 flex-1 flex-col lg:hidden">
-        {isMobile && searchActive && <div className="shrink-0 px-3 pt-3">{searchInput(true)}</div>}
         <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-(--line)">
           {columns.map((c, i) => (
             <button
