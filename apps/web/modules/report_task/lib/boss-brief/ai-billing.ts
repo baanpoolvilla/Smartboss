@@ -1,6 +1,6 @@
 import "server-only";
 import OpenAI from "openai";
-import { openField } from "@smartboss/database/field-crypto";
+import { openField, sealField, fieldEncryptionConfigured } from "@smartboss/database/field-crypto";
 import { createStoreIfAbsent, readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
 
 /**
@@ -72,4 +72,67 @@ export async function syncActualCost(orgId: string, now = new Date()): Promise<A
     if (w.ok) break;
   }
   return out;
+}
+
+/**
+ * หน้าตั้งค่า AI (15/11/2569) — ส่วนของผู้ให้บริการ (SUPER_ADMIN): ดูว่าบริษัทนี้ใช้คีย์ไหน ตั้ง/ล้างคีย์+Project ของบริษัทเอง ทดสอบการเชื่อมต่อ
+ * ไม่ส่งคีย์กลับหน้าจอเด็ดขาด — ส่งแค่ 4 ตัวท้าย
+ */
+export type AiBillingStatus = {
+  source: "org" | "platform-brief" | "platform-main" | "none";
+  projectId: string | null;
+  orgProjectId: string | null;
+  orgKeyHint: string | null;
+  adminKey: boolean;
+};
+
+export async function billingStatus(orgId: string): Promise<AiBillingStatus> {
+  const cfg = (await orgConfig(orgId)) as OrgAiConfig & { keyHint?: string };
+  const source = cfg.apiKeySealed ? "org" : process.env.OPENAI_BRIEF_API_KEY ? "platform-brief" : process.env.OPENAI_API_KEY ? "platform-main" : "none";
+  return {
+    source,
+    projectId: await projectIdFor(orgId),
+    orgProjectId: cfg.projectId || null,
+    orgKeyHint: cfg.apiKeySealed ? cfg.keyHint ?? "••••" : null,
+    adminKey: !!process.env.OPENAI_ADMIN_KEY,
+  };
+}
+
+/** apiKey: undefined = คงเดิม · "" กับ clearKey = ล้างคีย์ของบริษัท (กลับไปใช้คีย์กลาง) */
+export async function saveOrgBilling(orgId: string, patch: { projectId?: string; apiKey?: string; clearKey?: boolean }): Promise<void> {
+  if (patch.apiKey && !fieldEncryptionConfigured()) throw new Error("เซิร์ฟเวอร์ยังไม่ได้ตั้งกุญแจเข้ารหัส (FIELD_ENCRYPTION_KEY) — เก็บคีย์ไม่ได้");
+  for (let i = 0; i < 3; i++) {
+    const { data, version } = await readStore<OrgAiConfig & { keyHint?: string }>(orgId, "ai-billing");
+    const next: OrgAiConfig & { keyHint?: string } = { ...(data ?? {}) };
+    if (patch.projectId !== undefined) {
+      const p = patch.projectId.trim();
+      if (p && !/^proj_[A-Za-z0-9]{4,64}$/.test(p)) throw new Error("Project ID ต้องขึ้นต้นด้วย proj_");
+      if (p) next.projectId = p;
+      else delete next.projectId;
+    }
+    if (patch.clearKey) {
+      delete next.apiKeySealed;
+      delete next.keyHint;
+    } else if (patch.apiKey && patch.apiKey.trim()) {
+      const k = patch.apiKey.trim();
+      if (!/^sk-[A-Za-z0-9_\-]{20,}$/.test(k)) throw new Error("คีย์ไม่ถูกรูปแบบ (ต้องขึ้นต้นด้วย sk-)");
+      next.apiKeySealed = sealField(k);
+      next.keyHint = k.slice(-4);
+    }
+    const w = version === 0 ? await createStoreIfAbsent(orgId, "ai-billing", next) : await writeStore(orgId, "ai-billing", next, version);
+    if (w.ok) return;
+  }
+  throw new Error("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง");
+}
+
+/** ทดสอบคีย์ที่บริษัทนี้ใช้อยู่ — ขอรายชื่อรุ่น (ไม่เสียเงิน) */
+export async function testAiConnection(orgId: string): Promise<{ ok: boolean; message: string }> {
+  try {
+    const client = await aiClientFor(orgId);
+    await client.models.list();
+    return { ok: true, message: "เชื่อมต่อ OpenAI ได้" };
+  } catch (e) {
+    const status = (e as { status?: number }).status;
+    return { ok: false, message: status === 401 ? "คีย์ใช้ไม่ได้ (401)" : `เชื่อมต่อไม่ได้: ${(e as Error).message.slice(0, 150)}` };
+  }
 }

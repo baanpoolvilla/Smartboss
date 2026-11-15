@@ -144,6 +144,8 @@ export interface BossBriefSettings {
   detailModel: string;
   /** 2 = ตั้งค่าหลัง 13/11/2569 ที่เปลี่ยนรุ่นเริ่มต้นเป็น terra — ไม่มี/น้อยกว่า = ใช้รุ่นเริ่มต้นใหม่แทนค่าเก่าที่บันทึกไว้ */
   modelVersion?: number;
+  /** ตุ๊กตาผู้ช่วย AI มุมซ้ายล่างทุกหน้า (น้อง SmartBoss) — ไม่มีค่า = เปิด (15/11/2569 หน้าตั้งค่า AI) */
+  assistantEnabled?: boolean;
 }
 
 export const DEFAULT_BRIEF_SETTINGS: BossBriefSettings = {
@@ -172,6 +174,17 @@ export const MODEL_PRICES_USD: Record<string, { input: number; output: number; l
 };
 export const THB_PER_USD = 36;
 
+/** ใช้เงินกับอะไร — แยกให้เห็นในหน้าตั้งค่า AI */
+export type AiUsageKind = "summary" | "ask" | "range" | "image";
+export const AI_USAGE_LABEL: Record<AiUsageKind, string> = { summary: "สรุปหลังปิดรอบ", ask: "ถาม AI", range: "สรุปรวมหลายวัน", image: "อ่านรูปในรายงาน" };
+/** ประวัติการเรียก AI ล่าสุด (เก็บ 200 รายการ) */
+export interface AiUsageLog {
+  at: string;
+  kind: AiUsageKind;
+  thb: number;
+  model?: string;
+}
+
 export interface BriefUsageMonth {
   /** ยอดที่ใช้ตัดสินเพดาน = ค่าที่สูงกว่าระหว่างยอดที่ระบบนับเอง กับยอดจริงจาก OpenAI (แปลงเป็นบาท) */
   thb: number;
@@ -181,6 +194,9 @@ export interface BriefUsageMonth {
   /** ยอดจริงจาก OpenAI (Costs API) — ไม่มี = ยังไม่ได้ตั้ง admin key / ยังไม่เคยดึง */
   actualUsd?: number;
   actualSyncedAt?: string;
+  /** แยกตามประเภท และรายวัน (YYYY-MM-DD → บาท) */
+  byKind?: Partial<Record<AiUsageKind, number>>;
+  byDay?: Record<string, number>;
 }
 
 /** สิ่งที่ API ส่งให้การ์ด */

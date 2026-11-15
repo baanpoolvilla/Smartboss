@@ -629,6 +629,8 @@ function SettingsPanel({
       </div>
 
       <div className="flex items-center justify-end gap-2">
+        {/* 15/11/2569 หน้าตั้งค่า AI รวมทุกอย่าง (ห้องทั้งหมด ใช้เงินแยกประเภท/รายวัน ประวัติ ผู้ช่วย) */}
+        <a href="/ai-settings" className="mr-auto text-xs font-medium text-[var(--brand-navy)] hover:underline">ตั้งค่า AI ทั้งหมด ›</a>
         <button type="button" onClick={close} className="rounded-full px-3 py-1.5 text-xs text-[var(--ink-soft)] hover:text-[var(--ink)]">ยกเลิก</button>
         <button type="button" disabled={busy || !dirty} onClick={async () => { const r = await post({ action: "settings", monthlyCapThb: Math.min(capNum, planMax), detailModel: sum, askModel: ask }); if (r) { toast.success("บันทึกแล้ว"); close(); } }}
           className="rounded-full bg-[var(--brand-navy)] px-4 py-1.5 text-xs font-medium text-white disabled:opacity-50">บันทึก</button>

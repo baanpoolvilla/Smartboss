@@ -29,6 +29,8 @@ import {
   type BriefItem,
   type BriefKind,
   type BriefUsageMonth,
+  type AiUsageKind,
+  type AiUsageLog,
   estimateThb,
 } from "./types";
 
@@ -101,6 +103,7 @@ export async function saveBriefSettings(orgId: string, patch: Partial<BossBriefS
       askModel: patch.askModel && MODEL_PRICES_USD[patch.askModel] ? patch.askModel : cur.askModel,
       detailModel: patch.detailModel && MODEL_PRICES_USD[patch.detailModel] ? patch.detailModel : cur.detailModel,
       modelVersion: 2,
+      assistantEnabled: typeof patch.assistantEnabled === "boolean" ? patch.assistantEnabled : cur.assistantEnabled,
     };
     const w = version === 0 ? await createStoreIfAbsent(orgId, SETTINGS_KEY, next) : await writeStore(orgId, SETTINGS_KEY, next, version);
     if (w.ok) return next;
@@ -117,19 +120,39 @@ export async function readUsage(orgId: string, month: string): Promise<BriefUsag
     thb: Math.max(tracked.thb, actualThb),
     calls: tracked.calls,
     trackedThb: tracked.thb,
+    byKind: tracked.byKind,
+    byDay: tracked.byDay,
     ...(actual ? { actualUsd: actual.usd, actualSyncedAt: actual.syncedAt } : {}),
   };
 }
 
-export async function addUsage(orgId: string, month: string, thb: number): Promise<void> {
+const r4 = (n: number) => Math.round(n * 10000) / 10000;
+const USAGE_LOG_KEY = "boss-brief-usage-log";
+export async function addUsage(orgId: string, month: string, thb: number, kind: AiUsageKind = "summary", model?: string): Promise<void> {
+  const day = localDateStr(new Date());
   for (let i = 0; i < 5; i++) {
     const { data, version } = await readStore<Record<string, BriefUsageMonth>>(orgId, USAGE_KEY);
     const all = { ...(data ?? {}) };
     const cur = all[month] ?? { thb: 0, calls: 0 };
-    all[month] = { thb: Math.round((cur.thb + thb) * 10000) / 10000, calls: cur.calls + 1 };
+    all[month] = {
+      thb: r4(cur.thb + thb),
+      calls: cur.calls + 1,
+      byKind: { ...(cur.byKind ?? {}), [kind]: r4((cur.byKind?.[kind] ?? 0) + thb) },
+      byDay: { ...(cur.byDay ?? {}), [day]: r4((cur.byDay?.[day] ?? 0) + thb) },
+    };
     const w = version === 0 ? await createStoreIfAbsent(orgId, USAGE_KEY, all) : await writeStore(orgId, USAGE_KEY, all, version);
-    if (w.ok) return;
+    if (w.ok) break;
   }
+  // ประวัติล่าสุด 200 รายการ — ไว้ดูในหน้าตั้งค่า AI ว่าเงินออกตอนไหน กับอะไร
+  for (let i = 0; i < 3; i++) {
+    const { data, version } = await readStore<AiUsageLog[]>(orgId, USAGE_LOG_KEY);
+    const next = [{ at: new Date().toISOString(), kind, thb: r4(thb), ...(model ? { model } : {}) }, ...(data ?? [])].slice(0, 200);
+    const w = version === 0 ? await createStoreIfAbsent(orgId, USAGE_LOG_KEY, next) : await writeStore(orgId, USAGE_LOG_KEY, next, version);
+    if (w.ok) break;
+  }
+}
+export async function readUsageLog(orgId: string): Promise<AiUsageLog[]> {
+  return (await readStore<AiUsageLog[]>(orgId, USAGE_LOG_KEY)).data ?? [];
 }
 
 /*
@@ -332,7 +355,7 @@ ${kind === "range" ? "people หนึ่งรายการต่อคน �
       messages: [{ role: "user", content: prompt }],
     });
     const cost = costThb(settings.detailModel, res.usage);
-    await addUsage(orgId, monthOf(day), cost);
+    await addUsage(orgId, monthOf(day), cost, kind === "range" ? "range" : "summary", settings.detailModel);
     const out = JSON.parse(res.choices[0]?.message?.content ?? "{}") as Record<string, unknown>;
     const arr = (k: string) => (Array.isArray(out[k]) ? (out[k] as Record<string, unknown>[]) : []);
     const postOf = (ref: unknown, mustBeNow = false) => {
@@ -503,7 +526,7 @@ async function buildBrief(
         if (p.oneLine) oneLine.set(p.id, String(p.oneLine).slice(0, 160));
         for (const s of p.shorts ?? []) if (s && typeof s.short === "string") shorts.set(`${p.id}|${s.i}`, s.short.slice(0, 200));
       }
-      await addUsage(orgId, monthOf(day), legacyCost);
+      await addUsage(orgId, monthOf(day), legacyCost, "summary", settings.summaryModel);
     } catch (e) {
       console.error("[boss-brief] AI", orgId, e instanceof Error ? e.message : e);
       aiSkipped = "error";
@@ -769,7 +792,7 @@ export async function askBrief(orgId: string, briefId: string, question: string)
   if (leftNow < estimateThb(settings.askModel, "ask")) return { ok: false as const, error: `ใกล้ครบเพดาน ฿${cap} ของเดือนนี้แล้ว` };
   try {
     const r = await askCompany({ orgId, question: q, model: settings.askModel, brief, history: brief.qa, costOf: costThb, budgetThb: leftNow });
-    await addUsage(orgId, monthOf(today), r.costThb);
+    await addUsage(orgId, monthOf(today), r.costThb, "ask", settings.askModel);
     console.log("[boss-brief] ask", orgId, `฿${r.costThb.toFixed(2)}`, r.tools.join(","));
     // อ่านล่าสุดอีกรอบก่อนต่อท้าย (รอบตรวจอาจสรุปใหม่ระหว่าง AI กำลังตอบ) — แถวเดียว ไม่ต้องเขียนทั้งก้อนแล้ว
     const cur = (await getBrief(orgId, briefId)) ?? brief;
@@ -971,7 +994,7 @@ async function readReportImages(orgId: string, posts: ReportPost[], settings: Bo
     if (parts.length) out.set(p.id, parts.join("\n---\n"));
   }
   if (Object.keys(fresh).length) {
-    await addUsage(orgId, monthOf(localDateStr(new Date())), cost);
+    await addUsage(orgId, monthOf(localDateStr(new Date())), cost, "image", settings.summaryModel);
     // เก็บข้อความ (ตัดของเก่ากว่า 400 วันทิ้ง) — compare-and-swap กันเขียนทับกัน
     const oldest = new Date(Date.now() - 400 * 86_400_000).toISOString();
     for (let i = 0; i < 5; i++) {

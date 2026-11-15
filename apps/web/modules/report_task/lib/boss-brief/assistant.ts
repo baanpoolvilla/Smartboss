@@ -28,6 +28,7 @@ export async function assistantView(orgId: string, userId: string, isBoss: boole
   const none: AssistantView = { allowed: false, messages: [], usage: { thb: 0, capThb: 0 } };
   if (!isBoss || !planAtLeast(await getOrgPlan(orgId), "PRO")) return none;
   const settings = await readBriefSettings(orgId);
+  if (settings.assistantEnabled === false) return none;
   const [{ data }, usage, { cap }] = await Promise.all([readStore<Chat>(orgId, keyOf(userId)), readUsage(orgId, localDateStr(new Date()).slice(0, 7)), effectiveCap(orgId, settings)]);
   return { allowed: true, messages: data?.messages ?? [], usage: { thb: usage.thb, capThb: cap } };
 }
@@ -42,17 +43,18 @@ export async function askAssistant(
   const q = question.trim().slice(0, 800);
   if (!q) return { ok: false, error: "พิมพ์คำถามก่อน" };
   const settings = await readBriefSettings(orgId);
+  if (settings.assistantEnabled === false) return { ok: false, error: "ปิดผู้ช่วย AI ไว้ (เปิดได้ที่หน้าตั้งค่า AI)" };
   const month = localDateStr(new Date()).slice(0, 7);
   const usage = await readUsage(orgId, month);
   const { cap } = await effectiveCap(orgId, settings);
-  if (usage.thb + estimateThb(settings.askModel, "ask") > cap) return { ok: false, error: `ใกล้ครบเพดาน ฿${cap} ของเดือนนี้แล้ว (ตั้งเพิ่มได้ที่ตั้งค่าสรุปในห้องรายงาน)` };
+  if (usage.thb + estimateThb(settings.askModel, "ask") > cap) return { ok: false, error: `ใกล้ครบเพดาน ฿${cap} ของเดือนนี้แล้ว (ตั้งเพิ่มได้ที่หน้าตั้งค่า AI)` };
   const { data } = await readStore<Chat>(orgId, keyOf(userId));
   return withAiLock(orgId, async () => {
   const leftNow = cap - (await readUsage(orgId, month)).thb;
-  if (leftNow < estimateThb(settings.askModel, "ask")) return { ok: false as const, error: `ใกล้ครบเพดาน ฿${cap} ของเดือนนี้แล้ว (ตั้งเพิ่มได้ที่ตั้งค่าสรุปในห้องรายงาน)` };
+  if (leftNow < estimateThb(settings.askModel, "ask")) return { ok: false as const, error: `ใกล้ครบเพดาน ฿${cap} ของเดือนนี้แล้ว (ตั้งเพิ่มได้ที่หน้าตั้งค่า AI)` };
   try {
     const r = await askCompany({ orgId, question: q, model: settings.askModel, brief: null, history: data?.messages ?? [], pages, currentPath: currentPath.slice(0, 200), costOf: costThb, budgetThb: leftNow });
-    await addUsage(orgId, month, r.costThb);
+    await addUsage(orgId, month, r.costThb, "ask", settings.askModel);
     const msg: BriefQa = { at: new Date().toISOString(), q, a: r.answer, costThb: r.costThb, sources: [...new Set(r.tools)] };
     for (let i = 0; i < 5; i++) {
       const cur = await readStore<Chat>(orgId, keyOf(userId));

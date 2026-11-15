@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Send, Trash2, X } from "lucide-react";
+import Link from "next/link";
+import { Send, Settings2, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { AiText } from "@/modules/report_task/components/report-feed/ai-text";
 import { SOURCE_LABEL, type BriefQa } from "@/modules/report_task/lib/boss-brief/types";
@@ -139,6 +140,9 @@ export function AiAssistant() {
                 <Trash2 className="h-4 w-4" />
               </button>
             )}
+            <Link href="/ai-settings" onClick={() => setOpen(false)} aria-label="ตั้งค่า AI" title="ตั้งค่า AI" className="rounded-full p-1.5 text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)]">
+              <Settings2 className="h-4 w-4" />
+            </Link>
             <button type="button" onClick={() => setOpen(false)} aria-label="ปิด" className="rounded-full p-1.5 text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)]">
               <X className="h-5 w-5" />
             </button>
