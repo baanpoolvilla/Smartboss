@@ -2,6 +2,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import * as Y from "yjs";
 import { prisma } from "@smartboss/database";
+import { crossOrg } from "@smartboss/database/cross-org";
 
 import { publishToUsers } from "@/lib/realtime/server";
 import { readStore } from "@/modules/report_task/lib/db/org-store";
@@ -669,11 +670,14 @@ export async function runNotesMaintenance(): Promise<{ compacted: number; versio
       }
     });
   }
-  const quiet = await prisma.reportNotePage.findMany({
-    where: { deletedAt: null, lastEditAt: { lt: new Date(Date.now() - NOTE_LIMITS.versionGapMs) }, NOT: { sessionEditors: { isEmpty: true } } },
-    select: { id: true, orgId: true, title: true, sessionEditors: true },
-    take: 200,
-  });
+  // งาน cron วิ่งข้ามทุกบริษัท — แต่ละแถว resolve orgId ของตัวเองต่อ (loadDoc/saveVersion รับ p.orgId)
+  const quiet = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.reportNotePage.findMany({
+      where: { deletedAt: null, lastEditAt: { lt: new Date(Date.now() - NOTE_LIMITS.versionGapMs) }, NOT: { sessionEditors: { isEmpty: true } } },
+      select: { id: true, orgId: true, title: true, sessionEditors: true },
+      take: 200,
+    }),
+  );
   for (const p of quiet) {
     await withPageLock(p.id, async () => {
       const c = await loadDoc(p.id, p.orgId).catch(() => null);
@@ -684,9 +688,14 @@ export async function runNotesMaintenance(): Promise<{ compacted: number; versio
     });
   }
   const cutoff = new Date(Date.now() - NOTE_LIMITS.trashDays * 24 * 3600_000);
-  const purge = await prisma.reportNotePage.findMany({ where: { deletedAt: { lt: cutoff } }, select: { id: true }, take: 500 });
+  // ลบถาวรของในถังขยะเกินกำหนด — ทั้งระบบในรอบเดียว (ตั้งใจข้ามบริษัท)
+  const purge = await crossOrg("cron:platform-job-resolves-org-per-row", () =>
+    prisma.reportNotePage.findMany({ where: { deletedAt: { lt: cutoff } }, select: { id: true }, take: 500 }),
+  );
   for (const p of purge) docs.delete(p.id);
-  const purged = purge.length ? (await prisma.reportNotePage.deleteMany({ where: { id: { in: purge.map((p) => p.id) } } })).count : 0;
-  await prisma.reportNoteSection.deleteMany({ where: { deletedAt: { lt: cutoff } } });
+  const purged = purge.length
+    ? (await crossOrg("cron:platform-job-resolves-org-per-row", () => prisma.reportNotePage.deleteMany({ where: { id: { in: purge.map((p) => p.id) } } }))).count
+    : 0;
+  await crossOrg("cron:platform-job-resolves-org-per-row", () => prisma.reportNoteSection.deleteMany({ where: { deletedAt: { lt: cutoff } } }));
   return { compacted, versioned, purged };
 }

@@ -1071,6 +1071,28 @@ export const OPERATIONAL_ROUTES: readonly Omit<RouteDefinition, 'response'>[] = 
     successStatus: 201,
   },
   {
+    operationId: 'setTypeMonthlyQuota_post',
+    method: 'post',
+    path: '/leave-types/{leaveTypeId}/monthly-quota',
+    summary: 'POST /leave-types/{leaveTypeId}/monthly-quota',
+    tag: 'workflow',
+    // วัน/เดือนของประเภทลา (สิทธิ์วันหยุดต่อเดือนทั้งบริษัท · 0 = ไม่จำกัด)
+    permissions: ['workforce.leave.manage'] as Permission[],
+    idempotent: true,
+    successStatus: 200,
+  },
+  {
+    operationId: 'addPersonGrant_post',
+    method: 'post',
+    path: '/leave-types/{leaveTypeId}/person-grants',
+    summary: 'POST /leave-types/{leaveTypeId}/person-grants',
+    tag: 'workflow',
+    // HR เพิ่มวัน Holiday ให้คนหนึ่งเป็นสิทธิ์ของเดือนหนึ่ง
+    permissions: ['workforce.leave.manage'] as Permission[],
+    idempotent: true,
+    successStatus: 201,
+  },
+  {
     operationId: 'archiveType_post',
     method: 'post',
     path: '/leave-types/{leaveTypeId}/archive',

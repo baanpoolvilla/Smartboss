@@ -48,6 +48,31 @@ export const TENANT_SCOPED_MODELS = new Set<string>([
   "AdsAiReport", "AdsAiAction", "AdsSyncLog",
   // requests (เบิกจ่าย & OT) — มี RLS ของตัวเองด้วย ชั้นนี้เป็นตัวเตือนเพิ่ม
   "MoneyRequest", "MoneyRequestPayment", "MoneyRequestEvent", "MoneyVendor", "MoneyPettyCashEntry", "MoneyRequestSettings",
+  // chat stickers
+  "ChatStickerPack", "ChatSticker",
+  // commission (ค่าคอม)
+  "CommissionSetting", "CommissionPool",
+  // maintenance — คำขอเลื่อนกำหนดใบงาน
+  "WorkOrderDueRequest",
+  // report notes
+  "ReportNoteSection", "ReportNotePage", "ReportNoteUpdate", "ReportNoteVersion",
+]);
+
+/**
+ * โมเดลที่มี orgId แต่ **ไม่** ใส่ในการ์ดชั้นแอปนี้ เพราะแยกบริษัทที่ชั้นฐานข้อมูล
+ * แล้ว (Postgres RLS แบบ FORCE + role workforce_app — ดู migration ของแต่ละ schema)
+ * โค้ดเข้าถึงผ่าน withSalaryTenant / withDailyWorkerTenant / ฯลฯ ที่ตั้ง org ใน
+ * session ให้ RLS กรองเอง query จึงไม่จำเป็นต้องมี orgId ใน where — ถ้าใส่โมเดล
+ * เหล่านี้ในการ์ด โหมด strict จะ throw ผิด ๆ (พิสูจน์ด้วย tenant-isolation/salary.test.ts)
+ * เทสต์ใน tenant-guard.test.ts บังคับว่าทุกโมเดลที่มี orgId ต้องอยู่ในชุดใดชุดหนึ่งนี้
+ */
+export const DB_RLS_PROTECTED_MODELS = new Set<string>([
+  // salary (การเงินพนักงาน)
+  "SalarySettings", "SalaryRate", "SalaryItem", "SalaryEmployeeItem", "SalaryProfile", "SalaryRun", "SalaryRunLine", "SalaryEvent",
+  // daily_worker (คนงานรายวัน)
+  "DailyWorkerPayment", "DailyWorkerPayRate", "DailyWorkerTimeEdit", "DailyWorkerSettings", "DailyWorkerAuditEvent",
+  // requests — เงินสดย่อย
+  "MoneyPettyTopup", "MoneyPettyHolder",
 ]);
 
 /** operation ที่ "ต้อง" มี where ผูก orgId (list/bulk) — findUnique/update/delete

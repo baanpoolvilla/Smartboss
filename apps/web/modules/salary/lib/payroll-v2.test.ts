@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { formatExact, splitGradeTier, toCommissionMethod } from "@/modules/hr/lib/commission";
-import { applyDiligencePartial, computePay, diligenceStep, leaveCountsAgainstDiligence, type ComputeInput } from "../lib/compute";
-import { reportRow } from "../lib/report";
-import type { LineInfo } from "../lib/run";
-import { DEFAULT_SSO, DEFAULT_TAX, normalizeDiligenceSteps } from "../lib/types";
+import { applyDiligencePartial, computePay, diligenceStep, leaveCountsAgainstDiligence, type ComputeInput } from "./compute";
+import { reportRow } from "./report";
+import type { LineInfo } from "./run";
+import { DEFAULT_SSO, DEFAULT_TAX, normalizeDiligenceSteps } from "./types";
 
 /** ข้อกำหนดปรับปรุงระบบเงินเดือน (HR 28/10/2569) — ตัวอย่างในเอกสารต้องได้ตัวเลขตรงทุกข้อ */
 

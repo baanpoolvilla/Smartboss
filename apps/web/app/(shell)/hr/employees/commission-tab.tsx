@@ -533,7 +533,7 @@ export async function renderCommissionTab(
                     <span><b>รับคนใหม่ (ยังไม่ผ่านโปร):</b> ระบบติ๊กให้เอง (พนักงานที่เริ่มงานหลังเปิดใช้กติกานี้) · ไม่ได้ค่าคอมทุกเดือนจนกว่าจะเอาติ๊กออก</span>
                     <span>
                       <b>ผ่านโปรแล้ว:</b> เอาติ๊กออก → กดบันทึก · ได้ค่าคอมตั้งแต่เดือนนี้ · ถ้าขึ้นเงินเดือนด้วย ไปที่{" "}
-                      <a href="/salary/employees" className="font-semibold text-(--app-strong) underline">เงินเดือน › รายชื่อพนักงาน</a> › คนนั้น › แก้เงินเดือน/ขึ้นเงินเดือน
+                      <Link href="/salary/employees" className="font-semibold text-(--app-strong) underline">เงินเดือน › รายชื่อพนักงาน</Link> › คนนั้น › แก้เงินเดือน/ขึ้นเงินเดือน
                     </span>
                     <span className="text-(--ink-soft)">ไม่ผ่านโปร / ยังไม่ตัดสิน = ไม่ต้องทำอะไร</span>
                   </div>

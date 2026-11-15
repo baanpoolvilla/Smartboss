@@ -234,7 +234,7 @@ export function SubmitLeaveDialog({
                 maxLength={60}
               />
               <p className="text-xs text-(--ink-soft)">
-                ทั้งทีมเห็นชื่อนี้ — ใส่อะไรที่คนอ่านแล้วรู้เรื่อง เช่น "Bee-Off"
+                ทั้งทีมเห็นชื่อนี้ — ใส่อะไรที่คนอ่านแล้วรู้เรื่อง เช่น &ldquo;Bee-Off&rdquo;
               </p>
             </div>
 

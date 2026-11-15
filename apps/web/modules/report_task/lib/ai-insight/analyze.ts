@@ -123,7 +123,18 @@ export type AnalyzeOutcome =
  * (reserve/refund/commit) ไม่ให้วนไม่มีที่สิ้นสุดถ้าชนกันรัวๆ จริง คำขอที่
  * หมดรอบแล้วยังไม่ผ่านถือว่า "busy" ให้ผู้ใช้ลองใหม่ ดีกว่าปล่อยให้ค้าง
  */
-const MAX_CAS_ATTEMPTS = 5;
+const MAX_CAS_ATTEMPTS = 30;
+
+/**
+ * พักสั้น ๆ แบบสุ่มก่อนลองใหม่หลังชนกัน — เดิมลองติดกัน 5 รอบไม่พัก คำขอที่มา
+ * พร้อมกันหลายตัวจะชนกันซ้ำทุกรอบจนหมดรอบแล้วตอบ "busy" ทั้งที่โควตายังเหลือ
+ * (tenant-isolation/ai-insight-quota-concurrency.test.ts ยิง 25 คำขอ โควตา 10
+ * ผ่านจริงแค่ 7–8) การสุ่มเวลารอกระจายคำขอออกจากกัน ให้ทุกคำขอได้จองจนเต็มโควตาจริง
+ */
+function casBackoff(attempt: number): Promise<void> {
+  const ms = Math.min(50, 2 + attempt * 3) * (0.5 + Math.random());
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /**
  * `writeStore(...,null)` upsert เฉยๆ ตอนแถวยังไม่มี (version 0) — ไม่ CAS
@@ -163,6 +174,7 @@ export async function reserveQuotaSlot(
     const result = await writeStoreCas(orgId, RESULT_KEY, nextState, version);
     if (result.ok) return { ok: true, state: nextState, reservedMonth: month };
     // conflict — อีกคนจอง/เขียนแทรกระหว่างนี้ อ่านใหม่แล้วเช็ค/เขียนใหม่ทั้งชุด
+    await casBackoff(attempt);
   }
   return { ok: false, reason: "busy" };
 }
@@ -188,6 +200,7 @@ export async function refundQuotaSlot(orgId: string, reservedMonth: string): Pro
     const result = await writeStoreCas(orgId, RESULT_KEY, nextState, version);
     if (result.ok) return;
     // conflict — อ่านค่าล่าสุดใหม่แล้วลองลบ 1 จากยอดนั้นอีกที (ไม่ใช่ยอมแพ้)
+    await casBackoff(attempt);
   }
   // แพ้ทุกรอบ — โควตาจะค้างสูงเกินจริงอยู่ 1 (ลูกค้าเสียสิทธิ์ไปนิดหน่อย) แย่
   // น้อยกว่าปล่อยให้นับหายหรือลบ reservation ของคนอื่นทิ้งเพราะ retry ผิดวิธี
@@ -208,6 +221,7 @@ async function commitAnalysisResult(
     const next = apply(data ?? emptyState());
     const result = await writeStoreCas(orgId, RESULT_KEY, next, version);
     if (result.ok) return next;
+    await casBackoff(attempt);
   }
   throw new Error("บันทึกผลวิเคราะห์ AI ไม่สำเร็จ (เขียนชนกันหลายครั้งเกินไป)");
 }

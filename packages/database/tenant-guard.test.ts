@@ -4,7 +4,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { TENANT_SCOPED_MODELS } from "./tenant-guard";
+import { DB_RLS_PROTECTED_MODELS, TENANT_SCOPED_MODELS } from "./tenant-guard";
 
 /**
  * TENANT_SCOPED_MODELS ใน tenant-guard.ts คือ allowlist ที่ต้องดูแลเอง (comment
@@ -71,7 +71,7 @@ test("TENANT_SCOPED_MODELS ตรงกับโมเดลที่มีค�
     for (const [model, nullable] of modelsWithOrgId(src)) orgIdModels.set(model, nullable);
   }
 
-  const missing = [...orgIdModels.keys()].filter((m) => !TENANT_SCOPED_MODELS.has(m));
+  const missing = [...orgIdModels.keys()].filter((m) => !TENANT_SCOPED_MODELS.has(m) && !DB_RLS_PROTECTED_MODELS.has(m));
   const stale = [...TENANT_SCOPED_MODELS].filter((m) => !orgIdModels.has(m));
 
   assert.deepEqual(

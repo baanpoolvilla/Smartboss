@@ -466,7 +466,7 @@ export function BossBriefCard({ topic, onJumpToPost }: { topic: ReportTopic; onJ
             <div className="flex flex-col items-center gap-1 py-1 text-center">
               <img src={MASCOT_ANIM} alt="" aria-hidden="true" width={88} height={88} className="h-[88px] w-[88px]" />
               <p className="text-[13px] font-semibold text-[var(--ink)]">สวัสดีครับ ถามอะไรเกี่ยวกับบริษัทได้เลย</p>
-              <p className="text-[12px] text-[var(--ink-soft)]">เช่น "เดือนนี้ใครสายบ่อย" "สระ HS2 เสียกี่ครั้ง" "งานไหนเลยกำหนด"</p>
+              <p className="text-[12px] text-[var(--ink-soft)]">เช่น &ldquo;เดือนนี้ใครสายบ่อย&rdquo; &ldquo;สระ HS2 เสียกี่ครั้ง&rdquo; &ldquo;งานไหนเลยกำหนด&rdquo;</p>
             </div>
           )}
           {brief.qa.map((x, i) => (

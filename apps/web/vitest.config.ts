@@ -21,6 +21,9 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["modules/**/*.test.ts"],
-    exclude: ["**/node_modules/**", "**/.next/**"],
+    // ไฟล์ใน __tests__/ เขียนด้วย node:test (รันผ่าน `pnpm test` / test:tenant-isolation)
+    // ไม่ใช่ vitest — ถ้าไม่ตัดออก vitest จะฟ้อง "No test suite found" แล้วจบด้วย exit 1
+    // ข้อตกลง: node:test อยู่ใน __tests__/ · vitest วางข้างไฟล์ที่ทดสอบ (*.test.ts)
+    exclude: ["**/node_modules/**", "**/.next/**", "**/__tests__/**"],
   },
 });

@@ -31,6 +31,9 @@ const GUARD_PATTERNS = [
   /CRON_SECRET/,
   // แชท: modules/chat/data/route-helpers.ts chatActor() = requireOrg() + สิทธิ์ chat.access
   /chatActor\s*\(/,
+  // Google Ads: modules/ads/data/access.ts adsRoute(permission, ...) = requireAdsApi() →
+  // getSession() + ต้องมีบริษัท + hasPermission(permission) + บริษัทเปิดโมดูล Ads
+  /adsRoute\s*(<[^>]*>)?\s*\(/,
 ];
 
 /** route ที่ตั้งใจไม่มี guard ตัวไหนเลยข้างบน — ต้องมีเหตุผลกำกับทุกตัว เพิ่ม
@@ -43,6 +46,12 @@ const PUBLIC_OR_SECRET_ROUTES: Record<string, string> = {
   "auth/login/route.ts": "จุดเข้าสู่ระบบเอง — บังคับ session ก่อนก็ล็อกอินไม่ได้เลย",
   "auth/logout/route.ts": "เรียกได้แม้ไม่มี session (เพิกถอน token ถ้ามี ไม่มีก็ no-op ปลอดภัย)",
   "auth/refresh/route.ts": "จุดขอ token ใหม่เอง — access token อาจหมดอายุไปแล้วตอนเรียก",
+  "auth/refresh/current/route.ts":
+    "อ่าน refresh cookie ของเครื่องนี้เอง (cookie ส่งมาเฉพาะ path /api/auth/refresh) คืนแค่ id แถว ไม่มีข้อมูลบริษัท ไม่มี cookie = คืน null",
+  "auth/refresh/logout/route.ts":
+    "ออกจากระบบ: เพิกถอน refresh token จาก cookie ของผู้เรียกเอง ไม่มี cookie ก็ no-op ปลอดภัย (เหตุผลเดียวกับ auth/logout)",
+  "webhooks/multipost/notify/route.ts":
+    "webhook จาก Multi Post: ยืนยันด้วย token ที่เซ็นด้วย SSO_MULTIPOST_SECRET (verifyAppToken, อายุ 60 วินาที) ไม่ใช่ session ผู้ใช้",
   "report-task/holidays/route.ts":
     "proxy ไป public API ของบุคคลที่สาม ไม่มีข้อมูลบริษัทเลย — ยังต้อง login ผ่าน proxy.ts อยู่ดี (ไม่อยู่ใต้ /api/auth|cron|webhooks) แค่ไม่ต้องเช็คสิทธิ์เพิ่มในนี้",
   "report-task/holidays/countries/route.ts":

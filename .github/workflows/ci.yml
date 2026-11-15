@@ -83,6 +83,11 @@ jobs:
       - name: Test (apps/web, @smartboss/auth)
         run: pnpm test
 
+      # เทสต์ vitest ของเว็บ (สูตรเงินเดือน · ค่าคอม · ลงเวลา · คะแนน ~629 ข้อ) — `pnpm test`
+      # รันเฉพาะ node:test ใน __tests__/ ไฟล์ vitest อยู่ข้างโค้ด จึงต้องรันแยกขั้นนี้
+      - name: Test (apps/web — vitest)
+        run: pnpm --filter web exec vitest run
+
       - name: Test (workforce — PGlite ในตัวเอง ไม่ต้องมี Postgres จริง)
         run: pnpm wf:test
 

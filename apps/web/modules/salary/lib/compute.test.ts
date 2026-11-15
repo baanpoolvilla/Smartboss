@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { annualTax, computePay, periodsEmployedBefore, periodsRemaining, progressiveTax, type ComputeInput } from "../lib/compute";
-import { DEFAULT_SSO, DEFAULT_TAX, fmt, normalizeAllowances, periodDates, periodOfDate, roundSatangToBaht, toSatang, validateTax } from "../lib/types";
+import { annualTax, computePay, periodsEmployedBefore, periodsRemaining, progressiveTax, type ComputeInput } from "./compute";
+import { DEFAULT_SSO, DEFAULT_TAX, fmt, normalizeAllowances, periodDates, periodOfDate, roundSatangToBaht, toSatang, validateTax } from "./types";
 
 /** พนักงานเต็มงวด ต.ค. 2569 (26 ก.ย.–25 ต.ค. จ่าย 31 ต.ค.) ไม่มีอะไรพิเศษ — แต่ละเทสแก้เฉพาะที่ต้องการ */
 function base(over: Partial<ComputeInput> = {}): ComputeInput {
