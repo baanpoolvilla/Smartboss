@@ -2200,7 +2200,7 @@ export async function saveSettingsAction(input: RequestSettings): Promise<Result
 /**
  * คนดูแลเงินเดือนแก้ยอดเงินในใบ OT พนักงาน (ผู้ใช้ 16/11/2569 "คนอนุมัติส่งเป็นชั่วโมงพอ ให้ HR/คนทำเงินเดือนจัดการเงิน")
  * แก้ได้/ไม่ได้ตาม staffOtEditState (ยังไม่จ่าย · ไม่อยู่ในงวดที่ส่งอนุมัติแล้ว · ไม่ใช่ของตัวเอง · ไม่ได้คิด OT แบบนับวัน)
- * ไม่เปลี่ยนสถานะการอนุมัติของใบ · คนแก้ไม่ใช่ CEO = แจ้ง CEO ทุกครั้ง (เงินขึ้น/ลงต้องมีคนเห็น)
+ * ไม่เปลี่ยนสถานะการอนุมัติของใบ · ไม่แจ้งใคร — เก็บ log ในใบ (ใคร แก้จากเท่าไหร่เป็นเท่าไหร่ เมื่อไหร่ เหตุผล) ผู้ใช้ 16/11/2569 "ไม่ต้องแจ้ง boss เก็บ log ก็พอ"
  */
 export async function editStaffOtAmountAction(input: { id: string; amount: number; note?: string }): Promise<Result> {
   try {
@@ -2237,16 +2237,6 @@ export async function editStaffOtAmountAction(input: { id: string; amount: numbe
       return true;
     });
     if (!saved) return { error: "ใบนี้เพิ่งเปลี่ยน — รีเฟรชแล้วลองใหม่" };
-    const { salaryAccess } = await import("@/modules/salary/lib/access");
-    if (!(await salaryAccess(session)).isCeo) {
-      void notifyApprovers(
-        orgId,
-        { id: r.id, code: r.code, kind: "ot", title: r.title, netAmount: amount, beneficiaryName: r.beneficiaryName },
-        "ceo",
-        [session.userId],
-        `${byName} แก้ยอด OT ${baht(r.netAmount)} →`,
-      );
-    }
     refresh(r.id);
     return { ok: true };
   } catch (error) {

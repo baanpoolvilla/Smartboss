@@ -62,7 +62,7 @@ export function EditStaffOtAmountPanel({ id, current, canEdit, reason }: { id: s
             <span>บาท</span>
           </label>
           <input className={`${field} w-full`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="เหตุผล เช่น ตกลงเหมาจ่าย (ไม่บังคับ)" maxLength={200} aria-label="เหตุผลที่แก้ยอด" />
-          <p className="text-xs text-(--ink-soft)">ระบบบันทึกว่าใครแก้ ยอดเดิม {baht(current)} · ถ้าคนแก้ไม่ใช่ CEO ระบบแจ้ง CEO ด้วย</p>
+          <p className="text-xs text-(--ink-soft)">ระบบบันทึกไว้ในประวัติของใบนี้ว่าใครแก้ เมื่อไหร่ จาก {baht(current)} เป็นเท่าไหร่ และเหตุผล</p>
           {error && <Notice tone="danger">{error}</Notice>}
           <div className="flex gap-2">
             <button
