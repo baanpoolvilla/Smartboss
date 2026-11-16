@@ -31,7 +31,7 @@ import { useTaskStore } from "@/modules/report_task/store/task-store";
 import type { Project, ProjectStatus, Task } from "@/modules/report_task/types";
 import { ProjectTimeline } from "./project-timeline";
 import { BoardTab, CalendarTab, DashboardTab, FilesTab, ListTab, MessagesTab } from "./project-tabs";
-import { sendMessage, updateChannel } from "@/modules/chat/lib/api";
+import { deleteChannel, sendMessage, updateChannel } from "@/modules/chat/lib/api";
 import { PCT_HELP, PersonDot, ProjectStatusChip, STATE_COLOR, STATE_LABEL, StatePill, fmtDay, askProjectUpdate, defaultMemberRole, ensureProjectMembers, notifyAddedToProject, postProjectTaskNotices, syncChatMember, todayBkk, useCompanyHolidays } from "./project-ui";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
 import { ROLE_OF_DEFAULT } from "./project-roles";
@@ -752,10 +752,16 @@ function ProjectSettingsButton({ project }: { project: Project }) {
             <div className="flex flex-wrap items-center gap-2 border-t border-[var(--line)] pt-3">
               {confirmDel ? (
                 <button type="button" className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-semibold text-white"
-                  onClick={() => {
+                  onClick={async () => {
                     tasks.filter((t) => t.project?.projectId === project.id).forEach((t) => setTaskProject(t.id, null, me));
-                    // ห้องแชทของโปรเจกต์ → ปิด (อ่านย้อนหลังได้ ส่งใหม่ไม่ได้) ไม่ค้างเป็นห้องลอย ๆ (13/11/2569)
-                    if (project.chatChannelId) updateChannel(project.chatChannelId, { closed: true }).catch(() => {});
+                    // ห้องแชทของโปรเจกต์ → ลบไปด้วย (เก็บเข้าคลัง ข้อความไม่หาย กู้ได้) — ผู้ใช้ 16/11/2569
+                    // "โปรเจกต์ถูกลบแล้วทำไมแชทไม่ลบไปด้วย" (เดิม 13/11 แค่ปิดห้อง ห้องยังค้างในรายการแชท)
+                    // ต้องลบห้องก่อน removeProject — ฝั่ง server รู้ว่าเป็นห้องโปรเจกต์จากรายการโปรเจกต์
+                    // ถ้าลบไม่ได้ (ไม่มีสิทธิ์ลบห้อง) อย่างน้อยปิดห้องไว้เหมือนเดิม
+                    if (project.chatChannelId) {
+                      const channelId = project.chatChannelId;
+                      await deleteChannel(channelId).catch(() => updateChannel(channelId, { closed: true }).catch(() => {}));
+                    }
                     removeProject(project.id);
                     toast.success("ลบโปรเจกต์แล้ว · งานยังอยู่บนบอร์ดงาน");
                     router.push("/report-task/projects");
