@@ -15,6 +15,7 @@ import { EmptyState, NoPermission, Pill, SectionCard } from "@/modules/hr/compon
 import { HelpPopover } from "@/modules/hr/components/design-kit-client";
 import { formatDate } from "@/modules/hr/lib/labels";
 import { OvertimeCard, type OvertimeItem } from "./overtime-card";
+import { RetryOtSlipButton } from "./retry-ot-slip-button";
 
 /** ย้อนดู OT กี่วัน — ครอบหนึ่งรอบจ่ายรายเดือนพร้อมเผื่อ (ขอบเขตหน้าจอ ไม่ใช่กติกาจ่ายเงิน) */
 const LOOKBACK_DAYS = 45;
@@ -199,6 +200,9 @@ export async function renderOvertimeTab(): Promise<React.ReactNode> {
                 </div>
                 {r.status === "FINAL_APPROVED" ? (
                   <span className="flex flex-wrap items-center gap-2">
+                    {canDecide && (linkedByOt.get(r.id) ?? []).length === 0 && r.approved_minutes > 0 && (
+                      <RetryOtSlipButton overtimeRequestId={r.id} workDate={r.work_date.slice(0, 10)} />
+                    )}
                     {(linkedByOt.get(r.id) ?? []).map((l) => (
                       <Link key={l.id} href={`/requests/${l.id}`} className="text-xs font-medium text-(--app-strong) underline">
                         {l.code} ›

@@ -2479,7 +2479,10 @@ export async function decideOvertimeAction(formData: FormData) {
       workDate,
       category: decided.ot_category,
       approvedMinutes: decided.approved_minutes,
-    }).catch((error: unknown) => console.error("[hr] auto OT request failed", error));
+    })
+      // ข้ามเงียบ ๆ เคยทำให้ไม่มีใครรู้ว่าใบไม่ถูกสร้าง (16/11/2569 GL-011) — log ไว้ + มีปุ่ม "สร้างใบ OT อีกครั้ง" ในรายการตัดสินแล้ว
+      .then((r) => { if ("skipped" in r) console.warn("[hr] auto OT request skipped", decided.id, r.skipped); })
+      .catch((error: unknown) => console.error("[hr] auto OT request failed", error));
     revalidatePath("/requests");
   }
   void notifyRequester(
@@ -2694,4 +2697,38 @@ export async function revokeDeviceAction(formData: FormData) {
     throw new Error(toMessage(error));
   }
   revalidatePath("/hr/settings/devices");
+}
+
+
+/**
+ * สร้างใบ OT ใน เบิกจ่าย & OT ให้ OT ที่อนุมัติแล้วแต่ยังไม่มีใบ (ตอนอนุมัติสร้างไม่สำเร็จ) — ผู้ใช้ 16/11/2569
+ * อ่านรายการจาก workforce เอง ไม่เชื่อนาที/ประเภทจากหน้าจอ · คืนข้อความให้ขึ้นบนจอ ไม่เงียบ
+ */
+export async function retryOtSlipAction(overtimeRequestId: string, workDate: string): Promise<{ ok: boolean; message: string }> {
+  const session = await guard(HR_PERMS.employeeManage);
+  if (!hasPermission(session, REQ_PERMS.approve) && !hasPermission(session, REQ_PERMS.approveCeo)) {
+    return { ok: false, message: "ไม่มีสิทธิ์อนุมัติ OT" };
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(workDate)) return { ok: false, message: "วันที่ไม่ถูกต้อง" };
+  const list = await wfTry<{ items: { id: string; employment_id: string; work_date: string; ot_category: string; approved_minutes: number; status: string }[] }>(
+    `/overtime-requests?from=${workDate}&to=${workDate}`,
+  );
+  const row = list?.items.find((r) => r.id === overtimeRequestId);
+  if (!row || row.status !== "FINAL_APPROVED") return { ok: false, message: "ไม่พบ OT ที่อนุมัติแล้วรายการนี้" };
+  try {
+    const result = await createOtFromHrApproval(session, {
+      overtimeRequestId: row.id,
+      employmentId: row.employment_id,
+      workDate: row.work_date.slice(0, 10),
+      category: row.ot_category,
+      approvedMinutes: row.approved_minutes,
+    });
+    revalidatePath("/hr");
+    revalidatePath("/requests");
+    if ("skipped" in result) return { ok: false, message: `ไม่ได้สร้าง: ${result.skipped}` };
+    return { ok: true, message: `สร้างใบ ${result.created.join(", ")} แล้ว` };
+  } catch (error) {
+    console.error("[hr] retry OT request failed", overtimeRequestId, error);
+    return { ok: false, message: `สร้างไม่สำเร็จ: ${error instanceof Error ? error.message : String(error)}` };
+  }
 }
