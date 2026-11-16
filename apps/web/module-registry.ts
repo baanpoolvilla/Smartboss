@@ -24,7 +24,7 @@ export interface ModuleMenuItem {
   /**
    * Discord-style unread pill rendered at the end of this menu's row in
    * `Shell`'s rail nav (see components/shell/shell.tsx's RailItem) — optional
-   * live client component slot, e.g. report_task's "งาน / Kanban" entry uses
+   * live client component slot, e.g. report_task's "งาน / Task" entry uses
    * it to show a count of tasks waiting on someone's sign-off. Built once
    * here (a plain React element referencing a "use client" component), not
    * per-request data — the element itself is static, but once it hydrates on

@@ -42,7 +42,7 @@ export function useProjectPending(): ProjectPendingItem[] {
 
 /**
  * "project" = งานในโปรเจกต์ (เลขแดงเมนูโปรเจกต์) · "board" = งานบนบอร์ดงาน ไม่รวมงานโปรเจกต์
- * (เลขแดงเมนู "งาน / Kanban" — TaskReviewNavBadge) · นับแบบเดียวกับเลขแดงของเมนูนั้น
+ * (เลขแดงเมนู "งาน / Task" — TaskReviewNavBadge) · นับแบบเดียวกับเลขแดงของเมนูนั้น
  */
 export function useTaskPending(scope: "project" | "board"): ProjectPendingItem[] {
   const tasks = useTaskStore((s) => s.tasks);

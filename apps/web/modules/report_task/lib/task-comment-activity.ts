@@ -34,7 +34,7 @@ export function unreadTaskAttachmentCounts(notifications: AppNotification[], use
 
 /** เหมือน unreadTaskCommentCounts แต่นับ "มีคนมอบหมาย/เพิ่มคุณเป็นผู้รับผิดชอบ
  * งานนี้" ที่ยังไม่ได้เปิดดูแทน — เดิมงานที่เพิ่งได้รับมอบหมายไม่ขึ้น badge ที่
- * เมนู "งาน / Kanban" หรือไอคอนหน้าแรกเลย เห็นแค่ในกระดิ่งอย่างเดียว
+ * เมนู "งาน / Task" หรือไอคอนหน้าแรกเลย เห็นแค่ในกระดิ่งอย่างเดียว
  * ("เวลามีคนมอบหมายงานมาทำไมตรงที่วงไม่ขึ้นแดง") mark-as-read ตอนเปิดงาน
  * ร่วมจุดเดียวกับสองอันบน (ดู notification-store.ts's markTaskActivityRead) */
 export function unreadTaskAssignmentCounts(notifications: AppNotification[], userId: string): Map<string, number> {

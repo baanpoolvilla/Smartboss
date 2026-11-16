@@ -56,7 +56,7 @@ const ROLE_COLUMNS = ["เจ้าของบริษัท", "หัวห�
 
 const GROUPS: Group[] = [
   {
-    title: "งาน / บอร์ด Kanban",
+    title: "งาน / Task",
     rows: [
       { action: "เห็นงาน", note: "canSeeTask", owner: "full", head: "scoped", employee: "own" },
       { action: "สร้าง/แก้ไข/ลบงาน (ชื่อ ผู้รับผิดชอบ วันครบกำหนด ฯลฯ)", note: "canEditRecord — หัวหน้าแผนกแก้ได้เฉพาะงานของแผนกที่ตนเป็นหัวหน้า, พนักงานแก้ได้เฉพาะงานที่ตัวเองสร้าง", owner: "full", head: "scoped", employee: "own" },

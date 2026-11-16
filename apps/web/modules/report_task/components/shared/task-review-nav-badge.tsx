@@ -40,7 +40,7 @@ export function taskNavBadgeCount(
 }
 
 /**
- * Discord-style unread pill for the "งาน / Kanban" rail item (see
+ * Discord-style unread pill for the "งาน / Task" rail item (see
  * module-registry.ts's `ModuleMenuItem.badge` and shell.tsx's RailItem) —
  * sums two things:
  *   - tasks sitting in "เสร็จสิ้น" with nobody's sign-off yet
