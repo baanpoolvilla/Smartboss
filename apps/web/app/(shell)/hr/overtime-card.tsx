@@ -141,6 +141,9 @@ export function OvertimeCard({ item, canDecide = true, approvers = "" }: { item:
               ชม.
             </label>
           </div>
+          {FULL_DAY_HOURS > maxHours && (
+            <p className="text-xs text-(--ink-soft)">สแกนได้ไม่ถึง {FULL_DAY_HOURS} ชม. จึงเลือก &quot;ทั้งวัน&quot; ไม่ได้ ให้เลือกเป็นชั่วโมงแทน</p>
+          )}
           {custom !== "" && !customOk && (
             <p className="text-xs text-(--danger)">ใส่ทีละครึ่งชั่วโมง (เช่น 1, 1.5, 2) และไม่เกิน {hrs(maxHours)}</p>
           )}
