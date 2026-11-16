@@ -34,13 +34,42 @@ const hrs = (h: number) => `${Number.isInteger(h) ? h : h.toFixed(1)} ชม.`;
  * ส่งไป API เป็นนาทีเหมือนเดิม (ชม. × 60)
  */
 const QUICK_HOURS = [1, 1.5, 2, 3, 4];
+
+/**
+ * ข้อมูลคิดเงิน OT — ส่งมาเฉพาะคนอนุมัติที่ดูเงินเดือนได้ (ไม่มี = ไม่โชว์ยอดเงิน)
+ * สูตรเดียวกับใบ OT ที่สร้างให้เอง (hr-ot-link.ts): เงินเดือน ÷ 30 ÷ 8 × % × ชม. · วันหยุด 8 ชม.แรกเรทวันหยุด ส่วนเกินเรท OT วันหยุด
+ */
+export interface OtPayInfo {
+  salary: number;
+  holiday: boolean;
+  normalPct: number;
+  holidayPct: number;
+  holidayOtPct: number;
+  /** ปัดเศษสตางค์ขึ้นเป็นบาท (เบิกจ่าย & OT › ตั้งค่า) */
+  roundBaht: boolean;
+  /** บริษัทตั้งเงินเดือนให้คิด OT เป็นวัน = ยอดต่อวัน (ชั่วโมงไม่มีผลกับเงิน) · null = คิดตามชั่วโมง */
+  dayRate: number | null;
+}
+
+const r2 = (n: number) => Math.round(n * 100) / 100;
+function otAmount(pay: OtPayInfo, hours: number): number {
+  const minutes = Math.round(hours * 60);
+  const part = (m: number, pct: number) => {
+    const exact = r2((pay.salary / 30 / 8) * (pct / 100) * (m / 60));
+    return pay.roundBaht ? Math.ceil(exact) : exact;
+  };
+  if (!pay.holiday) return part(minutes, pay.normalPct);
+  const normal = Math.min(minutes, 8 * 60);
+  return r2(part(normal, pay.holidayPct) + (minutes > normal ? part(minutes - normal, pay.holidayOtPct) : 0));
+}
+const fmtBaht = (n: number) => n.toLocaleString("th-TH", { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 });
 const FULL_DAY_HOURS = 8;
 
 /**
  * OT รออนุมัติหนึ่งรายการ — อนุมัติกับไม่อนุมัติเป็นคนละ <form> ส่ง decision ผ่าน
  * hidden input (เหตุผลเดียวกับ CorrectionCard: ไม่แชร์ input ข้ามปุ่ม submit)
  */
-export function OvertimeCard({ item, canDecide = true, approvers = "" }: { item: OvertimeItem; canDecide?: boolean; approvers?: string }) {
+export function OvertimeCard({ item, canDecide = true, approvers = "", pay }: { item: OvertimeItem; canDecide?: boolean; approvers?: string; pay?: OtPayInfo | undefined }) {
   const [mode, setMode] = useState<"none" | "approve" | "reject">("none");
   const [hours, setHours] = useState<number | null>(null);
   const [custom, setCustom] = useState("");
@@ -49,6 +78,12 @@ export function OvertimeCard({ item, canDecide = true, approvers = "" }: { item:
   const customHours = Number(custom);
   const customOk = custom !== "" && Number.isFinite(customHours) && customHours > 0 && customHours * 2 === Math.round(customHours * 2) && customHours <= maxHours;
   const picked = custom !== "" ? (customOk ? customHours : null) : hours;
+  // ยอดเงิน: ตามสูตรจนกว่าจะพิมพ์แก้เอง · เปลี่ยนชั่วโมง = กลับไปตามสูตร
+  const [amountText, setAmountText] = useState<string | null>(null);
+  const formulaAmount = pay && pay.dayRate === null && picked !== null ? otAmount(pay, picked) : null;
+  const typedAmount = amountText === null ? null : amountText.trim() === "" ? Number.NaN : Number(amountText.replace(/,/g, ""));
+  const amountOk = typedAmount === null || (Number.isFinite(typedAmount) && typedAmount >= 0 && typedAmount <= 100_000);
+  const finalAmount = typedAmount !== null && amountOk ? typedAmount : formulaAmount;
   const toggle = (next: "approve" | "reject") => setMode((m) => (m === next ? "none" : next));
 
   const hidden = (
@@ -114,6 +149,7 @@ export function OvertimeCard({ item, canDecide = true, approvers = "" }: { item:
                   onClick={() => {
                     setHours(h);
                     setCustom("");
+                    setAmountText(null);
                   }}
                   className={`h-10 rounded-full border px-4 text-sm tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                     on
@@ -134,7 +170,10 @@ export function OvertimeCard({ item, canDecide = true, approvers = "" }: { item:
                 min={0.5}
                 max={maxHours}
                 value={custom}
-                onChange={(e) => setCustom(e.target.value)}
+                onChange={(e) => {
+                  setCustom(e.target.value);
+                  setAmountText(null);
+                }}
                 aria-label="จำนวนชั่วโมงที่อนุมัติ (ระบุเอง)"
                 className="h-7 w-16 rounded-md border border-(--line) px-2 text-center tabular-nums"
               />
@@ -147,6 +186,40 @@ export function OvertimeCard({ item, canDecide = true, approvers = "" }: { item:
           {custom !== "" && !customOk && (
             <p className="text-xs text-(--danger)">ใส่ทีละครึ่งชั่วโมง (เช่น 1, 1.5, 2) และไม่เกิน {hrs(maxHours)}</p>
           )}
+          {pay && pay.dayRate !== null && (
+            <p className="text-xs text-(--ink-soft)">
+              บริษัทตั้งให้คิด OT เป็นวัน: <b className="text-(--ink)">฿{fmtBaht(pay.dayRate)}</b> ต่อวัน (ชั่วโมงไม่มีผลกับเงิน · ตั้งที่ เงินเดือน › ตั้งค่า)
+            </p>
+          )}
+          {formulaAmount !== null && (
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-(--ink)">
+                ค่า OT
+                <span className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-(--ink-soft)">฿</span>
+                  <input
+                    inputMode="decimal"
+                    value={amountText ?? fmtBaht(formulaAmount)}
+                    onChange={(e) => setAmountText(e.target.value)}
+                    aria-label="ค่า OT (บาท) แก้ได้"
+                    className={`${inputClass} h-10 w-36 pl-7 text-right tabular-nums`}
+                  />
+                </span>
+              </label>
+              {amountText !== null && amountOk && <input type="hidden" name="approved_amount" value={String(typedAmount)} />}
+              <span className="text-xs text-(--ink-soft)">
+                {amountText === null
+                  ? `คิดจากเงินเดือน ÷ 30 ÷ 8 × ${pay!.holiday ? (picked! > 8 ? `${pay!.holidayPct}% (8 ชม.แรก) + ${pay!.holidayOtPct}% (ส่วนเกิน)` : `${pay!.holidayPct}% (วันหยุด)`) : `${pay!.normalPct}%`} × ชม.${pay!.roundBaht ? " · ปัดขึ้นเป็นบาท" : ""} · แก้ได้`
+                  : `แก้เอง (สูตรคิดได้ ฿${fmtBaht(formulaAmount)}) · `}
+                {amountText !== null && (
+                  <button type="button" className="underline" onClick={() => setAmountText(null)}>
+                    ใช้ตามสูตร
+                  </button>
+                )}
+              </span>
+              {!amountOk && <span className="text-xs text-(--danger)">ใส่ยอดเป็นตัวเลข 0 – 100,000</span>}
+            </div>
+          )}
           <div className="flex flex-col gap-2 sm:flex-row">
             <input
               name="reason"
@@ -155,8 +228,8 @@ export function OvertimeCard({ item, canDecide = true, approvers = "" }: { item:
               placeholder="เหตุผลที่อนุมัติ เช่น หัวหน้างานสั่งให้มาทำ"
               className={`${inputClass} h-10`}
             />
-            <Button type="submit" className="shrink-0" disabled={picked === null}>
-              {picked === null ? "เลือกจำนวนชั่วโมงก่อน" : `ยืนยันอนุมัติ ${hrs(picked)}`}
+            <Button type="submit" className="shrink-0" disabled={picked === null || !amountOk}>
+              {picked === null ? "เลือกจำนวนชั่วโมงก่อน" : `ยืนยันอนุมัติ ${hrs(picked)}${finalAmount !== null ? ` · ฿${fmtBaht(finalAmount)}` : ""}`}
             </Button>
           </div>
         </form>

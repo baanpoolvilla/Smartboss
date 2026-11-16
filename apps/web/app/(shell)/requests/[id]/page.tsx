@@ -240,7 +240,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
   const workerSystem = canSetWorker
     ? await workerRateOn(orgId, r.employmentId!, r.workDate).then((rate) => {
         if (!rate.wage) return null;
-        const c = otCalc("daily", rate.wage, rate.otPercent, r.otMinutes ?? 0);
+        const c = otCalc("daily", rate.wage, rate.otPercent, r.otMinutes ?? 0, settings.otRoundBaht);
         return { amount: c.amount, how: `คิดจาก ${c.formula}` };
       })
     : null;

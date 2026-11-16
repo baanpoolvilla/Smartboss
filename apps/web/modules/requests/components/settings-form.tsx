@@ -32,6 +32,7 @@ export function SettingsForm({ initial }: { initial: RequestSettings }) {
   const [vat, setVat] = useState(String(initial.vatPercent));
   const [maxAge, setMaxAge] = useState(String(initial.receiptMaxAgeDays));
   const [pettyReview, setPettyReview] = useState(initial.pettySpendReview);
+  const [otRoundBaht, setOtRoundBaht] = useState(initial.otRoundBaht);
   const [clearDays, setClearDays] = useState(String(initial.clearDueDays));
 
   function save() {
@@ -48,6 +49,7 @@ export function SettingsForm({ initial }: { initial: RequestSettings }) {
         receiptMaxAgeDays: Number(maxAge),
         clearDueDays: Number(clearDays),
         pettySpendReview: pettyReview,
+        otRoundBaht,
       });
       if (!res.ok) {
         setError(res.error);
@@ -119,6 +121,13 @@ export function SettingsForm({ initial }: { initial: RequestSettings }) {
         <button type="button" className="inline-flex items-center gap-1 self-start text-sm font-medium text-(--app-strong) hover:underline" onClick={() => setRates([...rates, { id: `r${Date.now()}`, label: "", percent: 150 }])}>
           <Plus className="h-4 w-4" aria-hidden="true" /> เพิ่มอัตรา
         </button>
+        <label className="flex items-start gap-3 text-sm text-(--ink)">
+          <input type="checkbox" className="mt-1 h-4 w-4" checked={otRoundBaht} onChange={(e) => setOtRoundBaht(e.target.checked)} />
+          <span>
+            ปัดเศษสตางค์ขึ้นเป็นบาทเต็ม
+            <span className="block text-xs text-(--ink-soft)">เช่น 562.50 → 563 บาท · ไม่ติ๊ก = คิดถึงสตางค์ · มีผลกับใบ OT ที่คิดใหม่ ใบเดิมไม่เปลี่ยน</span>
+          </span>
+        </label>
       </section>
 
       <section className="flex flex-col gap-3 rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4">

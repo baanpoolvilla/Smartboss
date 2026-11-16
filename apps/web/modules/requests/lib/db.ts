@@ -282,6 +282,7 @@ export async function readSettings(tx: Tx, orgId: string): Promise<RequestSettin
     receiptMaxAgeDays: s.receiptMaxAgeDays,
     clearDueDays: s.clearDueDays,
     pettySpendReview: s.pettySpendReview,
+    otRoundBaht: s.otRoundBaht,
   };
 }
 

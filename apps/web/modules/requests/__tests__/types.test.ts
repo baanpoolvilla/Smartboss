@@ -42,6 +42,14 @@ test("OT: พนักงาน เงินเดือน ÷ 30 ÷ 8 · คน
   assert.equal(minutesBetween("22:00", "02:00"), 240);
 });
 
+test("OT ปัดเศษสตางค์ขึ้นเป็นบาท (สวิตช์รายบริษัท) · ปิด = เหมือนเดิม", () => {
+  assert.equal(otCalc("monthly", 15000, 150, 180).amount, 281.25);
+  assert.equal(otCalc("monthly", 15000, 150, 180, true).amount, 282);
+  // ลงตัวอยู่แล้วไม่ปัดเพิ่ม
+  assert.equal(otCalc("monthly", 15000, 100, 480, true).amount, 500);
+  assert.equal(otCalc("daily", 400, 150, 100, true).amount, 125);
+});
+
 test("OT ซ้อนเวลากันจับได้ แม้ข้ามเที่ยงคืน", () => {
   assert.equal(timesOverlap("17:00", "19:00", "18:30", "20:00"), true);
   assert.equal(timesOverlap("17:00", "19:00", "19:00", "21:00"), false);

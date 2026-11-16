@@ -3,7 +3,10 @@ import { hasPermission, requireOrg } from "@smartboss/auth";
 import { REQ_PERMS } from "@/modules/requests/permissions";
 import { prisma } from "@smartboss/database";
 import { usersWithPermission } from "@/modules/maintenance/data/notify";
-import { withRequestsTenant } from "@/modules/requests/lib/db";
+import { readSettings as readRequestSettings, withRequestsTenant } from "@/modules/requests/lib/db";
+import { monthlySalaryOn } from "@/modules/requests/lib/data";
+import { salaryAccess } from "@/modules/salary/lib/access";
+import { readSettings as readSalarySettings, withSalaryTenant } from "@/modules/salary/lib/db";
 import {
   wfTry,
   type Employment,
@@ -14,7 +17,7 @@ import {
 import { EmptyState, NoPermission, Pill, SectionCard } from "@/modules/hr/components/ui";
 import { HelpPopover } from "@/modules/hr/components/design-kit-client";
 import { formatDate } from "@/modules/hr/lib/labels";
-import { OvertimeCard, type OvertimeItem } from "./overtime-card";
+import { OvertimeCard, type OvertimeItem, type OtPayInfo } from "./overtime-card";
 import { RetryOtSlipButton } from "./retry-ot-slip-button";
 
 /** ย้อนดู OT กี่วัน — ครอบหนึ่งรอบจ่ายรายเดือนพร้อมเผื่อ (ขอบเขตหน้าจอ ไม่ใช่กติกาจ่ายเงิน) */
@@ -156,6 +159,35 @@ export async function renderOvertimeTab(): Promise<React.ReactNode> {
       };
     });
 
+  // ยอดเงินในการ์ดอนุมัติ (16/11/2569 "คิดเป็นจำนวนเงินมาเลย และแก้ไขได้") — เฉพาะคนอนุมัติที่ดูเงินเดือนได้
+  // เงินเดือนเป็นข้อมูลลับ: คนอื่นไม่ได้ payBy เลย (ไม่ส่งเงินเดือนลงหน้าเว็บ)
+  const payBy = new Map<string, OtPayInfo>();
+  if (canDecide && pending.length > 0 && (await salaryAccess(session)).canEdit) {
+    const [reqSettings, otDays] = await Promise.all([
+      withRequestsTenant(orgId, (tx) => readRequestSettings(tx, orgId)),
+      withSalaryTenant(orgId, (tx) => readSalarySettings(tx, orgId)).then((s) => s.otMode === "days").catch(() => false),
+    ]);
+    const pct = (id: string) => (reqSettings.otRates.find((r) => r.id === id) ?? reqSettings.otRates[0]!).percent;
+    const resultBy = new Map(results.items.map((r) => [`${r.employment_id}|${r.work_date}`, r]));
+    await Promise.all(
+      pending.map(async (item) => {
+        const salary = await monthlySalaryOn(orgId, item.employmentId, item.workDate).catch(() => null);
+        if (!salary) return;
+        const r = resultBy.get(`${item.employmentId}|${item.workDate}`);
+        const holiday = !!(r && (r.is_holiday || r.is_rest_day)) || dayOffName.has(`${item.employmentId}|${item.workDate}`);
+        payBy.set(`${item.employmentId}|${item.workDate}`, {
+          salary,
+          holiday,
+          normalPct: pct("normal"),
+          holidayPct: pct("holiday"),
+          holidayOtPct: pct("holiday_ot"),
+          roundBaht: reqSettings.otRoundBaht,
+          dayRate: otDays ? Math.ceil(Math.round((salary / 30) * 1e6) / 1e6) : null,
+        });
+      }),
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <h2 className="flex items-center gap-1.5 text-sm font-medium text-(--ink-soft)">
@@ -174,7 +206,7 @@ export async function renderOvertimeTab(): Promise<React.ReactNode> {
         ) : (
           <div className="space-y-3">
             {pending.map((item) => (
-              <OvertimeCard key={`${item.employmentId}|${item.workDate}`} item={item} canDecide={canDecide} approvers={approverNames} />
+              <OvertimeCard key={`${item.employmentId}|${item.workDate}`} item={item} canDecide={canDecide} approvers={approverNames} pay={payBy.get(`${item.employmentId}|${item.workDate}`)} />
             ))}
           </div>
         )}

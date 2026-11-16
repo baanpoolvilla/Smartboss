@@ -348,7 +348,7 @@ async function computePreview(session: OrgSession, input: PreviewInput, settings
           p.percent = rate.otPercent;
           p.rateLabel = `% OT ของคนงาน (${rate.otPercent}%)`;
           if (rate.wage) {
-            const c = otCalc("daily", rate.wage, rate.otPercent, minutes);
+            const c = otCalc("daily", rate.wage, rate.otPercent, minutes, settings.otRoundBaht);
             Object.assign(p, { baseKind: "daily", base: rate.wage, amount: c.amount, formula: c.formula });
           } else {
             p.warns.push("ยังไม่ได้ตั้งค่าแรงของคนงานคนนี้ — ชั่วโมง OT เข้าบัญชีได้ ค่าเงินจะคิดเมื่อ HR ตั้งค่าแรง");
@@ -362,7 +362,7 @@ async function computePreview(session: OrgSession, input: PreviewInput, settings
         p.rateLabel = rate.label;
         const salary = p.employmentId ? await monthlySalaryOn(orgId, p.employmentId, date) : null;
         if (salary) {
-          const c = otCalc("monthly", salary, rate.percent, minutes);
+          const c = otCalc("monthly", salary, rate.percent, minutes, settings.otRoundBaht);
           Object.assign(p, { baseKind: "monthly", base: salary, amount: c.amount, formula: c.formula });
         } else {
           p.baseKind = "manual";
@@ -807,8 +807,8 @@ async function prepareUnlinkedOt(session: OrgSession, input: CreateInput, name: 
   const propertyId = input.propertyId || workOrder?.propertyId || null;
   const property = propertyId ? await prisma.property.findFirst({ where: { orgId, id: propertyId }, select: { id: true, name: true } }) : null;
   // กรอกค่าแรงไว้ = คิดยอดประมาณให้เห็นก่อน (ผู้ใช้ 6/11/2569 "อยากให้ขึ้นว่า OT ใครเท่านี้ ๆ") · ผูกชื่อแล้วคิดใหม่จากค่าแรงจริงของคนนั้น
-  const est = wage ? otCalc("daily", wage, companyPct, minutes) : null;
   const settings = await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId));
+  const est = wage ? otCalc("daily", wage, companyPct, minutes, settings.otRoundBaht) : null;
   const route = await approverLevelFor(orgId, "ot", session.userId, null, est?.amount ?? 0, settings.approvalRoutes);
 
   return {
@@ -934,8 +934,8 @@ export async function setUnlinkedOtAmountAction(input: { id: string; mode: "dail
     if (minutes <= 0) return { error: "ข้อมูลเวลา OT ไม่ครบ" };
     const note = String(input.note ?? "").trim().slice(0, 200);
     const pct = input.mode === "daily" ? await workerCompanyOtPercent(orgId) : null;
-    const amount = input.mode === "daily" ? otCalc("daily", value, pct!, minutes).amount : value;
     const settings = await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId));
+    const amount = input.mode === "daily" ? otCalc("daily", value, pct!, minutes, settings.otRoundBaht).amount : value;
     const route = await approverLevelFor(orgId, "ot", r.createdBy, r.beneficiaryUserId, amount, settings.approvalRoutes);
     const byName = await nameOf(session.userId);
     const saved = await withRequestsTenant(orgId, async (tx) => {
@@ -991,6 +991,7 @@ export async function setWorkerOtAmountAction(input: { id: string; mode: "system
     const minutes = r.otMinutes ?? 0;
     if (minutes <= 0) return { error: "ข้อมูลเวลา OT ไม่ครบ" };
     const note = String(input.note ?? "").trim().slice(0, 200);
+    const settings = await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId));
     let data: { amount: number; netAmount: number; otBase: number | null; otBaseKind: string; otPercent: number | null; otRateLabel: string };
     if (input.mode === "manual") {
       const v = round2(Number(input.value));
@@ -998,10 +999,9 @@ export async function setWorkerOtAmountAction(input: { id: string; mode: "system
       data = { amount: v, netAmount: v, otBase: null, otBaseKind: "manual", otPercent: null, otRateLabel: `HR กรอกยอดเอง${note ? ` · ${note}` : ""}` };
     } else {
       const rate = await workerRateOn(orgId, r.employmentId, r.workDate);
-      const c = rate.wage ? otCalc("daily", rate.wage, rate.otPercent, minutes) : null;
+      const c = rate.wage ? otCalc("daily", rate.wage, rate.otPercent, minutes, settings.otRoundBaht) : null;
       data = { amount: c?.amount ?? 0, netAmount: c?.amount ?? 0, otBase: rate.wage, otBaseKind: "daily", otPercent: rate.otPercent, otRateLabel: `% OT ของคนงาน (${rate.otPercent}%)` };
     }
-    const settings = await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId));
     const route = await approverLevelFor(orgId, "ot", r.createdBy, r.beneficiaryUserId, data.netAmount, settings.approvalRoutes);
     const byName = await nameOf(session.userId);
     const saved = await withRequestsTenant(orgId, async (tx) => {
@@ -2178,6 +2178,7 @@ export async function saveSettingsAction(input: RequestSettings): Promise<Result
       receiptMaxAgeDays: maxAge,
       clearDueDays: clearDays,
       pettySpendReview: !!input.pettySpendReview,
+      otRoundBaht: !!input.otRoundBaht,
       updatedBy: session.userId,
     };
     await withRequestsTenant(orgId, async (tx) => {
@@ -2186,7 +2187,7 @@ export async function saveSettingsAction(input: RequestSettings): Promise<Result
         byUserId: session.userId,
         byName,
         action: "settings",
-        summary: `ตั้งค่า: อนุมัติ ${(Object.keys(approvalRoutes) as RequestKind[]).map((k) => `${KIND_META[k].short} ${ceoText(routeText(approvalRoutes[k]), ceo)}`).join(", ")} · OT ${rates.map((r) => `${r.label} ${r.percent}%`).join(", ")} · เพดานเบิกล่วงหน้า ${input.advanceCapMode === "none" ? "ไม่จำกัด" : input.advanceCapMode === "baht" ? baht(capValue) : `${capValue} วัน`} · VAT ${vat}% · ซื้อของเองจากเงินสดย่อย${input.pettySpendReview ? "ต้องมีคนตรวจ" : "ไม่ต้องตรวจ"}`,
+        summary: `ตั้งค่า: อนุมัติ ${(Object.keys(approvalRoutes) as RequestKind[]).map((k) => `${KIND_META[k].short} ${ceoText(routeText(approvalRoutes[k]), ceo)}`).join(", ")} · OT ${rates.map((r) => `${r.label} ${r.percent}%`).join(", ")} · เพดานเบิกล่วงหน้า ${input.advanceCapMode === "none" ? "ไม่จำกัด" : input.advanceCapMode === "baht" ? baht(capValue) : `${capValue} วัน`} · VAT ${vat}% · ซื้อของเองจากเงินสดย่อย${input.pettySpendReview ? "ต้องมีคนตรวจ" : "ไม่ต้องตรวจ"} · ค่า OT ${input.otRoundBaht ? "ปัดขึ้นเป็นบาท" : "คิดถึงสตางค์"}`,
       });
     });
     revalidatePath("/requests");
