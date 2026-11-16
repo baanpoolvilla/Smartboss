@@ -12,6 +12,7 @@ import {
   WorkforceError,
   WorkforceUnavailableError,
   type Company,
+  type Employment,
   type LeaveType,
   type Me,
   type Paged,
@@ -35,6 +36,7 @@ import { dockAttendance } from "@/lib/attendance-performance";
 import { thaiHolidayEvents } from "@/modules/report_task/data/thai-holidays";
 import { createOtFromHrApproval } from "@/modules/requests/lib/hr-ot-link";
 import { salaryAccess } from "@/modules/salary/lib/access";
+import { employeeCodeAllocator, type CodeAllocator } from "@/modules/hr/lib/employee-code";
 
 import { ceoTitle } from "@/lib/ceo-title";
 import { accountOfEmployment, bangkokDay, offboardAccount } from "@/lib/offboarding";
@@ -216,6 +218,32 @@ function orNull(value: FormDataEntryValue | null): string | null {
   return s === "" ? null : s;
 }
 
+/** ตัวออกรหัสพนักงานอัตโนมัติ จากรหัสที่มีอยู่แล้วทั้งหมด (รวมคนที่พ้นสภาพ) */
+async function loadCodeAllocator(): Promise<CodeAllocator> {
+  const rows = await wfTry<Paged<Employment>>("/employments?limit=200");
+  return employeeCodeAllocator((rows?.items ?? []).map((row) => row.employee_code));
+}
+
+/**
+ * POST /employments — ถ้ารหัสมาจากระบบ (ไม่ได้กรอกเอง) แล้ว API ตอบว่าซ้ำ (409 เช่นรหัสของคนที่
+ * ไม่ได้อยู่ในรายการ) ขยับไปเลขถัดไปให้เอง ไม่เกิน 5 ครั้ง · รหัสที่กรอกเองซ้ำ = แจ้ง error ตามเดิม
+ */
+async function postEmployment(
+  body: Record<string, unknown>,
+  typedCode: string,
+  codes: CodeAllocator,
+): Promise<{ id: string }> {
+  if (typedCode !== "") return wfFetch<{ id: string }>("/employments", { method: "POST", body: { ...body, employee_code: typedCode } });
+  for (let attempt = 0; ; attempt += 1) {
+    const code = codes.take();
+    try {
+      return await wfFetch<{ id: string }>("/employments", { method: "POST", body: { ...body, employee_code: code } });
+    } catch (error) {
+      if (!(error instanceof WorkforceError && error.status === 409) || attempt >= 4) throw error;
+    }
+  }
+}
+
 /**
  * สร้างพนักงาน = สร้าง person ก่อนแล้วค่อยผูก employment
  * workforce แยกสองตารางเพราะคนหนึ่งคนมีสัญญาจ้างได้หลายครั้ง (ลาออกแล้วกลับมา)
@@ -231,8 +259,9 @@ export async function createEmployeeAction(formData: FormData) {
 
   if (!companyId) throw new Error("ยังไม่มีบริษัทในระบบ workforce");
   if (!firstName || !lastName) throw new Error("กรุณากรอกชื่อและนามสกุล");
-  if (!employeeCode) throw new Error("กรุณากรอกรหัสพนักงาน");
   if (!hiredOn) throw new Error("กรุณาระบุวันเริ่มงาน");
+  // เว้นว่าง = ระบบตั้งให้ต่อจากเลขล่าสุด (GL-023 → GL-024)
+  const codes = await loadCodeAllocator();
 
   let employmentId: string;
   try {
@@ -249,17 +278,17 @@ export async function createEmployeeAction(formData: FormData) {
       },
     });
 
-    const employment = await wfFetch<{ id: string }>("/employments", {
-      method: "POST",
-      body: {
+    const employment = await postEmployment(
+      {
         company_id: companyId,
         person_id: person.id,
-        employee_code: employeeCode,
         employment_type: String(formData.get("employment_type") ?? "MONTHLY"),
         hired_on: hiredOn,
         time_zone: "Asia/Bangkok",
       },
-    });
+      employeeCode,
+      codes,
+    );
     employmentId = employment.id;
   } catch (error) {
     throw new Error(toMessage(error));
@@ -335,6 +364,13 @@ export async function importEmployeesAction(formData: FormData) {
     // อ่านไม่ได้ = ถือว่ายังไม่มีใคร แล้วปล่อยให้ API ฝั่งโน้นตัดสินเอง
   }
 
+  // รหัสพนักงานที่เว้นว่าง = ระบบตั้งให้เรียงต่อกันตามลำดับคนที่ติ๊ก (ไม่มีเลขโดดข้าม)
+  const codes = await loadCodeAllocator();
+  for (const userId of picked) {
+    const typed = field("employee_code", userId);
+    if (typed !== "") codes.markUsed(typed);
+  }
+
   let created = 0;
   const linked: string[] = [];
   const failures: string[] = [];
@@ -351,10 +387,6 @@ export async function importEmployeesAction(formData: FormData) {
 
     if (!firstName || !lastName) {
       failures.push(`${label}: ยังไม่ได้กรอกชื่อ-นามสกุล`);
-      continue;
-    }
-    if (!employeeCode) {
-      failures.push(`${label}: ยังไม่ได้กรอกรหัสพนักงาน`);
       continue;
     }
     if (!hiredOn) {
@@ -378,17 +410,17 @@ export async function importEmployeesAction(formData: FormData) {
         if (email !== "") personByEmail.set(email, personId);
       }
 
-      const employment = await wfFetch<{ id: string }>("/employments", {
-        method: "POST",
-        body: {
+      const employment = await postEmployment(
+        {
           company_id: companyId,
           person_id: personId,
-          employee_code: employeeCode,
           employment_type: employmentType,
           hired_on: hiredOn,
           time_zone: "Asia/Bangkok",
         },
-      });
+        employeeCode,
+        codes,
+      );
       created += 1;
       linked.push(userId);
 

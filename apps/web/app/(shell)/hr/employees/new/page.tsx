@@ -2,7 +2,8 @@ import { Card } from "@smartboss/ui/components/card";
 import { Button } from "@smartboss/ui/components/button";
 import { HrPage } from "@/modules/hr/components/hr-page";
 import { HR_PERMS } from "@/modules/hr/permissions";
-import { wfFetch, type Company, type Paged } from "@/modules/hr/lib/api";
+import { wfFetch, wfTry, type Company, type Employment, type Paged } from "@/modules/hr/lib/api";
+import { employeeCodeAllocator } from "@/modules/hr/lib/employee-code";
 import { Field, NotProvisioned, inputClass, selectClass } from "@/modules/hr/components/ui";
 import { createEmployeeAction } from "../../actions";
 import { requireOrg } from "@smartboss/auth";
@@ -24,6 +25,9 @@ export default async function NewEmployeePage() {
         const canSetPay = (await salaryAccess(await requireOrg())).canEdit;
 
         const today = new Date().toISOString().slice(0, 10);
+        // เว้นว่าง = ระบบตั้งให้ต่อจากเลขล่าสุด (บันทึกจริงคิดใหม่อีกรอบตอนกดบันทึก)
+        const employments = await wfTry<Paged<Employment>>("/employments?limit=200");
+        const nextCode = employeeCodeAllocator((employments?.items ?? []).map((row) => row.employee_code)).peek();
 
         return (
           <form action={createEmployeeAction} className="flex flex-col gap-4">
@@ -69,12 +73,11 @@ export default async function NewEmployeePage() {
                 บริษัท: <span className="font-medium">{company.display_name}</span>
               </p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Field label="รหัสพนักงาน *">
+                <Field label="รหัสพนักงาน" hint={`เว้นว่างได้ ระบบตั้งให้เอง (ถัดไปคือ ${nextCode})`}>
                   <input
                     name="employee_code"
-                    required
                     maxLength={32}
-                    placeholder="EMP-001"
+                    placeholder="อัตโนมัติ"
                     className={`${inputClass} font-mono`}
                   />
                 </Field>

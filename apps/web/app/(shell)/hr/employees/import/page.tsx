@@ -24,6 +24,7 @@ import {
   selectClass,
 } from "@/modules/hr/components/ui";
 import { importEmployeesAction } from "../../actions";
+import { employeeCodeAllocator } from "@/modules/hr/lib/employee-code";
 
 /**
  * นำเข้าพนักงานจากบัญชีผู้ใช้ที่มีอยู่แล้วใน Smartboss
@@ -85,6 +86,8 @@ export default async function ImportEmployeesPage({
             imported: importedEmails.has(user.email.toLowerCase()),
           }));
         const pending = rows.filter((user) => !user.imported);
+        // รหัสพนักงาน: เว้นว่าง = ระบบตั้งให้ต่อจากเลขล่าสุด เรียงตามคนที่ติ๊ก
+        const nextCode = employeeCodeAllocator((employments?.items ?? []).map((row) => row.employee_code)).peek();
 
         return (
           <>
@@ -164,11 +167,11 @@ export default async function ImportEmployeesPage({
                           className={inputClass}
                         />
                       </Field>
-                      <Field label="รหัสพนักงาน *">
+                      <Field label="รหัสพนักงาน" hint={`เว้นว่างได้ ระบบตั้งให้เอง (ถัดไปคือ ${nextCode})`}>
                         <input
                           name={`employee_code.${user.id}`}
                           maxLength={32}
-                          placeholder="EMP-001"
+                          placeholder="อัตโนมัติ"
                           className={`${inputClass} font-mono`}
                         />
                       </Field>
