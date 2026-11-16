@@ -31,8 +31,6 @@ export interface HrOtApproval {
   /** WORKDAY | REST_DAY | PUBLIC_HOLIDAY */
   category: string;
   approvedMinutes: number;
-  /** ยอดเงินที่คนอนุมัติแก้เอง (บาท) — ส่งมาเฉพาะคนที่ดูเงินเดือนได้ · ไม่ส่ง = คิดตามสูตร */
-  amountOverride?: number;
 }
 
 export type HrOtLinkResult = { created: string[] } | { skipped: string };
@@ -117,27 +115,14 @@ export async function createOtFromHrApproval(session: OrgSession, input: HrOtApp
   const actorIsCeo = hasPermission(session, REQ_PERMS.approveCeo);
   const categoryText = input.category === "PUBLIC_HOLIDAY" ? "วันนักขัตฤกษ์" : input.category === "REST_DAY" ? "วันหยุด" : "หลังเลิกกะ";
 
-  // ยอดที่คนอนุมัติแก้เอง (16/11/2569 "คิดเป็นจำนวนเงินมาเลย และแก้ไขได้") — ใบแรกรับส่วนต่าง
-  // วันหยุดเกิน 8 ชม. มี 2 ใบ: ใบส่วนเกินคงยอดสูตร ใบแรก = ยอดที่แก้ − ใบส่วนเกิน (ยอดที่แก้น้อยกว่าใบส่วนเกิน → ใบแรกได้ทั้งหมด ใบส่วนเกิน 0)
-  const formula = parts.map((part) => (salary ? otCalc("monthly", salary, part.rate.percent, part.minutes, settings.otRoundBaht).amount : 0));
-  const override = input.amountOverride !== undefined && Number.isFinite(input.amountOverride) && input.amountOverride >= 0 ? round2(input.amountOverride) : undefined;
-  const amounts = [...formula];
-  if (override !== undefined) {
-    const rest = formula.slice(1).reduce((n, a) => n + a, 0);
-    if (override >= rest) amounts[0] = round2(override - rest);
-    else amounts.fill(0).splice(0, 1, override);
-  }
-  const hasAmount = salary !== null || override !== undefined;
-
   const created: string[] = [];
-  for (const [i, part] of parts.entries()) {
-    const amount = amounts[i] ?? 0;
-    const edited = override !== undefined && amount !== formula[i];
-    if (override !== undefined && i > 0 && amount === 0) continue;
+  for (const part of parts) {
+    const calc = salary ? otCalc("monthly", salary, part.rate.percent, part.minutes, settings.otRoundBaht) : null;
+    const amount = calc?.amount ?? 0;
     const route = routeFor(settings.approvalRoutes.ot, amount);
     // ไม่มีเงินเดือนในระบบ = คิดเงินไม่ได้ → รอ HR กรอกยอด (แก้ใบได้เพราะยังไม่มีใครตัดสิน)
-    const done = hasAmount && (actorIsCeo || (route.level === "hr" && !route.needCeo));
-    const toCeo = hasAmount && !done;
+    const done = salary !== null && (actorIsCeo || (route.level === "hr" && !route.needCeo));
+    const toCeo = salary !== null && !done;
     const now = new Date();
     const row = await withRequestsTenantAfter(
       orgId,
@@ -152,7 +137,7 @@ export async function createOtFromHrApproval(session: OrgSession, input: HrOtApp
             status: done ? "approved" : "pending",
             title: `OT ${categoryText} (จากเวลาสแกน)`,
             // ไม่ใส่สูตร (มีเงินเดือนอยู่ในนั้น) — หน้าใบประกอบสูตรจาก otBase ให้เฉพาะคนที่เห็นเงินเดือนได้
-            detail: `HR อนุมัติในแท็บ "OT รออนุมัติ" · ${part.rate.label}${edited ? ` · ยอดแก้โดย ${actorName}` : ""}`,
+            detail: `HR อนุมัติในแท็บ "OT รออนุมัติ" · ${part.rate.label}`,
             beneficiaryUserId: user.id,
             beneficiaryName: user.name,
             beneficiaryKind: "staff",
@@ -164,7 +149,7 @@ export async function createOtFromHrApproval(session: OrgSession, input: HrOtApp
             otPercent: part.rate.percent,
             otRateLabel: part.rate.label,
             otBase: salary,
-            otBaseKind: salary && !edited ? "monthly" : "manual",
+            otBaseKind: salary ? "monthly" : "manual",
             amount,
             netAmount: amount,
             attachments: [],
@@ -182,7 +167,7 @@ export async function createOtFromHrApproval(session: OrgSession, input: HrOtApp
           byUserId: session.userId,
           byName: actorName,
           action: "create",
-          summary: `สร้างอัตโนมัติจาก OT ที่ HR อนุมัติ · ${user.name} ${part.start}–${part.end} (${hoursText(part.minutes)}) ${hasAmount ? baht(round2(amount)) : "ยังไม่มีเงินเดือนในระบบ — กรอกค่า OT"}${edited ? ` (แก้ยอดจากสูตร ${baht(round2(formula[i] ?? 0))})` : ""}${done ? " · อนุมัติแล้ว" : toCeo ? ` · รอ ${ceo}` : ""}`,
+          summary: `สร้างอัตโนมัติจาก OT ที่ HR อนุมัติ · ${user.name} ${part.start}–${part.end} (${hoursText(part.minutes)}) ${salary ? baht(round2(amount)) : "ยังไม่มีเงินเดือนในระบบ — กรอกค่า OT"}${done ? " · อนุมัติแล้ว" : toCeo ? ` · รอ ${ceo}` : ""}`,
         });
         return { id: r.id, code: r.code };
       },
