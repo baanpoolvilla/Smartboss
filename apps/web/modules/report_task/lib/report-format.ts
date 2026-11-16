@@ -59,6 +59,7 @@ export function topicNames(line: string): string[] {
   const names: string[] = [];
   const seen = new Set<string>();
   for (const part of line.split("|")) {
+    if (part.trim().startsWith(KEYWORD_MARK)) continue; // คำหลัก ไม่ใช่ชื่อ — ดู topicKeywords
     const name = stripLead(part.replace(/[🔴🟡🟢]/gu, "")).trim().slice(0, MAX_TOPIC_LENGTH);
     const key = squash(name);
     if (!key || seen.has(key)) continue;
@@ -67,6 +68,68 @@ export function topicNames(line: string): string[] {
     if (names.length > MAX_ALIASES) break;
   }
   return names;
+}
+
+/**
+ * คำหลักของหัวข้อ (16/11/2569 ผู้ใช้: "ให้มันรู้พอแล้ว แต่ก็ไม่หลุดจนเกินไป")
+ * ตั้งค่าเป็น "~คำ" ต่อท้ายหัวข้อ เช่น "งานที่ล่าช้า ผิดพลาด ไม่เป็นไปตามแผน | ~ล่าช้า | ~ผิดแผน | ~งานค้าง"
+ * บรรทัดหัวข้อที่มีคำหลักอยู่ช่วงต้นบรรทัด = หัวข้อนี้ แม้ชื่อไม่ตรงตัว ("งานล่าช้า/ผิดแผน" → ผ่าน)
+ * แต่นับเฉพาะ "บรรทัดหัวข้อ" (มีสี 🔴🟡🟢 หรือเป็นบรรทัดสั้น) — คำว่า "ล่าช้า" ในเนื้อหายาว ๆ ไม่นับ
+ */
+export const KEYWORD_MARK = "~";
+/** ช่วงต้นบรรทัด (ตัวอักษรหลังตัดช่องว่าง/วรรคตอน) ที่ต้องเจอคำหลัก */
+const KEYWORD_WINDOW = 30;
+/** บรรทัดที่ไม่มีสี ยาวไม่เกินนี้ (หลังตัดช่องว่าง) ถึงนับว่าเป็นบรรทัดหัวข้อ */
+const HEADING_MAX = 45;
+
+export function topicKeywords(line: string): string[] {
+  const out: string[] = [];
+  for (const part of line.split("|")) {
+    const t = part.trim();
+    if (!t.startsWith(KEYWORD_MARK)) continue;
+    const kw = t.slice(KEYWORD_MARK.length).trim().slice(0, 30);
+    if (squash(kw) && !out.some((x) => squash(x) === squash(kw))) out.push(kw);
+    if (out.length >= MAX_ALIASES) break;
+  }
+  return out;
+}
+
+function matchersOf(wanted: string[]): { byLength: { index: number; key: string }[]; keywords: { index: number; key: string }[] } {
+  const byLength = wanted
+    .flatMap((line, index) => topicNames(line).map((name) => ({ index, key: squash(name) })))
+    .sort((a, b) => b.key.length - a.key.length);
+  const keywords = wanted.flatMap((line, index) => topicKeywords(line).map((kw) => ({ index, key: squash(kw) }))).filter((k) => k.key);
+  return { byLength, keywords };
+}
+
+/**
+ * บรรทัดนี้เป็นหัวข้อไหน — ชื่อตรง (ขึ้นต้นด้วยชื่อ) ก่อน · ไม่ตรงแล้วค่อยดูคำหลักในบรรทัดหัวข้อ
+ * คืน index ของหัวข้อ และ "เนื้อหาต่อท้ายบรรทัดเดียวกัน" ไหม
+ */
+function matchLine(
+  line: string,
+  head: string,
+  m: ReturnType<typeof matchersOf>,
+  taken: (index: number) => boolean,
+): { index: number; inlineContent: boolean } | null {
+  if (!head) return null;
+  const exact = m.byLength.find((t) => !taken(t.index) && head.startsWith(t.key));
+  if (exact) return { index: exact.index, inlineContent: head.length > exact.key.length };
+  if (m.keywords.length === 0) return null;
+  const colored = /[🔴🟡🟢]/u.test(line);
+  // ส่วนหัวของบรรทัด = ก่อน ":" (ถ้ามี) — "🟡 งานล่าช้า/ผิดแผน: รอช่าง" ดูแค่ "งานล่าช้า/ผิดแผน"
+  const beforeColon = stripMarkup(line).split(/[:：]/)[0] ?? "";
+  const headPart = squash(stripLead(beforeColon.replace(/[🔴🟡🟢🏁]/gu, "")));
+  if (!colored && headPart.length > HEADING_MAX) return null;
+  const window = headPart.slice(0, KEYWORD_WINDOW);
+  let best: { index: number; at: number } | null = null;
+  for (const k of m.keywords) {
+    if (taken(k.index)) continue;
+    const at = window.indexOf(k.key);
+    if (at >= 0 && (!best || at < best.at)) best = { index: k.index, at };
+  }
+  if (!best) return null;
+  return { index: best.index, inlineContent: head.length > headPart.length };
 }
 
 /** บรรทัดตั้งค่าที่มี 🏁 = หัวส่วน (ไม่ต้องใส่สี) */
@@ -115,7 +178,7 @@ export function normalizeTopics(input: readonly string[] | string | undefined | 
     const key = names[0] ? squash(names[0]) : "";
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    const topic = names.join(" | ");
+    const topic = [...names, ...topicKeywords(String(line)).map((k) => `${KEYWORD_MARK}${k}`)].join(" | ");
     out.push(topic);
     if (out.length >= MAX_TOPICS) break;
   }
@@ -131,9 +194,7 @@ export function normalizeTopics(input: readonly string[] | string | undefined | 
 export function checkReportFormat(text: string, topics: readonly string[], requireColor: boolean): FormatCheck {
   const wanted = normalizeTopics(topics);
   // ทุกชื่อ (หลัก + เรียกอื่น) ของทุกหัวข้อ เรียงชื่อยาวก่อน — "ปัญหา" ต้องไม่ไปแย่งบรรทัดของ "ปัญหาและความเสี่ยง"
-  const byLength = wanted
-    .flatMap((line, index) => topicNames(line).map((name) => ({ index, key: squash(name) })))
-    .sort((a, b) => b.key.length - a.key.length);
+  const m = matchersOf(wanted);
   const items: TopicCheck[] = wanted.map((line) => ({ topic: topicLabel(line), found: false, color: null, hasContent: false, section: isSectionTopic(line) }));
 
   let current: TopicCheck | null = null;
@@ -142,7 +203,7 @@ export function checkReportFormat(text: string, topics: readonly string[], requi
     const line = rawLine.trim();
     if (!line) continue;
     const head = squash(stripLead(line.replace(/[🔴🟡🟢🏁]/gu, "")));
-    const hit = head ? byLength.find((t) => !items[t.index]!.found && head.startsWith(t.key)) : undefined;
+    const hit = matchLine(line, head, m, (i) => items[i]!.found);
     if (hit) {
       const item = items[hit.index]!;
       item.found = true;
@@ -150,13 +211,13 @@ export function checkReportFormat(text: string, topics: readonly string[], requi
         // หัวส่วนใหม่ปิดหัวข้อเดิม — เนื้อหาใต้ "Department Module" ไม่ใช่รายละเอียดของหัวข้อสุดท้ายในส่วนก่อน
         currentSection = item;
         current = null;
-        if (head.length > hit.key.length) item.hasContent = true;
+        if (hit.inlineContent) item.hasContent = true;
         continue;
       }
       current = item;
       for (const emoji of Object.keys(COLOR_OF)) if (line.includes(emoji)) item.color = COLOR_OF[emoji]!;
       // เนื้อหาต่อท้ายบรรทัดเดียวกับหัวข้อ เช่น "🟢 วันนี้ส่งงานอะไร: ปิดงาน 4 ใบ"
-      if (head.length > hit.key.length) item.hasContent = true;
+      if (hit.inlineContent) item.hasContent = true;
       if (currentSection) currentSection.hasContent = true;
       continue;
     }
@@ -187,9 +248,7 @@ export interface TopicBlock {
  */
 export function splitReportTopics(text: string, topics: readonly string[]): TopicBlock[] {
   const wanted = normalizeTopics(topics);
-  const byLength = wanted
-    .flatMap((line, index) => topicNames(line).map((name) => ({ index, key: squash(name) })))
-    .sort((a, b) => b.key.length - a.key.length);
+  const m = matchersOf(wanted);
   const found = new Set<number>();
   const out: (TopicBlock & { lines: string[] })[] = [];
   let current: (TopicBlock & { lines: string[] }) | null = null;
@@ -197,7 +256,7 @@ export function splitReportTopics(text: string, topics: readonly string[]): Topi
     const line = rawLine.trim();
     if (!line) continue;
     const head = squash(stripLead(line.replace(/[🔴🟡🟢🏁]/gu, "")));
-    const hit = head ? byLength.find((t) => !found.has(t.index) && head.startsWith(t.key)) : undefined;
+    const hit = matchLine(line, head, m, (i) => found.has(i));
     if (hit) {
       found.add(hit.index);
       const def = wanted[hit.index]!;
