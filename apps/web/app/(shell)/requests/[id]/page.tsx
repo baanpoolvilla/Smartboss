@@ -14,6 +14,8 @@ import { REQ_PERMS } from "@/modules/requests/permissions";
 import { canDecide, canSee, canSetOtAmount, isUnlinkedOt, listPeople, needsOtAmount, workerRateOn } from "@/modules/requests/lib/data";
 import { LinkWorkerPanel } from "@/modules/requests/components/link-worker";
 import { SetOtAmountPanel } from "@/modules/requests/components/set-ot-amount";
+import { EditStaffOtAmountPanel } from "@/modules/requests/components/edit-staff-ot-amount";
+import { staffOtEditState } from "@/modules/requests/lib/ot-edit";
 import { WorkerOtAmountPanel } from "@/modules/requests/components/worker-ot-amount";
 import { loadRequests, pettyBalances, readSettings, withRequestsTenant, type RequestView } from "@/modules/requests/lib/db";
 import { listPettyHolders } from "@/modules/requests/lib/holders";
@@ -233,6 +235,8 @@ export default async function RequestDetailPage({ params, searchParams }: { para
   // + พนักงานที่ยังไม่มีเงินเดือนในระบบ ยื่นแบบไม่มียอด (ผู้ใช้ 8/11/2569) — ยอดพนักงานประจำใส่ได้เฉพาะคนที่เห็นยอด
   const staffNoSalary = r.kind === "ot" && !unlinked && r.otBaseKind === "manual";
   const canSetAmount = canSetOtAmount(r, viewer) && (unlinked || !payHidden);
+  // ยอด OT พนักงาน: แก้ได้/ไม่ได้ + เหตุผล (16/11/2569) — ใบที่รอใส่ยอด (canSetAmount) ใช้กล่องเดิม · คนที่ไม่เห็นเงินไม่ได้กล่องนี้
+  const otEdit = !canSetAmount && !payHidden && r.netAmount > 0 ? await staffOtEditState(session, r) : null;
   // คนงานที่มีในระบบ: HR เลือกคิดจากค่าแรง หรือกรอกยอดเอง (ก่อนอนุมัติ)
   const canSetWorker =
     r.kind === "ot" && r.status === "pending" && !r.firstDecidedAt && r.beneficiaryKind === "worker" && !!r.beneficiaryUserId && !!r.employmentId &&
@@ -458,6 +462,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
             {canSetAmount && (
               <SetOtAmountPanel id={r.id} minutes={r.otMinutes ?? 0} current={r.netAmount > 0 ? r.netAmount : null} />
             )}
+            {otEdit?.show && <EditStaffOtAmountPanel id={r.id} current={r.netAmount} canEdit={otEdit.canEdit} reason={otEdit.reason} />}
             {canSetWorker && <WorkerOtAmountPanel id={r.id} system={workerSystem} current={{ manual: r.otBaseKind === "manual", amount: r.netAmount }} />}
             {canLink && <LinkWorkerPanel id={r.id} typedName={r.beneficiaryName} workers={linkWorkers} optional />}
             {noAccount && r.status === "pending" && r.netAmount > 0 && canDecide(r, viewer) && (

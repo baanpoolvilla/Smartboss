@@ -2196,3 +2196,60 @@ export async function saveSettingsAction(input: RequestSettings): Promise<Result
     return fail(error);
   }
 }
+
+/**
+ * คนดูแลเงินเดือนแก้ยอดเงินในใบ OT พนักงาน (ผู้ใช้ 16/11/2569 "คนอนุมัติส่งเป็นชั่วโมงพอ ให้ HR/คนทำเงินเดือนจัดการเงิน")
+ * แก้ได้/ไม่ได้ตาม staffOtEditState (ยังไม่จ่าย · ไม่อยู่ในงวดที่ส่งอนุมัติแล้ว · ไม่ใช่ของตัวเอง · ไม่ได้คิด OT แบบนับวัน)
+ * ไม่เปลี่ยนสถานะการอนุมัติของใบ · คนแก้ไม่ใช่ CEO = แจ้ง CEO ทุกครั้ง (เงินขึ้น/ลงต้องมีคนเห็น)
+ */
+export async function editStaffOtAmountAction(input: { id: string; amount: number; note?: string }): Promise<Result> {
+  try {
+    const session = await guard();
+    const orgId = session.orgId;
+    const r = await withRequestsTenant(orgId, (tx) => loadOne(tx, orgId, input.id));
+    if (!r) return { error: "ไม่พบใบ OT" };
+    const { staffOtEditState } = await import("./lib/ot-edit");
+    const state = await staffOtEditState(session, r);
+    if (!state.canEdit) return { error: state.reason || "ใบนี้แก้ยอดไม่ได้" };
+    const amount = round2(Number(input.amount));
+    if (!Number.isFinite(amount) || amount < 0 || amount > 100_000) return { error: "ใส่ยอดเป็นตัวเลข 0 – 100,000 บาท" };
+    if (Math.abs(amount - r.netAmount) < 0.005) return { error: "ยอดเท่าเดิม" };
+    const note = String(input.note ?? "").trim().slice(0, 200);
+    const byName = await nameOf(session.userId);
+    const saved = await withRequestsTenant(orgId, async (tx) => {
+      const res = await tx.moneyRequest.updateMany({
+        where: { orgId, id: r.id, status: r.status, netAmount: r.netAmount },
+        data: {
+          amount,
+          netAmount: amount,
+          otBaseKind: "manual",
+          otRateLabel: `${(r.otRateLabel ?? "").split(" · แก้ยอดโดย")[0]} · แก้ยอดโดย ${byName}${note ? ` (${note})` : ""}`.replace(/^ · /, ""),
+        },
+      });
+      if (res.count === 0) return false;
+      await insertEvent(tx, orgId, {
+        requestId: r.id,
+        byUserId: session.userId,
+        byName,
+        action: "edit",
+        summary: `แก้ยอด OT ${baht(r.netAmount)} → ${baht(amount)}${note ? ` · ${note}` : ""}`,
+      });
+      return true;
+    });
+    if (!saved) return { error: "ใบนี้เพิ่งเปลี่ยน — รีเฟรชแล้วลองใหม่" };
+    const { salaryAccess } = await import("@/modules/salary/lib/access");
+    if (!(await salaryAccess(session)).isCeo) {
+      void notifyApprovers(
+        orgId,
+        { id: r.id, code: r.code, kind: "ot", title: r.title, netAmount: amount, beneficiaryName: r.beneficiaryName },
+        "ceo",
+        [session.userId],
+        `${byName} แก้ยอด OT ${baht(r.netAmount)} →`,
+      );
+    }
+    refresh(r.id);
+    return { ok: true };
+  } catch (error) {
+    return fail(error);
+  }
+}
