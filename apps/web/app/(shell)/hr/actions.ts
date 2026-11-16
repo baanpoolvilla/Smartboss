@@ -2456,6 +2456,15 @@ export async function decideOvertimeAction(formData: FormData) {
     approvedMinutes = n;
   }
 
+  // ยอดเงินที่แก้เองในการ์ด — รับเฉพาะคนที่ดูเงินเดือนได้ (คนอื่นไม่เห็นช่องนี้อยู่แล้ว)
+  let amountOverride: number | undefined;
+  const amountRaw = String(formData.get("approved_amount") ?? "").replace(/,/g, "").trim();
+  if (decision === "APPROVE" && amountRaw !== "" && (await salaryAccess(session)).canEdit) {
+    const n = Number(amountRaw);
+    if (!Number.isFinite(n) || n < 0 || n > 100_000) throw new Error("ยอดเงิน OT ไม่ถูกต้อง");
+    amountOverride = Math.round(n * 100) / 100;
+  }
+
   let decided: { id: string; status: string; ot_category: string; approved_minutes: number };
   try {
     decided = await wfFetch("/overtime-requests:decide", {
@@ -2479,6 +2488,7 @@ export async function decideOvertimeAction(formData: FormData) {
       workDate,
       category: decided.ot_category,
       approvedMinutes: decided.approved_minutes,
+      ...(amountOverride !== undefined ? { amountOverride } : {}),
     })
       // ข้ามเงียบ ๆ เคยทำให้ไม่มีใครรู้ว่าใบไม่ถูกสร้าง (16/11/2569 GL-011) — log ไว้ + มีปุ่ม "สร้างใบ OT อีกครั้ง" ในรายการตัดสินแล้ว
       .then((r) => { if ("skipped" in r) console.warn("[hr] auto OT request skipped", decided.id, r.skipped); })
