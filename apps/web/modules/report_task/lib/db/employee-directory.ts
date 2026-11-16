@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@smartboss/database";
 
 import { readStore, writeStore } from "./org-store";
+import { withWorkforceTenant } from "./workforce-calendar";
 
 /**
  * รายชื่อพนักงานของโมดูล — สร้างจาก `core.users` ของบริษัท ไม่ใช่รายชื่อแยกของตัวเอง
@@ -37,6 +38,30 @@ export interface DirectoryUser {
   isCeo?: boolean;
   /** คนงานรายวัน (role WORKER) — เห็นเฉพาะห้องรายงานที่ใส่ชื่อ/แผนกไว้ตรง ๆ (canSeeReportTopic) */
   isWorker?: boolean;
+  /**
+   * วันเริ่มงาน YYYY-MM-DD — วันเริ่มงานในทะเบียน HR (ถ้ามี) ไม่งั้นวันที่สร้างบัญชี
+   * วันก่อนหน้านี้ไม่นับว่าขาดส่งรายงาน (16/11/2569: คนเพิ่งเข้าวันนี้โดนนับ "ยังไม่ส่ง เลยกำหนด" 62 ครั้งย้อนไปถึงวันที่สร้างรอบ)
+   */
+  startedOn?: string;
+}
+
+const bkkDay = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(d);
+
+/** วันเริ่มงานจากทะเบียน HR ของแต่ละบัญชี (ทะเบียนที่ยังไม่พ้นสภาพ ล่าสุด) — ไม่มีโมดูล HR / อ่านไม่ได้ = ว่าง */
+async function hireDatesBySubject(orgId: string): Promise<Map<string, string>> {
+  try {
+    const rows = await withWorkforceTenant(orgId, (tx) =>
+      tx.$queryRawUnsafe<{ subject: string; hired_on: string }[]>(
+        `SELECT DISTINCT ON (p.subject) p.subject, to_char(e.hired_on, 'YYYY-MM-DD') AS hired_on
+           FROM workforce.employments e JOIN workforce.principals p ON p.person_id = e.person_id
+          WHERE p.subject IS NOT NULL AND e.terminated_on IS NULL
+          ORDER BY p.subject, e.hired_on DESC`,
+      ),
+    );
+    return new Map(rows.map((r) => [r.subject, r.hired_on]));
+  } catch {
+    return new Map();
+  }
 }
 
 /**
@@ -74,7 +99,7 @@ function initialsOf(name: string): string {
 }
 
 export async function listDirectory(orgId: string): Promise<DirectoryUser[]> {
-  const [users, profiles] = await Promise.all([
+  const [users, profiles, hired] = await Promise.all([
     prisma.user.findMany({
       where: { orgId, isActive: true },
       select: {
@@ -83,11 +108,13 @@ export async function listDirectory(orgId: string): Promise<DirectoryUser[]> {
         email: true,
         avatarUrl: true,
         departmentId: true,
+        createdAt: true,
         roles: { select: { role: { select: { code: true, name: true } } } },
       },
       orderBy: { name: "asc" },
     }),
     readStore<ProfileMap>(orgId, PROFILE_KEY),
+    hireDatesBySubject(orgId),
   ]);
 
   const map = profiles.data ?? {};
@@ -107,6 +134,7 @@ export async function listDirectory(orgId: string): Promise<DirectoryUser[]> {
       isOwner: (p.isOwnerOverride ?? roleDerived) || undefined,
       isCeo: codes.includes("CEO") || undefined,
       isWorker: codes.includes("WORKER") || undefined,
+      startedOn: hired.get(u.id) ?? bkkDay(u.createdAt),
     };
   });
 }

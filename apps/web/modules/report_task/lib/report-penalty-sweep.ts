@@ -309,6 +309,8 @@ export function computeReportPenaltyCandidates(
     for (const day of eachDay(startStr, endStr)) {
       for (const round of rounds) {
         for (const u of users) {
+          // ก่อนวันเริ่มงาน (HR / วันสร้างบัญชี) ไม่ต้องส่ง — ไม่หักคะแนน และที่เคยหักไปแล้วถูกคืนตอน reconcile (16/11/2569)
+          if (u.startedOn && day < u.startedOn) continue;
           const status = roundComplianceStatusServer(topic, u.id, round, day, posts, groups, users, exemptions, lock, weeklyMonthlyGraceDays, scorePeriod, earlySubmitDays);
           if (status !== "missed" && status !== "late") continue;
           out.push({

@@ -126,6 +126,15 @@ export function eachDay(startStr: string, endStr: string): string[] {
 export type ComplianceStatus = "on-time" | "late" | "missed" | "pending" | "exempt";
 
 /**
+ * วันก่อนเริ่มงานของคนนี้ = ไม่ต้องส่ง (16/11/2569: คนเพิ่งเข้าวันนี้ แต่ถูกเพิ่มเข้ารอบส่งที่สร้างไว้นานแล้ว
+ * โดนนับ "ยังไม่ส่ง เลยกำหนด" ย้อนหลังทุกวันตั้งแต่สร้างรอบ — 62 ครั้ง) · ไม่รู้วันเริ่มงาน = นับแบบเดิม
+ */
+function beforeStart(userId: string, day: string): boolean {
+  const start = getUser(userId)?.startedOn;
+  return !!start && day < start;
+}
+
+/**
  * A room's own creation day and "today" bound every compliance calculation —
  * a room can't have been missed before it existed, and a day that hasn't
  * finished yet can't be judged "missed" (see `dayComplianceStatus`'s
@@ -157,6 +166,7 @@ export function dayComplianceStatus(
   posts: ReportPost[],
   exemptions?: DateExemptions
 ): ComplianceStatus {
+  if (beforeStart(userId, day)) return "exempt";
   const lastCutoff = userRequiredCutoffMinutes(topic, userId, day);
   if (lastCutoff === null) return "exempt";
   const legacyOnly = !!exemptions && isLegacyHolidayOnly(exemptions, userId, day);
@@ -238,6 +248,7 @@ export function roundComplianceStatus(
   exemptions?: DateExemptions
 ): ComplianceStatus {
   if (!roundRunsOnDay(round, day)) return "exempt";
+  if (beforeStart(userId, day)) return "exempt";
   // วันหยุดเก่าก่อนเปลี่ยนกติกา: ส่งมาแล้วตัดสินตามปกติ ไม่ส่งไม่นับว่าขาด (isLegacyHolidayOnly)
   const legacyOnly = !!exemptions && !roundIgnoresDateExemptions(round) && isLegacyHolidayOnly(exemptions, userId, day);
   if (exemptions && !legacyOnly && !roundIgnoresDateExemptions(round) && isExemptDate(exemptions, userId, day)) return "exempt";

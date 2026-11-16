@@ -44,6 +44,8 @@ export interface User {
   isCeo?: boolean;
   /** คนงานรายวัน (role WORKER) — เห็นเฉพาะห้องรายงานที่ใส่ชื่อ/แผนกไว้ตรง ๆ */
   isWorker?: boolean;
+  /** วันเริ่มงาน YYYY-MM-DD (HR หรือวันสร้างบัญชี) — ก่อนวันนี้ไม่นับว่าขาดส่งรายงาน */
+  startedOn?: string;
 }
 
 /**

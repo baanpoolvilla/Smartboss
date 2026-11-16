@@ -164,3 +164,19 @@ describe("buildUserComplianceReports — countPending (ห้องสรุป�
     expect(r.complianceRate).toBe(50);
   });
 });
+
+// 16/11/2569: คนเพิ่งเริ่มงาน ถูกใส่ในรอบที่สร้างไว้นาน → โดนนับ "ยังไม่ส่ง เลยกำหนด" ย้อนหลังทุกวัน
+describe("วันก่อนเริ่มงานไม่นับว่าขาดส่ง", () => {
+  it("ก่อน startedOn = exempt · ตั้งแต่ startedOn ตัดสินตามปกติ", () => {
+    const prev = useEmployeeStore.getState().employees;
+    useEmployeeStore.setState({ employees: [...prev, { id: userId, name: "new", email: "n@test", avatar: "", role: "", departmentId: "dep-a", startedOn: "2026-02-01" } as User] });
+    try {
+      const topic = topicWith([morning]);
+      expect(roundComplianceStatus(topic, userId, morning, "2026-01-30", [])).toBe("exempt");
+      expect(dayComplianceStatus(topic, userId, "2026-01-31", [])).toBe("exempt");
+      expect(roundComplianceStatus(topic, userId, morning, "2026-02-01", [])).toBe("missed");
+    } finally {
+      useEmployeeStore.setState({ employees: prev });
+    }
+  });
+});
