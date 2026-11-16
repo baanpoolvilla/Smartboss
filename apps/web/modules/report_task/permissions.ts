@@ -36,7 +36,7 @@ export const ALL_REPORT_TASK_PERMS: string[] = Object.values(REPORT_TASK_PERMS);
 
 export const REPORT_TASK_PERM_LABELS: Record<string, string> = {
   [REPORT_TASK_PERMS.access]: "เข้าใช้โมดูลรายงานและงาน",
-  [REPORT_TASK_PERMS.taskView]: "ดูงานและบอร์ดงาน",
+  [REPORT_TASK_PERMS.taskView]: "ดูงาน / Task",
   [REPORT_TASK_PERMS.taskManage]: "สร้าง/แก้ไข/มอบหมายงาน",
   [REPORT_TASK_PERMS.calendarView]: "ดูปฏิทินทีม",
   [REPORT_TASK_PERMS.calendarManage]: "จัดการวันหยุด/ประชุม/ประเภทการลา",
