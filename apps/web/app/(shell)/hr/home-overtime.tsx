@@ -46,7 +46,14 @@ interface OvertimeRequestRow {
   approved_minutes: number;
   status: string;
   decision_reason: string | null;
+  final_approved_at?: string | null;
 }
+
+/**
+ * วันที่เริ่มสร้างใบ OT ให้เองตอนอนุมัติ (1977e7e, 22/10/2569) — อนุมัติก่อนหน้านั้นไม่เคยมีใบ (จ่ายนอกระบบไปแล้ว)
+ * ปุ่ม "สร้างใบ OT อีกครั้ง" ขึ้นเฉพาะที่อนุมัติหลังวันนี้ กันกดแล้วจ่ายซ้ำ (16/11/2569: GL-011 17 ต.ค. อนุมัติ 18 ต.ค.)
+ */
+const AUTO_SLIP_SINCE = Date.parse("2026-10-22T00:00:00+07:00");
 
 function hhmm(minutes: number): string {
   return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`;
@@ -200,7 +207,7 @@ export async function renderOvertimeTab(): Promise<React.ReactNode> {
                 </div>
                 {r.status === "FINAL_APPROVED" ? (
                   <span className="flex flex-wrap items-center gap-2">
-                    {canDecide && (linkedByOt.get(r.id) ?? []).length === 0 && r.approved_minutes > 0 && (
+                    {canDecide && (linkedByOt.get(r.id) ?? []).length === 0 && r.approved_minutes > 0 && !!r.final_approved_at && Date.parse(r.final_approved_at) >= AUTO_SLIP_SINCE && (
                       <RetryOtSlipButton overtimeRequestId={r.id} workDate={r.work_date.slice(0, 10)} />
                     )}
                     {(linkedByOt.get(r.id) ?? []).map((l) => (
