@@ -12,7 +12,13 @@ function notRejectedByHr(): SQL {
   return sql`not exists (
     select 1 from ${schema.mobileRiskAssessments} ra
     where ra.raw_time_event_id = ${schema.rawTimeEvents.id} and ra.review_outcome = 'REJECTED'
+  ) and not exists (
+    select 1 from ${schema.timeEventAdjustments} adj
+    where adj.target_event_id = ${schema.rawTimeEvents.id}
+      and adj.adjustment_type = 'IGNORE_EVENT' and adj.status = 'APPROVED'
   )`;
+  // ↑ คำขอแก้เวลาที่อนุมัติแล้วแบบ "ไม่นับรายการนี้" (IGNORE_EVENT) — ผลลงเวลาไม่นับอยู่แล้ว
+  // (collectPunches) แต่กระดาน/Timeline ยังนับ ⇒ สแกนที่ไม่นับไปโผล่เป็น "ออก" (16 พ.ย. GL-023)
 }
 
 @Injectable()
