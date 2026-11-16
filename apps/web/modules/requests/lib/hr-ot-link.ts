@@ -110,7 +110,9 @@ export async function createOtFromHrApproval(session: OrgSession, input: HrOtApp
   if (clash) return { skipped: `มีใบ ${clash.code} (${clash.otStart}–${clash.otEnd}) ลงไว้แล้ว` };
 
   const salary = await monthlySalaryOn(orgId, input.employmentId, input.workDate);
-  const actor = await prisma.user.findFirst({ where: { id: session.userId }, select: { name: true } });
+  // ต้องมี orgId — findFirst ที่ไม่มี orgId ถูก tenant-guard บล็อกบนเครื่องจริง (strict) ทำให้ใบ OT ไม่ถูกสร้าง
+  // (เจอจริง 11/11/2569 OT ของ GL-011 อนุมัติแล้วแต่ไม่มีใบ — log "[hr] auto OT request failed … User.findFirst ไม่มีเงื่อนไข orgId")
+  const actor = await prisma.user.findFirst({ where: { orgId, id: session.userId }, select: { name: true } });
   const actorName = actor?.name ?? "HR";
   const actorIsCeo = hasPermission(session, REQ_PERMS.approveCeo);
   const categoryText = input.category === "PUBLIC_HOLIDAY" ? "วันนักขัตฤกษ์" : input.category === "REST_DAY" ? "วันหยุด" : "หลังเลิกกะ";
