@@ -40,8 +40,24 @@ export function extractMentionedIds(text: string, type: MentionType): string[] {
  * mentionSymbolFor) — even though the underlying marker is always written
  * with a literal `@[...]` regardless of type. */
 export function mentionMarkersToPlainText(text: string): string {
-  return stripColorMarkers(text).replace(MENTION_ONLY_PATTERN, (_m, label: string, type: string) => `${mentionSymbolFor(type as MentionType)}${label}`);
+  return unescapeStars(stripColorMarkers(text)).replace(MENTION_ONLY_PATTERN, (_m, label: string, type: string) => `${mentionSymbolFor(type as MentionType)}${label}`);
 }
+
+/**
+ * ดอกจันที่คนพิมพ์เอง (16/11/2569 "พิมพ์ * แล้วกดส่งมันหาย ต้องกลับมาแก้ใหม่ตลอด" — เช่น "14*3 = 42", "*สีน้ำมัน")
+ * เดิมเก็บเป็น * เฉย ๆ ซึ่งชนกับเครื่องหมายตัวเอียง `*ข้อความ*` ของปุ่มจัดรูปแบบ → ดอกจันสองตัวในบรรทัดเดียวกันกลายเป็นตัวเอียงแล้วหายไป
+ * ตอนบันทึกจึงเก็บดอกจันที่พิมพ์เองเป็น `\*` · ตอนแสดงผลเปลี่ยนกลับเป็น * (ไม่ใช่ตัวเอียง)
+ * โพสต์เก่าที่บันทึกก่อนแก้ยังเป็น * เฉย ๆ — แสดงเหมือนเดิม
+ */
+export const ESCAPED_STAR = /\\\*/g;
+/** ตัวแทนชั่วคราวของดอกจันที่พิมพ์เองระหว่างจับรูปแบบ (อักษรใช้ส่วนตัว ไม่มีใครพิมพ์) */
+const STAR_HOLD = "\uE0AA";
+const STAR_HOLD_ALL = /\uE0AA/g;
+export function unescapeStars(text: string): string {
+  return text.replace(ESCAPED_STAR, "*");
+}
+const holdStars = (text: string) => text.replace(ESCAPED_STAR, STAR_HOLD);
+const releaseStars = (text: string) => text.replace(STAR_HOLD_ALL, "*");
 
 /** `{{c:red}}ข้อความ{{/c}}` → `ข้อความ` — ที่ที่แสดงสีไม่ได้ (แจ้งเตือน ฯลฯ) ไม่ให้เห็นรหัสสี */
 export function stripColorMarkers(text: string): string {
@@ -201,7 +217,8 @@ export function bulletsTextToHtml(text: string): string {
   const html = text
     .split("\n")
     .map((line) => {
-      const rendered = inlineToEditorHtml(escapeHtml(line));
+      // ดอกจันที่พิมพ์เอง (\*) ขึ้นในกล่องแก้เป็น * ธรรมดา — บันทึกใหม่จะเก็บเป็น \* อีกรอบเอง
+      const rendered = releaseStars(inlineToEditorHtml(holdStars(escapeHtml(line))));
       // A wrapped list line otherwise snaps its continuation back to the
       // editor's own left edge instead of hanging under the marker's text —
       // text-indent only ever affects a block's *first* line, and every
@@ -277,7 +294,8 @@ function collectLines(el: HTMLElement): string[] {
   function walk(node: Node, flags: FormatFlags, isRoot = false) {
     if (node.nodeType === Node.TEXT_NODE) {
       const text = node.textContent ?? "";
-      if (text) current += text.trim() ? applyFormatMarkers(text, flags) : text;
+      // ดอกจันที่พิมพ์เอง → \* (ไม่ให้ชนกับตัวเอียง) — ดู ESCAPED_STAR
+      if (text) current += text.trim() ? applyFormatMarkers(text.replace(/\*/g, "\\*"), flags) : text;
       return;
     }
     if (node.nodeType !== Node.ELEMENT_NODE) return;
@@ -385,12 +403,16 @@ const mentionChipClass = "inline-flex items-center rounded bg-[#5865f2]/15 text-
 
 /** Renders **bold**, *italic*, __underline__, `code`, bare http(s) links, and `@[label](type:id)` mentions written via the bullet toolbar. A topic mention links straight to that room; person/department mentions are just a styled highlight — nothing to navigate to. */
 export function renderRichBulletText(text: string): ReactNode[] {
+  return renderRichHeld(holdStars(text));
+}
+
+function renderRichHeld(text: string): ReactNode[] {
   const segs = splitColorSegments(text);
   if (segs.length === 1 && "text" in segs[0]!) return renderPlainRichText(text);
   return segs.map((seg, i) => {
     if ("text" in seg) return <Fragment key={i}>{renderPlainRichText(seg.text)}</Fragment>;
     const hex = paletteOf(seg.kind)[seg.name]?.hex;
-    const inner = renderRichBulletText(seg.inner);
+    const inner = renderRichHeld(seg.inner);
     if (!hex) return <Fragment key={i}>{inner}</Fragment>;
     if (seg.kind === "s") return <span key={i} style={{ fontSize: hex, lineHeight: 1.35 }}>{inner}</span>;
     return seg.kind === "c" ? (
@@ -408,7 +430,7 @@ function renderPlainRichText(text: string): ReactNode[] {
   let key = 0;
   for (const match of text.matchAll(RICH_TEXT_PATTERN)) {
     const index = match.index ?? 0;
-    if (index > lastIndex) nodes.push(text.slice(lastIndex, index));
+    if (index > lastIndex) nodes.push(releaseStars(text.slice(lastIndex, index)));
     if (match[1] !== undefined) {
       const [, label, mType, mId] = match;
       nodes.push(
@@ -429,7 +451,7 @@ function renderPlainRichText(text: string): ReactNode[] {
     else if (match[7] !== undefined)
       nodes.push(
         <code key={key++} className="bg-[var(--bg-soft)] ring-1 ring-inset ring-[var(--line)] rounded px-1 py-0.5 text-[12px] font-mono">
-          {match[7]}
+          {releaseStars(match[7])}
         </code>
       );
     else if (match[8] !== undefined) nodes.push(<s key={key++}>{renderPlainRichText(match[8])}</s>);
@@ -448,7 +470,7 @@ function renderPlainRichText(text: string): ReactNode[] {
       );
     lastIndex = index + match[0].length;
   }
-  if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+  if (lastIndex < text.length) nodes.push(releaseStars(text.slice(lastIndex)));
   return nodes;
 }
 
