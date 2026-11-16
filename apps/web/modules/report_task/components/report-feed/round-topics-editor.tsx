@@ -44,7 +44,7 @@ export function topicsFromRows(rows: readonly TopicRow[]): string[] {
 /** แบบสำเร็จรูป Common Report — คำหลักมาจากชื่อที่พนักงานใช้จริงในรายงาน 12–16 พ.ย. */
 export const COMMON_REPORT_ROWS: TopicRow[] = [
   { kind: "section", name: "Common Report", keywords: "", aliases: [] },
-  { kind: "topic", name: "วันนี้ส่งงานอะไร", keywords: "ส่งงาน, ทำงานอะไร, งานที่ทำ", aliases: [] },
+  { kind: "topic", name: "วันนี้ส่งงานอะไร", keywords: "ส่งงาน, ส่งมอบ, ดำเนินการ, ทำงานอะไร, งานที่ทำ", aliases: [] },
   { kind: "topic", name: "งานที่ล่าช้า ผิดพลาด ไม่เป็นไปตามแผน", keywords: "ล่าช้า, ผิดแผน, งานค้าง", aliases: [] },
   { kind: "topic", name: "ปัญหาและความเสี่ยง", keywords: "ปัญหา, ความเสี่ยง, อุปสรรค", aliases: [] },
   { kind: "topic", name: "วิธีแก้ไขและความรับผิดชอบ", keywords: "วิธีแก้, แก้ไข", aliases: [] },

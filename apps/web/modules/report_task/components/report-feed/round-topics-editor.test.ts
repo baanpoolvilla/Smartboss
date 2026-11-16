@@ -22,6 +22,14 @@ describe("ตั้งหัวข้อเป็นแถว ↔ ค่าท�
     expect(topicsFromRows([{ kind: "topic", name: "ก|ข~🏁", keywords: "", aliases: [] }])).toEqual(["กข"]);
   });
 
+  it("หัวข้อแรกแบบเลขข้อ + คำอื่น (เจอจริง 12–15 พ.ย.) นับเป็น วันนี้ส่งงานอะไร", () => {
+    const topics = topicsFromRows(COMMON_REPORT_ROWS);
+    for (const h of ["🟢 1.1 งานที่ดำเนินการวันนี้", "1.1 งานที่ส่งมอบวันนี้", "1.1 ผลงานที่ดำเนินการสำเร็จวันนี้"]) {
+      expect(checkReportFormat(`${h}
+ตรวจบ้าน 5 หลัง`, topics, false).missing).not.toContain("วันนี้ส่งงานอะไร");
+    }
+  });
+
   it("แบบสำเร็จรูป Common Report ผ่านรายงานที่เขียนชื่อใกล้เคียง", () => {
     const text = ["🏁 Common Report 🏁", "🟢 วันนี้ส่งงาน: ส่งแบบบ้าน", "🟡 งานล่าช้า / งานค้าง: รอช่าง", "🟢 ปัญหาและอุปสรรค: ไม่มี", "🟢 วิธีแก้ไข: โทรตามช่าง", "🟢 เรื่องที่ต้องการให้ Boss ตัดสินใจ: ไม่มี", "🏁 Department Module (Marketing) 🏁", "ยิงแอด 3 ตัว"].join("\n");
     expect(checkReportFormat(text, topicsFromRows(COMMON_REPORT_ROWS), true).ok).toBe(true);
