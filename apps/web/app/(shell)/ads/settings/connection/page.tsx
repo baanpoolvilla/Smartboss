@@ -1,31 +1,36 @@
-import { CheckCircle2, XCircle } from "lucide-react";
 import { requireAdsPage } from "@/modules/ads/data/access";
-import { lastSyncedAt, listAccounts } from "@/modules/ads/data/accounts";
-import { isSyncing, listSyncLogs, SYNC_LOOKBACK_DAYS } from "@/modules/ads/data/sync";
-import { maskedConfig, testConnection } from "@/modules/ads/lib/google-ads-client";
+import { lastSyncedAt, listAccounts, listSyncLogs } from "@/modules/ads/data/accounts";
+import { prisma } from "@smartboss/database";
+import { listAgentTokens } from "@/modules/ads/data/agent-auth";
+import { approverIds, botChannelId } from "@/modules/ads/data/bot";
+import { CHAT_PAGE_PATH } from "@/modules/chat/constants";
+import { AGENT_OFFLINE_AFTER_MINUTES, agentOnline, loadAgentSettings } from "@/modules/ads/data/agent-settings";
 import { ADS_PERMS } from "@/modules/ads/permissions";
 import { JOB_TYPE_LABEL, SYNC_STATUS_LABEL } from "@/modules/ads/constants";
 import { fmtDateTime, fmtNum } from "@/modules/ads/lib/format";
 import { formatPeriod, fromDbDate } from "@/modules/ads/lib/periods";
-import { AccountsPanel } from "@/modules/ads/components/connection-controls";
+import { TokensPanel, WebhookAndPolicyForm } from "@/modules/ads/components/agent-connection";
 import { AdsPage } from "@/modules/ads/components/page-shell";
 import { Section } from "@/modules/ads/components/ui";
 
 export const dynamic = "force-dynamic";
 
-const AUTH_LABEL = { service_account: "Service Account", oauth: "OAuth (refresh token)", none: "ยังไม่ได้ตั้งค่า" } as const;
-
-/** หน้า 4 — ตั้งค่าการเชื่อมต่อ Google Ads API (spec §7) — ผู้ดูแลระบบ */
+/** การเชื่อมต่อ n8n (ผู้ดูแลระบบ) — token · webhook · นโยบายคำขอปรับ · ประวัติการรับข้อมูล */
 export default async function AdsConnectionPage() {
   const session = await requireAdsPage(ADS_PERMS.admin);
-  const cfg = maskedConfig();
-  const [accounts, logs, lastSync, status] = await Promise.all([
+  const [accounts, logs, lastSync, tokens, agent, approvers] = await Promise.all([
     listAccounts(session.orgId),
     listSyncLogs(session.orgId),
     lastSyncedAt(session.orgId),
-    cfg.missing.length === 0 ? testConnection() : Promise.resolve({ ok: false as const, error: "ตั้งค่ายังไม่ครบ" }),
+    listAgentTokens(session.orgId),
+    loadAgentSettings(session.orgId),
+    approverIds(session.orgId),
   ]);
+  const approverNames = approvers.length
+    ? (await prisma.user.findMany({ where: { orgId: session.orgId, id: { in: approvers } }, select: { name: true }, orderBy: { name: "asc" } })).map((u) => u.name)
+    : [];
   const accountName = new Map(accounts.map((a) => [a.customerId, a.name]));
+  const online = agentOnline(agent.lastSeenAt);
 
   const row = (label: string, value: React.ReactNode) => (
     <>
@@ -35,61 +40,95 @@ export default async function AdsConnectionPage() {
   );
 
   return (
-    <AdsPage title="การเชื่อมต่อ Google Ads API" lastSynced={lastSync}>
-      <Section title="สถานะการเชื่อมต่อ">
-        {status.ok ? (
-          <div className="flex items-center gap-2 text-sm text-[#14532D]">
-            <CheckCircle2 className="h-5 w-5" /> เชื่อมต่อสำเร็จ{status.name ? ` — MCC: ${status.name}` : ""}
-          </div>
-        ) : (
-          <div className="flex items-start gap-2 text-sm text-[#8F1414]">
-            <XCircle className="mt-0.5 h-5 w-5 shrink-0" />
-            <div>
-              เชื่อมต่อไม่ได้ — {status.error}
-              {cfg.missing.length > 0 && (
-                <div className="mt-1 text-xs">ยังขาด env: {cfg.missing.join(", ")}</div>
-              )}
-            </div>
-          </div>
-        )}
-      </Section>
-
-      <Section
-        title="ข้อมูลยืนยันตัวตน"
-        description="เก็บใน environment ของเซิร์ฟเวอร์เท่านั้น (/etc/smartboss/smartboss.env) แก้ที่นั่นแล้ว restart เว็บ — หน้านี้แสดงแบบปิดบังค่า"
-      >
-        <dl className="grid gap-x-4 gap-y-1.5 text-sm sm:grid-cols-[200px_1fr]">
-          {row("วิธียืนยันตัวตน", AUTH_LABEL[cfg.authMode])}
-          {cfg.authMode === "service_account" && row("อีเมล Service Account", cfg.serviceAccountEmail)}
-          {cfg.authMode === "oauth" && row("OAuth Client ID", cfg.oauthClientId)}
-          {row("Developer Token", cfg.developerToken ?? "ไม่ใช้ (ระดับการเข้าถึงผูกกับ Google Cloud project)")}
-          {row("MCC (login-customer-id)", cfg.loginCustomerId)}
-          {row("เวอร์ชัน API", cfg.apiVersion)}
+    <AdsPage title="การเชื่อมต่อ n8n" lastSynced={lastSync}>
+      <Section title="สถานะ">
+        <dl className="grid gap-x-4 gap-y-1.5 text-sm sm:grid-cols-[220px_1fr]">
+          {row(
+            "n8n",
+            <span className={online ? "font-semibold text-[#137333]" : "font-semibold text-[#B3261E]"}>
+              {online ? "ออนไลน์" : agent.lastSeenAt ? `ออฟไลน์ (เงียบเกิน ${AGENT_OFFLINE_AFTER_MINUTES} นาที)` : "ยังไม่เคยติดต่อมา"}
+            </span>
+          )}
+          {row("ติดต่อมาล่าสุด", agent.lastSeenAt ? fmtDateTime(agent.lastSeenAt) : null)}
+          {row(
+            "heartbeat ล่าสุด",
+            agent.lastSeenInfo ? (
+              <code className="text-xs">{JSON.stringify(agent.lastSeenInfo)}</code>
+            ) : null
+          )}
+          {row("บัญชีโฆษณา", accounts.length ? accounts.map((a) => `${a.name ?? "-"} (${a.customerId})`).join(" · ") : "ยังไม่มี — n8n ส่ง POST /api/agent/ads/accounts")}
         </dl>
       </Section>
 
-      <Section title="ตารางเวลา" description="ตั้งใน crontab ของเซิร์ฟเวอร์ (deploy/cron-run.sh)">
-        <ul className="flex flex-col gap-1 text-sm text-(--ink)">
-          <li>ซิงค์รายวัน — ทุกวัน 06:00 · ย้อนหลัง {SYNC_LOOKBACK_DAYS} วัน แล้ว upsert ทับ</li>
-          <li>สรุปรายสัปดาห์ + อีเมล — ทุกวันจันทร์ 07:00 · 7 วันล่าสุด เทียบ 7 วันก่อนหน้า</li>
-          <li>รายงานรอบครึ่งเดือน — วันที่ 1 และ 16 เวลา 07:00 · ครึ่งเดือนที่ผ่านมา เทียบครึ่งเดือนก่อนหน้า</li>
-          <li>ซิงค์ด้วยมือ — ปุ่ม “ซิงค์ทันที” · ย้อนหลัง {SYNC_LOOKBACK_DAYS} วัน</li>
-        </ul>
+      <Section
+        title="กลุ่ม 🤖 Ads Agent (คนอนุมัติ)"
+        description="สมาชิกกลุ่มทุกคนกดอนุมัติ/ปฏิเสธคำขอปรับได้ กดได้ครั้งเดียว คนแรกชนะ · เพิ่ม/เอาคนออกที่เมนูสมาชิกของกลุ่มในแชท"
+        action={
+          <a href={`${CHAT_PAGE_PATH}?c=${encodeURIComponent(botChannelId(session.orgId))}`} className="text-sm text-[#1A73E8] underline">
+            เปิดกลุ่มในแชท
+          </a>
+        }
+      >
+        {approverNames.length === 0 ? (
+          <p className="text-sm text-[#B3261E]">ยังไม่มีสมาชิก — คำขอปรับจะไม่มีใครกดอนุมัติได้ เปิดกลุ่มในแชทแล้วเพิ่มคน</p>
+        ) : (
+          <p className="text-sm text-(--ink)">
+            {approverNames.length} คน: {approverNames.join(", ")}
+          </p>
+        )}
       </Section>
 
-      <Section title="บัญชีที่ดึง">
-        <AccountsPanel
-          accounts={accounts.map((a) => ({
-            ...a,
-            lastSyncedAt: a.lastSyncedAt?.toISOString() ?? null,
-            syncing: isSyncing(a.customerId),
+      <Section title="Token ของ n8n" description="n8n ใช้เรียก API ของ Smartboss — ผูกกับบริษัทนี้ · ตัวเต็มแสดงครั้งเดียว · ยกเลิกได้ทันที">
+        <TokensPanel
+          tokens={tokens.map((t) => ({
+            ...t,
+            createdAt: t.createdAt.toISOString(),
+            lastUsedAt: t.lastUsedAt?.toISOString() ?? null,
+            revokedAt: t.revokedAt?.toISOString() ?? null,
           }))}
         />
       </Section>
 
-      <Section title="ประวัติการซิงค์" description="50 รอบล่าสุด">
+      <Section title="Webhook และนโยบายคำขอปรับ">
+        <WebhookAndPolicyForm
+          initial={{
+            webhookUrl: agent.webhookUrl ?? "",
+            hasWebhookSecret: agent.hasWebhookSecret,
+            allowedTypes: agent.allowedTypes,
+            maxBudgetChangePct: agent.maxBudgetChangePct,
+            proposalExpiryHours: agent.proposalExpiryHours,
+            selfApprove: agent.selfApprove,
+          }}
+        />
+      </Section>
+
+      <Section title="API สำหรับ n8n" description="ทุกตัวต้องส่ง Authorization: Bearer <token> · รายละเอียดเต็มอยู่ในเอกสาร docs/ads-n8n-api.md">
+        <ul className="grid gap-1 font-mono text-[12.5px] text-(--ink) sm:grid-cols-2">
+          <li>POST /api/agent/ads/heartbeat</li>
+          <li>POST /api/agent/ads/accounts</li>
+          <li>POST /api/agent/ads/ingest/campaigns</li>
+          <li>POST /api/agent/ads/ingest/ad-groups</li>
+          <li>POST /api/agent/ads/ingest/keywords</li>
+          <li>POST /api/agent/ads/ingest/search-terms</li>
+          <li>POST /api/agent/ads/ingest/complete</li>
+          <li>GET  /api/agent/ads/report</li>
+          <li>GET  /api/agent/ads/search-terms</li>
+          <li>GET  /api/agent/ads/settings</li>
+          <li>POST /api/agent/ads/summaries</li>
+          <li>GET|POST /api/agent/ads/proposals</li>
+          <li>GET  /api/agent/ads/proposals/:id</li>
+          <li>POST /api/agent/ads/proposals/:id/claim</li>
+          <li>POST /api/agent/ads/proposals/:id/result</li>
+          <li>POST /api/agent/ads/proposals/:id/measurement</li>
+          <li>POST /api/agent/ads/messages</li>
+          <li>POST /api/agent/ads/typing</li>
+          <li>GET  /api/agent/ads/group</li>
+        </ul>
+      </Section>
+
+      <Section title="ประวัติการรับข้อมูล" description="50 รอบล่าสุด (n8n ส่ง POST /api/agent/ads/ingest/complete ตอนจบรอบ)">
         {logs.length === 0 ? (
-          <p className="text-sm text-(--ink-soft)">ยังไม่เคยซิงค์</p>
+          <p className="text-sm text-(--ink-soft)">ยังไม่มี</p>
         ) : (
           <div className="-mx-4 overflow-x-auto sm:mx-0">
             <table className="w-full min-w-[760px] border-collapse text-sm">
@@ -97,7 +136,7 @@ export default async function AdsConnectionPage() {
                 <tr>
                   <th className="px-2 py-2 text-left font-medium">เริ่ม</th>
                   <th className="px-2 py-2 text-left font-medium">บัญชี</th>
-                  <th className="px-2 py-2 text-left font-medium">ประเภท</th>
+                  <th className="px-2 py-2 text-left font-medium">ที่มา</th>
                   <th className="px-2 py-2 text-left font-medium">ช่วงข้อมูล</th>
                   <th className="px-2 py-2 text-right font-medium">แถว</th>
                   <th className="px-2 py-2 text-right font-medium">เวลา</th>
@@ -116,9 +155,7 @@ export default async function AdsConnectionPage() {
                     <td className="px-2 py-2 text-right tabular-nums">{fmtNum(l.rowsUpserted)}</td>
                     <td className="px-2 py-2 text-right tabular-nums">{l.durationMs != null ? `${fmtNum(l.durationMs / 1000, 1)} วิ` : "-"}</td>
                     <td className="px-2 py-2">
-                      <span className={l.status === "failed" ? "font-medium text-[#8F1414]" : "text-[#14532D]"}>
-                        {SYNC_STATUS_LABEL[l.status ?? ""] ?? l.status}
-                      </span>
+                      <span className={l.status === "failed" ? "font-medium text-[#8F1414]" : "text-[#14532D]"}>{SYNC_STATUS_LABEL[l.status ?? ""] ?? l.status}</span>
                       {l.errorMessage && <div className="mt-0.5 max-w-md text-xs text-(--ink-soft)">{l.errorMessage}</div>}
                     </td>
                   </tr>

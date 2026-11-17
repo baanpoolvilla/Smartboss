@@ -3,7 +3,7 @@
 #
 #   bash /opt/smartboss/deploy/cron-run.sh all
 #   bash /opt/smartboss/deploy/cron-run.sh performance
-#   bash /opt/smartboss/deploy/cron-run.sh sync ads      ← อาร์กิวเมนต์ที่ 2 = /api/cron/<ชื่อ>
+#   bash /opt/smartboss/deploy/cron-run.sh <task> <ชื่อ> ← อาร์กิวเมนต์ที่ 2 = /api/cron/<ชื่อ>
 #                                                          (ไม่ใส่ = maintenance เหมือนเดิม)
 #
 # แยกเป็นสคริปต์แทนที่จะเขียน curl ยาว ๆ ใน crontab เพราะ crontab ไม่มีตัวแปร

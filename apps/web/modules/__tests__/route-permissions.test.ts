@@ -32,8 +32,10 @@ const GUARD_PATTERNS = [
   // แชท: modules/chat/data/route-helpers.ts chatActor() = requireOrg() + สิทธิ์ chat.access
   /chatActor\s*\(/,
   // Google Ads: modules/ads/data/access.ts adsRoute(permission, ...) = requireAdsApi() →
-  // getSession() + ต้องมีบริษัท + hasPermission(permission) + บริษัทเปิดโมดูล Ads
+  // getSession() + ต้องมีบริษัท + บริษัทเปิดโมดูล Ads + hasPermission(permission) (null = ผู้เรียกเช็คเอง เช่น สมาชิกกลุ่ม Ads Agent)
   /adsRoute\s*(<[^>]*>)?\s*\(/,
+  // n8n: modules/ads/data/agent-auth.ts agentRoute() = Bearer token ที่ผูกกับบริษัท (ไม่มี session — /api/agent/* ยกเว้นใน proxy.ts)
+  /agentRoute\s*(<[^>]*>)?\s*\(/,
 ];
 
 /** route ที่ตั้งใจไม่มี guard ตัวไหนเลยข้างบน — ต้องมีเหตุผลกำกับทุกตัว เพิ่ม

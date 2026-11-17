@@ -15,19 +15,9 @@ export const STATUS_STYLE = {
   low_data: { bg: "#ECE9E1", fg: "#4F4B44", label: "ข้อมูลน้อย" },
 } as const;
 
-/** ป้ายของ enum ที่ AI ตอบกลับ (spec §6.3) และสถานะแผนปฏิบัติการ (spec §4 ads_ai_actions) */
-export const IMPACT_LABEL: Record<string, string> = { high: "ผลกระทบสูง", medium: "ผลกระทบกลาง", low: "ผลกระทบต่ำ" };
-export const URGENCY_LABEL: Record<string, string> = { now: "ทำทันที", this_week: "สัปดาห์นี้", this_month: "เดือนนี้" };
-export const ACTION_STATUS_LABEL: Record<string, string> = {
-  pending: "รอดำเนินการ",
-  in_progress: "กำลังทำ",
-  done: "เสร็จแล้ว",
-  skipped: "ข้าม",
-};
-export const ACTION_STATUSES = ["pending", "in_progress", "done", "skipped"] as const;
-
 export const SYNC_STATUS_LABEL: Record<string, string> = { success: "สำเร็จ", retried: "สำเร็จ (ลองซ้ำ)", failed: "ล้มเหลว" };
-export const JOB_TYPE_LABEL: Record<string, string> = { daily: "รายวัน", manual: "ซิงค์ด้วยมือ", backfill: "Backfill" };
+/** แถวที่ขึ้นต้นก่อน 17/11/2569 คือการซิงค์ของ Smartboss เอง — ตอนนี้มีแต่ n8n ส่งเข้ามา */
+export const JOB_TYPE_LABEL: Record<string, string> = { n8n: "n8n ส่งเข้ามา", daily: "รายวัน (ระบบเดิม)", manual: "ซิงค์ด้วยมือ (ระบบเดิม)", backfill: "Backfill (ระบบเดิม)" };
 
 /** ชื่อ KPI ที่มีเกณฑ์ (spec §5.2) — ลำดับนี้คือลำดับที่แสดงทุกหน้า */
 export const METRIC_LABEL: Record<string, string> = {

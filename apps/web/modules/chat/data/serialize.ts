@@ -4,6 +4,7 @@ import { prisma } from "@smartboss/database";
 import type { ChatAttachment, ChatAttachmentKind, ChatMessageDTO, ChatNotePreview, ChatReactionDTO, ChatReplyPreview, ChatAlbumCard, ChatTaskCard } from "../types";
 import { EXPIRING_KINDS, mediaExpiresAt } from "../lib/retention";
 import { isKeepChannelId } from "../types";
+import { proposalViewer } from "@/modules/ads/data/proposal-view";
 
 /** ข้อผิดพลาดที่มีสถานะ HTTP — route แปลงเป็นคำตอบให้เอง (ดู lib/respond.ts) */
 export class ChatError extends Error {
@@ -169,6 +170,15 @@ export async function hydrateMessages(orgId: string, rows: MessageRow[]): Promis
   };
   const noteByMessage = new Map(noteRows.map((n) => [n.messageId!, notePreview(n)]));
 
+  // การ์ดคำขอปรับ Google Ads — อ่านสถานะปัจจุบันจาก ads_change_proposals ทุกครั้ง (การ์ดคือหน้าต่างดูคำขอ)
+  // การ์ดใบเดียวในกลุ่ม ทุกคนเห็นเหมือนกัน — ปุ่มขึ้นไหมคิดฝั่งหน้าจอจาก deciderIds (canDecideFor)
+  const proposalIdOf = (r: MessageRow) =>
+    r.kind === "ads_proposal" && r.meta && typeof r.meta === "object" && typeof (r.meta as { proposalId?: unknown }).proposalId === "string"
+      ? (r.meta as { proposalId: string }).proposalId
+      : null;
+  const proposalIds = rows.map(proposalIdOf).filter((id): id is string => !!id);
+  const viewProposal = proposalIds.length > 0 ? await proposalViewer(orgId, proposalIds) : null;
+
   const reactions = groupReactions(reactionRows);
 
   // ไฟล์ที่บันทึกลงอัลบั้มแล้วไม่หมดอายุ — ไม่ต้องขึ้นป้ายเตือน
@@ -211,6 +221,14 @@ export async function hydrateMessages(orgId: string, rows: MessageRow[]): Promis
       ...(row.kind === "note" ? { note: deleted ? null : (noteByMessage.get(row.id) ?? null) } : {}),
       ...(row.kind === "album" ? { album: deleted ? null : albumCard(row) } : {}),
       ...(row.kind === "task" ? { task: deleted ? null : taskCard(row) } : {}),
+      ...(row.kind === "ads_proposal"
+        ? {
+            adsProposal:
+              deleted || !viewProposal
+                ? null
+                : viewProposal(proposalIdOf(row) ?? "", null),
+          }
+        : {}),
       body: deleted ? null : row.body,
       attachments: deleted ? [] : withExpiry(row),
       replyTo: deleted || !row.replyToId ? null : (replies.get(row.replyToId) ?? null),

@@ -17,7 +17,7 @@ import { prisma } from "@smartboss/database";
  * เกิดพร้อมกัน ไม่มีช่องให้แทรก
  */
 
-export type DocType = "ORG" | "WO" | "PO" | "T" | "REQ";
+export type DocType = "ORG" | "WO" | "PO" | "T" | "REQ" | "ADS";
 
 /** ปี พ.ศ. ของตอนนี้ตามเวลาไทย — ใช้เป็นช่วงของการเดินเลข */
 export function currentBuddhistYear(now = new Date()): string {
@@ -90,4 +90,11 @@ export async function nextRequestCode(tx: PrismaTx, orgId: string): Promise<stri
   const year = currentBuddhistYear();
   const n = await reserveNumber(tx, orgId, "REQ", year);
   return `REQ-${year}-${pad(n, 4)}`;
+}
+
+/** เลขที่คำขอปรับ Google Ads ถัดไป — ADS-2569-0001 (แยกตามบริษัทและปี พ.ศ.) */
+export async function nextAdsProposalCode(tx: PrismaTx, orgId: string): Promise<string> {
+  const year = currentBuddhistYear();
+  const n = await reserveNumber(tx, orgId, "ADS", year);
+  return `ADS-${year}-${pad(n, 4)}`;
 }

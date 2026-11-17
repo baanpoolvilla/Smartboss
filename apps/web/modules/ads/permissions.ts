@@ -1,20 +1,22 @@
 /**
- * Permission codes ของโมดูล Google Ads Report — ต้องตรงกับ ADS_PERMS ใน
- * packages/database/defaults.ts (spec §7 สิทธิ์การเข้าถึง)
+ * Permission codes ของโมดูล Google Ads — ต้องตรงกับ ADS_PERMS ใน
+ * packages/database/defaults.ts
+ *
+ * ตั้งแต่ 17/11/2569 AI ทั้งหมดอยู่บน n8n — Smartboss เก็บข้อมูล แสดงผล และเป็นที่อนุมัติ
  */
 export const ADS_PERMS = {
-  /** หน้า 1–3: แดชบอร์ด อีเมลสรุป AI วิเคราะห์ (สั่งวิเคราะห์/ถาม AI/อัปเดตแผน/ส่งออก) */
+  /** แดชบอร์ด · ดูคำขอปรับ (คนอนุมัติ = สมาชิกกลุ่มแชท 🤖 Ads Agent ไม่ใช่ permission) */
   access: "ads.access",
-  /** หน้า 5: เกณฑ์ KPI และกฎการวิเคราะห์ — ผู้ดูแลระบบ + หัวหน้าการตลาด */
+  /** เกณฑ์ KPI และกฎการวิเคราะห์ — ผู้ดูแลระบบ + หัวหน้าการตลาด */
   settingManage: "ads.setting.manage",
-  /** หน้า 4: การเชื่อมต่อ Google Ads API ซิงค์ Backfill — ผู้ดูแลระบบ */
+  /** การเชื่อมต่อ n8n — ออก token · ตั้ง webhook · นโยบายคำขอปรับ · เป็นแอดมินกลุ่ม Ads Agent ตอนสร้างกลุ่ม */
   admin: "ads.admin",
 } as const;
 
 export const ALL_ADS_PERMS: string[] = Object.values(ADS_PERMS);
 
 export const ADS_PERM_LABELS: Record<string, string> = {
-  [ADS_PERMS.access]: "ดูรายงาน Google Ads และใช้ AI วิเคราะห์",
+  [ADS_PERMS.access]: "ดูรายงาน Google Ads และคำขอปรับ",
   [ADS_PERMS.settingManage]: "แก้เกณฑ์ KPI กฎการวิเคราะห์ และเป้าหมายธุรกิจ",
-  [ADS_PERMS.admin]: "ตั้งค่าการเชื่อมต่อ Google Ads API และสั่งซิงค์",
+  [ADS_PERMS.admin]: "ตั้งค่าการเชื่อมต่อ n8n (token · webhook · นโยบาย)",
 };

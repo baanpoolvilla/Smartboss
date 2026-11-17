@@ -174,54 +174,124 @@ model AdsAnalysisSetting {
   @@schema("ads")
 }
 
-/// รายงานที่ AI สร้าง (เก็บเป็นประวัติ) · createdBy = "schedule" หรือ user id
-model AdsAiReport {
-  id            BigInt    @id @default(autoincrement())
-  orgId         String    @map("org_id")
-  customerId    String    @map("customer_id") @db.VarChar(20)
-  periodFrom    DateTime  @map("period_from") @db.Date
-  periodTo      DateTime  @map("period_to") @db.Date
-  compareFrom   DateTime? @map("compare_from") @db.Date
-  compareTo     DateTime? @map("compare_to") @db.Date
-  inputJson     Json?     @map("input_json")
-  outputJson    Json?     @map("output_json")
-  promptVersion String?   @map("prompt_version") @db.VarChar(20)
-  model         String?   @db.VarChar(60)
-  createdAt     DateTime? @default(now()) @map("created_at")
-  createdBy     String?   @map("created_by") @db.VarChar(40)
+/// token ที่ออกให้ n8n เรียก API ของ Smartboss (/api/agent/ads/*) — เก็บแค่ hash
+/// ตัว token เต็มแสดงครั้งเดียวตอนสร้าง · revokedAt ไม่ null = ใช้ไม่ได้แล้ว
+model AdsAgentToken {
+  id          String    @id @default(uuid())
+  orgId       String    @map("org_id")
+  name        String    @db.VarChar(100)
+  /// 12 ตัวแรกของ token ไว้ให้คนจำได้ว่าตัวไหน (sbads_xxxxxx)
+  tokenPrefix String    @map("token_prefix") @db.VarChar(20)
+  tokenHash   String    @unique @map("token_hash") @db.VarChar(64)
+  createdBy   String    @map("created_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  lastUsedAt  DateTime? @map("last_used_at")
+  revokedAt   DateTime? @map("revoked_at")
 
-  actions AdsAiAction[]
-
-  @@index([orgId, customerId, createdAt])
-  @@map("ads_ai_reports")
+  @@index([orgId])
+  @@map("ads_agent_tokens")
   @@schema("ads")
 }
 
-/// แผนปฏิบัติการที่ AI แนะนำ (ติดตามสถานะได้)
-/// impact: high|medium|low · urgency: now|this_week|this_month
-/// status: pending|in_progress|done|skipped — ตรวจในโค้ด
-model AdsAiAction {
+/// การเชื่อมต่อ n8n + นโยบายคำขอปรับ (รายบริษัท)
+model AdsAgentSetting {
+  orgId             String    @id @map("org_id")
+  /// URL ของ Webhook node ใน n8n ที่รับเหตุการณ์จาก Smartboss — null = ยังไม่ส่ง
+  webhookUrl        String?   @map("webhook_url")
+  /// ใช้เซ็น HMAC-SHA256 ทุก webhook (n8n ใช้ตรวจว่ามาจาก Smartboss จริง)
+  webhookSecret     String?   @map("webhook_secret") @db.VarChar(100)
+  /// ประเภทคำขอที่เปิดให้ n8n เสนอได้ (ดู lib/proposal-types.ts)
+  allowedTypes      String[]  @default([]) @map("allowed_types")
+  /// ปรับงบรายวันได้ไม่เกินกี่ % ต่อครั้ง
+  maxBudgetChangePct Decimal  @default(30) @map("max_budget_change_pct") @db.Decimal(6, 2)
+  /// คำขอที่ไม่มีใครตัดสินภายในกี่ชั่วโมง ถือว่าหมดอายุ
+  proposalExpiryHours Int     @default(72) @map("proposal_expiry_hours")
+  /// คนสั่งงานบอทเอง อนุมัติคำขอของตัวเองได้ไหม
+  selfApprove       Boolean   @default(true) @map("self_approve")
+  /// n8n ส่ง heartbeat มาล่าสุดเมื่อไหร่ · ข้อมูลประกอบ (เวอร์ชัน/ชื่อ workflow)
+  lastSeenAt        DateTime? @map("last_seen_at")
+  lastSeenInfo      Json?     @map("last_seen_info")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@map("ads_agent_settings")
+  @@schema("ads")
+}
+
+/// บทสรุป/บทวิเคราะห์ที่ AI บน n8n ส่งเข้ามา — แสดงบนแดชบอร์ด
+model AdsSummary {
   id         BigInt    @id @default(autoincrement())
   orgId      String    @map("org_id")
-  reportId   BigInt    @map("report_id")
-  seq        Int?
-  title      String?   @db.VarChar(255)
-  rationale  String?
-  impact     String?   @db.VarChar(10)
-  urgency    String?   @db.VarChar(20)
-  entityType String?   @map("entity_type") @db.VarChar(20)
-  entityId   BigInt?   @map("entity_id")
-  status     String    @default("pending") @db.VarChar(20)
-  updatedAt  DateTime? @map("updated_at")
+  customerId String?   @map("customer_id") @db.VarChar(20)
+  periodFrom DateTime? @map("period_from") @db.Date
+  periodTo   DateTime? @map("period_to") @db.Date
+  title      String    @db.VarChar(255)
+  body       String
+  /// [{ label, value, tone? }] ตัวเลขเด่นที่อยากโชว์เป็นป้าย — ไม่บังคับ
+  highlights Json?
+  createdAt  DateTime  @default(now()) @map("created_at")
 
-  report AdsAiReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
-
-  @@index([orgId, reportId])
-  @@map("ads_ai_actions")
+  @@index([orgId, customerId, createdAt])
+  @@map("ads_summaries")
   @@schema("ads")
 }
 
-/// log การซิงค์ · jobType: daily|manual|backfill · status: success|retried|failed
+/// คำขอปรับ Google Ads — แหล่งความจริงเดียวของสถานะ (n8n ไม่เก็บสถานะเอง)
+/// status: pending → approved → executing → applied | failed | stale
+///         pending → rejected | expired
+model AdsChangeProposal {
+  id            String    @id @default(uuid())
+  orgId         String    @map("org_id")
+  /// เลขให้คนอ่าน ADS-2569-0001 — เดินเลขแยกตามบริษัทและปี พ.ศ.
+  code          String    @db.VarChar(20)
+  customerId    String    @map("customer_id") @db.VarChar(20)
+  /// ดู lib/proposal-types.ts
+  type          String    @db.VarChar(40)
+  /// "ai" = AI เสนอเอง · "command" = มีคนพิมพ์สั่งบอท
+  source        String    @default("ai") @db.VarChar(10)
+  /// คนที่พิมพ์สั่ง (source = command)
+  requestedBy   String?   @map("requested_by")
+  campaignId    String?   @map("campaign_id") @db.VarChar(30)
+  campaignName  String?   @map("campaign_name") @db.VarChar(255)
+  adGroupId     String?   @map("ad_group_id") @db.VarChar(30)
+  adGroupName   String?   @map("ad_group_name") @db.VarChar(255)
+  /// id ของสิ่งที่ถูกปรับ (keyword criterion id / ad group id / campaign id) ตามประเภท
+  targetId      String?   @map("target_id") @db.VarChar(60)
+  targetName    String?   @map("target_name") @db.VarChar(500)
+  /// ค่าเดิมตอนเสนอ — n8n ต้องเทียบกับค่าจริงใน Google ก่อนยิง
+  before        Json?
+  /// ค่าที่เสนอ
+  proposed      Json
+  /// ค่าที่อนุมัติจริง (คนแก้/ติ๊กบางรายการออกได้) — null จนกว่าจะอนุมัติ
+  approved      Json?
+  reason        String
+  /// [{ label, value }] ตัวเลขประกอบเหตุผล
+  evidence      Json?
+  /// low | medium | high
+  risk          String    @default("medium") @db.VarChar(10)
+  expectedImpact String?  @map("expected_impact")
+  status        String    @default("pending") @db.VarChar(15)
+  decidedBy     String?   @map("decided_by")
+  decidedAt     DateTime? @map("decided_at")
+  decisionNote  String?   @map("decision_note")
+  /// n8n จองไปยิงเมื่อไหร่ (approved → executing)
+  claimedAt     DateTime? @map("claimed_at")
+  executedAt    DateTime? @map("executed_at")
+  /// ผลจาก Google (resource name, ค่าหลังปรับ) / ข้อความ error
+  result        Json?
+  error         String?
+  /// ผลวัดหลังปรับ { "7": {...}, "14": {...} }
+  measurement   Json?
+  expiresAt     DateTime  @map("expires_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@unique([orgId, code])
+  @@index([orgId, status, createdAt])
+  @@map("ads_change_proposals")
+  @@schema("ads")
+}
+
+/// log การรับข้อมูลจาก n8n (เดิม: การซิงค์ของ Smartboss เอง) · jobType: n8n (แถวเก่า daily|manual|backfill) · status: success|retried|failed
 model AdsSyncLog {
   id           BigInt    @id @default(autoincrement())
   orgId        String    @map("org_id")

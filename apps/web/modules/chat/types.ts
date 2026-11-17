@@ -1,3 +1,5 @@
+import type { ProposalView } from "@/modules/ads/lib/proposal-types";
+
 /**
  * ชนิดข้อมูลของโมดูลแชท — ไฟล์นี้ไม่มี "server-only" และไม่ import อะไรที่ผูกกับ
  * เซิร์ฟเวอร์ (prisma ฯลฯ) โดยตั้งใจ เพื่อให้ทั้ง data/*.ts (server) และ
@@ -152,7 +154,20 @@ export interface ChatTaskCard {
 
 /** ข้อความที่คนพิมพ์/โพสต์ (ไม่ใช่ข้อความระบบ) — นับยังไม่อ่าน เด้งแจ้งเตือน มีเสียง */
 export function isUserMessageKind(kind: string): boolean {
-  return kind === "text" || kind === "note" || kind === "album" || kind === "task";
+  return kind === "text" || kind === "note" || kind === "album" || kind === "task" || kind === "bot" || kind === "ads_proposal";
+}
+
+/**
+ * กลุ่ม "🤖 Ads Agent" ห้องเดียวต่อบริษัท (modules/ads/data/bot.ts) — id = adsbot-<orgId>
+ * สมาชิกกลุ่ม = คนที่กดอนุมัติคำขอปรับ Google Ads ได้ (กดได้ครั้งเดียว คนแรกชนะ)
+ * ข้อความของบอท kind "bot" · การ์ดคำขอปรับ kind "ads_proposal"
+ * authorId ของบอทไม่ใช่ผู้ใช้จริง (ไม่มี FK) — หน้าจอวาดชื่อ/รูปของบอทเอง
+ */
+export const ADS_BOT_CHANNEL_PREFIX = "adsbot-";
+export const ADS_BOT_AUTHOR = "bot:ads-agent";
+export const ADS_BOT_NAME = "🤖 Ads Agent";
+export function isAdsBotChannelId(id: string): boolean {
+  return id.startsWith(ADS_BOT_CHANNEL_PREFIX);
 }
 
 /** ห้อง "🕐 ระบบลงเวลา" ส่วนตัวของแต่ละคน (lib/attendance-chat.ts) — id ขึ้นต้นด้วยนี้ */
@@ -212,6 +227,8 @@ export interface ChatMessageDTO {
   album?: ChatAlbumCard | null;
   /** kind "task" เท่านั้น — การ์ดงานใหม่ */
   task?: ChatTaskCard | null;
+  /** kind "ads_proposal" เท่านั้น — การ์ดคำขอปรับ Google Ads (ใบเดียวกันทุกคนในกลุ่ม) · null = คำขอถูกลบ */
+  adsProposal?: ProposalView | null;
   body: string | null;
   attachments: ChatAttachment[];
   replyTo: ChatReplyPreview | null;
@@ -311,6 +328,8 @@ export type ChatRealtimeEvent =
       channelName?: string | null;
       channelType?: string;
     }
+  /** ข้อความเดิม (id เดิม) เปลี่ยน เช่น การ์ดคำขอปรับ Google Ads เปลี่ยนสถานะ — แทนที่ ไม่นับยังไม่อ่าน ไม่เด้ง */
+  | { type: "chat.message.updated"; channelId: string; message: ChatMessageDTO }
   | { type: "chat.message.deleted"; channelId: string; messageId: string }
   | { type: "chat.reaction"; channelId: string; messageId: string; reactions: ChatReactionDTO[] }
   | { type: "chat.read"; channelId: string; userId: string; lastReadSeq: string }

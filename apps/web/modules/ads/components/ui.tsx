@@ -93,11 +93,11 @@ export function KpiCard({
   );
 }
 
-/** เวลาซิงค์ล่าสุด — แสดงทุกหน้า (spec §7 ฟังก์ชันร่วม) */
+/** เวลาที่ n8n ส่งข้อมูลครบรอบล่าสุด — แสดงทุกหน้า */
 export function SyncStamp({ at }: { at: Date | string | null }) {
   return (
     <span className="inline-flex items-center gap-1 text-xs text-(--ink-soft)">
-      <Clock className="h-3.5 w-3.5" /> ซิงค์ล่าสุด {fmtDateTime(at)}
+      <Clock className="h-3.5 w-3.5" /> ข้อมูลล่าสุดจาก n8n {fmtDateTime(at)}
     </span>
   );
 }

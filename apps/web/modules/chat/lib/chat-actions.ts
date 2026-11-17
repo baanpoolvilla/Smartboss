@@ -5,7 +5,7 @@ import { toast } from "sonner";
 
 import { onRealtimeStatus, subscribeRealtime, type RealtimeEventMessage } from "@/lib/realtime-client";
 import { useChatStore, type RoomMessage } from "../store/chat-store";
-import { countsAsUnread, type ChatAttachment, type ChatRealtimeEvent } from "../types";
+import { ADS_BOT_AUTHOR, countsAsUnread, type ChatAttachment, type ChatRealtimeEvent } from "../types";
 import * as api from "./api";
 import { restoreChatCache, startChatCachePersist } from "./offline-cache";
 
@@ -51,7 +51,8 @@ const refreshChannelsSoon = debounce(() => void loadChannels(), 400);
 export async function loadUsers(): Promise<void> {
   try {
     const { users, onlineIds, off } = await api.fetchOrgUsers();
-    get().setUsers(users, onlineIds, off ?? {});
+    // บอท Ads Agent ไม่ใช่ผู้ใช้จริง — ใส่ชื่อไว้ให้ทุกที่ที่หาชื่อผู้เขียน (หัวข้อความ, กำลังพิมพ์, ตอบกลับ, รายการห้อง)
+    get().setUsers([...users, { id: ADS_BOT_AUTHOR, name: "Ads Agent", avatarUrl: null }], onlineIds, off ?? {});
   } catch {
     // ไม่เป็นไร — ใช้รายชื่อเดิมไปก่อน
   }
@@ -325,6 +326,9 @@ function handleEvent(raw: RealtimeEventMessage) {
       if (message.kind === "system" && s.details[event.channelId]) void loadDetail(event.channelId);
       break;
     }
+    case "chat.message.updated":
+      s.receiveMessage(event.message, false);
+      break;
     case "chat.message.deleted":
       s.markDeleted(event.channelId, event.messageId);
       break;

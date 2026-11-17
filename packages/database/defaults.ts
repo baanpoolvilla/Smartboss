@@ -117,10 +117,10 @@ export const COMPANY_FILES_PERMS = ["company_files.access", "company_files.uploa
 /**
  * ต้องตรงกับ ADS_PERMS ใน apps/web/modules/ads/permissions.ts — โมดูล Google Ads
  * Report (google-ads-report-module-spec.md §7 สิทธิ์การเข้าถึง)
- *   access          = หน้า 1–3 (แดชบอร์ด / อีเมล / AI วิเคราะห์) ฝ่ายการตลาดและผู้บริหาร
- *   setting.manage  = หน้า 5 เกณฑ์ KPI และกฎ — ผู้ดูแลระบบ + หัวหน้าการตลาด
- *                     (มอบให้หัวหน้าการตลาดเองที่ /admin/roles)
- *   admin           = หน้า 4 การเชื่อมต่อ Google Ads API — ผู้ดูแลระบบ
+ *   access          = แดชบอร์ด · คำขอปรับ (ดู) · คุยกับบอท Ads Agent ในแชท — ฝ่ายการตลาดและผู้บริหาร
+ *   setting.manage  = เกณฑ์ KPI และกฎ — ผู้ดูแลระบบ + หัวหน้าการตลาด (มอบเองที่ /admin/roles)
+ *   (คนอนุมัติคำขอปรับ = สมาชิกกลุ่มแชท "🤖 Ads Agent" — ไม่ใช่ permission ผู้ใช้ 17/11/2569)
+ *   admin           = การเชื่อมต่อ n8n (token · webhook · นโยบาย) — ผู้ดูแลระบบ
  * ไม่อยู่ใน BASELINE_PERMS — ข้อมูลงบโฆษณาไม่ใช่ของทุกคน
  */
 export const ADS_PERMS = ["ads.access", "ads.setting.manage", "ads.admin"];
@@ -243,7 +243,7 @@ const ROLE_EXTRA_GRANTS: Record<string, string[]> = {
     ...HR_PERMS,
     ...MAINT_PERMS.filter((p) => p !== "maintenance.admin"),
     ...REPORT_TASK_PERMS,
-    // ผู้บริหารดูรายงาน Google Ads (spec §7 หน้า 1–3)
+    // ผู้บริหารดูรายงาน Google Ads (อนุมัติคำขอปรับ = เป็นสมาชิกกลุ่มแชท 🤖 Ads Agent)
     "ads.access",
     // สติกเกอร์บริษัท: แอดมิน (IT) ได้ผ่าน CHAT_PERMS แล้ว + CEO + การตลาด
     "chat.sticker.manage",

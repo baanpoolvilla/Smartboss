@@ -27,11 +27,11 @@ export async function requireAdsPage(permission: string): Promise<OrgSession> {
 export type ApiGuard = { ok: true; session: OrgSession } | { ok: false; response: Response };
 
 /** ใช้ใน Route Handler — คืน JSON 401/403 แทนการ redirect */
-export async function requireAdsApi(permission: string): Promise<ApiGuard> {
+export async function requireAdsApi(permission: string | null): Promise<ApiGuard> {
   const session = await getSession();
   if (!session) return { ok: false, response: Response.json({ error: "ต้องเข้าสู่ระบบ" }, { status: 401 }) };
   if (!session.orgId) return { ok: false, response: Response.json({ error: "ผู้ใช้ไม่ได้สังกัดบริษัท" }, { status: 403 }) };
-  if (!hasPermission(session, permission)) {
+  if (permission && !hasPermission(session, permission)) {
     return { ok: false, response: Response.json({ error: "ไม่มีสิทธิ์" }, { status: 403 }) };
   }
   if (!(await moduleEnabled(session.orgId))) {
@@ -50,7 +50,8 @@ export function apiError(err: unknown, status = 400): Response {
  * (BigInt แปลงเป็น string) · error จาก data layer ตอบ 400 พร้อมข้อความ
  */
 export function adsRoute<P = Record<string, string>>(
-  permission: string,
+  /** null = ไม่ต้องมี permission เฉพาะ (ผู้เรียกเช็คเองใน data layer เช่น สมาชิกกลุ่ม Ads Agent) */
+  permission: string | null,
   handler: (req: Request, session: OrgSession, params: P) => Promise<unknown>
 ) {
   return async (req: Request, ctx: { params: Promise<P> }): Promise<Response> => {

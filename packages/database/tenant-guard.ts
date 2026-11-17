@@ -45,7 +45,7 @@ export const TENANT_SCOPED_MODELS = new Set<string>([
   // ads (Google Ads Report)
   "AdsAccount", "AdsCampaign", "AdsAdGroup", "AdsCampaignDaily", "AdsAdGroupDaily",
   "AdsKeywordDaily", "AdsSearchTermDaily", "AdsKpiBenchmark", "AdsAnalysisSetting",
-  "AdsAiReport", "AdsAiAction", "AdsSyncLog",
+  "AdsSyncLog", "AdsAgentToken", "AdsAgentSetting", "AdsSummary", "AdsChangeProposal",
   // requests (เบิกจ่าย & OT) — มี RLS ของตัวเองด้วย ชั้นนี้เป็นตัวเตือนเพิ่ม
   "MoneyRequest", "MoneyRequestPayment", "MoneyRequestEvent", "MoneyVendor", "MoneyPettyCashEntry", "MoneyRequestSettings",
   // chat stickers

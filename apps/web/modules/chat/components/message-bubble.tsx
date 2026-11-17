@@ -9,7 +9,7 @@ import { REACTION_CHIP_CLASS, ReactionPicker } from "@/components/emoji-picker";
 import { StickerImage } from "@/components/sticker-panel";
 
 import { sortReactionEmojis, useChatStore, type RoomMessage } from "../store/chat-store";
-import { CHAT_REACTION_EMOJIS, isKeepChannelId, type ChatAttachment, type ChatUser } from "../types";
+import { ADS_BOT_AUTHOR, CHAT_REACTION_EMOJIS, isKeepChannelId, type ChatAttachment, type ChatUser } from "../types";
 import { keepMessage } from "../lib/api";
 import { attachmentLabel, firstName, formatClock, formatDuration, formatFileSize } from "../lib/format";
 import { ChatAvatar } from "./chat-avatar";
@@ -19,6 +19,7 @@ import { daysUntilExpiry } from "../lib/retention";
 import { NoteCard } from "./notes";
 import { AlbumCard } from "./album-card";
 import { TaskCard } from "./task-card";
+import { AdsProposalCard } from "@/modules/ads/components/proposal-card";
 import { canOpenAsTask, requestCreateTask, requestCreateWorkOrder } from "./chat-task";
 import { useWorkOrderAccessStore } from "@/modules/report_task/store/work-order-access-store";
 import { MessageText } from "./message-text";
@@ -670,6 +671,8 @@ export const MessageBubble = memo(function MessageBubble(props: MessageBubblePro
               <AlbumCard key="album" message={m} mine={mine} />
             ) : m.kind === "task" && m.task ? (
               <TaskCard key="task" card={m.task} body={m.body} mine={mine} />
+            ) : m.kind === "ads_proposal" ? (
+              <AdsProposalCard key="ads" proposal={m.adsProposal ?? null} viewerId={meId} />
             ) : m.body && !m.replyTo && isJumboEmoji(m.body) ? (
               <p key="emoji" className="px-1 text-[44px] leading-tight">{m.body.trim()}</p>
             ) : (m.body || m.replyTo) && (
@@ -729,7 +732,14 @@ export const MessageBubble = memo(function MessageBubble(props: MessageBubblePro
     >
       {!mine && (
         <div className="relative w-9 shrink-0">
-          {firstInGroup && <ChatAvatar name={author?.name ?? "?"} src={author?.avatarUrl} colorKey={m.authorId} className="h-9 w-9" />}
+          {firstInGroup &&
+            (m.authorId === ADS_BOT_AUTHOR ? (
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#E8F0FE] text-lg" aria-hidden>
+                🤖
+              </span>
+            ) : (
+              <ChatAvatar name={author?.name ?? "?"} src={author?.avatarUrl} colorKey={m.authorId} className="h-9 w-9" />
+            ))}
         </div>
       )}
 

@@ -32,7 +32,9 @@ function isPublic(pathname: string): boolean {
     return (
       pathname.startsWith("/api/auth/") ||
       pathname.startsWith("/api/cron/") ||
-      pathname.startsWith("/api/webhooks/")
+      pathname.startsWith("/api/webhooks/") ||
+      // n8n (Ads Agent) — ไม่มี session ทุก route ตรวจ Bearer token เองใน agentRoute (modules/ads/data/agent-auth.ts)
+      pathname.startsWith("/api/agent/")
     );
   }
 

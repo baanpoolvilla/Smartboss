@@ -233,21 +233,11 @@ export function AnalysisSettingsForm({ customerId, initial }: { customerId: stri
           )}
           {field("Target CPA", "ว่างได้", numInput("targetCpa"))}
           {field("มูลค่าเฉลี่ยต่อ Lead", "ว่างได้ — ถ้ามีใช้ประมาณ ROAS", numInput("avgLeadValue"))}
-          {field(
-            "ผู้รับอีเมลสรุปรายสัปดาห์",
-            "คั่นด้วย , หรือขึ้นบรรทัดใหม่",
-            <textarea
-              rows={2}
-              className="w-full rounded-(--radius) border border-(--line) bg-(--bg) px-2 py-1.5 text-sm text-(--ink)"
-              value={v.emailRecipients}
-              onChange={(e) => setV({ ...v, emailRecipients: e.target.value })}
-            />
-          )}
         </div>
         <div className="mt-4">
           {field(
             "บริบทธุรกิจ",
-            "ข้อมูลที่ช่วยให้ AI เข้าใจธุรกิจ เช่น ฤดูกาล สินค้าหลัก กลุ่มลูกค้า",
+            "AI บน n8n อ่านไปใช้ (GET /api/agent/ads/settings) เช่น ฤดูกาล สินค้าหลัก กลุ่มลูกค้า",
             <textarea
               rows={4}
               maxLength={4000}

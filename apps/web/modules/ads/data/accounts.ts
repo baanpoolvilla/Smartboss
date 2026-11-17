@@ -1,6 +1,5 @@
 import "server-only";
 import { prisma } from "@smartboss/database";
-import { listClientAccounts } from "../lib/google-ads-client";
 
 export interface AdsAccountRow {
   customerId: string;
@@ -32,40 +31,7 @@ export async function resolveAccount(orgId: string, customerId: string | null | 
   return accounts.find((a) => a.customerId === customerId) ?? accounts[0] ?? null;
 }
 
-/**
- * ดึงรายชื่อบัญชีใต้ MCC มาเก็บ (spec §2: ผูกบัญชีโฆษณาทั้งหมดไว้ใต้ MCC)
- * บัญชีใหม่เปิดซิงค์เป็นค่าเริ่มต้น (ads_accounts.sync_enabled DEFAULT TRUE)
- * บัญชีที่ผูกกับบริษัทอื่นไว้แล้วจะข้าม — customer_id เป็น PK ทั้งระบบ
- */
-export async function discoverAccounts(orgId: string): Promise<{ added: number; updated: number; skipped: number }> {
-  const found = await listClientAccounts();
-  let added = 0;
-  let updated = 0;
-  let skipped = 0;
-  for (const acc of found) {
-    const existing = await prisma.adsAccount.findUnique({ where: { customerId: acc.customerId }, select: { orgId: true } });
-    if (existing && existing.orgId !== orgId) {
-      skipped++;
-      continue;
-    }
-    const data = { name: acc.name, currencyCode: acc.currencyCode, timeZone: acc.timeZone };
-    if (existing) {
-      await prisma.adsAccount.update({ where: { customerId: acc.customerId }, data });
-      updated++;
-    } else {
-      await prisma.adsAccount.create({ data: { customerId: acc.customerId, orgId, ...data } });
-      added++;
-    }
-  }
-  return { added, updated, skipped };
-}
-
-export async function setSyncEnabled(orgId: string, customerId: string, enabled: boolean): Promise<void> {
-  const res = await prisma.adsAccount.updateMany({ where: { orgId, customerId }, data: { syncEnabled: enabled } });
-  if (res.count === 0) throw new Error("ไม่พบบัญชีโฆษณานี้");
-}
-
-/** เวลาซิงค์ล่าสุดของบริษัท (แสดงทุกหน้า — spec §7 ฟังก์ชันร่วม) */
+/** เวลาที่ n8n ส่งข้อมูลเข้ามาครบรอบล่าสุด (แสดงทุกหน้า) */
 export async function lastSyncedAt(orgId: string, customerId?: string | null): Promise<Date | null> {
   const row = await prisma.adsAccount.findFirst({
     where: { orgId, ...(customerId ? { customerId } : {}), lastSyncedAt: { not: null } },
@@ -73,4 +39,13 @@ export async function lastSyncedAt(orgId: string, customerId?: string | null): P
     select: { lastSyncedAt: true },
   });
   return row?.lastSyncedAt ?? null;
+}
+
+/** ประวัติการรับข้อมูลจาก n8n (แถวเก่าก่อน 17/11/2569 คือการซิงค์ของระบบเดิม) */
+export async function listSyncLogs(orgId: string, customerId?: string | null, take = 50) {
+  return prisma.adsSyncLog.findMany({
+    where: { orgId, ...(customerId ? { customerId } : {}) },
+    orderBy: { startedAt: "desc" },
+    take,
+  });
 }

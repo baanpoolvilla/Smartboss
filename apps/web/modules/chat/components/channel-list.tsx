@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
 
 import { useChatStore } from "../store/chat-store";
-import { CLOCK_CHANNEL_PREFIX, isKeepChannelId, type ChatChannelSummary, type ChatUser } from "../types";
+import { CLOCK_CHANNEL_PREFIX, isAdsBotChannelId, isKeepChannelId, type ChatChannelSummary, type ChatUser } from "../types";
 import { channelPreview, channelTitle, formatListTime } from "../lib/format";
 import { updateChannel } from "../lib/api";
 import { ChatAvatar, OffBadge } from "./chat-avatar";
@@ -61,6 +61,14 @@ export function ChannelAvatar({
         title="ระบบลงเวลา"
       >
         <Clock className="h-[50%] w-[50%]" />
+      </div>
+    );
+  }
+  // ห้องบอท Ads Agent (การ์ดอนุมัติคำขอปรับ Google Ads) — หุ่นยนต์บนพื้นสีโมดูล Google Ads
+  if (isAdsBotChannelId(channel.id)) {
+    return (
+      <div className={cn("flex shrink-0 items-center justify-center rounded-full bg-[#E8F0FE] text-[1.35em] leading-none", size)} title="Ads Agent">
+        <span aria-hidden>🤖</span>
       </div>
     );
   }
