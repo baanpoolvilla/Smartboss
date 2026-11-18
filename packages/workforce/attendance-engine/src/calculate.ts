@@ -234,13 +234,19 @@ function dropLateScanAfterCorrectedIn(input: AttendanceInput): AttendanceInput['
   const [first, next, ...later] = work;
   if (first === undefined || next === undefined) return input.punches;
   if (!first.adjusted || first.intent !== 'CLOCK_IN') return input.punches;
-  if (next.intent !== 'AUTO' || later.some((p) => p.intent !== 'AUTO')) return input.punches;
   const midpoint = zonedTimeToUtc(
     input.workDate,
     Math.round((shift.startMinutes + shift.endMinutes) / 2),
     input.timeZone,
   );
   if (next.at.getTime() >= midpoint.getTime()) return input.punches;
+  // มือถือกด "เข้างาน" (CLOCK_IN) หลังเวลาเข้าที่แก้แล้ว ก่อนครึ่งกะ = การมาถึงครั้งเดียวกันแน่นอน
+  // (เข้า-เข้า ไม่มีทางเป็นการออก) — เดิมกฎนี้ดูแค่สแกนนิ้ว (AUTO) วันนั้นเลยเป็น "ไม่มีเวลาออก" ค้าง
+  // (เจอจริง 18 พ.ย. 69: ขอแก้เข้า 08:11 + กดมือถือ 08:17 ⇒ ขึ้น "เข้า 08:11 ออก 08:17")
+  if (next.intent === 'CLOCK_IN' && !next.adjusted) {
+    return input.punches.map((p) => (p === next ? { ...p, ignored: true } : p));
+  }
+  if (next.intent !== 'AUTO' || later.some((p) => p.intent !== 'AUTO')) return input.punches;
   if (later.length > 0 && later.length % 2 === 0) return input.punches;
   return input.punches.map((p) => (p === next ? { ...p, ignored: true } : p));
 }

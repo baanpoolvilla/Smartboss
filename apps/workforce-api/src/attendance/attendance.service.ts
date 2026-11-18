@@ -88,6 +88,8 @@ export class AttendanceService {
       // เวลาที่แก้แล้ว (อนุมัติ) นับเป็นการลงเวลาบนกระดานด้วย — เวลาออกที่เพิ่มให้ขึ้นเป็นเวลาออก
       // และคนที่ไม่มีสแกนจริงเลยแต่มีเวลาที่แก้แล้ว ก็มีแถวบนกระดาน (ไม่ขึ้น "ขาดงาน")
       const added = await this.repository.listBoardAdjustmentPunches(uow.tx, workDate);
+      // สแกนจริงครั้งแรกของแต่ละคน (ก่อนรวมเวลาที่แก้) — ไว้ดูว่าเป็น "การมาถึงซ้ำ" หลังแก้เวลาเข้าไหม
+      const rawFirstAt = new Map(rows.map((r) => [r.employmentId, r.firstAt]));
       for (const punch of added) {
         const row = rows.find((r) => r.employmentId === punch.employmentId);
         if (row === undefined) {
@@ -142,6 +144,26 @@ export class AttendanceService {
           }
         }
 
+        /*
+         * แก้เวลาเข้าแล้ว + สแกน/กดมือถือตอนเช้าที่ตามมา = การมาถึงครั้งเดียวกัน ไม่ใช่เวลาออก
+         * (กติกาเดียวกับ dropLateScanAfterCorrectedIn ในเครื่องคำนวณ) — เดิมกระดานถือว่าสแกนล่าสุดคือออกเสมอ
+         * เจอจริง 18 พ.ย. 69: ขอแก้เข้า 08:11 แล้วกดมือถือ 08:17 ⇒ ขึ้น "เข้า 08:11 · ออก 08:17"
+         */
+        let lastAt = row.lastAt;
+        let scanCount = row.scanCount;
+        const rawFirst = rawFirstAt.get(row.employmentId);
+        if (
+          rawFirst !== undefined &&
+          shift !== undefined &&
+          !shift.shift.restDay &&
+          new Date(firstAt).getTime() < new Date(rawFirst).getTime() &&
+          localMinutesOf(rawFirst, row.timeZone) <
+            Math.round((shift.shift.startMinutes + shift.shift.endMinutes) / 2)
+        ) {
+          scanCount -= 1;
+          if (new Date(lastAt).getTime() === new Date(rawFirst).getTime()) lastAt = firstAt;
+        }
+
         // นาทีจากเที่ยงคืนของเวลาที่สแกนครั้งแรก เทียบกับเวลาเข้างานตามกะ
         const local = new Date(firstAt);
         const parts = new Intl.DateTimeFormat('en-GB', {
@@ -177,8 +199,8 @@ export class AttendanceService {
           display_name: row.displayName,
           employee_code: row.employeeCode,
           first_scan_at: firstAt,
-          last_scan_at: row.lastAt,
-          scan_count: row.scanCount,
+          last_scan_at: lastAt,
+          scan_count: scanCount,
           scheduled_start_minutes: shift?.shift.startMinutes ?? null,
           status,
           late_minutes: lateMinutes,
@@ -1350,4 +1372,17 @@ function toStoredResultView(
     has_blocking_exception: row.hasBlockingException,
     calculated_at: row.calculatedAt.toISOString(),
   };
+}
+
+/** นาทีนับจากเที่ยงคืนตามเวลาท้องถิ่น */
+function localMinutesOf(at: string | Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date(at));
+  const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? '0') % 24;
+  const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? '0');
+  return hour * 60 + minute;
 }

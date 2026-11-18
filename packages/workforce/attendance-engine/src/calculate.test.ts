@@ -279,6 +279,41 @@ describe('missing and duplicate punches', () => {
     expect(codes(result)).not.toContain('MISSING_OUT');
   });
 
+  it('a corrected clock-in makes a later phone "เข้างาน" the same arrival', () => {
+    // 18 พ.ย. 69 GL-011: ขอแก้เข้า 08:11 แล้วกด "เข้างาน" ในมือถือ 08:17 — เดิมเป็นเข้า-เข้า (MISSING_OUT)
+    const result = run({
+      punches: [
+        punch('08:11', { intent: 'CLOCK_IN', adjusted: true, trustedIntent: true }),
+        punch('08:17', { intent: 'CLOCK_IN', trustedIntent: true }),
+        punch('17:05', { intent: 'CLOCK_OUT', trustedIntent: true }),
+      ],
+    });
+    expect(result.actualInAt?.toISOString()).toBe(zonedTimeToUtc(WORK_DATE, 491, TZ).toISOString());
+    expect(result.actualOutAt?.toISOString()).toBe(zonedTimeToUtc(WORK_DATE, 1025, TZ).toISOString());
+    expect(codes(result)).not.toContain('MISSING_OUT');
+    // ผลเหมือนไม่มีสแกน 08:17 เลย
+    const withoutPhone = run({
+      punches: [
+        punch('08:11', { intent: 'CLOCK_IN', adjusted: true, trustedIntent: true }),
+        punch('17:05', { intent: 'CLOCK_OUT', trustedIntent: true }),
+      ],
+    });
+    expect(result.workedMinutes).toBe(withoutPhone.workedMinutes);
+    expect(result.lateMinutes).toBe(withoutPhone.lateMinutes);
+    expect(result.absenceMinutes).toBe(withoutPhone.absenceMinutes);
+  });
+
+  it('a corrected clock-in + phone "เข้างาน" with no clock-out yet is still clocked in', () => {
+    const result = run({
+      punches: [
+        punch('08:11', { intent: 'CLOCK_IN', adjusted: true, trustedIntent: true }),
+        punch('08:17', { intent: 'CLOCK_IN', trustedIntent: true }),
+      ],
+    });
+    expect(result.actualInAt?.toISOString()).toBe(zonedTimeToUtc(WORK_DATE, 491, TZ).toISOString());
+    expect(result.actualOutAt).toBeNull();
+  });
+
   it('a corrected clock-in keeps a real morning exit and return', () => {
     const result = run({
       punches: [
