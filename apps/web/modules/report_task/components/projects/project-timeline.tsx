@@ -26,6 +26,7 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useProjectStore } from "@/modules/report_task/store/project-store";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import type { Project, ProjectDepRule } from "@/modules/report_task/types";
+import { TimelineTaskWork } from "./timeline-task-work";
 import { barStyle, fmtDay, PersonDot, STATE_COLOR, STATE_LABEL, StatePill, TH_MONTH_SHORT } from "./project-ui";
 
 import { useCeoTitle } from "@/lib/ceo-title-client";
@@ -833,7 +834,9 @@ function ItemDetail({
     onMove(s, e);
   };
   const stepBtn = "h-9 w-9 rounded-lg border border-[var(--line)] bg-[var(--bg-soft)] text-base disabled:opacity-40";
+  // งาน: แผงเดิม (วัน/ต้องรอ) ซ้าย + รายละเอียดและเช็คลิสต์ที่ติ๊กได้ขวา (timeline-task-work.tsx) · จุดสำคัญเหมือนเดิม
   return (
+    <div className={item.kind === "task" ? "grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]" : "contents"}>
     <div className="grid gap-3 rounded-xl border border-[var(--line)] bg-[var(--bg-soft)] p-3.5">
       <div className="flex flex-wrap items-center gap-2">
         {item.kind === "milestone" && canEdit ? (
@@ -941,6 +944,8 @@ function ItemDetail({
         )}
       </div>
       {item.state === "late" && dayNum(item.end) < dayNum(today) && <p className="m-0 text-xs text-red-600">เลยกำหนดมา {dayNum(today) - dayNum(item.end)} วัน</p>}
+    </div>
+    {item.kind === "task" && <TimelineTaskWork taskId={item.id} />}
     </div>
   );
 }
