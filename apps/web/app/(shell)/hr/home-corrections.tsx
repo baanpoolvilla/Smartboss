@@ -59,6 +59,13 @@ function issuesByEmployment(results: ResultRow[], corrections: AttendanceCorrect
   return out;
 }
 
+/** ประวัติ: วันที่ทำงานล่าสุดขึ้นก่อน · วันเดียวกันเอาคำขอที่ยื่นทีหลังขึ้นก่อน (API คืนเก่า→ใหม่) */
+function newestFirst(list: AttendanceCorrection[]): AttendanceCorrection[] {
+  return [...list].sort(
+    (a, b) => b.work_date.slice(0, 10).localeCompare(a.work_date.slice(0, 10)) || b.created_at.localeCompare(a.created_at)
+  );
+}
+
 /**
  * มุมของพนักงานที่ไม่มีสิทธิ์จัดการ — ยื่นคำขอแก้เวลาของตัวเองและตามดูสถานะ
  * ไม่เห็นของคนอื่น ไม่มีปุ่มอนุมัติ (workforce API บังคับซ้ำอีกชั้น)
@@ -81,7 +88,7 @@ async function renderMyCorrections(today: string, from: string): Promise<React.R
   ]);
   const issues = issuesByEmployment(results?.items ?? [], corrections.items, today);
   const pending = corrections.items.filter((c) => c.status === "PENDING");
-  const decided = corrections.items.filter((c) => c.status !== "PENDING");
+  const decided = newestFirst(corrections.items.filter((c) => c.status !== "PENDING"));
 
   return (
     <div className="flex flex-col gap-4">
@@ -139,7 +146,7 @@ export async function renderCorrectionsTab(canManage: boolean): Promise<React.Re
 
   const activeEmployees = employments.items.filter((e) => e.terminated_on === null);
   const pending = corrections.items.filter((c) => c.status === "PENDING");
-  const decided = corrections.items.filter((c) => c.status !== "PENDING");
+  const decided = newestFirst(corrections.items.filter((c) => c.status !== "PENDING"));
 
   return (
     <div className="flex flex-col gap-4">
