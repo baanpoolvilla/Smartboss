@@ -19,7 +19,7 @@ import { answer, attachVideo, canShareScreen, changeVolume, decline, enableAudio
 export function CallManager() {
   const {
     phase, call, muted, needsAudioTap, endedLabel, minimized, meId, volume, volumeAdjustable,
-    cameraOn, remoteVideo, facing, noMic, sharingScreen, remoteIsScreen,
+    cameraOn, remoteVideo, facing, noMic, sharingScreen, remoteIsScreen, reconnecting, peerAway,
   } = useCallStore();
 
   useEffect(() => {
@@ -65,7 +65,7 @@ export function CallManager() {
         onClick={() => useCallStore.setState({ minimized: false })}
         className="fixed inset-x-0 top-0 z-[90] flex items-center justify-center gap-2 bg-[#06c755] px-4 pb-1.5 pt-[max(0.375rem,env(safe-area-inset-top))] text-sm font-medium text-white shadow"
       >
-        <Phone className="h-4 w-4" /> {peerName} · <CallTimer since={call.answeredAt} />
+        <Phone className="h-4 w-4" /> {peerName} · {reconnecting ? "กำลังต่อสายใหม่…" : peerAway ? "รอปลายสาย…" : <CallTimer since={call.answeredAt} />}
         {muted && <MicOff className="h-4 w-4" />}
         {cameraOn && <Video className="h-4 w-4" />}
       </button>
@@ -81,7 +81,11 @@ export function CallManager() {
           ? "กำลังเชื่อมต่อ…"
           : phase === "ended"
             ? endedLabel
-            : null;
+            : reconnecting
+              ? "สัญญาณหลุด กำลังต่อสายใหม่…"
+              : peerAway
+                ? "ปลายสายสัญญาณหลุด รอสักครู่…"
+                : null;
 
   return (
     <div className="fixed inset-0 z-[90] flex flex-col items-center bg-gradient-to-b from-[#1f2a37] to-[#0b1118] px-6 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] text-white">

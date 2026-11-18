@@ -49,6 +49,10 @@ interface CallState {
   sharingScreen: boolean;
   /** ภาพที่ปลายสายส่งมาคือหน้าจอ (ไม่ใช่กล้อง) — แสดงแบบเต็มภาพไม่ครอป */
   remoteIsScreen: boolean;
+  /** ห้องเสียงของเราหลุด กำลังต่อกลับเข้าสายเดิม (จอดับนาน/เน็ตสลับ) */
+  reconnecting: boolean;
+  /** ปลายสายหลุดไป (จอดับ/เน็ตหาย) — รอให้กลับมา */
+  peerAway: boolean;
 }
 
 const VOLUME_KEY = "sb.call.volume";
@@ -79,11 +83,18 @@ export const useCallStore = create<CallState>(() => ({
   noMic: false,
   sharingScreen: false,
   remoteIsScreen: false,
+  reconnecting: false,
+  peerAway: false,
 }));
 
 const RING_TIMEOUT_MS = 45_000;
-/** ปลายสายหลุดจากห้อง (ปิดแอป/เน็ตหาย) นานเท่านี้ไม่กลับมา = วางสายให้ */
-const PEER_GONE_MS = 20_000;
+/**
+ * ปลายสายหลุดจากห้อง (ปิดแอป/เน็ตหาย/จอดับ) นานเท่านี้ไม่กลับมา = วางสายให้
+ * เดิม 20 วิ — ปลายสายจอดับครู่เดียว (มือถือพักหน้าเว็บ) สายก็ถูกวางทั้งสองฝั่ง (ผู้ใช้ 18/11/2569 "จอดับแล้วคุยไม่ได้เลย")
+ */
+const PEER_GONE_MS = 60_000;
+/** ห้องเสียงของเราหลุด (จอดับนาน/เน็ตสลับ) — ลองต่อกลับเข้าสายเดิมได้นานเท่านี้ก่อนยอมวาง */
+const REJOIN_WINDOW_MS = 45_000;
 
 let room: Room | null = null;
 let ringTimer: ReturnType<typeof setTimeout> | null = null;
@@ -198,6 +209,125 @@ export function changeVolume(delta: number) {
   setVolume(useCallStore.getState().volume + delta);
 }
 
+// ─── จอดับระหว่างคุย (ผู้ใช้ 18/11/2569 "โทรแล้วจอดับ คุยไม่ได้เลย ไม่ได้ยินเสียง") ───
+// มือถือพักหน้าเว็บตอนจอดับ — ไมค์/เสียงหยุด เน็ตของหน้าเว็บหลุด
+//  1. ระหว่างสาย ขอให้จอไม่ดับเอง (Screen Wake Lock — แบบแอปโทรทั่วไป) · จอดับเพราะกดปุ่มเองยังกันไม่ได้
+//  2. กลับมาเปิดจอ: เล่นเสียงปลายสายต่อ + เปิดไมค์ใหม่ถ้าเครื่องตัดไปแล้ว
+//  3. ห้องเสียงหลุด: ต่อกลับเข้าสายเดิมก่อน (ไม่วางสายทันทีเหมือนเดิม)
+
+type WakeLockLike = { release: () => Promise<void>; released?: boolean };
+let wakeLock: WakeLockLike | null = null;
+
+async function keepScreenOn() {
+  if (typeof navigator === "undefined" || document.visibilityState !== "visible") return;
+  if (wakeLock && !wakeLock.released) return;
+  const api = (navigator as unknown as { wakeLock?: { request: (t: "screen") => Promise<WakeLockLike> } }).wakeLock;
+  if (!api) return; // เบราว์เซอร์เก่า/บางแอป — ไม่มีให้ใช้ ข้ามไป
+  try {
+    wakeLock = await api.request("screen");
+  } catch {
+    wakeLock = null; // แบตต่ำ/โหมดประหยัด — ปฏิเสธได้ ไม่เป็นไร
+  }
+}
+
+function releaseScreen() {
+  const w = wakeLock;
+  wakeLock = null;
+  if (w && !w.released) void w.release().catch(() => undefined);
+}
+
+const inCall = () => {
+  const p = useCallStore.getState().phase;
+  return p === "outgoing" || p === "incoming" || p === "connecting" || p === "active";
+};
+
+/** กลับมาเปิดจอ/สลับกลับเข้าแอประหว่างคุย */
+async function onVisible() {
+  if (!inCall()) return;
+  void keepScreenOn(); // ล็อกจอถูกปล่อยเองตอนหน้าเว็บถูกซ่อน — ขอใหม่
+  const r = room;
+  if (!r) return;
+  // เสียงปลายสายถูกพักไว้ — เล่นต่อ (เครื่องไม่ยอม = ขึ้นปุ่ม "เปิดเสียง")
+  await r.startAudio().catch(() => undefined);
+  for (const el of audioEls) void el.play().catch(() => undefined);
+  useCallStore.setState({ needsAudioTap: !r.canPlaybackAudio });
+  // ไมค์ถูกเครื่องตัดตอนจอดับ (iPhone) — เปิดใหม่ ถ้าเราไม่ได้กดปิดไมค์เอง
+  const s = useCallStore.getState();
+  if (s.muted || s.noMic) return;
+  try {
+    const { Track } = await import("livekit-client");
+    const mic = r.localParticipant.getTrackPublication(Track.Source.Microphone)?.track?.mediaStreamTrack;
+    if (!mic || mic.readyState === "ended" || mic.muted) {
+      await r.localParticipant.setMicrophoneEnabled(false).catch(() => undefined);
+      await r.localParticipant.setMicrophoneEnabled(true);
+    }
+  } catch {
+    /* เปิดไมค์ไม่ได้ — ผู้ใช้ยังกดปุ่มไมค์เองได้ */
+  }
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") void onVisible();
+  });
+}
+
+let recovering = false;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * ห้องเสียงของเราหลุดระหว่างคุย — ต่อกลับเข้าสายเดิม (token ใหม่) ภายใน REJOIN_WINDOW_MS
+ * ระหว่างจอดับ (หน้าเว็บถูกซ่อน) รอจนเปิดจอก่อน · สายถูกวางไปแล้ว/ต่อไม่ได้จริง = วางสาย
+ */
+async function recoverRoom() {
+  if (recovering) return;
+  const callId = useCallStore.getState().call?.id;
+  if (!callId) return;
+  recovering = true;
+  const wasMuted = useCallStore.getState().muted;
+  useCallStore.setState({ reconnecting: true });
+  const deadline = Date.now() + REJOIN_WINDOW_MS;
+  try {
+    while (useCallStore.getState().phase === "active" && useCallStore.getState().call?.id === callId) {
+      if (document.visibilityState !== "visible") {
+        // จอดับอยู่ — ทำอะไรไม่ได้ รอเปิดจอ (นับเวลาเริ่มใหม่ตอนเปิดจอ ไม่งั้นจอดับนาน = วางทันทีที่เปิด)
+        await new Promise<void>((resolve) => {
+          const on = () => {
+            if (document.visibilityState !== "visible") return;
+            document.removeEventListener("visibilitychange", on);
+            resolve();
+          };
+          document.addEventListener("visibilitychange", on);
+        });
+        continue;
+      }
+      if (Date.now() > deadline) break;
+      try {
+        const joined = await post<Joined>(`/api/chat/calls/${callId}/rejoin`);
+        disconnectRoom();
+        await connectRoom(joined.url, joined.token);
+        if (wasMuted && room) {
+          useCallStore.setState({ muted: true });
+          await room.localParticipant.setMicrophoneEnabled(false).catch(() => undefined);
+        }
+        useCallStore.setState({ call: joined.call, reconnecting: false });
+        return;
+      } catch (err) {
+        // สายจบไปแล้ว (อีกฝั่งวาง) — ไม่ต้องลองต่อ
+        if (err instanceof Error && err.message.includes("จบไปแล้ว")) {
+          teardown("วางสายแล้ว");
+          return;
+        }
+        await sleep(3000);
+      }
+    }
+    if (useCallStore.getState().phase === "active" && useCallStore.getState().call?.id === callId) void hangUp("สายหลุด");
+  } finally {
+    recovering = false;
+    useCallStore.setState({ reconnecting: false });
+  }
+}
+
 // ─── ต่อ / ตัดห้องเสียง ───
 
 async function connectRoom(url: string, token: string) {
@@ -247,17 +377,22 @@ async function connectRoom(url: string, token: string) {
   r.on(RoomEvent.ParticipantConnected, () => {
     if (peerGoneTimer) clearTimeout(peerGoneTimer);
     peerGoneTimer = null;
+    useCallStore.setState({ peerAway: false });
   });
   r.on(RoomEvent.ParticipantDisconnected, () => {
     if (useCallStore.getState().phase !== "active") return;
+    // ปลายสายจอดับ/เน็ตหาย — รอกลับมา (ขึ้นสถานะบนจอโทร) ไม่วางทันที
+    useCallStore.setState({ peerAway: true });
     if (peerGoneTimer) clearTimeout(peerGoneTimer);
-    peerGoneTimer = setTimeout(() => void hangUp(), PEER_GONE_MS);
+    peerGoneTimer = setTimeout(() => void hangUp("ปลายสายหลุด"), PEER_GONE_MS);
   });
   r.on(RoomEvent.Disconnected, () => {
-    // หลุดถาวร (LiveKit ลองต่อใหม่เองแล้วไม่สำเร็จ) — ระหว่างคุยถือว่าวางสาย
+    // หลุดถาวร (LiveKit ลองต่อใหม่เองแล้วไม่สำเร็จ)
     if (room !== r) return;
     const { phase } = useCallStore.getState();
-    if (phase === "active" || phase === "outgoing" || phase === "connecting") void hangUp();
+    // ระหว่างคุย: ต่อกลับเข้าสายเดิมก่อน (เดิมวางสายทั้งสองฝั่งทันที — จอดับนิดเดียวสายก็หลุด)
+    if (phase === "active") void recoverRoom();
+    else if (phase === "outgoing" || phase === "connecting") void hangUp();
   });
   await r.connect(url, token);
   // ไม่มีไมค์ (คอมตั้งโต๊ะ) = เข้าสายฟังอย่างเดียว แทนที่จะโทรไม่ได้เลย · ไม่อนุญาตไมค์ = ยังเป็น error ให้ไปเปิดสิทธิ์
@@ -277,7 +412,7 @@ function disconnectRoom() {
   remoteCamTrack = null;
   remoteScreenTrack = null;
   localVideoTrack = null;
-  useCallStore.setState({ cameraOn: false, remoteVideo: false, facing: "user", noMic: false, sharingScreen: false, remoteIsScreen: false });
+  useCallStore.setState({ cameraOn: false, remoteVideo: false, facing: "user", noMic: false, sharingScreen: false, remoteIsScreen: false, peerAway: false });
   if (r) void r.disconnect().catch(() => undefined);
   for (const el of audioEls) el.remove();
   audioEls.clear();
@@ -549,6 +684,15 @@ export function onUpdate(call: ChatCallDTO) {
   const label =
     call.status === "declined" ? (s.meId === call.callerId ? "ปลายสายไม่สะดวกรับ" : "") : call.status === "missed" ? (s.phase === "incoming" ? "สายที่ไม่ได้รับ" : "ไม่มีผู้รับสาย") : "วางสายแล้ว";
   teardown(label);
+}
+
+// จอไม่ดับเองตลอดสาย (เรียกเข้า/รอสาย/คุยอยู่) · จบสาย = ปล่อย
+if (typeof window !== "undefined") {
+  useCallStore.subscribe((s, prev) => {
+    if (s.phase === prev.phase) return;
+    if (inCall()) void keepScreenOn();
+    else releaseScreen();
+  });
 }
 
 /** เปิดแอป/รีเฟรช — ดึงสายที่ยังไม่จบของเรามาต่อ */
