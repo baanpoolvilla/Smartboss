@@ -2,7 +2,7 @@ import "server-only";
 
 import { listDirectory } from "@/modules/report_task/lib/db/employee-directory";
 import { listDepartmentsWithOverlay } from "@/modules/report_task/lib/db/departments";
-import { ownNotifications, readStore } from "@/modules/report_task/lib/db/org-store";
+import { ownNotifications, readStore, readStoreVersion } from "@/modules/report_task/lib/db/org-store";
 import {
   listHolidayCalendar,
   listLeaveEvents,
@@ -79,8 +79,31 @@ export async function readStorePayload(
     return { payload: events, version: 1 };
   }
 
-  const { data, version } = await readStore<unknown>(orgId, key);
+  const { data, version } = key === NOTIFICATIONS_KEY ? await readNotificationsShared(orgId) : await readStore<unknown>(orgId, key);
   // แจ้งเตือนเก็บรวมทั้งบริษัท แต่ส่งให้แต่ละคนเฉพาะของตัวเอง — เดิมทุกเครื่องได้ทั้งก้อน
   // (ของคนอื่นถูกซ่อนแค่ที่หน้าจอ แต่เปิด DevTools ก็อ่านได้ และโหลด 1.6 MB ทุกครั้ง)
   return { payload: key === NOTIFICATIONS_KEY ? ownNotifications(data, userId) : data, version };
+}
+
+/**
+ * แจ้งเตือนทั้งบริษัท (ก้อนเดียวหลาย MB) — จำก้อนล่าสุดไว้ในโปรเซสตามเลข version
+ *
+ * มีแจ้งเตือนใหม่ถึงใครก็ตาม version ขยับ ⇒ ทุกแท็บที่ poll อยู่ขอก้อนใหม่พร้อมกัน เดิมแต่ละคำขออ่านจาก DB
+ * และแปลง JSON หลาย MB เองทุกครั้ง ⇒ next-server ตัวเดียวค้างทั้งตัวจนหน้าอื่นรอ (prod 18/11/2569: หน้าเปล่า
+ * /api/version ตอบ 0.7–2.6 วิ เป็นช่วง ๆ) · ตอนนี้แปลงครั้งเดียวต่อ version แล้วทุกคำขอใช้ร่วม
+ *
+ * ข้อมูลที่ส่งออกเหมือนเดิมทุกอย่าง (ยังกรองเหลือของแต่ละคนที่ ownNotifications) · ห้ามแก้ object ที่ได้ไป
+ * เขียนยังผ่าน readStore/writeStore ตามเดิม ไม่ได้ใช้ก้อนนี้ · โปรเซสเดียว (ดู store-delta-log.ts)
+ */
+const g = globalThis as unknown as { __notifShared?: Map<string, { version: number; data: unknown }> };
+const notifShared = (g.__notifShared ??= new Map());
+
+async function readNotificationsShared(orgId: string): Promise<{ data: unknown; version: number }> {
+  const version = await readStoreVersion(orgId, NOTIFICATIONS_KEY);
+  const hit = notifShared.get(orgId);
+  if (hit && hit.version === version) return hit;
+  const fresh = await readStore<unknown>(orgId, NOTIFICATIONS_KEY);
+  const cur = notifShared.get(orgId);
+  if (!cur || fresh.version >= cur.version) notifShared.set(orgId, { version: fresh.version, data: fresh.data });
+  return { data: fresh.data, version: fresh.version };
 }
