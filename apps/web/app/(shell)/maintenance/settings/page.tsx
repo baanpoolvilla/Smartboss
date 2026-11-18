@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ExternalLink, FileText, MessageSquare, ReceiptText } from "lucide-react";
-import { requireOrg, hasPermission } from "@smartboss/auth";
+import { ExternalLink, FileText, MessageSquare } from "lucide-react";
+import { requireOrg, hasPermission, SUPER_ADMIN_ROLE } from "@smartboss/auth";
 import { Card } from "@smartboss/ui/components/card";
 import { Button } from "@smartboss/ui/components/button";
 import { Input } from "@smartboss/ui/components/input";
@@ -14,13 +14,14 @@ import {
   AppScaffold,
   AppBarLink,
 } from "@/modules/maintenance/components/app-scaffold";
-import { saveExpenseTrackingAction, saveLineConfigAction, saveWoReviewAction } from "./actions";
+import { saveLineConfigAction, saveWoReviewAction } from "./actions";
+import { ExpenseTrackingForm } from "@/modules/maintenance/components/expense-tracking-form";
+import { prisma } from "@smartboss/database";
+import { todayIso } from "@/modules/hr/lib/date";
 import { loadWoReviewEnabled } from "@/modules/maintenance/data/work-order-review";
 import { ClipboardCheck } from "lucide-react";
 
-import { ceoTitle } from "@/lib/ceo-title";
 export default async function MaintenanceSettingsPage() {
-  const ceo = await ceoTitle();
   const session = await requireOrg();
   if (!hasPermission(session, MAINT_PERMS.admin)) redirect("/");
 
@@ -28,11 +29,19 @@ export default async function MaintenanceSettingsPage() {
   const canSeeUsers = hasPermission(session, ADMIN_PERMS.userView);
   const tracking = await loadExpenseTracking(session.orgId);
   const expenseHolders = await usersWithPermission(session.orgId, MAINT_PERMS.expenseManage);
-  const holderNames = await userNameMap(session.orgId, expenseHolders);
+  // ชื่อของทั้งคนที่มีสิทธิ์และคนที่เคยติ๊กไว้ (ปิดบัญชี/ถอนสิทธิ์แล้วก็ยังขึ้นชื่อให้เอาออกได้)
+  const holderNames = await userNameMap(session.orgId, [...expenseHolders, ...tracking.recorderIds]);
+  // รายชื่อให้เลือก: แยกแผนก · ไม่รวมผู้ดูแลระบบสูงสุด (ไม่ใช่คนทำงานจริง)
+  const holderRows = await prisma.user.findMany({
+    where: { orgId: session.orgId, id: { in: expenseHolders } },
+    select: { id: true, name: true, department: { select: { name: true } }, roles: { select: { role: { select: { code: true } } } } },
+    orderBy: { name: "asc" },
+  });
+  const recorderOptions = holderRows
+    .filter((u) => !u.roles.some((r) => r.role.code === SUPER_ADMIN_ROLE))
+    .map((u) => ({ id: u.id, name: u.name, dept: u.department?.name ?? "ไม่ระบุแผนก" }));
+  const todayBkk = todayIso();
   const pendingCount = (await pendingExpenseWorkOrders(session.orgId)).length;
-  // ติ๊กไว้แต่ทำงานไม่ได้แล้ว (ปิดบัญชี/ถอนสิทธิ์) — ไม่มีใครรับงาน ไม่มีใครโดนหัก ต้องบอกให้รู้
-  const lostRecorders = tracking.recorderIds.filter((id) => !expenseHolders.includes(id)).length;
-  const noRecorder = !!tracking.from && tracking.recorderIds.length === lostRecorders;
   const reviewOn = await loadWoReviewEnabled(session.orgId);
 
   return (
@@ -63,48 +72,18 @@ export default async function MaintenanceSettingsPage() {
         </form>
       </Card>
 
-      {/* ─── กำหนดบันทึกค่าใช้จ่าย ─── */}
+      {/* ─── เตือนลงบิลค่าใช้จ่าย (กติกาเดิม หน้าตั้งค่าใหม่ 18/11/2569) ─── */}
       <Card className="mb-4 p-5">
-        <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-(--ink)">
-          <ReceiptText className="h-4 w-4 text-(--brand-green)" /> กำหนดบันทึกค่าใช้จ่าย
-        </h2>
-        <p className="mb-3 text-xs text-(--ink-soft)">
-          ใบงานที่ปิดแล้วและยังไม่บันทึกค่าใช้จ่าย จะขึ้นเป็นงานของผู้บันทึกพร้อมวันครบกำหนด เลยกำหนดหักคะแนนผู้บันทึกทุกคน
-          ผู้บันทึกเห็นเฉพาะใบที่เกี่ยวกับตัวเองและใบที่รอบันทึก · ตอนนี้รอบันทึก {pendingCount} ใบ
-          · ใบที่ปิดก่อนวันเริ่มใช้นับเวลาจากวันเริ่มใช้และไม่หักคะแนน
-        </p>
-        <form action={saveExpenseTrackingAction} className="flex flex-col gap-3">
-          <div className="flex flex-wrap gap-3">
-            <label className="flex flex-col gap-1 text-sm">
-              วันเริ่มใช้ (เว้นว่าง = ปิด)
-              <Input type="date" name="from" defaultValue={tracking.from ? tracking.from.toISOString().slice(0, 10) : ""} className="w-48" />
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              ปิดงานแล้วมีเวลาบันทึก (วัน)
-              <Input type="number" name="days" min={1} max={90} defaultValue={tracking.days} className="w-32" />
-            </label>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <span className="text-sm">ผู้บันทึกค่าใช้จ่าย</span>
-            {lostRecorders > 0 && (
-              <span role="alert" className="rounded-(--radius) bg-amber-50 px-2 py-1 text-xs text-amber-800">
-                มีผู้บันทึก {lostRecorders} คนที่ปิดบัญชีหรือถูกถอนสิทธิ์แล้ว{noRecorder ? " ตอนนี้ไม่มีใครรับงานนี้เลย" : ""} เลือกคนใหม่แล้วกดบันทึก
-              </span>
-            )}
-            {expenseHolders.length === 0 ? (
-              <span className="text-xs text-(--ink-soft)">ยังไม่มีใครมีสิทธิ์บันทึก/แก้ไขค่าใช้จ่าย ให้สิทธิ์ที่หน้าบทบาทก่อน</span>
-            ) : (
-              expenseHolders.map((id) => (
-                <label key={id} className="flex w-fit items-center gap-2 text-sm text-(--ink)">
-                  <input type="checkbox" name="recorderIds" value={id} defaultChecked={tracking.recorderIds.includes(id)} className="h-4 w-4" />
-                  {holderNames[id] ?? id}
-                </label>
-              ))
-            )}
-            <span className="text-xs text-(--ink-soft)">รายชื่อคือคนที่มีสิทธิ์บันทึก/แก้ไขค่าใช้จ่าย · {ceo} ที่ติ๊กไว้ยังเห็นทุกใบตามเดิม</span>
-          </div>
-          <Button type="submit" className="w-fit">บันทึก</Button>
-        </form>
+        <ExpenseTrackingForm
+          initialFrom={tracking.from ? tracking.from.toISOString().slice(0, 10) : null}
+          initialDays={tracking.days}
+          initialRecorderIds={tracking.recorderIds}
+          options={recorderOptions}
+          allowedIds={expenseHolders}
+          names={holderNames}
+          pendingCount={pendingCount}
+          today={todayBkk}
+        />
       </Card>
 
       {/* ─── LINE config (ของโมดูลนี้โดยเฉพาะ) ─── */}
