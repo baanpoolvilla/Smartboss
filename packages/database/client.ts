@@ -40,12 +40,34 @@ function urlWithPoolLimit(): string | undefined {
   }
 }
 
+/**
+ * จดคิวรีที่ช้า (≥ SLOW_QUERY_MS) ลง log — ชื่อตาราง + ชนิดคำสั่ง + เวลา เท่านั้น ไม่จดข้อมูล/เงื่อนไข
+ * วัดรวมเวลารอ connection ด้วย ⇒ ถ้า pool เต็มก็เห็น (ผู้ใช้ 18/11/2569 หน้าโหลดช้า — วัดก่อนแก้)
+ * ไม่เปลี่ยนผลลัพธ์ของคิวรีใด ๆ · ปิดได้ด้วย SLOW_QUERY_MS=0
+ */
+const SLOW_QUERY_MS = Number(process.env.SLOW_QUERY_MS ?? 300);
+const slowQueryLog = {
+  name: "slow-query-log",
+  query: {
+    async $allOperations({ model, operation, args, query }: { model?: string; operation: string; args: unknown; query: (a: unknown) => Promise<unknown> }) {
+      if (!(SLOW_QUERY_MS > 0)) return query(args);
+      const t0 = performance.now();
+      try {
+        return await query(args);
+      } finally {
+        const took = Math.round(performance.now() - t0);
+        if (took >= SLOW_QUERY_MS) console.warn(`[perf] slow query ${model ?? "raw"}.${operation} ${took}ms`);
+      }
+    },
+  },
+} as const;
+
 function makeClient() {
   const url = urlWithPoolLimit();
   return new PrismaClient({
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
     ...(url ? { datasources: { db: { url } } } : {}),
-  }).$extends(tenantGuardExtension).$extends(fieldCryptoExtension);
+  }).$extends(slowQueryLog).$extends(tenantGuardExtension).$extends(fieldCryptoExtension);
 }
 
 const globalForPrisma = globalThis as unknown as {
