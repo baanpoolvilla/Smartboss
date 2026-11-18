@@ -7,6 +7,7 @@ import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { ServerStoreSync } from "@/modules/report_task/components/shared/server-store-sync";
 import type { User } from "@/modules/report_task/types";
+import { fetchEmployeeDirectory } from "@/modules/report_task/lib/employee-directory-fetch";
 import { usesReportTaskScaffold } from "@/modules/report_task/constants";
 import { useShellOptional } from "@/components/shell/shell-context";
 
@@ -38,8 +39,8 @@ export function ReportNotificationSync() {
     // ตัวตนในเครื่องถูกตั้งแค่ตอนเปิดหน้าโมดูลงาน/รีพอต (report-task-scaffold.tsx) — เปิดหน้าแจ้งเตือนเป็นหน้าแรก
     // (เครื่องใหม่ / กดจากแจ้งเตือนมือถือ) เคยไม่เห็นแจ้งเตือนงาน แท็ก รีพอตของตัวเองเลย (เจอ 29/10/2569) ⇒ ตั้งจาก session
     if (sessionUserId) useIdentityStore.getState().setViewingAs(sessionUserId);
-    fetch("/api/report-task/store/employees")
-      .then((res) => res.json())
+    // ใช้ร่วมกับตัวอื่นในแท็บ ไม่ขอซ้ำทุกครั้งที่เปลี่ยนหน้า (lib/employee-directory-fetch.ts)
+    fetchEmployeeDirectory()
       .then((employees: User[]) => {
         if (!cancelled) useEmployeeStore.getState().setEmployees(employees);
       })

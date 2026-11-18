@@ -13,6 +13,7 @@ import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report
 import type { TaskReviewSettings } from "@/modules/report_task/store/task-review-settings-store";
 import type { Task } from "@/modules/report_task/types";
 import type { User, Department } from "@/modules/report_task/types";
+import { fetchEmployeeDirectory } from "@/modules/report_task/lib/employee-directory-fetch";
 
 /**
  * ของที่สอง tile (รายงานและงาน / Chat & Report) ต้องใช้ร่วมกัน — ดึงครั้งเดียวแล้วใช้ด้วยกัน และจำไว้
@@ -71,7 +72,7 @@ export function AppTileReviewBadge({
         const none = Promise.resolve(null);
         const [tasks, employees, departments, reportFeed, reviewSettings, notifications] = (await Promise.all([
           part === "tasks" ? fetchShared("/api/report-task/tasks") : Promise.resolve([]),
-          fetchShared("/api/report-task/store/employees"),
+          fetchEmployeeDirectory(),
           fetchShared("/api/report-task/store/departments"),
           part === "reports" ? fetchShared("/api/report-task/store/report-feed") : none,
           part === "tasks" ? fetchShared("/api/report-task/store/task-review-settings") : none,

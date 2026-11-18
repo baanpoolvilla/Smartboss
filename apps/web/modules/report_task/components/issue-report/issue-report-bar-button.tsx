@@ -11,6 +11,7 @@ import { migrateIssueStoreSlice } from "@/modules/report_task/lib/issue-migratio
 import { reporterStatusGroup } from "@/modules/report_task/lib/issue-meta";
 import { ServerStoreSync } from "@/modules/report_task/components/shared/server-store-sync";
 import type { User } from "@/modules/report_task/types";
+import { fetchEmployeeDirectory } from "@/modules/report_task/lib/employee-directory-fetch";
 
 import { usesReportTaskScaffold } from "@/modules/report_task/constants";
 /**
@@ -51,8 +52,8 @@ export function IssueReportBarButton() {
     if (isReportTaskPage) return;
     let cancelled = false;
     useIdentityStore.persist.rehydrate();
-    fetch("/api/report-task/store/employees")
-      .then((res) => res.json())
+    // ใช้ร่วมกับตัวอื่นในแท็บ ไม่ขอซ้ำทุกครั้งที่เปลี่ยนหน้า (lib/employee-directory-fetch.ts)
+    fetchEmployeeDirectory()
       .then((employees: User[]) => {
         if (!cancelled) useEmployeeStore.getState().setEmployees(employees);
       })
