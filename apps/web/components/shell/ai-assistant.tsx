@@ -25,6 +25,7 @@ const baht = (n: number) => (n < 10 ? n.toFixed(2) : Math.round(n).toLocaleStrin
  */
 const POS_KEY = "sb-ai-pos";
 const HIDE_KEY = "sb-ai-hidden";
+const TIP_KEY = "sb-ai-drag-tip";
 type Pos = { side: "left" | "right"; bottom: number };
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), Math.max(lo, hi));
 
@@ -54,10 +55,12 @@ export function AiAssistant() {
       setTucked(localStorage.getItem(HIDE_KEY) === "1");
     } catch { /* ไม่มี/อ่านไม่ได้ = ตำแหน่งเดิม */ }
   }, []);
+  const [tip, setTip] = useState(false);
   const setHidden = (v: boolean) => {
     setTucked(v);
     setHover(false);
     setGreet(false);
+    setTip(false);
     try { if (v) localStorage.setItem(HIDE_KEY, "1"); else localStorage.removeItem(HIDE_KEY); } catch { /* ใช้ได้รอบนี้ */ }
   };
 
@@ -73,8 +76,20 @@ export function AiAssistant() {
     void load();
   }, [load]);
   // ทักทายครั้งแรกของวัน (ฟองคำพูด 5 วิ) — จำในเครื่องว่าวันนี้ทักแล้ว
+  // ก่อนหน้านั้น: บอกวิธีลาก/ซ่อน ครั้งเดียวต่อเครื่อง (ผู้ใช้ 18/11/2569 "ทำให้เค้ารู้ได้ยังไง") — ท่าลากมองไม่เห็นบนจอ
   useEffect(() => {
     if (!view?.allowed) return;
+    let tipSeen = true;
+    try { tipSeen = localStorage.getItem(TIP_KEY) === "1"; } catch { /* อ่านไม่ได้ = ไม่บอก */ }
+    if (!tipSeen) {
+      const t1 = setTimeout(() => setTip(true), 1500);
+      const t2 = setTimeout(() => setTip(false), 9500);
+      try {
+        localStorage.setItem(TIP_KEY, "1");
+        localStorage.setItem("sb-ai-greet", new Date().toDateString());
+      } catch { /* ไม่เป็นไร */ }
+      return () => { clearTimeout(t1); clearTimeout(t2); };
+    }
     const today = new Date().toDateString();
     let seen = "";
     try { seen = localStorage.getItem("sb-ai-greet") ?? ""; } catch { /* โหมดส่วนตัว — ทักทุกครั้งก็ได้ */ }
@@ -137,7 +152,7 @@ export function AiAssistant() {
     const dx = e.clientX - d.sx;
     const dy = e.clientY - d.sy;
     if (!d.moved && Math.hypot(dx, dy) < 6) return;
-    if (!d.moved) { d.moved = true; setHover(false); setGreet(false); }
+    if (!d.moved) { d.moved = true; setHover(false); setGreet(false); setTip(false); }
     setDrag({
       // ลากเลยขอบได้ครึ่งตัว — ปล่อยตรงนั้น = หดเข้าขอบ (ซ่อน)
       left: clamp(d.ox + dx, -el.offsetWidth / 2, window.innerWidth - el.offsetWidth / 2),
@@ -193,12 +208,12 @@ export function AiAssistant() {
           className={`${drag || tucked ? "" : "sb-float "}fixed left-[max(12px,env(safe-area-inset-left))] z-[60] bottom-[calc(84px+env(safe-area-inset-bottom))] transition-[opacity] lg:bottom-[max(16px,env(safe-area-inset-bottom))]`}
         >
           {/* ฟองคำพูด: ทักครั้งแรกของวัน / ชี้เมาส์ — ปุ่มชิดขวา ฟองก็ชิดขวา ไม่ล้นจอ */}
-          {(greet || hover) && !drag && !tucked && (
+          {(tip || greet || hover) && !drag && !tucked && (
             <div
-              key={greet ? "greet" : "hover"}
-              className={`sb-bubble pointer-events-none absolute bottom-[46px] whitespace-nowrap rounded-2xl bg-white px-3 py-1.5 text-[12.5px] font-medium text-[var(--ink)] shadow-lg ring-1 ring-[var(--line)] lg:bottom-[64px] ${right ? "right-1 rounded-br-md" : "left-1 rounded-bl-md"}`}
+              key={tip ? "tip" : greet ? "greet" : "hover"}
+              className={`sb-bubble pointer-events-none absolute bottom-[46px] ${tip ? "w-[220px] whitespace-normal leading-snug" : "whitespace-nowrap"} rounded-2xl bg-white px-3 py-1.5 text-[12.5px] font-medium text-[var(--ink)] shadow-lg ring-1 ring-[var(--line)] lg:bottom-[64px] ${right ? "right-1 rounded-br-md" : "left-1 rounded-bl-md"}`}
             >
-              {greet ? "สวัสดีครับ มีอะไรให้ช่วยไหม 👋" : "คุยกับ AI ไหมครับ? (ลากชนขอบจอเพื่อซ่อน)"}
+              {tip ? "ลากผมไปไว้ไหนก็ได้นะครับ · ลากชนขอบจอเพื่อซ่อน แตะเพื่อเรียกกลับ" : greet ? "สวัสดีครับ มีอะไรให้ช่วยไหม 👋" : "คุยกับ AI ไหมครับ? (ลากชนขอบจอเพื่อซ่อน)"}
             </div>
           )}
           <button
@@ -208,6 +223,7 @@ export function AiAssistant() {
               // หดอยู่ — แตะแรก = ออกมาเต็มตัวก่อน (ยังไม่เปิดแชท)
               if (tucked) { setHidden(false); return; }
               setGreet(false);
+              setTip(false);
               setOpen(true);
             }}
             onPointerDown={onPointerDown}
@@ -218,7 +234,7 @@ export function AiAssistant() {
             onMouseLeave={() => setHover(false)}
             aria-label={tucked ? "แสดงผู้ช่วย AI" : "คุยกับผู้ช่วย AI (ลากเพื่อย้าย · ลากชนขอบจอเพื่อซ่อน)"}
             data-testid="ai-assistant-open"
-            className={`sb-mascot-btn relative grid h-10 w-10 touch-none select-none place-items-center rounded-full bg-white shadow-lg ring-1 ring-[var(--line)] transition-shadow hover:shadow-xl lg:h-[60px] lg:w-[60px] ${drag ? "cursor-grabbing shadow-2xl" : "cursor-pointer"}`}
+            className={`sb-mascot-btn relative grid h-10 w-10 touch-none select-none place-items-center rounded-full bg-white shadow-lg ring-1 ring-[var(--line)] transition-shadow hover:shadow-xl lg:h-[60px] lg:w-[60px] ${drag ? "cursor-grabbing shadow-2xl" : "cursor-pointer"} ${tip ? "animate-bounce" : ""}`}
           >
             {/* วงแสงกระเพื่อม = กดได้ (ซ่อนอยู่ไม่กระเพื่อม — ไม่เรียกร้องความสนใจ) */}
             {!tucked && <span aria-hidden="true" className="sb-ping pointer-events-none absolute inset-0 rounded-full bg-[var(--brand-green,#22c55e)]/35" />}
