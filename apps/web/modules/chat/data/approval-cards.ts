@@ -22,19 +22,15 @@ export function approveChannelId(userId: string): string {
   return `${APPROVE_CHANNEL_PREFIX}${userId}`;
 }
 
-const ensured = globalThis as unknown as { __approveChannels?: Set<string> };
-const ensuredChannels = (ensured.__approveChannels ??= new Set<string>());
-
 async function ensureApprovalChannel(orgId: string, userId: string): Promise<string> {
   const id = approveChannelId(userId);
-  if (!ensuredChannels.has(id)) {
-    await prisma.chatChannel.upsert({
-      where: { id },
-      update: { archived: false },
-      create: { id, orgId, type: "group", name: APPROVE_CHANNEL_NAME, createdById: userId },
-    });
-    ensuredChannels.add(id);
-  }
+  // ไม่จำไว้ในหน่วยความจำ (ต่างจากห้องลงเวลา) — คำขอมีไม่บ่อย และห้องที่ถูกลบ/ซ่อนไปต้องกลับมาทุกครั้งที่มีคำขอใหม่
+  // (เจอตอนทดสอบ 18/11/2569: จำว่าสร้างแล้วแต่ห้องหายไป → ใส่สมาชิกพัง การ์ดไม่ขึ้น)
+  await prisma.chatChannel.upsert({
+    where: { id },
+    update: { archived: false },
+    create: { id, orgId, type: "group", name: APPROVE_CHANNEL_NAME, createdById: userId },
+  });
   // กดออกจากห้องไปแล้ว คำขอถัดไปก็กลับเข้าห้องเอง (แบบห้องระบบลงเวลา)
   await prisma.chatChannelMember.createMany({ data: [{ channelId: id, userId, orgId, role: "member" }], skipDuplicates: true });
   return id;
