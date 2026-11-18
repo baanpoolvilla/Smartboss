@@ -19,6 +19,14 @@ const MASCOT = "/brand/smartboss-ai-128.png";
 const MASCOT_ANIM = "/brand/smartboss-ai-anim.webp";
 const SUGGEST = ["วันนี้มีอะไรที่ฉันต้องรู้บ้าง", "งานไหนเลยกำหนดแล้วบ้าง ของใคร", "เดือนนี้ค่าซ่อมรวมเท่าไร บ้านไหนมากสุด", "ช่วยวางแผนงานสัปดาห์หน้าจากงานที่ค้างอยู่"];
 const baht = (n: number) => (n < 10 ? n.toFixed(2) : Math.round(n).toLocaleString("th-TH"));
+/**
+ * ลากย้ายปุ่มได้ (ผู้ใช้ 18/11/2569 "บนมือถือมาบังเวลาจะกดอะไร ทำให้ขยับได้") — ปล่อยแล้วชิดขอบซ้าย/ขวาที่ใกล้กว่า
+ * แบบปุ่มลอยของมือถือ · จำตำแหน่งไว้ในเครื่องนี้ (localStorage) · ขยับเกิน 6px = ลาก ไม่ใช่กด
+ */
+const POS_KEY = "sb-ai-pos";
+const HIDE_KEY = "sb-ai-hidden";
+type Pos = { side: "left" | "right"; bottom: number };
+const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), Math.max(lo, hi));
 
 type View = { allowed: boolean; messages: BriefQa[]; usage: { thb: number; capThb: number } };
 
@@ -32,6 +40,26 @@ export function AiAssistant() {
   const path = usePathname();
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ id: number; sx: number; sy: number; ox: number; oy: number; moved: boolean } | null>(null);
+  const suppressClick = useRef(false);
+  const [pos, setPos] = useState<Pos | null>(null);
+  const [drag, setDrag] = useState<{ left: number; top: number } | null>(null);
+  // ซ่อนน้อง (ผู้ใช้ 18/11/2569 "มีให้กดซ่อนได้ดีกว่าไหม") — เหลือแถบเล็กติดขอบจอ กดแล้วกลับมา · จำในเครื่องนี้
+  const [tucked, setTucked] = useState(false);
+  useEffect(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(POS_KEY) ?? "null") as Pos | null;
+      if (v && (v.side === "left" || v.side === "right") && typeof v.bottom === "number") setPos(v);
+      setTucked(localStorage.getItem(HIDE_KEY) === "1");
+    } catch { /* ไม่มี/อ่านไม่ได้ = ตำแหน่งเดิม */ }
+  }, []);
+  const setHidden = (v: boolean) => {
+    setTucked(v);
+    setHover(false);
+    setGreet(false);
+    try { if (v) localStorage.setItem(HIDE_KEY, "1"); else localStorage.removeItem(HIDE_KEY); } catch { /* ใช้ได้รอบนี้ */ }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -96,28 +124,105 @@ export function AiAssistant() {
     if (window.matchMedia("(max-width: 1023px)").matches) setOpen(false);
   };
 
+  const onPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const r = wrapRef.current?.getBoundingClientRect();
+    if (!r) return;
+    dragRef.current = { id: e.pointerId, sx: e.clientX, sy: e.clientY, ox: r.left, oy: r.top, moved: false };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const d = dragRef.current;
+    const el = wrapRef.current;
+    if (!d || d.id !== e.pointerId || !el) return;
+    const dx = e.clientX - d.sx;
+    const dy = e.clientY - d.sy;
+    if (!d.moved && Math.hypot(dx, dy) < 6) return;
+    if (!d.moved) { d.moved = true; setHover(false); setGreet(false); }
+    setDrag({
+      // ลากเลยขอบได้ครึ่งตัว — ปล่อยตรงนั้น = หดเข้าขอบ (ซ่อน)
+      left: clamp(d.ox + dx, -el.offsetWidth / 2, window.innerWidth - el.offsetWidth / 2),
+      top: clamp(d.oy + dy, 8, window.innerHeight - el.offsetHeight - 8),
+    });
+  };
+  const onPointerEnd = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const d = dragRef.current;
+    dragRef.current = null;
+    if (!d || d.id !== e.pointerId || !d.moved) return;
+    suppressClick.current = true;
+    const r = wrapRef.current?.getBoundingClientRect();
+    setDrag(null);
+    if (!r) return;
+    const next: Pos = {
+      side: r.left + r.width / 2 < window.innerWidth / 2 ? "left" : "right",
+      bottom: Math.round(clamp(window.innerHeight - r.bottom, 8, window.innerHeight - r.height - 8)),
+    };
+    setPos(next);
+    try { localStorage.setItem(POS_KEY, JSON.stringify(next)); } catch { /* ไม่เป็นไร — ใช้ได้รอบนี้ */ }
+    // ปล่อยตอนเลยขอบจอเกิน 1/4 ตัว = หดเข้าขอบ (แบบปุ่มลอยของมือถือ / หัวแชท Messenger) · ลากออกมา = กลับมาเต็มตัว
+    setHidden(r.left < -r.width * 0.25 || r.right > window.innerWidth + r.width * 0.25);
+  };
+  // ระหว่างลาก = ตามนิ้ว · ปล่อยแล้ว = ชิดขอบที่ใกล้กว่า (ถ้าหมุนจอแล้วเตี้ยลง ไม่หลุดจอ)
+  // หดอยู่ = โผล่ครึ่งตัวที่ขอบ จางลง แตะแล้วออกมา
+  const side = pos?.side ?? "left";
+  const right = side === "right" && !drag;
+  const floatStyle: React.CSSProperties | undefined = drag
+    ? { left: drag.left, top: drag.top, right: "auto", bottom: "auto" }
+    : tucked
+      ? {
+          ...(pos ? { bottom: `min(${pos.bottom}px, calc(100dvh - 80px))` } : {}),
+          left: side === "left" ? 0 : "auto",
+          right: side === "right" ? 0 : "auto",
+          // โผล่ครึ่งตัวที่ขอบจอ (ผู้ใช้ 18/11/2569 "ลากแล้วให้แสดงครึ่งเดียว")
+          transform: side === "left" ? "translateX(-50%)" : "translateX(50%)",
+        }
+      : pos
+        ? {
+            bottom: `min(${pos.bottom}px, calc(100dvh - 80px))`,
+            left: pos.side === "left" ? "max(12px, env(safe-area-inset-left))" : "auto",
+            right: pos.side === "right" ? "max(12px, env(safe-area-inset-right))" : "auto",
+          }
+        : undefined;
+
   return (
     <>
       {!open && (
-        <div className="sb-float fixed left-[max(12px,env(safe-area-inset-left))] z-[60] bottom-[calc(84px+env(safe-area-inset-bottom))] lg:bottom-[max(16px,env(safe-area-inset-bottom))]">
-          {/* ฟองคำพูด: ทักครั้งแรกของวัน / ชี้เมาส์ */}
-          {(greet || hover) && (
-            <div key={greet ? "greet" : "hover"} className="sb-bubble pointer-events-none absolute bottom-[64px] left-1 whitespace-nowrap rounded-2xl rounded-bl-md bg-white px-3 py-1.5 text-[12.5px] font-medium text-[var(--ink)] shadow-lg ring-1 ring-[var(--line)]">
-              {greet ? "สวัสดีครับ มีอะไรให้ช่วยไหม 👋" : "คุยกับ AI ไหมครับ?"}
+        <div
+          ref={wrapRef}
+          style={floatStyle}
+          data-tucked={tucked ? "1" : undefined}
+          className={`${drag || tucked ? "" : "sb-float "}fixed left-[max(12px,env(safe-area-inset-left))] z-[60] bottom-[calc(84px+env(safe-area-inset-bottom))] transition-[opacity] lg:bottom-[max(16px,env(safe-area-inset-bottom))]`}
+        >
+          {/* ฟองคำพูด: ทักครั้งแรกของวัน / ชี้เมาส์ — ปุ่มชิดขวา ฟองก็ชิดขวา ไม่ล้นจอ */}
+          {(greet || hover) && !drag && !tucked && (
+            <div
+              key={greet ? "greet" : "hover"}
+              className={`sb-bubble pointer-events-none absolute bottom-[46px] whitespace-nowrap rounded-2xl bg-white px-3 py-1.5 text-[12.5px] font-medium text-[var(--ink)] shadow-lg ring-1 ring-[var(--line)] lg:bottom-[64px] ${right ? "right-1 rounded-br-md" : "left-1 rounded-bl-md"}`}
+            >
+              {greet ? "สวัสดีครับ มีอะไรให้ช่วยไหม 👋" : "คุยกับ AI ไหมครับ? (ลากชนขอบจอเพื่อซ่อน)"}
             </div>
           )}
           <button
             type="button"
-            onClick={() => { setGreet(false); setOpen(true); }}
+            onClick={() => {
+              if (suppressClick.current) { suppressClick.current = false; return; }
+              // หดอยู่ — แตะแรก = ออกมาเต็มตัวก่อน (ยังไม่เปิดแชท)
+              if (tucked) { setHidden(false); return; }
+              setGreet(false);
+              setOpen(true);
+            }}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerEnd}
+            onPointerCancel={onPointerEnd}
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
-            aria-label="คุยกับผู้ช่วย AI"
+            aria-label={tucked ? "แสดงผู้ช่วย AI" : "คุยกับผู้ช่วย AI (ลากเพื่อย้าย · ลากชนขอบจอเพื่อซ่อน)"}
             data-testid="ai-assistant-open"
-            className="sb-mascot-btn relative grid h-[60px] w-[60px] place-items-center rounded-full bg-white shadow-lg ring-1 ring-[var(--line)] transition-shadow hover:shadow-xl"
+            className={`sb-mascot-btn relative grid h-10 w-10 touch-none select-none place-items-center rounded-full bg-white shadow-lg ring-1 ring-[var(--line)] transition-shadow hover:shadow-xl lg:h-[60px] lg:w-[60px] ${drag ? "cursor-grabbing shadow-2xl" : "cursor-pointer"}`}
           >
-            {/* วงแสงกระเพื่อม = กดได้ */}
-            <span aria-hidden="true" className="sb-ping pointer-events-none absolute inset-0 rounded-full bg-[var(--brand-green,#22c55e)]/35" />
-            <img src={MASCOT_ANIM} alt="" aria-hidden="true" width={52} height={52} className="sb-life relative h-[52px] w-[52px] rounded-full" />
+            {/* วงแสงกระเพื่อม = กดได้ (ซ่อนอยู่ไม่กระเพื่อม — ไม่เรียกร้องความสนใจ) */}
+            {!tucked && <span aria-hidden="true" className="sb-ping pointer-events-none absolute inset-0 rounded-full bg-[var(--brand-green,#22c55e)]/35" />}
+            <img src={MASCOT_ANIM} alt="" aria-hidden="true" width={52} height={52} draggable={false} className="sb-life pointer-events-none relative h-[34px] w-[34px] rounded-full lg:h-[52px] lg:w-[52px]" />
           </button>
         </div>
       )}
