@@ -5,6 +5,8 @@ import { wfFetch, WorkforceError, WorkforceUnavailableError } from "@/modules/hr
 import { CHECKIN_PHOTO_ENABLED } from "@/modules/hr/lib/app-clock";
 import { signCheckinAttempt } from "@/modules/hr/lib/checkin-attempt-proof";
 import { todayIso } from "@/modules/hr/lib/date";
+import { correctedInBlocksOut } from "@/modules/hr/lib/corrected-in-guard";
+import { addedPunches, todayShift } from "@/modules/hr/lib/today-clock-data";
 
 export const runtime = "nodejs";
 
@@ -126,6 +128,33 @@ async function justClockedIn(): Promise<Date | null> {
 }
 
 /**
+ * เวลาเข้าที่แก้ให้แล้ว (คำขอแก้เวลา) เป็นรายการล่าสุด + ยังไม่ถึงครึ่งกะ ⇒ กด "ออกงาน" นี้น่าจะกดผิด
+ * (ดู modules/hr/lib/corrected-in-guard.ts) · อ่านไม่ได้ = null (ปล่อยลงเวลาตามปกติ)
+ */
+async function correctedInGuard(orgId: string | null | undefined): Promise<{ inAt: string; untilMinutes: number } | null> {
+  try {
+    const me = await wfFetch<{ employment_id: string | null }>("/me");
+    if (me.employment_id === null) return null;
+    const date = todayIso();
+    const [{ items }, added, shift] = await Promise.all([
+      wfFetch<{ items: (TimeEventLite & { source_type?: string })[] }>(`/time-events?date=${date}`),
+      addedPunches(orgId, me.employment_id, date),
+      todayShift(orgId, me.employment_id, date),
+    ]);
+    if (added.length === 0) return null;
+    const events = [...items.filter((e) => e.employment_id === me.employment_id), ...added].map((e) => ({
+      intent: e.event_intent,
+      capturedAt: e.captured_at,
+      sourceType: e.source_type ?? "",
+    }));
+    return correctedInBlocksOut(events, shift, new Date());
+  } catch (error) {
+    console.error("[m/checkin] correctedInGuard lookup failed", error);
+    return null;
+  }
+}
+
+/**
  * ลงเวลาให้จบในคำขอเดียว
  *
  * ฝั่ง workforce แยกเป็น 3 จังหวะ (สร้าง session → แนบหลักฐาน → commit) เพื่อให้
@@ -207,6 +236,27 @@ export async function POST(req: NextRequest) {
         {
           code: "JUST_CLOCKED_IN",
           error: `บันทึกเข้างานแล้วตั้งแต่ ${time} น. ไม่ต้องกดซ้ำ — ออกงานได้หลัง ${until} น.`,
+        },
+        { status: 409 },
+      );
+    }
+  }
+
+  // เวลาเข้าได้จากคำขอแก้เวลา แล้วกด "ออกงาน" ตอนเช้า = คิดว่ายังต้องกดเข้างาน — ไม่บันทึก บอกว่าเข้างานแล้ว
+  if (input.intent === "CLOCK_OUT") {
+    const corrected = await correctedInGuard(session.orgId);
+    if (corrected !== null) {
+      const time = new Date(corrected.inAt).toLocaleTimeString("th-TH", {
+        timeZone: "Asia/Bangkok",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      const hh = String(Math.floor(corrected.untilMinutes / 60)).padStart(2, "0");
+      const mm = String(corrected.untilMinutes % 60).padStart(2, "0");
+      return NextResponse.json(
+        {
+          code: "JUST_CLOCKED_IN",
+          error: `เวลาเข้างาน ${time} น. แก้ให้แล้ว ไม่ต้องกดเข้างานอีก — กดออกงานตอนเลิกงาน (ออกได้หลัง ${hh}:${mm} น.)`,
         },
         { status: 409 },
       );
