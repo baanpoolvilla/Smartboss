@@ -1135,7 +1135,8 @@ export function NewTaskDialog({
           toast.success(`แนบ ${files.length} ไฟล์แล้ว`);
         }}
       >
-        <PasteDropFiles label="ปล่อยเพื่อแนบไฟล์/รูป">
+        {/* min-w-0: เป็นลูกของ grid ใน DialogContent — ไม่ใส่ เช็คลิสต์ข้อความยาวดันทั้งกรอบกว้างเกินจอ (ปุ่มปิด/สร้างงานหลุดขอบ) */}
+        <PasteDropFiles label="ปล่อยเพื่อแนบไฟล์/รูป" className="min-w-0">
         <DialogHeader className="px-5 pt-5 pb-3 space-y-3">
           {/* ติ๊ก "ส่วนตัว" ข้างหัวกล่อง — ไม่กินที่แถวชื่องาน ทั้งคอมและมือถือ (pr-10 เว้นที่ปุ่มปิด) */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pr-10">
