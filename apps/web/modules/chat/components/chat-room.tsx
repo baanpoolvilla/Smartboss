@@ -7,7 +7,7 @@ import { cn } from "@smartboss/ui/cn";
 
 import { useChatStore, type RoomMessage } from "../store/chat-store";
 import type { ChatAttachment, ChatChannelSummary, ChatMessageDTO } from "../types";
-import { isKeepChannelId } from "../types";
+import { isApproveChannelId, isKeepChannelId } from "../types";
 import * as api from "../lib/api";
 import { attachmentLabel, channelTitle, formatDayLabel, formatClock, formatMessageTime } from "../lib/format";
 import { jumpToMessage, loadChannels, loadDetail } from "../lib/chat-actions";
@@ -282,6 +282,9 @@ export function ChatRoom({
         {/* ห้องของโปรเจกต์ที่ปิดแล้ว (งานจบ) — อ่านย้อนหลังได้ ส่งใหม่ไม่ได้ (ผู้ใช้ 20/10/2569) */}
         {detail?.closed ? (
           <ClosedRoomBar channelId={channel.id} canReopen={detail.canClose ?? false} />
+        ) : isApproveChannelId(channel.id) ? (
+          // ห้อง "คำขออนุมัติ" — ข้อความจากระบบ ตอบกลับไม่ได้ (กดปุ่มบนการ์ดแทน)
+          <div className="border-t border-(--line) px-4 py-3 text-center text-xs text-(--ink-soft)">ข้อความจากระบบ · กดอนุมัติ/ไม่อนุมัติบนการ์ดได้เลย</div>
         ) : (
           <Composer
             ref={composerRef}

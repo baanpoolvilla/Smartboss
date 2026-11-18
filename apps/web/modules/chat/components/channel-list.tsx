@@ -1,12 +1,12 @@
 "use client";
 
 import { memo, useMemo, useState } from "react";
-import { BellOff, Bookmark, Building2, Clock, Lock, MoreHorizontal, Pin, Search, Settings, SquarePen, Users } from "lucide-react";
+import { BellOff, Bookmark, Building2, CalendarCheck, Clock, Lock, MoreHorizontal, Pin, Search, Settings, SquarePen, Users } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@smartboss/ui/cn";
 
 import { useChatStore } from "../store/chat-store";
-import { CLOCK_CHANNEL_PREFIX, isAdsBotChannelId, isKeepChannelId, type ChatChannelSummary, type ChatUser } from "../types";
+import { CLOCK_CHANNEL_PREFIX, isAdsBotChannelId, isApproveChannelId, isKeepChannelId, type ChatChannelSummary, type ChatUser } from "../types";
 import { channelPreview, channelTitle, formatListTime } from "../lib/format";
 import { updateChannel } from "../lib/api";
 import { ChatAvatar, OffBadge } from "./chat-avatar";
@@ -61,6 +61,14 @@ export function ChannelAvatar({
         title="ระบบลงเวลา"
       >
         <Clock className="h-[50%] w-[50%]" />
+      </div>
+    );
+  }
+  // ห้อง "คำขออนุมัติ" (ผู้ใช้ 18/11/2569) — รูปปฏิทินสีส้มของระบบเสมอ แยกจากห้องลงเวลา
+  if (isApproveChannelId(channel.id)) {
+    return (
+      <div className={cn("flex shrink-0 items-center justify-center rounded-full bg-[#ea7a1f] text-white", size)} title="คำขออนุมัติ">
+        <CalendarCheck className="h-[50%] w-[50%]" />
       </div>
     );
   }

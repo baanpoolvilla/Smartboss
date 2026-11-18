@@ -3,6 +3,7 @@ import { dropDuplicateNotifications } from "@/modules/report_task/lib/notificati
 import { prisma } from "@smartboss/database";
 import { announceNotification } from "@/lib/notify-push";
 import { postTaskCard } from "@/modules/chat/data/task-cards";
+import { postTaskDueRequestCard } from "@/modules/chat/data/approval-cards";
 import { loadNotificationPrefs } from "@/lib/notification-prefs";
 import { isTopicOn, topicForReportNotification } from "@/modules/notifications/prefs";
 import { publishToOrg, publishToUsers } from "@/lib/realtime/server";
@@ -327,6 +328,13 @@ function announceNewNotifications(orgId: string, beforeData: unknown, afterData:
   if (fresh.length === 0) return;
   // มอบหมายงานโดยคน (ไม่ใช่รอบอัตโนมัติ "system" / ข้ามรอบงานทำซ้ำ) → การ์ดงานในแชทส่วนตัวคนมอบหมาย ↔ ผู้รับ
   // (ผู้ใช้ 30/10/2569 — เปิดงานจากที่ไหนก็ได้ ให้เจ้าตัวรู้ในแชท · ไม่ขึ้นกับการตั้งค่าแจ้งเตือน เพราะเป็นข้อความแชทไม่ใช่การเด้ง)
+  // ขอเลื่อนกำหนดส่งงาน → การ์ดในห้อง "คำขออนุมัติ" ของคนที่ได้แจ้งเตือนนี้ (คนอนุมัติ — ผู้ใช้ 18/11/2569)
+  // คนได้แจ้งเตือน = คนมอบหมาย / ผู้ดูแลโปรเจกต์ / Boss เฉพาะงานที่ไม่มีคนอื่นอนุมัติ (requestDueDateChange) — Boss ไม่ได้ของคนอื่น
+  for (const n of fresh) {
+    if (n.kind !== "task_due_request" || typeof n.taskId !== "string" || typeof n.byUserId !== "string" || n.byUserId === "system") continue;
+    if (typeof n.message !== "string" || !n.message.includes("ขอเลื่อนกำหนดส่งงาน")) continue;
+    void postTaskDueRequestCard(orgId, { taskId: n.taskId, requesterId: n.byUserId, approverId: n.userId as string });
+  }
   for (const n of fresh) {
     if (n.kind !== "task_assigned" || typeof n.taskId !== "string" || typeof n.byUserId !== "string" || n.byUserId === "system") continue;
     const message = typeof n.message === "string" ? n.message : "";

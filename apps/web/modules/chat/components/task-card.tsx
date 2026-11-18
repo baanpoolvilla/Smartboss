@@ -6,6 +6,7 @@ import { cn } from "@smartboss/ui/cn";
 
 import { formatShortDate } from "@/modules/report_task/lib/format";
 import type { ChatTaskCard } from "../types";
+import { ApprovalCard } from "./approval-card";
 import { ceoText } from "@/lib/ceo-title-shared";
 import { useCeoTitle } from "@/lib/ceo-title-client";
 
@@ -24,6 +25,12 @@ const TAG_BG: Record<string, string> = {
 };
 
 export function TaskCard({ card, body, mine }: { card: ChatTaskCard; body: string | null; mine: boolean }) {
+  // การ์ดคำขออนุมัติ (ห้อง "คำขออนุมัติ") — มีปุ่มอนุมัติ/ไม่อนุมัติ แยกไว้อีกไฟล์
+  if (card.approval) return <ApprovalCard card={card as ChatTaskCard & { approval: NonNullable<ChatTaskCard["approval"]> }} />;
+  return <PlainTaskCard card={card} body={body} mine={mine} />;
+}
+
+function PlainTaskCard({ card, body, mine }: { card: ChatTaskCard; body: string | null; mine: boolean }) {
   const ceo = useCeoTitle();
   const isWorkOrder = card.target === "work_order";
   const assigned = body?.startsWith("มอบหมาย");

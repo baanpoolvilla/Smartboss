@@ -11,6 +11,7 @@ import { expenseDueAt, trackingActive } from "@/modules/maintenance/lib/expense-
 import { fmtThaiDate } from "@/modules/maintenance/lib/format";
 
 import { ceoTitle } from "@/lib/ceo-title";
+import { postWorkOrderDueRequestCards } from "@/modules/chat/data/approval-cards";
 /**
  * ขอเลื่อนกำหนดบันทึกค่าใช้จ่าย (ผู้ใช้ 3/11/2569) — แยกจากขอเลื่อนกำหนดส่งใบงาน (due-request-actions.ts)
  *   ขอได้:      คนในรายชื่อผู้บันทึกค่าใช้จ่าย · ใบต้องปิดแล้วและยังไม่บันทึก · ต้องใส่เหตุผล · ขอได้ทั้งก่อนและหลังครบกำหนด
@@ -71,7 +72,7 @@ export async function requestExpenseExtensionAction(workOrderId: string, newDate
     });
     await deleteActionNotifications(wo.id, "work_order", [PENDING_TITLE], replaced.createdAt);
   }
-  await prisma.workOrderDueRequest.create({
+  const created = await prisma.workOrderDueRequest.create({
     data: { orgId: s.orgId, workOrderId, kind: "expense", requestedBy: s.userId, previousDate: due, newDate: d, reason: why },
   });
   const range = `${fmtThaiDate(due)} → ${fmtThaiDate(d)}`;
@@ -79,7 +80,10 @@ export async function requestExpenseExtensionAction(workOrderId: string, newDate
   await log(s.orgId, s.userId, wo, `ขอเลื่อนบันทึกค่าใช้จ่าย ${range} ของ`, { reason: why });
 
   const who = (await notifyActorName(s.userId)) ?? "ผู้บันทึกค่าใช้จ่าย";
-  await notifyUsers(s.orgId, (await ceoUserIds(s.orgId)).filter((id) => id !== s.userId), {
+  const approverIds = (await ceoUserIds(s.orgId)).filter((id) => id !== s.userId);
+  // การ์ดในห้อง "คำขออนุมัติ" ของคนเดียวกับที่ได้กระดิ่ง (ผู้ใช้ 18/11/2569) — ไม่เด้งซ้ำ ไม่ throw
+  await postWorkOrderDueRequestCards(s.orgId, { requestId: created.id, approverIds });
+  await notifyUsers(s.orgId, approverIds, {
     title: `${who} · ⏰ ${PENDING_TITLE}`,
     body: `${wo.code} ${wo.title} · ${range} · ${why}`,
     type: "work_order",

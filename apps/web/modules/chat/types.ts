@@ -150,6 +150,39 @@ export interface ChatTaskCard {
   project?: { id: string; name: string; section?: string };
   /** ชื่อผู้รับผิดชอบ — การ์ดในห้องกลุ่ม (ห้องโปรเจกต์) ต้องบอกว่างานของใคร · การ์ดในแชทส่วนตัวไม่ใส่ */
   assignees?: string[];
+  /** การ์ดคำขออนุมัติ (ห้อง "คำขออนุมัติ" approve-<userId>) — มีปุ่มอนุมัติ/ไม่อนุมัติ · การ์ดงานปกติไม่มี */
+  approval?: ChatApprovalInfo;
+}
+
+/**
+ * คำขอเลื่อนบนการ์ดในห้อง "คำขออนุมัติ" (ผู้ใช้ 18/11/2569 "เป็นแชทระบบ กดเลื่อนงานได้เลย")
+ * status/decided* อ่านสดจากคำขอจริงตอนโหลดข้อความ (data/approval-cards.ts) ไม่ใช่ค่าที่เก็บตอนโพสต์
+ */
+export interface ChatApprovalInfo {
+  /** task = ขอเลื่อนงานบนบอร์ด · work_order = ขอเลื่อนส่งใบแจ้งซ่อม · expense = ขอเลื่อนบันทึกค่าใช้จ่ายของใบแจ้งซ่อม */
+  source: "task" | "work_order" | "expense";
+  requestId: string;
+  requesterId: string;
+  requesterName?: string;
+  /** YYYY-MM-DD หรือ ISO */
+  previousDate: string | null;
+  newDate: string;
+  reason: string;
+  /** งานกลุ่ม: ขอเลื่อนให้ใครบ้าง (ชื่อ) — ไม่มี = เฉพาะคนขอ */
+  forNames?: string[];
+  /** งานกลุ่ม: จำนวนคนทั้งกลุ่ม (บอก "ทั้งกลุ่ม N คน") */
+  memberCount?: number;
+  status: "pending" | "approved" | "rejected" | "cancelled";
+  decidedBy?: string;
+  decidedAt?: string;
+  decisionNote?: string;
+}
+
+/** ห้อง "คำขออนุมัติ" ส่วนตัวของแต่ละคน (data/approval-cards.ts) — id = approve-<userId> */
+export const APPROVE_CHANNEL_PREFIX = "approve-";
+export const APPROVE_CHANNEL_NAME = "คำขออนุมัติ";
+export function isApproveChannelId(id: string): boolean {
+  return id.startsWith(APPROVE_CHANNEL_PREFIX);
 }
 
 /** ข้อความที่คนพิมพ์/โพสต์ (ไม่ใช่ข้อความระบบ) — นับยังไม่อ่าน เด้งแจ้งเตือน มีเสียง */

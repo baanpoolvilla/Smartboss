@@ -8,7 +8,7 @@ import { publishToOrg, publishToUsers } from "@/lib/realtime/server";
 import { sendWebPush } from "@/lib/web-push";
 import { notifyUsers } from "@/modules/maintenance/data/notify";
 import { CHAT_ORG_CHANNEL_NAME } from "../constants";
-import { CLOCK_CHANNEL_PREFIX, isAdsBotChannelId, isKeepChannelId, type ChatChannelDetail, type ChatChannelSummary, type ChatRealtimeEvent } from "../types";
+import { CLOCK_CHANNEL_PREFIX, isAdsBotChannelId, isApproveChannelId, isKeepChannelId, type ChatChannelDetail, type ChatChannelSummary, type ChatRealtimeEvent } from "../types";
 import { ensureKeepChannel } from "./keep";
 import { closedChannels, forgetProjectRooms, isChannelClosed, projectRoomOf, writeChannelClosed } from "./project-room";
 import { ChatError, firstAttachmentKind, hydrateMessages, type ChatActor } from "./serialize";
@@ -581,7 +581,7 @@ const RENAMED_KEY = "chat-renamed-channels";
  * แอดมินกลุ่ม: กลุ่มที่สร้างเอง (กติกาเดิม) · แชทส่วนตัว (DM) และห้อง "ระบบลงเวลา" ตั้งชื่อไม่ได้
  */
 function canRename(actor: ChatActor, channel: { id: string; type: string; departmentId: string | null; createdById: string | null }, role: "admin" | "member"): boolean {
-  if (channel.type === "dm" || channel.id.startsWith(CLOCK_CHANNEL_PREFIX) || isKeepChannelId(channel.id) || isAdsBotChannelId(channel.id)) return false;
+  if (channel.type === "dm" || channel.id.startsWith(CLOCK_CHANNEL_PREFIX) || isKeepChannelId(channel.id) || isAdsBotChannelId(channel.id) || isApproveChannelId(channel.id)) return false;
   if (actor.isTopAdmin || actor.isChatAdmin) return true;
   if (channel.type !== "org" && channel.createdById === actor.userId) return true;
   return channel.type === "group" && !channel.departmentId && role === "admin";
@@ -624,7 +624,7 @@ function canChangeAvatar(
   actor: ChatActor,
   channel: { id: string; type: string; departmentId: string | null; createdById: string | null }
 ): boolean {
-  if (channel.type === "dm" || channel.id.startsWith(CLOCK_CHANNEL_PREFIX) || isKeepChannelId(channel.id) || isAdsBotChannelId(channel.id)) return false;
+  if (channel.type === "dm" || channel.id.startsWith(CLOCK_CHANNEL_PREFIX) || isKeepChannelId(channel.id) || isAdsBotChannelId(channel.id) || isApproveChannelId(channel.id)) return false;
   if (channel.type === "org" || channel.departmentId || channel.id.startsWith(WORKER_CHANNEL_PREFIX)) return actor.isChatAdmin || !!actor.isTopAdmin;
   return channel.createdById === actor.userId;
 }

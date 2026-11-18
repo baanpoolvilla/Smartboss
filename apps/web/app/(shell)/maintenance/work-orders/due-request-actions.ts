@@ -15,6 +15,7 @@ import { isWorkOrderMember, memberDueAt, workOrderMemberIds } from "@/modules/ma
 import { isPastDay } from "@/modules/maintenance/lib/no-past-date";
 
 import { ceoTitle } from "@/lib/ceo-title";
+import { postWorkOrderDueRequestCards } from "@/modules/chat/data/approval-cards";
 /**
  * ขอเลื่อนกำหนดส่งใบงาน — แบบเดียวกับงานบนบอร์ดงาน (ผู้ใช้ขอ 17/10/2569)
  *   ขอได้:     ผู้รับผิดชอบใบงาน · ใบงานยังไม่เสร็จ/ไม่ยกเลิก · มีกำหนดส่ง · ขอได้แค่ "เลื่อนออกไป"
@@ -87,7 +88,7 @@ export async function requestDueDateAction(workOrderId: string, newDate: string,
   const forText = await whoText(forIds, members.length);
   const forOthers = forIds.length > 1 || (forIds.length === 1 && forIds[0] !== s.userId);
   const replaced = await pendingDueRequest(s.orgId, workOrderId, isGroup ? s.userId : undefined);
-  await createDueRequest(s.orgId, { workOrderId, requestedBy: s.userId, previousDate: ownDue, newDate: d, reason: why, ...(forOthers ? { forUserIds: forIds } : {}) }, isGroup);
+  const created = await createDueRequest(s.orgId, { workOrderId, requestedBy: s.userId, previousDate: ownDue, newDate: d, reason: why, ...(forOthers ? { forUserIds: forIds } : {}) }, isGroup);
   // ใบกลุ่มอาจมีคำขอของคนอื่นค้าง แจ้งเตือนแยกต่อคำขอไม่ได้ จึงปล่อยไว้จนไม่เหลือคำขอ
   if (replaced && !isGroup) await deleteActionNotifications(wo.id, "work_order", [PENDING_TITLE], replaced.createdAt);
   await addWorkOrderComment(s.orgId, workOrderId, s.userId, `ขอเลื่อนกำหนดส่ง${forText} ${fmtThaiDate(ownDue)} → ${fmtThaiDate(d)} · ${why}`, null, { kind: "log" });
@@ -103,6 +104,8 @@ export async function requestDueDateAction(workOrderId: string, newDate: string,
       : null;
   const approvers = new Set<string>(opener ? [opener.id] : await usersWithPermission(s.orgId, "core.data.view_all"));
   approvers.delete(s.userId);
+  // การ์ดในห้อง "คำขออนุมัติ" ของคนเดียวกับที่ได้กระดิ่ง (ผู้ใช้ 18/11/2569) — ไม่เด้งซ้ำ ไม่ throw
+  await postWorkOrderDueRequestCards(s.orgId, { requestId: created.id, approverIds: [...approvers] });
   const who = (await notifyActorName(s.userId)) ?? "ผู้รับผิดชอบ";
   await notifyUsers(s.orgId, [...approvers], {
     title: `${who} · ⏰ ขอเลื่อนกำหนดส่งใบงาน รออนุมัติ`,

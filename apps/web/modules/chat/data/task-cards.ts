@@ -207,7 +207,7 @@ async function insertCard(
  * ป้ายประเภทบนการ์ด — ชุดคำเดียวกับป้ายบนบอร์ดงาน (PM / อัตโนมัติ) ให้รู้ว่าเป็นใบอะไรโดยไม่ต้องกดเข้าไป
  * ใบรอบ PM ที่ CEO รวบหลายรอบ = autoCreated แต่มีคนเปิด (CEO) ⇒ "CEO รวบ" ไม่ใช่ "อัตโนมัติ"
  */
-function workOrderTags(
+export function workOrderTags(
   wo: { pmScheduleId: string | null; pmScheduleIds: string[]; autoCreated: boolean; createdBy: string | null } | null,
 ): string[] {
   if (!wo) return [];
@@ -301,7 +301,7 @@ function isProjectTask(task: { data: unknown } | null): boolean {
   return typeof link?.projectId === "string" && !!link.projectId;
 }
 
-function taskTags(task: { parentId: string | null; data: unknown } | null): string[] {
+export function taskTags(task: { parentId: string | null; data: unknown } | null): string[] {
   const tags = ["Task"];
   const data = task?.data && typeof task.data === "object" ? (task.data as Record<string, unknown>) : null;
   const project = data?.project && typeof data.project === "object" ? (data.project as Record<string, unknown>) : null;

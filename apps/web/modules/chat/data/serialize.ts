@@ -5,6 +5,8 @@ import type { ChatAttachment, ChatAttachmentKind, ChatMessageDTO, ChatNotePrevie
 import { EXPIRING_KINDS, mediaExpiresAt } from "../lib/retention";
 import { isKeepChannelId } from "../types";
 import { proposalViewer } from "@/modules/ads/data/proposal-view";
+import type { ChatApprovalInfo } from "../types";
+import { liveApprovalStatuses } from "./approval-status";
 
 /** ข้อผิดพลาดที่มีสถานะ HTTP — route แปลงเป็นคำตอบให้เอง (ดู lib/respond.ts) */
 export class ChatError extends Error {
@@ -121,6 +123,28 @@ function taskCard(row: MessageRow): ChatTaskCard | null {
     ...(Array.isArray(m.assignees) && m.assignees.length
       ? { assignees: m.assignees.filter((n): n is string => typeof n === "string").slice(0, 8).map((n) => n.slice(0, 60)) }
       : {}),
+    ...(approvalOf(m.approval) ? { approval: approvalOf(m.approval)! } : {}),
+  };
+}
+
+/** การ์ดคำขออนุมัติ (data/approval-cards.ts) — meta.approval · ข้อมูลไม่ครบ = ไม่ใช่การ์ดคำขอ (ขึ้นเป็นการ์ดงานธรรมดา) */
+function approvalOf(v: unknown): ChatApprovalInfo | null {
+  if (!v || typeof v !== "object") return null;
+  const a = v as Partial<ChatApprovalInfo>;
+  if (a.source !== "task" && a.source !== "work_order" && a.source !== "expense") return null;
+  if (typeof a.requestId !== "string" || typeof a.requesterId !== "string" || typeof a.newDate !== "string") return null;
+  return {
+    source: a.source,
+    requestId: a.requestId,
+    requesterId: a.requesterId,
+    ...(typeof a.requesterName === "string" ? { requesterName: a.requesterName.slice(0, 60) } : {}),
+    previousDate: typeof a.previousDate === "string" ? a.previousDate : null,
+    newDate: a.newDate,
+    reason: typeof a.reason === "string" ? a.reason.slice(0, 500) : "",
+    ...(Array.isArray(a.forNames) ? { forNames: a.forNames.filter((n): n is string => typeof n === "string").slice(0, 20) } : {}),
+    ...(typeof a.memberCount === "number" ? { memberCount: a.memberCount } : {}),
+    // สถานะจริงเติมทีหลังใน hydrateMessages (อ่านสดจากคำขอ)
+    status: "pending",
   };
 }
 
@@ -210,6 +234,22 @@ export async function hydrateMessages(orgId: string, rows: MessageRow[]): Promis
     ])
   );
 
+  // การ์ดคำขออนุมัติ: สถานะอ่านสดจากคำขอจริง (กดที่บอร์ด/หน้าใบงาน การ์ดก็เปลี่ยนตาม) — อ่านรวมครั้งเดียวต่อชุด
+  const cards = new Map<string, ChatTaskCard>();
+  for (const row of rows) {
+    if (row.kind !== "task" || row.deletedAt) continue;
+    const c = taskCard(row);
+    if (c) cards.set(row.id, c);
+  }
+  const approvalCards = [...cards.values()].filter((c) => c.approval);
+  if (approvalCards.length) {
+    const live = await liveApprovalStatuses(orgId, approvalCards).catch(() => new Map());
+    for (const c of approvalCards) {
+      const s = live.get(`${c.approval!.source}:${c.approval!.requestId}`);
+      if (s) c.approval = { ...c.approval!, ...s };
+    }
+  }
+
   return rows.map((row) => {
     const deleted = Boolean(row.deletedAt);
     return {
@@ -220,7 +260,7 @@ export async function hydrateMessages(orgId: string, rows: MessageRow[]): Promis
       kind: row.kind,
       ...(row.kind === "note" ? { note: deleted ? null : (noteByMessage.get(row.id) ?? null) } : {}),
       ...(row.kind === "album" ? { album: deleted ? null : albumCard(row) } : {}),
-      ...(row.kind === "task" ? { task: deleted ? null : taskCard(row) } : {}),
+      ...(row.kind === "task" ? { task: deleted ? null : (cards.get(row.id) ?? null) } : {}),
       ...(row.kind === "ads_proposal"
         ? {
             adsProposal:

@@ -1,5 +1,5 @@
 import type { ChatAttachmentKind, ChatChannelSummary, ChatUser } from "../types";
-import { isKeepChannelId } from "../types";
+import { isApproveChannelId, isKeepChannelId } from "../types";
 
 function timeOf(d: Date): string {
   return d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
@@ -88,6 +88,8 @@ export function channelPreview(channel: ChatChannelSummary, meId: string, users:
   if (last.deleted) return `${who} ยกเลิกข้อความ`;
   if (last.kind === "note") return `${who} สร้างโน้ต: ${last.body?.replace(/\s+/g, " ") ?? ""}`;
   if (last.kind === "album") return `${who} ${last.body ?? "เพิ่มรูปในอัลบั้ม"}`;
+  // ห้อง "คำขออนุมัติ": "ต้น ขอเลื่อนกำหนดส่งงาน "…"" (ผู้เขียน = คนขอ)
+  if (last.kind === "task" && isApproveChannelId(channel.id)) return `📅 ${who} ${last.body ?? "ขอเลื่อนกำหนดส่ง"}`;
   if (last.kind === "task") return `📋 ${last.body ?? "งานใหม่"}`;
   const text = last.body?.replace(/\s+/g, " ") || attachmentLabel(last.attachmentKind);
   // Keep Memo มีแต่ของตัวเอง — ไม่ต้องขึ้น "คุณ:"
