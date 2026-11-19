@@ -1870,6 +1870,45 @@ export async function setYearlyEntitlementAction(formData: FormData): Promise<{ 
   return { ok: true };
 }
 
+/**
+ * บันทึกสิทธิ์รายปีหลายคนพร้อมกัน — ผู้ใช้ 19/11/2569 "แก้ไขและบันทึกทีเดียวได้เลย"
+ * ทำทีละคนตามลำดับ (คำสั่งเดียวกับ setYearlyEntitlementAction) · คนไหนพลาดบอกเป็นรายคน คนอื่นยังบันทึกต่อ
+ */
+export async function setYearlyEntitlementsAction(input: {
+  leaveTypeId: string;
+  year: number;
+  items: { employmentId: string; days: string }[];
+}): Promise<{ error?: string; results: { employmentId: string; error?: string }[] }> {
+  try {
+    await guardYearlyEntitlements();
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "ไม่มีสิทธิ์ดำเนินการนี้", results: [] };
+  }
+  if (!input.leaveTypeId || !Number.isInteger(input.year)) return { error: "ข้อมูลไม่ครบ", results: [] };
+  const results: { employmentId: string; error?: string }[] = [];
+  for (const item of input.items.slice(0, 500)) {
+    const raw = String(item.days ?? "").trim();
+    const days = Number(raw);
+    if (!item.employmentId) continue;
+    if (raw === "" || !Number.isFinite(days) || days < 0 || days > 366 || Math.round(days * 2) !== days * 2) {
+      results.push({ employmentId: item.employmentId, error: "จำนวนวันต้องเป็น 0–366 (ครึ่งวันได้ เช่น 6.5)" });
+      continue;
+    }
+    try {
+      await wfFetch(`/leave-types/${input.leaveTypeId}/yearly-entitlements`, {
+        method: "POST",
+        body: { employment_id: item.employmentId, year: input.year, days, reason: "" },
+      });
+      results.push({ employmentId: item.employmentId });
+    } catch (error) {
+      results.push({ employmentId: item.employmentId, error: toMessage(error) });
+    }
+  }
+  revalidatePath("/hr");
+  revalidatePath("/hr/settings/leave-types");
+  return { results };
+}
+
 /** HR เพิ่มวัน Holiday ให้คนหนึ่ง เป็นสิทธิ์ของเดือนที่เลือก — ต้องมีเหตุผล (audit ฝั่งระบบบุคคล) */
 export async function addHolidayPersonGrantAction(formData: FormData): Promise<{ error?: string }> {
   try {
