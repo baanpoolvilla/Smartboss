@@ -81,13 +81,9 @@ export function ProjectView({ projectId }: { projectId: string }) {
   const searchParams = useSearchParams();
   // "งานของฉัน": พนักงานที่มีงานในโปรเจกต์เปิดมาเห็นเฉพาะงานตัวเองก่อน (ไม่ต้องไล่หาชื่อตัวเองในรายการ)
   // เจ้าของ/CEO เห็นทั้งหมดก่อน · ลิงก์ ?mine=1 (จาก "งานของฉันในโปรเจกต์") บังคับเปิดแบบของฉัน
-  const [mineOnly, setMineOnly] = useState<boolean>(() => {
-    if (searchParams.get("mine") === "1") return true;
-    const p = useProjectStore.getState().projects.find((x) => x.id === projectId);
-    const uid = useIdentityStore.getState().viewingAsUserId;
-    if (!p || canPlanProject(p, uid)) return false;
-    return useTaskStore.getState().tasks.some((t) => t.project?.projectId === projectId && t.assigneeIds.includes(uid));
-  });
+  // 19/11/2569 ผู้ใช้: "อยากให้เห็นทั้งหมดของงาน" (ต้องส่งต่องานกัน) → ทุกคนเปิดมาเห็นทุกงานก่อน
+  // ปุ่ม "งานของฉัน" ยังกดกรองได้ · ลิงก์ ?mine=1 ยังเปิดแบบของฉันเหมือนเดิม
+  const [mineOnly, setMineOnly] = useState<boolean>(() => searchParams.get("mine") === "1");
 
   const allItems = useMemo(() => (project ? timelineItems(project, tasks, today) : []), [project, tasks, today]);
   const myCount = useMemo(() => allItems.filter((i) => i.kind === "task" && i.assigneeIds.includes(me)).length, [allItems, me]);

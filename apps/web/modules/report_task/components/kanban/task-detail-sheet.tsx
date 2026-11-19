@@ -47,7 +47,7 @@ import { SubtasksSection } from "@/modules/report_task/components/kanban/subtask
 import { canManageSeries } from "@/modules/report_task/lib/task-recurrence";
 import { canDecideTaskDueRequest } from "@/modules/report_task/lib/pending-due-request";
 import { useProjectStore } from "@/modules/report_task/store/project-store";
-import { canEditRecord, canRemoveReaction, canReviewTaskRecord, canSeePenaltyStatus, canToggleOwnChecklistItem } from "@/modules/report_task/lib/permissions";
+import { canEditRecord, canRemoveReaction, canReviewTaskRecord, canSeePenaltyStatus, canSeeTask, canToggleOwnChecklistItem } from "@/modules/report_task/lib/permissions";
 import { useTaskReviewSettingsStore } from "@/modules/report_task/store/task-review-settings-store";
 import { todayIso } from "@/modules/report_task/lib/now";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
@@ -620,6 +620,9 @@ export function TaskDetailSheet({
   // isn't without having to ask.
   const isShared = task.taskMode === "group";
   const iAmAssignee = task.assigneeIds.includes(viewingAsUserId);
+  // ดูอย่างเดียว: คนที่ไม่เกี่ยวกับงานนี้ (ไม่ใช่ผู้รับ/ผู้มอบ/หัวหน้าแผนก/Boss) แต่เปิดได้เพราะอยู่ในโปรเจกต์เดียวกัน
+  // — ผู้ใช้ 19/11/2569: เห็นรายละเอียดเพื่อส่งต่องานกันได้ แต่กดอะไรไม่ได้ (เดิมเปลี่ยนสถานะ/คอมเมนต์ได้)
+  const viewOnly = !canSeeTask(task, viewingAsUserId);
   // "ติดตามงานนี้" — จำกัดไว้แค่หัวหน้าแผนก/CEO (canManage) เท่านั้น
   // ("ทาง 2 จะกดได้เฉพาะหัวหน้า ceo อย่างเดียวพอ" — เดิมเปิดให้ทุกคนกดได้
   // ["ทำให้มันยืดหยุ่นก็ได้"] แต่ภายหลังขอให้จำกัดสิทธิ์กลับ)
@@ -972,6 +975,11 @@ export function TaskDetailSheet({
             className="text-lg font-semibold border-0 border-b border-transparent hover:border-[var(--line)] focus-visible:border-[var(--brand-green)] rounded-none px-0 shadow-none focus-visible:ring-0 disabled:opacity-100 disabled:cursor-default"
           />
         </DialogHeader>
+        {viewOnly && (
+          <p className="m-0 shrink-0 border-b border-[var(--line)] bg-[#eaeef5] px-6 py-2 text-xs text-[var(--brand-navy)]">
+            ดูอย่างเดียว — คุณไม่ได้อยู่ในงานนี้ จึงเปลี่ยนสถานะ ติ๊ก หรือคอมเมนต์ไม่ได้
+          </p>
+        )}
 
         {/* Two-pane body, MS-Planner-style: task details on the left, a
             persistent comments/chat rail on the right — stacked on small
@@ -990,6 +998,8 @@ export function TaskDetailSheet({
               <span className="shrink-0 font-semibold">ไปดูต้นทาง</span>
             </Link>
           )}
+          {/* ดูอย่างเดียว: ปิดปุ่ม/ช่องกรอกตั้งแต่รายละเอียดถึงเช็คลิสต์ (ไฟล์แนบด้านล่างยังกดเปิดดูได้) */}
+          <fieldset disabled={viewOnly} className="m-0 min-w-0 space-y-5 border-0 p-0">
           {/* Editable description (creator only) — staged in draftDescription */}
           <div className="space-y-1">
             <Label className="text-xs text-[var(--ink-soft)]">รายละเอียด</Label>
@@ -2245,6 +2255,7 @@ export function TaskDetailSheet({
               </div>
             )}
           </div>
+          </fieldset>
 
           <Separator />
 
@@ -2258,7 +2269,7 @@ export function TaskDetailSheet({
             // ตัวดูไฟล์เลื่อนต่อเนื่องตามลำดับที่เห็นในหน้า (ส่วนบนก่อน แล้วส่วนส่งงาน)
             const viewerList = [...briefFiles, ...submittedFiles];
             // ผู้สั่งงาน/หัวหน้า (หรือคนที่ไม่ใช่ผู้รับผิดชอบ) แนบไฟล์ส่วนบนได้ · ผู้รับผิดชอบส่งไฟล์งานในส่วนล่าง
-            const canAddBrief = canEditMain || !iAmAssignee;
+            const canAddBrief = !viewOnly && (canEditMain || !iAmAssignee);
             const canSubmit = iAmAssignee;
 
             const limitsTip = (
@@ -2418,7 +2429,7 @@ export function TaskDetailSheet({
             comment list below unscrollable (both halves stuck). Capped, the
             list scrolls inside it and the details keep the rest. */}
         <FileDropZone
-          enabled
+          enabled={!viewOnly}
           onFiles={(files) => void handleCommentFilesSelected(files)}
           label="ปล่อยเพื่อแนบในความคิดเห็น"
           className={cn(
@@ -2600,6 +2611,8 @@ export function TaskDetailSheet({
               ช่องเหลือกว้างนิดเดียว ข้อความตกบรรทัดทุกสองสามคำ ("ไม่สวย ให้พื้นที่พิมพ์แชทเยอะกว่านี้")
             */}
             {/* กลับมาใช้แบบนี้ (ผู้ใช้เลือกจาก mock up 18/10/2569 "แก้เป็นแบบนี้ดีกว่า") — ช่องพิมพ์บน แถบ 📎 😊 ... ➤ ล่าง */}
+            {/* ดูอย่างเดียว: อ่านคอมเมนต์ได้ แต่พิมพ์/ส่งไม่ได้ */}
+            <fieldset disabled={viewOnly} className="m-0 min-w-0 border-0 p-0">
             <div className={cn("flex flex-col rounded-xl border border-input bg-white transition-colors focus-within:border-[var(--brand-green)] focus-within:ring-2 focus-within:ring-[var(--brand-green)]/20", chatExpanded && "md:mx-auto md:w-full md:max-w-[760px]")}>
               <div className="relative min-w-0 flex-1">
                 {mentionQuery && mentionCandidates.length > 0 && (
@@ -2721,6 +2734,7 @@ export function TaskDetailSheet({
               </Button>
               </div>
             </div>
+            </fieldset>
           </div>
         </FileDropZone>
         </div>
