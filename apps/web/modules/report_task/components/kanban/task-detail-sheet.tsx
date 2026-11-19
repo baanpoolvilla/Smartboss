@@ -3,7 +3,7 @@
 import { markTaskSheetOpen } from "@/modules/report_task/components/shared/task-sync";
 import { useDismissKeyboardOnDrag } from "@/lib/dismiss-keyboard-on-drag";
 import { ReactionPicker } from "@/components/emoji-picker";
-import { Fragment, type SyntheticEvent, type UIEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type ReactNode, type SyntheticEvent, type UIEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { NewDivider } from "@/components/new-divider";
 import {
@@ -159,8 +159,18 @@ function toLightboxImage(a: Attachment): ReportPostImage {
   return { id: a.id, url: a.url, dataUrl: a.dataUrl, name: a.name, mime: a.mime ?? mimeFromLegacyTaskLabel(a.type) };
 }
 
+/**
+ * คอมเมนต์: ลิงก์กดได้ + ไฮไลต์ @ชื่อคน
+ * แยกลิงก์ออกก่อน แล้วค่อยหา @ชื่อในส่วนที่เหลือ — ลิงก์ที่มี @ ข้างใน (youtube.com/@ช่อง) จะไม่ถูกตัดเป็นสองท่อน
+ */
+function renderMentions(text: string): ReactNode[] {
+  return splitLinks(text).map((part, i) =>
+    typeof part === "string" ? <Fragment key={i}>{highlightMentions(part)}</Fragment> : <Fragment key={i}>{part}</Fragment>
+  );
+}
+
 /** Highlight @mentions inside a comment so tagged people stand out. */
-function renderMentions(text: string) {
+function highlightMentions(text: string) {
   // ชื่อพนักงานจริง (ยาวก่อน) ให้ชื่อที่มีเว้นวรรคเป็นสีทั้งชื่อ ไม่ใช่แค่คำแรก
   const names = users
     .map((u) => u.name)
@@ -176,6 +186,37 @@ function renderMentions(text: string) {
       part
     )
   );
+}
+
+/**
+ * ลิงก์ในคอมเมนต์กดได้ (ผู้ใช้ 19/11/2569 "ทำไมส่งเป็นลิงก์แล้วไม่เป็นลิงก์") — เปิดแท็บใหม่
+ * คืนข้อความธรรมดาเป็น string ส่วนลิงก์เป็น <a> · ตัดวรรคตอนท้ายลิงก์ออก ("ดูที่ https://x.com/a." จุดท้ายไม่ใช่ลิงก์)
+ */
+function splitLinks(text: string): (string | ReactNode)[] {
+  const out: (string | ReactNode)[] = [];
+  const urlRe = /https?:\/\/[^\s<>"']+/g;
+  let last = 0;
+  for (const m of text.matchAll(urlRe)) {
+    let url = m[0];
+    const trail = /[.,;:!?)\]}]+$/.exec(url)?.[0] ?? "";
+    if (trail) url = url.slice(0, -trail.length);
+    const start = m.index ?? 0;
+    if (start > last) out.push(text.slice(last, start));
+    out.push(
+      <a
+        key={`${start}-${url}`}
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="break-all text-[var(--brand-navy,#1e3a6e)] underline underline-offset-2 hover:opacity-80"
+      >
+        {url}
+      </a>
+    );
+    last = start + url.length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
 }
 
 /** ข้อความของรายการเช็คลิสต์ — ปกติแสดงบรรทัดเดียว (ตัดด้วย …) ถ้ายาวเกินจริงถึงมีลูกศรเล็ก ๆ ท้ายบรรทัด
