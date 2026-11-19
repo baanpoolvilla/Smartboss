@@ -3,7 +3,7 @@ import { dropDuplicateNotifications } from "@/modules/report_task/lib/notificati
 import { prisma } from "@smartboss/database";
 import { announceNotification } from "@/lib/notify-push";
 import { postTaskCard } from "@/modules/chat/data/task-cards";
-import { postTaskDueRequestCard } from "@/modules/chat/data/approval-cards";
+import { postTaskDueRequestCard, postTaskReviewCard } from "@/modules/chat/data/approval-cards";
 import { loadNotificationPrefs } from "@/lib/notification-prefs";
 import { isTopicOn, topicForReportNotification } from "@/modules/notifications/prefs";
 import { publishToOrg, publishToUsers } from "@/lib/realtime/server";
@@ -334,6 +334,12 @@ function announceNewNotifications(orgId: string, beforeData: unknown, afterData:
     if (n.kind !== "task_due_request" || typeof n.taskId !== "string" || typeof n.byUserId !== "string" || n.byUserId === "system") continue;
     if (typeof n.message !== "string" || !n.message.includes("ขอเลื่อนกำหนดส่งงาน")) continue;
     void postTaskDueRequestCard(orgId, { taskId: n.taskId, requesterId: n.byUserId, approverId: n.userId as string });
+  }
+  // งานส่งแล้วรอตรวจ → การ์ดในห้อง "คำขออนุมัติ" ของคนที่ได้แจ้งเตือนนี้ (ผู้ตรวจ — notifyReviewReady เลือก · ผู้ใช้ 19/11/2569)
+  for (const n of fresh) {
+    if (n.kind || typeof n.taskId !== "string" || typeof n.byUserId !== "string" || n.byUserId === "system") continue;
+    if (typeof n.message !== "string" || !/ส่งงาน "[\s\S]*" แล้ว รอคุณตรวจ/.test(n.message)) continue;
+    void postTaskReviewCard(orgId, { taskId: n.taskId, submitterId: n.byUserId, reviewerId: n.userId as string });
   }
   for (const n of fresh) {
     if (n.kind !== "task_assigned" || typeof n.taskId !== "string" || typeof n.byUserId !== "string" || n.byUserId === "system") continue;

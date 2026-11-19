@@ -152,6 +152,26 @@ export interface ChatTaskCard {
   assignees?: string[];
   /** การ์ดคำขออนุมัติ (ห้อง "คำขออนุมัติ" approve-<userId>) — มีปุ่มอนุมัติ/ไม่อนุมัติ · การ์ดงานปกติไม่มี */
   approval?: ChatApprovalInfo;
+  /** การ์ด "เสร็จแล้ว รอตรวจ" (ห้องเดียวกัน — ผู้ใช้ 19/11/2569) มีปุ่มผ่าน · การ์ดงานปกติไม่มี */
+  review?: ChatReviewInfo;
+}
+
+/**
+ * งานส่งแล้วรอตรวจ บนการ์ดในห้อง "คำขออนุมัติ" (ผู้ใช้ 19/11/2569 "ให้กดยืนยันในนั้นได้เลย")
+ * status/decided* อ่านสดจากงาน/ใบงานจริงตอนโหลดข้อความ (data/approval-status.ts)
+ */
+export interface ChatReviewInfo {
+  /** task = งานบนบอร์ด · work_order = ใบแจ้งซ่อม */
+  source: "task" | "work_order";
+  submitterId: string;
+  submitterName?: string;
+  /** รอบที่ส่ง (งาน: completedAt · ใบงาน: reviewSubmittedAt) — ส่งใหม่หลังไม่ผ่าน = การ์ดใหม่ การ์ดเก่าปิด */
+  submittedAt: string;
+  /** closed = รอบนี้จบไปแล้วทางอื่น (เปิดงานกลับ/ส่งรอบใหม่/งานถูกลบ) */
+  status: "pending" | "passed" | "failed" | "closed";
+  decidedBy?: string;
+  decidedAt?: string;
+  note?: string;
 }
 
 /**

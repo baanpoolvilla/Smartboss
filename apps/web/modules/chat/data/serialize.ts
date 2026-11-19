@@ -5,8 +5,8 @@ import type { ChatAttachment, ChatAttachmentKind, ChatMessageDTO, ChatNotePrevie
 import { EXPIRING_KINDS, mediaExpiresAt } from "../lib/retention";
 import { isKeepChannelId } from "../types";
 import { proposalViewer } from "@/modules/ads/data/proposal-view";
-import type { ChatApprovalInfo } from "../types";
-import { liveApprovalStatuses } from "./approval-status";
+import type { ChatApprovalInfo, ChatReviewInfo } from "../types";
+import { liveApprovalStatuses, liveReviewStatuses } from "./approval-status";
 
 /** ข้อผิดพลาดที่มีสถานะ HTTP — route แปลงเป็นคำตอบให้เอง (ดู lib/respond.ts) */
 export class ChatError extends Error {
@@ -124,6 +124,23 @@ function taskCard(row: MessageRow): ChatTaskCard | null {
       ? { assignees: m.assignees.filter((n): n is string => typeof n === "string").slice(0, 8).map((n) => n.slice(0, 60)) }
       : {}),
     ...(approvalOf(m.approval) ? { approval: approvalOf(m.approval)! } : {}),
+    ...(reviewOf(m.review) ? { review: reviewOf(m.review)! } : {}),
+  };
+}
+
+/** การ์ด "รอตรวจ" (data/approval-cards.ts) — meta.review · ข้อมูลไม่ครบ = การ์ดงานธรรมดา */
+function reviewOf(v: unknown): ChatReviewInfo | null {
+  if (!v || typeof v !== "object") return null;
+  const r = v as Partial<ChatReviewInfo>;
+  if (r.source !== "task" && r.source !== "work_order") return null;
+  if (typeof r.submitterId !== "string" || typeof r.submittedAt !== "string") return null;
+  return {
+    source: r.source,
+    submitterId: r.submitterId,
+    ...(typeof r.submitterName === "string" ? { submitterName: r.submitterName.slice(0, 60) } : {}),
+    submittedAt: r.submittedAt,
+    // สถานะจริงเติมทีหลังใน hydrateMessages (อ่านสดจากงาน/ใบงาน)
+    status: "pending",
   };
 }
 
@@ -247,6 +264,14 @@ export async function hydrateMessages(orgId: string, rows: MessageRow[]): Promis
     for (const c of approvalCards) {
       const s = live.get(`${c.approval!.source}:${c.approval!.requestId}`);
       if (s) c.approval = { ...c.approval!, ...s };
+    }
+  }
+  const reviewCards = [...cards.values()].filter((c) => c.review);
+  if (reviewCards.length) {
+    const live = await liveReviewStatuses(orgId, reviewCards).catch(() => new Map());
+    for (const c of reviewCards) {
+      const s = live.get(`${c.review!.source}:${c.taskId}:${c.review!.submittedAt}`);
+      if (s) c.review = { ...c.review!, ...s };
     }
   }
 

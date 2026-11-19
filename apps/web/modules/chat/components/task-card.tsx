@@ -7,6 +7,7 @@ import { cn } from "@smartboss/ui/cn";
 import { formatShortDate } from "@/modules/report_task/lib/format";
 import type { ChatTaskCard } from "../types";
 import { ApprovalCard } from "./approval-card";
+import { ReviewCard } from "./review-card";
 import { ceoText } from "@/lib/ceo-title-shared";
 import { useCeoTitle } from "@/lib/ceo-title-client";
 
@@ -27,6 +28,8 @@ const TAG_BG: Record<string, string> = {
 export function TaskCard({ card, body, mine }: { card: ChatTaskCard; body: string | null; mine: boolean }) {
   // การ์ดคำขออนุมัติ (ห้อง "คำขออนุมัติ") — มีปุ่มอนุมัติ/ไม่อนุมัติ แยกไว้อีกไฟล์
   if (card.approval) return <ApprovalCard card={card as ChatTaskCard & { approval: NonNullable<ChatTaskCard["approval"]> }} />;
+  // การ์ด "เสร็จแล้ว รอตรวจ" (ห้องเดียวกัน) — มีปุ่มผ่าน
+  if (card.review) return <ReviewCard card={card as ChatTaskCard & { review: NonNullable<ChatTaskCard["review"]> }} />;
   return <PlainTaskCard card={card} body={body} mine={mine} />;
 }
 

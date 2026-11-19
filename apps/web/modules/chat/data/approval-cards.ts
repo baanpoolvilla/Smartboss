@@ -2,7 +2,7 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@smartboss/database";
 
-import { APPROVE_CHANNEL_NAME, APPROVE_CHANNEL_PREFIX, type ChatApprovalInfo, type ChatTaskCard } from "../types";
+import { APPROVE_CHANNEL_NAME, APPROVE_CHANNEL_PREFIX, type ChatApprovalInfo, type ChatReviewInfo, type ChatTaskCard } from "../types";
 import { broadcastToChannel } from "./channels";
 import { hydrateMessages } from "./serialize";
 import { taskTags, workOrderTags } from "./task-cards";
@@ -36,7 +36,11 @@ async function ensureApprovalChannel(orgId: string, userId: string): Promise<str
   return id;
 }
 
-async function postCard(orgId: string, approverId: string, input: { authorId: string; body: string; card: ChatTaskCard }): Promise<void> {
+async function postCard(
+  orgId: string,
+  approverId: string,
+  input: { authorId: string; body: string; card: ChatTaskCard; clientId?: string }
+): Promise<void> {
   try {
     const channelId = await ensureApprovalChannel(orgId, approverId);
     const row = await prisma.chatMessage.create({
@@ -47,7 +51,7 @@ async function postCard(orgId: string, approverId: string, input: { authorId: st
         kind: "task",
         body: input.body,
         meta: input.card as unknown as Prisma.InputJsonValue,
-        clientId: `appr-${input.card.approval!.source}-${input.card.approval!.requestId}`,
+        clientId: input.clientId ?? `appr-${input.card.approval!.source}-${input.card.approval!.requestId}`,
       },
     });
     const [[message], author] = await Promise.all([
@@ -172,5 +176,105 @@ export async function postWorkOrderDueRequestCards(orgId: string, input: { reque
     }
   } catch (err) {
     console.error("[chat] work order approval card failed", err);
+  }
+}
+
+/**
+ * งานบนบอร์ดส่งแล้ว รอตรวจ (ผู้ใช้ 19/11/2569) — เรียกจากแจ้งเตือน "ส่งงาน … แล้ว รอคุณตรวจ" (org-store)
+ * ⇒ ส่งถึงคนเดียวกับที่ได้กระดิ่ง (notifyReviewReady ใน task-store เป็นคนเลือก)
+ * งานบันทึกจากเครื่องคนละจังหวะกับแจ้งเตือน: อ่านซ้ำได้ ~6 วิ จนเห็นสถานะเสร็จ · ไม่เห็น = ไม่โพสต์
+ * รอบส่ง = completedAt — ไม่ผ่านแล้วส่งใหม่ได้การ์ดใหม่ (clientId ต่างกัน) การ์ดเก่าปิดเอง
+ */
+export async function postTaskReviewCard(orgId: string, input: { taskId: string; submitterId: string; reviewerId: string }): Promise<void> {
+  if (input.submitterId === input.reviewerId) return;
+  try {
+    const read = () =>
+      prisma.reportTask
+        .findUnique({
+          where: { orgId_id: { orgId, id: input.taskId } },
+          select: { title: true, code: true, parentId: true, data: true, status: true, completedAt: true, dueDate: true },
+        })
+        .catch(() => null);
+    const ready = (t: Awaited<ReturnType<typeof read>>) =>
+      !!t && t.status === "done" && !!t.completedAt && !(t.data as { reviewedBy?: unknown } | null)?.reviewedBy;
+    let task = await read();
+    for (let i = 0; i < 15 && !ready(task); i++) {
+      await new Promise((r) => setTimeout(r, 400));
+      task = await read();
+    }
+    if (!task || !ready(task)) return;
+    const names = await namesOf(orgId, [input.submitterId]);
+    const review: ChatReviewInfo = {
+      source: "task",
+      submitterId: input.submitterId,
+      ...(names.get(input.submitterId) ? { submitterName: names.get(input.submitterId) } : {}),
+      submittedAt: task.completedAt!,
+      status: "pending",
+    };
+    await postCard(orgId, input.reviewerId, {
+      authorId: input.submitterId,
+      body: `ส่งงาน "${task.title.slice(0, 120)}" แล้ว รอตรวจ`,
+      clientId: `rev-task-${input.taskId}-${task.completedAt}`,
+      card: {
+        taskId: input.taskId,
+        title: task.title.slice(0, 200),
+        dueDate: task.dueDate || null,
+        link: `/report-task/tasks?task=${encodeURIComponent(input.taskId)}`,
+        ...(task.code ? { code: task.code } : {}),
+        tags: taskTags(task),
+        review,
+      },
+    });
+  } catch (err) {
+    console.error("[chat] task review card failed", err);
+  }
+}
+
+/** ใบแจ้งซ่อมส่งงานแล้ว รอคนเปิดใบตรวจ — เรียกจาก submitForReview ส่งถึงคนเดียวกับที่ได้แจ้งเตือน "รอคุณตรวจ" */
+export async function postWorkOrderReviewCard(orgId: string, input: { workOrderId: string; submitterId: string; reviewerId: string }): Promise<void> {
+  if (input.submitterId === input.reviewerId) return;
+  try {
+    const wo = await prisma.workOrder.findFirst({
+      where: { orgId, id: input.workOrderId },
+      select: {
+        id: true,
+        title: true,
+        code: true,
+        dueDate: true,
+        reviewSubmittedAt: true,
+        reviewState: true,
+        pmScheduleId: true,
+        pmScheduleIds: true,
+        autoCreated: true,
+        createdBy: true,
+      },
+    });
+    if (!wo || wo.reviewState !== "pending" || !wo.reviewSubmittedAt) return;
+    const submittedAt = wo.reviewSubmittedAt.toISOString();
+    const names = await namesOf(orgId, [input.submitterId]);
+    const review: ChatReviewInfo = {
+      source: "work_order",
+      submitterId: input.submitterId,
+      ...(names.get(input.submitterId) ? { submitterName: names.get(input.submitterId) } : {}),
+      submittedAt,
+      status: "pending",
+    };
+    await postCard(orgId, input.reviewerId, {
+      authorId: input.submitterId,
+      body: `ส่งงานใบแจ้งซ่อม "${wo.title.slice(0, 120)}" แล้ว รอตรวจ`,
+      clientId: `rev-wo-${wo.id}-${submittedAt}`,
+      card: {
+        taskId: wo.id,
+        title: wo.title.slice(0, 200),
+        dueDate: ymd(wo.dueDate),
+        link: `/maintenance/work-orders/${wo.id}`,
+        target: "work_order",
+        ...(wo.code ? { code: wo.code } : {}),
+        tags: workOrderTags(wo),
+        review,
+      },
+    });
+  } catch (err) {
+    console.error("[chat] work order review card failed", err);
   }
 }

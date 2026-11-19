@@ -77,6 +77,7 @@ import { fmtThaiDate, fmtThaiDateTime } from "@/modules/maintenance/lib/format";
 import { putFile, putFiles, deleteFiles } from "@/modules/maintenance/lib/storage";
 import { isPastDay } from "@/modules/maintenance/lib/no-past-date";
 import { createUploadLink } from "@/modules/maintenance/data/external-upload";
+import { postWorkOrderReviewCard } from "@/modules/chat/data/approval-cards";
 import { createExpensesForProperties, listExpenses } from "@/modules/maintenance/data/expenses";
 import {
   closeAutoWorkOrdersOfPm,
@@ -658,6 +659,8 @@ async function submitForReview(
       referenceId: wo.id,
       line: `📋 รอคุณตรวจใบแจ้งซ่อม\n📝 ${wo.title}\n🏠 ${property?.name ?? "-"}\n👤 ${who} ส่งงานแล้ว\n✅ เข้าไปกด ผ่าน / ไม่ผ่าน ในใบงาน ${wo.code ?? ""}`,
     });
+    // การ์ดในห้อง "คำขออนุมัติ" ของคนเปิดใบ — กดผ่านในแชทได้ (ผู้ใช้ 19/11/2569) · พลาดก็ไม่กระทบการส่งงาน
+    await postWorkOrderReviewCard(s.orgId, { workOrderId: wo.id, submitterId: s.userId, reviewerId: reviewer });
   }
   await notifyStatusChanged(s.orgId, wo, "completed", s.userId, { emoji: "📨", label: "ส่งงานแล้ว · รอตรวจ", skip: reviewer ? [reviewer] : [] });
   await addWorkOrderComment(s.orgId, wo.id, s.userId, "ส่งงานแล้ว · รอคนเปิดใบตรวจ", null, { kind: "log" });

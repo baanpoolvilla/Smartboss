@@ -284,7 +284,7 @@ export function ChatRoom({
           <ClosedRoomBar channelId={channel.id} canReopen={detail.canClose ?? false} />
         ) : isApproveChannelId(channel.id) ? (
           // ห้อง "คำขออนุมัติ" — ข้อความจากระบบ ตอบกลับไม่ได้ (กดปุ่มบนการ์ดแทน)
-          <div className="border-t border-(--line) px-4 py-3 text-center text-xs text-(--ink-soft)">ข้อความจากระบบ · กดอนุมัติ/ไม่อนุมัติบนการ์ดได้เลย</div>
+          <div className="border-t border-(--line) px-4 py-3 text-center text-xs text-(--ink-soft)">ข้อความจากระบบ · กดอนุมัติ / ตรวจงานบนการ์ดได้เลย</div>
         ) : (
           <Composer
             ref={composerRef}
