@@ -98,6 +98,10 @@ export interface MaintenanceBoardItem {
   expensePending?: boolean;
   /** ผู้บันทึก: ใบที่บันทึกแล้วภายใน 7 วัน อยู่คอลัมน์เสร็จ บอกยอดรวม ให้กลับมาแก้ได้ */
   expenseRecordedTotal?: number;
+  /** ส่งงานแล้ว รอคนเปิดใบตรวจ (ตรวจงาน 10/11/2569) */
+  awaitingReview?: boolean;
+  /** คนที่ดูอยู่คือคนเปิดใบ — แถบแดง "รอคุณตรวจ" บนการ์ด */
+  reviewWaitsMe?: boolean;
 }
 
 /** สติกเกอร์ 1 ครั้งบนใบงานซ่อม — ชุดสติกเกอร์เดียวกับงาน คะแนนเข้า targetUserId (ผู้รับผิดชอบตอนที่ติด) */

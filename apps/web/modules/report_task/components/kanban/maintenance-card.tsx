@@ -110,6 +110,8 @@ export function MaintenanceCard({ item }: { item: MaintenanceBoardItem }) {
         pendingDue={item.pendingDue ?? 0}
         pendingDueTo={item.pendingDueTo}
         pendingDueWaitsMe={item.pendingDueWaitsMe}
+        awaitingReview={item.awaitingReview}
+        reviewWaitsMe={item.reviewWaitsMe}
         score={item.score}
         isPrivate={item.isPrivate}
         // ปุ่มสติกเกอร์วางทับนอกลิงก์ (ด้านล่าง) — เว้นที่ไว้ข้างรูปคน

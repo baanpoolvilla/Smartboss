@@ -89,6 +89,7 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
       isPrivate: true,
       photoUrls: true,
       afterPhotoUrls: true,
+      reviewState: true,
       _count: {
         select: {
           purchaseOrders: { where: { status: { not: "cancelled" } } },
@@ -184,7 +185,7 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
         code: w.code,
         title: w.title,
         column,
-        statusLabel: expensePending ? "รอบันทึกค่าใช้จ่าย" : done ? "ซ่อมเสร็จแล้ว" : w.status === "in_progress" ? "กำลังซ่อม" : "รอดำเนินการ",
+        statusLabel: expensePending ? "รอบันทึกค่าใช้จ่าย" : done && w.reviewState === "pending" ? "รอตรวจสอบ" : done ? "ซ่อมเสร็จแล้ว" : w.status === "in_progress" ? "กำลังซ่อม" : "รอดำเนินการ",
         priority: WO_PRIORITY[w.priority] ?? "medium",
         dueDate: (expenseDue ?? earliestPendingDue(w))?.toISOString() ?? null,
         createdAt: w.createdAt.toISOString(),
@@ -212,6 +213,9 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
         autoCreated: w.autoCreated,
         expensePending,
         expenseRecordedTotal,
+        // ตรวจงาน — แบบเดียวกับบอร์ดแจ้งซ่อม (data/work-order-board-rows.ts): ป้ายรอตรวจ + แถบแดงเฉพาะคนเปิดใบ
+        awaitingReview: w.status === "completed" && w.reviewState === "pending",
+        reviewWaitsMe: w.status === "completed" && w.reviewState === "pending" && w.createdBy === session.userId,
       });
     }
   }
