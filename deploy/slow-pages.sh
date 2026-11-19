@@ -25,17 +25,22 @@ for line in sys.stdin:
     key = ID.sub("/:id", path) or "/"
     is_page = not path.startswith("/api/") and r.get("method") == "GET"
     if is_page and "_rsc=" not in uri and "rsc" not in h and "text/html" not in str(h.get("accept", "")): continue
-    (pages if is_page else apis).setdefault(key, []).append(float(e.get("duration", 0)))
+    if not is_page:
+        # แยกอ่าน/เขียน: อ่าน = GET ทั้งก้อน · อ่าน·เช็กรุ่น = เครื่องถือข้อมูลอยู่แล้ว (ได้ "ไม่เปลี่ยน" หรือแค่ส่วนที่เปลี่ยน) · เขียน = PUT/POST
+        m = r.get("method", "GET")
+        key = (("อ่าน·เช็กรุ่น " if "x-known-version" in h else "อ่าน ") if m == "GET" else f"เขียน({m}) ") + key
+    (pages if is_page else apis).setdefault(key, []).append((float(e.get("duration", 0)), int(e.get("size", 0) or 0)))
 def table(title, data):
     rows = []
-    for k, v in data.items():
-        v.sort(); n = len(v)
-        rows.append((v[n // 2], v[min(n - 1, int(n * 0.9))], v[-1], n, k))
+    for k, pairs in data.items():
+        v = sorted(d for d, _ in pairs); n = len(v)
+        kb = sum(b for _, b in pairs) / n / 1024
+        rows.append((v[n // 2], v[min(n - 1, int(n * 0.9))], v[-1], n, kb, k))
     rows.sort(reverse=True)
-    print(f"\n== {title} (เรียงช้าสุดก่อน · วินาที) ==")
-    print("%6s %7s %7s %6s  หน้า" % ("ปกติ", "ช้า10%", "ช้าสุด", "ครั้ง"))
-    for med, p90, mx, n, k in rows[:25]:
-        if n >= 3: print(f"{med:6.2f} {p90:7.2f} {mx:7.2f} {n:6d}  {k}")
+    print(f"\n== {title} (เรียงช้าสุดก่อน · วินาที · KB = ขนาดเฉลี่ยที่ส่งกลับ) ==")
+    print("%6s %7s %7s %6s %7s  หน้า" % ("ปกติ", "ช้า10%", "ช้าสุด", "ครั้ง", "KB"))
+    for med, p90, mx, n, kb, k in rows[:30]:
+        if n >= 3: print(f"{med:6.2f} {p90:7.2f} {mx:7.2f} {n:6d} {kb:7.0f}  {k}")
 table("เปลี่ยนหน้า", pages)
 table("API", apis)
 ' "$HOURS"
