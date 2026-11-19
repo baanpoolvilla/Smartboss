@@ -1854,8 +1854,8 @@ export async function setYearlyEntitlementAction(formData: FormData): Promise<{ 
   const raw = String(formData.get("days") ?? "").trim();
   const days = Number(raw);
   if (!leaveTypeId || !employmentId || !Number.isInteger(year)) return { error: "ข้อมูลไม่ครบ" };
-  if (raw === "" || !Number.isFinite(days) || days < 0 || days > 366 || Math.round(days * 2) !== days * 2) {
-    return { error: "จำนวนวันต้องเป็น 0–366 (ครึ่งวันได้ เช่น 6.5)" };
+  if (raw === "" || !Number.isFinite(days) || days < 0 || days > 366 || !Number.isInteger(days)) {
+    return { error: "จำนวนวันต้องเป็นจำนวนเต็ม 0–366 วัน (ไม่มีครึ่งวัน)" };
   }
   try {
     await wfFetch(`/leave-types/${leaveTypeId}/yearly-entitlements`, {
@@ -1890,8 +1890,8 @@ export async function setYearlyEntitlementsAction(input: {
     const raw = String(item.days ?? "").trim();
     const days = Number(raw);
     if (!item.employmentId) continue;
-    if (raw === "" || !Number.isFinite(days) || days < 0 || days > 366 || Math.round(days * 2) !== days * 2) {
-      results.push({ employmentId: item.employmentId, error: "จำนวนวันต้องเป็น 0–366 (ครึ่งวันได้ เช่น 6.5)" });
+    if (raw === "" || !Number.isFinite(days) || days < 0 || days > 366 || !Number.isInteger(days)) {
+      results.push({ employmentId: item.employmentId, error: "จำนวนวันต้องเป็นจำนวนเต็ม 0–366 วัน (ไม่มีครึ่งวัน)" });
       continue;
     }
     try {

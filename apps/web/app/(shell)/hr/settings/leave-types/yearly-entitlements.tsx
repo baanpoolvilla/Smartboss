@@ -48,6 +48,12 @@ export function YearlyEntitlements({
   const isDirty = (r: YearlyRow) => drafts[r.employmentId] !== undefined && drafts[r.employmentId]!.trim() !== saved(r);
   const dirtyRows = sorted.filter(isDirty);
   const blank = dirtyRows.filter((r) => drafts[r.employmentId]!.trim() === "").length;
+  // สิทธิ์เป็นวันเต็มเท่านั้น (ผู้ใช้ 19/11/2569 "มันคือวันนะ") — เศษวันเตือนทันที ไม่ต้องรอกดบันทึก
+  const fractional = dirtyRows.filter((r) => {
+    const v = drafts[r.employmentId]!.trim();
+    return v !== "" && !Number.isInteger(Number(v));
+  }).length;
+  const cannotSave = blank > 0 || fractional > 0;
 
   // ยังไม่ได้บันทึกแล้วจะปิด/ออกจากหน้า — เตือนก่อน
   useEffect(() => {
@@ -58,7 +64,7 @@ export function YearlyEntitlements({
   }, [dirtyRows.length]);
 
   const saveAll = () => {
-    if (dirtyRows.length === 0 || blank > 0) return;
+    if (dirtyRows.length === 0 || cannotSave) return;
     setNotice(null);
     const items = dirtyRows.map((r) => ({ employmentId: r.employmentId, days: drafts[r.employmentId]!.trim() }));
     startTransition(async () => {
@@ -141,7 +147,9 @@ export function YearlyEntitlements({
                 {dirtyRows.length > 0
                   ? blank > 0
                     ? `แก้ไข ${dirtyRows.length} คน · มีช่องว่าง ${blank} ช่อง ใส่ตัวเลขก่อน (0 = ไม่ได้สิทธิ์)`
-                    : `แก้ไขแล้ว ${dirtyRows.length} คน ยังไม่ได้บันทึก`
+                    : fractional > 0
+                      ? `มี ${fractional} ช่องที่เป็นเศษวัน — ใส่เป็นจำนวนเต็ม เช่น 6 หรือ 7`
+                      : `แก้ไขแล้ว ${dirtyRows.length} คน ยังไม่ได้บันทึก`
                   : notice}
               </span>
               {dirtyRows.length > 0 && (
@@ -158,7 +166,7 @@ export function YearlyEntitlements({
                   >
                     ยกเลิกที่แก้
                   </button>
-                  <button type="submit" disabled={pending || blank > 0} className="h-9 rounded-md bg-(--brand-navy) px-3 text-sm font-semibold text-white disabled:opacity-50">
+                  <button type="submit" disabled={pending || cannotSave} className="h-9 rounded-md bg-(--brand-navy) px-3 text-sm font-semibold text-white disabled:opacity-50">
                     {pending ? "กำลังบันทึก…" : `บันทึกทั้งหมด (${dirtyRows.length} คน)`}
                   </button>
                 </>
@@ -200,7 +208,8 @@ function Row({
             type="number"
             min={0}
             max={366}
-            step={0.5}
+            step={1}
+            inputMode="numeric"
             value={value}
             onChange={(e) => onChange(e.target.value)}
             aria-label={`จำนวนวันของ ${row.name}`}
