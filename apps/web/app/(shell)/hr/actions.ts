@@ -1767,10 +1767,17 @@ export async function setHolidayValidMonthsAction(formData: FormData) {
   await guard(HR_PERMS.settingManage);
   const leaveTypeId = String(formData.get("leave_type_id") ?? "");
   const months = Number(formData.get("months") ?? 0);
+  // ตัดตามรอบปี (ผู้ใช้ 19/11/2569): "" = ไม่ตัด · 0 = สิ้น ธ.ค. ปีนั้น · 1 = สิ้น ม.ค. ปีถัดไป … · ไม่มีช่องนี้ในฟอร์ม = ไม่แก้
+  const carryRaw = formData.get("year_carry_months");
+  const yearCarry = carryRaw === null ? undefined : String(carryRaw) === "" ? null : Number(carryRaw);
   if (!leaveTypeId) throw new Error("ไม่พบประเภทการลา");
   if (!Number.isInteger(months) || months < 1 || months > 12) throw new Error("เลือกได้ 1–12 เดือน");
+  if (typeof yearCarry === "number" && (!Number.isInteger(yearCarry) || yearCarry < 0 || yearCarry > 11)) throw new Error("ค่าตัดตามรอบปีไม่ถูกต้อง");
   try {
-    await wfFetch(`/leave-types/${leaveTypeId}/holiday-valid-months`, { method: "POST", body: { months } });
+    await wfFetch(`/leave-types/${leaveTypeId}/holiday-valid-months`, {
+      method: "POST",
+      body: { months, ...(yearCarry !== undefined ? { year_carry_months: yearCarry } : {}) },
+    });
   } catch (error) {
     throw new Error(toMessage(error));
   }

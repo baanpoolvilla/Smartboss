@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { requireOrg } from "@smartboss/auth";
 import { wfTry, type HolidayAllowance, type LeaveRequest, type LeaveType, type Paged } from "@/modules/hr/lib/api";
 import { listHolidayEvents } from "@/modules/report_task/lib/db/workforce-calendar";
-import { holidayValidMonths } from "@/modules/hr/lib/holiday-valid-months";
+import { holidayValidMonths, holidayYearCarry } from "@/modules/hr/lib/holiday-valid-months";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
     const nameOf = new Map((types?.items ?? []).map((t) => [t.id, t.name]));
     // สิทธิ์ของแต่ละเดือนใช้ได้กี่เดือน — ตั้งได้ต่อประเภท (ผู้ใช้ 19/11/2569) · ไม่มี = 3
     const validOf = new Map((types?.items ?? []).map((t) => [t.id, holidayValidMonths(t.holiday_valid_months)]));
+    const carryOf = new Map((types?.items ?? []).map((t) => [t.id, holidayYearCarry(t.holiday_year_carry_months)]));
     const windowMonths = Math.max(3, ...(allowances?.items ?? []).map((a) => validOf.get(a.leave_type_id) ?? 3));
 
     // รายละเอียด: ช่วงเดือนที่สิทธิ์ยังใช้ได้ = (N-1) เดือนก่อนหน้า ถึงเดือนนี้
@@ -81,6 +82,8 @@ export async function GET(request: NextRequest) {
           leaveTypeId: a.leave_type_id,
           name: nameOf.get(a.leave_type_id) ?? "Holiday",
           validMonths: validOf.get(a.leave_type_id) ?? 3,
+          // ตัดตามรอบปี (0 = สิ้น ธ.ค. ปีนั้น · 1 = สิ้น ม.ค. ปีถัดไป) · null = ไม่ตัด
+          yearCarryMonths: carryOf.get(a.leave_type_id) ?? null,
           availableDays: current?.available_days ?? 0,
           expiringDays: (current?.buckets ?? [])
             .filter((b) => b.expires_month === month)

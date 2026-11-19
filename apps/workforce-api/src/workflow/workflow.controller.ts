@@ -151,7 +151,7 @@ export class LeaveController {
     @Param('leaveTypeId') leaveTypeId: string,
     @Body(zodPipe(setHolidayValidMonthsSchema)) body: z.infer<typeof setHolidayValidMonthsSchema>,
   ): Promise<Record<string, unknown>> {
-    return this.service.setHolidayValidMonths(requireUuid(leaveTypeId, 'leaveTypeId'), body.months);
+    return this.service.setHolidayValidMonths(requireUuid(leaveTypeId, 'leaveTypeId'), body.months, body.year_carry_months);
   }
 
   /** ลงกระชั้นชิดต้องรออนุมัติ (Day-Off ลงของวันนี้/พรุ่งนี้) — 0 = ปิด */

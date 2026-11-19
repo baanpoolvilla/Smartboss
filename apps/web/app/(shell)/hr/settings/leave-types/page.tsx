@@ -363,12 +363,13 @@ export default async function LeaveTypesSettingsPage({
                   currentId={accruing[0]?.id ?? null}
                   startsLabel={monthLabel(accruing[0]?.accrual_starts_on)}
                   validMonths={accruing[0]?.holiday_valid_months ?? 3}
+                  yearCarryMonths={accruing[0]?.holiday_year_carry_months ?? null}
                   validMonthsAction={setHolidayValidMonthsAction}
                 />
               )}
               {canManage &&
                 allowanceTables.map(({ type, months }) => (
-                  <HolidayAllowances key={type.id} companyId={companyId} leaveTypeId={type.id} leaveTypeName={type.name} year={year} months={months} validMonths={type.holiday_valid_months ?? 3} />
+                  <HolidayAllowances key={type.id} companyId={companyId} leaveTypeId={type.id} leaveTypeName={type.name} year={year} months={months} validMonths={type.holiday_valid_months ?? 3} yearCarryMonths={type.holiday_year_carry_months ?? null} />
                 ))}
               {canManage && accruing[0] && balances && (
                 <HolidayBalances

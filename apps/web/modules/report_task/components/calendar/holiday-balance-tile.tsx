@@ -9,6 +9,8 @@ interface HolidayBalance {
   expiringDays: number;
   /** สิทธิ์ของแต่ละเดือนใช้ได้กี่เดือน (บริษัทตั้ง) — ระบบรุ่นเก่าไม่ส่งมา = 3 */
   validMonths?: number;
+  /** ตัดตามรอบปี — null/ไม่มี = ไม่ตัด */
+  yearCarryMonths?: number | null;
 }
 
 /**
@@ -47,7 +49,13 @@ export function HolidayBalanceTile({ balance, onOpen }: { balance: HolidayBalanc
       title={
         balance.expiringDays > 0
           ? `${balance.expiringDays} วันต้องใช้ภายในเดือนนี้ ไม่งั้นถูกตัดทิ้ง`
-          : `สิทธิ์ของแต่ละเดือนใช้ได้ภายใน ${balance.validMonths ?? 3} เดือน`
+          : `สิทธิ์ของแต่ละเดือนใช้ได้ภายใน ${balance.validMonths ?? 3} เดือน${
+              balance.yearCarryMonths === 0
+                ? " · ไม่ทบข้ามปี"
+                : typeof balance.yearCarryMonths === "number"
+                  ? ` · ของแต่ละปีใช้ข้ามปีได้ไม่เกินสิ้น${["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย."][balance.yearCarryMonths - 1]}`
+                  : ""
+            }`
       }
     >
       <p className="text-lg font-semibold tabular-nums">{balance.availableDays}</p>

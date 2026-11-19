@@ -8,6 +8,7 @@ import { CLOCK } from '../shared/tokens';
 import {
   holidayAvailability,
   validMonthsOf,
+  yearCarryOf,
   type HolidayGrant,
   monthIndex,
   monthOfIndex,
@@ -406,23 +407,37 @@ export class LeaveService {
    * Holiday แบบสะสม: สิทธิ์ของแต่ละเดือนใช้ได้กี่เดือน (นับรวมเดือนนั้น 1–12) — ผู้ใช้ 19/11/2569
    * ยอดคิดใหม่ทุกครั้งจากสิทธิ์รายเดือน + ใบที่ลงไว้ ⇒ เปลี่ยนแล้วมีผลทันทีกับทุกคน (ขยาย = สิทธิ์ที่เพิ่งหมดกลับมา)
    */
-  async setHolidayValidMonths(leaveTypeId: string, months: number): Promise<Record<string, unknown>> {
+  async setHolidayValidMonths(
+    leaveTypeId: string,
+    months: number,
+    yearCarryMonths?: number | null,
+  ): Promise<Record<string, unknown>> {
     return this.uow.run(async (uow) => {
       const types = await uow.tx.select().from(schema.leaveTypes).where(eq(schema.leaveTypes.id, leaveTypeId)).limit(1);
       const type = types[0];
       if (type === undefined) throw AppError.notFound('leave type');
       if (!type.accruesFromHolidays) throw AppError.validation('leave type does not accrue from holidays');
-      await uow.tx.update(schema.leaveTypes).set({ holidayValidMonths: months }).where(eq(schema.leaveTypes.id, leaveTypeId));
+      await uow.tx
+        .update(schema.leaveTypes)
+        .set({ holidayValidMonths: months, ...(yearCarryMonths !== undefined ? { holidayYearCarryMonths: yearCarryMonths } : {}) })
+        .where(eq(schema.leaveTypes.id, leaveTypeId));
       await uow.audit({
         action: 'leave.type.holiday_valid_months',
         resourceType: 'leave_type',
         resourceId: leaveTypeId,
         outcome: 'SUCCESS',
         companyId: type.companyId,
-        before: { holiday_valid_months: type.holidayValidMonths },
-        after: { holiday_valid_months: months },
+        before: { holiday_valid_months: type.holidayValidMonths, holiday_year_carry_months: type.holidayYearCarryMonths },
+        after: {
+          holiday_valid_months: months,
+          holiday_year_carry_months: yearCarryMonths !== undefined ? yearCarryMonths : type.holidayYearCarryMonths,
+        },
       });
-      return { id: leaveTypeId, holiday_valid_months: months };
+      return {
+        id: leaveTypeId,
+        holiday_valid_months: months,
+        holiday_year_carry_months: yearCarryMonths !== undefined ? yearCarryMonths : type.holidayYearCarryMonths,
+      };
     });
   }
 
@@ -761,7 +776,7 @@ export class LeaveService {
   private async holidayLedger(
     tx: Tx,
     employment: { id: string; companyId: string; hiredOn: string },
-    leaveType: { id: string; accrualStartsOn: string | null; holidayValidMonths?: number | null },
+    leaveType: { id: string; accrualStartsOn: string | null; holidayValidMonths?: number | null; holidayYearCarryMonths?: number | null },
     fromMonth: string,
     toMonth: string,
     excludeRequestId?: string,
@@ -808,7 +823,7 @@ export class LeaveService {
     // + วันที่ HR เพิ่มให้คนนี้ (leave_person_grants) — ไม่มี = เหมือนเดิม
     const person = (await this.personGrants(tx, leaveTypeId)).get(employment.id);
     const grants = withPersonGrants(onlyFrom(companyGrants, start), person);
-    return { from: earliestWithPersonGrants(start, person, validMonths), to: end, grants, usage, validMonths };
+    return { from: earliestWithPersonGrants(start, person, validMonths), to: end, grants, usage, validMonths, yearCarryMonths: yearCarryOf(leaveType.holidayYearCarryMonths) };
   }
 
   /**
@@ -966,7 +981,7 @@ export class LeaveService {
         const person = personGrants.get(employment.id);
         const mine = withPersonGrants(onlyFrom(grants, from), person);
         const { available_days, buckets } = holidayAvailability(
-          { from: earliestWithPersonGrants(from, person, validMonths), to: lastMonth, grants: mine, usage, validMonths },
+          { from: earliestWithPersonGrants(from, person, validMonths), to: lastMonth, grants: mine, usage, validMonths, yearCarryMonths: yearCarryOf(type.holidayYearCarryMonths) },
           month,
         );
         items.push({
@@ -1805,6 +1820,7 @@ export class LeaveService {
           monthly_quota_days: row.monthlyQuotaDays,
           accrues_from_holidays: row.accruesFromHolidays,
           holiday_valid_months: row.holidayValidMonths,
+          holiday_year_carry_months: row.holidayYearCarryMonths,
           yearly_entitlement: row.yearlyEntitlement,
           approval_notice_days: row.approvalNoticeDays,
           accrual_starts_on: row.accrualStartsOn,

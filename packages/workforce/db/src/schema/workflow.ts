@@ -41,6 +41,8 @@ export const leaveTypes = workforce.table('leave_types', {
   accruesFromHolidays: boolean('accrues_from_holidays').notNull().default(false),
   /** Holiday แบบสะสม: สิทธิ์ของแต่ละเดือนใช้ได้กี่เดือน นับรวมเดือนนั้น (1–12 · migration 0023 · ค่าเดิม 3) */
   holidayValidMonths: integer('holiday_valid_months').notNull().default(3),
+  /** Holiday ตัดตามรอบปี: สิทธิ์ของปี Y ใช้ได้ถึงสิ้นเดือนที่ C ของปี Y+1 (0 = สิ้น ธ.ค. ปีเดียวกัน) · null = ไม่ตัด (migration 0024) */
+  holidayYearCarryMonths: integer('holiday_year_carry_months'),
   /** มีสิทธิ์รายคนรายปี (ลาพักร้อน) — จำนวนวันอยู่ใน leave_balance_ledger (migration 0021) */
   yearlyEntitlement: boolean('yearly_entitlement').notNull().default(false),
   /** เดือนแรกที่เริ่มนับสิทธิ์สะสม (วันแรกของเดือน) — ตั้งตอนเปิดใช้ครั้งแรก ก่อนหน้านี้ไม่นับย้อนหลัง */

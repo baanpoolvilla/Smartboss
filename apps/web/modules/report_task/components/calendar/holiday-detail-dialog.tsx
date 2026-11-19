@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/modules/report_task/components/ui/dialog";
 import { Button } from "@/modules/report_task/components/ui/button";
-import { holidayValidityText } from "@/modules/hr/lib/holiday-valid-months";
+import { holidayValidityText, naturalExpiryMonth, yearCarryRuleText } from "@/modules/hr/lib/holiday-valid-months";
 
 interface HolidayGrantDetail {
   month: string;
@@ -19,6 +19,7 @@ interface HolidayDetail {
   availableDays: number;
   expiringDays: number;
   validMonths?: number;
+  yearCarryMonths?: number | null;
   grants?: HolidayGrantDetail[];
   used?: { startsOn: string; endsOn: string; days: number; pending: boolean }[];
 }
@@ -93,6 +94,15 @@ export function HolidayDetailDialog({
   const granted = grants.reduce((sum, g) => sum + g.grantedDays, 0);
   const usedDays = grants.reduce((sum, g) => sum + (g.grantedDays - g.remainingDays), 0);
   const nextExpiring = grants.find((g) => g.remainingDays > 0);
+  // สิทธิ์ที่หมดเร็วกว่าปกติเพราะตัดตามรอบปี (ผู้ใช้ 19/11/2569 — ให้พนักงานรู้ว่าทำไมหมดก่อนครบเดือน)
+  const yearCut = (g: HolidayGrantDetail) => g.expiresMonth < naturalExpiryMonth(g.month, detail?.validMonths ?? 3);
+  // หลายก้อนหมดเดือนเดียวกันได้ (ตัดตามรอบปี: ของ พ.ย. กับ ธ.ค. หมดสิ้น ม.ค. พร้อมกัน) — รวมทุกก้อนในป้ายเตือน
+  const expiringGroup = nextExpiring ? grants.filter((g) => g.remainingDays > 0 && g.expiresMonth === nextExpiring.expiresMonth) : [];
+  const expiringDays = expiringGroup.reduce((sum, g) => sum + g.remainingDays, 0);
+  const beYear = Number(month.slice(0, 4)) + 543;
+  // ช่วงต้นปี ยังมีสิทธิ์ของปีก่อนค้าง → บอกกติกาของปีก่อน · ปลายปี → บอกของปีนี้
+  const ruleYear = grants.some((g) => g.remainingDays > 0 && Number(g.month.slice(0, 4)) + 543 < beYear) ? beYear - 1 : beYear;
+  const yearRule = yearCarryRuleText(detail?.yearCarryMonths, ruleYear);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -120,7 +130,13 @@ export function HolidayDetailDialog({
                   className="mt-2 rounded-lg px-3 py-2 text-xs font-medium"
                   style={{ background: "var(--bg-soft)", color: "var(--tone-warn)" }}
                 >
-                  {nextExpiring.remainingDays} วันต้องใช้ภายใน {endOfMonthLong(nextExpiring.expiresMonth)} ไม่งั้นถูกตัดทิ้ง
+                  {expiringDays} วันต้องใช้ภายใน {endOfMonthLong(nextExpiring.expiresMonth)} ไม่งั้นถูกตัดทิ้ง
+                  {expiringGroup.some(yearCut) ? " (ตัดตามรอบปี)" : ""}
+                </p>
+              )}
+              {yearRule && (
+                <p className="mt-2 rounded-lg border border-[var(--line)] px-3 py-2 text-xs" data-testid="holiday-year-rule">
+                  {yearRule}
                 </p>
               )}
             </div>
@@ -146,7 +162,9 @@ export function HolidayDetailDialog({
                               : { background: "var(--accent)", color: "var(--brand-green-dark)" }
                           }
                         >
-                          {g.remainingDays === 0 ? "ใช้หมดแล้ว" : `เหลือ ${g.remainingDays} · ใช้ได้ถึงสิ้น ${monthShort(g.expiresMonth)}`}
+                          {g.remainingDays === 0
+                            ? "ใช้หมดแล้ว"
+                            : `เหลือ ${g.remainingDays} · ใช้ได้ถึงสิ้น ${monthShort(g.expiresMonth)}${yearCut(g) ? " (ตัดตามรอบปี)" : ""}`}
                         </span>
                       </div>
                       <div
@@ -202,6 +220,7 @@ export function HolidayDetailDialog({
               <ul className="list-disc space-y-0.5 pl-5 text-xs leading-relaxed text-[var(--ink-soft)]">
                 <li>แต่ละเดือนได้ {detail.name} เท่าจำนวนวันหยุดนักขัตฤกษ์ของเดือนนั้น (ตามปฏิทินวันหยุดบริษัท)</li>
                 <li>{holidayValidityText(detail.validMonths)}</li>
+                {yearRule && <li>{yearRule}</li>}
                 <li>ลงวันหยุดเมื่อไหร่ ระบบหักจากสิทธิ์ที่ใกล้หมดอายุก่อน</li>
                 <li>ตัววันหยุดราชการเองเป็นวันทำงานปกติ เลือกหยุดวันอื่นแทน</li>
               </ul>

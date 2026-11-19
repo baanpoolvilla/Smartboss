@@ -63,6 +63,8 @@ export const setLeaveTypeApprovalNoticeSchema = z.object({
 /** Holiday แบบสะสม: สิทธิ์ของแต่ละเดือนใช้ได้กี่เดือน (นับรวมเดือนนั้น) — ผู้ใช้ 19/11/2569 */
 export const setHolidayValidMonthsSchema = z.object({
   months: z.number().int().min(1).max(12),
+  /** ตัดตามรอบปี: สิทธิ์ของปีหนึ่งใช้ได้ถึงสิ้นเดือนที่ N ของปีถัดไป (0 = สิ้น ธ.ค. ปีเดียวกัน) · null = ไม่ตัด · ไม่ส่ง = ไม่แก้ */
+  year_carry_months: z.number().int().min(0).max(11).nullable().optional(),
 });
 
 /** เปิด/ปิดสิทธิ์รายคนรายปีของประเภทลา (เช่น ลาพักร้อน) */

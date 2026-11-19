@@ -18,6 +18,24 @@ describe('holidayAvailability', () => {
     expect(available('2026-09')).toBe(3);
   });
 
+  it('ตัดตามรอบปี: ของ ธ.ค. 69 ใช้ได้ถึงสิ้น ม.ค. 70 (ไม่ถึง ก.พ.) · ของ พ.ย. ถึงสิ้น ม.ค. ตามปกติ', () => {
+    const g = new Map([
+      ['2026-11', 1],
+      ['2026-12', 2],
+    ]);
+    const at = (month: string, yearCarryMonths: number | null) =>
+      holidayAvailability({ from: '2026-01', to: month, grants: g, usage: new Map(), validMonths: 3, yearCarryMonths }, month);
+    expect(at('2027-01', 1).available_days).toBe(3);
+    expect(at('2027-01', 1).buckets.find((b) => b.month === '2026-12')?.expires_month).toBe('2027-01');
+    expect(at('2027-02', 1).available_days).toBe(0);
+    expect(at('2027-02', 1).grants).toHaveLength(0);
+    // ไม่ตัด = แบบเดิม: ของ ธ.ค. ยังใช้ได้ใน ก.พ.
+    expect(at('2027-02', null).available_days).toBe(2);
+    // 0 = ตัดสิ้น ธ.ค. ปีเดียวกัน
+    expect(at('2027-01', 0).available_days).toBe(0);
+    expect(at('2026-12', 0).buckets.find((b) => b.month === '2026-12')?.expires_month).toBe('2026-12');
+  });
+
   it('ตั้งจำนวนเดือนเองได้ (validMonths) — 6 เดือน: ของ ก.ค. ใช้ได้ถึงสิ้น ธ.ค. · 1 เดือน: ใช้ได้แค่เดือนนั้น', () => {
     const at = (month: string, validMonths: number) =>
       holidayAvailability({ from: '2026-01', to: month, grants, usage: new Map(), validMonths }, month);
