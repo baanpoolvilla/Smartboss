@@ -11,7 +11,6 @@ import { mimeFromLegacyTaskLabel } from "@/modules/report_task/lib/report-attach
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
 import { KanbanColumn, type BoardColumn } from "@/modules/report_task/components/kanban/kanban-column";
 import { buildStatusColumns } from "@/modules/report_task/components/kanban/status-columns";
-import { sortTasksByDueForBoard } from "@/modules/report_task/lib/task-flags";
 import { chartColors } from "@/modules/report_task/lib/chart-colors";
 import { getUser } from "@/modules/report_task/lib/directory";
 import { dayNum, dayToIso, depRuleLabel, isTopLevel, withSubtasks, ymdOfDay, type TimelineItem } from "@/modules/report_task/lib/project-schedule";
@@ -227,17 +226,26 @@ export function BoardTab({ project, items, canEdit, onOpen }: { project: Project
   const [by, setBy] = useState<"section" | "status">("section");
   // บอร์ดโชว์งานหลัก — งานย่อยดูจาก "งานย่อย n/m" บนการ์ด (กดเปิดงานหลักเห็นครบ)
   const tasks = items.filter((i) => i.kind === "task" && i.task && !i.parentId).map((i) => i.task!);
-  // คอลัมน์ชุดเดียวกับบอร์ดงานหลัก (ผู้ใช้ 19/11/2569 "จัดให้เหมือน task") — ตามสถานะ = 4 คอลัมน์ มี "รอตรวจสอบ"
+  // หน้าตาคอลัมน์ (หัวสี/ตัวเลข/การ์ด) ชุดเดียวกับบอร์ดงานหลัก — ผู้ใช้ 19/11/2569 "เปลี่ยนแค่สี คงที่เหลือแบบเดิม"
+  // ⇒ ตามสถานะยังเป็น 3 คอลัมน์เดิม (ต้องทำ / กำลังทำ / เสร็จแล้ว) ลากไปเสร็จแล้วได้เหมือนเดิม · สีหัวคอลัมน์ใช้ของบอร์ดหลัก
+  const accentOf = new Map(buildStatusColumns([]).map((c) => [c.id, { accent: c.accent, icon: c.icon }]));
   const cols: BoardColumn[] =
     by === "section"
       ? project.sections.map((s) => ({
           id: s.id,
           label: s.name,
           accent: chartColors.gray,
-          tasks: sortTasksByDueForBoard(tasks.filter((t) => t.project?.sectionId === s.id)),
-          emptyMessage: "ยังไม่มีงานในช่วงนี้",
+          tasks: tasks.filter((t) => t.project?.sectionId === s.id),
+          emptyMessage: "ว่าง",
         }))
-      : buildStatusColumns(tasks);
+      : ([["todo", "ต้องทำ"], ["in_progress", "กำลังทำ"], ["done", "เสร็จแล้ว"]] as const).map(([k, l]) => ({
+          id: k,
+          label: l,
+          accent: accentOf.get(k)?.accent ?? chartColors.gray,
+          icon: accentOf.get(k)?.icon,
+          tasks: tasks.filter((t) => t.status === k),
+          emptyMessage: "ว่าง",
+        }));
   function drop(col: string, taskId: string) {
     const t = tasks.find((x) => x.id === taskId);
     if (!t) return;
@@ -245,15 +253,9 @@ export function BoardTab({ project, items, canEdit, onOpen }: { project: Project
       if (t.project?.sectionId === col) return;
       setTaskProject(t.id, { ...t.project!, sectionId: col }, me);
       toast.success(`ย้าย "${t.title}" ไปช่วง ${project.sections.find((s) => s.id === col)?.name}`);
-      return;
+    } else if (t.status !== col) {
+      moveTask(t.id, col as TaskStatus);
     }
-    // "รอตรวจสอบ" = ส่งงานเสร็จ (สถานะ done แล้วรอคนตรวจ) · "เสร็จสิ้น" ได้หลังผ่านการตรวจเท่านั้น — ลากไปตรง ๆ ไม่ได้
-    if (col === "done" && t.status !== "done") {
-      toast.info("งานไป \"เสร็จสิ้น\" หลังผ่านการตรวจ — ลากไป \"รอตรวจสอบ\" เพื่อส่งงาน");
-      return;
-    }
-    const status: TaskStatus = col === "review" ? "done" : (col as TaskStatus);
-    if (t.status !== status) moveTask(t.id, status);
   }
   return (
     <div className="space-y-2">
