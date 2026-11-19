@@ -52,6 +52,8 @@ export function ProjectsPortfolio() {
           p, status: projectStatusOf(p, items), pct: progressOf(items), next: nextMilestoneOf(items), count: tasksOnly.length,
           late: tasksOnly.filter((i) => i.state === "late").length,
           mine: tasksOnly.filter((i) => i.state !== "done" && i.assigneeIds.includes(me)).length,
+          // ผู้เกี่ยวข้อง (ผู้ใช้ 19/11/2569): สมาชิก + คนที่มีงานในโปรเจกต์ ไม่รวมผู้ดูแล (โชว์แยกด้านหน้า)
+          people: [...new Set([...p.members.map((m) => m.userId), ...tasksOnly.flatMap((i) => i.assigneeIds)])].filter((id) => id !== p.ownerId && !!getUser(id)),
           timePct, daysLeft: dayNum(p.endDate) - dayNum(today),
           // วันนับจากอัปเดตสถานะล่าสุด (ไม่เคยอัปเดต = นับจากวันเริ่มโปรเจกต์)
           staleDays: dayNum(today) - dayNum(([...p.updates].sort((a, b) => b.at.localeCompare(a.at))[0]?.at.slice(0, 10)) ?? p.startDate),
@@ -140,7 +142,7 @@ export function ProjectsPortfolio() {
   );
 }
 
-type Row = { p: Project; status: ProjectStatus; pct: number; next?: TimelineItem; count: number; late: number; mine: number; timePct: number; daysLeft: number; staleDays: number };
+type Row = { p: Project; status: ProjectStatus; pct: number; next?: TimelineItem; count: number; late: number; mine: number; people: string[]; timePct: number; daysLeft: number; staleDays: number };
 
 type Focus = "all" | "late" | "risk" | "stale";
 const FOCUS_LABEL: Record<Focus, string> = { all: "ทั้งหมด", late: "ล่าช้า", risk: "อาจไม่ทัน", stale: "ไม่อัปเดตเกิน 7 วัน" };
@@ -249,9 +251,23 @@ function ProjectCard({ r, today, pending }: { r: Row; today: string; pending: Pr
       </div>
       {pending.length > 0 && <div className="-mt-1.5"><PendingTag items={pending} /></div>}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-[var(--ink-soft)]">
-        <span className="inline-flex items-center gap-1.5"><PersonDot userId={p.ownerId} size={20} /><span className="text-[var(--ink)]">{getUser(p.ownerId)?.name ?? "—"}</span></span>
+        <span className="inline-flex items-center gap-1.5" title="ผู้ดูแลโปรเจกต์"><PersonDot userId={p.ownerId} size={20} /><span className="text-[var(--ink)]">{getUser(p.ownerId)?.name ?? "—"}</span></span>
         <span className="tabular-nums">{fmtDay(p.startDate)} – {fmtDay(p.endDate, true)}</span>
       </div>
+      {/* ผู้เกี่ยวข้อง: รูปซ้อนกันสูงสุด 6 คน เกินนั้นเป็น +N · ชี้ที่รูปเห็นชื่อ · ชี้ทั้งแถวเห็นชื่อทุกคน */}
+      {r.people.length > 0 && (
+        <div className="-mt-1 flex items-center gap-2 text-[12.5px] text-[var(--ink-soft)]" title={r.people.map((id) => getUser(id)?.name).join(", ")}>
+          <span className="flex items-center -space-x-1.5 [&>*]:ring-2 [&>*]:ring-[var(--bg)]">
+            {r.people.slice(0, 6).map((id) => <PersonDot key={id} userId={id} size={22} />)}
+            {r.people.length > 6 && (
+              <span className="inline-grid h-[22px] min-w-[22px] place-items-center rounded-full bg-[var(--bg-soft)] px-1 text-[10.5px] font-semibold text-[var(--ink-soft)]">+{r.people.length - 6}</span>
+            )}
+          </span>
+          <span className="min-w-0 truncate">
+            {r.people.length <= 2 ? r.people.map((id) => getUser(id)?.name).join(", ") : `ผู้เกี่ยวข้อง ${r.people.length} คน`}
+          </span>
+        </div>
+      )}
 
       {/* คืบหน้า (เขียว) เทียบเวลาที่ผ่านไป (เส้นดำ) */}
       <div className="grid gap-1.5">

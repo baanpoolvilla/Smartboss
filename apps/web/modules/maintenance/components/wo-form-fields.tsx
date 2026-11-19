@@ -36,6 +36,9 @@ export function WoRequiredGuard() {
         missing.push({ text: "บ้าน (อย่างน้อย 1 หลัง)", el: form.querySelector("[data-wo-field='house']") });
       const assignee = form.querySelector<HTMLSelectElement>('select[name="assignedTo"]');
       if (assignee && !assignee.disabled && !assignee.value) missing.push({ text: "ผู้รับผิดชอบ", el: assignee });
+      // กำหนดส่งบังคับ (req 19/11/2569 "เปิดใบงานแล้วต้องบังคับให้เลือกวันจบงาน")
+      const due = form.querySelector<HTMLInputElement>('input[name="dueDate"]');
+      if (due && !due.value) missing.push({ text: "กำหนดส่ง", el: form.querySelector("[data-wo-field='due']") });
       if (missing.length === 0) return;
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -170,9 +173,9 @@ export function WoDueDateField({ defaultValue, minDate }: { defaultValue?: strin
             <DatePickerField value={minDate} onChange={() => {}} className="h-10 px-2 text-[13px] text-(--ink) max-[359px]:[&>svg]:hidden sm:px-3 sm:text-sm" />
           </div>
         </div>
-        <div className="flex min-w-0 flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1" data-wo-field="due">
           <span className="flex items-center justify-between gap-2 text-xs text-(--ink-soft)">
-            กำหนดส่ง
+            กำหนดส่ง *
             {value && (
               <button type="button" onClick={() => setValue("")} className="hover:underline">
                 ล้าง
@@ -183,7 +186,7 @@ export function WoDueDateField({ defaultValue, minDate }: { defaultValue?: strin
         </div>
       </div>
       <input type="hidden" name="dueDate" value={value} />
-      <span className="text-[11px] text-(--ink-soft)" data-testid="wo-due-hint">ไม่ใส่ก็ได้ · เลยกำหนดหักคะแนน</span>
+      <span className="text-[11px] text-(--ink-soft)" data-testid="wo-due-hint">ต้องเลือกวันจบงาน · เลยกำหนดหักคะแนน</span>
     </div>
   );
 }

@@ -194,6 +194,9 @@ export async function createWorkOrderAction(formData: FormData) {
     throw new Error("วันครบกำหนดย้อนหลังไม่ได้ — ตั้งเป็นวันนี้หรือหลังจากนี้");
   }
   const dueDate = parseDueDate(d.dueDate);
+  // req 19/11/2569: เปิดใบงานต้องมีวันจบงาน — ฟอร์มบังคับแล้ว ตรงนี้กันคำขอที่ยิงตรงมา
+  // (ใบที่ระบบเปิดเอง เช่น PM ไม่ผ่านฟังก์ชันนี้ ไม่กระทบ)
+  if (!dueDate) throw new Error("เลือกกำหนดส่ง (วันจบงาน) ก่อนสร้างใบแจ้งซ่อม");
 
   const photoFiles = formData.getAll("photos").filter((f): f is File => f instanceof File);
   const photoUrls = await putFiles(`${s.orgId}/maintenance/work-orders`, photoFiles);
