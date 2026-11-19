@@ -11,7 +11,7 @@ import { dueUrgency } from "@/modules/report_task/lib/task-flags";
 import { chartColors } from "@/modules/report_task/lib/chart-colors";
 import { cn } from "@/modules/report_task/lib/utils";
 import type { Task, TaskStatus } from "@/modules/report_task/types";
-import { useMemo } from "react";
+import { useMemo, useState, type DragEvent } from "react";
 import { Clock, MessageCircle } from "lucide-react";
 import { pendingDueRequestsOf } from "@/modules/report_task/lib/pending-due-request";
 import { useNotificationStore } from "@/modules/report_task/store/notification-store";
@@ -135,6 +135,8 @@ export function KanbanColumn({
   groupedByPriority,
   groupedByStatus,
   hideHeaderOnMobile,
+  hideProjectChip,
+  onCardDrop,
 }: {
   column: BoardColumn;
   /** Every task currently on the board (post-filter) — the denominator for this column's "N% ของบอร์ด" bar. */
@@ -166,7 +168,12 @@ export function KanbanColumn({
   groupedByStatus?: boolean;
   /** มือถือ (<640px): ซ่อนการ์ดหัวคอลัมน์ — แถบแท็บของบอร์ดบอกชื่อ+จำนวนแทนแล้ว (ดู kanban-board.tsx) */
   hideHeaderOnMobile?: boolean;
+  /** บอร์ดในหน้าโปรเจกต์: ไม่ต้องขึ้นชิปชื่อโปรเจกต์บนการ์ด (อยู่ในโปรเจกต์นั้นอยู่แล้ว) */
+  hideProjectChip?: boolean;
+  /** บอร์ดในหน้าโปรเจกต์: ลากการ์ดมาวางคอลัมน์นี้ได้ (ไม่ใส่ = บอร์ดหลักเหมือนเดิม ลากไม่ได้) */
+  onCardDrop?: (taskId: string) => void;
 }) {
+  const [dropOver, setDropOver] = useState(false);
   const accent = column.accent;
   // คอมเมนต์ที่ยังไม่อ่านในคอลัมน์นี้ — ขึ้นแทนป้ายจำนวนงานทางขวา (จำนวนงานย้ายไปไว้หน้าชื่อแทนไอคอน)
   const unreadMap = useUnreadCommentMap();
@@ -286,7 +293,25 @@ export function KanbanColumn({
       // place on swipe (see KanbanBoard's `snap-x snap-mandatory` scroller +
       // its own pager buttons) — ≥640px reverts to the original fixed-width
       // lane sitting side-by-side with the others.
-      className="flex h-full min-h-0 flex-1 basis-full min-w-full max-w-full sm:basis-[300px] sm:min-w-[280px] sm:max-w-[400px] shrink-0 flex-col snap-center sm:snap-none transition-shadow duration-500"
+      className={cn(
+        "flex h-full min-h-0 flex-1 basis-full min-w-full max-w-full sm:basis-[300px] sm:min-w-[280px] sm:max-w-[400px] shrink-0 flex-col snap-center sm:snap-none transition-shadow duration-500",
+        dropOver && "rounded-xl ring-2 ring-[var(--brand-navy,#1e3a6e)]"
+      )}
+      {...(onCardDrop
+        ? {
+            onDragOver: (e: DragEvent) => {
+              e.preventDefault();
+              setDropOver(true);
+            },
+            onDragLeave: () => setDropOver(false),
+            onDrop: (e: DragEvent) => {
+              e.preventDefault();
+              setDropOver(false);
+              const id = e.dataTransfer.getData("text/task");
+              if (id) onCardDrop(id);
+            },
+          }
+        : {})}
     >
       {(() => {
         // ทั้งการ์ดหัวคอลัมน์กดได้เลยตอนมี onHeaderClick (คนดูเรื่องผู้รับผิดชอบ/
@@ -440,11 +465,23 @@ export function KanbanColumn({
             {visibleEntries.map((e) =>
               e.type === "mx" ? (
                 <MaintenanceCard key={`mx-${e.item.kind}-${e.item.id}`} item={e.item} />
+              ) : onCardDrop ? (
+                <div key={e.task.id} draggable onDragStart={(ev) => ev.dataTransfer.setData("text/task", e.task.id)}>
+                  <TaskCard
+                    task={e.task}
+                    onOpen={onOpen}
+                    showOriginalStatus={column.derived}
+                    groupedByPriority={groupedByPriority}
+                    dimWhenDone={!groupedByStatus}
+                    hideProjectChip={hideProjectChip}
+                  />
+                </div>
               ) : (
               <TaskCard
                 key={e.task.id}
                 task={e.task}
                 onOpen={onOpen}
+                hideProjectChip={hideProjectChip}
                 showOriginalStatus={column.derived}
                 groupedByPriority={groupedByPriority}
                 // A done card fades so it visually "settles" next to open ones —

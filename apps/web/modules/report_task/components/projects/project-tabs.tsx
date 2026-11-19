@@ -9,7 +9,10 @@ import { DocAttachmentCard } from "@/modules/report_task/components/report-feed/
 import { mimeFromLegacyTaskLabel } from "@/modules/report_task/lib/report-attachment-kind";
 
 import { DatePickerField } from "@/modules/report_task/components/shared/date-picker-field";
-import { TaskCard } from "@/modules/report_task/components/kanban/task-card";
+import { KanbanColumn, type BoardColumn } from "@/modules/report_task/components/kanban/kanban-column";
+import { buildStatusColumns } from "@/modules/report_task/components/kanban/status-columns";
+import { sortTasksByDueForBoard } from "@/modules/report_task/lib/task-flags";
+import { chartColors } from "@/modules/report_task/lib/chart-colors";
 import { getUser } from "@/modules/report_task/lib/directory";
 import { dayNum, dayToIso, depRuleLabel, isTopLevel, withSubtasks, ymdOfDay, type TimelineItem } from "@/modules/report_task/lib/project-schedule";
 import { uuid } from "@/modules/report_task/lib/uuid";
@@ -222,13 +225,19 @@ export function BoardTab({ project, items, canEdit, onOpen }: { project: Project
   const setTaskProject = useTaskStore((s) => s.setTaskProject);
   const moveTask = useTaskStore((s) => s.moveTask);
   const [by, setBy] = useState<"section" | "status">("section");
-  const [over, setOver] = useState<string | null>(null);
   // บอร์ดโชว์งานหลัก — งานย่อยดูจาก "งานย่อย n/m" บนการ์ด (กดเปิดงานหลักเห็นครบ)
   const tasks = items.filter((i) => i.kind === "task" && i.task && !i.parentId).map((i) => i.task!);
-  const cols =
+  // คอลัมน์ชุดเดียวกับบอร์ดงานหลัก (ผู้ใช้ 19/11/2569 "จัดให้เหมือน task") — ตามสถานะ = 4 คอลัมน์ มี "รอตรวจสอบ"
+  const cols: BoardColumn[] =
     by === "section"
-      ? project.sections.map((s) => ({ key: s.id, label: s.name, list: tasks.filter((t) => t.project?.sectionId === s.id) }))
-      : ([["todo", "ต้องทำ"], ["in_progress", "กำลังทำ"], ["done", "เสร็จแล้ว"]] as const).map(([k, l]) => ({ key: k, label: l, list: tasks.filter((t) => t.status === k) }));
+      ? project.sections.map((s) => ({
+          id: s.id,
+          label: s.name,
+          accent: chartColors.gray,
+          tasks: sortTasksByDueForBoard(tasks.filter((t) => t.project?.sectionId === s.id)),
+          emptyMessage: "ยังไม่มีงานในช่วงนี้",
+        }))
+      : buildStatusColumns(tasks);
   function drop(col: string, taskId: string) {
     const t = tasks.find((x) => x.id === taskId);
     if (!t) return;
@@ -236,9 +245,15 @@ export function BoardTab({ project, items, canEdit, onOpen }: { project: Project
       if (t.project?.sectionId === col) return;
       setTaskProject(t.id, { ...t.project!, sectionId: col }, me);
       toast.success(`ย้าย "${t.title}" ไปช่วง ${project.sections.find((s) => s.id === col)?.name}`);
-    } else if (t.status !== col) {
-      moveTask(t.id, col as TaskStatus);
+      return;
     }
+    // "รอตรวจสอบ" = ส่งงานเสร็จ (สถานะ done แล้วรอคนตรวจ) · "เสร็จสิ้น" ได้หลังผ่านการตรวจเท่านั้น — ลากไปตรง ๆ ไม่ได้
+    if (col === "done" && t.status !== "done") {
+      toast.info("งานไป \"เสร็จสิ้น\" หลังผ่านการตรวจ — ลากไป \"รอตรวจสอบ\" เพื่อส่งงาน");
+      return;
+    }
+    const status: TaskStatus = col === "review" ? "done" : (col as TaskStatus);
+    if (t.status !== status) moveTask(t.id, status);
   }
   return (
     <div className="space-y-2">
@@ -246,21 +261,17 @@ export function BoardTab({ project, items, canEdit, onOpen }: { project: Project
         <div className={segWrap}><button type="button" className={seg(by === "section")} onClick={() => setBy("section")}>ตามช่วงงาน</button><button type="button" className={seg(by === "status")} onClick={() => setBy("status")}>ตามสถานะ</button></div>
         <span className="text-xs text-[var(--ink-soft)]">การ์ดชุดเดียวกับบอร์ดงานหลัก{canEdit ? " · ลากการ์ดไปคอลัมน์อื่นได้" : ""}</span>
       </div>
-      <div className="flex gap-3 overflow-x-auto pb-2">
+      <div className="flex items-stretch gap-4 overflow-x-auto pb-2 snap-x snap-mandatory sm:snap-none">
         {cols.map((c) => (
-          <div key={c.key}
-            onDragOver={(e) => { if (canEdit) { e.preventDefault(); setOver(c.key); } }}
-            onDragLeave={() => setOver((o) => (o === c.key ? null : o))}
-            onDrop={(e) => { e.preventDefault(); setOver(null); drop(c.key, e.dataTransfer.getData("text/task")); }}
-            className={cn("grid w-72 shrink-0 content-start gap-2 rounded-xl bg-[var(--bg-soft)] p-2.5", over === c.key && "ring-2 ring-[var(--brand-green)]")}>
-            <div className="flex justify-between text-xs font-semibold text-[var(--ink-soft)]"><span className="truncate">{c.label}</span><span>{c.list.length}</span></div>
-            {c.list.map((t) => (
-              <div key={t.id} draggable={canEdit} onDragStart={(e) => e.dataTransfer.setData("text/task", t.id)}>
-                <TaskCard task={t} onOpen={onOpen} hideProjectChip />
-              </div>
-            ))}
-            {!c.list.length && <p className="m-0 py-4 text-center text-xs text-[var(--ink-soft)]">ว่าง</p>}
-          </div>
+          <KanbanColumn
+            key={c.id}
+            column={c}
+            boardTotal={tasks.length}
+            onOpen={onOpen}
+            groupedByStatus={by === "status"}
+            hideProjectChip
+            {...(canEdit ? { onCardDrop: (taskId: string) => drop(c.id, taskId) } : {})}
+          />
         ))}
       </div>
     </div>
