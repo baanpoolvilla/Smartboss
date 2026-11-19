@@ -18,6 +18,18 @@ describe('holidayAvailability', () => {
     expect(available('2026-09')).toBe(3);
   });
 
+  it('ตั้งจำนวนเดือนเองได้ (validMonths) — 6 เดือน: ของ ก.ค. ใช้ได้ถึงสิ้น ธ.ค. · 1 เดือน: ใช้ได้แค่เดือนนั้น', () => {
+    const at = (month: string, validMonths: number) =>
+      holidayAvailability({ from: '2026-01', to: month, grants, usage: new Map(), validMonths }, month);
+    expect(at('2026-12', 6).available_days).toBe(6);
+    expect(at('2027-01', 6).available_days).toBe(4);
+    expect(at('2026-12', 6).buckets.find((b) => b.month === '2026-07')?.expires_month).toBe('2026-12');
+    expect(at('2026-08', 1).available_days).toBe(1);
+    expect(at('2026-09', 1).available_days).toBe(0);
+    // ไม่ใส่ / ค่าเพี้ยน = 3 เดือนเหมือนเดิม
+    expect(at('2026-10', 0).available_days).toBe(4);
+  });
+
   it('ใช้ได้ภายใน 3 เดือนนับรวมเดือนที่ได้สิทธิ์ เกินนั้นตัดทิ้ง', () => {
     // ต.ค. — ของ ก.ค. หมดอายุสิ้น ก.ย. แล้ว เหลือ ส.ค.(1) + ต.ค.(3)
     expect(available('2026-10')).toBe(4);

@@ -7,7 +7,7 @@ import { addHolidayPersonGrantAction } from "../../actions";
 
 /**
  * "+ เพิ่มวัน" ในตารางยอด Holiday รายคน — HR เพิ่มวันให้คนหนึ่ง (เช่นวันหยุดก่อนเริ่มนับที่ยังไม่ได้ใช้)
- * นับเป็นสิทธิ์ของเดือนที่เลือก ใช้ได้ 3 เดือนรวมเดือนนั้น · ต้องใส่เหตุผล (เก็บในประวัติการแก้ของระบบบุคคล)
+ * นับเป็นสิทธิ์ของเดือนที่เลือก ใช้ได้นานเท่าสิทธิ์ของบริษัท (holiday_valid_months) · ต้องใส่เหตุผล (เก็บในประวัติการแก้ของระบบบุคคล)
  */
 export function AddHolidayDays({ leaveTypeId, employmentId, name, month }: { leaveTypeId: string; employmentId: string; name: string; month: string }) {
   const router = useRouter();
@@ -48,7 +48,7 @@ export function AddHolidayDays({ leaveTypeId, employmentId, name, month }: { lea
           className="rounded-md border border-(--line) bg-(--bg) px-2 py-1"
         />
       </label>
-      <p className="text-(--ink-soft)">ใช้ได้ 3 เดือนนับรวมเดือนที่เลือก (เหมือนสิทธิ์ของบริษัท)</p>
+      <p className="text-(--ink-soft)">นับเป็นสิทธิ์ของเดือนที่เลือก ใช้ได้นานเท่าสิทธิ์ของบริษัท</p>
       {error && <p className="text-(--tone-danger)">{error}</p>}
       <div className="flex gap-2">
         <button

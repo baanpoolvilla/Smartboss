@@ -1114,6 +1114,17 @@ export const OPERATIONAL_ROUTES: readonly Omit<RouteDefinition, 'response'>[] = 
     successStatus: 200,
   },
   {
+    operationId: 'setHolidayValidMonths_post',
+    method: 'post',
+    path: '/leave-types/{leaveTypeId}/holiday-valid-months',
+    summary: 'POST /leave-types/{leaveTypeId}/holiday-valid-months',
+    tag: 'workflow',
+    // Holiday แบบสะสม: สิทธิ์ของแต่ละเดือนใช้ได้กี่เดือน (1–12)
+    permissions: ['workforce.leave.manage'] as Permission[],
+    idempotent: true,
+    successStatus: 200,
+  },
+  {
     operationId: 'setYearlyEntitlementMode_post',
     method: 'post',
     path: '/leave-types/{leaveTypeId}/yearly-entitlement-mode',

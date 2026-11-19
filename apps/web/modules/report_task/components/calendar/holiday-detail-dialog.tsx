@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/modules/report_task/components/ui/dialog";
 import { Button } from "@/modules/report_task/components/ui/button";
+import { holidayValidityText } from "@/modules/hr/lib/holiday-valid-months";
 
 interface HolidayGrantDetail {
   month: string;
@@ -17,6 +18,7 @@ interface HolidayDetail {
   name: string;
   availableDays: number;
   expiringDays: number;
+  validMonths?: number;
   grants?: HolidayGrantDetail[];
   used?: { startsOn: string; endsOn: string; days: number; pending: boolean }[];
 }
@@ -126,7 +128,7 @@ export function HolidayDetailDialog({
             <section className="space-y-2">
               <h3 className="text-xs font-semibold text-[var(--ink-soft)]">สิทธิ์ที่ได้ (แยกตามเดือน)</h3>
               {grants.length === 0 ? (
-                <p className="text-sm text-[var(--ink-soft)]">ช่วง 3 เดือนนี้ไม่มีวันหยุดบริษัท จึงยังไม่มีสิทธิ์</p>
+                <p className="text-sm text-[var(--ink-soft)]">ช่วง {detail.validMonths ?? 3} เดือนนี้ไม่มีวันหยุดบริษัท จึงยังไม่มีสิทธิ์</p>
               ) : (
                 grants.map((g) => {
                   const usedPart = g.grantedDays - g.remainingDays;
@@ -199,7 +201,7 @@ export function HolidayDetailDialog({
               <h3 className="text-xs font-semibold text-[var(--ink-soft)]">กติกา</h3>
               <ul className="list-disc space-y-0.5 pl-5 text-xs leading-relaxed text-[var(--ink-soft)]">
                 <li>แต่ละเดือนได้ {detail.name} เท่าจำนวนวันหยุดนักขัตฤกษ์ของเดือนนั้น (ตามปฏิทินวันหยุดบริษัท)</li>
-                <li>ใช้ได้ภายใน 3 เดือนนับรวมเดือนที่ได้ เช่น ของ ธ.ค. ใช้ได้ถึงสิ้น ก.พ.</li>
+                <li>{holidayValidityText(detail.validMonths)}</li>
                 <li>ลงวันหยุดเมื่อไหร่ ระบบหักจากสิทธิ์ที่ใกล้หมดอายุก่อน</li>
                 <li>ตัววันหยุดราชการเองเป็นวันทำงานปกติ เลือกหยุดวันอื่นแทน</li>
               </ul>

@@ -1760,6 +1760,25 @@ export async function setHolidayModeAction(formData: FormData) {
 }
 
 /**
+ * Holiday แบบสะสม: สิทธิ์ของแต่ละเดือนใช้ได้กี่เดือน (ผู้ใช้ 19/11/2569 "อยากให้แก้ได้ว่าจะใช้ได้กี่เดือน ให้ HR/Boss เลือก")
+ * นับรวมเดือนที่ได้ · 1–12 · ค่าเดิม 3 · มีผลทันทีกับยอดทุกคน (ยอดคิดใหม่ทุกครั้ง)
+ */
+export async function setHolidayValidMonthsAction(formData: FormData) {
+  await guard(HR_PERMS.settingManage);
+  const leaveTypeId = String(formData.get("leave_type_id") ?? "");
+  const months = Number(formData.get("months") ?? 0);
+  if (!leaveTypeId) throw new Error("ไม่พบประเภทการลา");
+  if (!Number.isInteger(months) || months < 1 || months > 12) throw new Error("เลือกได้ 1–12 เดือน");
+  try {
+    await wfFetch(`/leave-types/${leaveTypeId}/holiday-valid-months`, { method: "POST", body: { months } });
+  } catch (error) {
+    throw new Error(toMessage(error));
+  }
+  revalidatePath("/hr");
+  revalidatePath("/hr/settings/leave-types");
+}
+
+/**
  * HR กำหนดจำนวนวัน Holiday ของเดือนหนึ่งทับจำนวนวันหยุดบริษัท (บริษัทให้ไม่ตรงกับปฏิทิน)
  * ช่องว่าง = ลบค่าทับ กลับไปนับจากปฏิทินวันหยุดบริษัท
  */

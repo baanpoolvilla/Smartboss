@@ -16,6 +16,7 @@ import {
   setHolidayAccrualSchema,
   setYearlyEntitlementModeSchema,
   setLeaveTypeApprovalNoticeSchema,
+  setHolidayValidMonthsSchema,
   setYearlyEntitlementSchema,
   setMonthAllowanceSchema,
   addPersonGrantSchema,
@@ -139,6 +140,18 @@ export class LeaveController {
     @Body(zodPipe(setHolidayAccrualSchema)) body: z.infer<typeof setHolidayAccrualSchema>,
   ): Promise<Record<string, unknown>> {
     return this.service.setHolidayAccrual(requireUuid(leaveTypeId, 'leaveTypeId'), body.enabled);
+  }
+
+  /** Holiday แบบสะสม: สิทธิ์ของแต่ละเดือนใช้ได้กี่เดือน (1–12) */
+  @Post('leave-types/:leaveTypeId/holiday-valid-months')
+  @HttpCode(200)
+  @RequirePermissions('workforce.leave.manage')
+  @Idempotent()
+  async setHolidayValidMonths(
+    @Param('leaveTypeId') leaveTypeId: string,
+    @Body(zodPipe(setHolidayValidMonthsSchema)) body: z.infer<typeof setHolidayValidMonthsSchema>,
+  ): Promise<Record<string, unknown>> {
+    return this.service.setHolidayValidMonths(requireUuid(leaveTypeId, 'leaveTypeId'), body.months);
   }
 
   /** ลงกระชั้นชิดต้องรออนุมัติ (Day-Off ลงของวันนี้/พรุ่งนี้) — 0 = ปิด */

@@ -6,8 +6,8 @@ import { UnitOfWork } from '../infrastructure/unit-of-work';
 import { RequestContextService } from '../shared/request-context';
 import { CLOCK } from '../shared/tokens';
 import {
-  HOLIDAY_VALID_MONTHS,
   holidayAvailability,
+  validMonthsOf,
   type HolidayGrant,
   monthIndex,
   monthOfIndex,
@@ -403,6 +403,30 @@ export class LeaveService {
   }
 
   /**
+   * Holiday แบบสะสม: สิทธิ์ของแต่ละเดือนใช้ได้กี่เดือน (นับรวมเดือนนั้น 1–12) — ผู้ใช้ 19/11/2569
+   * ยอดคิดใหม่ทุกครั้งจากสิทธิ์รายเดือน + ใบที่ลงไว้ ⇒ เปลี่ยนแล้วมีผลทันทีกับทุกคน (ขยาย = สิทธิ์ที่เพิ่งหมดกลับมา)
+   */
+  async setHolidayValidMonths(leaveTypeId: string, months: number): Promise<Record<string, unknown>> {
+    return this.uow.run(async (uow) => {
+      const types = await uow.tx.select().from(schema.leaveTypes).where(eq(schema.leaveTypes.id, leaveTypeId)).limit(1);
+      const type = types[0];
+      if (type === undefined) throw AppError.notFound('leave type');
+      if (!type.accruesFromHolidays) throw AppError.validation('leave type does not accrue from holidays');
+      await uow.tx.update(schema.leaveTypes).set({ holidayValidMonths: months }).where(eq(schema.leaveTypes.id, leaveTypeId));
+      await uow.audit({
+        action: 'leave.type.holiday_valid_months',
+        resourceType: 'leave_type',
+        resourceId: leaveTypeId,
+        outcome: 'SUCCESS',
+        companyId: type.companyId,
+        before: { holiday_valid_months: type.holidayValidMonths },
+        after: { holiday_valid_months: months },
+      });
+      return { id: leaveTypeId, holiday_valid_months: months };
+    });
+  }
+
+  /**
    * ลงกระชั้นชิดต้องรออนุมัติ — ผู้ใช้ 8/11/2569 "ลงวันหยุดในวันนั้นหรือก่อนวันเดียวแล้วมาลง Day-Off ต้องให้ HR กดอนุมัติ"
    * ใช้ได้เฉพาะประเภทที่อนุมัติอัตโนมัติ (ประเภทที่ต้องอนุมัติอยู่แล้วไม่มีผลอะไร) · 0 = ปิด
    */
@@ -737,16 +761,17 @@ export class LeaveService {
   private async holidayLedger(
     tx: Tx,
     employment: { id: string; companyId: string; hiredOn: string },
-    leaveType: { id: string; accrualStartsOn: string | null },
+    leaveType: { id: string; accrualStartsOn: string | null; holidayValidMonths?: number | null },
     fromMonth: string,
     toMonth: string,
     excludeRequestId?: string,
   ): Promise<HolidayLedgerInput> {
     const leaveTypeId = leaveType.id;
+    const validMonths = validMonthsOf(leaveType.holidayValidMonths);
     const start = monthOfIndex(
       Math.max(
         monthIndex(employment.hiredOn.slice(0, 7)),
-        monthIndex(fromMonth) - 12,
+        monthIndex(fromMonth) - Math.max(12, validMonths),
         // ก่อนเดือนที่เปิดใช้ไม่นับทั้งสิทธิ์และการใช้ — เริ่มนับใหม่จากเดือนนั้น
         leaveType.accrualStartsOn === null ? 0 : monthIndex(leaveType.accrualStartsOn.slice(0, 7)),
       ),
@@ -783,7 +808,7 @@ export class LeaveService {
     // + วันที่ HR เพิ่มให้คนนี้ (leave_person_grants) — ไม่มี = เหมือนเดิม
     const person = (await this.personGrants(tx, leaveTypeId)).get(employment.id);
     const grants = withPersonGrants(onlyFrom(companyGrants, start), person);
-    return { from: earliestWithPersonGrants(start, person), to: end, grants, usage };
+    return { from: earliestWithPersonGrants(start, person, validMonths), to: end, grants, usage, validMonths };
   }
 
   /**
@@ -911,11 +936,12 @@ export class LeaveService {
       }
       const grants = await this.holidayGrants(uow.tx, type.companyId, leaveTypeId, firstMonth, lastMonth);
       const personGrants = await this.personGrants(uow.tx, leaveTypeId);
-      // ชื่อวันของสิทธิ์ที่ยังเหลือ — ถังที่ยังใช้ได้ ณ เดือนนี้มาจากไม่เกิน HOLIDAY_VALID_MONTHS เดือนก่อน
+      // ชื่อวันของสิทธิ์ที่ยังเหลือ — ถังที่ยังใช้ได้ ณ เดือนนี้มาจากไม่เกิน validMonths เดือนก่อน
+      const validMonths = validMonthsOf(type.holidayValidMonths);
       const holidayNames = await this.companyHolidaysByMonth(
         uow.tx,
         type.companyId,
-        monthOfIndex(monthIndex(month) - HOLIDAY_VALID_MONTHS + 1),
+        monthOfIndex(monthIndex(month) - validMonths + 1),
         month,
       );
       const personReasons = await uow.tx
@@ -940,7 +966,7 @@ export class LeaveService {
         const person = personGrants.get(employment.id);
         const mine = withPersonGrants(onlyFrom(grants, from), person);
         const { available_days, buckets } = holidayAvailability(
-          { from: earliestWithPersonGrants(from, person), to: lastMonth, grants: mine, usage },
+          { from: earliestWithPersonGrants(from, person, validMonths), to: lastMonth, grants: mine, usage, validMonths },
           month,
         );
         items.push({
@@ -1778,6 +1804,7 @@ export class LeaveService {
           auto_approve: row.autoApprove,
           monthly_quota_days: row.monthlyQuotaDays,
           accrues_from_holidays: row.accruesFromHolidays,
+          holiday_valid_months: row.holidayValidMonths,
           yearly_entitlement: row.yearlyEntitlement,
           approval_notice_days: row.approvalNoticeDays,
           accrual_starts_on: row.accrualStartsOn,
@@ -1999,12 +2026,12 @@ function onlyFrom(grants: Map<string, number>, from: string): Map<string, number
  * (ส.ค. → ใช้ได้ถึงสิ้น ต.ค.) · สิทธิ์บริษัท/ใบลาก่อน `start` ยังไม่ถูกนับเหมือนเดิม (onlyFrom + เงื่อนไขของใบ)
  * ไม่ขึ้นกับเดือนที่ดู — ไม่งั้นพอดู ธ.ค. วันแม่หายจากการคิด ใบ ต.ค. ที่ใช้วันแม่ไปแล้วจะถูกหักจากสิทธิ์ ต.ค. ซ้ำ
  */
-function earliestWithPersonGrants(start: string, person: Map<string, number> | undefined): string {
+function earliestWithPersonGrants(start: string, person: Map<string, number> | undefined, validMonths: number): string {
   if (!person) return start;
   let earliest = monthIndex(start);
   for (const month of person.keys()) {
     const i = monthIndex(month);
-    if (i < earliest && monthIndex(start) - i < HOLIDAY_VALID_MONTHS) earliest = i;
+    if (i < earliest && monthIndex(start) - i < validMonths) earliest = i;
   }
   return monthOfIndex(earliest);
 }

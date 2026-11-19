@@ -39,6 +39,8 @@ export const leaveTypes = workforce.table('leave_types', {
    * ไม่ใช้ monthlyQuotaDays (ดู migration 0019 และ LeaveService.holidayLedger)
    */
   accruesFromHolidays: boolean('accrues_from_holidays').notNull().default(false),
+  /** Holiday แบบสะสม: สิทธิ์ของแต่ละเดือนใช้ได้กี่เดือน นับรวมเดือนนั้น (1–12 · migration 0023 · ค่าเดิม 3) */
+  holidayValidMonths: integer('holiday_valid_months').notNull().default(3),
   /** มีสิทธิ์รายคนรายปี (ลาพักร้อน) — จำนวนวันอยู่ใน leave_balance_ledger (migration 0021) */
   yearlyEntitlement: boolean('yearly_entitlement').notNull().default(false),
   /** เดือนแรกที่เริ่มนับสิทธิ์สะสม (วันแรกของเดือน) — ตั้งตอนเปิดใช้ครั้งแรก ก่อนหน้านี้ไม่นับย้อนหลัง */

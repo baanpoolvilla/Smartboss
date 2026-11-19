@@ -7,6 +7,8 @@ interface HolidayBalance {
   name: string;
   availableDays: number;
   expiringDays: number;
+  /** สิทธิ์ของแต่ละเดือนใช้ได้กี่เดือน (บริษัทตั้ง) — ระบบรุ่นเก่าไม่ส่งมา = 3 */
+  validMonths?: number;
 }
 
 /**
@@ -45,7 +47,7 @@ export function HolidayBalanceTile({ balance, onOpen }: { balance: HolidayBalanc
       title={
         balance.expiringDays > 0
           ? `${balance.expiringDays} วันต้องใช้ภายในเดือนนี้ ไม่งั้นถูกตัดทิ้ง`
-          : "สิทธิ์ของแต่ละเดือนใช้ได้ภายใน 3 เดือน"
+          : `สิทธิ์ของแต่ละเดือนใช้ได้ภายใน ${balance.validMonths ?? 3} เดือน`
       }
     >
       <p className="text-lg font-semibold tabular-nums">{balance.availableDays}</p>

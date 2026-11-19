@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { holidayValidityText } from "@/modules/hr/lib/holiday-valid-months";
 import { Button } from "@smartboss/ui/components/button";
 import { DataTable, Pill, SectionCard, Td, inputClass } from "@/modules/hr/components/ui";
 import { formatBuddhistYear, formatDate } from "@/modules/hr/lib/labels";
@@ -22,18 +23,21 @@ export function HolidayAllowances({
   leaveTypeName,
   year,
   months,
+  validMonths,
 }: {
   companyId: string;
   leaveTypeId: string;
   leaveTypeName: string;
   year: number;
   months: MonthAllowance[];
+  /** สิทธิ์ของแต่ละเดือนใช้ได้กี่เดือน (ตั้งที่ "รูปแบบวันหยุด Holiday") */
+  validMonths?: number;
 }) {
   const total = months.reduce((sum, m) => sum + m.days, 0);
   return (
     <SectionCard
       title={`สิทธิ์ ${leaveTypeName} รายเดือน · ปี ${formatBuddhistYear(year)}`}
-      description={`แต่ละเดือนได้สิทธิ์เท่าจำนวนวันหยุดบริษัทของเดือนนั้น แก้จำนวนทับได้ถ้าบริษัทให้ไม่ตรง · สิทธิ์ของแต่ละเดือนใช้ได้ภายใน 3 เดือน (เช่น ก.ค. ใช้ได้ถึงสิ้น ก.ย.) เกินนั้นตัดทิ้ง · รวมทั้งปี ${total} วัน`}
+      description={`แต่ละเดือนได้สิทธิ์เท่าจำนวนวันหยุดบริษัทของเดือนนั้น แก้จำนวนทับได้ถ้าบริษัทให้ไม่ตรง · สิทธิ์ของแต่ละเดือน${holidayValidityText(validMonths)} เกินนั้นตัดทิ้ง · รวมทั้งปี ${total} วัน`}
       action={
         <div className="flex flex-wrap justify-end gap-1">
           <form action={importThaiHolidaysAction}>

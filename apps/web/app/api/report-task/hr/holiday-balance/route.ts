@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { requireOrg } from "@smartboss/auth";
 import { wfTry, type HolidayAllowance, type LeaveRequest, type LeaveType, type Paged } from "@/modules/hr/lib/api";
 import { listHolidayEvents } from "@/modules/report_task/lib/db/workforce-calendar";
+import { holidayValidMonths } from "@/modules/hr/lib/holiday-valid-months";
 
 export const dynamic = "force-dynamic";
 
@@ -32,13 +33,16 @@ export async function GET(request: NextRequest) {
       wfTry<{ items: HolidayAllowance[] }>(`/me/holiday-allowances?from=${month}&to=${month}`),
     ]);
     const nameOf = new Map((types?.items ?? []).map((t) => [t.id, t.name]));
+    // สิทธิ์ของแต่ละเดือนใช้ได้กี่เดือน — ตั้งได้ต่อประเภท (ผู้ใช้ 19/11/2569) · ไม่มี = 3
+    const validOf = new Map((types?.items ?? []).map((t) => [t.id, holidayValidMonths(t.holiday_valid_months)]));
+    const windowMonths = Math.max(3, ...(allowances?.items ?? []).map((a) => validOf.get(a.leave_type_id) ?? 3));
 
-    // รายละเอียด: ช่วงเดือนที่สิทธิ์ยังใช้ได้ = 2 เดือนก่อนหน้า ถึงเดือนนี้ (HOLIDAY_VALID_MONTHS = 3)
+    // รายละเอียด: ช่วงเดือนที่สิทธิ์ยังใช้ได้ = (N-1) เดือนก่อนหน้า ถึงเดือนนี้
     let holidaysByMonth = new Map<string, { date: string; name: string }[]>();
     let requests: LeaveRequest[] = [];
     if (detail && (allowances?.items ?? []).length > 0) {
       const [y, m] = month.split("-").map(Number) as [number, number];
-      const windowStart = new Date(Date.UTC(y, m - 3, 1)).toISOString().slice(0, 10);
+      const windowStart = new Date(Date.UTC(y, m - windowMonths, 1)).toISOString().slice(0, 10);
       const windowEnd = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
       const [holidays, mine] = await Promise.all([
         listHolidayEvents(session.orgId, windowStart, windowEnd),
@@ -76,6 +80,7 @@ export async function GET(request: NextRequest) {
           ...details,
           leaveTypeId: a.leave_type_id,
           name: nameOf.get(a.leave_type_id) ?? "Holiday",
+          validMonths: validOf.get(a.leave_type_id) ?? 3,
           availableDays: current?.available_days ?? 0,
           expiringDays: (current?.buckets ?? [])
             .filter((b) => b.expires_month === month)

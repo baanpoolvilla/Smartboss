@@ -21,6 +21,7 @@ import {
   renameLeaveTypeAction,
   seedLeaveTypesAction,
   setHolidayModeAction,
+  setHolidayValidMonthsAction,
   setLeaveTypeMonthlyQuotaAction,
   setYearlyEntitlementModeAction,
   setLeaveTypeApprovalNoticeAction,
@@ -147,7 +148,7 @@ export default async function LeaveTypesSettingsPage({
                           <Pill tone={t.auto_approve ? "var(--app-strong)" : "var(--tone-ok)"}>
                             {t.name}
                             {t.accrues_from_holidays
-                              ? " · Holiday สะสม ใช้ได้ภายใน 3 เดือน"
+                              ? ` · Holiday สะสม ใช้ได้ภายใน ${t.holiday_valid_months ?? 3} เดือน`
                               : !t.auto_approve
                                 ? t.yearly_entitlement
                                   ? " · การลา ต้องอนุมัติ · สิทธิ์รายคนรายปี"
@@ -361,11 +362,13 @@ export default async function LeaveTypesSettingsPage({
                   types={activeChoices}
                   currentId={accruing[0]?.id ?? null}
                   startsLabel={monthLabel(accruing[0]?.accrual_starts_on)}
+                  validMonths={accruing[0]?.holiday_valid_months ?? 3}
+                  validMonthsAction={setHolidayValidMonthsAction}
                 />
               )}
               {canManage &&
                 allowanceTables.map(({ type, months }) => (
-                  <HolidayAllowances key={type.id} companyId={companyId} leaveTypeId={type.id} leaveTypeName={type.name} year={year} months={months} />
+                  <HolidayAllowances key={type.id} companyId={companyId} leaveTypeId={type.id} leaveTypeName={type.name} year={year} months={months} validMonths={type.holiday_valid_months ?? 3} />
                 ))}
               {canManage && accruing[0] && balances && (
                 <HolidayBalances

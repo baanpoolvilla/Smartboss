@@ -60,6 +60,11 @@ export const setLeaveTypeApprovalNoticeSchema = z.object({
   days: z.number().int().min(0).max(30),
 });
 
+/** Holiday แบบสะสม: สิทธิ์ของแต่ละเดือนใช้ได้กี่เดือน (นับรวมเดือนนั้น) — ผู้ใช้ 19/11/2569 */
+export const setHolidayValidMonthsSchema = z.object({
+  months: z.number().int().min(1).max(12),
+});
+
 /** เปิด/ปิดสิทธิ์รายคนรายปีของประเภทลา (เช่น ลาพักร้อน) */
 export const setYearlyEntitlementModeSchema = z.object({
   enabled: z.boolean(),

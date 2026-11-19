@@ -2,13 +2,19 @@
  * สิทธิ์ Holiday แบบสะสม — คิดเป็น "ถัง" รายเดือน
  *
  * แต่ละเดือนได้สิทธิ์เท่าจำนวนวันหยุดบริษัทของเดือนนั้น (หรือจำนวนที่ HR กำหนดทับ)
- * สิทธิ์ของเดือน M ใช้ได้ภายใน HOLIDAY_VALID_MONTHS เดือนนับรวมเดือน M เอง (ก.ค. → ใช้ได้ถึงสิ้น ก.ย.) เกินนั้นตัดทิ้ง
+ * สิทธิ์ของเดือน M ใช้ได้ภายใน N เดือนนับรวมเดือน M เอง (N = 3: ก.ค. → ใช้ได้ถึงสิ้น ก.ย.) เกินนั้นตัดทิ้ง
+ * N ตั้งได้ต่อประเภทลา (leave_types.holiday_valid_months · ผู้ใช้ 19/11/2569) ค่าเดิม 3
  * การใช้ตัดจากถังที่เก่าที่สุดก่อน (ของที่ใกล้หมดอายุถูกใช้ก่อน ไม่เสียสิทธิ์โดยไม่จำเป็น)
  *
  * ไม่เก็บยอดคงเหลือเป็นตัวเลข — คำนวณใหม่จากสิทธิ์รายเดือนกับใบที่ลงไว้ทุกครั้ง
  * HR แก้จำนวนวันของเดือนย้อนหลัง หรือมีคนยกเลิกวันหยุด ยอดก็ถูกเองโดยไม่ต้องปรับบัญชี
  */
 export const HOLIDAY_VALID_MONTHS = 3;
+
+/** ค่าที่บริษัทตั้งไว้ต่อประเภท (leave_types.holiday_valid_months 1–12) — ไม่มี/เพี้ยน = 3 เหมือนเดิม */
+export function validMonthsOf(value: number | null | undefined): number {
+  return Number.isInteger(value) && (value as number) >= 1 && (value as number) <= 12 ? (value as number) : HOLIDAY_VALID_MONTHS;
+}
 
 /** 'YYYY-MM' → เลขเดือนต่อเนื่อง (ใช้บวกลบข้ามปี) */
 export function monthIndex(month: string): number {
@@ -39,12 +45,13 @@ function simulate(
   to: number,
   grantOf: (month: number) => number,
   usageOf: (month: number) => number,
+  validMonths: number,
 ): Simulation {
   let buckets: { month: number; left: number }[] = [];
   let deficit = 0;
   const bucketsAt = new Map<number, HolidayBucket[]>();
   for (let month = from; month <= to; month += 1) {
-    buckets = buckets.filter((bucket) => month - bucket.month < HOLIDAY_VALID_MONTHS);
+    buckets = buckets.filter((bucket) => month - bucket.month < validMonths);
     const granted = grantOf(month);
     if (granted > 0) buckets.push({ month, left: granted });
     let need = usageOf(month);
@@ -61,7 +68,7 @@ function simulate(
         .map((bucket) => ({
           month: monthOfIndex(bucket.month),
           remaining_days: bucket.left,
-          expires_month: monthOfIndex(bucket.month + HOLIDAY_VALID_MONTHS - 1),
+          expires_month: monthOfIndex(bucket.month + validMonths - 1),
         })),
     );
   }
@@ -87,6 +94,8 @@ export interface HolidayLedgerInput {
   grants: ReadonlyMap<string, number>;
   /** วันที่ลงไว้แล้วต่อเดือน (รออนุมัติ + อนุมัติแล้ว) */
   usage: ReadonlyMap<string, number>;
+  /** สิทธิ์ของแต่ละเดือนใช้ได้กี่เดือน นับรวมเดือนนั้น — ไม่ใส่ = HOLIDAY_VALID_MONTHS (3) */
+  validMonths?: number;
 }
 
 /**
@@ -105,9 +114,10 @@ export function holidayAvailability(
   const to = Math.max(monthIndex(input.to), target);
   if (target < from) return { available_days: 0, buckets: [], grants: [] };
 
+  const validMonths = validMonthsOf(input.validMonths);
   const grantOf = (index: number): number => input.grants.get(monthOfIndex(index)) ?? 0;
   const run = (extra: number): Simulation =>
-    simulate(from, to, grantOf, (index) => (input.usage.get(monthOfIndex(index)) ?? 0) + (index === target ? extra : 0));
+    simulate(from, to, grantOf, (index) => (input.usage.get(monthOfIndex(index)) ?? 0) + (index === target ? extra : 0), validMonths);
 
   const base = run(0);
   const buckets = base.bucketsAt.get(target) ?? [];
@@ -116,7 +126,7 @@ export function holidayAvailability(
   while (available > 0 && run(available).deficit > base.deficit + 1e-9) available -= 0.5;
   // buckets ตัดเดือนที่ใช้หมดแล้วทิ้ง — grants เก็บไว้ครบทุกเดือนในช่วงใช้ได้ คนดูจะเห็นว่า "ได้ 4 ใช้ไป 4"
   const grants: HolidayGrant[] = [];
-  for (let month = Math.max(from, target - HOLIDAY_VALID_MONTHS + 1); month <= target; month += 1) {
+  for (let month = Math.max(from, target - validMonths + 1); month <= target; month += 1) {
     const granted = grantOf(month);
     if (granted <= 0) continue;
     const left = buckets.find((bucket) => bucket.month === monthOfIndex(month))?.remaining_days ?? 0;
@@ -124,7 +134,7 @@ export function holidayAvailability(
       month: monthOfIndex(month),
       granted_days: granted,
       remaining_days: left,
-      expires_month: monthOfIndex(month + HOLIDAY_VALID_MONTHS - 1),
+      expires_month: monthOfIndex(month + validMonths - 1),
     });
   }
   return { available_days: Math.max(0, available), buckets, grants };
