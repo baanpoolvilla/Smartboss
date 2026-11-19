@@ -203,6 +203,20 @@ describe("ล้างแจ้งเตือนเก่า", () => {
     expect(out.map((x) => x.id)).toEqual(["ok"]);
   });
 
+  it("อ่านแล้วเกิน 30 วันถูกลบ · ยังไม่อ่านเก็บถึง 60 วัน", () => {
+    const now = Date.parse("2026-10-01T00:00:00Z");
+    const out = pruneNotifications(
+      [
+        { id: "read-40d", userId: "u", createdAt: "2026-08-22T00:00:00Z", read: true },
+        { id: "unread-20d", userId: "u", createdAt: "2026-09-11T00:00:00Z", read: false },
+        { id: "read-20d", userId: "u", createdAt: "2026-09-11T00:00:00Z", read: true },
+        { id: "unread-50d", userId: "u", createdAt: "2026-08-12T00:00:00Z" },
+      ],
+      now
+    ) as { id: string }[];
+    expect(out.map((x) => x.id).sort()).toEqual(["read-20d", "unread-20d", "unread-50d"]);
+  });
+
   it("เกิน 300 ต่อคน เก็บ 300 อันใหม่สุด (คนอื่นไม่โดนตัด)", () => {
     const now = Date.parse("2026-10-01T00:00:00Z");
     const many = Array.from({ length: 305 }, (_, i) => ({

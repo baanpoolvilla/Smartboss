@@ -132,6 +132,12 @@ const NOTIFICATIONS_KEY = "notifications";
 
 /** เก็บแจ้งเตือนไว้กี่วัน / กี่รายการต่อคน — ก่อนหน้านี้ไม่เคยลบเลย ก้อนโตถึง 1.6 MB */
 const NOTIFICATION_RETENTION_DAYS = 60;
+/**
+ * แถวที่ "อ่านแล้ว" เก็บสั้นกว่า (ผู้ใช้ 19/11/2569) — ก้อนแจ้งเตือนเขียนใหม่ทั้งก้อนทุกครั้งที่มีคนกดอ่าน
+ * prod 19/11: 3,882 แถว 2.1 MB อ่านแล้ว 89% ⇒ ฐานข้อมูลสะดุด ~0.5–1 วิ ทุกครั้ง ทุกคนรอคิว
+ * ยังไม่อ่านเก็บ 60 วันเหมือนเดิม (ตัวเลขแดง/ป้ายบนการ์ดไม่เปลี่ยน)
+ */
+const NOTIFICATION_READ_RETENTION_DAYS = 30;
 const NOTIFICATION_MAX_PER_USER = 300;
 
 interface OwnedNotification {
@@ -141,10 +147,11 @@ interface OwnedNotification {
   read?: unknown;
 }
 
-/** ตัดแจ้งเตือนเก่าเกินกำหนด + เกินโควตาต่อคน (เก็บรายการใหม่สุด) — ของที่ไม่ใช่อาร์เรย์คืนเดิม */
+/** ตัดแจ้งเตือนเก่าเกินกำหนด (อ่านแล้ว 30 วัน · ยังไม่อ่าน 60 วัน) + เกินโควตาต่อคน (เก็บรายการใหม่สุด) — ของที่ไม่ใช่อาร์เรย์คืนเดิม */
 export function pruneNotifications(data: unknown, now: number = Date.now()): unknown {
   if (!Array.isArray(data)) return data;
   const cutoff = now - NOTIFICATION_RETENTION_DAYS * 86_400_000;
+  const readCutoff = now - NOTIFICATION_READ_RETENTION_DAYS * 86_400_000;
   const sorted = [...(data as OwnedNotification[])].sort((a, b) =>
     String(b?.createdAt ?? "").localeCompare(String(a?.createdAt ?? ""))
   );
@@ -152,6 +159,7 @@ export function pruneNotifications(data: unknown, now: number = Date.now()): unk
   return sorted.filter((n) => {
     const t = Date.parse(String(n?.createdAt ?? ""));
     if (Number.isFinite(t) && t < cutoff) return false;
+    if (Number.isFinite(t) && t < readCutoff && n?.read === true) return false;
     const owner = String(n?.userId ?? "");
     const count = (perUser.get(owner) ?? 0) + 1;
     perUser.set(owner, count);
