@@ -1218,7 +1218,9 @@ export class LeaveService {
 
       const periodYear = startsOn.year;
       // ประเภทที่เปิดสิทธิ์รายปีใช้ตัวตรวจของมันเองด้านล่าง (ข้อความชัดกว่า และไม่บล็อกการสลับวัน)
-      if (!leaveType.allowNegative && !leaveType.yearlyEntitlement) {
+      // Holiday แบบสะสมก็เช่นกัน — สิทธิ์มาจากวันหยุดรายเดือน (holidayLedger ด้านล่าง) ไม่ใช่ยอดต้นปี
+      // ไม่งั้นต้นปีใหม่ที่ยังไม่มีใคร grant ยอด OPENING ให้ จะลงไม่ได้สักใบ ("insufficient leave balance") — ผู้ใช้ 19/11/2569
+      if (!leaveType.allowNegative && !leaveType.yearlyEntitlement && !leaveType.accruesFromHolidays) {
         const balances = await this.aggregateBalance(
           uow.tx,
           input.employment_id,
