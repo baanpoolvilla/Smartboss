@@ -101,9 +101,39 @@ export async function GET(request: NextRequest, context: { params: Promise<{ key
     }
   }
 
+  // ฟีดรายงานทั้งก้อน: เลขรุ่นยังเท่าเดิม = ส่งข้อความชุดเดิมที่แปลงไว้แล้ว (ไม่ต้องอ่าน+แปลง 4 MB ใหม่)
+  if (key === REPORT_FEED_KEY) {
+    const current = await readStoreVersion(session.orgId, key);
+    const hit = feedBody.get(session.orgId);
+    if (hit && hit.version === current) return jsonBody(hit.body, current);
+  }
+
   const { payload, version } = await readStorePayload(session.orgId, session.userId, key);
   if (DELTA_KEYS.has(key)) rememberSnapshot(session.orgId, key, version, payload);
+  if (key === REPORT_FEED_KEY) {
+    const body = JSON.stringify(payload);
+    const cur = feedBody.get(session.orgId);
+    if (!cur || version >= cur.version) feedBody.set(session.orgId, { version, body });
+    return jsonBody(body, version);
+  }
   return Response.json(payload, { headers: { "Cache-Control": "no-store", "X-Data-Version": String(version) } });
+}
+
+/**
+ * ฟีดรายงานทั้งก้อนที่แปลงเป็นข้อความแล้ว จำไว้บริษัทละชุดตามเลขรุ่น (โปรเซสเดียว ดู store-delta-log.ts)
+ *
+ * prod 18/11/2569: ฟีด 4.3 MB โหลดเต็มก้อน 185 ครั้ง/วัน แต่ละครั้งตัวเว็บใช้ ~46 ms อ่าน + ~90 ms แปลงส่งออก
+ * ระหว่างนั้นรับคำขออื่นไม่ได้ ⇒ คนอื่นกดเปลี่ยนหน้าต้องรอ · ตอนนี้ถามแค่เลขรุ่น (แถวเดียว) ถ้าไม่มีใครแก้ ส่งชุดเดิมเลย
+ * ข้อความที่ส่งเหมือนเดิมทุกไบต์ (มาจากการอ่านฐานข้อมูลแบบเดิม แล้ว JSON.stringify แบบเดียวกับ Response.json)
+ * มีคนแก้ฟีด เลขรุ่นขยับ → รอบหน้าอ่านใหม่เอง
+ */
+const gFeed = globalThis as unknown as { __feedBody?: Map<string, { version: number; body: string }> };
+const feedBody = (gFeed.__feedBody ??= new Map());
+
+function jsonBody(body: string, version: number) {
+  return new Response(body, {
+    headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "X-Data-Version": String(version) },
+  });
 }
 
 async function put(request: NextRequest, key: string) {

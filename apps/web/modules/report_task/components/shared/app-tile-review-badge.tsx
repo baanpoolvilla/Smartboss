@@ -1,13 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { isAwaitingReview } from "@/modules/report_task/lib/personal-task";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
 import { useDepartmentStore } from "@/modules/report_task/store/department-store";
-import { canReviewTaskRecord, canSeeReportTopic } from "@/modules/report_task/lib/permissions";
-import { aboutMeCountInPost } from "@/modules/report_task/lib/report-feed-activity";
-import { unreadTaskAssignmentCounts, unreadTaskAttachmentCounts, unreadTaskCommentCounts } from "@/modules/report_task/lib/task-comment-activity";
+import { countReportTileBadge, countTaskTileBadge } from "@/modules/report_task/lib/home-badge-count";
 import type { AppNotification } from "@/modules/report_task/store/notification-store";
 import type { ReportPost, ReportTopic } from "@/modules/report_task/store/report-feed-store";
 import type { TaskReviewSettings } from "@/modules/report_task/store/task-review-settings-store";
@@ -66,57 +63,43 @@ export function AppTileReviewBadge({
     let cancelled = false;
     useIdentityStore.persist.rehydrate();
 
+    // เดิม: โหลดข้อมูลก้อนใหญ่มานับเอง — ยังเก็บไว้เป็นทางสำรองตอนเซิร์ฟเวอร์นับไม่ได้
+    async function loadLegacy(): Promise<number> {
+      // tile งานไม่ใช้ฟีดรายงาน · tile Chat & Report ไม่ใช้งาน/การตั้งค่าตรวจงาน — ดึงเฉพาะที่ใช้
+      const none = Promise.resolve(null);
+      const [tasks, reportFeed, reviewSettings, notifications] = (await Promise.all([
+        part === "tasks" ? fetchShared("/api/report-task/tasks") : Promise.resolve([]),
+        part === "reports" ? fetchShared("/api/report-task/store/report-feed") : none,
+        part === "tasks" ? fetchShared("/api/report-task/store/task-review-settings") : none,
+        part === "tasks" ? fetchShared("/api/report-task/store/notifications") : none,
+      ])) as [Task[], { topics?: ReportTopic[]; posts?: ReportPost[] } | null, TaskReviewSettings | null, AppNotification[] | null];
+      const viewingAsUserId = useIdentityStore.getState().viewingAsUserId;
+      return part === "tasks"
+        ? countTaskTileBadge(tasks, notifications ?? [], viewingAsUserId, reviewSettings)
+        : countReportTileBadge(reportFeed, viewingAsUserId);
+    }
+
     async function load() {
       try {
-        // tile งานไม่ใช้ฟีดรายงาน · tile Chat & Report ไม่ใช้งาน/การตั้งค่าตรวจงาน — ดึงเฉพาะที่ใช้
-        const none = Promise.resolve(null);
-        const [tasks, employees, departments, reportFeed, reviewSettings, notifications] = (await Promise.all([
-          part === "tasks" ? fetchShared("/api/report-task/tasks") : Promise.resolve([]),
+        // รายชื่อ/แผนกยังโหลดใส่ store เหมือนเดิม (ของอื่นบนหน้าหลักอาจใช้) — ทั้งคู่เล็กและจำร่วมกันอยู่แล้ว
+        const [employees, departments] = (await Promise.all([
           fetchEmployeeDirectory(),
           fetchShared("/api/report-task/store/departments"),
-          part === "reports" ? fetchShared("/api/report-task/store/report-feed") : none,
-          part === "tasks" ? fetchShared("/api/report-task/store/task-review-settings") : none,
-          part === "tasks" ? fetchShared("/api/report-task/store/notifications") : none,
-        ])) as [
-          Task[],
-          User[],
-          Department[],
-          { topics?: ReportTopic[]; posts?: ReportPost[] } | null,
-          TaskReviewSettings | null,
-          AppNotification[] | null,
-        ];
+        ])) as [User[], Department[]];
         if (cancelled) return;
-
         useEmployeeStore.getState().setEmployees(employees);
         useDepartmentStore.getState().setDepartments(departments);
-        const viewingAsUserId = useIdentityStore.getState().viewingAsUserId;
 
-        const reviewCount = tasks.filter(
-          (t) =>
-            isAwaitingReview(t) &&
-            canReviewTaskRecord(t, viewingAsUserId, reviewSettings ?? undefined)
-        ).length;
-
-        let unreadActivityCount = 0;
-        for (const n of unreadTaskCommentCounts(notifications ?? [], viewingAsUserId).values()) unreadActivityCount += n;
-        for (const n of unreadTaskAttachmentCounts(notifications ?? [], viewingAsUserId).values()) unreadActivityCount += n;
-        for (const n of unreadTaskAssignmentCounts(notifications ?? [], viewingAsUserId).values()) unreadActivityCount += n;
-
-        const topics = reportFeed?.topics ?? [];
-        const posts = reportFeed?.posts ?? [];
-        const topicById = new Map(topics.map((t) => [t.id, t]));
-        const activeTopics = new Map<string, boolean>(
-          topics.map((t) => [
-            t.id,
-            canSeeReportTopic(t.visibility, viewingAsUserId) && (t.notifyPreference?.[viewingAsUserId] ?? "all") !== "off",
-          ])
-        );
-        const activityCount = posts.reduce(
-          (sum, post) => (activeTopics.get(post.topicId) ? sum + aboutMeCountInPost(post, viewingAsUserId, topicById.get(post.topicId)) : sum),
-          0
-        );
-
-        setCount(part === "tasks" ? reviewCount + unreadActivityCount : activityCount);
+        // ให้เซิร์ฟเวอร์นับ (ส่งกลับแค่ตัวเลข) แทนโหลดฟีด 4 MB / งานทุกใบมานับเองบนเครื่อง
+        let n: number;
+        try {
+          const r = await fetchShared<{ count?: unknown }>(`/api/report-task/home-badge?part=${part}`);
+          if (typeof r.count !== "number") throw new Error("bad count");
+          n = r.count;
+        } catch {
+          n = await loadLegacy();
+        }
+        if (!cancelled) setCount(n);
       } catch {
         // Best-effort — a failed fetch just leaves the tile without a badge.
       }

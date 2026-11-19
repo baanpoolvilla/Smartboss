@@ -23,8 +23,28 @@ function liveArrayProxy<T>(getLive: () => T[]): T[] {
   });
 }
 
-export const departments: Department[] = liveArrayProxy(() => useDepartmentStore.getState().departments);
-export const users: User[] = liveArrayProxy(() => useEmployeeStore.getState().employees);
+/**
+ * ใช้รายชื่อ/แผนกชุดที่ส่งมาแทน store ชั่วคราว — สำหรับเซิร์ฟเวอร์นับเลขบนไอคอนหน้าหลักด้วยสูตรเดียวกับหน้าจอ
+ * (app/api/report-task/home-badge) โดยไม่ต้องเขียนสูตรสิทธิ์ซ้ำอีกชุด
+ *
+ * ปลอดภัยข้ามบริษัทเพราะ `fn` ต้องเป็นงาน sync ล้วน (ห้าม await) — ตั้งค่า → คำนวณ → คืนค่าเดิม จบในจังหวะเดียว
+ * ไม่มีคำขออื่นแทรกได้ · ไม่ได้เรียก = ทุกอย่างอ่านจาก store เหมือนเดิม
+ */
+let override: { users: User[]; departments: Department[]; sessionOwnerId: string | null } | null = null;
+export function withDirectory<T>(dir: { users: User[]; departments: Department[]; sessionOwnerId: string | null }, fn: () => T): T {
+  const prev = override;
+  override = dir;
+  try {
+    const out = fn();
+    if (out instanceof Promise) throw new Error("withDirectory: fn ต้องเป็น sync");
+    return out;
+  } finally {
+    override = prev;
+  }
+}
+
+export const departments: Department[] = liveArrayProxy(() => override?.departments ?? useDepartmentStore.getState().departments);
+export const users: User[] = liveArrayProxy(() => override?.users ?? useEmployeeStore.getState().employees);
 
 export function getUser(id: string) {
   return users.find((u) => u.id === id);
@@ -54,15 +74,20 @@ export function isDepartmentHead(userId: string) {
  * ADMIN/CEO ไม่ผ่านทางนี้ — ใช้ช่อง "เจ้าของบริษัท" ในรายชื่อพนักงานตามเดิม (ค่าเริ่มต้นตาม role ปิดรายคนได้)
  * เคยเอา ADMIN มารวมด้วย ทำให้ IT (ADMIN ที่ตั้งให้เห็นแค่งานตัวเอง) เห็นงานทุกคน
  */
-let sessionOwnerId: string | null = null;
+let sessionOwnerIdValue: string | null = null;
+function currentSessionOwner(): string | null {
+  return override ? override.sessionOwnerId : sessionOwnerIdValue;
+}
 export function setSessionOwner(userId: string | null) {
-  sessionOwnerId = userId;
+  sessionOwnerIdValue = userId;
 }
 /** บัญชี "ผู้ดูแลระบบสูงสุด" (role SUPER_ADMIN) ที่ล็อกอินอยู่ — ไม่รวม CEO/ADMIN ที่ติ๊ก "เจ้าของบริษัท" */
 export function isSessionSuperAdmin(userId: string) {
+  const sessionOwnerId = currentSessionOwner();
   return sessionOwnerId !== null && userId === sessionOwnerId;
 }
 export function isOwner(userId: string) {
+  const sessionOwnerId = currentSessionOwner();
   return (sessionOwnerId !== null && userId === sessionOwnerId) || getUser(userId)?.isOwner === true;
 }
 /** Anyone with manager-level UI access — a department head or the company-wide owner. */
