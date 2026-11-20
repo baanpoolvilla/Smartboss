@@ -36,6 +36,7 @@ import {
   type Attachment,
   type PaymentMethod,
   otCalc,
+  FLAT_OT_RATE,
 } from "@/modules/requests/lib/types";
 import { readSettings as readSalarySettings, withSalaryTenant } from "@/modules/salary/lib/db";
 import { PERIOD_RE, periodDates, periodLabel as salaryPeriodLabel, periodOfDate, thaiDate as salaryThaiDate } from "@/modules/salary/lib/types";
@@ -327,7 +328,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
               {r.kind === "ot" && payHidden && (
                 <>
                   <div className="rounded-(--radius) bg-(--bg-soft) px-3 py-2 text-sm text-(--ink)">
-                    {hoursText(r.otMinutes ?? 0)} × {r.otPercent}% ({r.otRateLabel})
+                    {hoursText(r.otMinutes ?? 0)}{r.otRateLabel === FLAT_OT_RATE.label ? "" : ` × ${r.otPercent}%`} ({r.otRateLabel})
                     <div className="text-xs text-(--ink-soft)">ระบบคิดเงินให้จากเงินเดือน · ยอดเงิน{ceoText(HIDDEN_PAY_LABEL, ceo)} (ยอด OT บอกเงินเดือนได้)</div>
                   </div>
                   {scanNote && <Notice tone={scanNote.tone}>{scanNote.text}</Notice>}
@@ -358,7 +359,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
                     )
                   ) : r.otBase ? (
                     <div className="rounded-(--radius) bg-(--bg-soft) px-3 py-2 text-sm text-(--ink)">
-                      {r.otBaseKind === "monthly" ? `เงินเดือน ${baht(r.otBase)} ÷ 30 ÷ 8` : `ค่าแรง ${baht(r.otBase)}/วัน ÷ 8`} = {baht(round2(r.otBaseKind === "monthly" ? r.otBase / 240 : r.otBase / 8))}/ชม. × {r.otPercent}% × {hoursText(r.otMinutes ?? 0)}
+                      {r.otBaseKind === "monthly" ? `เงินเดือน ${baht(r.otBase)} ÷ 30 ÷ 8` : `ค่าแรง ${baht(r.otBase)}/วัน ÷ 8`} = {baht(round2(r.otBaseKind === "monthly" ? r.otBase / 240 : r.otBase / 8))}/ชม.{r.otRateLabel === FLAT_OT_RATE.label ? "" : ` × ${r.otPercent}%`} × {hoursText(r.otMinutes ?? 0)}
                       <div className="text-xs text-(--ink-soft)">{r.otRateLabel} · ตัวเลขตอนยื่น ไม่เปลี่ยนตามการปรับเงินเดือนทีหลัง</div>
                     </div>
                   ) : (
