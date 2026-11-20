@@ -163,21 +163,39 @@ export function SettingsForm({ initial }: { initial: RequestSettings }) {
       <section className="flex flex-col gap-3 rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4">
         <div>
           <h2 className="text-sm font-bold text-(--ink)">เพดานเบิกล่วงหน้า ต่อคน ต่อเดือน</h2>
-          <p className="text-xs text-(--ink-soft)">ยื่นเกินเพดานไม่ได้ (นับรวมที่รออนุมัติ/อนุมัติ/จ่ายแล้วในเดือนนั้น)</p>
+          <p className="text-xs text-(--ink-soft)">ใช้กับทั้งคนงานรายวันและพนักงานรายเดือน · เฉพาะใบ &quot;เบิกล่วงหน้า&quot; (ไม่เกี่ยวกับเบิกค่าใช้จ่าย/OT)</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <label className="flex items-start gap-3 text-sm text-(--ink)">
+          <input
+            type="checkbox"
+            className="mt-1 h-4 w-4"
+            checked={capMode !== "none"}
+            onChange={(e) => {
+              if (!e.target.checked) {
+                setCapMode("none");
+                setCapValue("");
+              } else setCapMode("baht");
+            }}
+          />
+          <span>
+            จำกัดยอดเบิกล่วงหน้า
+            <span className="block text-xs text-(--ink-soft)">
+              {capMode === "none" ? "ปิดอยู่ — เบิกได้ไม่จำกัด HR/ผู้อนุมัติเป็นคนดูเอง · ติ๊กเมื่ออยากตั้งเพดาน" : "ยื่นเกินเพดานไม่ได้ (นับรวมที่รออนุมัติ/อนุมัติ/จ่ายแล้วในเดือนนั้น)"}
+            </span>
+          </span>
+        </label>
+        {capMode !== "none" && <div className="flex flex-wrap gap-2">
           {(
             [
               ["baht", "ไม่เกิน … บาท"],
               ["days", "ไม่เกิน … วันของค่าแรง"],
-              ["none", "ไม่จำกัด"],
             ] as [AdvanceCapMode, string][]
           ).map(([m, label]) => (
             <button key={m} type="button" aria-pressed={capMode === m} onClick={() => setCapMode(m)} className={`h-9 rounded-full px-3.5 text-sm ${capMode === m ? "bg-(--brand-navy) font-semibold text-white" : "border border-(--line)"}`}>
               {label}
             </button>
           ))}
-        </div>
+        </div>}
         {capMode !== "none" && (
           <label className="flex max-w-xs flex-col gap-1.5 text-sm">
             <span className="font-semibold">{capMode === "baht" ? "เพดาน (บาท)" : "จำนวนวัน"}</span>
