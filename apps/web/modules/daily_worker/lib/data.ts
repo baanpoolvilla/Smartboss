@@ -299,11 +299,13 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
     const w = wf.wages.find((r) => r.employment_id === employmentId && r.effective_from <= date && (!r.effective_to || r.effective_to >= date));
     return w ? Number(w.amount) : null;
   };
-  const otPercentOn = (employmentId: string, date: string): number => rateOn(employmentId, date)?.otPercent ?? settings.otPercent;
+  // ทุกคนเท่ากัน (otPerPerson ปิด) = ไม่สน % รายคน
+  const ownPct = (p: number | null | undefined): number | null => (settings.otPerPerson ? (p ?? null) : null);
+  const otPercentOn = (employmentId: string, date: string): number => ownPct(rateOn(employmentId, date)?.otPercent) ?? settings.otPercent;
   const rateSourceOn = (employmentId: string, date: string): DayCell["rate"] => {
     const own = rateOn(employmentId, date);
     if (own) {
-      return { wage: own.dailyWage, otPercent: own.otPercent ?? settings.otPercent, origin: "module", byName: own.byName, from: own.from, otFromCompany: own.otPercent === null };
+      return { wage: own.dailyWage, otPercent: ownPct(own.otPercent) ?? settings.otPercent, origin: "module", byName: own.byName, from: own.from, otFromCompany: ownPct(own.otPercent) === null };
     }
     const w = wf.wages.find((r) => r.employment_id === employmentId && r.effective_from <= date && (!r.effective_to || r.effective_to >= date));
     return w ? { wage: Number(w.amount), otPercent: settings.otPercent, origin: "hr", byName: null, from: w.effective_from, otFromCompany: true } : undefined;
@@ -420,7 +422,7 @@ export async function loadMonth(orgId: string, month: string, now: Date = new Da
   });
 
   const unlinkedUserIds = wf.employments.filter((e) => !e.linked).map((e) => e.subject);
-  return { month, days: total, today, unlinkedUserIds, workers: rows, otPercent: settings.otPercent, dayOffTypeId: wf.dayOffTypeId, shifts: wf.shifts.map((s) => ({ id: s.id, name: s.name, start: s.start_minutes, end: s.end_minutes })) };
+  return { month, days: total, today, unlinkedUserIds, workers: rows, otPercent: settings.otPercent, otPerPerson: settings.otPerPerson, dayOffTypeId: wf.dayOffTypeId, shifts: wf.shifts.map((s) => ({ id: s.id, name: s.name, start: s.start_minutes, end: s.end_minutes })) };
 }
 
 /** สรุปของคนหนึ่งในเดือนนั้น — ใช้ทั้งตารางสรุป, Excel และหน้า "เดือนนี้ของฉัน" */

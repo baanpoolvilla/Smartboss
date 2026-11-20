@@ -19,8 +19,11 @@ interface Row {
  *   - % OT กลางของบริษัท (ค่าเริ่มต้น 150)
  *   - ค่าแรงต่อวัน + % OT เฉพาะคน (เว้นว่าง = ใช้ % กลาง) — เลือกหลายคนตั้งพร้อมกันได้ · มีผลตั้งแต่วันที่เลือก
  * OT ต่อชั่วโมง = ค่าแรงวัน ÷ 8 × % · หักสาย/กลับก่อน นาทีละ ค่าแรงวัน ÷ 480
+ * otPerPerson ปิด = ทุกคนใช้ % กลาง ซ่อนช่อง % รายคน (ค่ารายคนยังเก็บไว้ เปิดกลับมาก็ได้ค่าเดิม) — ผู้ใช้ 20/11/2569
  */
-export function PaySettings({ rows, otPercent, today }: { rows: Row[]; otPercent: number; today: string }) {
+export function PaySettings({ rows, otPercent, otPerPerson: savedPerPerson = true, today }: { rows: Row[]; otPercent: number; otPerPerson?: boolean; today: string }) {
+  // กดแล้วเปลี่ยนทันที (ไม่รอรีเฟรช) · บันทึกไม่ได้ = กลับค่าเดิม
+  const [otPerPerson, setOtPerPerson] = useState(savedPerPerson);
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [sel, setSel] = useState<Set<string>>(new Set());
@@ -60,7 +63,7 @@ export function PaySettings({ rows, otPercent, today }: { rows: Row[]; otPercent
           </p>
         </div>
         <label className="flex items-center gap-2 text-sm">
-          % OT ค่ากลาง
+          {otPerPerson ? "% OT ค่ากลาง" : "% OT ทุกคน"}
           <input
             id="dw-company-ot"
             type="number"
@@ -82,6 +85,38 @@ export function PaySettings({ rows, otPercent, today }: { rows: Row[]; otPercent
         </button>
       </div>
 
+      <div role="radiogroup" aria-label="วิธีตั้ง % OT คนงาน" className="flex flex-col gap-2 sm:flex-row">
+        {([
+          { v: false, title: "ทุกคนเท่ากัน", body: `ทุกคนใช้ % เดียวกัน (${otPercent}%) แก้ที่ช่องด้านบนช่องเดียว` },
+          { v: true, title: "กำหนดรายคน", body: "ใช้ % ด้านบนเป็นค่ากลาง และตั้ง % เฉพาะบางคนได้ในแถบล่าง" },
+        ] as const).map((o) => (
+          <label key={String(o.v)} className={`flex flex-1 cursor-pointer items-start gap-2.5 rounded-xl border p-3 text-sm ${otPerPerson === o.v ? "border-(--brand-navy,#1b2537) bg-(--bg-soft)" : "border-(--line)"}`}>
+            <input
+              type="radio"
+              name="dw-ot-mode"
+              className="mt-1 h-4 w-4"
+              checked={otPerPerson === o.v}
+              disabled={pending}
+              onChange={() => {
+                setOtPerPerson(o.v);
+                run(async () => {
+                  const r = await saveDwSettingsAction({ otPercent, otPerPerson: o.v });
+                  if (r.error) setOtPerPerson(!o.v);
+                  return r;
+                }, o.v ? "เปลี่ยนเป็นกำหนด % OT รายคนแล้ว" : `เปลี่ยนเป็นทุกคนใช้ ${otPercent}% แล้ว`);
+              }}
+            />
+            <span className="flex flex-col">
+              <span className="font-semibold">% OT: {o.title}</span>
+              <span className="text-xs text-(--ink-soft)">{o.body}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+      {!otPerPerson && rows.some((r) => r.otPercent !== null) && (
+        <p className="text-xs text-(--ink-soft)">บางคนเคยตั้ง % เฉพาะไว้ ตอนนี้ไม่ใช้ · เลือก &quot;กำหนดรายคน&quot; เมื่อไหร่ ค่าเดิมกลับมาเอง</p>
+      )}
+
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-xs text-(--ink-soft)">
@@ -102,7 +137,7 @@ export function PaySettings({ rows, otPercent, today }: { rows: Row[]; otPercent
           </thead>
           <tbody>
             {rows.map((r) => {
-              const pct = r.otPercent ?? otPercent;
+              const pct = (otPerPerson ? r.otPercent : null) ?? otPercent;
               return (
                 <tr key={r.employmentId} className="border-t border-(--line)">
                   <td className="py-1.5">
@@ -121,7 +156,9 @@ export function PaySettings({ rows, otPercent, today }: { rows: Row[]; otPercent
                     {r.dailyWage === null ? "—" : `${baht(Math.round(((r.dailyWage / 8) * pct) / 100 * 100) / 100)} บาท`}
                   </td>
                   <td className="py-1.5 text-right tabular-nums">
-                    {pct}%{r.otPercent === null && <span className="text-xs text-(--ink-soft)"> (กลาง)</span>}
+                    {pct}%
+                    {otPerPerson && r.otPercent === null && <span className="text-xs text-(--ink-soft)"> (กลาง)</span>}
+                    {!otPerPerson && r.otPercent !== null && r.otPercent !== otPercent && <span className="text-xs text-(--ink-soft)"> (เคยตั้ง {r.otPercent}%)</span>}
                   </td>
                 </tr>
               );
@@ -143,10 +180,10 @@ export function PaySettings({ rows, otPercent, today }: { rows: Row[]; otPercent
           ค่าแรงต่อวัน (บาท)
           <input id="dw-wage" type="number" min={1} value={wage} onChange={(e) => setWage(e.target.value)} placeholder="เช่น 400" className="w-28 rounded-lg border border-(--line) bg-(--bg) px-2 py-1 text-sm text-(--ink) tabular-nums" />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-(--ink-soft)">
+        {otPerPerson && <label className="flex flex-col gap-1 text-xs text-(--ink-soft)">
           % OT (เว้นว่าง = ค่ากลาง {otPercent}%)
           <input id="dw-ot-pct" type="number" min={1} max={1000} value={ot} onChange={(e) => setOt(e.target.value)} placeholder={String(otPercent)} className="w-28 rounded-lg border border-(--line) bg-(--bg) px-2 py-1 text-sm text-(--ink) tabular-nums" />
-        </label>
+        </label>}
         <label className="flex flex-col gap-1 text-xs text-(--ink-soft)">
           มีผลตั้งแต่วันที่
           <input id="dw-wage-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-lg border border-(--line) bg-(--bg) px-2 py-1 text-sm text-(--ink)" />
@@ -156,7 +193,7 @@ export function PaySettings({ rows, otPercent, today }: { rows: Row[]; otPercent
           disabled={pending || sel.size === 0 || !(wageNum > 0) || !from}
           onClick={() =>
             run(
-              () => savePayRateAction({ employmentIds: [...sel], dailyWage: wageNum, otPercent: ot.trim() ? Number(ot) : null, from }),
+              () => savePayRateAction({ employmentIds: [...sel], dailyWage: wageNum, otPercent: otPerPerson && ot.trim() ? Number(ot) : null, from, keepOt: !otPerPerson }),
               `ตั้งค่าแรง ${baht(wageNum)} บาท/วัน ให้ ${sel.size} คน (มีผลตั้งแต่ ${from}) แล้ว`,
             )
           }
@@ -166,7 +203,7 @@ export function PaySettings({ rows, otPercent, today }: { rows: Row[]; otPercent
         </button>
         {wageNum > 0 && (
           <span className="pb-1.5 text-xs text-(--ink-soft)">
-            สาย 1 นาที หัก {baht(Math.round((wageNum / 480) * 100) / 100)} บาท · OT ชม.ละ {baht(Math.round(((wageNum / 8) * (ot.trim() ? Number(ot) : otPercent)) / 100 * 100) / 100)} บาท
+            สาย 1 นาที หัก {baht(Math.round((wageNum / 480) * 100) / 100)} บาท · OT ชม.ละ {baht(Math.round(((wageNum / 8) * (otPerPerson && ot.trim() ? Number(ot) : otPercent)) / 100 * 100) / 100)} บาท
           </span>
         )}
       </div>

@@ -75,6 +75,8 @@ export interface MonthData {
   shifts: { id: string; name: string; start: number; end: number }[];
   /** % ค่า OT ของค่าแรงต่อชั่วโมง (ตั้งค่าได้ · ค่าเริ่มต้น 150) */
   otPercent: number;
+  /** false = ทุกคนใช้ % กลาง */
+  otPerPerson: boolean;
 }
 
 /** ผู้ดูแลแก้เวลาเข้า/ออกของวันหนึ่ง — store daily-worker-time-edits · null = ใช้เวลาที่สแกนจริง */
@@ -91,6 +93,8 @@ export interface TimeEditEntry {
 
 export interface DwSettings {
   otPercent: number;
+  /** true = % OT รายคนมีผล (แบบเดิม) · false = ทุกคนใช้ % กลาง */
+  otPerPerson: boolean;
 }
 
 /**

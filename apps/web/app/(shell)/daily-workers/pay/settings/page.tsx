@@ -31,6 +31,7 @@ export default async function PaySettingsPage() {
               .filter((w) => w.employmentId)
               .map((w) => ({ employmentId: w.employmentId!, name: w.name, employeeCode: w.employeeCode, dailyWage: w.dailyWage, otPercent: w.otPercent }))}
             otPercent={data.otPercent}
+            otPerPerson={data.otPerPerson}
             today={data.today}
           />
         )}

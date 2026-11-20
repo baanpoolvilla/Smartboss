@@ -449,7 +449,7 @@ export async function removeTimeEditAction(input: { employmentId: string; date: 
 }
 
 /** % OT กลางของบริษัท (คนงานที่ไม่ได้ตั้ง % เอง) */
-export async function saveDwSettingsAction(input: { otPercent: number }): Promise<Result> {
+export async function saveDwSettingsAction(input: { otPercent: number; otPerPerson?: boolean }): Promise<Result> {
   try {
     const session = await guard(DW_PERMS.pay);
     const p = Number(input.otPercent);
@@ -458,16 +458,23 @@ export async function saveDwSettingsAction(input: { otPercent: number }): Promis
     const byName = await nameOf(session.userId);
     await withDailyWorkerTenant(orgId, async (tx) => {
       const before = await tx.dailyWorkerSettings.findUnique({ where: { orgId } });
+      const perBefore = before?.otPerPerson ?? true;
+      const per = input.otPerPerson ?? perBefore;
       await tx.dailyWorkerSettings.upsert({
         where: { orgId },
-        create: { orgId, otPercent: p, updatedBy: session.userId },
-        update: { otPercent: p, updatedBy: session.userId },
+        create: { orgId, otPercent: p, otPerPerson: per, updatedBy: session.userId },
+        update: { otPercent: p, otPerPerson: per, updatedBy: session.userId },
       });
+      const pctBefore = before ? Number(before.otPercent.toString()) : 150;
+      const parts = [
+        pctBefore !== p ? `% OT กลาง ${pctBefore}% → ${p}%` : "",
+        perBefore !== per ? `% OT ${perBefore ? "กำหนดรายคน" : "ทุกคนเท่ากัน"} → ${per ? "กำหนดรายคน" : "ทุกคนเท่ากัน"}` : "",
+      ].filter(Boolean);
       await insertAudit(tx, orgId, {
         byUserId: session.userId,
         byName,
         action: "settings",
-        summary: `% OT กลาง ${before ? Number(before.otPercent.toString()) : 150}% → ${p}%`,
+        summary: parts.join(" · ") || `% OT กลาง ${p}%`,
       });
     });
     revalidatePath("/daily-workers");
@@ -481,7 +488,8 @@ export async function saveDwSettingsAction(input: { otPercent: number }): Promis
  * ตั้งค่าแรงรายวัน (+ % OT ของคนนั้น ถ้าต่างจากค่ากลาง) ให้คนงานหลายคนพร้อมกัน — มีผลตั้งแต่วัน `from`
  * วันก่อนหน้ายังคิดเรทเดิม (เก็บเป็นประวัติ ไม่เขียนทับ) · ตั้งซ้ำวันเดิม = แทนที่ของวันนั้น
  */
-export async function savePayRateAction(input: { employmentIds: string[]; dailyWage: number; otPercent: number | null; from: string }): Promise<Result> {
+/** keepOt = ไม่แตะ % OT รายคน (ใช้ % เดิมของแต่ละคน) — ตอนตั้งแบบ "ทุกคนเท่ากัน" ที่ไม่มีช่อง % ให้กรอก */
+export async function savePayRateAction(input: { employmentIds: string[]; dailyWage: number; otPercent: number | null; from: string; keepOt?: boolean }): Promise<Result> {
   try {
     const session = await guard(DW_PERMS.pay);
     const wage = Number(input.dailyWage);
@@ -495,12 +503,21 @@ export async function savePayRateAction(input: { employmentIds: string[]; dailyW
     const ids = [...new Set(input.employmentIds)];
     // เพิ่มเป็นประวัติเสมอ ไม่เขียนทับ — วันเดียวกันตั้งซ้ำ ตัวที่ตั้งทีหลังชนะ (rateOn เรียงตามเวลาที่ตั้ง)
     await withDailyWorkerTenant(orgId, async (tx) => {
+      const keep = new Map<string, number | null>();
+      if (input.keepOt) {
+        const prev = await tx.dailyWorkerPayRate.findMany({
+          where: { orgId, employmentId: { in: ids }, effectiveFrom: { lte: new Date(`${input.from}T00:00:00Z`) } },
+          orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }],
+          select: { employmentId: true, otPercent: true },
+        });
+        for (const r of prev) if (!keep.has(r.employmentId)) keep.set(r.employmentId, r.otPercent === null ? null : Number(r.otPercent.toString()));
+      }
       await tx.dailyWorkerPayRate.createMany({
         data: ids.map((employmentId) => ({
           orgId,
           employmentId,
           dailyWage: Math.round(wage * 100) / 100,
-          otPercent: ot,
+          otPercent: input.keepOt ? (keep.get(employmentId) ?? null) : ot,
           effectiveFrom: new Date(`${input.from}T00:00:00Z`),
           byUserId: session.userId,
           byName,
@@ -512,7 +529,7 @@ export async function savePayRateAction(input: { employmentIds: string[]; dailyW
         action: "pay_rate",
         employmentIds: ids,
         workDate: input.from,
-        summary: `ตั้งค่าแรง ${baht(Math.round(wage * 100) / 100)} บาท/วัน · OT ${ot === null ? "ใช้ % กลาง" : `${ot}%`} · มีผลตั้งแต่ ${input.from}`,
+        summary: `ตั้งค่าแรง ${baht(Math.round(wage * 100) / 100)} บาท/วัน · OT ${input.keepOt ? "ทุกคนใช้ % กลาง (ไม่แตะ % รายคน)" : ot === null ? "ใช้ % กลาง" : `${ot}%`} · มีผลตั้งแต่ ${input.from}`,
       });
     });
     revalidatePath("/daily-workers");

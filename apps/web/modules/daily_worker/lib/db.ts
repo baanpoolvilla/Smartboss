@@ -80,7 +80,7 @@ export async function readTimeEditsDb(orgId: string): Promise<TimeEditEntry[]> {
 export async function readSettingsDb(orgId: string): Promise<DwSettings> {
   const row = await withDailyWorkerTenant(orgId, (tx) => tx.dailyWorkerSettings.findUnique({ where: { orgId } }));
   const p = num(row?.otPercent);
-  return { otPercent: p && p > 0 ? p : DEFAULT_OT_PERCENT };
+  return { otPercent: p && p > 0 ? p : DEFAULT_OT_PERCENT, otPerPerson: row?.otPerPerson ?? true };
 }
 
 /* ───────────── ประวัติการแก้ไข (audit_events — เพิ่มได้อย่างเดียว) ───────────── */

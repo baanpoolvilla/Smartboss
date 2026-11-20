@@ -75,6 +75,8 @@ model DailyWorkerTimeEdit {
 model DailyWorkerSettings {
   orgId     String   @id @map("org_id")
   otPercent Decimal  @map("ot_percent") @db.Decimal(6, 2)
+  /// true = % OT ตั้งรายคนได้ (แบบเดิม) · false = ทุกคนใช้ % กลาง ไม่สน % รายคน (ค่ารายคนยังเก็บไว้)
+  otPerPerson Boolean @default(true) @map("ot_per_person")
   updatedBy String   @map("updated_by")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 

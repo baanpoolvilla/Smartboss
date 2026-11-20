@@ -78,7 +78,7 @@ export async function workerRateOn(orgId: string, employmentId: string, date: st
   const own = rates
     .filter((r) => r.employmentId === employmentId && r.from <= date)
     .sort((a, b) => (a.from === b.from ? b.at.localeCompare(a.at) : b.from.localeCompare(a.from)))[0];
-  if (own) return { wage: own.dailyWage, otPercent: own.otPercent ?? settings.otPercent };
+  if (own) return { wage: own.dailyWage, otPercent: (settings.otPerPerson ? own.otPercent : null) ?? settings.otPercent };
   const rows = await withWorkforceTenant(orgId, (tx) =>
     tx.$queryRawUnsafe<{ amount: string }[]>(
       `SELECT amount::text AS amount FROM workforce.compensation_rates
