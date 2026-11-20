@@ -2,8 +2,26 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 
 import { mySlips } from "../lib/views";
+import { mySavings } from "../lib/savings";
 import { fmtBaht, periodLabel, thaiDate } from "../lib/types";
 import { card } from "./ui";
+
+/** เงินสะสมของฉัน — ยอดรวมอย่างเดียว (ไม่มีเงินสะสม = ไม่มีกล่อง) */
+export async function MySavingsBox({ orgId, userId }: { orgId: string; userId: string }) {
+  const rows = await mySavings(orgId, userId).catch(() => []);
+  if (rows.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-2">
+      {rows.map((r) => (
+        <section key={r.name} className={`${card} flex flex-col gap-0.5 p-4`}>
+          <span className="text-sm text-(--ink-soft)">เงินสะสมของฉัน · {r.name}</span>
+          <span className="text-2xl font-bold tabular-nums text-(--ink)">{fmtBaht(r.total)}</span>
+          <span className="text-xs text-(--ink-soft)">{r.asOf ? `ถึง ${periodLabel(r.asOf)} · ` : ""}ได้คืนเมื่อออกจากงาน</span>
+        </section>
+      ))}
+    </div>
+  );
+}
 
 /** สลิปของฉัน — เฉพาะงวดที่บริษัทบันทึกจ่ายแล้ว */
 export async function MySlipList({ orgId, userId }: { orgId: string; userId: string }) {

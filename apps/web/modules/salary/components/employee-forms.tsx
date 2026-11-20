@@ -343,7 +343,7 @@ export function RecurringSection({
 }: {
   employmentId: string;
   rows: { id: string; name: string; kind: string; amount: number; fromPeriod: string; toPeriod: string | null; note: string }[];
-  items: { id: string; name: string; kind: string }[];
+  items: { id: string; name: string; kind: string; savings?: boolean }[];
   thisPeriod: string;
 }) {
   const ceo = useCeoTitle();
@@ -353,7 +353,9 @@ export function RecurringSection({
   const [from, setFrom] = useState(thisPeriod);
   const [to, setTo] = useState("");
   const [note, setNote] = useState("");
+  const [employer, setEmployer] = useState("");
   const { busy, error, run } = useRun();
+  const isSavings = !!items.find((i) => i.id === itemId)?.savings;
   return (
     <section className={`${card} flex flex-col gap-3 p-4 sm:p-5`}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -398,13 +400,19 @@ export function RecurringSection({
             <span className={labelText}>ถึงงวด (เว้นว่าง = ไม่มีกำหนด)</span>
             <input type="month" className={field} value={to} onChange={(e) => setTo(e.target.value)} />
           </label>
+          {isSavings && (
+            <label className={`${label} sm:col-span-2`}>
+              <span className={labelText}>บริษัทสมทบต่อเดือน (บาท) <span className="font-normal text-(--ink-soft)">ไม่หักจากพนักงาน · เข้าสมุดเงินสะสม</span></span>
+              <input inputMode="decimal" className={field} value={employer} onChange={(e) => setEmployer(e.target.value)} placeholder="0.00" />
+            </label>
+          )}
           <label className={`${label} sm:col-span-2`}>
             <span className={labelText}>หมายเหตุ</span>
             <input className={field} value={note} onChange={(e) => setNote(e.target.value)} />
           </label>
           <div className="flex gap-2 sm:col-span-2">
             <button type="button" className={outline} onClick={() => setOpen(false)} disabled={busy}>ยกเลิก</button>
-            <button type="button" className={navy} disabled={busy || !itemId || !amount || !from} onClick={() => run(() => addRecurringAction({ employmentId, itemId, amount: Number(amount.replace(/,/g, "")), fromPeriod: from, toPeriod: to || null, note }), () => { setOpen(false); setAmount(""); setNote(""); setTo(""); })}>
+            <button type="button" className={navy} disabled={busy || !itemId || !amount || !from} onClick={() => run(() => addRecurringAction({ employmentId, itemId, amount: Number(amount.replace(/,/g, "")), fromPeriod: from, toPeriod: to || null, note, employer: isSavings ? Number(employer.replace(/,/g, "") || 0) : 0 }), () => { setOpen(false); setAmount(""); setNote(""); setTo(""); setEmployer(""); })}>
               {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} เพิ่มรายการประจำ
             </button>
           </div>

@@ -68,7 +68,7 @@ export default async function SalarySettingsPage() {
         <SsoRates current={rateOn(rates.sso, today, DEFAULT_SSO)} isDefault={rates.sso.length === 0} history={rates.sso.map((r) => ({ from: r.effectiveFrom, p: r.params }))} />
         <TaxAndItemsSwitch taxEnabled={settings.taxEnabled} activeItems={items.filter((i) => i.active).length} totalItems={items.length} />
         {settings.taxEnabled && <TaxRates current={rateOn(rates.tax, today, DEFAULT_TAX)} isDefault={rates.tax.length === 0} />}
-        <ItemsList items={items.map((i) => ({ id: i.id, name: i.name, kind: i.kind as "earning" | "deduction", taxable: i.taxable, ssoBase: i.ssoBase, active: i.active }))} />
+        <ItemsList items={items.map((i) => ({ id: i.id, name: i.name, kind: i.kind as "earning" | "deduction", taxable: i.taxable, ssoBase: i.ssoBase, active: i.active, savings: i.savings }))} />
       </div>
     </AppScaffold>
   );

@@ -88,12 +88,14 @@ interface EmpRow {
 }
 
 /** ที่มาของรายการประจำบนสลิป: ผ่อนมีกำหนด = "ผ่อนงวดที่ 2/3 (ถึง ธ.ค. 2569)" · ไม่มีกำหนด = "ทุกเดือน ตั้งแต่ ต.ค. 2569" */
-function recurringDetail(from: string, to: string | null, period: string, note: string): string {
+function recurringDetail(from: string, to: string | null, period: string, note: string, savings?: { employer: number }): string {
   const idx = (a: string) => Number(a.slice(0, 4)) * 12 + Number(a.slice(5, 7));
+  // เงินสะสม: ไม่ใช่การผ่อน → "งวดที่ 2/4" · บอกยอดบริษัทสมทบด้วย
   const base = to
-    ? `ผ่อนงวดที่ ${idx(period) - idx(from) + 1}/${idx(to) - idx(from) + 1} (ถึง ${periodLabel(to)})`
+    ? `${savings ? "งวดที่" : "ผ่อนงวดที่"} ${idx(period) - idx(from) + 1}/${idx(to) - idx(from) + 1} (ถึง ${periodLabel(to)})`
     : `ทุกเดือน ตั้งแต่ ${periodLabel(from)}`;
-  return note ? `${base} · ${note}` : base;
+  const parts = [base, note, savings && savings.employer > 0 ? `บริษัทสมทบ ${fmtBaht(savings.employer)}` : ""].filter(Boolean);
+  return parts.join(" · ");
 }
 
 const clampDate = (d: string, lo: string, hi: string) => (d < lo ? lo : d > hi ? hi : d);
@@ -331,7 +333,7 @@ export async function loadPeriodInputs(
           amount: num(x.amount),
           taxable: it?.taxable ?? true,
           ssoBase: it?.ssoBase ?? false,
-          detail: recurringDetail(x.fromPeriod, x.toPeriod, run.period, x.note),
+          detail: recurringDetail(x.fromPeriod, x.toPeriod, run.period, x.note, it?.savings && it.kind === "deduction" ? { employer: num(x.employerAmount) } : undefined),
         };
       });
 

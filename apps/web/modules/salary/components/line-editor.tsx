@@ -31,7 +31,7 @@ export interface EditorData {
   /** เบี้ยขยันที่ระบบคิดได้ (ไม่มี = บริษัทไม่ได้เปิด/คนนี้ไม่ได้) */
   diligenceComputed?: number | null;
   deferred: { refId: string; code: string; amount: number }[];
-  items: { id: string; name: string; kind: "earning" | "deduction"; taxable: boolean; ssoBase: boolean }[];
+  items: { id: string; name: string; kind: "earning" | "deduction"; taxable: boolean; ssoBase: boolean; savings?: boolean }[];
   gross: number;
   deductions: number;
   net: number;
@@ -369,14 +369,20 @@ function AddForm({ kind, items, ctx }: { kind: "earning" | "deduction"; items: E
   const [taxable, setTaxable] = useState(true);
   const [ssoBase, setSsoBase] = useState(false);
   const [saveName, setSaveName] = useState(false);
+  const [savingsTick, setSavingsTick] = useState(false);
+  const [employer, setEmployer] = useState("");
   const { busy, error, run } = useRun();
   const other = itemId === OTHER;
+  // เงินสะสม (เช่น กองทุนสงเคราะห์ลูกจ้าง): มีช่องบริษัทสมทบ · ยอดเข้าสมุดเงินสะสมรายคนเมื่อรอบจ่ายแล้ว
+  const isSavings = kind === "deduction" && (other ? savingsTick : !!choices.find((c) => c.id === itemId)?.savings);
   const reset = () => {
     setOpen(false);
     setAmount("");
     setReason("");
     setName("");
     setRepeat("once");
+    setEmployer("");
+    setSavingsTick(false);
   };
   if (!open) {
     return (
@@ -411,6 +417,12 @@ function AddForm({ kind, items, ctx }: { kind: "earning" | "deduction"; items: E
             </div>
           )}
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={saveName} onChange={(e) => setSaveName(e.target.checked)} className="h-4 w-4" /> จำชื่อนี้ไว้ใช้ครั้งหน้า</label>
+          {kind === "deduction" && (
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" checked={savingsTick} onChange={(e) => setSavingsTick(e.target.checked)} className="mt-0.5 h-4 w-4" />
+              <span>เป็นเงินสะสม <span className="text-(--ink-soft)">เช่น กองทุนสงเคราะห์ลูกจ้าง — มีช่องบริษัทสมทบ และรวมยอดในสมุดเงินสะสมของคนนี้</span></span>
+            </label>
+          )}
         </div>
       )}
       <div className="grid grid-cols-2 gap-2">
@@ -427,6 +439,12 @@ function AddForm({ kind, items, ctx }: { kind: "earning" | "deduction"; items: E
           </select>
         </label>
       </div>
+      {isSavings && (
+        <label className={label}>
+          <span className={labelText}>บริษัทสมทบ (บาท) <span className="font-normal text-(--ink-soft)">ไม่หักจากพนักงาน · เข้าสมุดเงินสะสม{repeat !== "once" ? " ทุกงวด" : ""}</span></span>
+          <input inputMode="decimal" className={field} value={employer} onChange={(e) => setEmployer(e.target.value)} placeholder="0.00" />
+        </label>
+      )}
       {repeat === "months" && (
         <label className={label}>
           <span className={labelText}>กี่เดือน (เท่ากันทุกเดือน หยุดเอง)</span>
@@ -459,6 +477,8 @@ function AddForm({ kind, items, ctx }: { kind: "earning" | "deduction"; items: E
                   repeat,
                   months: Number(months),
                   saveName,
+                  savings: other ? savingsTick : undefined,
+                  employer: isSavings ? Number(employer.replace(/,/g, "") || 0) : 0,
                 }),
               reset,
             )

@@ -89,6 +89,8 @@ model SalaryItem {
   taxable   Boolean  @default(true)
   /// เงินได้: นับเป็นค่าจ้างคิดประกันสังคม
   ssoBase   Boolean  @default(false) @map("sso_base")
+  /// รายการหัก: เป็นเงินสะสม (มีสมุดสะสมรายคน + ช่องบริษัทสมทบ) เช่น กองทุนสงเคราะห์ลูกจ้าง
+  savings   Boolean  @default(false)
   active    Boolean  @default(true)
   sort      Int      @default(0)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -110,6 +112,8 @@ model SalaryEmployeeItem {
   /// งวดสุดท้าย (รวม) · null = ไม่มีกำหนด
   toPeriod      String?   @map("to_period")
   note          String    @default("")
+  /// เงินสะสม: บริษัทสมทบต่องวด (ไม่หักจากพนักงาน · เข้าสมุดเงินสะสมเมื่อรอบจ่ายแล้ว)
+  employerAmount Decimal  @default(0) @map("employer_amount") @db.Decimal(12, 2)
   createdByName String    @map("created_by_name")
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   /// เลิกใช้ (แทนการลบ)
@@ -257,5 +261,28 @@ model SalaryEvent {
 
   @@index([orgId, runId])
   @@map("events")
+  @@schema("salary")
+}
+
+/// สมุดเงินสะสมรายคน — ยอดยกมา (ก่อนมีระบบ) และการจ่ายคืน · ยอดรายเดือนอ่านจากรอบที่จ่ายแล้ว (ไม่เก็บซ้ำ)
+/// แก้ = ยกเลิกแถวเดิม (voided) แล้วเพิ่มแถวใหม่ — เห็นประวัติว่าใครแก้
+model SalarySavingsEntry {
+  id             String    @id @default(uuid())
+  orgId          String    @map("org_id")
+  employmentId   String    @map("employment_id")
+  itemId         String    @map("item_id")
+  /// opening = ยอดยกมา · payout = จ่ายคืนแล้ว
+  kind           String
+  employeeAmount Decimal   @default(0) @map("employee_amount") @db.Decimal(12, 2)
+  employerAmount Decimal   @default(0) @map("employer_amount") @db.Decimal(12, 2)
+  onDate         DateTime  @map("on_date") @db.Date
+  note           String    @default("")
+  createdByName  String    @map("created_by_name")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  voidedAt       DateTime? @map("voided_at") @db.Timestamptz(6)
+  voidedByName   String?   @map("voided_by_name")
+
+  @@index([orgId, employmentId])
+  @@map("savings_entries")
   @@schema("salary")
 }

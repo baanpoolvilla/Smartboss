@@ -173,6 +173,12 @@ export interface Adjustment {
   ssoBase: boolean;
   reason: string;
   byName: string;
+  /** รายการหักที่เป็นเงินสะสม (สมุดเงินสะสมรายคน) */
+  savings?: boolean;
+  /** เงินสะสม: บริษัทสมทบ (บาท) ไม่หักจากพนักงาน */
+  employer?: number;
+  /** ชื่อรายการที่ตั้งไว้ (ไว้รวมยอดเงินสะสมตามรายการ) */
+  itemId?: string | null;
 }
 
 export interface Override {
@@ -498,7 +504,7 @@ export function computePay(input: ComputeInput): ComputeResult {
   for (const a of input.adjustments) {
     const amt = s(a.amount);
     if (amt <= 0) continue;
-    const how = `${a.reason}${a.byName ? ` · เพิ่มโดย ${a.byName}` : ""}`;
+    const how = `${a.reason}${a.savings && (a.employer ?? 0) > 0 ? ` · บริษัทสมทบ ${fmt(s(a.employer!))}` : ""}${a.byName ? ` · เพิ่มโดย ${a.byName}` : ""}`;
     if (a.kind === "earning") {
       lines.push({ key: `adj:${a.id}`, label: a.label, kind: "earning", amount: toBaht(amt), how, source: "adjustment", auto: false, refId: a.id });
       if (a.taxable) irregularEarn += amt;

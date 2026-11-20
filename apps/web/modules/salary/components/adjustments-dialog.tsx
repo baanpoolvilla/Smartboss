@@ -28,6 +28,7 @@ export interface ReviewItem {
   kind: "earning" | "deduction";
   taxable: boolean;
   ssoBase: boolean;
+  savings?: boolean;
 }
 
 /**
@@ -237,9 +238,11 @@ function AddRow({ ctx, items, onDone }: { ctx: { runId: string; employmentId: st
   const [labelText, setLabelText] = useState("");
   const [reason, setReason] = useState("");
   const [amount, setAmount] = useState("");
+  const [employer, setEmployer] = useState("");
   const { busy, error, run } = useRun();
   const list = items.filter((i) => i.kind === kind);
   const item = list.find((i) => i.id === itemId);
+  const isSavings = kind === "deduction" && !!item?.savings;
   const chip = (on: boolean, tone: string) => `h-9 rounded-full border px-3 text-sm ${on ? `${tone} font-semibold` : "border-(--line) text-(--ink-soft)"}`;
   return (
     <div className="mt-2 flex flex-col gap-2 rounded-(--radius) border border-dashed border-(--line) bg-(--bg-soft) p-3">
@@ -258,6 +261,13 @@ function AddRow({ ctx, items, onDone }: { ctx: { runId: string; employmentId: st
         <input aria-label="รายละเอียด" className={`${field} h-10`} placeholder={`รายละเอียด (${ceo} เห็นตอนอนุมัติ)`} value={reason} onChange={(e) => setReason(e.target.value)} />
         <input aria-label="จำนวนเงิน" inputMode="decimal" className={`${field} h-10`} placeholder="บาท" value={amount} onChange={(e) => setAmount(e.target.value)} />
       </div>
+      {isSavings && (
+        <label className="flex flex-wrap items-center gap-2 text-sm">
+          <span>บริษัทสมทบ (บาท)</span>
+          <input aria-label="บริษัทสมทบ" inputMode="decimal" className={`${field} h-10 w-32`} placeholder="0.00" value={employer} onChange={(e) => setEmployer(e.target.value)} />
+          <span className={hint}>ไม่หักจากพนักงาน · เข้าสมุดเงินสะสม</span>
+        </label>
+      )}
       <p className={hint}>เป็นรายการของงวดนี้งวดเดียว · ทุกเดือน/ผ่อนหลายงวด ตั้งที่ &quot;แก้ไข&quot; รายคน</p>
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" className={`${outline} h-10`} onClick={onDone} disabled={busy}>ยกเลิก</button>
@@ -280,6 +290,7 @@ function AddRow({ ctx, items, onDone }: { ctx: { runId: string; employmentId: st
                   repeat: "once",
                   months: 0,
                   saveName: false,
+                  employer: isSavings ? Number(employer.replace(/,/g, "") || 0) : 0,
                 }),
               onDone,
             )

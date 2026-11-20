@@ -7,6 +7,8 @@ import { readSettings, withSalaryTenant } from "@/modules/salary/lib/db";
 import { ownSalaryLocked } from "@/modules/salary/lib/access";
 import { salaryPage } from "@/modules/salary/lib/page";
 import { lastPaidDiligence, listStaff } from "@/modules/salary/lib/views";
+import { savingsForEmployee } from "@/modules/salary/lib/savings";
+import { SavingsSection } from "@/modules/salary/components/savings-section";
 import { bangkokToday, periodDates, shiftPeriod, thaiDate } from "@/modules/salary/lib/types";
 
 import { ceoTitle } from "@/lib/ceo-title";
@@ -28,6 +30,7 @@ export default async function SalaryEmployeePage({ params }: { params: Promise<{
   const today = bangkokToday();
   const p = today.slice(0, 7);
   const lastDiligence = settings.diligenceEnabled ? await lastPaidDiligence(orgId, row.employmentId) : null;
+  const savings = await savingsForEmployee(orgId, row.employmentId);
   // คนทำเงินเดือน (ไม่ใช่ CEO) ดูของตัวเองได้แต่แก้ไม่ได้ — server ก็กันซ้ำใน actions
   const ownLocked = ownSalaryLocked(access, row.userId === session.userId);
   const thisPeriod = periodDates(p, settings.cutoffDay, settings.payDay).endsOn >= today ? p : shiftPeriod(p, 1);
@@ -73,7 +76,8 @@ export default async function SalaryEmployeePage({ params }: { params: Promise<{
             diligenceOpening: row.profile.diligenceOpening,
           }}
         />
-        <RecurringSection employmentId={row.employmentId} rows={row.recurring} items={items.map((i) => ({ id: i.id, name: i.name, kind: i.kind }))} thisPeriod={thisPeriod} />
+        <RecurringSection employmentId={row.employmentId} rows={row.recurring} items={items.map((i) => ({ id: i.id, name: i.name, kind: i.kind, savings: i.savings }))} thisPeriod={thisPeriod} />
+        <SavingsSection employmentId={row.employmentId} books={savings} today={today} />
         </>
         )}
       </div>

@@ -12,6 +12,7 @@ import { isOwnEmployment, ownSalaryLocked, salaryAccess, type SalaryAccess } fro
 import type { Adjustment } from "./lib/compute";
 import { insertEvent, readSettings, withSalaryTenant } from "./lib/db";
 import { actorOf } from "./lib/page";
+import { savingsBooksTx } from "./lib/savings";
 import { computeRun, createRun, decideRun, deleteRun, editLine, markPaid, setExcluded, setRunNote, submitRun, type Actor } from "./lib/run";
 import {
   ALLOWANCE_FIELDS,
@@ -323,7 +324,7 @@ export async function addRateAction(input: { kind: "sso" | "tax"; effectiveFrom:
 
 /* ═════════════════════════ ชื่อรายการเงินได้/รายการหัก ═════════════════════════ */
 
-export async function saveItemAction(input: { id?: string | null; name: string; kind: ItemKind; taxable: boolean; ssoBase: boolean; active: boolean }): Promise<Result<{ id: string }>> {
+export async function saveItemAction(input: { id?: string | null; name: string; kind: ItemKind; taxable: boolean; ssoBase: boolean; active: boolean; savings?: boolean }): Promise<Result<{ id: string }>> {
   try {
     const { orgId, actor } = await guard("canEdit");
     const name = text(input.name, 50);
@@ -332,7 +333,7 @@ export async function saveItemAction(input: { id?: string | null; name: string; 
     const id = await withSalaryTenant(orgId, async (tx) => {
       const dup = await tx.salaryItem.findFirst({ where: { orgId, name, kind: input.kind, ...(input.id ? { id: { not: input.id } } : {}) } });
       if (dup) throw new Error(`มีรายการ "${name}" อยู่แล้ว`);
-      const data = { name, kind: input.kind, taxable: input.kind === "earning" ? !!input.taxable : false, ssoBase: input.kind === "earning" ? !!input.ssoBase : false, active: !!input.active };
+      const data = { name, kind: input.kind, taxable: input.kind === "earning" ? !!input.taxable : false, ssoBase: input.kind === "earning" ? !!input.ssoBase : false, savings: input.kind === "deduction" ? !!input.savings : false, active: !!input.active };
       const row = input.id
         ? await tx.salaryItem.update({ where: { id: input.id }, data }).catch(() => null)
         : await tx.salaryItem.create({ data: { orgId, ...data } });
@@ -466,7 +467,7 @@ export async function setSalaryAction(input: { employmentId: string; amount: num
   }
 }
 
-export async function addRecurringAction(input: { employmentId: string; itemId: string; amount: number; fromPeriod: string; toPeriod: string | null; note: string }): Promise<Result> {
+export async function addRecurringAction(input: { employmentId: string; itemId: string; amount: number; fromPeriod: string; toPeriod: string | null; note: string; employer?: number }): Promise<Result> {
   try {
     const g = await guardFor(input.employmentId);
     const { orgId, actor } = g;
@@ -477,7 +478,8 @@ export async function addRecurringAction(input: { employmentId: string; itemId: 
     await withSalaryTenant(orgId, async (tx) => {
       const item = await tx.salaryItem.findFirst({ where: { orgId, id: input.itemId } });
       if (!item) throw new Error("ไม่พบชื่อรายการ");
-      await tx.salaryEmployeeItem.create({ data: { orgId, employmentId: input.employmentId, itemId: item.id, amount, fromPeriod: input.fromPeriod, toPeriod: input.toPeriod, note: text(input.note, 200), createdByName: actor.name } });
+      const employer = item.savings ? money(input.employer ?? 0, "บริษัทสมทบ", 10_000_000) : 0;
+      await tx.salaryEmployeeItem.create({ data: { orgId, employmentId: input.employmentId, itemId: item.id, amount, fromPeriod: input.fromPeriod, toPeriod: input.toPeriod, note: text(input.note, 200), employerAmount: employer, createdByName: actor.name } });
       await insertEvent(tx, orgId, { byUserId: actor.userId, byName: actor.name, action: "employee", summary: `รายการประจำ "${item.name}" ${fmtBaht(amount)} ตั้งแต่ ${periodLabel(input.fromPeriod)}${input.toPeriod ? ` ถึง ${periodLabel(input.toPeriod)}` : ""}` });
     });
     await noteSelfEdit(g, input.employmentId, `เพิ่มรายการประจำ ${fmtBaht(Number(input.amount))} ตั้งแต่ ${periodLabel(input.fromPeriod)}`);
@@ -502,6 +504,57 @@ export async function endRecurringAction(input: { id: string }): Promise<Result>
       return { own, employmentId: row.employmentId, amount: Number(row.amount) };
     });
     await noteSelfEdit({ selfEdit: ended.own && !access.isCeo, orgId, actor, session }, ended.employmentId, `เลิกรายการประจำ ${fmtBaht(ended.amount)}`);
+    refresh();
+    return { ok: true };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/* ── สมุดเงินสะสมรายคน (ผู้ใช้ 20/11/2569) — ยอดยกมา/จ่ายคืน · แก้ = ยกเลิกแถวเดิม เพิ่มใหม่ (เห็นประวัติ) ── */
+
+const todayBkk = () => new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+
+export async function setSavingsOpeningAction(input: { employmentId: string; itemId: string; employee: number; employer: number; note: string }): Promise<Result> {
+  try {
+    const g = await guardFor(input.employmentId);
+    const { orgId, actor } = g;
+    const employee = money(input.employee, "ยอดยกมา ส่วนพนักงาน", 10_000_000);
+    const employer = money(input.employer, "ยอดยกมา ส่วนบริษัท", 10_000_000);
+    const note = text(input.note, 200);
+    await withSalaryTenant(orgId, async (tx) => {
+      const item = await tx.salaryItem.findFirst({ where: { orgId, id: input.itemId, savings: true } });
+      if (!item) throw new Error("ไม่พบรายการเงินสะสม");
+      const old = await tx.salarySavingsEntry.findMany({ where: { orgId, employmentId: input.employmentId, itemId: item.id, kind: "opening", voidedAt: null } });
+      if (old.length) await tx.salarySavingsEntry.updateMany({ where: { id: { in: old.map((o) => o.id) } }, data: { voidedAt: new Date(), voidedByName: actor.name } });
+      if (employee > 0 || employer > 0) {
+        await tx.salarySavingsEntry.create({ data: { orgId, employmentId: input.employmentId, itemId: item.id, kind: "opening", employeeAmount: employee, employerAmount: employer, onDate: new Date(`${todayBkk()}T00:00:00Z`), note, createdByName: actor.name } });
+      }
+      const was = old[0] ? `${fmtBaht(Number(old[0].employeeAmount))} + ${fmtBaht(Number(old[0].employerAmount))}` : "ไม่มี";
+      await insertEvent(tx, orgId, { byUserId: actor.userId, byName: actor.name, action: "savings", summary: `ยอดยกมา "${item.name}": ${was} → ${fmtBaht(employee)} + ${fmtBaht(employer)}${note ? ` · ${note}` : ""}`, detail: { employmentId: input.employmentId } });
+    });
+    await noteSelfEdit(g, input.employmentId, "แก้ยอดยกมาเงินสะสม");
+    refresh();
+    return { ok: true };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/** จ่ายคืนเงินสะสมทั้งก้อน (เช่น ลาออก) — บันทึกยอดคงเหลือ ณ ตอนนี้ แล้วยอดกลับเป็น 0 */
+export async function savingsPayoutAction(input: { employmentId: string; itemId: string; onDate: string; note: string }): Promise<Result> {
+  try {
+    const g = await guardFor(input.employmentId);
+    const { orgId, actor } = g;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(input.onDate)) return { error: "ใส่วันที่จ่ายคืน" };
+    const note = text(input.note, 200);
+    await withSalaryTenant(orgId, async (tx) => {
+      const book = (await savingsBooksTx(tx, orgId, [input.employmentId])).get(input.employmentId)?.find((b) => b.itemId === input.itemId);
+      if (!book || book.total <= 0) throw new Error("ไม่มียอดคงเหลือให้จ่ายคืน");
+      await tx.salarySavingsEntry.create({ data: { orgId, employmentId: input.employmentId, itemId: input.itemId, kind: "payout", employeeAmount: book.employee, employerAmount: book.employer, onDate: new Date(`${input.onDate}T00:00:00Z`), note, createdByName: actor.name } });
+      await insertEvent(tx, orgId, { byUserId: actor.userId, byName: actor.name, action: "savings", summary: `จ่ายคืนเงินสะสม "${book.name}" ${fmtBaht(book.total)}${note ? ` · ${note}` : ""}`, detail: { employmentId: input.employmentId } });
+    });
+    await noteSelfEdit(g, input.employmentId, "บันทึกจ่ายคืนเงินสะสม");
     refresh();
     return { ok: true };
   } catch (error) {
@@ -556,6 +609,10 @@ export interface AdjustInput {
   months: number;
   /** จำชื่อที่พิมพ์เองไว้เป็นรายการในตั้งค่า */
   saveName: boolean;
+  /** รายการหักที่พิมพ์ชื่อเอง: เป็นเงินสะสม (เลือกจากรายการ = ใช้ธงของรายการนั้น) */
+  savings?: boolean;
+  /** เงินสะสม: บริษัทสมทบ (บาท) */
+  employer?: number;
 }
 
 export async function addAdjustmentAction(input: AdjustInput): Promise<Result> {
@@ -568,10 +625,12 @@ export async function addAdjustmentAction(input: AdjustInput): Promise<Result> {
     const reason = text(input.reason, 300);
     if (!reason) return { error: `ใส่หมายเหตุ (${ceo} เห็นตอนอนุมัติ)` };
     if (input.kind !== "earning" && input.kind !== "deduction") return { error: "ชนิดรายการไม่ถูกต้อง" };
+    const employer = money(input.employer ?? 0, "บริษัทสมทบ", 10_000_000);
     // ชื่อ: จากรายการที่ตั้งไว้ (ใช้ธงภาษี/ประกันสังคมของรายการนั้น) หรือพิมพ์เอง
     let label = text(input.label, 50);
     let taxable = input.kind === "earning" ? !!input.taxable : false;
     let ssoBase = input.kind === "earning" ? !!input.ssoBase : false;
+    let savings = input.kind === "deduction" ? !!input.savings : false;
     let itemId = input.itemId;
     const run = await withSalaryTenant(orgId, async (tx) => {
       const r = await tx.salaryRun.findFirst({ where: { orgId, id: input.runId } });
@@ -582,11 +641,13 @@ export async function addAdjustmentAction(input: AdjustInput): Promise<Result> {
         label = item.name;
         taxable = item.taxable;
         ssoBase = item.ssoBase;
+        savings = item.kind === "deduction" && item.savings;
       } else {
         if (!label) throw new Error("พิมพ์ชื่อรายการ");
         if (input.saveName || input.repeat !== "once") {
           const found = await tx.salaryItem.findFirst({ where: { orgId, name: label, kind: input.kind } });
-          itemId = found ? found.id : (await tx.salaryItem.create({ data: { orgId, name: label, kind: input.kind, taxable, ssoBase } })).id;
+          itemId = found ? found.id : (await tx.salaryItem.create({ data: { orgId, name: label, kind: input.kind, taxable, ssoBase, savings } })).id;
+          if (found && savings && !found.savings) await tx.salaryItem.update({ where: { id: found.id }, data: { savings: true } });
         }
       }
       // ทุกเดือน / ผ่อน: สร้างเป็นรายการประจำของคนนี้ เริ่มงวดนี้ (คำนวณใหม่แล้วจะเข้ามาเองในฐานะรายการประจำ)
@@ -596,12 +657,12 @@ export async function addAdjustmentAction(input: AdjustInput): Promise<Result> {
         const [y, m] = r.period.split("-").map(Number) as [number, number];
         const endIdx = y * 12 + (m - 1) + (input.repeat === "months" ? months - 1 : 0);
         const toPeriod = input.repeat === "months" ? `${Math.floor(endIdx / 12)}-${String((endIdx % 12) + 1).padStart(2, "0")}` : null;
-        await tx.salaryEmployeeItem.create({ data: { orgId, employmentId: input.employmentId, itemId: itemId!, amount, fromPeriod: r.period, toPeriod, note: reason, createdByName: actor.name } });
+        await tx.salaryEmployeeItem.create({ data: { orgId, employmentId: input.employmentId, itemId: itemId!, amount, fromPeriod: r.period, toPeriod, note: reason, employerAmount: savings ? employer : 0, createdByName: actor.name } });
       }
       return r;
     });
     if (input.repeat === "once") {
-      const adj: Adjustment = { id: randomUUID(), label, kind: input.kind, amount, taxable, ssoBase, reason, byName: actor.name };
+      const adj: Adjustment = { id: randomUUID(), label, kind: input.kind, amount, taxable, ssoBase, reason, byName: actor.name, ...(savings ? { savings: true, employer, itemId: itemId ?? null } : {}) };
       await editLine(orgId, actor, input, (line) => ({
         adjustments: [...line.adjustments, adj],
         info: line.info,

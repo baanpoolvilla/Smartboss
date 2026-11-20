@@ -83,7 +83,7 @@ export default async function RunPage({ params, searchParams }: { params: Promis
         overrides: { sso: editLine.info?.overrides?.sso, tax: editLine.info?.overrides?.tax, commission: editLine.info?.overrides?.commission, diligence: editLine.info?.overrides?.diligence },
         diligenceComputed: editLine.info?.diligence ? (editLine.info.diligence.computed ?? editLine.info.diligence.amount) : null,
         deferred: editLine.info?.deferredAdvances ?? [],
-        items: items.map((i) => ({ id: i.id, name: i.name, kind: i.kind as "earning" | "deduction", taxable: i.taxable, ssoBase: i.ssoBase })),
+        items: items.map((i) => ({ id: i.id, name: i.name, kind: i.kind as "earning" | "deduction", taxable: i.taxable, ssoBase: i.ssoBase, savings: i.savings })),
         gross: editLine.gross,
         deductions: editLine.deductions,
         net: editLine.net,
@@ -119,7 +119,7 @@ export default async function RunPage({ params, searchParams }: { params: Promis
     adjustments: l.adjustments,
     net: l.net,
   }));
-  const reviewItems = items.map((i) => ({ id: i.id, name: i.name, kind: i.kind as "earning" | "deduction", taxable: i.taxable, ssoBase: i.ssoBase }));
+  const reviewItems = items.map((i) => ({ id: i.id, name: i.name, kind: i.kind as "earning" | "deduction", taxable: i.taxable, ssoBase: i.ssoBase, savings: i.savings }));
   const plusTotal = Math.round((t.gross - salaryTotal) * 100) / 100;
   const stepHelp: Record<string, React.ReactNode> = {
     draft: (

@@ -334,7 +334,7 @@ export function TaxAndItemsSwitch({ taxEnabled, activeItems, totalItems }: { tax
 }
 
 /** ชื่อรายการปรับเพิ่ม/ปรับลด ของบริษัท */
-export function ItemsList({ items }: { items: { id: string; name: string; kind: "earning" | "deduction"; taxable: boolean; ssoBase: boolean; active: boolean }[] }) {
+export function ItemsList({ items }: { items: { id: string; name: string; kind: "earning" | "deduction"; taxable: boolean; ssoBase: boolean; active: boolean; savings?: boolean }[] }) {
   const [adding, setAdding] = useState(false);
   const [n, setN] = useState({ name: "", kind: "earning" as "earning" | "deduction", taxable: true, ssoBase: false });
   const { busy, error, run } = useRun();
@@ -374,7 +374,7 @@ export function ItemsList({ items }: { items: { id: string; name: string; kind: 
   );
 }
 
-function ItemRow({ it }: { it: { id: string; name: string; kind: "earning" | "deduction"; taxable: boolean; ssoBase: boolean; active: boolean } }) {
+function ItemRow({ it }: { it: { id: string; name: string; kind: "earning" | "deduction"; taxable: boolean; ssoBase: boolean; active: boolean; savings?: boolean } }) {
   const { busy, error, run } = useRun();
   const save = (patch: Partial<typeof it>) => run(() => saveItemAction({ ...it, ...patch }));
   return (
@@ -387,6 +387,9 @@ function ItemRow({ it }: { it: { id: string; name: string; kind: "earning" | "de
             <label className="flex items-center gap-1.5"><input type="checkbox" className="h-4 w-4" checked={it.taxable} disabled={busy} onChange={(e) => save({ taxable: e.target.checked })} /> คิดภาษี</label>
             <label className="flex items-center gap-1.5"><input type="checkbox" className="h-4 w-4" checked={it.ssoBase} disabled={busy} onChange={(e) => save({ ssoBase: e.target.checked })} /> คิดประกันสังคม</label>
           </>
+        )}
+        {it.kind === "deduction" && it.active && (
+          <label className="flex items-center gap-1.5"><input type="checkbox" className="h-4 w-4" checked={!!it.savings} disabled={busy} onChange={(e) => save({ savings: e.target.checked })} /> เงินสะสม</label>
         )}
         <button type="button" className="font-semibold text-(--app-strong) underline" disabled={busy} onClick={() => save({ active: !it.active })}>{it.active ? "ปิดใช้" : "เปิดใช้"}</button>
       </span>
