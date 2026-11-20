@@ -152,6 +152,12 @@ describe("social security", () => {
     expect(computePay(base({ salary, ot })).ssoEmployee).toBe(792);
     expect(computePay(base({ salary, ot, settings: { ...base().settings, otSsoBase: false } })).ssoEmployee).toBe(750);
   });
+  it("SSO line says what wasn't counted", () => {
+    const ot = [{ refId: "r1", code: "REQ-1", label: "ค่าล่วงเวลา", amount: 1000, minutes: 60, detail: "1 ชม." }];
+    const off = computePay(base({ ot, settings: { ...base().settings, otSsoBase: false } }));
+    expect(off.lines.find((l) => l.key === "sso")?.how).toMatch(/ไม่นับ OT/);
+    expect(computePay(base({ ot })).lines.find((l) => l.key === "sso")?.how).not.toMatch(/ไม่นับ/);
+  });
   it("rounds .50 up", () => {
     const r = computePay(base({ salary: [{ monthly: 15850, from: "2026-09-26", to: "2026-10-25" }] }));
     expect(r.ssoEmployee).toBe(793);

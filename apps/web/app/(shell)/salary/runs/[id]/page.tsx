@@ -489,6 +489,29 @@ export default async function RunPage({ params, searchParams }: { params: Promis
             </div>
             )}
             {run.status === "paid" && <div className="flex justify-between text-xs text-(--ink-soft)"><span>ค่าธรรมเนียมโอน</span><span className="tabular-nums">{fmtBaht(run.bankFee)}</span></div>}
+            {/* วิธีคิดที่บริษัทตั้งไว้ — HR เห็นทันทีโดยไม่ต้องเปิดหน้าตั้งค่า */}
+            <div className="mt-3 flex flex-col gap-1 border-t border-(--line) pt-3 text-xs">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="font-semibold text-(--ink)">บริษัทตั้งไว้ว่า</span>
+                <Link href="/salary/settings" className="text-(--app-strong) underline">แก้ที่ตั้งค่า</Link>
+              </div>
+              <span>
+                <strong>ประกันสังคม</strong> {ssoP.employeeRate}% ของ{["เงินเดือน", settings.commissionSsoBase && "ค่าคอม", settings.otSsoBase && "OT", settings.diligenceSsoBase && "เบี้ยขยัน"].filter(Boolean).join(" + ")}
+                {" "}(หักไม่เกิน {fmtBaht(ssoP.maxContribution)})
+                {(() => {
+                  const off = [!settings.commissionSsoBase && "ค่าคอม", !settings.otSsoBase && "OT", !settings.diligenceSsoBase && "เบี้ยขยัน"].filter(Boolean);
+                  return off.length > 0 ? <span className="text-(--ink-soft)"> · ไม่นับ {off.join(", ")}</span> : null;
+                })()}
+              </span>
+              <span><strong>ภาษี</strong> {settings.taxEnabled ? "เปิด — คิดจากเงินได้ทุกอย่าง แบบขั้นบันไดทั้งปี" : "ปิด — ไม่หักภาษีใคร"}</span>
+              <span>
+                <strong>หักเงิน</strong>{" "}
+                {[settings.deductUnpaidLeave && "ลาไม่รับค่าจ้าง", settings.deductAbsent && "ขาดงาน", settings.deductLate && "มาสาย"].filter(Boolean).join(", ") || "ไม่หักลา/ขาด/สาย"}
+                {" "}+ เบิกล่วงหน้า + ที่ HR ใส่เอง
+                {(!settings.deductAbsent || !settings.deductLate) && <span className="text-(--ink-soft)"> · {[!settings.deductAbsent && "ขาด", !settings.deductLate && "สาย"].filter(Boolean).join("/")}ไม่หักเงิน (มีผลแค่คะแนน)</span>}
+              </span>
+              <span><strong>OT</strong> {settings.otMode === "days" ? "นับเป็นวัน" : "ตามชั่วโมงในใบ OT"} · <strong>เบี้ยขยัน</strong> {settings.diligenceEnabled ? "เปิด" : "ปิด"}</span>
+            </div>
           </section>
         </div>
       </div>

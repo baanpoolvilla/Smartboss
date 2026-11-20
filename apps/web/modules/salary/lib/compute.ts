@@ -433,12 +433,15 @@ export function computePay(input: ComputeInput): ComputeResult {
   let regularEarn = 0; // เงินได้ประจำ (คิดภาษีแบบทั้งปี)
   let irregularEarn = 0; // เงินได้ไม่ประจำ (คิดภาษีทั้งก้อนงวดนี้)
   let ssoExtra = 0;
+  // เงินที่คนนี้ได้แต่ไม่นับฐานประกันสังคม — บอกในบรรทัดประกันสังคมให้ HR/พนักงานเห็น (ไม่ต้องไปเดาจากตั้งค่า)
+  const ssoSkipped = new Set<string>();
   for (const o of input.ot) {
     const amt = s(o.amount);
     if (amt <= 0) continue;
     lines.push({ key: `ot:${o.refId}`, label: o.label, kind: "earning", amount: toBaht(amt), how: o.detail, source: "ot", auto: true, refId: o.refId, ...(o.formula ? { formula: o.formula } : {}) });
     irregularEarn += amt;
     if (input.settings.otSsoBase) ssoExtra += amt;
+    else ssoSkipped.add("OT");
   }
   for (const r of input.recurring) {
     const amt = s(r.amount);
@@ -447,6 +450,7 @@ export function computePay(input: ComputeInput): ComputeResult {
       lines.push({ key: `rec:${r.refId}`, label: r.name, kind: "earning", amount: toBaht(amt), how: r.detail ?? "รายการประจำทุกเดือน", source: "recurring", auto: true, refId: r.refId });
       if (r.taxable) regularEarn += amt;
       if (r.ssoBase) ssoExtra += amt;
+      else ssoSkipped.add(r.name);
     } else {
       lines.push({ key: `rec:${r.refId}`, label: r.name, kind: "deduction", amount: toBaht(amt), how: r.detail ?? "รายการหักประจำทุกเดือน", source: "recurring", auto: true, refId: r.refId });
     }
@@ -474,6 +478,7 @@ export function computePay(input: ComputeInput): ComputeResult {
       lines.push({ key: "commission", label: comm?.label ?? "ค่าคอม (ตามเกรด)", kind: "earning", amount: toBaht(commAmt), how, source: "commission", auto: !commOverride });
       if (comm?.taxable ?? true) irregularEarn += commAmt;
       if (input.settings.commissionSsoBase ?? comm?.ssoBase ?? true) ssoExtra += commAmt;
+      else ssoSkipped.add("ค่าคอม");
     }
   }
   // เบี้ยขยัน — เงินจูงใจ ไม่ใช่ค่าจ้าง (ไม่นับฐานประกันสังคม เว้นแต่ติ๊กในตั้งค่า) · จ่ายไม่แน่นอน = เงินได้ไม่ประจำ (ภาษี)
@@ -488,6 +493,7 @@ export function computePay(input: ComputeInput): ComputeResult {
     }
     irregularEarn += amt;
     if (input.settings.diligenceSsoBase) ssoExtra += amt;
+    else if (amt > 0) ssoSkipped.add("เบี้ยขยัน");
   }
   for (const a of input.adjustments) {
     const amt = s(a.amount);
@@ -497,6 +503,7 @@ export function computePay(input: ComputeInput): ComputeResult {
       lines.push({ key: `adj:${a.id}`, label: a.label, kind: "earning", amount: toBaht(amt), how, source: "adjustment", auto: false, refId: a.id });
       if (a.taxable) irregularEarn += amt;
       if (a.ssoBase) ssoExtra += amt;
+      else ssoSkipped.add(a.label);
     } else {
       lines.push({ key: `adj:${a.id}`, label: a.label, kind: "deduction", amount: toBaht(amt), how, source: "adjustment", auto: false, refId: a.id });
     }
@@ -523,7 +530,8 @@ export function computePay(input: ComputeInput): ComputeResult {
           ? `${p.employeeRate}% ของ ${fmt(s(p.wageFloor))} (ค่าจ้างต่ำกว่าขั้นต่ำ ใช้ขั้นต่ำ)`
           : `${p.employeeRate}% ของค่าจ้าง ${fmt(ssoBaseShown)}`;
   let ssoEmployee = ssoComputed;
-  let ssoHow = ssoHowAuto;
+  const skippedNote = !input.profile.ssoExempt && ssoWage > 0 && ssoSkipped.size > 0 ? ` · ไม่นับ ${[...ssoSkipped].join(", ")} (ตามตั้งค่า)` : "";
+  let ssoHow = ssoHowAuto + skippedNote;
   if (input.overrides.sso) {
     ssoEmployee = Math.max(0, s(input.overrides.sso.amount));
     ssoHow = `ปรับโดย ${input.overrides.sso.byName}: ${input.overrides.sso.reason} (ระบบคิดได้ ${fmt(ssoComputed)})`;
