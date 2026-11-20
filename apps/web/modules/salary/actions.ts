@@ -193,6 +193,7 @@ export interface SettingsInput {
   otSsoBase: boolean;
   commissionSsoBase: boolean;
   diligenceSsoBase: boolean;
+  savingsEmployer: boolean;
   taxEnabled: boolean;
   otMode: OtMode;
   diligenceEnabled: boolean;
@@ -239,6 +240,7 @@ export async function saveSettingsAction(input: SettingsInput): Promise<Result> 
       otSsoBase: !!input.otSsoBase,
       commissionSsoBase: !!input.commissionSsoBase,
       diligenceSsoBase: !!input.diligenceSsoBase,
+      savingsEmployer: !!input.savingsEmployer,
       taxEnabled: !!input.taxEnabled,
       otMode: input.otMode,
       diligenceEnabled: !!input.diligenceEnabled,
@@ -478,7 +480,7 @@ export async function addRecurringAction(input: { employmentId: string; itemId: 
     await withSalaryTenant(orgId, async (tx) => {
       const item = await tx.salaryItem.findFirst({ where: { orgId, id: input.itemId } });
       if (!item) throw new Error("ไม่พบชื่อรายการ");
-      const employer = item.savings ? money(input.employer ?? 0, "บริษัทสมทบ", 10_000_000) : 0;
+      const employer = item.savings && (await readSettings(tx, orgId)).savingsEmployer ? money(input.employer ?? 0, "บริษัทสมทบ", 10_000_000) : 0;
       await tx.salaryEmployeeItem.create({ data: { orgId, employmentId: input.employmentId, itemId: item.id, amount, fromPeriod: input.fromPeriod, toPeriod: input.toPeriod, note: text(input.note, 200), employerAmount: employer, createdByName: actor.name } });
       await insertEvent(tx, orgId, { byUserId: actor.userId, byName: actor.name, action: "employee", summary: `รายการประจำ "${item.name}" ${fmtBaht(amount)} ตั้งแต่ ${periodLabel(input.fromPeriod)}${input.toPeriod ? ` ถึง ${periodLabel(input.toPeriod)}` : ""}` });
     });
@@ -520,9 +522,10 @@ export async function setSavingsOpeningAction(input: { employmentId: string; ite
     const g = await guardFor(input.employmentId);
     const { orgId, actor } = g;
     const employee = money(input.employee, "ยอดยกมา ส่วนพนักงาน", 10_000_000);
-    const employer = money(input.employer, "ยอดยกมา ส่วนบริษัท", 10_000_000);
+    const employerIn = money(input.employer, "ยอดยกมา ส่วนบริษัท", 10_000_000);
     const note = text(input.note, 200);
     await withSalaryTenant(orgId, async (tx) => {
+      const employer = (await readSettings(tx, orgId)).savingsEmployer ? employerIn : 0;
       const item = await tx.salaryItem.findFirst({ where: { orgId, id: input.itemId, savings: true } });
       if (!item) throw new Error("ไม่พบรายการเงินสะสม");
       const old = await tx.salarySavingsEntry.findMany({ where: { orgId, employmentId: input.employmentId, itemId: item.id, kind: "opening", voidedAt: null } });
@@ -625,7 +628,8 @@ export async function addAdjustmentAction(input: AdjustInput): Promise<Result> {
     const reason = text(input.reason, 300);
     if (!reason) return { error: `ใส่หมายเหตุ (${ceo} เห็นตอนอนุมัติ)` };
     if (input.kind !== "earning" && input.kind !== "deduction") return { error: "ชนิดรายการไม่ถูกต้อง" };
-    const employer = money(input.employer ?? 0, "บริษัทสมทบ", 10_000_000);
+    const employerOn = await withSalaryTenant(orgId, async (tx) => (await readSettings(tx, orgId)).savingsEmployer);
+    const employer = employerOn ? money(input.employer ?? 0, "บริษัทสมทบ", 10_000_000) : 0;
     // ชื่อ: จากรายการที่ตั้งไว้ (ใช้ธงภาษี/ประกันสังคมของรายการนั้น) หรือพิมพ์เอง
     let label = text(input.label, 50);
     let taxable = input.kind === "earning" ? !!input.taxable : false;

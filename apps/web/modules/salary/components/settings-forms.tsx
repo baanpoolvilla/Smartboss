@@ -165,6 +165,13 @@ export function GeneralSettingsForm({ initial }: { initial: SettingsInput }) {
           <label className="flex min-h-10 items-center gap-3 text-sm"><input type="checkbox" className="h-5 w-5" checked={v.diligenceSsoBase} onChange={(e) => set({ diligenceSsoBase: e.target.checked })} /> เบี้ยขยัน</label>
           <p className={hint}>ไม่ติ๊ก = พนักงานยังได้เงินนั้นเต็ม แค่ไม่เอาไปรวมคิดประกันสังคม · ไม่แน่ใจให้ถามนักบัญชี</p>
         </fieldset>
+        <label className="flex min-h-11 items-start gap-3 text-sm">
+          <input type="checkbox" className="mt-0.5 h-5 w-5" checked={v.savingsEmployer} onChange={(e) => set({ savingsEmployer: e.target.checked })} />
+          <span>
+            เงินสะสม (เช่น กองทุนสงเคราะห์ลูกจ้าง): บันทึกส่วนบริษัทสมทบด้วย
+            <span className={`${hint} block`}>ไม่ติ๊ก = เก็บแค่ยอดที่พนักงานฝาก ไม่มีช่องบริษัทสมทบให้กรอก</span>
+          </span>
+        </label>
         <p className={hint}>ปิดสาย/ขาด = มีผลแค่คะแนนและเกรดเหมือนเดิม · OT ดึงจากใบที่อนุมัติในเบิกจ่าย &amp; OT เอง</p>
       </section>
 

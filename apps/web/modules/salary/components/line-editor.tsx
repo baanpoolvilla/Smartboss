@@ -46,6 +46,8 @@ export interface EditorData {
   sso: SsoParams;
   /** บริษัทปิดการคิดภาษี = ไม่มีแถวภาษี */
   taxEnabled?: boolean;
+  /** เงินสะสม: มีช่องบริษัทสมทบ (ปิด = เก็บแค่ยอดฝาก) */
+  savingsEmployer?: boolean;
   closeHref: string;
   employeeHref: string;
   slipHref: string;
@@ -191,7 +193,7 @@ export function LineEditor({ d }: { d: EditorData }) {
                   </div>
                 </div>
               ))}
-              {d.editable && <AddForm kind="deduction" items={d.items} ctx={ctx} />}
+              {d.editable && <AddForm kind="deduction" items={d.items} ctx={ctx} employerOn={!!d.savingsEmployer} />}
             </section>
 
             <section className="flex flex-col gap-1.5 rounded-(--radius) bg-(--bg-soft) p-3 text-sm">
@@ -356,7 +358,7 @@ function OverrideRow({
 
 const OTHER = "__other__";
 
-function AddForm({ kind, items, ctx }: { kind: "earning" | "deduction"; items: EditorData["items"]; ctx: { runId: string; employmentId: string; expectUpdatedAt: string } }) {
+function AddForm({ kind, items, ctx, employerOn = false }: { kind: "earning" | "deduction"; items: EditorData["items"]; ctx: { runId: string; employmentId: string; expectUpdatedAt: string }; employerOn?: boolean }) {
   const ceo = useCeoTitle();
   const [open, setOpen] = useState(false);
   const choices = items.filter((i) => i.kind === kind);
@@ -420,7 +422,7 @@ function AddForm({ kind, items, ctx }: { kind: "earning" | "deduction"; items: E
           {kind === "deduction" && (
             <label className="flex items-start gap-2 text-sm">
               <input type="checkbox" checked={savingsTick} onChange={(e) => setSavingsTick(e.target.checked)} className="mt-0.5 h-4 w-4" />
-              <span>เป็นเงินสะสม <span className="text-(--ink-soft)">เช่น กองทุนสงเคราะห์ลูกจ้าง — มีช่องบริษัทสมทบ และรวมยอดในสมุดเงินสะสมของคนนี้</span></span>
+              <span>เป็นเงินสะสม <span className="text-(--ink-soft)">เช่น กองทุนสงเคราะห์ลูกจ้าง — รวมยอดฝากในสมุดเงินสะสมของคนนี้</span></span>
             </label>
           )}
         </div>
@@ -439,7 +441,7 @@ function AddForm({ kind, items, ctx }: { kind: "earning" | "deduction"; items: E
           </select>
         </label>
       </div>
-      {isSavings && (
+      {isSavings && employerOn && (
         <label className={label}>
           <span className={labelText}>บริษัทสมทบ (บาท) <span className="font-normal text-(--ink-soft)">ไม่หักจากพนักงาน · เข้าสมุดเงินสะสม{repeat !== "once" ? " ทุกงวด" : ""}</span></span>
           <input inputMode="decimal" className={field} value={employer} onChange={(e) => setEmployer(e.target.value)} placeholder="0.00" />
@@ -478,7 +480,7 @@ function AddForm({ kind, items, ctx }: { kind: "earning" | "deduction"; items: E
                   months: Number(months),
                   saveName,
                   savings: other ? savingsTick : undefined,
-                  employer: isSavings ? Number(employer.replace(/,/g, "") || 0) : 0,
+                  employer: isSavings && employerOn ? Number(employer.replace(/,/g, "") || 0) : 0,
                 }),
               reset,
             )

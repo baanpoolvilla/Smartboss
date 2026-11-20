@@ -11,12 +11,13 @@ import { card, field, hint, label, labelText, navy, outline } from "./ui";
 import { useRun } from "./use-run";
 
 /** 6. เงินสะสม — สมุดรายคน: ยอดยกมา (ก่อนมีระบบ) + ยอดจากรอบที่จ่ายแล้ว − จ่ายคืน */
-export function SavingsSection({ employmentId, books, today }: { employmentId: string; books: SavingsBook[]; today: string }) {
+export function SavingsSection({ employmentId, books, today, employerOn = false }: { employmentId: string; books: SavingsBook[]; today: string; employerOn?: boolean }) {
   if (books.length === 0) return null;
   return (
     <>
       {books.map((b) => (
-        <Book key={b.itemId} employmentId={employmentId} b={b} today={today} />
+        // ปิดส่วนสมทบ = เก็บแค่ยอดฝาก · ถ้ามียอดบริษัทค้างจากตอนเปิดไว้ ยังโชว์คอลัมน์บริษัท (ไม่ซ่อนเงิน)
+        <Book key={b.itemId} employmentId={employmentId} b={b} today={today} withEmployer={employerOn || b.rows.some((r) => r.employer > 0)} />
       ))}
     </>
   );
@@ -24,7 +25,7 @@ export function SavingsSection({ employmentId, books, today }: { employmentId: s
 
 const num = (s: string) => Number(s.replace(/,/g, "").trim() || 0);
 
-function Book({ employmentId, b, today }: { employmentId: string; b: SavingsBook; today: string }) {
+function Book({ employmentId, b, today, withEmployer }: { employmentId: string; b: SavingsBook; today: string; withEmployer: boolean }) {
   const [mode, setMode] = useState<"" | "opening" | "payout">("");
   const [emp, setEmp] = useState(b.opening ? String(b.opening.employee) : "");
   const [com, setCom] = useState(b.opening ? String(b.opening.employer) : "");
@@ -48,13 +49,19 @@ function Book({ employmentId, b, today }: { employmentId: string; b: SavingsBook
         <p className="text-sm text-(--ink-soft)">ยังไม่มียอด — คนที่จ่ายไว้ก่อนมีระบบ กด &quot;+ ยอดยกมา&quot;</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[520px] text-sm">
+          <table className={`w-full text-sm ${withEmployer ? "min-w-[520px]" : ""}`}>
             <thead>
               <tr className="text-xs text-(--ink-soft)">
                 <th className="px-2 py-1.5 text-left font-semibold">รายการ</th>
-                <th className="px-2 py-1.5 text-right font-semibold">พนักงาน</th>
-                <th className="px-2 py-1.5 text-right font-semibold">บริษัท</th>
-                <th className="px-2 py-1.5 text-right font-semibold">รวม</th>
+                {withEmployer ? (
+                  <>
+                    <th className="px-2 py-1.5 text-right font-semibold">พนักงาน</th>
+                    <th className="px-2 py-1.5 text-right font-semibold">บริษัท</th>
+                    <th className="px-2 py-1.5 text-right font-semibold">รวม</th>
+                  </>
+                ) : (
+                  <th className="px-2 py-1.5 text-right font-semibold">ยอดฝาก</th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -69,16 +76,16 @@ function Book({ employmentId, b, today }: { employmentId: string; b: SavingsBook
                       )}
                     </td>
                     <td className={cell}>{sign}{fmtBaht(r.employee)}</td>
-                    <td className={cell}>{sign}{fmtBaht(r.employer)}</td>
-                    <td className={cell}>{sign}{fmtBaht(r.employee + r.employer)}</td>
+                    {withEmployer && <td className={cell}>{sign}{fmtBaht(r.employer)}</td>}
+                    {withEmployer && <td className={cell}>{sign}{fmtBaht(r.employee + r.employer)}</td>}
                   </tr>
                 );
               })}
               <tr className="border-t-2 border-(--brand-navy,#1b2537) font-bold">
                 <td className="px-2 py-2">คงเหลือสะสม</td>
-                <td className={cell}>{fmtBaht(b.employee)}</td>
-                <td className={cell}>{fmtBaht(b.employer)}</td>
-                <td className={`${cell} text-base`}>{fmtBaht(b.total)}</td>
+                <td className={withEmployer ? cell : `${cell} text-base`}>{fmtBaht(b.employee)}</td>
+                {withEmployer && <td className={cell}>{fmtBaht(b.employer)}</td>}
+                {withEmployer && <td className={`${cell} text-base`}>{fmtBaht(b.total)}</td>}
               </tr>
             </tbody>
           </table>
@@ -87,22 +94,24 @@ function Book({ employmentId, b, today }: { employmentId: string; b: SavingsBook
 
       {mode === "opening" && (
         <div className="grid grid-cols-1 gap-3 rounded-(--radius) border border-dashed border-(--line) bg-(--bg-soft) p-3 sm:grid-cols-2">
-          <p className={`${hint} sm:col-span-2`}>ยอดที่จ่ายไว้แล้วก่อนเริ่มหักในระบบ · ใส่ 0 ทั้งคู่ = ลบยอดยกมา · แก้แล้วเก็บประวัติว่าใครแก้</p>
+          <p className={`${hint} sm:col-span-2`}>ยอดที่ฝากไว้แล้วก่อนเริ่มหักในระบบ · ใส่ 0 = ลบยอดยกมา · แก้แล้วเก็บประวัติว่าใครแก้</p>
           <label className={label}>
-            <span className={labelText}>ส่วนพนักงาน (บาท)</span>
+            <span className={labelText}>{withEmployer ? "ส่วนพนักงาน (บาท)" : "ยอดฝากยกมา (บาท)"}</span>
             <input inputMode="decimal" className={field} value={emp} onChange={(e) => setEmp(e.target.value)} placeholder="0.00" />
           </label>
-          <label className={label}>
-            <span className={labelText}>ส่วนบริษัท (บาท)</span>
-            <input inputMode="decimal" className={field} value={com} onChange={(e) => setCom(e.target.value)} placeholder="0.00" />
-          </label>
+          {withEmployer && (
+            <label className={label}>
+              <span className={labelText}>ส่วนบริษัท (บาท)</span>
+              <input inputMode="decimal" className={field} value={com} onChange={(e) => setCom(e.target.value)} placeholder="0.00" />
+            </label>
+          )}
           <label className={`${label} sm:col-span-2`}>
             <span className={labelText}>หมายเหตุ</span>
             <input className={field} value={note} onChange={(e) => setNote(e.target.value)} placeholder="เช่น จ่ายครบถึง ธ.ค. 2569" />
           </label>
           <div className="flex gap-2 sm:col-span-2">
             <button type="button" className={outline} onClick={() => setMode("")} disabled={busy}>ยกเลิก</button>
-            <button type="button" className={navy} disabled={busy} onClick={() => run(() => setSavingsOpeningAction({ employmentId, itemId: b.itemId, employee: num(emp), employer: num(com), note }), () => setMode(""))}>
+            <button type="button" className={navy} disabled={busy} onClick={() => run(() => setSavingsOpeningAction({ employmentId, itemId: b.itemId, employee: num(emp), employer: withEmployer ? num(com) : 0, note }), () => setMode(""))}>
               {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} บันทึกยอดยกมา
             </button>
           </div>
@@ -111,7 +120,7 @@ function Book({ employmentId, b, today }: { employmentId: string; b: SavingsBook
 
       {mode === "payout" && (
         <div className="grid grid-cols-1 gap-3 rounded-(--radius) border border-dashed border-(--line) bg-(--bg-soft) p-3 sm:grid-cols-2">
-          <p className={`${hint} sm:col-span-2`}>บันทึกว่าจ่ายคืนแล้วทั้งก้อน {fmtBaht(b.total)} (พนักงาน {fmtBaht(b.employee)} + บริษัท {fmtBaht(b.employer)}) · ยอดคงเหลือกลับเป็น 0 ประวัติยังอยู่</p>
+          <p className={`${hint} sm:col-span-2`}>บันทึกว่าจ่ายคืนแล้วทั้งก้อน {fmtBaht(b.total)}{withEmployer ? ` (พนักงาน ${fmtBaht(b.employee)} + บริษัท ${fmtBaht(b.employer)})` : ""} · ยอดคงเหลือกลับเป็น 0 ประวัติยังอยู่</p>
           <label className={label}>
             <span className={labelText}>วันที่จ่ายคืน</span>
             <input type="date" className={field} value={onDate} onChange={(e) => setOnDate(e.target.value)} />

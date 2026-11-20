@@ -60,6 +60,7 @@ export async function readSettings(tx: Tx, orgId: string): Promise<SettingsView>
     otSsoBase: row.otSsoBase,
     commissionSsoBase: row.commissionSsoBase,
     diligenceSsoBase: row.diligenceSsoBase,
+    savingsEmployer: row.savingsEmployer,
     taxEnabled: row.taxEnabled,
     otMode: row.otMode === "days" ? "days" : "hours",
     diligenceEnabled: row.diligenceEnabled,

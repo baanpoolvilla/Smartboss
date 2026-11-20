@@ -76,8 +76,8 @@ export default async function SalaryEmployeePage({ params }: { params: Promise<{
             diligenceOpening: row.profile.diligenceOpening,
           }}
         />
-        <RecurringSection employmentId={row.employmentId} rows={row.recurring} items={items.map((i) => ({ id: i.id, name: i.name, kind: i.kind, savings: i.savings }))} thisPeriod={thisPeriod} />
-        <SavingsSection employmentId={row.employmentId} books={savings} today={today} />
+        <RecurringSection employmentId={row.employmentId} rows={row.recurring} items={items.map((i) => ({ id: i.id, name: i.name, kind: i.kind, savings: i.savings && settings.savingsEmployer }))} thisPeriod={thisPeriod} />
+        <SavingsSection employmentId={row.employmentId} books={savings} today={today} employerOn={settings.savingsEmployer} />
         </>
         )}
       </div>

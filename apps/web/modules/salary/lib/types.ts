@@ -216,6 +216,8 @@ export interface SettingsView {
   commissionSsoBase: boolean;
   /** เบี้ยขยันอัตโนมัติ นับเป็นค่าจ้างคิดประกันสังคม */
   diligenceSsoBase: boolean;
+  /** เงินสะสม: มีส่วนบริษัทสมทบ · ปิด = เก็บแค่ยอดฝาก */
+  savingsEmployer: boolean;
   /** false = ไม่คิด/ไม่หักภาษีหัก ณ ที่จ่าย (ไม่มีบรรทัดภาษี) */
   taxEnabled: boolean;
   /** hours = ตามใบ OT รายชั่วโมง · days = ปัดขึ้น(เงินเดือน ÷ 30) × จำนวนวันที่มี OT */
@@ -251,6 +253,7 @@ export const DEFAULT_SETTINGS: SettingsView = {
   otSsoBase: true,
   commissionSsoBase: true,
   diligenceSsoBase: false,
+  savingsEmployer: false,
   taxEnabled: true,
   otMode: "hours",
   diligenceEnabled: false,

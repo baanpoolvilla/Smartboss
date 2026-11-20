@@ -95,6 +95,7 @@ export default async function RunPage({ params, searchParams }: { params: Promis
         taxBreak: editLine.info?.taxBreak,
         sso: ssoP,
         taxEnabled: settings.taxEnabled,
+        savingsEmployer: settings.savingsEmployer,
         closeHref: `/salary/runs/${run.id}`,
         employeeHref: `/salary/employees/${editLine.employmentId}`,
         slipHref: `/salary/runs/${run.id}/slip/${editLine.employmentId}`,
@@ -119,7 +120,7 @@ export default async function RunPage({ params, searchParams }: { params: Promis
     adjustments: l.adjustments,
     net: l.net,
   }));
-  const reviewItems = items.map((i) => ({ id: i.id, name: i.name, kind: i.kind as "earning" | "deduction", taxable: i.taxable, ssoBase: i.ssoBase, savings: i.savings }));
+  const reviewItems = items.map((i) => ({ id: i.id, name: i.name, kind: i.kind as "earning" | "deduction", taxable: i.taxable, ssoBase: i.ssoBase, savings: i.savings, employer: i.savings && settings.savingsEmployer }));
   const plusTotal = Math.round((t.gross - salaryTotal) * 100) / 100;
   const stepHelp: Record<string, React.ReactNode> = {
     draft: (

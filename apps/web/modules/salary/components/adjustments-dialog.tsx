@@ -29,6 +29,8 @@ export interface ReviewItem {
   taxable: boolean;
   ssoBase: boolean;
   savings?: boolean;
+  /** เงินสะสมที่บริษัทเปิดส่วนสมทบ */
+  employer?: boolean;
 }
 
 /**
@@ -242,7 +244,7 @@ function AddRow({ ctx, items, onDone }: { ctx: { runId: string; employmentId: st
   const { busy, error, run } = useRun();
   const list = items.filter((i) => i.kind === kind);
   const item = list.find((i) => i.id === itemId);
-  const isSavings = kind === "deduction" && !!item?.savings;
+  const isSavings = kind === "deduction" && !!item?.savings && !!item?.employer;
   const chip = (on: boolean, tone: string) => `h-9 rounded-full border px-3 text-sm ${on ? `${tone} font-semibold` : "border-(--line) text-(--ink-soft)"}`;
   return (
     <div className="mt-2 flex flex-col gap-2 rounded-(--radius) border border-dashed border-(--line) bg-(--bg-soft) p-3">
