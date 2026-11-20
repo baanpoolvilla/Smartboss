@@ -212,6 +212,10 @@ export interface SettingsView {
   deductAbsent: boolean;
   deductUnpaidLeave: boolean;
   otSsoBase: boolean;
+  /** ค่าคอมจากเกรด นับเป็นค่าจ้างคิดประกันสังคม */
+  commissionSsoBase: boolean;
+  /** เบี้ยขยันอัตโนมัติ นับเป็นค่าจ้างคิดประกันสังคม */
+  diligenceSsoBase: boolean;
   /** false = ไม่คิด/ไม่หักภาษีหัก ณ ที่จ่าย (ไม่มีบรรทัดภาษี) */
   taxEnabled: boolean;
   /** hours = ตามใบ OT รายชั่วโมง · days = ปัดขึ้น(เงินเดือน ÷ 30) × จำนวนวันที่มี OT */
@@ -245,6 +249,8 @@ export const DEFAULT_SETTINGS: SettingsView = {
   deductAbsent: false,
   deductUnpaidLeave: true,
   otSsoBase: true,
+  commissionSsoBase: true,
+  diligenceSsoBase: false,
   taxEnabled: true,
   otMode: "hours",
   diligenceEnabled: false,

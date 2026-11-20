@@ -219,6 +219,10 @@ export interface ComputeInput {
     deductAbsent: boolean;
     deductUnpaidLeave: boolean;
     otSsoBase: boolean;
+    /** ค่าคอมจากเกรดนับฐานประกันสังคม · ไม่ส่งมา = ใช้ธงที่มากับค่าคอม (เดิม) */
+    commissionSsoBase?: boolean;
+    /** เบี้ยขยันอัตโนมัตินับฐานประกันสังคม · ไม่ส่งมา = ไม่นับ (เดิม) */
+    diligenceSsoBase?: boolean;
     /** false = ไม่คิด/ไม่หักภาษีเลย (ไม่มีบรรทัดภาษี) · ไม่ส่งมา = คิดภาษี (เดิม) */
     taxEnabled?: boolean;
   };
@@ -469,10 +473,10 @@ export function computePay(input: ComputeInput): ComputeResult {
       // จ่ายไม่สม่ำเสมอ (แล้วแต่เกรด) — คิดภาษีแบบเงินได้ไม่ประจำ เหมือน OT/โบนัส
       lines.push({ key: "commission", label: comm?.label ?? "ค่าคอม (ตามเกรด)", kind: "earning", amount: toBaht(commAmt), how, source: "commission", auto: !commOverride });
       if (comm?.taxable ?? true) irregularEarn += commAmt;
-      if (comm?.ssoBase ?? true) ssoExtra += commAmt;
+      if (input.settings.commissionSsoBase ?? comm?.ssoBase ?? true) ssoExtra += commAmt;
     }
   }
-  // เบี้ยขยัน — เงินจูงใจ ไม่ใช่ค่าจ้าง (ไม่นับฐานประกันสังคม) · จ่ายไม่แน่นอน = เงินได้ไม่ประจำ (ภาษี)
+  // เบี้ยขยัน — เงินจูงใจ ไม่ใช่ค่าจ้าง (ไม่นับฐานประกันสังคม เว้นแต่ติ๊กในตั้งค่า) · จ่ายไม่แน่นอน = เงินได้ไม่ประจำ (ภาษี)
   // HR ปรับยอดเองได้ (ต้องมีเหตุผล) · ทำงานไม่ครบรอบแล้วได้ 0 ยังขึ้นบรรทัดพร้อมเหตุผล (ไม่หายเงียบ)
   const dilOverride = input.overrides.diligence;
   if (input.diligence || dilOverride) {
@@ -483,6 +487,7 @@ export function computePay(input: ComputeInput): ComputeResult {
       lines.push({ key: "diligence", label: "เบี้ยขยัน", kind: "earning", amount: toBaht(amt), how, source: "diligence", auto: !dilOverride });
     }
     irregularEarn += amt;
+    if (input.settings.diligenceSsoBase) ssoExtra += amt;
   }
   for (const a of input.adjustments) {
     const amt = s(a.amount);

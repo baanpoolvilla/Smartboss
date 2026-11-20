@@ -361,6 +361,16 @@ describe("ค่าคอม Pool ตามเกรด (ระบบบุค�
     expect(computePay(base({ ...low, commission: { ...comm, ssoBase: false } })).ssoEmployee).toBe(500);
   });
 
+  it("กล่อง 'คิดประกันสังคมจาก' ในตั้งค่าชนะธงที่มากับค่าคอม · เบี้ยขยันนับเมื่อติ๊ก", () => {
+    const low = { salary: [{ monthly: 10000, from: "2026-09-26", to: "2026-10-25" }] };
+    const st = base().settings;
+    expect(computePay(base({ ...low, commission: comm, settings: { ...st, commissionSsoBase: false } })).ssoEmployee).toBe(500);
+    expect(computePay(base({ ...low, commission: { ...comm, ssoBase: false }, settings: { ...st, commissionSsoBase: true } })).ssoEmployee).toBe(650);
+    const dil = { amount: 1000, how: "ขั้น 1", passed: true } as unknown as Parameters<typeof computePay>[0]["diligence"];
+    expect(computePay(base({ ...low, diligence: dil })).ssoEmployee).toBe(500);
+    expect(computePay(base({ ...low, diligence: dil, settings: { ...st, diligenceSsoBase: true } })).ssoEmployee).toBe(550);
+  });
+
   it("เกรดยังไม่ปิด = ไม่ใส่ยอด แต่ขึ้นเตือน", () => {
     const r = computePay(base({ commission: { ...comm, amount: 0, pending: "ค่าคอม ต.ค. 2569 ยังไม่ใส่ — เกรดยังไม่ปิด" } }));
     expect(line(r, "commission")).toBeUndefined();

@@ -58,6 +58,8 @@ export async function readSettings(tx: Tx, orgId: string): Promise<SettingsView>
     deductAbsent: row.deductAbsent,
     deductUnpaidLeave: row.deductUnpaidLeave,
     otSsoBase: row.otSsoBase,
+    commissionSsoBase: row.commissionSsoBase,
+    diligenceSsoBase: row.diligenceSsoBase,
     taxEnabled: row.taxEnabled,
     otMode: row.otMode === "days" ? "days" : "hours",
     diligenceEnabled: row.diligenceEnabled,

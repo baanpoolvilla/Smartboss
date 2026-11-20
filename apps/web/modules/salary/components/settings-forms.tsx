@@ -157,7 +157,14 @@ export function GeneralSettingsForm({ initial }: { initial: SettingsInput }) {
         </label>
         <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" className="h-5 w-5" checked={v.deductAbsent} onChange={(e) => set({ deductAbsent: e.target.checked })} /> หักเงินขาดงาน (เงินเดือน ÷ 30 ต่อวัน)</label>
         <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" className="h-5 w-5" checked={v.deductUnpaidLeave} onChange={(e) => set({ deductUnpaidLeave: e.target.checked })} /> หักลาไม่รับค่าจ้าง เฉพาะวันที่ลง (เงินเดือน ÷ 30 ต่อวัน)</label>
-        <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" className="h-5 w-5" checked={v.otSsoBase} onChange={(e) => set({ otSsoBase: e.target.checked })} /> นับค่า OT เป็นค่าจ้างคิดประกันสังคม (ตามนิยามค่าจ้างใน พ.ร.บ.ประกันสังคม — ให้นักบัญชียืนยัน)</label>
+        <fieldset className="flex flex-col gap-1 rounded-(--radius) border border-(--line) p-3">
+          <legend className="px-1 text-sm font-semibold text-(--ink)">คิดประกันสังคมจาก</legend>
+          <label className="flex min-h-10 items-center gap-3 text-sm text-(--ink-soft)"><input type="checkbox" className="h-5 w-5" checked disabled /> เงินเดือน (นับเสมอ)</label>
+          <label className="flex min-h-10 items-center gap-3 text-sm"><input type="checkbox" className="h-5 w-5" checked={v.commissionSsoBase} onChange={(e) => set({ commissionSsoBase: e.target.checked })} /> ค่าคอม</label>
+          <label className="flex min-h-10 items-center gap-3 text-sm"><input type="checkbox" className="h-5 w-5" checked={v.otSsoBase} onChange={(e) => set({ otSsoBase: e.target.checked })} /> ค่า OT</label>
+          <label className="flex min-h-10 items-center gap-3 text-sm"><input type="checkbox" className="h-5 w-5" checked={v.diligenceSsoBase} onChange={(e) => set({ diligenceSsoBase: e.target.checked })} /> เบี้ยขยัน</label>
+          <p className={hint}>ไม่ติ๊ก = พนักงานยังได้เงินนั้นเต็ม แค่ไม่เอาไปรวมคิดประกันสังคม · ไม่แน่ใจให้ถามนักบัญชี</p>
+        </fieldset>
         <p className={hint}>ปิดสาย/ขาด = มีผลแค่คะแนนและเกรดเหมือนเดิม · OT ดึงจากใบที่อนุมัติในเบิกจ่าย &amp; OT เอง</p>
       </section>
 
@@ -337,7 +344,7 @@ export function ItemsList({ items }: { items: { id: string; name: string; kind: 
         <h2 className="text-base font-bold text-(--ink)">ชื่อรายการปรับเพิ่ม / ปรับลด</h2>
         {!adding && <button type="button" className="text-sm font-semibold text-(--app-strong) underline" onClick={() => setAdding(true)}>+ เพิ่มชื่อรายการ</button>}
       </div>
-      <p className={hint}>ใช้เลือกตอนเพิ่มรายการรายคน · ธงภาษี/ประกันสังคมเป็นค่าตั้งต้นที่พบบ่อย ให้นักบัญชีตรวจ · &quot;อื่นๆ (พิมพ์เอง)&quot; มีให้เสมอ</p>
+      <p className={hint}>ใช้เลือกตอนเพิ่มรายการรายคนเท่านั้น · ปิดใช้ = ไม่มีผลอะไร · ค่าคอม/เบี้ยขยัน/OT ที่ระบบคิดให้ ตั้งที่ &quot;คิดประกันสังคมจาก&quot; ด้านบน · &quot;อื่นๆ (พิมพ์เอง)&quot; มีให้เสมอ</p>
       {adding && (
         <div className="grid grid-cols-1 gap-2 rounded-(--radius) border border-dashed border-(--line) bg-(--bg-soft) p-3 sm:grid-cols-[1fr_auto]">
           <input aria-label="ชื่อรายการ" className={field} value={n.name} onChange={(e) => setN({ ...n, name: e.target.value })} placeholder="ชื่อรายการ" />
@@ -374,7 +381,8 @@ function ItemRow({ it }: { it: { id: string; name: string; kind: "earning" | "de
     <li className={`flex flex-wrap items-center justify-between gap-2 py-2 text-sm ${it.active ? "" : "opacity-60"}`}>
       <span><strong>{it.name}</strong> · {it.kind === "earning" ? "ปรับเพิ่ม" : "ปรับลด"}</span>
       <span className="flex flex-wrap items-center gap-3 text-xs">
-        {it.kind === "earning" && (
+        {/* ปิดใช้ = แถวนี้ไม่มีผลอะไร → ไม่โชว์ช่องติ๊กให้งง */}
+        {it.kind === "earning" && it.active && (
           <>
             <label className="flex items-center gap-1.5"><input type="checkbox" className="h-4 w-4" checked={it.taxable} disabled={busy} onChange={(e) => save({ taxable: e.target.checked })} /> คิดภาษี</label>
             <label className="flex items-center gap-1.5"><input type="checkbox" className="h-4 w-4" checked={it.ssoBase} disabled={busy} onChange={(e) => save({ ssoBase: e.target.checked })} /> คิดประกันสังคม</label>

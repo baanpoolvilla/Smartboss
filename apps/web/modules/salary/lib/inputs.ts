@@ -476,16 +476,16 @@ export { ymd };
  * (Pool ÷ ตัวคูณ · % ของเงินเดือน · บาทต่อเกรด · ไม่คิด) และเฉพาะคนที่ได้ค่าคอม
  * ไม่คิด / Pool ไม่ได้ใส่ = ไม่มีบรรทัด ไม่เตือน
  * เกรดยังไม่ปิด (ก่อนเวลาพร้อมใช้) → ไม่ใส่ยอด แต่เตือนให้กด "ดึงข้อมูลใหม่" หลังเกรดปิด (ตัวเลขยังเปลี่ยนได้)
- * ภาษี/ประกันสังคมตามรายการชื่อ "คอมมิชชั่น" ในตั้งค่า (ไม่มี = คิดทั้งคู่)
+ * ภาษีตามรายการชื่อ "คอมมิชชั่น" ที่เปิดใช้ (ไม่มี/ปิดใช้ = คิดภาษี) · ประกันสังคมตามกล่อง "คิดประกันสังคมจาก" ในตั้งค่า
  */
-async function loadCommissionFor(orgId: string, month: string, items: { name: string; kind: string; taxable: boolean; ssoBase: boolean }[]) {
+async function loadCommissionFor(orgId: string, month: string, items: { name: string; kind: string; taxable: boolean; ssoBase: boolean; active: boolean }[]) {
   const data = await loadCommissionMonth(orgId, month);
   if (data.method === "off" || (data.method === "pool" && (!data.pool || data.pool.satang <= 0))) return null;
   const gradeTier = data.method === "grade_tier";
   const config = await loadScorePeriodConfig(orgId);
   const readyAt = await loadScorePeriodReadyAt(orgId, config, month);
   const label = periodLabel(month);
-  const flags = items.find((i) => i.kind === "earning" && i.name.trim() === "คอมมิชชั่น");
+  const flags = items.find((i) => i.active && i.kind === "earning" && i.name.trim() === "คอมมิชชั่น");
   const taxable = flags?.taxable ?? true;
   const ssoBase = flags?.ssoBase ?? true;
   const pending =

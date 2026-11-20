@@ -39,6 +39,10 @@ model SalarySettings {
   payBankAccount     String   @default("") @map("pay_bank_account")
   /// ค่า OT นับเป็นค่าจ้างคิดประกันสังคม
   otSsoBase          Boolean  @default(true) @map("ot_sso_base")
+  /// ค่าคอมจากเกรด นับเป็นค่าจ้างคิดประกันสังคม (เดิมอ่านจากรายการ "คอมมิชชั่น" — ย้ายมาที่นี่ 20/11/2569)
+  commissionSsoBase  Boolean  @default(true) @map("commission_sso_base")
+  /// เบี้ยขยันอัตโนมัติ นับเป็นค่าจ้างคิดประกันสังคม (เดิมไม่นับเสมอ)
+  diligenceSsoBase   Boolean  @default(false) @map("diligence_sso_base")
   /// false = ไม่คิด/ไม่หักภาษีหัก ณ ที่จ่ายเลย (ไม่มีบรรทัดภาษี)
   taxEnabled         Boolean  @default(true) @map("tax_enabled")
   /// hours = ตามใบ OT รายชั่วโมง (เดิม) · days = ปัดขึ้น(เงินเดือน ÷ 30) × จำนวนวันที่มี OT

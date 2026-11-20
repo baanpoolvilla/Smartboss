@@ -51,6 +51,8 @@ export default async function SalarySettingsPage() {
             deductAbsent: settings.deductAbsent,
             deductUnpaidLeave: settings.deductUnpaidLeave,
             otSsoBase: settings.otSsoBase,
+            commissionSsoBase: settings.commissionSsoBase,
+            diligenceSsoBase: settings.diligenceSsoBase,
             taxEnabled: settings.taxEnabled,
             otMode: settings.otMode,
             diligenceEnabled: settings.diligenceEnabled,

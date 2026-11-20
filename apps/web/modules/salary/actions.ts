@@ -190,6 +190,8 @@ export interface SettingsInput {
   deductAbsent: boolean;
   deductUnpaidLeave: boolean;
   otSsoBase: boolean;
+  commissionSsoBase: boolean;
+  diligenceSsoBase: boolean;
   taxEnabled: boolean;
   otMode: OtMode;
   diligenceEnabled: boolean;
@@ -234,6 +236,8 @@ export async function saveSettingsAction(input: SettingsInput): Promise<Result> 
       deductAbsent: !!input.deductAbsent,
       deductUnpaidLeave: !!input.deductUnpaidLeave,
       otSsoBase: !!input.otSsoBase,
+      commissionSsoBase: !!input.commissionSsoBase,
+      diligenceSsoBase: !!input.diligenceSsoBase,
       taxEnabled: !!input.taxEnabled,
       otMode: input.otMode,
       diligenceEnabled: !!input.diligenceEnabled,
