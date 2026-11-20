@@ -6,7 +6,7 @@ import { applyDiligencePartial, diligenceStep, leaveCountsAgainstDiligence, peri
 import { fillSubjectsByEmail } from "./people";
 import { isNewHire, loadProbationFrom } from "./probation";
 import { loadRequests } from "@/modules/requests/lib/db";
-import { hoursText, otCalc } from "@/modules/requests/lib/types";
+import { FLAT_OT_RATE, hoursText, otCalc } from "@/modules/requests/lib/types";
 import { commissionForUser, loadCommissionMonth } from "@/modules/hr/lib/commission-data";
 import { loadScorePeriodConfig, loadScorePeriodReadyAt } from "@/lib/score-period-config";
 import type { AutoItem, CommissionInput, RecurringItem, SalarySegment } from "./compute";
@@ -306,9 +306,9 @@ export async function loadPeriodInputs(
           label: "ค่าล่วงเวลา (OT)",
           amount: remaining,
           minutes: r.otMinutes ?? 0,
-          detail: `${r.code} · ${thaiDate(r.workDate, false)} ${r.otStart ?? ""}–${r.otEnd ?? ""} · ${hoursText(r.otMinutes ?? 0)} × ${r.otPercent ?? ""}%`,
+          detail: `${r.code} · ${thaiDate(r.workDate, false)} ${r.otStart ?? ""}–${r.otEnd ?? ""} · ${hoursText(r.otMinutes ?? 0)}${r.otRateLabel === FLAT_OT_RATE.label ? "" : ` × ${r.otPercent ?? ""}%`}`,
           ...(r.otBase && r.otPercent && r.otMinutes
-            ? { formula: `${otCalc(r.otBaseKind === "daily" ? "daily" : "monthly", r.otBase, r.otPercent, r.otMinutes).formula}${remaining < r.netAmount ? ` (จ่ายไปแล้ว ${r.paidTotal.toFixed(2)} เหลือ ${remaining.toFixed(2)})` : ""}` }
+            ? { formula: `${otCalc(r.otBaseKind === "daily" ? "daily" : "monthly", r.otBase, r.otPercent, r.otMinutes, false, r.otRateLabel !== FLAT_OT_RATE.label).formula}${remaining < r.netAmount ? ` (จ่ายไปแล้ว ${r.paidTotal.toFixed(2)} เหลือ ${remaining.toFixed(2)})` : ""}` }
             : {}),
         };
       })

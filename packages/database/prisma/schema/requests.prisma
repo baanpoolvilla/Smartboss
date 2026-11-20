@@ -289,6 +289,8 @@ model MoneyRequestSettings {
   pettySpendReview  Boolean  @default(false) @map("petty_spend_review")
   /// ค่า OT ปัดเศษสตางค์ขึ้นเป็นบาทเต็ม — ปิด = คิดถึงสตางค์แบบเดิม
   otRoundBaht       Boolean  @default(false) @map("ot_round_baht")
+  /// วิธีคิดอัตรา OT พนักงานรายเดือน: standard = ตามตาราง % (150/100/300) · flat = อัตราเดียว (เงินเดือน ÷ 30 ÷ 8 × ชั่วโมง ไม่คูณ %)
+  otRateMode        String   @default("standard") @map("ot_rate_mode")
   /// เส้นทางอนุมัติรายประเภท {"ot": {"mode": "hr", "ceoAbove": 5000}, ...} — null = ค่าเริ่มต้น
   approvalRoutes    Json?    @map("approval_routes")
   updatedBy         String   @map("updated_by")

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 
 import { saveSettingsAction } from "../actions";
-import { KIND_META, KINDS, routeText, type AdvanceCapMode, type ApprovalRoute, type OtRate, type RequestKind, type RequestSettings } from "../lib/types";
+import { KIND_META, KINDS, routeText, type AdvanceCapMode, type ApprovalRoute, type OtRate, type OtRateMode, type RequestKind, type RequestSettings } from "../lib/types";
 import { Notice } from "./ui";
 
 import { useCeoTitle } from "@/lib/ceo-title-client";
@@ -33,6 +33,7 @@ export function SettingsForm({ initial }: { initial: RequestSettings }) {
   const [maxAge, setMaxAge] = useState(String(initial.receiptMaxAgeDays));
   const [pettyReview, setPettyReview] = useState(initial.pettySpendReview);
   const [otRoundBaht, setOtRoundBaht] = useState(initial.otRoundBaht);
+  const [otRateMode, setOtRateMode] = useState<OtRateMode>(initial.otRateMode);
   const [clearDays, setClearDays] = useState(String(initial.clearDueDays));
 
   function save() {
@@ -50,6 +51,7 @@ export function SettingsForm({ initial }: { initial: RequestSettings }) {
         clearDueDays: Number(clearDays),
         pettySpendReview: pettyReview,
         otRoundBaht,
+        otRateMode,
       });
       if (!res.ok) {
         setError(res.error);
@@ -101,10 +103,36 @@ export function SettingsForm({ initial }: { initial: RequestSettings }) {
 
       <section className="flex flex-col gap-3 rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4">
         <div>
-          <h2 className="text-sm font-bold text-(--ink)">อัตรา OT ของพนักงาน</h2>
-          <p className="text-xs text-(--ink-soft)">ค่า OT = เงินเดือน ÷ 30 ÷ 8 × % × ชั่วโมง · แอดมินเลือกอัตราตอนลง (แถวแรก = ค่าเริ่มต้น) · คนงานรายวันใช้ % ในโมดูลคนงาน</p>
+          <h2 className="text-sm font-bold text-(--ink)">วิธีคิดค่า OT ของพนักงานรายเดือน</h2>
+          <p className="text-xs text-(--ink-soft)">เลือก 1 แบบ · มีผลกับใบ OT ที่ลงใหม่ ใบเดิมไม่เปลี่ยน · คนงานรายวันใช้ % ในโมดูลคนงาน (ไม่เกี่ยวกับตรงนี้)</p>
         </div>
-        {rates.map((r, i) => (
+        <div role="radiogroup" aria-label="วิธีคิดค่า OT" className="flex flex-col gap-2">
+          {([
+            {
+              v: "flat" as const,
+              title: "อัตราเดียว — คิดตามชั่วโมงที่ทำ",
+              body: "ค่า OT = เงินเดือน ÷ 30 ÷ 8 × ชั่วโมงที่ทำ · ทุกวันคิดเท่ากัน ไม่แยกวันธรรมดา/วันหยุด ไม่คูณ % · คนลง OT ไม่ต้องเลือกอัตรา",
+              ex: "เงินเดือน 15,000 ÷ 30 ÷ 8 = 62.50 บาท/ชม. × 3 ชม. = 187.50 บาท",
+            },
+            {
+              v: "standard" as const,
+              title: "ตามกฎหมายแรงงาน — แยกอัตราตามประเภท",
+              body: "ค่า OT = เงินเดือน ÷ 30 ÷ 8 × % × ชั่วโมง · % ตามประเภทที่ตั้งด้านล่าง (ค่าตั้งต้น: นอกเวลาวันทำงาน 150% · ทำงานในวันหยุด 100% · นอกเวลาในวันหยุด 300%) · คนลง OT เลือกประเภท",
+              ex: "เงินเดือน 15,000 ÷ 30 ÷ 8 = 62.50 บาท/ชม. × 150% × 3 ชม. = 281.25 บาท",
+            },
+          ]).map((o) => (
+            <label key={o.v} className={`flex cursor-pointer items-start gap-3 rounded-(--radius) border p-3 text-sm ${otRateMode === o.v ? "border-(--brand-navy,#1b2537) bg-(--bg-soft)" : "border-(--line)"}`}>
+              <input type="radio" name="otRateMode" className="mt-1 h-4 w-4" checked={otRateMode === o.v} onChange={() => setOtRateMode(o.v)} />
+              <span className="flex flex-col gap-1">
+                <span className="font-semibold text-(--ink)">{o.title}</span>
+                <span className="text-xs text-(--ink-soft)">{o.body}</span>
+                <span className="text-xs text-(--ink)">ตัวอย่าง: {o.ex}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+        {otRateMode === "standard" && <p className="text-xs font-semibold text-(--ink)">อัตราแต่ละประเภท (แถวแรก = ค่าเริ่มต้นตอนลง OT)</p>}
+        {otRateMode === "standard" && rates.map((r, i) => (
           <div key={i} className="flex gap-2">
             <input className={`${fieldNoW} min-w-0 flex-1`} value={r.label} aria-label={`ชื่ออัตราที่ ${i + 1}`} onChange={(e) => setRates(rates.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
             <div className="relative w-28">
@@ -118,9 +146,11 @@ export function SettingsForm({ initial }: { initial: RequestSettings }) {
             )}
           </div>
         ))}
-        <button type="button" className="inline-flex items-center gap-1 self-start text-sm font-medium text-(--app-strong) hover:underline" onClick={() => setRates([...rates, { id: `r${Date.now()}`, label: "", percent: 150 }])}>
-          <Plus className="h-4 w-4" aria-hidden="true" /> เพิ่มอัตรา
-        </button>
+        {otRateMode === "standard" && (
+          <button type="button" className="inline-flex items-center gap-1 self-start text-sm font-medium text-(--app-strong) hover:underline" onClick={() => setRates([...rates, { id: `r${Date.now()}`, label: "", percent: 150 }])}>
+            <Plus className="h-4 w-4" aria-hidden="true" /> เพิ่มอัตรา
+          </button>
+        )}
         <label className="flex items-start gap-3 text-sm text-(--ink)">
           <input type="checkbox" className="mt-1 h-4 w-4" checked={otRoundBaht} onChange={(e) => setOtRoundBaht(e.target.checked)} />
           <span>

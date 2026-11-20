@@ -58,6 +58,7 @@ import {
   type PaymentMethod,
   type RequestKind,
   type RequestSettings,
+  activeOtRates,
 } from "./lib/types";
 
 import { ceoTitle } from "@/lib/ceo-title";
@@ -357,12 +358,13 @@ async function computePreview(session: OrgSession, input: PreviewInput, settings
           }
         }
       } else {
-        const rate = settings.otRates.find((r) => r.id === input.otRateId) ?? settings.otRates[0]!;
+        const rates = activeOtRates(settings);
+        const rate = rates.find((r) => r.id === input.otRateId) ?? rates[0]!;
         p.percent = rate.percent;
         p.rateLabel = rate.label;
         const salary = p.employmentId ? await monthlySalaryOn(orgId, p.employmentId, date) : null;
         if (salary) {
-          const c = otCalc("monthly", salary, rate.percent, minutes, settings.otRoundBaht);
+          const c = otCalc("monthly", salary, rate.percent, minutes, settings.otRoundBaht, settings.otRateMode !== "flat");
           Object.assign(p, { baseKind: "monthly", base: salary, amount: c.amount, formula: c.formula });
         } else {
           p.baseKind = "manual";
@@ -2179,6 +2181,7 @@ export async function saveSettingsAction(input: RequestSettings): Promise<Result
       clearDueDays: clearDays,
       pettySpendReview: !!input.pettySpendReview,
       otRoundBaht: !!input.otRoundBaht,
+      otRateMode: input.otRateMode === "flat" ? "flat" : "standard",
       updatedBy: session.userId,
     };
     await withRequestsTenant(orgId, async (tx) => {
@@ -2187,7 +2190,7 @@ export async function saveSettingsAction(input: RequestSettings): Promise<Result
         byUserId: session.userId,
         byName,
         action: "settings",
-        summary: `ตั้งค่า: อนุมัติ ${(Object.keys(approvalRoutes) as RequestKind[]).map((k) => `${KIND_META[k].short} ${ceoText(routeText(approvalRoutes[k]), ceo)}`).join(", ")} · OT ${rates.map((r) => `${r.label} ${r.percent}%`).join(", ")} · เพดานเบิกล่วงหน้า ${input.advanceCapMode === "none" ? "ไม่จำกัด" : input.advanceCapMode === "baht" ? baht(capValue) : `${capValue} วัน`} · VAT ${vat}% · ซื้อของเองจากเงินสดย่อย${input.pettySpendReview ? "ต้องมีคนตรวจ" : "ไม่ต้องตรวจ"} · ค่า OT ${input.otRoundBaht ? "ปัดขึ้นเป็นบาท" : "คิดถึงสตางค์"}`,
+        summary: `ตั้งค่า: อนุมัติ ${(Object.keys(approvalRoutes) as RequestKind[]).map((k) => `${KIND_META[k].short} ${ceoText(routeText(approvalRoutes[k]), ceo)}`).join(", ")} · OT ${rates.map((r) => `${r.label} ${r.percent}%`).join(", ")} · เพดานเบิกล่วงหน้า ${input.advanceCapMode === "none" ? "ไม่จำกัด" : input.advanceCapMode === "baht" ? baht(capValue) : `${capValue} วัน`} · VAT ${vat}% · ซื้อของเองจากเงินสดย่อย${input.pettySpendReview ? "ต้องมีคนตรวจ" : "ไม่ต้องตรวจ"} · ค่า OT ${input.otRoundBaht ? "ปัดขึ้นเป็นบาท" : "คิดถึงสตางค์"} · วิธีคิด OT ${input.otRateMode === "flat" ? "อัตราเดียว (ไม่คูณ %)" : "ตามตาราง %"}`,
       });
     });
     revalidatePath("/requests");

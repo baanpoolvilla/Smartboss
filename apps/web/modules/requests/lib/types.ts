@@ -142,6 +142,16 @@ export interface OtRate {
   percent: number;
 }
 
+/** อัตราเดียว (ผู้ใช้ 20/11/2569): เงินเดือน ÷ 30 ÷ 8 × ชั่วโมง — ไม่แยกวันธรรมดา/วันหยุด ไม่คูณ % */
+export const FLAT_OT_RATE: OtRate = { id: "flat", label: "OT อัตราเดียว", percent: 100 };
+
+export type OtRateMode = "standard" | "flat";
+
+/** อัตราที่ใช้จริงตามที่บริษัทเลือก — flat = มีแบบเดียว */
+export function activeOtRates(s: { otRateMode?: OtRateMode; otRates: OtRate[] }): OtRate[] {
+  return s.otRateMode === "flat" ? [FLAT_OT_RATE] : s.otRates;
+}
+
 export const DEFAULT_OT_RATES: OtRate[] = [
   { id: "normal", label: "นอกเวลา วันทำงาน", percent: 150 },
   { id: "holiday", label: "ทำงานในวันหยุด", percent: 100 },
@@ -179,13 +189,13 @@ export interface OtCalc {
  * ค่า OT — พนักงานรายเดือน: เงินเดือน ÷ 30 ÷ 8 · คนงานรายวัน: ค่าแรง ÷ 8 (กติกาเดียวกับโมดูลคนงาน)
  * × % ที่เลือก × ชั่วโมง (ผู้ใช้กำหนด 21/10/2569)
  */
-export function otCalc(baseKind: "monthly" | "daily", base: number, percent: number, minutes: number, roundBaht = false): OtCalc {
+export function otCalc(baseKind: "monthly" | "daily", base: number, percent: number, minutes: number, roundBaht = false, showPercent = true): OtCalc {
   const hourly = baseKind === "monthly" ? base / 30 / 8 : base / 8;
   const exact = round2(hourly * (percent / 100) * (minutes / 60));
   // ปัดเศษสตางค์ขึ้นเป็นบาทเต็ม (สวิตช์รายบริษัท otRoundBaht) — ปัดจากยอดที่ปัดสตางค์แล้ว กัน 500.0000001 → 501
   const amount = roundBaht ? Math.ceil(exact) : exact;
   const head = baseKind === "monthly" ? `เงินเดือน ${baht(base)} ÷ 30 ÷ 8` : `ค่าแรง ${baht(base)}/วัน ÷ 8`;
-  return { hourly: round2(hourly), amount, formula: `${head} = ${baht(round2(hourly))}/ชม. × ${percent}% × ${hoursText(minutes)}` };
+  return { hourly: round2(hourly), amount, formula: `${head} = ${baht(round2(hourly))}/ชม.${showPercent ? ` × ${percent}%` : ""} × ${hoursText(minutes)}` };
 }
 
 /** ช่วงเวลาทับกันไหม (นาทีนับจากเที่ยงคืน ข้ามคืนได้) */
@@ -448,6 +458,8 @@ export interface RequestSettings {
   pettySpendReview: boolean;
   /** ค่า OT ปัดเศษสตางค์ขึ้นเป็นบาทเต็ม — ปิด = คิดถึงสตางค์แบบเดิม (ผู้ใช้ 16/11/2569 สวิตช์รายบริษัท) */
   otRoundBaht: boolean;
+  /** standard = ตามตาราง % · flat = อัตราเดียว ไม่คูณ % (ค่าเริ่มต้น standard = แบบเดิม) */
+  otRateMode: OtRateMode;
 }
 
 export const DEFAULT_SETTINGS: RequestSettings = {
@@ -461,6 +473,7 @@ export const DEFAULT_SETTINGS: RequestSettings = {
   clearDueDays: 7,
   pettySpendReview: false,
   otRoundBaht: false,
+  otRateMode: "standard",
 };
 
 export function daysInMonthOf(month: string): number {

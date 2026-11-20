@@ -283,6 +283,7 @@ export async function readSettings(tx: Tx, orgId: string): Promise<RequestSettin
     clearDueDays: s.clearDueDays,
     pettySpendReview: s.pettySpendReview,
     otRoundBaht: s.otRoundBaht,
+    otRateMode: s.otRateMode === "flat" ? "flat" : "standard",
   };
 }
 

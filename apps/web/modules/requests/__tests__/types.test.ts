@@ -2,6 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  activeOtRates,
+  DEFAULT_OT_RATES,
+  FLAT_OT_RATE,
   advanceCap,
   amountMismatch,
   baht,
@@ -112,4 +115,23 @@ test("สลิปคล้ายกัน: AI อ่านเลขอ้าง
   assert.equal(similarSlip(a, { ...a, amount: 100, receiptNo: "016294101523AT04512" }), false);
   assert.equal(similarSlip(a, { ...a, date: "2026-10-22", receiptNo: "016294101523AT04512" }), false);
   assert.equal(similarSlip(a, { ...a, receiptNo: "2026102198765432" }), false);
+});
+
+test("OT อัตราเดียว: เงินเดือน ÷ 30 ÷ 8 × ชั่วโมง ไม่คูณ % และสูตรไม่มี %", () => {
+  const c = otCalc("monthly", 15000, FLAT_OT_RATE.percent, 180, false, false);
+  assert.equal(c.amount, 187.5);
+  assert.ok(!c.formula.includes("%"));
+  assert.ok(c.formula.endsWith("/ชม. × 3 ชม."));
+});
+
+test("activeOtRates: flat มีแบบเดียว · standard/ไม่ตั้ง ใช้ตารางเดิม", () => {
+  assert.deepEqual(activeOtRates({ otRateMode: "flat", otRates: DEFAULT_OT_RATES }), [FLAT_OT_RATE]);
+  assert.equal(activeOtRates({ otRateMode: "standard", otRates: DEFAULT_OT_RATES }), DEFAULT_OT_RATES);
+  assert.equal(activeOtRates({ otRates: DEFAULT_OT_RATES }), DEFAULT_OT_RATES);
+});
+
+test("OT แบบมาตรฐานยังเหมือนเดิม (มี × 150%)", () => {
+  const c = otCalc("monthly", 15000, 150, 180);
+  assert.equal(c.amount, 281.25);
+  assert.ok(c.formula.includes("× 150% × 3 ชม."));
 });

@@ -8,7 +8,7 @@ import { REQ_PERMS } from "../permissions";
 import { monthlySalaryOn } from "./data";
 import { dateOnly, insertEvent, readSettings, withRequestsTenant, withRequestsTenantAfter } from "./db";
 import { notifyApprovers, notifyPayers } from "./notify";
-import { baht, hoursText, otCalc, round2, routeFor, timesOverlap, type OtRate } from "./types";
+import { FLAT_OT_RATE, baht, hoursText, otCalc, round2, routeFor, timesOverlap, type OtRate } from "./types";
 
 import { ceoTitle } from "@/lib/ceo-title";
 /*
@@ -89,7 +89,9 @@ export async function createOtFromHrApproval(session: OrgSession, input: HrOtApp
   const settings = await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId));
   const rateOf = (id: string): OtRate => settings.otRates.find((r) => r.id === id) ?? settings.otRates[0]!;
   const parts: { start: string; end: string; minutes: number; rate: OtRate }[] = [];
-  if (!holiday) parts.push({ start, end: addMinutes(start, minutes), minutes, rate: rateOf("normal") });
+  // อัตราเดียว: ไม่แยกวันหยุด/นอกเวลา — ใบเดียวทั้งช่วง
+  if (settings.otRateMode === "flat") parts.push({ start, end: addMinutes(start, minutes), minutes, rate: FLAT_OT_RATE });
+  else if (!holiday) parts.push({ start, end: addMinutes(start, minutes), minutes, rate: rateOf("normal") });
   else {
     const normal = Math.min(minutes, HOLIDAY_NORMAL_MINUTES);
     parts.push({ start, end: addMinutes(start, normal), minutes: normal, rate: rateOf("holiday") });
@@ -119,7 +121,7 @@ export async function createOtFromHrApproval(session: OrgSession, input: HrOtApp
 
   const created: string[] = [];
   for (const part of parts) {
-    const calc = salary ? otCalc("monthly", salary, part.rate.percent, part.minutes, settings.otRoundBaht) : null;
+    const calc = salary ? otCalc("monthly", salary, part.rate.percent, part.minutes, settings.otRoundBaht, settings.otRateMode !== "flat") : null;
     const amount = calc?.amount ?? 0;
     const route = routeFor(settings.approvalRoutes.ot, amount);
     // ไม่มีเงินเดือนในระบบ = คิดเงินไม่ได้ → รอ HR กรอกยอด (แก้ใบได้เพราะยังไม่มีใครตัดสิน)

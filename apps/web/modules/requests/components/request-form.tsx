@@ -18,6 +18,7 @@ import {
   thaiDate,
   type RequestKind,
   type RequestSettings,
+  activeOtRates,
 } from "../lib/types";
 import { FilePicker } from "./file-picker";
 import { PersonPicker, type PickItem } from "./person-picker";
@@ -111,7 +112,8 @@ export function RequestForm({
   const [workDate, setWorkDate] = useState(initial?.workDate ?? today);
   const [otStart, setOtStart] = useState(initial?.otStart || "17:00");
   const [otEnd, setOtEnd] = useState(initial?.otEnd || "19:00");
-  const [rateId, setRateId] = useState(initial?.rateId || (settings.otRates[0]?.id ?? ""));
+  const otRates = activeOtRates(settings);
+  const [rateId, setRateId] = useState(initial?.rateId || (otRates[0]?.id ?? ""));
   const [amount, setAmount] = useState(initial?.amount ?? "");
   const [title, setTitle] = useState(initial?.title ?? "");
   const [detail, setDetail] = useState(initial?.detail ?? "");
@@ -587,11 +589,14 @@ export function RequestForm({
                 </label>
               </div>
               {otMinutes > 0 && <div className="-mt-2 text-xs text-(--ink-soft)">รวม {hoursText(otMinutes)}{otEnd <= otStart ? " (ข้ามเที่ยงคืน)" : ""}</div>}
-              {person && !person.isWorker && (
+              {person && !person.isWorker && settings.otRateMode === "flat" && (
+                <div className="text-xs text-(--ink-soft)">ค่า OT = เงินเดือน ÷ 30 ÷ 8 × ชั่วโมงที่ทำ (อัตราเดียว ตามที่บริษัทตั้งไว้)</div>
+              )}
+              {person && !person.isWorker && settings.otRateMode !== "flat" && (
                 <label className={labelCls}>
                   <span className={labelText}>อัตรา OT</span>
                   <select className={field} value={rateId} onChange={(e) => setRateId(e.target.value)}>
-                    {settings.otRates.map((r) => (
+                    {otRates.map((r) => (
                       <option key={r.id} value={r.id}>{r.label} · {r.percent}%</option>
                     ))}
                   </select>

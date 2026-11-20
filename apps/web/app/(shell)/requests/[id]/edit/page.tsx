@@ -6,7 +6,7 @@ import { listLinkableWorkOrders, listPeople, listProperties, loadSettings } from
 import { canManageVendors, requestsPage } from "@/modules/requests/lib/page";
 import { loadRequests, toVendor, withRequestsTenant } from "@/modules/requests/lib/db";
 import { RequestForm, type EditInitial } from "@/modules/requests/components/request-form";
-import { bangkokToday } from "@/modules/requests/lib/types";
+import { activeOtRates, bangkokToday } from "@/modules/requests/lib/types";
 import { ceoTitle } from "@/lib/ceo-title";
 import { ceoText } from "@/lib/ceo-title-shared";
 
@@ -50,7 +50,7 @@ export default async function EditRequestPage({ params }: { params: Promise<{ id
     workDate: r.workDate,
     otStart: r.otStart ?? "",
     otEnd: r.otEnd ?? "",
-    rateId: settings.otRates.find((x) => x.label === r.otRateLabel)?.id ?? "",
+    rateId: activeOtRates(settings).find((x) => x.label === r.otRateLabel)?.id ?? "",
     amount: r.kind === "ot" ? (r.otBaseKind === "manual" ? String(r.amount) : "") : r.kind === "expense" ? "" : String(r.amount),
     title: r.title,
     detail: r.detail,
