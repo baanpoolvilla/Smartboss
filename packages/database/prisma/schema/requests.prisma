@@ -134,6 +134,9 @@ model MoneyRequestPayment {
   paidOn        DateTime  @map("paid_on") @db.Date
   /// เงินสดย่อยของใคร (method = petty_cash)
   pettyHolderId String?   @map("petty_holder_id")
+  /// โอนจากบัญชีบริษัทบัญชีไหน (id ใน settings.company_accounts) + ชื่อที่แสดง ณ ตอนจ่าย
+  companyAccountId    String?  @map("company_account_id")
+  companyAccountLabel String?  @map("company_account_label")
   payrollPeriod String?   @map("payroll_period")
   slips         Json      @default("[]")
   note          String    @default("")
@@ -319,6 +322,14 @@ model MoneyRequestSettings {
   noReceiptMax      Decimal? @map("no_receipt_max") @db.Decimal(12, 2)
   /// ส่งใบเสร็จแล้วยอดตรง = ปิดใบเอง (มีเงินทอน = ปิดเมื่อคนถือเงินกดรับทอน) — ปิด = HR ตรวจทุกใบแบบเดิม
   autoCloseClear    Boolean  @default(false) @map("auto_close_clear")
+  /// บัญชีธนาคารของบริษัท [{id,bankName,accountNo,accountName}] — ให้เลือกตอนบันทึกโอน
+  companyAccounts   Json?    @map("company_accounts")
+  /// รายการที่หัก ณ ที่จ่าย ต้องโอนจากบัญชีบริษัท (ห้ามเงินสด/เงินสดย่อย) — ปิด = แบบเดิม
+  whtCompanyOnly    Boolean  @default(false) @map("wht_company_only")
+  /// ผู้จ่ายเงินในหนังสือรับรองการหักภาษี ณ ที่จ่าย (50 ทวิ) — ชื่อ / เลขผู้เสียภาษี / ที่อยู่บริษัท
+  payerName         String   @default("") @map("payer_name")
+  payerTaxId        String   @default("") @map("payer_tax_id")
+  payerAddress      String   @default("") @map("payer_address")
   updatedBy         String   @map("updated_by")
   updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 

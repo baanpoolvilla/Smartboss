@@ -336,6 +336,8 @@ export interface PettyTaxSettings {
   whtRates: number[];
   /** ใบรับรองแทนใบเสร็จ ใบละไม่เกิน — null/ไม่ส่ง = ไม่เปิดให้ใช้ */
   noReceiptMax?: number | null;
+  /** บริษัทบังคับ หัก ณ ที่จ่ายต้องโอนจากบัญชีบริษัท — ซื้อของเองที่มีหัก ณ ที่จ่ายลงไม่ได้ */
+  whtCompanyOnly?: boolean;
 }
 
 function PayModal({ holder, today, payable, tax, onClose }: { holder: PettyHolderView; today: string; payable: PettyPayableItem[]; tax: PettyTaxSettings; onClose: () => void }) {
@@ -482,7 +484,7 @@ function SpendForm({ balance, today, taxSettings, onClose }: { balance: number; 
   const paid = tax ? tax.paid : value;
   const over = Number.isFinite(paid) && paid > balance + 0.005;
   const payeeOk = whtPercent === 0 || (payeeName.trim() && payeeKind);
-  const ready = title.trim() && category && Number.isFinite(value) && value > 0 && !over && spentOn && files.length > 0 && payeeOk && !customBad && (!noBill || nrSeller.trim());
+  const ready = title.trim() && category && Number.isFinite(value) && value > 0 && !over && spentOn && files.length > 0 && payeeOk && !customBad && (!noBill || nrSeller.trim()) && !(taxSettings.whtCompanyOnly && whtPercent > 0);
   return (
       <div className="flex flex-col gap-3">
         <Explain>ใช้เงินในมือซื้อของ/จ่ายค่าบริการเอง ไม่ต้องทำใบเบิก — กรอกครบทุกช่องที่มี * และแนบรูปใบเสร็จ บันทึกแล้วยอดในมือลดลงทันที{taxSettings.review ? ` แล้ว HR (หรือ ${ceo} ถ้าคุณเป็น HR) จะตรวจใบเสร็จทีหลัง — ไม่ผ่านต้องคืนเงินเข้ากอง` : ""} · เงินในมือตอนนี้ {baht(balance)}</Explain>
@@ -552,6 +554,9 @@ function SpendForm({ balance, today, taxSettings, onClose }: { balance: number; 
                 </div>
                 {tax && tax.base < 1000 && <span className="text-xs text-amber-700">ยอดก่อน VAT ต่ำกว่า 1,000 บาท ปกติไม่ต้องหัก — ตรวจอีกครั้ง</span>}
               </div>
+            )}
+            {taxSettings.whtCompanyOnly && whtPercent > 0 && (
+              <Notice tone="warn">ค่าบริการที่หัก ณ ที่จ่าย ต้องโอนจากบัญชีบริษัท — จ่ายจากเงินสดย่อยไม่ได้ ให้ลงเป็นใบ “จ่ายช่าง / ร้านค้า” ที่เมนูยื่นคำขอแทน</Notice>
             )}
             {tax && (vatIncluded || whtPercent > 0) && (
               <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5 rounded-(--radius) bg-(--bg-soft) px-3 py-2 text-sm tabular-nums">

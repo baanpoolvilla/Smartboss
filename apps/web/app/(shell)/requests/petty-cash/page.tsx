@@ -95,6 +95,8 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
     ? (await withRequestsTenant(orgId, (tx) => loadRequests(tx, orgId, { status: "approved" }, 200)))
         .map((r) => maskRequest(privacy, r))
         .filter((r) => payableByHolder(r, session.userId))
+        // หัก ณ ที่จ่าย + บริษัทบังคับโอนจากบัญชีบริษัท — จ่ายจากเงินสดย่อยไม่ได้ ไม่ขึ้นในรายการของคนถือเงิน
+        .filter((r) => !(reqSettings.whtCompanyOnly && r.whtAmount > 0.005))
         .map((r) => ({ id: r.id, code: r.code, title: r.title, beneficiaryName: r.beneficiaryName, outstanding: r.netAmount - r.paidTotal }))
     : [];
   // ตรวจ "ซื้อของเอง": HR/CEO ที่อนุมัติได้ · ไม่ตรวจของตัวเอง · ผู้ถือเป็น HR ⇒ CEO
@@ -231,7 +233,7 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
               const isMe = h.userId === session.userId;
               return (
                 <PettyHolderCard
-                  tax={{ review: reqSettings.pettySpendReview, vatPercent: reqSettings.vatPercent, whtRates: reqSettings.whtRates.filter((r) => r > 0), noReceiptMax: reqSettings.noReceiptMax }}
+                  tax={{ review: reqSettings.pettySpendReview, vatPercent: reqSettings.vatPercent, whtRates: reqSettings.whtRates.filter((r) => r > 0), noReceiptMax: reqSettings.noReceiptMax, whtCompanyOnly: reqSettings.whtCompanyOnly }}
                   key={h.userId}
                   holder={h}
                   isMe={isMe && viewer.isPettyHolder}

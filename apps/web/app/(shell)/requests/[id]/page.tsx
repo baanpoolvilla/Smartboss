@@ -477,6 +477,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
                         <span className={`font-bold tabular-nums ${p.voided ? "line-through" : ""}`}>{payHidden ? "฿•••" : baht(p.amount)}</span> · {METHOD_LABEL[p.method]}
                         {p.payrollPeriod ? ` งวด ${p.payrollPeriod}` : ""}
                         {p.pettyHolderId ? ` (${holders.find((h) => h.userId === p.pettyHolderId)?.name ?? ""})` : ""}
+                        {p.companyAccountLabel ? <span className="block text-xs text-(--ink-soft)">จากบัญชีบริษัท {p.companyAccountLabel}</span> : null}
                       </div>
                       <div className="text-xs text-(--ink-soft)">{thaiDate(p.paidOn)} · บันทึกโดย {p.byName}</div>
                     </div>
@@ -530,6 +531,8 @@ export default async function RequestDetailPage({ params, searchParams }: { para
                 payrollPeriod={period}
                 title={r.kind === "cash_advance" && r.clearedAt ? "จ่ายส่วนต่างที่ใช้เกิน" : "บันทึกการจ่ายเงิน"}
                 noPhotoOk={settings.cashConfirmMode && r.beneficiaryKind === "staff" && !!r.beneficiaryUserId}
+                companyAccounts={settings.companyAccounts}
+                needCompanyAccount={settings.whtCompanyOnly && r.whtAmount > 0.005}
               />
             )}
             {r.kind === "cash_advance" && r.status === "paid" && !r.clearStatus && (isBeneficiary || r.createdBy === session.userId) && (
@@ -543,6 +546,11 @@ export default async function RequestDetailPage({ params, searchParams }: { para
                 {clearMatch && settings.autoCloseClear && <Notice tone="ok">ยอดตรงกับใบเสร็จ{r.clearNoReceipt ? " (ใบรับรองแทนใบเสร็จ)" : ""} — รอคนถือเงินกดรับทอน หรือยืนยันตรงนี้ได้เลย</Notice>}
                 <ClearingConfirm id={r.id} paid={r.paidTotal} spent={r.clearSpent ?? 0} returned={r.clearReturned ?? 0} holders={holders} worker={r.beneficiaryKind === "worker"} />
               </>
+            )}
+            {r.kind === "contractor" && r.whtAmount > 0 && r.paidTotal > 0 && (viewer.canPay || viewer.canViewAll) && (
+              <a href={`/requests/wht-cert/${r.id}`} target="_blank" rel="noopener" className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-(--radius) border border-(--line) bg-(--bg) text-sm font-semibold text-(--ink) hover:bg-(--bg-soft)">
+                พิมพ์หนังสือรับรองหัก ณ ที่จ่าย (50 ทวิ)
+              </a>
             )}
             {(r.kind === "expense" || r.kind === "cash_advance") && (r.createdBy === session.userId || isBeneficiary) && r.status !== "pending" && (
               <Link href={`/requests/new?from=${r.id}`} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-(--radius) border border-(--line) bg-(--bg) text-sm font-semibold text-(--ink) hover:bg-(--bg-soft)">

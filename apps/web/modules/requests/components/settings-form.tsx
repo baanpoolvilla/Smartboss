@@ -8,6 +8,7 @@ import { saveSettingsAction } from "../actions";
 import { KIND_META, KINDS, routeText, type AdvanceCapMode, type ApprovalRoute, type OtRate, type OtRateMode, type RequestKind, type RequestSettings } from "../lib/types";
 import { Notice } from "./ui";
 import { WorkloadSettings, type WorkloadState } from "./workload-settings";
+import { CompanyAccountsSettings, type AccountsState } from "./company-accounts-settings";
 
 import { useCeoTitle } from "@/lib/ceo-title-client";
 import { ceoText } from "@/lib/ceo-title-shared";
@@ -43,6 +44,13 @@ export function SettingsForm({ initial, people = [] }: { initial: RequestSetting
     noReceiptMax: initial.noReceiptMax === null ? "" : String(initial.noReceiptMax),
     autoCloseClear: initial.autoCloseClear,
   });
+  const [accounts, setAccounts] = useState<AccountsState>({
+    companyAccounts: initial.companyAccounts,
+    whtCompanyOnly: initial.whtCompanyOnly,
+    payerName: initial.payerName,
+    payerTaxId: initial.payerTaxId,
+    payerAddress: initial.payerAddress,
+  });
 
   function save() {
     setError(null);
@@ -64,6 +72,7 @@ export function SettingsForm({ initial, people = [] }: { initial: RequestSetting
         cashConfirmMode: workload.cashConfirmMode,
         noReceiptMax: workload.noReceiptOn ? Number(workload.noReceiptMax.replace(/,/g, "")) : null,
         autoCloseClear: workload.autoCloseClear,
+        ...accounts,
       });
       if (!res.ok) {
         setError(res.error);
@@ -218,6 +227,8 @@ export function SettingsForm({ initial, people = [] }: { initial: RequestSetting
       </section>
 
       <WorkloadSettings value={workload} onChange={setWorkload} people={people} />
+
+      <CompanyAccountsSettings value={accounts} onChange={setAccounts} />
 
       <section className="flex flex-col gap-2 rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4">
         <h2 className="text-sm font-bold text-(--ink)">เงินสดย่อย</h2>

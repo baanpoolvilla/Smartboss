@@ -15,6 +15,7 @@ import {
   type ApprovalRoute,
 } from "./types";
 import { parseNoReceipt, parseSpendLimits, type NoReceipt, type RequestLine } from "./spend-rules";
+import { parseCompanyAccounts } from "./company-accounts";
 
 /**
  * ที่เก็บของโมดูลเบิกจ่าย & OT — schema requests (migration 20261021120000_requests_module)
@@ -59,6 +60,8 @@ export interface PaymentView {
   paidOn: string;
   pettyHolderId: string | null;
   payrollPeriod: string | null;
+  /** โอนจากบัญชีบริษัทบัญชีไหน (ชื่อที่แสดง ณ ตอนจ่าย) */
+  companyAccountLabel: string | null;
   slips: Attachment[];
   note: string;
   byUserId: string;
@@ -165,6 +168,7 @@ export function toPayment(p: PaymentRow): PaymentView {
     paidOn: ymd(p.paidOn),
     pettyHolderId: p.pettyHolderId,
     payrollPeriod: p.payrollPeriod,
+    companyAccountLabel: p.companyAccountLabel,
     slips: (p.slips as unknown as Attachment[]) ?? [],
     note: p.note,
     byUserId: p.byUserId,
@@ -300,6 +304,11 @@ export async function readSettings(tx: Tx, orgId: string): Promise<RequestSettin
     cashConfirmMode: s.cashConfirmMode,
     noReceiptMax: s.noReceiptMax === null ? null : num0(s.noReceiptMax),
     autoCloseClear: s.autoCloseClear,
+    companyAccounts: parseCompanyAccounts(s.companyAccounts),
+    whtCompanyOnly: s.whtCompanyOnly,
+    payerName: s.payerName,
+    payerTaxId: s.payerTaxId,
+    payerAddress: s.payerAddress,
   };
 }
 

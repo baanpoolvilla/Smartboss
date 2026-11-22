@@ -1,4 +1,5 @@
 import type { SpendLimitRule } from "./spend-rules";
+import type { CompanyAccount } from "./company-accounts";
 /**
  * กติกาบริสุทธิ์ของโมดูลเบิกจ่าย & OT (ไม่แตะฐานข้อมูล — ทดสอบได้ตรง ๆ ดู types.test.ts)
  * ตัวเลขเงินทุกตัวที่หน้าจอแสดงมาจากฟังก์ชันในไฟล์นี้ ไม่คำนวณซ้ำในหน้าเว็บ
@@ -224,6 +225,9 @@ export interface ReceiptAi {
   isReceipt: boolean;
   /** ข้อสังเกตจาก AI เช่น "ตัวเลขดูถูกแก้" — ใช้เป็นข้อเตือนให้ HR ดู ไม่ใช่คำตัดสิน */
   notes: string | null;
+  /** สลิปโอน: ชื่อบัญชีผู้โอน / เลขบัญชีผู้โอน (ตามที่เห็น อาจมี x) — เทียบกับบัญชีบริษัทที่เลือก · ข้อมูลเก่าไม่มี */
+  fromName?: string | null;
+  fromAccount?: string | null;
 }
 
 export interface Attachment {
@@ -469,6 +473,14 @@ export interface RequestSettings {
   noReceiptMax: number | null;
   /** ส่งใบเสร็จแล้วยอดตรง = ปิดใบเอง — ปิด = HR ตรวจทุกใบแบบเดิม */
   autoCloseClear: boolean;
+  /** บัญชีธนาคารบริษัท (ช่องทางการเงิน) — ให้เลือกตอนบันทึกโอน */
+  companyAccounts: CompanyAccount[];
+  /** รายการหัก ณ ที่จ่าย ต้องโอนจากบัญชีบริษัท — ปิด = แบบเดิม */
+  whtCompanyOnly: boolean;
+  /** ผู้จ่ายเงินใน 50 ทวิ */
+  payerName: string;
+  payerTaxId: string;
+  payerAddress: string;
 }
 
 export const DEFAULT_SETTINGS: RequestSettings = {
@@ -487,6 +499,11 @@ export const DEFAULT_SETTINGS: RequestSettings = {
   cashConfirmMode: false,
   noReceiptMax: null,
   autoCloseClear: false,
+  companyAccounts: [],
+  whtCompanyOnly: false,
+  payerName: "",
+  payerTaxId: "",
+  payerAddress: "",
 };
 
 export function daysInMonthOf(month: string): number {

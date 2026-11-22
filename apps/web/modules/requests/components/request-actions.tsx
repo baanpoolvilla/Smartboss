@@ -16,6 +16,7 @@ import {
 } from "../actions";
 import { METHOD_LABEL, SIMILAR_SLIP_PREFIX, baht, parseMoney, round2, thaiDate, type PaymentMethod } from "../lib/types";
 import { NO_RECEIPT_REASONS } from "../lib/spend-rules";
+import { accountLabel, slipFromMatches, type CompanyAccount } from "../lib/company-accounts";
 import { FilePicker } from "./file-picker";
 import { MoneyRow, Notice } from "./ui";
 
@@ -94,6 +95,8 @@ export function PayPanel({
   payrollPeriod,
   title = "บันทึกการจ่ายเงิน",
   noPhotoOk = false,
+  companyAccounts = [],
+  needCompanyAccount = false,
 }: {
   id: string;
   outstanding: number;
@@ -105,10 +108,18 @@ export function PayPanel({
   title?: string;
   /** จ่ายเงินสด/เงินสดย่อยไม่ต้องแนบรูป — ผู้รับกด "ได้รับเงินแล้ว" เอง (บริษัทเปิดในตั้งค่า + ผู้รับเป็นพนักงานที่มีบัญชี) */
   noPhotoOk?: boolean;
+  /** บัญชีธนาคารบริษัท — โอนต้องเลือกบัญชี (ตั้งไว้ในตั้งค่า) */
+  companyAccounts?: CompanyAccount[];
+  /** ใบหัก ณ ที่จ่าย + บริษัทบังคับ — โอนจากบัญชีบริษัทอย่างเดียว */
+  needCompanyAccount?: boolean;
 }) {
   const { busy, error, run } = useRun();
   const [amount, setAmount] = useState(String(outstanding));
-  const [method, setMethod] = useState<PaymentMethod>(methods[0] ?? "transfer");
+  const allowed = needCompanyAccount ? methods.filter((m) => m === "transfer") : methods;
+  const [method, setMethod] = useState<PaymentMethod>(allowed[0] ?? "transfer");
+  const [accountId, setAccountId] = useState(companyAccounts.length === 1 ? companyAccounts[0]!.id : "");
+  const account = companyAccounts.find((a) => a.id === accountId) ?? null;
+  const useAccount = method === "transfer" && companyAccounts.length > 0;
   const [paidOn, setPaidOn] = useState(today);
   const [holder, setHolder] = useState(holders.find((h) => h.userId === myUserId)?.userId ?? holders[0]?.userId ?? "");
   const [note, setNote] = useState("");
@@ -128,7 +139,7 @@ export function PayPanel({
   function pay(confirmSimilar: boolean) {
     setSimilar(null);
     run(async () => {
-      const res = await recordPaymentAction({ id, amount: amt, method, paidOn, pettyHolderId: method === "petty_cash" ? holder : null, payrollPeriod: method === "payroll" ? payrollPeriod : null, note, slips, closeShort, confirmSimilar });
+      const res = await recordPaymentAction({ id, amount: amt, method, paidOn, pettyHolderId: method === "petty_cash" ? holder : null, payrollPeriod: method === "payroll" ? payrollPeriod : null, note, slips, closeShort, confirmSimilar, companyAccountId: useAccount ? accountId || null : null });
       if (!res.ok && res.error.startsWith(SIMILAR_SLIP_PREFIX)) {
         setSimilar(res.error.split("|").slice(2).join("|"));
         return { error: "" };
@@ -145,7 +156,7 @@ export function PayPanel({
       </div>
       <fieldset className="flex flex-wrap gap-2">
         <legend className="sr-only">วิธีจ่าย</legend>
-        {methods.map((m) => (
+        {allowed.map((m) => (
           <label key={m} className={`inline-flex h-10 cursor-pointer items-center gap-2 rounded-(--radius) border px-3 text-sm ${method === m ? "border-(--brand-navy) bg-slate-100 font-semibold" : "border-(--line)"}`}>
             <input type="radio" name={`method-${id}`} className="sr-only" checked={method === m} onChange={() => setMethod(m)} />
             {METHOD_LABEL[m]}
@@ -162,6 +173,18 @@ export function PayPanel({
           {method === "payroll" ? <input className={field} value={payrollPeriod} readOnly /> : <input type="date" className={field} value={paidOn} max={today} onChange={(e) => setPaidOn(e.target.value)} />}
         </label>
       </div>
+      {needCompanyAccount && <Notice tone="warn">ใบนี้หัก ณ ที่จ่าย — ต้องโอนจากบัญชีบริษัทเท่านั้น (จ่ายเงินสด/เงินสดย่อยไม่ได้)</Notice>}
+      {useAccount && (
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className="font-semibold text-(--ink)">โอนจากบัญชีบริษัท <span className="font-normal text-red-700">*</span></span>
+          <select className={field} value={accountId} onChange={(e) => setAccountId(e.target.value)} aria-label="โอนจากบัญชีบริษัท">
+            <option value="">— เลือกบัญชี —</option>
+            {companyAccounts.map((a) => (
+              <option key={a.id} value={a.id}>{accountLabel(a)}</option>
+            ))}
+          </select>
+        </label>
+      )}
       {method === "petty_cash" && (
         <label className="flex flex-col gap-1.5 text-sm">
           <span className="font-semibold text-(--ink)">จ่ายจากเงินสดย่อยของ</span>
@@ -184,6 +207,10 @@ export function PayPanel({
         />
       )}
       {slipMismatch && <Notice tone="warn">ยอดในสลิป {baht(slipTotal!)} ไม่ตรงกับยอดที่จะบันทึก {baht(amt)} — ตรวจสลิปอีกครั้ง</Notice>}
+      {useAccount && account && slips.some((x) => slipFromMatches(x.ai, account) === false) && (
+        <Notice tone="warn">ผู้โอนในสลิป ({slips.map((x) => x.ai?.fromName || x.ai?.fromAccount).filter(Boolean).join(", ") || "—"}) ไม่ตรงกับบัญชีที่เลือก {accountLabel(account)} — ตรวจว่าโอนจากบัญชีบริษัทจริง</Notice>
+      )}
+      {useAccount && account && slips.length > 0 && slips.every((x) => slipFromMatches(x.ai, account) === true) && <Notice tone="ok">สลิปโอนจากบัญชีบริษัทที่เลือก ✓</Notice>}
       {short && (
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" className="mt-1 h-4 w-4" checked={closeShort} onChange={(e) => setCloseShort(e.target.checked)} />
@@ -210,7 +237,7 @@ export function PayPanel({
       <button
         type="button"
         className={primary}
-        disabled={busy || !Number.isFinite(amt) || amt <= 0 || pettyShort || (method !== "payroll" && slips.length === 0 && !(noPhotoOk && (method === "cash" || method === "petty_cash"))) || (short && !note.trim())}
+        disabled={busy || !Number.isFinite(amt) || amt <= 0 || pettyShort || (useAccount && !accountId) || (method !== "payroll" && slips.length === 0 && !(noPhotoOk && (method === "cash" || method === "petty_cash"))) || (short && !note.trim())}
         onClick={() => pay(false)}
       >
         {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}

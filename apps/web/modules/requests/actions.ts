@@ -29,6 +29,7 @@ import { dateOnly, insertEvent, loadRequests, pettyBalances, readSettings, withR
 import { clearActionNotifications, notifyApprovers, notifyClear, notifyPayers, notifyPettySpendReviewers, notifyPettyTopupApprovers, notifyPettyTopupResult, notifyResult } from "./lib/notify";
 import { usersWithPermission } from "@/modules/maintenance/data/notify";
 import { readReceipt } from "./lib/receipt-ai";
+import { accountLabel, mustUseCompanyAccount, parseCompanyAccounts, slipFromMatches } from "./lib/company-accounts";
 import { clearingMatches, cleanNoReceipt, evaluateLimit, LIMIT_KINDS, parseSpendLimits, weekStartOf, type NoReceipt, type RequestLine, type SpendLimitRule } from "./lib/spend-rules";
 import { isPettyHolder } from "./lib/holders";
 import { PAYROLL_METHOD_BLOCKED, canSeePay, payPrivacy, payrollHandoffBlock, usesSalaryModule } from "./lib/pay-privacy";
@@ -1386,6 +1387,8 @@ export interface PayInput {
   closeShort?: boolean;
   /** HR ยืนยันแล้วว่าสลิปที่คล้ายใบก่อนเป็นคนละรายการ */
   confirmSimilar?: boolean;
+  /** โอนจากบัญชีบริษัทบัญชีไหน (id ใน settings.companyAccounts) */
+  companyAccountId?: string | null;
 }
 
 export async function recordPaymentAction(input: PayInput): Promise<Result> {
@@ -1421,6 +1424,14 @@ export async function recordPaymentAction(input: PayInput): Promise<Result> {
     const settings = await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId));
     // จ่ายเงินสดให้พนักงานที่มีบัญชี: บริษัทเปิด "ให้ผู้รับกดยืนยัน" = ไม่ต้องถ่ายรูป (ผู้ใช้ 22/11/2569) — คนงาน/ช่างภายนอกยังต้องแนบรูป
     const confirmByReceiver = cashConfirmAllowed(settings, method, r);
+    // ช่องทางการเงิน (แนว PEAK): หัก ณ ที่จ่าย + บริษัทเปิดสวิตช์ = โอนจากบัญชีบริษัทเท่านั้น · บริษัทตั้งบัญชีไว้ = โอนต้องเลือกบัญชีทุกครั้ง
+    const needCompanyAccount = mustUseCompanyAccount(settings, r.whtAmount);
+    if (needCompanyAccount && method !== "transfer") return { error: `ใบนี้หัก ณ ที่จ่าย ${baht(r.whtAmount)} — ต้องโอนจากบัญชีบริษัท (จ่ายเงินสด/เงินสดย่อยไม่ได้ เพราะเอาไปหักภาษีไม่ได้ชัด)` };
+    const companyAccount = method === "transfer" && input.companyAccountId ? (settings.companyAccounts.find((a) => a.id === input.companyAccountId) ?? null) : null;
+    if (method === "transfer" && input.companyAccountId && !companyAccount) return { error: "ไม่พบบัญชีบริษัทที่เลือก — รีเฟรชหน้า" };
+    if (method === "transfer" && settings.companyAccounts.length > 0 && !companyAccount) return { error: "เลือกว่าโอนจากบัญชีบริษัทบัญชีไหน" };
+    // ผู้โอนในสลิปไม่ตรงกับบัญชีที่เลือก — บันทึกไว้ในประวัติให้บัญชีเห็น (ไม่บล็อก: AI อ่านพลาดได้ · หน้าเว็บเตือนก่อนกดแล้ว)
+    const slipMismatch = companyAccount ? slips.some((x) => slipFromMatches(x.ai, companyAccount) === false) : false;
     if (method !== "payroll" && slips.length === 0 && !confirmByReceiver) return { error: method === "transfer" ? "แนบสลิปโอน" : "แนบรูปหลักฐานรับเงิน (เช่นรูปเซ็นรับเงินสด)" };
     const payrollPeriod = method === "payroll" ? (input.payrollPeriod && /^\d{4}-\d{2}$/.test(input.payrollPeriod) ? input.payrollPeriod : paidOn.slice(0, 7)) : null;
     const holderName = pettyHolderId ? await nameOf(pettyHolderId) : "";
@@ -1463,7 +1474,7 @@ export async function recordPaymentAction(input: PayInput): Promise<Result> {
         if (bal + 0.005 < amount) return `petty:${bal}` as const;
       }
       const pay = await tx.moneyRequestPayment.create({
-        data: { orgId, requestId: r.id, amount, method, paidOn: dateOnly(paidOn), pettyHolderId, payrollPeriod, slips: slips as unknown as object, note, byUserId: session.userId, byName },
+        data: { orgId, requestId: r.id, amount, method, paidOn: dateOnly(paidOn), pettyHolderId, payrollPeriod, slips: slips as unknown as object, note, byUserId: session.userId, byName, ...(companyAccount ? { companyAccountId: companyAccount.id, companyAccountLabel: accountLabel(companyAccount) } : {}) },
       });
       if (method === "petty_cash") {
         await tx.moneyPettyCashEntry.create({
@@ -1496,7 +1507,7 @@ export async function recordPaymentAction(input: PayInput): Promise<Result> {
         byUserId: session.userId,
         byName,
         action: "pay",
-        summary: `จ่าย ${baht(amount)} (${METHOD_LABEL[method]}${method === "petty_cash" && holderName ? ` ของ ${holderName}` : ""}${payrollPeriod ? ` งวด ${payrollPeriod}` : ""})${slips.length === 0 && confirmByReceiver ? " · ไม่มีรูป รอผู้รับกดยืนยันรับเงิน" : ""}${short ? ` · ${input.closeShort ? "ปิดยอดไม่จ่ายส่วนที่เหลือ" : "จ่ายบางส่วน"}: ${note}` : note ? ` · ${note}` : ""}`,
+        summary: `จ่าย ${baht(amount)} (${METHOD_LABEL[method]}${method === "petty_cash" && holderName ? ` ของ ${holderName}` : ""}${payrollPeriod ? ` งวด ${payrollPeriod}` : ""})${companyAccount ? ` จาก ${accountLabel(companyAccount)}` : ""}${slipMismatch ? " · ⚠ ชื่อ/เลขบัญชีผู้โอนในสลิปไม่ตรงกับบัญชีที่เลือก" : ""}${slips.length === 0 && confirmByReceiver ? " · ไม่มีรูป รอผู้รับกดยืนยันรับเงิน" : ""}${short ? ` · ${input.closeShort ? "ปิดยอดไม่จ่ายส่วนที่เหลือ" : "จ่ายบางส่วน"}: ${note}` : note ? ` · ${note}` : ""}`,
       });
       return full ? ("full" as const) : ("partial" as const);
     });
@@ -2295,6 +2306,10 @@ export async function addPettySpendAction(input: {
     const payeeKind = input.payeeKind === "person" || input.payeeKind === "company" ? input.payeeKind : null;
     if (whtPercent > 0 && (!payeeName || !payeeKind)) return { error: "หัก ณ ที่จ่าย ต้องใส่ชื่อผู้รับเงิน และเลือกว่าเป็นบุคคลหรือบริษัท (ใช้ออก 50 ทวิ)" };
     const hasTax = !!input.vatIncluded || whtPercent > 0;
+    // ค่าบริการที่หัก ณ ที่จ่าย: บริษัทเปิด "ต้องโอนจากบัญชีบริษัท" — จ่ายจากเงินสดย่อยไม่ได้ ลงเป็นใบจ่ายช่าง/ร้านค้าแทน
+    if (whtPercent > 0 && (await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId))).whtCompanyOnly) {
+      return { error: "ค่าบริการที่หัก ณ ที่จ่าย ต้องโอนจากบัญชีบริษัท — จ่ายจากเงินสดย่อยไม่ได้ ให้ลงเป็นใบ “จ่ายช่าง / ร้านค้า” แทน" };
+    }
     // VAT % ตามหน้าตั้งค่าเบิกจ่าย (ที่เดียวกับใบค่าช่าง) — เปลี่ยนอัตราเมื่อไหร่แก้ที่นั่น
     const vatPercent = (await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId))).vatPercent;
     const tax = pettyTax(bill, !!input.vatIncluded, whtPercent, vatPercent);
@@ -2475,8 +2490,19 @@ export async function saveSettingsAction(input: RequestSettings): Promise<Result
     const spendLimits = limits.map((r) => ({ ...r, userIds: r.userIds.filter((u) => realUsers.has(u)) }));
     const noReceiptMax = input.noReceiptMax === null || input.noReceiptMax === undefined || (input.noReceiptMax as unknown) === "" ? null : round2(Number(input.noReceiptMax));
     if (noReceiptMax !== null && (!Number.isFinite(noReceiptMax) || noReceiptMax <= 0 || noReceiptMax > 100_000)) return { error: "ยอดสูงสุดของใบรับรองแทนใบเสร็จไม่ถูกต้อง" };
+    // ช่องทางการเงิน: บัญชีที่กรอกไม่ครบถูกตัด — เปิดบังคับหัก ณ ที่จ่ายต้องมีบัญชีบริษัทอย่างน้อย 1 บัญชี
+    const companyAccounts = parseCompanyAccounts(input.companyAccounts);
+    if ((input.companyAccounts ?? []).length !== companyAccounts.length) return { error: "บัญชีบริษัทกรอกไม่ครบ — ต้องมีธนาคาร เลขบัญชี (อย่างน้อย 6 หลัก) และชื่อบัญชี" };
+    if (input.whtCompanyOnly && companyAccounts.length === 0) return { error: "เปิด “หัก ณ ที่จ่ายต้องโอนจากบัญชีบริษัท” ต้องเพิ่มบัญชีบริษัทก่อน" };
+    const payerTaxId = String(input.payerTaxId ?? "").replace(/\D/g, "");
+    if (payerTaxId && payerTaxId.length !== 13) return { error: "เลขประจำตัวผู้เสียภาษีของบริษัทต้องมี 13 หลัก" };
     const byName = await nameOf(session.userId);
     const data = {
+      companyAccounts: companyAccounts as unknown as object,
+      whtCompanyOnly: !!input.whtCompanyOnly,
+      payerName: String(input.payerName ?? "").trim().slice(0, 160),
+      payerTaxId,
+      payerAddress: String(input.payerAddress ?? "").trim().slice(0, 300),
       spendLimits: spendLimits as unknown as object,
       cashConfirmMode: !!input.cashConfirmMode,
       noReceiptMax,
@@ -2500,7 +2526,7 @@ export async function saveSettingsAction(input: RequestSettings): Promise<Result
         byUserId: session.userId,
         byName,
         action: "settings",
-        summary: `ตั้งค่า: อนุมัติ ${(Object.keys(approvalRoutes) as RequestKind[]).map((k) => `${KIND_META[k].short} ${ceoText(routeText(approvalRoutes[k]), ceo)}`).join(", ")} · OT ${rates.map((r) => `${r.label} ${r.percent}%`).join(", ")} · เพดานเบิกล่วงหน้า ${input.advanceCapMode === "none" ? "ไม่จำกัด" : input.advanceCapMode === "baht" ? baht(capValue) : `${capValue} วัน`} · VAT ${vat}% · ซื้อของเองจากเงินสดย่อย${input.pettySpendReview ? "ต้องมีคนตรวจ" : "ไม่ต้องตรวจ"} · ค่า OT ${input.otRoundBaht ? "ปัดขึ้นเป็นบาท" : "คิดถึงสตางค์"} · วิธีคิด OT ${input.otRateMode === "flat" ? "อัตราเดียว (ไม่คูณ %)" : "ตามตาราง %"} · วงเงินรายคน ${spendLimits.filter((r) => r.active).length ? spendLimits.filter((r) => r.active).map((r) => `${r.name} ครั้งละ ${baht(r.perRequest)} สัปดาห์ละ ${baht(r.perWeek)} (${r.userIds.length} คน)`).join(", ") : "ไม่ใช้"} · ใบรับรองแทนใบเสร็จ ${noReceiptMax === null ? "ไม่เปิด" : `ใบละไม่เกิน ${baht(noReceiptMax)}`} · จ่ายเงินสด${input.cashConfirmMode ? "ให้ผู้รับกดยืนยัน" : "ต้องแนบรูป"} · ยอดตรงปิดเอง ${input.autoCloseClear ? "เปิด" : "ปิด"}`,
+        summary: `ตั้งค่า: อนุมัติ ${(Object.keys(approvalRoutes) as RequestKind[]).map((k) => `${KIND_META[k].short} ${ceoText(routeText(approvalRoutes[k]), ceo)}`).join(", ")} · OT ${rates.map((r) => `${r.label} ${r.percent}%`).join(", ")} · เพดานเบิกล่วงหน้า ${input.advanceCapMode === "none" ? "ไม่จำกัด" : input.advanceCapMode === "baht" ? baht(capValue) : `${capValue} วัน`} · VAT ${vat}% · ซื้อของเองจากเงินสดย่อย${input.pettySpendReview ? "ต้องมีคนตรวจ" : "ไม่ต้องตรวจ"} · ค่า OT ${input.otRoundBaht ? "ปัดขึ้นเป็นบาท" : "คิดถึงสตางค์"} · วิธีคิด OT ${input.otRateMode === "flat" ? "อัตราเดียว (ไม่คูณ %)" : "ตามตาราง %"} · วงเงินรายคน ${spendLimits.filter((r) => r.active).length ? spendLimits.filter((r) => r.active).map((r) => `${r.name} ครั้งละ ${baht(r.perRequest)} สัปดาห์ละ ${baht(r.perWeek)} (${r.userIds.length} คน)`).join(", ") : "ไม่ใช้"} · ใบรับรองแทนใบเสร็จ ${noReceiptMax === null ? "ไม่เปิด" : `ใบละไม่เกิน ${baht(noReceiptMax)}`} · จ่ายเงินสด${input.cashConfirmMode ? "ให้ผู้รับกดยืนยัน" : "ต้องแนบรูป"} · ยอดตรงปิดเอง ${input.autoCloseClear ? "เปิด" : "ปิด"} · บัญชีบริษัท ${companyAccounts.length ? companyAccounts.map(accountLabel).join(", ") : "ไม่มี"} · หัก ณ ที่จ่าย${input.whtCompanyOnly ? "ต้องโอนจากบัญชีบริษัท" : "จ่ายช่องทางใดก็ได้"}`,
       });
     });
     revalidatePath("/requests");

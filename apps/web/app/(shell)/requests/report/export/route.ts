@@ -3,6 +3,7 @@ import { hasPermission, requireOrg } from "@smartboss/auth";
 
 import { REQ_PERMS } from "@/modules/requests/permissions";
 import { isPettyHolder } from "@/modules/requests/lib/holders";
+import { withRequestsTenant } from "@/modules/requests/lib/db";
 import { monthRequests } from "@/modules/requests/lib/report";
 import { beneficiaryLabel, statusOf } from "@/modules/requests/lib/page";
 import { KIND_META, METHOD_LABEL, bangkokToday, costOf } from "@/modules/requests/lib/types";
@@ -29,9 +30,11 @@ export async function GET(req: Request) {
   // ยอด OT พนักงานประจำ: ไฟล์ของคนที่ไม่ใช่ CEO/ผู้ดูแลเงินเดือนไม่มีตัวเลข (lib/pay-privacy.ts)
   const privacy = await payPrivacy(session);
   const rows = (await monthRequests(session.orgId, viewer, month)).map((r) => maskRequest(privacy, r));
+  // เลขผู้เสียภาษี + บุคคล/นิติบุคคล ของช่าง/ร้าน — ให้บัญชียื่น ภ.ง.ด.3/53 จากไฟล์นี้ได้เลย
+  const vendors = new Map((await withRequestsTenant(session.orgId, (tx) => tx.moneyVendor.findMany({ where: { orgId: session.orgId }, select: { id: true, taxId: true, kind: true } }))).map((v) => [v.id, v]));
   const head = [
     "วันที่", "เลขที่", "ประเภท", "ของใคร", "ประเภทผู้รับ", "รายการ", "บ้าน", "ใบงาน", "เวลา OT", "ชั่วโมง OT",
-    "ยอดก่อนภาษี", "VAT", "หัก ณ ที่จ่าย", "ยอดสุทธิ", "ค่าใช้จ่ายจริง", "จ่ายแล้ว", "วิธีจ่าย", "รอหักคืน", "สถานะ", "ผู้ยื่น", "ผู้อนุมัติ",
+    "ยอดก่อนภาษี", "VAT", "หัก ณ ที่จ่าย", "ยอดสุทธิ", "ค่าใช้จ่ายจริง", "จ่ายแล้ว", "วิธีจ่าย", "โอนจากบัญชี", "เลขผู้เสียภาษีผู้รับ", "ผู้รับเป็น", "รอหักคืน", "สถานะ", "ผู้ยื่น", "ผู้อนุมัติ",
   ];
   const esc = (v: unknown) => {
     const s = v === null || v === undefined ? "" : String(v);
@@ -56,6 +59,9 @@ export async function GET(req: Request) {
       r.payHidden ? "" : costOf(r).toFixed(2),
       r.payHidden ? "" : r.paidTotal.toFixed(2),
       [...new Set(r.payments.filter((p) => !p.voided).map((p) => METHOD_LABEL[p.method]))].join(" + "),
+      [...new Set(r.payments.filter((p) => !p.voided && p.companyAccountLabel).map((p) => p.companyAccountLabel))].join(" + "),
+      r.vendorId ? (vendors.get(r.vendorId)?.taxId ?? "") : "",
+      r.whtAmount > 0 ? (r.vendorId && vendors.get(r.vendorId)?.kind === "company" ? "นิติบุคคล (ภ.ง.ด.53)" : "บุคคล (ภ.ง.ด.3)") : "",
       r.deductAmount > 0 && !r.deductedAt ? r.deductAmount.toFixed(2) : "",
       statusOf(r, ceo).label,
       r.createdByName,
