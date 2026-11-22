@@ -72,7 +72,9 @@ export function nextGradeHistory(
 ): GradeHistoryEntry[] {
   if (effectiveFrom === null) return [];
   if (!MONTH.test(effectiveFrom)) throw new Error("รอบที่เริ่มใช้ไม่ถูกต้อง");
-  if (sameThresholds(oldCurrent, newCurrent)) return [...oldHistory];
+  // แถว F (ต่ำกว่าทุกเกณฑ์) ไม่มีผลกับเกรดที่ได้ — มี/ไม่มีถือว่าชุดเดียวกัน
+  const noF = (t: GradeThresholds) => t.filter(([g]) => g !== "F");
+  if (sameThresholds(noF(oldCurrent), noF(newCurrent))) return [...oldHistory];
   const until = prevMonth(effectiveFrom);
   const kept = oldHistory.filter((e) => e.until < until);
   const before = thresholdsForRound(oldCurrent, oldHistory, until);

@@ -1,3 +1,4 @@
+import { salaryAccess } from "@/modules/salary/lib/access";
 import { redirect } from "next/navigation";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { AppScaffold } from "@/components/module/app-scaffold";
@@ -30,7 +31,7 @@ export default async function PerformanceSettingsPage() {
     <AppScaffold title="เกณฑ์คะแนนผลงาน" width="max-w-none" backHref="/admin/performance">
       <div className="flex flex-col gap-4">
         <ScorePeriodForm period={period} />
-        <PerformanceSettingsForm settings={settings} orgId={session.orgId} />
+        <PerformanceSettingsForm settings={settings} orgId={session.orgId} canEditCommission={(await salaryAccess(session)).canEdit} />
       </div>
     </AppScaffold>
   );

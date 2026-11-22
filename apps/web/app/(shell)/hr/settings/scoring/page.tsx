@@ -1,3 +1,4 @@
+import { salaryAccess } from "@/modules/salary/lib/access";
 import { requireOrg } from "@smartboss/auth";
 import { HrPage } from "@/modules/hr/components/hr-page";
 import { SettingsSubnav } from "@/modules/hr/components/design-kit";
@@ -34,7 +35,7 @@ export default async function HrScoringSettingsPage() {
             <div className="min-w-0 flex-1">
               <div className="flex flex-col gap-4">
                 <ScorePeriodForm period={period} />
-                <PerformanceSettingsForm settings={settings} orgId={session.orgId} />
+                <PerformanceSettingsForm settings={settings} orgId={session.orgId} canEditCommission={(await salaryAccess(session)).canEdit} />
               </div>
             </div>
           </div>

@@ -17,6 +17,8 @@ import { ADMIN_PERMS } from "@/modules/admin/permissions";
 import { organizationExists } from "@/modules/admin/data/orgs";
 import { PERFORMANCE_CATEGORIES, loadPerformanceSettings } from "@/lib/performance";
 import { historyToJson, nextGradeHistory, sortThresholds } from "@/lib/grade-thresholds";
+import { buildGradeCommissionUpdate } from "@/modules/hr/lib/commission-data";
+import { salaryAccess } from "@/modules/salary/lib/access";
 import { shiftMonth } from "@/lib/performance-month";
 import { clampIdleLogout, clampSecuritySetting, loadSecuritySettings, parseIpList } from "@/lib/security-settings";
 import { notifyUser } from "@/modules/maintenance/data/notify";
@@ -810,6 +812,19 @@ export async function savePerformanceSettingsAction(formData: FormData) {
   const gradeFromRaw = String(formData.get("gradeFrom") ?? "current");
   const currentRound = scorePeriodOf(await loadScorePeriodConfig(orgId), new Date());
   const effectiveFrom = gradeFromRaw === "all" ? null : gradeFromRaw === "next" ? shiftMonth(currentRound, 1) : currentRound;
+  // ค่าคอมของแต่ละเกรด (คอลัมน์ในตารางเกรด) — ตรวจครบทุกช่องก่อนบันทึกอะไรเลย · เฉพาะคนแก้เงินเดือนได้ + บริษัทของตัวเอง
+  let commissionUpdate: Awaited<ReturnType<typeof buildGradeCommissionUpdate>> = null;
+  const commRaw = formData.getAll("gradeComm").map(String);
+  if (commRaw.length > 0 && orgId === session.orgId && (await salaryAccess(session)).canEdit) {
+    const names = formData.getAll("gradeName").map((n) => String(n).trim());
+    const entries: [string, string][] = [];
+    names.forEach((n, i) => {
+      if (n && n in gradeThresholds) entries.push([n, commRaw[i] ?? ""]);
+    });
+    entries.push(["F", String(formData.get("gradeCommF") ?? "")]);
+    commissionUpdate = await buildGradeCommissionUpdate(orgId, entries);
+  }
+
   const gradeThresholdHistory = historyToJson(
     nextGradeHistory(before.gradeThresholds, before.gradeHistory, sortThresholds(gradeThresholds), effectiveFrom),
   );
@@ -831,18 +846,30 @@ export async function savePerformanceSettingsAction(formData: FormData) {
     updatedBy: session.userId,
   };
 
-  await prisma.performanceSetting.upsert({
-    where: { orgId },
-    update: data,
-    create: { orgId, ...data },
-  });
+  await prisma.$transaction([
+    prisma.performanceSetting.upsert({
+      where: { orgId },
+      update: data,
+      create: { orgId, ...data },
+    }),
+    ...(commissionUpdate
+      ? [
+          prisma.commissionSetting.upsert({
+            where: { orgId },
+            update: { ...commissionUpdate, updatedBy: session.userId },
+            create: { orgId, ...commissionUpdate, updatedBy: session.userId },
+          }),
+        ]
+      : []),
+  ]);
 
   await audit({
     userId: session.userId,
     action: "PERFORMANCE_SETTINGS_UPDATED",
     targetId: orgId,
-    detail: data,
+    detail: commissionUpdate ? { ...data, commission: commissionUpdate } : data,
   });
+  revalidatePath("/salary/commission");
   revalidatePath("/admin/performance");
   revalidatePath("/admin/performance/settings");
   revalidatePath("/hr/settings/scoring");

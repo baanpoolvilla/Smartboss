@@ -389,3 +389,61 @@ export async function saveCommissionEligibility(input: { orgId: string; userId: 
   const data = { eligibleDepartmentIds: depts.map((d) => d.id), excludedUserIds: users.map((u) => u.id), probationPassedUserIds, updatedBy: input.userId };
   await prisma.commissionSetting.upsert({ where: { orgId: input.orgId }, update: data, create: { orgId: input.orgId, ...data } });
 }
+
+/* ═════════ ค่าคอมต่อเกรด แก้พร้อมเกณฑ์เกรด (หน้าเกณฑ์คะแนน) ═════════ */
+
+export interface GradeCommissionColumn {
+  method: CommissionMethod;
+  /** หัวคอลัมน์ในตารางเกรด */
+  label: string;
+  /** ค่าที่ใช้อยู่ของแต่ละเกรด (รวม F) — เกรดที่ยังไม่เคยตั้งได้ค่าตั้งต้นของระบบ */
+  values: Record<string, number>;
+  /** เกรดที่ยังไม่เคยบันทึกค่าไว้ */
+  unset: string[];
+}
+
+/** ค่าคอมของแต่ละเกรดสำหรับตารางเกรด — วิธี "ไม่คิดจากเกรด" = null (ไม่มีคอลัมน์) */
+export async function loadGradeCommissionColumn(orgId: string, gradeNames: string[]): Promise<GradeCommissionColumn | null> {
+  const setting = await prisma.commissionSetting.findUnique({ where: { orgId } });
+  const method = toCommissionMethod(setting?.method);
+  if (method === "off") return null;
+  const order = commissionGradeOrder(gradeNames);
+  if (method === "pool" || method === "grade_tier") {
+    const saved = toObject(setting?.gradeWeights);
+    return { method, label: "ตัวคูณค่าคอม", values: resolveGradeWeights(gradeNames, saved), unset: order.filter((g) => !(g in saved)) };
+  }
+  const saved = toObject(toObject(setting?.gradeValues)[method]);
+  return {
+    method,
+    label: method === "percent" ? "ค่าคอม % ของเงินเดือน" : "ค่าคอม บาทต่อคน",
+    values: resolveGradeValues(order, saved, method),
+    unset: order.filter((g) => !(g in saved)),
+  };
+}
+
+/**
+ * ตรวจค่าคอมต่อเกรดจากตารางเกรด — ผิดสักช่อง = throw ก่อนบันทึกอะไรเลย · คืน data สำหรับ commissionSetting
+ * เก็บเฉพาะเกรดที่มีอยู่ตอนนี้ (เกรดที่ลบไปหายจากที่ตั้งไว้ด้วย)
+ */
+export async function buildGradeCommissionUpdate(orgId: string, entries: [string, string][]): Promise<{ gradeWeights: Record<string, number> } | { gradeValues: Record<string, unknown> } | null> {
+  const setting = await prisma.commissionSetting.findUnique({ where: { orgId }, select: { method: true, gradeValues: true } });
+  const method = toCommissionMethod(setting?.method);
+  if (method === "off") return null;
+  const out: Record<string, number> = {};
+  for (const [grade, raw] of entries) {
+    if (raw.trim() === "") throw new Error(`ยังไม่ได้ใส่ค่าคอมของเกรด ${grade}`);
+    const v = method === "pool" || method === "grade_tier" ? parseGradeWeight(raw) : parseGradeValue(raw, method);
+    if (v === null) {
+      throw new Error(
+        method === "pool" || method === "grade_tier"
+          ? `ตัวคูณค่าคอมของเกรด ${grade} ไม่ถูกต้อง — ใส่ 0 ถึง 100 ทศนิยมไม่เกิน 2 ตำแหน่ง`
+          : method === "percent"
+            ? `% ค่าคอมของเกรด ${grade} ไม่ถูกต้อง — ใส่ 0 ถึง 100`
+            : `จำนวนเงินค่าคอมของเกรด ${grade} ไม่ถูกต้อง`,
+      );
+    }
+    out[grade] = v;
+  }
+  if (method === "pool" || method === "grade_tier") return { gradeWeights: out };
+  return { gradeValues: { ...toObject(setting?.gradeValues), [method]: out } };
+}

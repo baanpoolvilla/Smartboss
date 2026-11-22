@@ -13,6 +13,7 @@ import { GradeThresholdsEditor } from "@/modules/admin/components/grade-threshol
 import { scorePeriodOf } from "@/lib/score-period";
 import { loadScorePeriodConfig } from "@/lib/score-period-config";
 import { monthDisplay, shiftMonth } from "@/lib/performance-month";
+import { loadGradeCommissionColumn } from "@/modules/hr/lib/commission-data";
 
 /**
  * ฟอร์มตั้งเกณฑ์คะแนนผลงานของบริษัท — ใช้ร่วมกันสองที่:
@@ -62,9 +63,25 @@ const GROUPS: { title: string; hint: string; keys: PerformanceCategory[] }[] = [
   },
 ];
 
-export async function PerformanceSettingsForm({ settings: s, orgId }: { settings: PerformanceSettings; orgId: string }) {
+export async function PerformanceSettingsForm({
+  settings: s,
+  orgId,
+  canEditCommission,
+}: {
+  settings: PerformanceSettings;
+  orgId: string;
+  /** แก้เงินเดือน/ค่าคอมได้ — ได้คอลัมน์ค่าคอมต่อเกรดในตารางเกรด */
+  canEditCommission: boolean;
+}) {
   const currentRound = scorePeriodOf(await loadScorePeriodConfig(orgId), new Date());
   const lastOld = s.gradeHistory[s.gradeHistory.length - 1];
+  const gradeNames = s.gradeThresholds.map(([g]) => g);
+  const column = canEditCommission ? await loadGradeCommissionColumn(orgId, gradeNames) : null;
+  const commissionNote = !canEditCommission
+    ? "ค่าคอมของแต่ละเกรดแก้ได้เฉพาะคนที่มีสิทธิ์แก้เงินเดือน (หน้าค่าคอม)"
+    : column === null
+      ? "บริษัทตั้งค่าคอมแบบไม่คิดจากเกรด — เปลี่ยนวิธีได้ที่หน้าค่าคอม"
+      : null;
 
   return (
     <form action={savePerformanceSettingsAction} className="flex flex-col gap-4">
@@ -109,6 +126,9 @@ export async function PerformanceSettingsForm({ settings: s, orgId }: { settings
           ต่ำกว่าทุกเกณฑ์ได้ F
         </p>
         <GradeThresholdsEditor
+          key={JSON.stringify([s.gradeThresholds, s.gradeHistory.length, column?.values ?? null])}
+          commission={column ? { label: column.label, isWeight: column.method === "pool" || column.method === "grade_tier", values: column.values, unset: column.unset } : null}
+          commissionNote={commissionNote}
           initial={s.gradeThresholds}
           baseScore={s.baseScore}
           currentRoundLabel={monthDisplay(currentRound)}
