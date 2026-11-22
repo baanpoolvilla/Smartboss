@@ -54,6 +54,8 @@ const get = (key: string, known?: string) =>
 beforeEach(() => {
   sessionUser = "u-1";
   rows.clear();
+  // ฐานข้อมูลจริงขยับ version/updated_at ทุกครั้งที่เขียน — เทสต์นี้ตั้งแถวใหม่ด้วยเลขเดิม จึงล้างก้อนที่จำไว้ (org-store readBigStore)
+  (globalThis as { __bigStoreRead?: Map<string, unknown> }).__bigStoreRead?.clear();
   rows.set("org-1:report-feed", { data: { topics: [], posts: [] }, version: 7 });
 });
 

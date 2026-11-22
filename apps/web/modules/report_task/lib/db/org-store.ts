@@ -38,11 +38,61 @@ export interface StoreRead<T> {
 }
 
 export async function readStore<T>(orgId: string, key: string): Promise<StoreRead<T>> {
+  if (BIG_READ_KEYS.has(key)) return readBigStore<T>(orgId, key);
   const row = await prisma.reportTaskStore.findUnique({
     where: { orgId_key: { orgId, key } },
     select: { data: true, version: true },
   });
   return row ? { data: row.data as T, version: row.version } : { data: null, version: 0 };
+}
+
+/**
+ * คีย์ก้อนใหญ่ (หลายร้อย KB – หลาย MB) — จำก้อนล่าสุดไว้ในโปรเซส ถามฐานข้อมูลแค่ version + updated_at
+ *
+ * prod 20/11/2569 (หลัง 81ab6c9 แล้ว): คิวรีช้า ≥300ms วันละ ~4,800 ครั้ง ตัวที่เยอะสุดคือ ReportTaskStore.findUnique
+ * ทั้งที่ CPU/RAM ว่าง (load 0.07) — ต้นทุนคือดึงก้อน 1–3 MB จาก Postgres แล้วแปลง JSON ในโปรเซสเว็บทุกครั้ง
+ * (ตัวเตือน ตัวหักคะแนน การเขียนแจ้งเตือนที่ต้องอ่านก้อนเดิมก่อน ฯลฯ ~120 จุดที่เรียก readStore)
+ *
+ * ผลลัพธ์เหมือนเดิมทุกอย่าง: คืน "สำเนา" ทุกครั้ง (ผู้เรียกแก้ไขของที่ได้ไปได้เหมือนเดิม ไม่กระทบชุดที่จำไว้)
+ * ตรงกับฐานข้อมูลเสมอ: ทุกการเขียนขยับ version, เทียบ updated_at ด้วยกันกรณีล้างคีย์แล้วนับใหม่
+ * และโปรเซสอื่นเขียนก็เห็นจาก version ที่เปลี่ยน · ปิดได้ด้วย BIG_STORE_CACHE=0
+ */
+const BIG_READ_KEYS =
+  process.env.BIG_STORE_CACHE === "0" ? new Set<string>() : new Set<string>(["report-feed", "notifications", "activity-log"]);
+
+type BigEntry = { version: number; stamp: number; data: unknown };
+const gBig = globalThis as unknown as { __bigStoreRead?: Map<string, BigEntry> };
+const bigStoreRead = (gBig.__bigStoreRead ??= new Map<string, BigEntry>());
+
+const stampOf = (d: unknown): number => (d instanceof Date ? d.getTime() : 0);
+
+async function readBigStore<T>(orgId: string, key: string): Promise<StoreRead<T>> {
+  const id = `${orgId}:${key}`;
+  const head = await prisma.reportTaskStore.findUnique({
+    where: { orgId_key: { orgId, key } },
+    select: { version: true, updatedAt: true },
+  });
+  if (!head) {
+    bigStoreRead.delete(id);
+    return { data: null, version: 0 };
+  }
+  const hit = bigStoreRead.get(id);
+  if (hit && hit.version === head.version && hit.stamp === stampOf(head.updatedAt)) {
+    return { data: structuredClone(hit.data) as T, version: hit.version };
+  }
+  const row = await prisma.reportTaskStore.findUnique({
+    where: { orgId_key: { orgId, key } },
+    select: { data: true, version: true, updatedAt: true },
+  });
+  if (!row) {
+    bigStoreRead.delete(id);
+    return { data: null, version: 0 };
+  }
+  const cur = bigStoreRead.get(id);
+  if (!cur || row.version >= cur.version) {
+    bigStoreRead.set(id, { version: row.version, stamp: stampOf(row.updatedAt), data: structuredClone(row.data) });
+  }
+  return { data: row.data as T, version: row.version };
 }
 
 /** แค่เลข version ของคีย์ (0 = ยังไม่เคยบันทึก) — ให้ poll เช็คว่ามีอะไรใหม่ไหม
@@ -418,6 +468,7 @@ async function writeStoreRaw(
 export async function clearStore(orgId: string, key: string): Promise<void> {
   await prisma.reportTaskStore.deleteMany({ where: { orgId, key } });
   forgetDeltas(orgId, key);
+  bigStoreRead.delete(`${orgId}:${key}`);
 }
 
 /**

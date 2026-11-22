@@ -46,6 +46,15 @@ function urlWithPoolLimit(): string | undefined {
  * ไม่เปลี่ยนผลลัพธ์ของคิวรีใด ๆ · ปิดได้ด้วย SLOW_QUERY_MS=0
  */
 const SLOW_QUERY_MS = Number(process.env.SLOW_QUERY_MS ?? 300);
+
+/** ตาราง store รวมก้อน: บอกชื่อคีย์ + ดึงก้อนข้อมูลหรือแค่เลขรุ่น (ไม่จดข้อมูล) — ไว้รู้ว่าก้อนไหนช้า */
+function storeHint(model: string | undefined, args: unknown): string {
+  if (model !== "ReportTaskStore") return "";
+  const a = args as { where?: { orgId_key?: { key?: unknown }; key?: unknown }; select?: { data?: unknown } } | undefined;
+  const key = a?.where?.orgId_key?.key ?? a?.where?.key;
+  const part = a?.select && !a.select.data ? "head" : "data";
+  return typeof key === "string" ? ` key=${key} ${part}` : "";
+}
 const slowQueryLog = {
   name: "slow-query-log",
   query: {
@@ -56,7 +65,7 @@ const slowQueryLog = {
         return await query(args);
       } finally {
         const took = Math.round(performance.now() - t0);
-        if (took >= SLOW_QUERY_MS) console.warn(`[perf] slow query ${model ?? "raw"}.${operation} ${took}ms`);
+        if (took >= SLOW_QUERY_MS) console.warn(`[perf] slow query ${model ?? "raw"}.${operation} ${took}ms${storeHint(model, args)}`);
       }
     },
   },
