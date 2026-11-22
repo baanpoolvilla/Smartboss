@@ -101,6 +101,14 @@ model MoneyRequest {
   dwOtEntryId     String?   @map("dw_ot_entry_id")
   dwPaymentId     String?   @map("dw_payment_id")
   maintenanceExpenseId String? @map("maintenance_expense_id")
+  /// หมวดค่าใช้จ่าย (PETTY_CATEGORIES) — ใช้กับวงเงินรายคน · null = ใบเดิม/ไม่ได้เลือก
+  category        String?
+  /// ผ่านอัตโนมัติด้วยวงเงินไหน (id ของกฎใน settings.spend_limits) — null = คนอนุมัติ
+  limitRuleId     String?   @map("limit_rule_id")
+  /// ใบรับรองแทนใบเสร็จ ตอนยื่นเบิกค่าใช้จ่าย (ร้านไม่มีบิล) {date,seller,items,total,reason,signedName,signedAt}
+  noReceipt       Json?     @map("no_receipt")
+  /// ใบรับรองแทนใบเสร็จ ตอนส่งเคลียร์เงินที่เบิกไปซื้อของ
+  clearNoReceipt  Json?     @map("clear_no_receipt")
   /// OT ที่ HR อนุมัติจากเวลาสแกน (workforce.overtime_requests.id) — ใบนี้สร้างให้อัตโนมัติ
   hrOvertimeRequestId String? @map("hr_overtime_request_id")
 
@@ -216,6 +224,8 @@ model MoneyPettyCashEntry {
   /// ผู้รับเงิน (ออก 50 ทวิ) · person = ภ.ง.ด.3 · company = ภ.ง.ด.53
   payeeName        String?   @map("payee_name")
   payeeKind        String?   @map("payee_kind")
+  /// ใบรับรองแทนใบเสร็จ (ร้านไม่มีบิล) — null = มีบิล
+  noReceipt        Json?     @map("no_receipt")
   attachments  Json      @default("[]")
   byUserId     String    @map("by_user_id")
   byName       String    @map("by_name")
@@ -248,6 +258,14 @@ model MoneyPettyTopup {
   decidedAt         DateTime? @map("decided_at") @db.Timestamptz(6)
   decisionNote      String?   @map("decision_note")
   entryId           String?   @map("entry_id")
+  /// ใช้ไปตั้งแต่เติมครั้งก่อน (ตอนขอ) — null = คำขอแบบเดิม
+  spentSince        Decimal?  @map("spent_since") @db.Decimal(12, 2)
+  /// นับเงินในมือได้จริง (ตอนขอ) — null = ไม่ได้นับ
+  counted           Decimal?  @db.Decimal(12, 2)
+  /// เงินในมือตามระบบตอนขอ
+  balanceAtRequest  Decimal?  @map("balance_at_request") @db.Decimal(12, 2)
+  /// สรุปที่ใช้ไปแยกหมวด [{label, count, amount}]
+  breakdown         Json?
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@index([orgId, status])
@@ -293,6 +311,14 @@ model MoneyRequestSettings {
   otRateMode        String   @default("standard") @map("ot_rate_mode")
   /// เส้นทางอนุมัติรายประเภท {"ot": {"mode": "hr", "ceoAbove": 5000}, ...} — null = ค่าเริ่มต้น
   approvalRoutes    Json?    @map("approval_routes")
+  /// วงเงินรายคน [{id,name,kinds,categories,perRequest,perWeek,userIds,active}] — ใบในวงเงินผ่านเอง · ว่าง = ปิด
+  spendLimits       Json?    @map("spend_limits")
+  /// จ่ายเงินสดโดยให้ผู้รับกด "ได้รับเงินแล้ว" แทนรูปถ่าย (เฉพาะพนักงานที่มีบัญชี) — ปิด = ต้องแนบรูปแบบเดิม
+  cashConfirmMode   Boolean  @default(false) @map("cash_confirm_mode")
+  /// ใบรับรองแทนใบเสร็จ (ร้านไม่มีบิล) ใบละไม่เกิน — null = ไม่เปิดให้ใช้
+  noReceiptMax      Decimal? @map("no_receipt_max") @db.Decimal(12, 2)
+  /// ส่งใบเสร็จแล้วยอดตรง = ปิดใบเอง (มีเงินทอน = ปิดเมื่อคนถือเงินกดรับทอน) — ปิด = HR ตรวจทุกใบแบบเดิม
+  autoCloseClear    Boolean  @default(false) @map("auto_close_clear")
   updatedBy         String   @map("updated_by")
   updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 

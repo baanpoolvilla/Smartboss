@@ -55,6 +55,7 @@ export function RequestsHome({
   showPayTab,
   showAllTab,
   showApproveTab,
+  queue = null,
 }: {
   rows: ListRow[];
   /** เดือนนี้ (YYYY-MM เวลาไทย) — แท็บ ทั้งหมด/ของฉัน เปิดมาที่เดือนนี้ */
@@ -69,6 +70,8 @@ export function RequestsHome({
   showAllTab: boolean;
   /** คนที่อนุมัติได้ (HR/CEO) — เห็นแท็บ "รอฉันอนุมัติ" แม้ว่าง · คนดูทุกใบอย่างเดียว (เช่น IT) ไม่ต้องเห็น */
   showApproveTab: boolean;
+  /** คิว "รอจ่ายวันนี้" (จ่ายรวดเดียว) — null = ไม่แสดง */
+  queue?: React.ReactNode;
 }) {
   const ceo = useCeoTitle();
   const counts = {
@@ -365,6 +368,7 @@ export function RequestsHome({
             {mobileTabs}
           </div>
           {strip}
+          {queue}
           {createdNote && <Notice tone="ok">{createdNote}</Notice>}
           {overdueNote && <Notice tone="warn">{overdueNote}</Notice>}
           {activeFilters > 0 && (

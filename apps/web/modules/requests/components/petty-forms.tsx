@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Minus, Plus } from "lucide-react";
 
@@ -8,7 +8,9 @@ import { Modal } from "@/components/module/dialog";
 import { InfoTip } from "@/modules/salary/components/help";
 import {
   addPettyEntryAction,
+  addPettyIncomeAction,
   addPettySpendAction,
+  pettyTopupSuggestionAction,
   cancelPettyTopupAction,
   decidePettyTopupAction,
   recordPaymentAction,
@@ -20,6 +22,7 @@ import {
   type UploadedFile,
 } from "../actions";
 import { PETTY_CATEGORIES, SIMILAR_SLIP_PREFIX, baht, parseMoney, pettyTax, thaiDateTime } from "../lib/types";
+import { NO_RECEIPT_REASONS } from "../lib/spend-rules";
 import { FilePicker } from "./file-picker";
 import { Notice } from "./ui";
 
@@ -62,6 +65,32 @@ export interface PettyTopupItem {
   requestedByUserId: string;
   needsCeo: boolean;
   at: string;
+  /** ขอเติมเท่าที่ใช้ไป (คำขอแบบใหม่) — null = พิมพ์ยอดเอง */
+  spentSince?: number | null;
+  counted?: number | null;
+  balanceAtRequest?: number | null;
+  breakdown?: { label: string; count: number; amount: number }[];
+}
+
+/** สรุปที่มาของคำขอเติม — ใช้ไปเท่าไหร่ แยกหมวด + นับเงินจริงได้เท่าไหร่ (ให้คนอนุมัติเห็นก่อนกด) */
+function TopupBasis({ item }: { item: PettyTopupItem }) {
+  if (item.spentSince === null || item.spentSince === undefined) return null;
+  const diff = item.counted !== null && item.counted !== undefined && item.balanceAtRequest !== null && item.balanceAtRequest !== undefined ? Math.round((item.counted - item.balanceAtRequest) * 100) / 100 : null;
+  return (
+    <div className="flex flex-col gap-0.5 rounded-(--radius) bg-(--bg-soft) px-3 py-2 text-xs">
+      <div className="flex justify-between gap-2 text-sm"><span>ใช้ไปตั้งแต่เติมครั้งก่อน</span><b className="tabular-nums">{baht(item.spentSince)}</b></div>
+      {(item.breakdown ?? []).map((g) => (
+        <div key={g.label} className="flex justify-between gap-2 text-(--ink-soft)"><span>{g.label} ({g.count})</span><span className="tabular-nums">{baht(g.amount)}</span></div>
+      ))}
+      {item.counted !== null && item.counted !== undefined && (
+        <div className={`mt-1 flex justify-between gap-2 border-t border-(--line) pt-1 ${diff !== null && Math.abs(diff) > 0.005 ? "font-semibold text-amber-800" : "text-(--ink-soft)"}`}>
+          <span>นับเงินจริงได้ {baht(item.counted)} (ระบบ {baht(item.balanceAtRequest ?? 0)})</span>
+          <span>{diff === null || Math.abs(diff) < 0.005 ? "ตรง" : `${diff < 0 ? "ขาด" : "เกิน"} ${baht(Math.abs(diff))}`}</span>
+        </div>
+      )}
+      {Math.abs(item.amount - item.spentSince) > 0.005 && <div className="mt-1 text-amber-800">ขอเติม {baht(item.amount)} ไม่เท่ากับที่ใช้ไป {baht(item.spentSince)}</div>}
+    </div>
+  );
 }
 
 /** แถบบอกขั้นตอนในหน้าต่าง — อ่านจบรู้ว่ากดแล้วเกิดอะไร ไม่ต้องเดา */
@@ -207,7 +236,7 @@ export function PettyHolderCard({
   payable?: PettyPayableItem[];
 }) {
   const ceo = useCeoTitle();
-  const [open, setOpen] = useState<"spend" | "request" | "topup" | "adjust" | null>(null);
+  const [open, setOpen] = useState<"spend" | "request" | "topup" | "adjust" | "income" | null>(null);
   const close = () => setOpen(null);
   return (
     <section className={`flex flex-col gap-3 rounded-(--radius-lg) border bg-(--bg) p-4 ${selected ? "border-2 border-(--brand-navy)" : "border-(--line)"}`}>
@@ -245,6 +274,10 @@ export function PettyHolderCard({
             >
               <Plus className="h-4 w-4" aria-hidden="true" />
               {pendingMine ? "รออนุมัติเติมเงิน" : "ขอเติมเงิน"}
+            </button>
+            <button type="button" onClick={() => setOpen("income")} className="inline-flex h-10 items-center gap-1.5 rounded-(--radius) border border-(--line) px-3.5 text-sm font-semibold text-(--ink) hover:bg-(--bg-soft)">
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              รับเงินเข้า
             </button>
           </>
         )}
@@ -288,6 +321,7 @@ export function PettyHolderCard({
       {open === "request" && <RequestTopupModal holder={holder} onClose={close} />}
       {open === "topup" && <TopUpModal holder={holder} today={today} onClose={close} />}
       {open === "adjust" && <AdjustModal holder={holder} onClose={close} />}
+      {open === "income" && <IncomeModal holder={holder} today={today} onClose={close} />}
     </section>
   );
 }
@@ -300,6 +334,8 @@ export interface PettyTaxSettings {
   vatPercent: number;
   /** % หัก ณ ที่จ่ายที่ให้กดเลือก (ไม่รวม 0) */
   whtRates: number[];
+  /** ใบรับรองแทนใบเสร็จ ใบละไม่เกิน — null/ไม่ส่ง = ไม่เปิดให้ใช้ */
+  noReceiptMax?: number | null;
 }
 
 function PayModal({ holder, today, payable, tax, onClose }: { holder: PettyHolderView; today: string; payable: PettyPayableItem[]; tax: PettyTaxSettings; onClose: () => void }) {
@@ -436,12 +472,17 @@ function SpendForm({ balance, today, taxSettings, onClose }: { balance: number; 
   };
   const [payeeName, setPayeeName] = useState("");
   const [payeeKind, setPayeeKind] = useState<"person" | "company" | null>(null);
+  // ร้านไม่มีบิล — ใบรับรองแทนใบเสร็จ + รูปของ (ผู้ใช้ 22/11/2569)
+  const noReceiptMax = taxSettings.noReceiptMax ?? null;
+  const [noBill, setNoBill] = useState(false);
+  const [nrSeller, setNrSeller] = useState("");
+  const [nrReason, setNrReason] = useState<string>(NO_RECEIPT_REASONS[0]);
   const value = parseMoney(amount);
   const tax = Number.isFinite(value) && value > 0 ? pettyTax(value, vatIncluded, whtPercent, vatRate) : null;
   const paid = tax ? tax.paid : value;
   const over = Number.isFinite(paid) && paid > balance + 0.005;
   const payeeOk = whtPercent === 0 || (payeeName.trim() && payeeKind);
-  const ready = title.trim() && category && Number.isFinite(value) && value > 0 && !over && spentOn && files.length > 0 && payeeOk && !customBad;
+  const ready = title.trim() && category && Number.isFinite(value) && value > 0 && !over && spentOn && files.length > 0 && payeeOk && !customBad && (!noBill || nrSeller.trim());
   return (
       <div className="flex flex-col gap-3">
         <Explain>ใช้เงินในมือซื้อของ/จ่ายค่าบริการเอง ไม่ต้องทำใบเบิก — กรอกครบทุกช่องที่มี * และแนบรูปใบเสร็จ บันทึกแล้วยอดในมือลดลงทันที{taxSettings.review ? ` แล้ว HR (หรือ ${ceo} ถ้าคุณเป็น HR) จะตรวจใบเสร็จทีหลัง — ไม่ผ่านต้องคืนเงินเข้ากอง` : ""} · เงินในมือตอนนี้ {baht(balance)}</Explain>
@@ -522,11 +563,35 @@ function SpendForm({ balance, today, taxSettings, onClose }: { balance: number; 
           </fieldset>
         )}
         {over && <Notice tone="warn">เงินในมือไม่พอ (เหลือ {baht(balance)}) — กด “ขอเติมเงิน” ก่อน</Notice>}
+        {noReceiptMax !== null && (
+          <label className="flex items-start gap-3 rounded-(--radius) border border-(--line) px-3 py-2.5 text-sm">
+            <input type="checkbox" className="mt-1 h-4 w-4" checked={noBill} onChange={(e) => { setNoBill(e.target.checked); setFiles([]); }} />
+            <span>
+              ร้านไม่มีบิล (ตลาด / ร้านเล็ก)
+              <span className="block text-xs text-(--ink-soft)">ใช้ใบรับรองแทนใบเสร็จ + รูปของที่ซื้อ · ใบละไม่เกิน {baht(noReceiptMax)}</span>
+            </span>
+          </label>
+        )}
+        {noBill && (
+          <div className="flex flex-col gap-3 rounded-(--radius) border border-amber-200 bg-amber-50/60 p-3">
+            <div className="text-sm font-semibold text-(--ink)">ใบรับรองแทนใบเสร็จรับเงิน</div>
+            <Field label="ซื้อจากร้าน / คนขาย" required>
+              <input className={field} value={nrSeller} onChange={(e) => setNrSeller(e.target.value)} placeholder="เช่น แผงผักป้าแดง ตลาดเช้าบ่อผุด" />
+            </Field>
+            <Field label="ทำไมไม่มีบิล">
+              <select className={field} value={nrReason} onChange={(e) => setNrReason(e.target.value)}>
+                {NO_RECEIPT_REASONS.map((x) => (
+                  <option key={x} value={x}>{x}</option>
+                ))}
+              </select>
+            </Field>
+          </div>
+        )}
         <FilePicker
-          role="receipt"
+          role={noBill ? "evidence" : "receipt"}
           files={files}
           onChange={setFiles}
-          label="รูปใบเสร็จ / บิล *"
+          label={noBill ? "รูปของที่ซื้อ หรือรูปหน้าร้าน *" : "รูปใบเสร็จ / บิล *"}
           hint="ถ่ายให้เห็นยอดเงินและวันที่ชัด ๆ"
           today={today}
           claimDate={spentOn}
@@ -541,7 +606,7 @@ function SpendForm({ balance, today, taxSettings, onClose }: { balance: number; 
         />
         {error && <Notice tone="danger">{error}</Notice>}
         <div className="flex justify-end gap-2 border-t border-(--line) pt-3">
-          <SaveButtons busy={busy} disabled={!ready} label="บันทึกการจ่าย" onClose={onClose} onSave={() => run(() => addPettySpendAction({ title, category, amount: value, spentOn, attachments: files, vatIncluded, whtPercent, payeeName, payeeKind }))} />
+          <SaveButtons busy={busy} disabled={!ready} label="บันทึกการจ่าย" onClose={onClose} onSave={() => run(() => addPettySpendAction({ title, category, amount: value, spentOn, attachments: files, vatIncluded, whtPercent, payeeName, payeeKind, noReceipt: noBill ? { date: spentOn, seller: nrSeller, sellerAddress: "", reason: nrReason, items: [{ item: title, amount: value }] } : undefined }))} />
         </div>
       </div>
   );
@@ -554,23 +619,95 @@ function RequestTopupModal({ holder, onClose }: { holder: PettyHolderView; onClo
   const { busy, error, run } = useSave(onClose);
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
+  const [counted, setCounted] = useState("");
+  // ใช้ไปเท่าไหร่ตั้งแต่เติมครั้งก่อน — เติมคืนเท่าที่ใช้ (ผู้ใช้ 22/11/2569 "จ่าย 4,500 เติมคืน 4,500")
+  const [used, setUsed] = useState<{ spent: number; balance: number; since: string | null; count: number; breakdown: { label: string; count: number; amount: number }[] } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void pettyTopupSuggestionAction().then((res) => {
+      if (!alive || !res.ok) return;
+      setUsed(res);
+      if (res.spent > 0) setAmount((a) => a || String(res.spent));
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
   const value = parseMoney(amount);
+  const countedValue = counted.trim() === "" ? null : parseMoney(counted);
+  const diff = countedValue !== null && Number.isFinite(countedValue) && used ? Math.round((countedValue - used.balance) * 100) / 100 : null;
+  const ok = Number.isFinite(value) && value > 0 && (note.trim() || (countedValue !== null && Number.isFinite(countedValue)));
   return (
     <Modal
       title="ขอเติมเงินสดย่อย"
       onClose={onClose}
-      actions={<SaveButtons busy={busy} disabled={!(Number.isFinite(value) && value > 0 && note.trim())} label="ส่งคำขอ" onClose={onClose} onSave={() => run(() => requestPettyTopupAction({ amount: value, note }))} />}
+      actions={<SaveButtons busy={busy} disabled={!ok} label={Number.isFinite(value) && value > 0 ? `ขอเติม ${baht(value)}` : "ส่งคำขอ"} onClose={onClose} onSave={() => run(() => requestPettyTopupAction({ amount: value, note, counted: countedValue }))} />}
     >
       <div className="flex flex-col gap-3">
         <Explain>
-          ส่งแล้วระบบแจ้ง HR หรือ {ceo} ให้อนุมัติ (ถ้าคุณเป็น HR ต้องให้ {ceo} อนุมัติ — อนุมัติของตัวเองไม่ได้) · คนอนุมัติโอน/ให้เงินสด แล้วแนบสลิปหรือรูปเงินสด ยอดในมือถึงจะเพิ่ม · เงินในมือตอนนี้ {baht(holder.balance)}
+          เติมคืนเท่าที่ใช้ไปตั้งแต่เติมครั้งก่อน (เงินในมือ + ใบเสร็จที่จ่ายไป = วงเงินเท่าเดิม) · ส่งแล้วระบบแจ้ง HR หรือ {ceo} (ถ้าคุณเป็น HR ต้องให้ {ceo} อนุมัติ) · คนอนุมัติเห็นรายการทั้งหมด
         </Explain>
+        {used && (
+          <div className="flex flex-col gap-1 rounded-(--radius) border border-(--line) p-3 text-sm">
+            <div className="flex justify-between gap-2"><span className="text-(--ink-soft)">ใช้ไปตั้งแต่เติมครั้งก่อน{used.since ? ` (${thaiDateTime(used.since)})` : ""}</span><b className="tabular-nums">{baht(used.spent)}</b></div>
+            {used.breakdown.map((g) => (
+              <div key={g.label} className="flex justify-between gap-2 text-xs text-(--ink-soft)"><span>{g.label} ({g.count})</span><span className="tabular-nums">{baht(g.amount)}</span></div>
+            ))}
+            <div className="flex justify-between gap-2 border-t border-(--line) pt-1"><span className="text-(--ink-soft)">เงินในมือตามระบบ</span><b className="tabular-nums">{baht(used.balance)}</b></div>
+          </div>
+        )}
         <Field label="ขอเติม (บาท)" required>
           <input inputMode="decimal" className={field} value={amount} onChange={(e) => setAmount(e.target.value)} />
         </Field>
-        <Field label="เหตุผล" required>
-          <input className={field} value={note} onChange={(e) => setNote(e.target.value)} placeholder="เช่น เงินในมือใกล้หมด ต้องซื้อของเข้าบ้านสัปดาห์นี้" />
+        <Field label="นับเงินในมือได้จริง (บาท)" tip="นับเงินสดที่ถืออยู่ตอนนี้ ถ้าไม่ตรงกับระบบ จะบันทึกส่วนต่างแยกไว้ตอนอนุมัติ ไม่ปนกับยอดที่ใช้">
+          <input inputMode="decimal" className={field} value={counted} onChange={(e) => setCounted(e.target.value)} placeholder={used ? String(used.balance) : ""} />
         </Field>
+        {diff !== null && (
+          <Notice tone={Math.abs(diff) > 0.005 ? "warn" : "ok"}>{Math.abs(diff) < 0.005 ? "ตรงกับระบบ" : `${diff < 0 ? "ขาด" : "เกิน"} ${baht(Math.abs(diff))} จากยอดในระบบ — คนอนุมัติจะเห็น และบันทึกส่วนต่างตอนอนุมัติ`}</Notice>
+        )}
+        <Field label="หมายเหตุ" required={countedValue === null}>
+          <input className={field} value={note} onChange={(e) => setNote(e.target.value)} placeholder="เช่น เติมเท่าที่ใช้ไปสัปดาห์นี้" />
+        </Field>
+        {error && <Notice tone="danger">{error}</Notice>}
+      </div>
+    </Modal>
+  );
+}
+
+/* ───────────── + รับเงินเข้า (ผู้ถือ) ───────────── */
+
+const INCOME_SOURCES = ["ขายของเก่า / เศษวัสดุ", "แขกจ่ายค่าเสียหาย", "แขกจ่ายค่าบริการเพิ่ม", "เงินคืนจากร้าน", "อื่น ๆ"] as const;
+
+function IncomeModal({ holder, today, onClose }: { holder: PettyHolderView; today: string; onClose: () => void }) {
+  const { busy, error, run } = useSave(onClose);
+  const [amount, setAmount] = useState("");
+  const [source, setSource] = useState<string>("");
+  const [note, setNote] = useState("");
+  const [files, setFiles] = useState<UploadedFile[]>([]);
+  const value = parseMoney(amount);
+  return (
+    <Modal
+      title="รับเงินเข้าเงินสดย่อย"
+      onClose={onClose}
+      actions={<SaveButtons busy={busy} disabled={!(Number.isFinite(value) && value > 0 && source)} label={Number.isFinite(value) && value > 0 ? `รับเข้า ${baht(value)}` : "บันทึก"} onClose={onClose} onSave={() => run(() => addPettyIncomeAction({ amount: value, source, note, attachments: files }))} />}
+    >
+      <div className="flex flex-col gap-3">
+        <Explain>เงินที่ได้รับเข้ามาในมือ (ไม่ใช่การเติมจากบริษัท) เช่น ขายของเก่า แขกจ่ายค่าเสียหาย · เงินในมือตอนนี้ {baht(holder.balance)}</Explain>
+        <Field label="เงินมาจากไหน" required>
+          <select className={field} value={source} onChange={(e) => setSource(e.target.value)}>
+            <option value="">— เลือก —</option>
+            {INCOME_SOURCES.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="จำนวนเงิน (บาท)" required>
+          <input inputMode="decimal" className={field} value={amount} onChange={(e) => setAmount(e.target.value)} />
+        </Field>
+        <Field label="รายละเอียด">
+          <input className={field} value={note} onChange={(e) => setNote(e.target.value)} placeholder="เช่น แก้วแตก 2 ใบ บ้าน B1 แขกจ่ายเงินสด" />
+        </Field>
+        <FilePicker role="evidence" files={files} onChange={setFiles} label="รูปหลักฐาน (ถ้ามี)" today={today} />
         {error && <Notice tone="danger">{error}</Notice>}
       </div>
     </Modal>
@@ -671,6 +808,7 @@ export function PendingTopupRow({ item, canDecide, isMine, waitingFor, today }: 
         <div className="text-xs text-(--ink-soft)">
           {thaiDateTime(item.at)} · {item.note} · <span className="font-medium">รอ {waitingFor} อนุมัติ</span>
         </div>
+        <div className="mt-1.5 max-w-md"><TopupBasis item={item} /></div>
         {error && !open && <div className="mt-1 text-xs text-red-700">{error}</div>}
       </div>
       <div className="flex gap-2">
@@ -708,6 +846,10 @@ function ApproveTopupModal({ item, today, onClose }: { item: PettyTopupItem; tod
         <div className="text-sm">
           <span className="text-(--ink-soft)">เหตุผลที่ขอ:</span> {item.note}
         </div>
+        <TopupBasis item={item} />
+        {item.counted !== null && item.counted !== undefined && item.balanceAtRequest !== null && item.balanceAtRequest !== undefined && Math.abs(item.counted - item.balanceAtRequest) > 0.005 && (
+          <Notice tone="warn">นับเงินได้ไม่ตรงกับระบบ — กดอนุมัติแล้วระบบบันทึกส่วนต่างเป็น “ปรับยอด (นับเงินจริง)” แยกไว้ก่อนเติม</Notice>
+        )}
         <div role="group" aria-labelledby="topup-method" className="flex flex-col gap-1.5 text-sm">
           <span id="topup-method" className="font-semibold text-(--ink)">
             ให้เงินแบบ <span className="font-normal text-red-700">*</span>

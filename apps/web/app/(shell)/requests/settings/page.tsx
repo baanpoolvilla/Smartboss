@@ -1,6 +1,6 @@
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { REQ_PERMS } from "@/modules/requests/permissions";
-import { loadSettings } from "@/modules/requests/lib/data";
+import { listPeople, loadSettings } from "@/modules/requests/lib/data";
 import { requestsPage } from "@/modules/requests/lib/page";
 import { SettingsForm } from "@/modules/requests/components/settings-form";
 
@@ -15,11 +15,11 @@ const LATER = [
 
 export default async function RequestSettingsPage() {
   const { session } = await requestsPage(REQ_PERMS.settings);
-  const settings = await loadSettings(session.orgId);
+  const [settings, people] = await Promise.all([loadSettings(session.orgId), listPeople(session.orgId)]);
   return (
     <AppScaffold title="ตั้งค่าเบิกจ่าย & OT" backHref="/requests" width="max-w-none">
       <div className="flex flex-col gap-4">
-        <SettingsForm initial={settings} />
+        <SettingsForm initial={settings} people={people.map((p) => ({ userId: p.userId, name: p.name, isWorker: p.isWorker }))} />
         <section className="rounded-(--radius-lg) border border-dashed border-(--line) bg-(--bg) p-4">
           <h2 className="text-sm font-bold text-(--ink)">ยังไม่มี · จะทำต่อ</h2>
           <ul className="mt-2 list-disc pl-5 text-sm text-(--ink-soft)">

@@ -14,6 +14,7 @@ import {
   type AdvanceCapMode,
   type ApprovalRoute,
 } from "./types";
+import { parseNoReceipt, parseSpendLimits, type NoReceipt, type RequestLine } from "./spend-rules";
 
 /**
  * ที่เก็บของโมดูลเบิกจ่าย & OT — schema requests (migration 20261021120000_requests_module)
@@ -104,8 +105,15 @@ export interface RequestView {
   whtPercent: number;
   whtAmount: number;
   netAmount: number;
-  lines: { item: string; amount: number }[];
+  lines: RequestLine[];
   attachments: Attachment[];
+  /** หมวดค่าใช้จ่าย (เลือกตอนยื่นเบิกค่าใช้จ่าย/เบิกไปซื้อของ) */
+  category: string | null;
+  /** ผ่านเองด้วยวงเงินรายคน (id กฎ) — null = คนอนุมัติ */
+  limitRuleId: string | null;
+  /** ใบรับรองแทนใบเสร็จ ตอนยื่น / ตอนเคลียร์ */
+  noReceipt: NoReceipt | null;
+  clearNoReceipt: NoReceipt | null;
   createdBy: string;
   createdByName: string;
   createdAt: string;
@@ -199,8 +207,12 @@ export function toRequest(r: RequestRow, payments: PaymentRow[]): RequestView {
     whtPercent: num0(r.whtPercent),
     whtAmount: num0(r.whtAmount),
     netAmount: num0(r.netAmount),
-    lines: (r.lines as { item: string; amount: number }[] | null) ?? [],
+    lines: (r.lines as RequestLine[] | null) ?? [],
     attachments: (r.attachments as unknown as Attachment[]) ?? [],
+    category: r.category,
+    limitRuleId: r.limitRuleId,
+    noReceipt: parseNoReceipt(r.noReceipt),
+    clearNoReceipt: parseNoReceipt(r.clearNoReceipt),
     createdBy: r.createdBy,
     createdByName: r.createdByName,
     createdAt: r.createdAt.toISOString(),
@@ -284,6 +296,10 @@ export async function readSettings(tx: Tx, orgId: string): Promise<RequestSettin
     pettySpendReview: s.pettySpendReview,
     otRoundBaht: s.otRoundBaht,
     otRateMode: s.otRateMode === "flat" ? "flat" : "standard",
+    spendLimits: parseSpendLimits(s.spendLimits),
+    cashConfirmMode: s.cashConfirmMode,
+    noReceiptMax: s.noReceiptMax === null ? null : num0(s.noReceiptMax),
+    autoCloseClear: s.autoCloseClear,
   };
 }
 
@@ -325,7 +341,7 @@ export interface PettyEntryView {
   id: string;
   holderUserId: string;
   holderName: string;
-  kind: "top_up" | "spend" | "return" | "adjust";
+  kind: "top_up" | "spend" | "return" | "adjust" | "income";
   delta: number;
   requestId: string | null;
   note: string;
@@ -340,6 +356,8 @@ export interface PettyEntryView {
   review: { status: "pending" | "approved" | "rejected"; byName: string | null; at: string | null; note: string | null } | null;
   /** ภาษีของ "ซื้อของเอง" — null = ไม่มีภาษี (ยอด = −delta) */
   tax: { bill: number; vat: number; whtPercent: number; wht: number; payeeName: string | null; payeeKind: "person" | "company" | null } | null;
+  /** ใบรับรองแทนใบเสร็จ (ร้านไม่มีบิล) */
+  noReceipt: NoReceipt | null;
 }
 
 export function toPetty(e: Awaited<ReturnType<Tx["moneyPettyCashEntry"]["findFirstOrThrow"]>>): PettyEntryView {
@@ -371,6 +389,7 @@ export function toPetty(e: Awaited<ReturnType<Tx["moneyPettyCashEntry"]["findFir
             payeeKind: (e.payeeKind as "person" | "company" | null) ?? null,
           }
         : null,
+    noReceipt: parseNoReceipt(e.noReceipt),
   };
 }
 
@@ -384,6 +403,11 @@ export interface PettyTopupView {
   requestedByName: string;
   needsCeo: boolean;
   at: string;
+  /** ขอเติมเท่าที่ใช้ไป — null = คำขอแบบเดิม (พิมพ์ยอดเอง) */
+  spentSince: number | null;
+  counted: number | null;
+  balanceAtRequest: number | null;
+  breakdown: { label: string; count: number; amount: number }[];
 }
 
 export function toPettyTopup(t: Awaited<ReturnType<Tx["moneyPettyTopup"]["findFirstOrThrow"]>>): PettyTopupView {
@@ -397,6 +421,10 @@ export function toPettyTopup(t: Awaited<ReturnType<Tx["moneyPettyTopup"]["findFi
     requestedByName: t.requestedByName,
     needsCeo: t.needsCeo,
     at: t.createdAt.toISOString(),
+    spentSince: num(t.spentSince),
+    counted: num(t.counted),
+    balanceAtRequest: num(t.balanceAtRequest),
+    breakdown: Array.isArray(t.breakdown) ? (t.breakdown as { label: string; count: number; amount: number }[]) : [],
   };
 }
 

@@ -7,7 +7,7 @@ import { pettyAccess } from "@/modules/requests/lib/page";
 import { pettyMonth } from "@/modules/requests/lib/petty-report";
 import { bangkokToday } from "@/modules/requests/lib/types";
 
-const KIND_LABEL = { top_up: "รับเงินเติม", spend: "จ่ายเงิน", return: "รับเงินทอนคืน", adjust: "ปรับยอด (นับเงินจริง)" } as const;
+const KIND_LABEL = { top_up: "รับเงินเติม", spend: "จ่ายเงิน", return: "รับเงินทอนคืน", adjust: "ปรับยอด (นับเงินจริง)", income: "รับเงินเข้า" } as const;
 
 /**
  * เงินสดย่อยของเดือนเป็น CSV (เปิดใน Excel ได้ภาษาไทยไม่เพี้ยน — มี BOM) — สรุปรายคนด้านบน แล้วทุกรายการ

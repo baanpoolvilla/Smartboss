@@ -1,3 +1,4 @@
+import type { SpendLimitRule } from "./spend-rules";
 /**
  * กติกาบริสุทธิ์ของโมดูลเบิกจ่าย & OT (ไม่แตะฐานข้อมูล — ทดสอบได้ตรง ๆ ดู types.test.ts)
  * ตัวเลขเงินทุกตัวที่หน้าจอแสดงมาจากฟังก์ชันในไฟล์นี้ ไม่คำนวณซ้ำในหน้าเว็บ
@@ -48,11 +49,11 @@ export const KIND_META: Record<
     hint: "ขอเงินก่อนเงินเดือน/ค่าแรงออก — หักคืนจากเงินเดือน/ค่าแรงทีหลัง",
   },
   contractor: {
-    label: "ค่าช่าง/ร้านภายนอก",
-    short: "ช่างภายนอก",
+    label: "จ่ายช่าง / ร้านค้า",
+    short: "ช่าง/ร้าน",
     who: "แอดมินลง",
     approver: "HR อนุมัติและจ่าย (ยอดสูง → CEO)",
-    hint: "จ้างช่างหรือร้านข้างนอก — ระบบคิด VAT และภาษีหัก ณ ที่จ่ายให้",
+    hint: "จ้างช่างข้างนอก หรือโอนจ่ายร้านค้าตรง (ไม่ผ่านมือพนักงาน) — ระบบคิด VAT และภาษีหัก ณ ที่จ่ายให้",
   },
 };
 
@@ -460,6 +461,14 @@ export interface RequestSettings {
   otRoundBaht: boolean;
   /** standard = ตามตาราง % · flat = อัตราเดียว ไม่คูณ % (ค่าเริ่มต้น standard = แบบเดิม) */
   otRateMode: OtRateMode;
+  /** วงเงินรายคน — ใบในวงเงินผ่านเอง (lib/spend-rules.ts) · ว่าง = ปิด แบบเดิม */
+  spendLimits: SpendLimitRule[];
+  /** จ่ายเงินสดให้พนักงานกด "ได้รับเงินแล้ว" แทนรูปถ่าย — ปิด = ต้องแนบรูปแบบเดิม */
+  cashConfirmMode: boolean;
+  /** ใบรับรองแทนใบเสร็จ ใบละไม่เกิน — null = ไม่เปิดให้ใช้ (แบบเดิม: บังคับบิล) */
+  noReceiptMax: number | null;
+  /** ส่งใบเสร็จแล้วยอดตรง = ปิดใบเอง — ปิด = HR ตรวจทุกใบแบบเดิม */
+  autoCloseClear: boolean;
 }
 
 export const DEFAULT_SETTINGS: RequestSettings = {
@@ -474,6 +483,10 @@ export const DEFAULT_SETTINGS: RequestSettings = {
   pettySpendReview: false,
   otRoundBaht: false,
   otRateMode: "standard",
+  spendLimits: [],
+  cashConfirmMode: false,
+  noReceiptMax: null,
+  autoCloseClear: false,
 };
 
 export function daysInMonthOf(month: string): number {

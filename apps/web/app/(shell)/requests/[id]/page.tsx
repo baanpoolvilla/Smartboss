@@ -47,10 +47,12 @@ import {
   ClearingSubmit,
   ConfirmReceivedButton,
   DecidePanel,
+  HolderChangeButton,
   PayPanel,
   VoidPaymentButton,
   type PettyHolder,
 } from "@/modules/requests/components/request-actions";
+import { amountsByProperty, clearingMatches, type NoReceipt } from "@/modules/requests/lib/spend-rules";
 
 import { ceoTitle } from "@/lib/ceo-title";
 import { ceoText } from "@/lib/ceo-title-shared";
@@ -69,6 +71,25 @@ async function scansOn(orgId: string, employmentId: string, date: string) {
     ),
   ).catch(() => []);
   return rows[0] ?? null;
+}
+
+/** ใบรับรองแทนใบเสร็จรับเงิน (บก.111) — ร้านไม่มีบิล */
+function NoReceiptCard({ nr }: { nr: NoReceipt }) {
+  return (
+    <div className="mt-1 rounded-(--radius) border border-amber-200 bg-amber-50/70 p-3 text-sm">
+      <div className="font-semibold text-(--ink)">ใบรับรองแทนใบเสร็จรับเงิน</div>
+      <div className="mt-1 text-xs text-(--ink-soft)">
+        วันที่ {thaiDate(nr.date)} · ซื้อจาก {nr.seller}{nr.sellerAddress ? ` (${nr.sellerAddress})` : ""} · เหตุผล: {nr.reason}
+      </div>
+      <ul className="mt-2 flex flex-col gap-0.5">
+        {nr.items.map((x, i) => (
+          <li key={i} className="flex justify-between gap-2 tabular-nums"><span>{x.item}</span><span>{baht(x.amount)}</span></li>
+        ))}
+      </ul>
+      <div className="mt-1 flex justify-between border-t border-amber-200 pt-1 font-semibold tabular-nums"><span>รวม</span><span>{baht(nr.total)}</span></div>
+      <div className="mt-1 text-xs text-(--ink-soft)">ข้าพเจ้า {nr.signedName} ขอรับรองว่าได้จ่ายเงินตามรายการข้างต้นจริง · {thaiDateTime(nr.signedAt)}</div>
+    </div>
+  );
 }
 
 function Files({ files, title, flagsFor }: { files: Attachment[]; title: string; flagsFor?: (a: Attachment) => { level: "block" | "warn"; text: string }[] }) {
@@ -183,6 +204,13 @@ export default async function RequestDetailPage({ params, searchParams }: { para
     (r.status === "pending" && (r.createdBy === session.userId || manager)) ||
     ((r.status === "approved" || (r.status === "paid" && workerOt)) && manager && !r.payments.some((p) => !p.voided && p.method !== "worker_ledger"));
 
+  // ส่งเคลียร์แล้วยอดตรง (lib/spend-rules.ts) — คนถือเงินที่จ่ายใบนี้จากเงินสดย่อยกดรับทอนแล้วใบปิดเองได้
+  const clearMatch =
+    r.kind === "cash_advance" && r.clearStatus === "submitted" && r.clearSpent !== null &&
+    clearingMatches({ paid: r.paidTotal, spent: r.clearSpent, returned: r.clearReturned ?? 0, receiptAmounts: r.attachments.filter((a) => a.role === "clearing").map((a) => a.ai?.amount), noReceiptTotal: r.clearNoReceipt?.total ?? null });
+  const changeHolderId = r.payments.find((p) => !p.voided && p.method === "petty_cash" && p.pettyHolderId)?.pettyHolderId ?? null;
+  const holderChange = settings.autoCloseClear && clearMatch && changeHolderId === session.userId && (r.clearReturned ?? 0) > 0;
+  const limitRule = r.limitRuleId ? settings.spendLimits.find((x) => x.id === r.limitRuleId) : null;
   const receipts = r.attachments.filter((a) => a.role === "receipt");
   const flagsFor = (a: Attachment) => receiptFlags(a, { claimDate: r.workDate, today, maxAgeDays: settings.receiptMaxAgeDays, duplicateOf: dups.get(a.sha256) ?? null });
   const mismatch = r.kind === "expense" ? amountMismatch(receipts, r.amount) : null;
@@ -304,6 +332,16 @@ export default async function RequestDetailPage({ params, searchParams }: { para
                 <div><dt className="text-xs text-(--ink-soft)">ของใคร</dt><dd className="font-medium text-(--ink)">{r.beneficiaryName} <span className="font-normal text-(--ink-soft)">({beneficiaryLabel(r)})</span>{unlinked && <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-900">ยังไม่มีในระบบ</span>}</dd></div>
                 <div><dt className="text-xs text-(--ink-soft)">ผู้ยื่น</dt><dd className="text-(--ink)">{r.createdByName} · {thaiDateTime(r.createdAt)}</dd></div>
                 <div><dt className="text-xs text-(--ink-soft)">{r.kind === "ot" ? "วันที่ทำ" : r.kind === "advance" ? "วันที่ขอ" : "วันที่"}</dt><dd className="text-(--ink)">{thaiDate(r.workDate)}{r.kind === "ot" && r.otMinutes ? ` · ${r.otStart}–${r.otEnd} (${hoursText(r.otMinutes)})` : ""}</dd></div>
+                {r.category && <div><dt className="text-xs text-(--ink-soft)">หมวด</dt><dd className="text-(--ink)">{r.category}</dd></div>}
+                {r.limitRuleId && (
+                  <div>
+                    <dt className="text-xs text-(--ink-soft)">อนุมัติ</dt>
+                    <dd><span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-900">ผ่านอัตโนมัติ · วงเงิน “{limitRule?.name ?? "—"}”</span></dd>
+                  </div>
+                )}
+                {(r.noReceipt || r.clearNoReceipt) && (
+                  <div><dt className="text-xs text-(--ink-soft)">บิล</dt><dd><span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">ไม่มีบิล · ใช้ใบรับรองแทนใบเสร็จ</span></dd></div>
+                )}
                 {(r.propertyName || r.workOrderCode) && (
                   <div>
                     <dt className="text-xs text-(--ink-soft)">บ้าน / ใบงาน</dt>
@@ -371,9 +409,15 @@ export default async function RequestDetailPage({ params, searchParams }: { para
               )}
               {r.kind === "expense" && (
                 <>
-                  {r.lines.length > 0 ? r.lines.map((l, i) => <MoneyRow key={i} label={l.item} value={l.amount} />) : <MoneyRow label={r.title} value={r.amount} />}
+                  {r.lines.length > 0 ? r.lines.map((l, i) => <MoneyRow key={i} label={l.propertyName ? `${l.item} · ${l.propertyName}` : l.item} value={l.amount} />) : <MoneyRow label={r.title} value={r.amount} />}
                   <MoneyRow strong label="ขอเบิก" value={r.amount} />
+                  {r.lines.some((l) => l.propertyName) && (
+                    <div className="rounded-(--radius) bg-(--bg-soft) px-3 py-2 text-xs text-(--ink-soft)">
+                      แยกตามบ้าน: {amountsByProperty(r.lines, { id: r.propertyId, name: r.propertyName }).map((x) => `${x.name} ${baht(x.amount)}`).join(" · ")}
+                    </div>
+                  )}
                   {mismatch && <Notice tone="warn">{mismatch}</Notice>}
+                  {r.noReceipt && <NoReceiptCard nr={r.noReceipt} />}
                 </>
               )}
               {r.kind === "advance" && (
@@ -393,6 +437,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
                     return <MoneyRow strong label={diff > 0.005 ? "ขาดคืน" : diff < -0.005 ? "บริษัทจ่ายเพิ่ม" : "พอดี"} value={Math.abs(diff)} />;
                   })()}
                   {r.clearNote && <div className="text-xs text-(--ink-soft)">หมายเหตุผู้เบิก: {r.clearNote}</div>}
+                  {r.clearNoReceipt && <NoReceiptCard nr={r.clearNoReceipt} />}
                 </>
               )}
               {breakdown && (
@@ -475,13 +520,34 @@ export default async function RequestDetailPage({ params, searchParams }: { para
               <DecidePanel id={r.id} version={r.updatedAt} level={r.approverLevel} isOt={r.kind === "ot"} forwardsToCeo={r.approverLevel === "hr" && r.needCeo && !viewer.canApproveCeo} firstBy={r.firstDecidedByName} />
             )}
             {canPayHere && (
-              <PayPanel id={r.id} outstanding={outstanding} methods={methods} holders={payHolders} myUserId={session.userId} today={today} payrollPeriod={period} title={r.kind === "cash_advance" && r.clearedAt ? "จ่ายส่วนต่างที่ใช้เกิน" : "บันทึกการจ่ายเงิน"} />
+              <PayPanel
+                id={r.id}
+                outstanding={outstanding}
+                methods={methods}
+                holders={payHolders}
+                myUserId={session.userId}
+                today={today}
+                payrollPeriod={period}
+                title={r.kind === "cash_advance" && r.clearedAt ? "จ่ายส่วนต่างที่ใช้เกิน" : "บันทึกการจ่ายเงิน"}
+                noPhotoOk={settings.cashConfirmMode && r.beneficiaryKind === "staff" && !!r.beneficiaryUserId}
+              />
             )}
             {r.kind === "cash_advance" && r.status === "paid" && !r.clearStatus && (isBeneficiary || r.createdBy === session.userId) && (
-              <ClearingSubmit id={r.id} paid={r.paidTotal} dueDate={r.clearDueDate ?? null} today={today} maxAgeDays={settings.receiptMaxAgeDays} />
+              <ClearingSubmit id={r.id} paid={r.paidTotal} dueDate={r.clearDueDate ?? null} today={today} maxAgeDays={settings.receiptMaxAgeDays} noReceiptMax={settings.noReceiptMax} title={r.title} />
+            )}
+            {r.kind === "cash_advance" && r.clearStatus === "submitted" && holderChange && !viewer.canPay && (
+              <HolderChangeButton id={r.id} returned={r.clearReturned ?? 0} spent={r.clearSpent ?? 0} />
             )}
             {r.kind === "cash_advance" && r.clearStatus === "submitted" && viewer.canPay && !isBeneficiary && (
-              <ClearingConfirm id={r.id} paid={r.paidTotal} spent={r.clearSpent ?? 0} returned={r.clearReturned ?? 0} holders={holders} worker={r.beneficiaryKind === "worker"} />
+              <>
+                {clearMatch && settings.autoCloseClear && <Notice tone="ok">ยอดตรงกับใบเสร็จ{r.clearNoReceipt ? " (ใบรับรองแทนใบเสร็จ)" : ""} — รอคนถือเงินกดรับทอน หรือยืนยันตรงนี้ได้เลย</Notice>}
+                <ClearingConfirm id={r.id} paid={r.paidTotal} spent={r.clearSpent ?? 0} returned={r.clearReturned ?? 0} holders={holders} worker={r.beneficiaryKind === "worker"} />
+              </>
+            )}
+            {(r.kind === "expense" || r.kind === "cash_advance") && (r.createdBy === session.userId || isBeneficiary) && r.status !== "pending" && (
+              <Link href={`/requests/new?from=${r.id}`} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-(--radius) border border-(--line) bg-(--bg) text-sm font-semibold text-(--ink) hover:bg-(--bg-soft)">
+                เบิกซ้ำรายการนี้
+              </Link>
             )}
             {isBeneficiary && r.paidTotal > 0 && !r.receivedAt && r.payments.some((p) => !p.voided && p.method !== "payroll" && p.method !== "worker_ledger") && (
               <ConfirmReceivedButton id={r.id} amount={r.paidTotal} />

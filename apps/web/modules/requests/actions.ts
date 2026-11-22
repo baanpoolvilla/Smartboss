@@ -4,6 +4,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { requireOrg, hasPermission, type OrgSession } from "@smartboss/auth";
 import { prisma } from "@smartboss/database";
+import { Prisma } from "@prisma/client";
 
 import { putFile } from "@/lib/storage";
 import { nextRequestCode } from "@/lib/document-code";
@@ -28,6 +29,7 @@ import { dateOnly, insertEvent, loadRequests, pettyBalances, readSettings, withR
 import { clearActionNotifications, notifyApprovers, notifyClear, notifyPayers, notifyPettySpendReviewers, notifyPettyTopupApprovers, notifyPettyTopupResult, notifyResult } from "./lib/notify";
 import { usersWithPermission } from "@/modules/maintenance/data/notify";
 import { readReceipt } from "./lib/receipt-ai";
+import { clearingMatches, cleanNoReceipt, evaluateLimit, LIMIT_KINDS, parseSpendLimits, weekStartOf, type NoReceipt, type RequestLine, type SpendLimitRule } from "./lib/spend-rules";
 import { isPettyHolder } from "./lib/holders";
 import { PAYROLL_METHOD_BLOCKED, canSeePay, payPrivacy, payrollHandoffBlock, usesSalaryModule } from "./lib/pay-privacy";
 import {
@@ -236,6 +238,8 @@ export interface PreviewInput {
   amount?: number;
   /** กำลังแก้ใบนี้ — ไม่นับใบตัวเองเป็น OT ทับเวลา/ยอดเบิกล่วงหน้าที่ใช้ไปแล้ว */
   exceptRequestId?: string;
+  /** หมวด (เบิกค่าใช้จ่าย/เบิกไปซื้อของ) — ดูวงเงินรายคน */
+  category?: string | null;
 }
 
 export interface Preview {
@@ -265,6 +269,8 @@ export interface Preview {
   ceoNames: string[];
   /** ยอด OT พนักงานประจำถูกซ่อนจากคนกรอก (บอกเงินเดือนได้ — lib/pay-privacy.ts) */
   payHidden: boolean;
+  /** วงเงินรายคน — null = คนนี้ไม่มีวงเงินของใบแบบนี้ */
+  limit: { name: string; perRequest: number; perWeek: number; used: number; left: number; auto: boolean; reason: string | null } | null;
 }
 
 async function beneficiaryOf(orgId: string, userId: string | null) {
@@ -313,6 +319,7 @@ async function computePreview(session: OrgSession, input: PreviewInput, settings
     approverNames: [],
     ceoNames: [],
     payHidden: false,
+    limit: null,
   };
   const today = bangkokToday();
   const date = normalizeDate(input.workDate) || today;
@@ -419,8 +426,44 @@ async function computePreview(session: OrgSession, input: PreviewInput, settings
       if (ceoIds.length === 0) p.blocks.push(`ยอดเกินเกณฑ์ต้องให้ ${ceo} อนุมัติต่อ แต่ไม่มี ${ceo} ที่อนุมัติใบนี้ได้`);
     }
     if (ids.length === 0) p.blocks.push(p.approverLevel === "ceo" ? `ไม่มี ${ceo} ที่อนุมัติใบนี้ได้ (คนยื่น/ผู้ได้เงินอนุมัติเองไม่ได้)` : "ไม่มี HR ที่อนุมัติใบนี้ได้ — ตั้งสิทธิ์ที่ /admin/roles");
+    const lim = await limitCheck(orgId, settings, { kind: input.kind, category: input.category ?? null, amount: amt, beneficiaryUserId: who?.userId ?? null, level: route.level, needCeo: route.needCeo, exceptRequestId: input.exceptRequestId });
+    if (lim?.shown) p.limit = { name: lim.shown.rule.name, perRequest: lim.shown.rule.perRequest, perWeek: lim.shown.rule.perWeek, used: lim.shown.used, left: lim.shown.left, auto: !!lim.rule && amt > 0, reason: lim.reason };
   }
   return p;
+}
+
+/**
+ * วงเงินรายคน (lib/spend-rules.ts) — ใบนี้ผ่านเองไหม · ไม่มีวงเงินของคนนี้ = null (แบบเดิม)
+ * ไม่ผ่านเองเสมอ: ใบที่ต้องผ่าน CEO (ยอดเกินเกณฑ์ / ใบของ HR) · คนนี้ค้างส่งใบเสร็จเงินที่เบิกไปซื้อของเกินกำหนด
+ * ยอดสัปดาห์นี้ = ใบของคนนี้ที่ยังมีผล (รออนุมัติ/อนุมัติ/จ่ายแล้ว) ที่ยื่นตั้งแต่วันจันทร์ ตามประเภท/หมวดของวงเงินนั้น
+ */
+async function limitCheck(
+  orgId: string,
+  settings: RequestSettings,
+  c: { kind: RequestKind; category: string | null; amount: number; beneficiaryUserId: string | null; level: "hr" | "ceo"; needCeo: boolean; exceptRequestId?: string },
+) {
+  if (!(LIMIT_KINDS as readonly string[]).includes(c.kind) || settings.spendLimits.length === 0 || !c.beneficiaryUserId) return null;
+  const today = bangkokToday();
+  const weekFrom = new Date(`${weekStartOf(today)}T00:00:00+07:00`);
+  const [rows, overdue] = await withRequestsTenant(orgId, (tx) =>
+    Promise.all([
+      tx.moneyRequest.findMany({
+        where: { orgId, beneficiaryUserId: c.beneficiaryUserId, kind: { in: [...LIMIT_KINDS] }, status: { in: ["pending", "approved", "paid"] }, createdAt: { gte: weekFrom }, ...(c.exceptRequestId ? { id: { not: c.exceptRequestId } } : {}) },
+        select: { kind: true, category: true, netAmount: true },
+      }),
+      tx.moneyRequest.findFirst({ where: { orgId, beneficiaryUserId: c.beneficiaryUserId, kind: "cash_advance", status: "paid", clearStatus: null, clearDueDate: { lt: dateOnly(today) } }, select: { code: true } }),
+    ]),
+  );
+  const blockedBecause = c.level === "ceo" || c.needCeo ? "ใบนี้ต้องผ่าน CEO — ไม่ใช้วงเงิน" : overdue ? `ค้างส่งใบเสร็จ ${overdue.code} เกินกำหนด — ส่งก่อนถึงจะใช้วงเงินได้` : null;
+  return evaluateLimit(settings.spendLimits, {
+    kind: c.kind,
+    category: c.category,
+    amount: c.amount,
+    beneficiaryUserId: c.beneficiaryUserId,
+    blockedBecause,
+    usedThisWeek: (rule: SpendLimitRule) =>
+      rows.filter((r) => (rule.kinds as readonly string[]).includes(r.kind) && (rule.categories.length === 0 || (r.category !== null && rule.categories.includes(r.category)))).reduce((sum, r) => sum + Number(r.netAmount), 0),
+  });
 }
 
 export async function previewRequestAction(input: PreviewInput): Promise<Result<{ preview: Preview }>> {
@@ -456,12 +499,16 @@ export interface CreateInput {
   otRateId?: string;
   /** OT ที่คิดจากเงินเดือนไม่ได้ / ยอดเบิก */
   amount?: number;
-  lines?: { item: string; amount: number }[];
+  lines?: { item: string; amount: number; propertyId?: string | null }[];
   propertyId?: string | null;
   workOrderId?: string | null;
   vatOn?: boolean;
   whtPercent?: number;
   attachments: Attachment[];
+  /** หมวดค่าใช้จ่าย (เบิกค่าใช้จ่าย/เบิกไปซื้อของ) — ใช้กับวงเงินรายคน */
+  category?: string | null;
+  /** ร้านไม่มีบิล: ใบรับรองแทนใบเสร็จ (เบิกค่าใช้จ่าย) */
+  noReceipt?: unknown;
 }
 
 /** ข้อมูลของใบที่ผ่านการตรวจแล้ว — ใช้ทั้งตอนยื่นและตอนแก้ไข (กติกาเดียวกันทุกข้อ) */
@@ -492,10 +539,12 @@ interface Prepared {
     whtPercent: number;
     whtAmount: number;
     netAmount: number;
-    lines: { item: string; amount: number }[] | null;
+    lines: RequestLine[] | null;
     attachments: Attachment[];
     approverLevel: "hr" | "ceo";
     needCeo: boolean;
+    category: string | null;
+    noReceipt: NoReceipt | null;
   };
   workDate: string;
 }
@@ -535,12 +584,14 @@ async function prepareRequest(session: OrgSession, input: CreateInput, exceptReq
   const attachments = cleanAttachments(orgId, input.attachments, allowed);
   if (kind === "contractor" && attachments.length === 0) return { error: "แนบใบเสนอราคา/ใบแจ้งหนี้/รูปงาน อย่างน้อย 1 ไฟล์" };
   const receipts = attachments.filter((a) => a.role === "receipt");
-  if (kind === "expense" && receipts.length === 0) return { error: "แนบใบเสร็จอย่างน้อย 1 ใบ" };
+  const wantsNoReceipt = kind === "expense" && receipts.length === 0 && !!input.noReceipt;
+  if (kind === "expense" && receipts.length === 0 && !wantsNoReceipt) return { error: "แนบใบเสร็จอย่างน้อย 1 ใบ" };
+  if (wantsNoReceipt && !attachments.some((a) => a.role === "evidence")) return { error: "ไม่มีบิล: แนบรูปของที่ซื้อ หรือรูปหน้าร้าน อย่างน้อย 1 รูป" };
 
   // ยอดเงิน
   let amount = 0;
   let vat = { vatPercent: 0, vat: 0, whtPercent: 0, wht: 0, net: 0 };
-  let lines: { item: string; amount: number }[] | null = null;
+  let lines: RequestLine[] | null = null;
   let vendor: { id: string | null; name: string } | null = null;
   if (kind === "ot") {
     // ไม่มีเงินเดือนในระบบ = ยื่นแบบไม่มียอด รอ HR ใส่ตอนตรวจ (ผู้ใช้ 8/11/2569) — ยอดที่ส่งมาจากฟอร์มไม่ใช้
@@ -563,16 +614,27 @@ async function prepareRequest(session: OrgSession, input: CreateInput, exceptReq
     amount = b.base;
     vat = { vatPercent: b.vatPercent, vat: b.vat, whtPercent: b.whtPercent, wht: b.wht, net: b.net };
   } else {
-    const cleanLines = (input.lines ?? [])
-      .map((l) => ({ item: String(l.item ?? "").trim().slice(0, 120), amount: round2(Number(l.amount)) }))
+    const rawLines = (input.lines ?? [])
+      .map((l) => ({ item: String(l.item ?? "").trim().slice(0, 120), amount: round2(Number(l.amount)), propertyId: typeof l.propertyId === "string" && l.propertyId ? l.propertyId : null }))
       .filter((l) => l.item && Number.isFinite(l.amount) && l.amount > 0)
       .slice(0, 30);
+    // บ้านต่อรายการ (ซื้อของให้หลายบ้านในใบเดียว) — รับเฉพาะบ้านของบริษัทนี้ · ไม่เลือก = ใช้บ้านของใบ
+    const lineProps = [...new Set(rawLines.map((l) => l.propertyId).filter((x): x is string => !!x))];
+    const propNames = new Map(lineProps.length ? (await prisma.property.findMany({ where: { orgId, id: { in: lineProps } }, select: { id: true, name: true } })).map((x) => [x.id, x.name]) : []);
+    const cleanLines: RequestLine[] = rawLines.map((l) => (l.propertyId && propNames.has(l.propertyId) ? { item: l.item, amount: l.amount, propertyId: l.propertyId, propertyName: propNames.get(l.propertyId)! } : { item: l.item, amount: l.amount }));
     amount = cleanLines.length > 0 ? round2(cleanLines.reduce((s, l) => s + l.amount, 0)) : round2(Number(input.amount));
     if (cleanLines.length > 0) lines = cleanLines;
     if (!Number.isFinite(amount) || amount <= 0) return { error: "กรอกจำนวนเงิน" };
     if (amount > 1_000_000) return { error: "จำนวนเงินสูงเกินไป ตรวจอีกครั้ง" };
   }
   const net = kind === "contractor" ? vat.net : amount;
+  let noReceipt: NoReceipt | null = null;
+  if (wantsNoReceipt) {
+    const nr = cleanNoReceipt(input.noReceipt, { max: settings.noReceiptMax, signedName: await nameOf(session.userId), today, expectTotal: net });
+    if ("error" in nr) return nr;
+    noReceipt = nr.value;
+  }
+  const category = (kind === "expense" || kind === "cash_advance") && typeof input.category === "string" && (PETTY_CATEGORIES as readonly string[]).includes(input.category) ? input.category : null;
 
   // ใบเสร็จ: วันที่ในอนาคต / ไฟล์ซ้ำกับใบอื่น (เช็คซ้ำฝั่งเซิร์ฟเวอร์ ไม่เชื่อธงจากหน้าเว็บ · ไม่นับใบตัวเอง)
   const used = await withRequestsTenant(orgId, (tx) => usedHashes(tx, orgId, attachments.map((a) => a.sha256), exceptRequestId));
@@ -631,6 +693,8 @@ async function prepareRequest(session: OrgSession, input: CreateInput, exceptReq
       attachments,
       approverLevel: level,
       needCeo,
+      category,
+      noReceipt,
     },
   };
 }
@@ -644,11 +708,15 @@ export async function createRequestAction(input: CreateInput): Promise<Result<{ 
     if ("error" in prep) return prep;
     const f = prep.fields;
     const byName = await nameOf(session.userId);
+    // วงเงินรายคน: อยู่ในวงเงิน = ผ่านเองตอนยื่น ไม่ต้องรอใครกด (ลอก Ramp/Brex) · ไม่มีวงเงิน/เกิน = แบบเดิม
+    const settings = await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId));
+    const lim = await limitCheck(orgId, settings, { kind, category: f.category, amount: f.netAmount, beneficiaryUserId: f.beneficiaryUserId, level: f.approverLevel, needCeo: f.needCeo });
+    const autoRule = lim?.rule ?? null;
     const created = await withRequestsTenantAfter(
       orgId,
       (tx) => nextRequestCode(tx, orgId),
       async (tx, code) => {
-        const { lines, attachments, ...rest } = f;
+        const { lines, attachments, noReceipt, ...rest } = f;
         const row = await tx.moneyRequest.create({
           data: {
             orgId,
@@ -657,8 +725,10 @@ export async function createRequestAction(input: CreateInput): Promise<Result<{ 
             ...rest,
             ...(lines ? { lines } : {}),
             attachments: attachments as unknown as object,
+            ...(noReceipt ? { noReceipt: noReceipt as unknown as object } : {}),
             createdBy: session.userId,
             createdByName: byName,
+            ...(autoRule ? { status: "approved", limitRuleId: autoRule.id, decidedByName: `อนุมัติอัตโนมัติ · วงเงิน “${autoRule.name}”`, decidedAt: new Date() } : {}),
           },
         });
         const summary =
@@ -666,10 +736,19 @@ export async function createRequestAction(input: CreateInput): Promise<Result<{ 
             ? `ลง OT ให้ ${f.beneficiaryName} ${thai(prep.workDate)} ${f.otStart}–${f.otEnd} (${hoursText(f.otMinutes ?? 0)}) ${awaitingAmountLabel(kind, f) ? "· รอ HR ใส่ยอด" : baht(f.netAmount)}`
             : `ยื่น${KIND_META[kind].label} ${baht(f.netAmount)} ให้ ${f.beneficiaryName}`;
         await insertEvent(tx, orgId, { requestId: row.id, byUserId: session.userId, byName, action: "create", summary });
+        if (autoRule && lim?.shown) {
+          await insertEvent(tx, orgId, { requestId: row.id, byUserId: session.userId, byName: "ระบบ", action: "approve", summary: `ผ่านอัตโนมัติ · อยู่ในวงเงิน “${autoRule.name}” (ครั้งละไม่เกิน ${baht(autoRule.perRequest)} · สัปดาห์นี้ใช้แล้ว ${baht(lim.shown.used)} จาก ${baht(autoRule.perWeek)})` });
+        }
         return { id: row.id, code: row.code };
       },
     );
-    void notifyApprovers(orgId, { id: created.id, code: created.code, kind, title: f.title, netAmount: f.netAmount, beneficiaryName: f.beneficiaryName }, f.approverLevel, [session.userId, f.beneficiaryUserId ?? ""], awaitingAmountLabel(kind, f));
+    const createdBrief = { id: created.id, code: created.code, kind, title: f.title, netAmount: f.netAmount, beneficiaryName: f.beneficiaryName };
+    if (autoRule) {
+      void notifyPayers(orgId, createdBrief, [f.beneficiaryUserId ?? "", session.userId]);
+      refresh();
+      return { ok: true, ...created };
+    }
+    void notifyApprovers(orgId, createdBrief, f.approverLevel, [session.userId, f.beneficiaryUserId ?? ""], awaitingAmountLabel(kind, f));
     refresh();
     return { ok: true, ...created };
   } catch (error) {
@@ -740,7 +819,7 @@ export async function createOtGroupAction(
         for (let i = 0; i < preps.length; i++) {
           const prep = preps[i]!;
           const f = prep.fields;
-          const { lines, attachments, ...rest } = f;
+          const { lines, attachments, noReceipt, ...rest } = f;
           const row = await tx.moneyRequest.create({
             data: {
               orgId,
@@ -749,6 +828,7 @@ export async function createOtGroupAction(
               ...rest,
               ...(lines ? { lines } : {}),
               attachments: attachments as unknown as object,
+              ...(noReceipt ? { noReceipt: noReceipt as unknown as object } : {}),
               createdBy: session.userId,
               createdByName: byName,
             },
@@ -845,6 +925,8 @@ async function prepareUnlinkedOt(session: OrgSession, input: CreateInput, name: 
       attachments,
       approverLevel: route.level,
       needCeo: route.needCeo,
+      category: null,
+      noReceipt: null,
     },
   };
 }
@@ -1077,11 +1159,11 @@ export async function updateRequestAction(id: string, input: CreateInput): Promi
 
     const byName = await nameOf(session.userId);
     const saved = await withRequestsTenant(orgId, async (tx) => {
-      const { lines, attachments, ...rest } = f;
+      const { lines, attachments, noReceipt, ...rest } = f;
       // แก้ได้เฉพาะตอนยังไม่มีใครตัดสิน — กันกดแก้พร้อมกับที่ HR กำลังอนุมัติ
       const res = await tx.moneyRequest.updateMany({
         where: { orgId, id, status: "pending", firstDecidedAt: null },
-        data: { ...rest, lines: lines ?? [], attachments: attachments as unknown as object },
+        data: { ...rest, lines: lines ?? [], attachments: attachments as unknown as object, noReceipt: noReceipt ? (noReceipt as unknown as object) : Prisma.DbNull },
       });
       if (res.count === 0) return false;
       await insertEvent(tx, orgId, { requestId: id, byUserId: session.userId, byName, action: "edit", summary: `แก้ไข: ${changes.join(" · ")}` });
@@ -1336,9 +1418,11 @@ export async function recordPaymentAction(input: PayInput): Promise<Result> {
     const short = amount < outstanding - 0.005;
     if (short && !note) return { error: "จ่ายน้อยกว่ายอดที่อนุมัติ — ใส่เหตุผล" };
     const slips = cleanAttachments(orgId, input.slips, ["slip"]);
-    if (method !== "payroll" && slips.length === 0) return { error: method === "transfer" ? "แนบสลิปโอน" : "แนบรูปหลักฐานรับเงิน (เช่นรูปเซ็นรับเงินสด)" };
-    const payrollPeriod = method === "payroll" ? (input.payrollPeriod && /^\d{4}-\d{2}$/.test(input.payrollPeriod) ? input.payrollPeriod : paidOn.slice(0, 7)) : null;
     const settings = await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId));
+    // จ่ายเงินสดให้พนักงานที่มีบัญชี: บริษัทเปิด "ให้ผู้รับกดยืนยัน" = ไม่ต้องถ่ายรูป (ผู้ใช้ 22/11/2569) — คนงาน/ช่างภายนอกยังต้องแนบรูป
+    const confirmByReceiver = cashConfirmAllowed(settings, method, r);
+    if (method !== "payroll" && slips.length === 0 && !confirmByReceiver) return { error: method === "transfer" ? "แนบสลิปโอน" : "แนบรูปหลักฐานรับเงิน (เช่นรูปเซ็นรับเงินสด)" };
+    const payrollPeriod = method === "payroll" ? (input.payrollPeriod && /^\d{4}-\d{2}$/.test(input.payrollPeriod) ? input.payrollPeriod : paidOn.slice(0, 7)) : null;
     const holderName = pettyHolderId ? await nameOf(pettyHolderId) : "";
 
     const result = await withRequestsTenant(orgId, async (tx) => {
@@ -1412,7 +1496,7 @@ export async function recordPaymentAction(input: PayInput): Promise<Result> {
         byUserId: session.userId,
         byName,
         action: "pay",
-        summary: `จ่าย ${baht(amount)} (${METHOD_LABEL[method]}${payrollPeriod ? ` งวด ${payrollPeriod}` : ""})${short ? ` · ${input.closeShort ? "ปิดยอดไม่จ่ายส่วนที่เหลือ" : "จ่ายบางส่วน"}: ${note}` : note ? ` · ${note}` : ""}`,
+        summary: `จ่าย ${baht(amount)} (${METHOD_LABEL[method]}${method === "petty_cash" && holderName ? ` ของ ${holderName}` : ""}${payrollPeriod ? ` งวด ${payrollPeriod}` : ""})${slips.length === 0 && confirmByReceiver ? " · ไม่มีรูป รอผู้รับกดยืนยันรับเงิน" : ""}${short ? ` · ${input.closeShort ? "ปิดยอดไม่จ่ายส่วนที่เหลือ" : "จ่ายบางส่วน"}: ${note}` : note ? ` · ${note}` : ""}`,
       });
       return full ? ("full" as const) : ("partial" as const);
     });
@@ -1429,7 +1513,7 @@ export async function recordPaymentAction(input: PayInput): Promise<Result> {
     }
     if (r.kind === "cash_advance" && result === "full") {
       // แจ้งอันเดียว — บอกทั้งว่าได้เงินแล้ว และต้องส่งใบเสร็จ + เงินทอนเมื่อไหร่
-      void notifyClear(orgId, brief(r), [staffOnly(r)], `จ่ายแล้ว ${baht(amount)} · ส่งใบเสร็จ + เงินทอนภายใน ${settings.clearDueDays} วัน`);
+      void notifyClear(orgId, brief(r), [staffOnly(r)], `จ่ายแล้ว ${baht(amount)}${slips.length === 0 ? " · กด “ได้รับเงินแล้ว”" : ""} · ส่งใบเสร็จ + เงินทอนภายใน ${settings.clearDueDays} วัน`);
     } else if (method !== "payroll") {
       void notifyResult(orgId, brief(r), [staffOnly(r)], "จ่ายเงินแล้ว", `${baht(amount)} · ${METHOD_LABEL[method]} — กด "ได้รับเงินแล้ว" ในใบ`);
     }
@@ -1522,6 +1606,62 @@ export async function voidPaymentAction(input: { paymentId: string; reason: stri
   }
 }
 
+/** จ่ายเงินสดแบบไม่ต้องถ่ายรูปได้ไหม — บริษัทเปิดสวิตช์ + จ่ายเงินสด/เงินสดย่อย + ผู้รับเป็นพนักงานที่มีบัญชี (กดยืนยันในมือถือได้) */
+function cashConfirmAllowed(settings: RequestSettings, method: PaymentMethod, r: Pick<RequestView, "beneficiaryKind" | "beneficiaryUserId">): boolean {
+  return settings.cashConfirmMode && (method === "cash" || method === "petty_cash") && r.beneficiaryKind === "staff" && !!r.beneficiaryUserId;
+}
+
+/**
+ * จ่ายหลายใบพร้อมกัน (ผู้ใช้ 22/11/2569 "HR กดเยอะมาก") — เงินสด/เงินสดย่อย ไม่ต้องถ่ายรูป ผู้รับกดยืนยันเอง
+ * approve = ใบที่ยังรออนุมัติระดับ HR (ไม่ต้องผ่าน CEO) ที่คนนี้อนุมัติได้ อนุมัติก่อนแล้วจ่ายต่อในครั้งเดียว
+ * ใช้ decideRequestAction + recordPaymentAction ตัวเดิมทีละใบ — กติกาทุกข้อเหมือนกดทีละใบ (ใบไหนติด ใบอื่นยังทำต่อ)
+ */
+export async function payManyAction(input: { ids: string[]; method: "cash" | "petty_cash"; pettyHolderId?: string | null; approve?: boolean }): Promise<Result<{ done: string[]; failed: { code: string; error: string }[] }>> {
+  try {
+    const session = await guard();
+    const orgId = session.orgId;
+    if (input.method !== "cash" && input.method !== "petty_cash") return { error: "จ่ายพร้อมกันได้เฉพาะเงินสด / เงินสดย่อย" };
+    const ids = [...new Set(input.ids)].slice(0, 50);
+    if (ids.length === 0) return { error: "ยังไม่ได้เลือกใบ" };
+    const settings = await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId));
+    if (!settings.cashConfirmMode) return { error: "ต้องเปิด “จ่ายเงินสด ไม่ต้องถ่ายรูป” ในตั้งค่าก่อน ถึงจะจ่ายหลายใบพร้อมกันได้" };
+    const viewer = await viewerOf(session);
+    const done: string[] = [];
+    const failed: { code: string; error: string }[] = [];
+    const today = bangkokToday();
+    for (const id of ids) {
+      let r = await withRequestsTenant(orgId, (tx) => loadOne(tx, orgId, id));
+      if (!r) continue;
+      if (!cashConfirmAllowed(settings, input.method, r)) {
+        failed.push({ code: r.code, error: "ผู้รับไม่ใช่พนักงานที่มีบัญชี — ต้องจ่ายทีละใบพร้อมแนบรูป" });
+        continue;
+      }
+      if (r.status === "pending") {
+        if (!input.approve || r.approverLevel !== "hr" || r.needCeo || !canDecide(r, viewer)) {
+          failed.push({ code: r.code, error: r.needCeo || r.approverLevel === "ceo" ? "ต้องผ่าน CEO ก่อน" : "คุณอนุมัติใบนี้ไม่ได้" });
+          continue;
+        }
+        const d = await decideRequestAction({ id, outcome: "approve", note: "อนุมัติพร้อมจ่าย (จ่ายหลายใบ)", version: r.updatedAt });
+        if (!d.ok) {
+          failed.push({ code: r.code, error: d.error });
+          continue;
+        }
+        r = await withRequestsTenant(orgId, (tx) => loadOne(tx, orgId, id));
+        if (!r) continue;
+      }
+      const outstanding = round2(r.netAmount - r.paidTotal);
+      const res = await recordPaymentAction({ id, amount: outstanding, method: input.method, paidOn: today, pettyHolderId: input.pettyHolderId ?? null, note: "", slips: [] });
+      if (res.ok) done.push(r.code);
+      else failed.push({ code: r.code, error: res.error });
+    }
+    refresh();
+    revalidatePath("/requests/petty-cash");
+    return { ok: true, done, failed };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
 export async function confirmReceivedAction(input: { id: string }): Promise<Result> {
   try {
     const session = await guard();
@@ -1544,7 +1684,7 @@ export async function confirmReceivedAction(input: { id: string }): Promise<Resu
 
 /* ═════════════════════════ เคลียร์เงินที่เบิกไปก่อน ═════════════════════════ */
 
-export async function submitClearingAction(input: { id: string; spent: number; returned: number; note: string; receipts: Attachment[] }): Promise<Result> {
+export async function submitClearingAction(input: { id: string; spent: number; returned: number; note: string; receipts: Attachment[]; noReceipt?: unknown }): Promise<Result<{ autoClosed?: boolean; waitingChange?: boolean }>> {
   try {
     const session = await guard();
     const orgId = session.orgId;
@@ -1552,23 +1692,61 @@ export async function submitClearingAction(input: { id: string; spent: number; r
     const spent = round2(Number(input.spent));
     const returned = round2(Number(input.returned) || 0);
     if (!Number.isFinite(spent) || spent < 0 || !Number.isFinite(returned) || returned < 0) return { error: "จำนวนเงินไม่ถูกต้อง" };
-    const receipts = cleanAttachments(orgId, input.receipts, ["clearing"]);
-    if (spent > 0 && receipts.length === 0) return { error: "แนบใบเสร็จของที่ซื้อ" };
+    const files = cleanAttachments(orgId, input.receipts, ["clearing", "evidence"]);
+    const receipts = files.filter((a) => a.role === "clearing");
+    const settings = await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId));
+    // ร้านไม่มีบิล: ใบรับรองแทนใบเสร็จ + รูปของ (บริษัทเปิดในตั้งค่า) — ยอดใบรับรอง + ใบเสร็จที่มี = ที่ใช้จริง
+    let noReceipt: NoReceipt | null = null;
+    if (input.noReceipt) {
+      const read = round2(receipts.reduce((s, a) => s + (a.ai?.amount ?? 0), 0));
+      const nr = cleanNoReceipt(input.noReceipt, { max: settings.noReceiptMax, signedName: byName, today: bangkokToday(), expectTotal: receipts.length ? undefined : spent });
+      if ("error" in nr) return nr;
+      noReceipt = nr.value;
+      if (!files.some((a) => a.role === "evidence")) return { error: "ไม่มีบิล: แนบรูปของที่ซื้อ หรือรูปหน้าร้าน อย่างน้อย 1 รูป" };
+      if (receipts.length && Math.abs(round2(read + noReceipt.total) - spent) > 1) return { error: `ใบเสร็จ ${baht(read)} + ใบรับรอง ${baht(noReceipt.total)} ไม่ตรงกับที่ใช้จริง ${baht(spent)}` };
+    }
+    if (spent > 0 && receipts.length === 0 && !noReceipt) return { error: "แนบใบเสร็จของที่ซื้อ" };
     const r = await withRequestsTenant(orgId, (tx) => loadOne(tx, orgId, input.id));
     if (!r || r.kind !== "cash_advance") return { error: "ไม่พบคำขอ" };
     if (r.beneficiaryUserId !== session.userId && r.createdBy !== session.userId) return { error: "ส่งใบเสร็จได้เฉพาะคนที่เบิก" };
     if (r.status !== "paid" || r.clearStatus) return { error: r.clearStatus ? "ส่งใบเสร็จไปแล้ว" : "ยังไม่ได้รับเงิน" };
     if (spent + returned > r.paidTotal + 0.005 && returned > 0) return { error: `ใช้จริง + เงินทอนเกินยอดที่ได้ไป ${baht(r.paidTotal)}` };
-    const used = await withRequestsTenant(orgId, (tx) => usedHashes(tx, orgId, receipts.map((a) => a.sha256), r.id));
-    const dup = receipts.find((a) => used.has(a.sha256));
-    if (dup) return { error: `${dup.name}: ใบเสร็จนี้เคยใช้แล้วใน ${used.get(dup.sha256)}` };
+    const used = await withRequestsTenant(orgId, (tx) => usedHashes(tx, orgId, files.map((a) => a.sha256), r.id));
+    const dup = files.find((a) => used.has(a.sha256));
+    if (dup) return { error: `${dup.name}: ไฟล์นี้เคยใช้แล้วใน ${used.get(dup.sha256)}` };
     await withRequestsTenant(orgId, async (tx) => {
       await tx.moneyRequest.update({
         where: { id: r.id },
-        data: { clearStatus: "submitted", clearSpent: spent, clearReturned: returned, clearNote: input.note.trim().slice(0, 500) || null, attachments: [...r.attachments, ...receipts] as unknown as object },
+        data: {
+          clearStatus: "submitted",
+          clearSpent: spent,
+          clearReturned: returned,
+          clearNote: input.note.trim().slice(0, 500) || null,
+          attachments: [...r.attachments, ...files] as unknown as object,
+          ...(noReceipt ? { clearNoReceipt: noReceipt as unknown as object } : {}),
+        },
       });
-      await insertEvent(tx, orgId, { requestId: r.id, byUserId: session.userId, byName, action: "clear_submit", summary: `ส่งใบเสร็จ · ใช้จริง ${baht(spent)} · คืนเงินทอน ${baht(returned)} · ใบเสร็จ ${receipts.length} ใบ` });
+      await insertEvent(tx, orgId, {
+        requestId: r.id,
+        byUserId: session.userId,
+        byName,
+        action: "clear_submit",
+        summary: `ส่งใบเสร็จ · ใช้จริง ${baht(spent)} · คืนเงินทอน ${baht(returned)} · ใบเสร็จ ${receipts.length} ใบ${noReceipt ? ` · ไม่มีบิล: ใบรับรองแทนใบเสร็จ ${baht(noReceipt.total)} (${noReceipt.seller})` : ""}`,
+      });
     });
+    // ยอดตรง (บริษัทเปิด "ปิดใบเอง"): ไม่มีเงินทอน = ปิดทันที · มีเงินทอน = รอคนถือเงินที่จ่ายใบนี้กด "ได้รับเงินทอน"
+    const fresh = await withRequestsTenant(orgId, (tx) => loadOne(tx, orgId, r.id));
+    if (fresh && settings.autoCloseClear && clearingAutoOk(fresh)) {
+      if (returned <= 0.005) {
+        await confirmClearingCore(orgId, fresh, { userId: session.userId, name: "ระบบ" }, null, "ปิดเอง · ยอดตรงกับใบเสร็จ");
+        refresh(r.id);
+        return { ok: true, autoClosed: true };
+      }
+      const holder = changeHolderOf(fresh);
+      void notifyClear(orgId, brief(r), holder ? [holder] : [], `คืนเงินทอน ${baht(returned)} — ยอดตรง กด “ได้รับเงินทอน” แล้วใบปิดเอง`);
+      refresh(r.id);
+      return { ok: true, waitingChange: true };
+    }
     const payers = await prisma.user.findMany({ where: { orgId, isActive: true, roles: { some: { role: { permissions: { some: { permission: { code: REQ_PERMS.pay } } } } } } }, select: { id: true } });
     void notifyClear(orgId, brief(r), payers.map((p) => p.id).filter((id) => id !== session.userId), "ส่งใบเสร็จ + เงินทอนแล้ว รอตรวจ");
     refresh(r.id);
@@ -1578,69 +1756,90 @@ export async function submitClearingAction(input: { id: string; spent: number; r
   }
 }
 
+/** ใบที่ส่งเคลียร์แล้ว "ยอดตรง" (lib/spend-rules.ts clearingMatches) */
+function clearingAutoOk(r: RequestView): boolean {
+  if (r.clearStatus !== "submitted" || r.clearSpent === null) return false;
+  const receipts = r.attachments.filter((a) => a.role === "clearing");
+  return clearingMatches({ paid: r.paidTotal, spent: r.clearSpent, returned: r.clearReturned ?? 0, receiptAmounts: receipts.map((a) => a.ai?.amount), noReceiptTotal: r.clearNoReceipt?.total ?? null });
+}
+
+/** คนที่ควรรับเงินทอน = คนถือเงินสดย่อยที่จ่ายใบนี้ (จ่ายจากเงินสดย่อย) — จ่ายเงินสดธรรมดา/โอน = null (HR ตรวจตามเดิม) */
+function changeHolderOf(r: RequestView): string | null {
+  const pay = r.payments.find((p) => !p.voided && p.method === "petty_cash" && p.pettyHolderId);
+  return pay?.pettyHolderId ?? null;
+}
+
 /**
  * HR ตรวจเคลียร์ — ใช้จริงมากกว่าที่ให้ไป = บริษัทค้างจ่ายเพิ่ม (ใบกลับไปรอจ่ายส่วนต่าง)
  * ใช้จริง + เงินทอน น้อยกว่าที่ให้ไป = ส่วนที่ขาดต้องหักคืน (พนักงาน: งวดเงินเดือน · คนงาน: บัญชีค่าแรง)
+ * ยอดตรง + จ่ายจากเงินสดย่อย: คนถือเงินที่จ่ายใบนี้กด "ได้รับเงินทอน" ได้เอง (ไม่ต้องมีสิทธิ์จ่าย) — ทอนเข้าเงินในมือของเขา
  */
 export async function confirmClearingAction(input: { id: string; returnedTo: string | null; note: string }): Promise<Result> {
   try {
     const session = await guard();
     const orgId = session.orgId;
     const viewer = await viewerOf(session);
-    if (!viewer.canPay) return { error: "ตรวจใบเสร็จได้เฉพาะ HR" };
     const byName = await nameOf(session.userId);
     const r = await withRequestsTenant(orgId, (tx) => loadOne(tx, orgId, input.id));
     if (!r || r.kind !== "cash_advance" || r.clearStatus !== "submitted") return { error: "ใบนี้ยังไม่ได้ส่งใบเสร็จ" };
     if (r.beneficiaryUserId === session.userId) return { error: "ตรวจใบของตัวเองไม่ได้" };
-    const spent = r.clearSpent ?? 0;
+    const settings = await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId));
+    const holderReceives = settings.autoCloseClear && clearingAutoOk(r) && changeHolderOf(r) === session.userId;
+    if (!viewer.canPay && !holderReceives) return { error: "ตรวจใบเสร็จได้เฉพาะ HR" };
+    const returnedTo = holderReceives ? session.userId : input.returnedTo;
     const returned = r.clearReturned ?? 0;
-    const shortage = round2(r.paidTotal - spent - returned);
-    const owedMore = round2(spent - r.paidTotal);
-    if (returned > 0 && input.returnedTo) {
-      const holder = await prisma.user.findFirst({ where: { orgId, id: input.returnedTo, isActive: true }, select: { id: true, name: true } });
+    if (returned > 0 && returnedTo) {
+      const holder = await prisma.user.findFirst({ where: { orgId, id: returnedTo, isActive: true }, select: { id: true } });
       if (!holder) return { error: "ไม่พบคนรับเงินทอน" };
     }
-    const returnHolderName = returned > 0 && input.returnedTo ? await nameOf(input.returnedTo) : "";
-    await withRequestsTenant(orgId, async (tx) => {
-      if (returned > 0 && input.returnedTo) {
-        const holderName = returnHolderName;
-        await tx.moneyPettyCashEntry.create({ data: { orgId, holderUserId: input.returnedTo, holderName, kind: "return", delta: returned, requestId: r.id, note: `เงินทอนจาก ${r.code}`, byUserId: session.userId, byName } });
-      }
-      let dwPaymentId: string | null = null;
-      if (shortage > 0.005 && r.beneficiaryKind === "worker" && r.employmentId) {
-        const dw = await tx.dailyWorkerPayment.create({
-          data: { orgId, employmentId: r.employmentId, payDate: dateOnly(bangkokToday()), amount: shortage, kind: "advance", note: `${r.code} เบิกไปก่อนแล้วไม่ได้คืน ${baht(shortage, false)} บาท`.slice(0, 200), byUserId: session.userId, byName },
-        });
-        dwPaymentId = dw.id;
-        await insertDwAudit(tx, orgId, { byUserId: session.userId, byName, action: "payment", employmentIds: [r.employmentId], workDate: bangkokToday(), summary: `หักคืนเงินเบิกไปก่อนที่ไม่ได้คืน ${baht(shortage, false)} บาท (${r.code})` });
-      }
-      await tx.moneyRequest.update({
-        where: { id: r.id },
-        data: {
-          clearStatus: "cleared",
-          clearedAt: new Date(),
-          clearedByName: byName,
-          ...(owedMore > 0.005 ? { netAmount: spent, status: "approved" } : {}),
-          ...(shortage > 0.005 && r.beneficiaryKind !== "worker" ? { deductAmount: shortage } : {}),
-          ...(dwPaymentId ? { dwPaymentId } : {}),
-        },
-      });
-      const parts = [`ตรวจใบเสร็จแล้ว · ใช้จริง ${baht(spent)}`];
-      if (returned > 0) parts.push(`รับเงินทอน ${baht(returned)}${input.returnedTo ? " เข้าเงินสดย่อย" : ""}`);
-      if (owedMore > 0.005) parts.push(`บริษัทค้างจ่ายเพิ่ม ${baht(owedMore)}`);
-      if (shortage > 0.005) parts.push(r.beneficiaryKind === "worker" ? `ขาดคืน ${baht(shortage)} หักจากค่าแรง` : `ขาดคืน ${baht(shortage)} รอหักเงินเดือน`);
-      if (input.note.trim()) parts.push(input.note.trim().slice(0, 200));
-      await insertEvent(tx, orgId, { requestId: r.id, byUserId: session.userId, byName, action: "clear_confirm", summary: parts.join(" · ") });
-    });
-    await clearActionNotifications(orgId, r.id, ["req_clear"]);
-    if (spent > 0) await linkMaintenanceExpense(orgId, r, session.userId, spent);
-    if (owedMore > 0.005) void notifyPayers(orgId, { ...brief(r), netAmount: owedMore }, [r.beneficiaryUserId ?? "", session.userId]);
-    void notifyResult(orgId, brief(r), [staffOnly(r)], "ตรวจใบเสร็จแล้ว", shortage > 0.005 ? `ขาดคืน ${baht(shortage)} — หักคืนทีหลัง` : owedMore > 0.005 ? `บริษัทจ่ายเพิ่ม ${baht(owedMore)}` : undefined);
+    await confirmClearingCore(orgId, r, { userId: session.userId, name: byName }, returnedTo, holderReceives ? `${input.note.trim() ? `${input.note.trim()} · ` : ""}ยอดตรง คนถือเงินรับทอนแล้ว` : input.note);
     refresh(r.id);
     return { ok: true };
   } catch (error) {
     return fail(error);
   }
+}
+
+async function confirmClearingCore(orgId: string, r: RequestView, by: { userId: string; name: string }, returnedTo: string | null, note: string) {
+  const spent = r.clearSpent ?? 0;
+  const returned = r.clearReturned ?? 0;
+  const shortage = round2(r.paidTotal - spent - returned);
+  const owedMore = round2(spent - r.paidTotal);
+  const returnHolderName = returned > 0 && returnedTo ? await nameOf(returnedTo) : "";
+  await withRequestsTenant(orgId, async (tx) => {
+    if (returned > 0 && returnedTo) {
+      await tx.moneyPettyCashEntry.create({ data: { orgId, holderUserId: returnedTo, holderName: returnHolderName, kind: "return", delta: returned, requestId: r.id, note: `เงินทอนจาก ${r.code}`, byUserId: by.userId, byName: by.name } });
+    }
+    let dwPaymentId: string | null = null;
+    if (shortage > 0.005 && r.beneficiaryKind === "worker" && r.employmentId) {
+      const dw = await tx.dailyWorkerPayment.create({
+        data: { orgId, employmentId: r.employmentId, payDate: dateOnly(bangkokToday()), amount: shortage, kind: "advance", note: `${r.code} เบิกไปก่อนแล้วไม่ได้คืน ${baht(shortage, false)} บาท`.slice(0, 200), byUserId: by.userId, byName: by.name },
+      });
+      dwPaymentId = dw.id;
+      await insertDwAudit(tx, orgId, { byUserId: by.userId, byName: by.name, action: "payment", employmentIds: [r.employmentId], workDate: bangkokToday(), summary: `หักคืนเงินเบิกไปก่อนที่ไม่ได้คืน ${baht(shortage, false)} บาท (${r.code})` });
+    }
+    await tx.moneyRequest.update({
+      where: { id: r.id },
+      data: {
+        clearStatus: "cleared",
+        clearedAt: new Date(),
+        clearedByName: by.name,
+        ...(owedMore > 0.005 ? { netAmount: spent, status: "approved" } : {}),
+        ...(shortage > 0.005 && r.beneficiaryKind !== "worker" ? { deductAmount: shortage } : {}),
+        ...(dwPaymentId ? { dwPaymentId } : {}),
+      },
+    });
+    const parts = [`ตรวจใบเสร็จแล้ว · ใช้จริง ${baht(spent)}`];
+    if (returned > 0) parts.push(`รับเงินทอน ${baht(returned)}${returnedTo ? ` เข้าเงินสดย่อย${returnHolderName ? ` ของ ${returnHolderName}` : ""}` : ""}`);
+    if (owedMore > 0.005) parts.push(`บริษัทค้างจ่ายเพิ่ม ${baht(owedMore)}`);
+    if (shortage > 0.005) parts.push(r.beneficiaryKind === "worker" ? `ขาดคืน ${baht(shortage)} หักจากค่าแรง` : `ขาดคืน ${baht(shortage)} รอหักเงินเดือน`);
+    if (note.trim()) parts.push(note.trim().slice(0, 200));
+    await insertEvent(tx, orgId, { requestId: r.id, byUserId: by.userId, byName: by.name, action: "clear_confirm", summary: parts.join(" · ") });
+  });
+  await clearActionNotifications(orgId, r.id, ["req_clear"]);
+  if (spent > 0) await linkMaintenanceExpense(orgId, r, by.userId, spent);
+  if (owedMore > 0.005) void notifyPayers(orgId, { ...brief(r), netAmount: owedMore }, [r.beneficiaryUserId ?? "", by.userId]);
+  void notifyResult(orgId, brief(r), [staffOnly(r)], "ตรวจใบเสร็จแล้ว", shortage > 0.005 ? `ขาดคืน ${baht(shortage)} — หักคืนทีหลัง` : owedMore > 0.005 ? `บริษัทจ่ายเพิ่ม ${baht(owedMore)}` : undefined);
 }
 
 /* ═════════════════════════ ส่งเข้าเงินเดือน ═════════════════════════ */
@@ -1788,6 +1987,35 @@ export async function addPettyEntryAction(input: { holderUserId: string; kind: "
   }
 }
 
+/**
+ * รับเงินเข้าเงินสดย่อย (ผู้ใช้ 22/11/2569) — ขายของเก่า แขกจ่ายค่าเสียหาย ฯลฯ คนถือเงินลงของตัวเอง
+ * แยกจาก "ปรับยอด" (นับเงินไม่ตรง) — รายงานจะได้รู้ว่าเงินมาจากไหน · ยกเลิกได้แบบรายการทั่วไป
+ */
+export async function addPettyIncomeAction(input: { amount: number; source: string; note: string; attachments: Attachment[] }): Promise<Result> {
+  try {
+    const session = await guard();
+    const orgId = session.orgId;
+    const holder = await pettyHolder(orgId, session.userId);
+    if (!holder) return { error: "คุณไม่ได้ถือเงินสดย่อย" };
+    const amount = round2(Number(input.amount));
+    if (!Number.isFinite(amount) || amount <= 0) return { error: "กรอกจำนวนเงินที่รับเข้า" };
+    if (amount > 1_000_000) return { error: "จำนวนเงินสูงเกินไป ตรวจอีกครั้ง" };
+    const source = input.source.trim().slice(0, 80);
+    if (!source) return { error: "เลือกว่าเงินมาจากไหน" };
+    const note = input.note.trim().slice(0, 200);
+    const attachments = cleanAttachments(orgId, input.attachments, ["evidence", "slip", "receipt"]);
+    const byName = holder.name;
+    await withRequestsTenant(orgId, async (tx) => {
+      await tx.moneyPettyCashEntry.create({ data: { orgId, holderUserId: holder.id, holderName: holder.name, kind: "income", delta: amount, category: source, note: `${source}${note ? ` · ${note}` : ""}`, attachments: attachments as unknown as object, byUserId: session.userId, byName } });
+      await insertEvent(tx, orgId, { byUserId: session.userId, byName, action: "petty", summary: `รับเงินเข้าเงินสดย่อย ${holder.name} ${baht(amount)} · ${source}${note ? ` · ${note}` : ""}` });
+    });
+    revalidatePath("/requests/petty-cash");
+    return { ok: true };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
 export async function voidPettyEntryAction(input: { id: string; reason: string }): Promise<Result> {
   try {
     const session = await guard();
@@ -1836,7 +2064,48 @@ async function holderIsHr(orgId: string, userId: string): Promise<boolean> {
   return hr.includes(userId) && !ceo.includes(userId);
 }
 
-export async function requestPettyTopupAction(input: { amount: number; note: string }): Promise<Result> {
+/**
+ * ใช้ไปเท่าไหร่ตั้งแต่เติมครั้งก่อน (เงินสดย่อยแบบวงเงินคงที่ — ผู้ใช้ 22/11/2569 "จ่าย 4,500 เติมคืน 4,500")
+ * = ยอดที่ออกจากมือสุทธิหลังรายการเติมล่าสุด (จ่าย − เงินทอนคืน − รับเงินเข้า ± ปรับยอด) · แยกหมวดให้คนอนุมัติเห็น
+ */
+async function pettySpentSince(tx: Tx, orgId: string, holderUserId: string) {
+  const lastTopUp = await tx.moneyPettyCashEntry.findFirst({ where: { orgId, holderUserId, kind: "top_up", voidedAt: null }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
+  const rows = await tx.moneyPettyCashEntry.findMany({
+    where: { orgId, holderUserId, voidedAt: null, kind: { not: "top_up" }, ...(lastTopUp ? { createdAt: { gt: lastTopUp.createdAt } } : {}) },
+    select: { kind: true, delta: true, category: true, requestId: true },
+  });
+  const groups = new Map<string, { label: string; count: number; amount: number }>();
+  let net = 0;
+  for (const e of rows) {
+    const d = Number(e.delta);
+    net += d;
+    const label = e.kind === "spend" ? (e.category ?? (e.requestId ? "จ่ายใบเบิก" : "อื่น ๆ")) : e.kind === "return" ? "เงินทอนคืน" : e.kind === "income" ? "รับเงินเข้า" : "ปรับยอด";
+    const g = groups.get(label) ?? { label, count: 0, amount: 0 };
+    g.count += 1;
+    g.amount = round2(g.amount - d);
+    groups.set(label, g);
+  }
+  return { since: lastTopUp?.createdAt ?? null, spent: round2(-net), breakdown: [...groups.values()].sort((a, b) => b.amount - a.amount), count: rows.length };
+}
+
+/** ยอดที่ควรขอเติม (ใช้ไปตั้งแต่เติมครั้งก่อน) + เงินในมือตามระบบ — หน้า "ขอเติมเงิน" ใช้เติมให้อัตโนมัติ */
+export async function pettyTopupSuggestionAction(): Promise<Result<{ spent: number; balance: number; since: string | null; count: number; breakdown: { label: string; count: number; amount: number }[] }>> {
+  try {
+    const session = await guard();
+    const orgId = session.orgId;
+    if (!(await pettyHolder(orgId, session.userId))) return { error: "คุณไม่ได้ถือเงินสดย่อย" };
+    const res = await withRequestsTenant(orgId, async (tx) => {
+      const s = await pettySpentSince(tx, orgId, session.userId);
+      const balance = (await pettyBalances(tx, orgId)).get(session.userId) ?? 0;
+      return { ...s, balance };
+    });
+    return { ok: true, spent: res.spent, balance: round2(res.balance), since: res.since ? res.since.toISOString() : null, count: res.count, breakdown: res.breakdown };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function requestPettyTopupAction(input: { amount: number; note: string; counted?: number | null }): Promise<Result> {
   try {
     const session = await guard();
     const orgId = session.orgId;
@@ -1844,14 +2113,25 @@ export async function requestPettyTopupAction(input: { amount: number; note: str
     if (!holder) return { error: "คุณไม่ได้ถือเงินสดย่อย" };
     const amount = round2(Number(input.amount));
     if (!Number.isFinite(amount) || amount <= 0) return { error: "กรอกจำนวนเงินที่ขอเติม" };
-    const note = input.note.trim().slice(0, 300);
-    if (!note) return { error: "บอกเหตุผลที่ขอเติม (เช่น เงินในมือใกล้หมด)" };
+    const counted = input.counted === null || input.counted === undefined || (input.counted as unknown) === "" ? null : round2(Number(input.counted));
+    if (counted !== null && (!Number.isFinite(counted) || counted < 0)) return { error: "ยอดที่นับได้ไม่ถูกต้อง" };
+    let note = input.note.trim().slice(0, 300);
+    if (!note && counted === null) return { error: "บอกเหตุผลที่ขอเติม (เช่น เงินในมือใกล้หมด)" };
     const needsCeo = await holderIsHr(orgId, holder.id);
     const created = await withRequestsTenant(orgId, async (tx) => {
       const dup = await tx.moneyPettyTopup.findFirst({ where: { orgId, holderUserId: holder.id, status: "pending" }, select: { id: true } });
       if (dup) return null;
-      const t = await tx.moneyPettyTopup.create({ data: { orgId, holderUserId: holder.id, holderName: holder.name, amount, note, requestedByUserId: session.userId, requestedByName: holder.name, needsCeo } });
-      await insertEvent(tx, orgId, { byUserId: session.userId, byName: holder.name, action: "petty", summary: `ขอเติมเงินสดย่อย ${holder.name} ${baht(amount)} · ${note}` });
+      const used = await pettySpentSince(tx, orgId, holder.id);
+      const balance = round2((await pettyBalances(tx, orgId)).get(holder.id) ?? 0);
+      if (!note) note = `เติมเท่าที่ใช้ไป ${used.count} รายการ`;
+      const t = await tx.moneyPettyTopup.create({
+        data: {
+          orgId, holderUserId: holder.id, holderName: holder.name, amount, note, requestedByUserId: session.userId, requestedByName: holder.name, needsCeo,
+          spentSince: used.spent, balanceAtRequest: balance, breakdown: used.breakdown as unknown as object, ...(counted !== null ? { counted } : {}),
+        },
+      });
+      const diff = counted === null ? 0 : round2(counted - balance);
+      await insertEvent(tx, orgId, { byUserId: session.userId, byName: holder.name, action: "petty", summary: `ขอเติมเงินสดย่อย ${holder.name} ${baht(amount)} · ใช้ไปตั้งแต่เติมครั้งก่อน ${baht(used.spent)}${counted !== null ? ` · นับเงินได้ ${baht(counted)} (ระบบ ${baht(balance)}${Math.abs(diff) > 0.005 ? ` ${diff < 0 ? "ขาด" : "เกิน"} ${baht(Math.abs(diff))}` : " ตรง"})` : ""} · ${note}` });
       return t;
     });
     if (!created) return { error: "มีคำขอเติมเงินที่รออนุมัติอยู่แล้ว — รอผล หรือยกเลิกอันเดิมก่อน" };
@@ -1885,6 +2165,15 @@ export async function decidePettyTopupAction(input: { id: string; outcome: "appr
       let entryId: string | null = null;
       if (input.outcome === "approve") {
         const how = input.method === "cash" ? "ให้เงินสด" : "โอนเงิน";
+        // นับเงินจริงตอนขอได้ไม่ตรงกับระบบ — บันทึกส่วนต่างแยกเป็น "ปรับยอด" ก่อนเติม (ไม่ปนกับยอดที่ใช้จริง)
+        if (t.counted !== null && t.balanceAtRequest !== null) {
+          const diff = round2(Number(t.counted) - Number(t.balanceAtRequest));
+          if (Math.abs(diff) > 0.005) {
+            await tx.moneyPettyCashEntry.create({
+              data: { orgId, holderUserId: t.holderUserId, holderName: t.holderName, kind: "adjust", delta: diff, note: `นับเงินจริงตอนขอเติม ได้ ${baht(Number(t.counted))} ระบบ ${baht(Number(t.balanceAtRequest))} — ${diff < 0 ? "เงินขาด" : "เงินเกิน"} ${baht(Math.abs(diff))}`, byUserId: session.userId, byName },
+            });
+          }
+        }
         const e = await tx.moneyPettyCashEntry.create({
           data: { orgId, holderUserId: t.holderUserId, holderName: t.holderName, kind: "top_up", delta: t.amount, note: `อนุมัติคำขอเติม · ${how}${note ? ` · ${note}` : ""}`, attachments: attachments as unknown as object, byUserId: session.userId, byName },
         });
@@ -1986,6 +2275,8 @@ export async function addPettySpendAction(input: {
   whtPercent?: number;
   payeeName?: string;
   payeeKind?: "person" | "company" | null;
+  /** ร้านไม่มีบิล: ใบรับรองแทนใบเสร็จ (รูปที่แนบ = รูปของที่ซื้อ/หน้าร้าน) */
+  noReceipt?: unknown;
 }): Promise<Result> {
   try {
     const session = await guard();
@@ -2012,9 +2303,16 @@ export async function addPettySpendAction(input: {
     const spentOn = normalizeDate(input.spentOn);
     if (!spentOn || spentOn > bangkokToday()) return { error: "วันที่จ่ายไม่ถูกต้อง" };
     const attachments = cleanAttachments(orgId, input.attachments, ["receipt", "evidence"]);
-    if (attachments.length === 0) return { error: "แนบรูปใบเสร็จ / บิล" };
+    if (attachments.length === 0) return { error: input.noReceipt ? "ไม่มีบิล: แนบรูปของที่ซื้อ หรือรูปหน้าร้าน" : "แนบรูปใบเสร็จ / บิล" };
     // บริษัทเปิด "ซื้อของเองต้องมีคนตรวจ" (ตั้งค่าเบิกจ่าย & OT) — ปิด = แบบเดิม ไม่ต้องตรวจ
-    const needReview = (await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId))).pettySpendReview;
+    const pettySettings = await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId));
+    const needReview = pettySettings.pettySpendReview;
+    let noReceipt: NoReceipt | null = null;
+    if (input.noReceipt) {
+      const nr = cleanNoReceipt(input.noReceipt, { max: pettySettings.noReceiptMax, signedName: holder.name, today: bangkokToday(), expectTotal: bill });
+      if ("error" in nr) return nr;
+      noReceipt = nr.value;
+    }
     const res = await withRequestsTenant(orgId, async (tx) => {
       const balance = (await pettyBalances(tx, orgId)).get(holder.id) ?? 0;
       if (amount > balance + 0.005) return { error: `เงินในมือไม่พอ (เหลือ ${baht(balance)}) — กด “ขอเติมเงิน” ก่อน` } as const;
@@ -2035,9 +2333,10 @@ export async function addPettySpendAction(input: {
           ...(hasTax
             ? { billAmount: tax.bill, vatAmount: tax.vat, whtPercent: tax.whtPercent, whtAmount: tax.wht, payeeName: whtPercent > 0 ? payeeName : payeeName || null, payeeKind: whtPercent > 0 ? payeeKind : null }
             : {}),
+          ...(noReceipt ? { noReceipt: noReceipt as unknown as object } : {}),
         },
       });
-      await insertEvent(tx, orgId, { byUserId: session.userId, byName: holder.name, action: "petty", summary: `จ่ายจากเงินสดย่อย ${holder.name} ${baht(amount)} · ${input.category} · ${title}${hasTax ? ` · บิล ${baht(tax.bill)}${tax.vat ? ` VAT ${baht(tax.vat)}` : ""}${tax.wht ? ` หัก ณ ที่จ่าย ${tax.whtPercent}% ${baht(tax.wht)}` : ""}` : ""}${needReview ? " · รอตรวจ" : ""}` });
+      await insertEvent(tx, orgId, { byUserId: session.userId, byName: holder.name, action: "petty", summary: `จ่ายจากเงินสดย่อย ${holder.name} ${baht(amount)} · ${input.category} · ${title}${noReceipt ? ` · ไม่มีบิล: ใบรับรองแทนใบเสร็จ (${noReceipt.seller})` : ""}${hasTax ? ` · บิล ${baht(tax.bill)}${tax.vat ? ` VAT ${baht(tax.vat)}` : ""}${tax.wht ? ` หัก ณ ที่จ่าย ${tax.whtPercent}% ${baht(tax.wht)}` : ""}` : ""}${needReview ? " · รอตรวจ" : ""}` });
       return { ok: true, entryId: entry.id } as const;
     });
     if ("error" in res) return { error: res.error ?? "ทำไม่สำเร็จ" };
@@ -2169,8 +2468,19 @@ export async function saveSettingsAction(input: RequestSettings): Promise<Result
       if (above !== null && (!Number.isFinite(above) || above < 0)) return { error: `เกณฑ์ ${ceo} ของ ${KIND_META[k].label} ไม่ถูกต้อง` };
       approvalRoutes[k] = { mode, ceoAbove: mode === "ceo" ? null : above };
     }
+    // วงเงินรายคน — รับเฉพาะคนในบริษัทนี้ · ใบรับรองแทนใบเสร็จ: ว่าง = ไม่เปิด
+    const limits = parseSpendLimits(input.spendLimits);
+    const limitUserIds = [...new Set(limits.flatMap((r) => r.userIds))];
+    const realUsers = new Set(limitUserIds.length ? (await prisma.user.findMany({ where: { orgId, id: { in: limitUserIds } }, select: { id: true } })).map((u) => u.id) : []);
+    const spendLimits = limits.map((r) => ({ ...r, userIds: r.userIds.filter((u) => realUsers.has(u)) }));
+    const noReceiptMax = input.noReceiptMax === null || input.noReceiptMax === undefined || (input.noReceiptMax as unknown) === "" ? null : round2(Number(input.noReceiptMax));
+    if (noReceiptMax !== null && (!Number.isFinite(noReceiptMax) || noReceiptMax <= 0 || noReceiptMax > 100_000)) return { error: "ยอดสูงสุดของใบรับรองแทนใบเสร็จไม่ถูกต้อง" };
     const byName = await nameOf(session.userId);
     const data = {
+      spendLimits: spendLimits as unknown as object,
+      cashConfirmMode: !!input.cashConfirmMode,
+      noReceiptMax,
+      autoCloseClear: !!input.autoCloseClear,
       approvalRoutes,
       otRates: rates,
       advanceCapMode: input.advanceCapMode,
@@ -2190,7 +2500,7 @@ export async function saveSettingsAction(input: RequestSettings): Promise<Result
         byUserId: session.userId,
         byName,
         action: "settings",
-        summary: `ตั้งค่า: อนุมัติ ${(Object.keys(approvalRoutes) as RequestKind[]).map((k) => `${KIND_META[k].short} ${ceoText(routeText(approvalRoutes[k]), ceo)}`).join(", ")} · OT ${rates.map((r) => `${r.label} ${r.percent}%`).join(", ")} · เพดานเบิกล่วงหน้า ${input.advanceCapMode === "none" ? "ไม่จำกัด" : input.advanceCapMode === "baht" ? baht(capValue) : `${capValue} วัน`} · VAT ${vat}% · ซื้อของเองจากเงินสดย่อย${input.pettySpendReview ? "ต้องมีคนตรวจ" : "ไม่ต้องตรวจ"} · ค่า OT ${input.otRoundBaht ? "ปัดขึ้นเป็นบาท" : "คิดถึงสตางค์"} · วิธีคิด OT ${input.otRateMode === "flat" ? "อัตราเดียว (ไม่คูณ %)" : "ตามตาราง %"}`,
+        summary: `ตั้งค่า: อนุมัติ ${(Object.keys(approvalRoutes) as RequestKind[]).map((k) => `${KIND_META[k].short} ${ceoText(routeText(approvalRoutes[k]), ceo)}`).join(", ")} · OT ${rates.map((r) => `${r.label} ${r.percent}%`).join(", ")} · เพดานเบิกล่วงหน้า ${input.advanceCapMode === "none" ? "ไม่จำกัด" : input.advanceCapMode === "baht" ? baht(capValue) : `${capValue} วัน`} · VAT ${vat}% · ซื้อของเองจากเงินสดย่อย${input.pettySpendReview ? "ต้องมีคนตรวจ" : "ไม่ต้องตรวจ"} · ค่า OT ${input.otRoundBaht ? "ปัดขึ้นเป็นบาท" : "คิดถึงสตางค์"} · วิธีคิด OT ${input.otRateMode === "flat" ? "อัตราเดียว (ไม่คูณ %)" : "ตามตาราง %"} · วงเงินรายคน ${spendLimits.filter((r) => r.active).length ? spendLimits.filter((r) => r.active).map((r) => `${r.name} ครั้งละ ${baht(r.perRequest)} สัปดาห์ละ ${baht(r.perWeek)} (${r.userIds.length} คน)`).join(", ") : "ไม่ใช้"} · ใบรับรองแทนใบเสร็จ ${noReceiptMax === null ? "ไม่เปิด" : `ใบละไม่เกิน ${baht(noReceiptMax)}`} · จ่ายเงินสด${input.cashConfirmMode ? "ให้ผู้รับกดยืนยัน" : "ต้องแนบรูป"} · ยอดตรงปิดเอง ${input.autoCloseClear ? "เปิด" : "ปิด"}`,
       });
     });
     revalidatePath("/requests");

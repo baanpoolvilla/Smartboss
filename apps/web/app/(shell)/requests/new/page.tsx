@@ -3,8 +3,8 @@ import { prisma } from "@smartboss/database";
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { listLinkableWorkOrders, listPeople, listProperties, loadSettings, workerCompanyOtPercent } from "@/modules/requests/lib/data";
 import { canManageVendors, requestsPage } from "@/modules/requests/lib/page";
-import { withRequestsTenant, toVendor } from "@/modules/requests/lib/db";
-import { RequestForm } from "@/modules/requests/components/request-form";
+import { loadRequests, withRequestsTenant, toVendor } from "@/modules/requests/lib/db";
+import { RequestForm, type EditInitial } from "@/modules/requests/components/request-form";
 import { usesSalaryModule } from "@/modules/requests/lib/pay-privacy";
 import { KINDS, bangkokToday, type RequestKind } from "@/modules/requests/lib/types";
 import { readSettings as readSalarySettings, withSalaryTenant } from "@/modules/salary/lib/db";
@@ -22,10 +22,37 @@ const ROLE_TH: Record<string, string> = {
 const roleLabel = (roles: string[]) => roles.map((r) => ROLE_TH[r]).find(Boolean) ?? null;
 
 /** ยื่นคำขอ — ประเภทที่เห็นขึ้นกับสิทธิ์: ทุกคนเบิกค่าใช้จ่าย/เบิกไปก่อนของตัวเองได้ · OT เบิกล่วงหน้า ช่างภายนอก = คนที่ลงให้คนอื่นได้ */
-export default async function NewRequestPage({ searchParams }: { searchParams: Promise<{ kind?: string }> }) {
+export default async function NewRequestPage({ searchParams }: { searchParams: Promise<{ kind?: string; from?: string }> }) {
   const ceo = await ceoTitle();
   const { session, viewer } = await requestsPage();
   const sp = await searchParams;
+  // เบิกซ้ำรายการเดิม (ผู้ใช้ 22/11/2569 — ของประจำ น้ำแข็ง แก๊ส) — เอาข้อความ/ยอด/บ้าน/หมวดจากใบเดิมของตัวเองมาเติม ไม่เอาไฟล์/วันที่
+  const [source] = sp.from && /^[0-9a-f-]{36}$/.test(sp.from)
+    ? await withRequestsTenant(session.orgId, (tx) => loadRequests(tx, session.orgId, { id: sp.from, kind: { in: ["expense", "cash_advance"] }, OR: [{ createdBy: session.userId }, { beneficiaryUserId: session.userId }] }, 1))
+    : [];
+  const repeat: EditInitial | undefined = source
+    ? {
+        beneficiaryUserId: source.beneficiaryUserId ?? "",
+        onBehalf: source.beneficiaryUserId !== session.userId,
+        workDate: bangkokToday(),
+        otStart: "",
+        otEnd: "",
+        rateId: "",
+        amount: source.kind === "expense" ? "" : String(source.amount),
+        title: source.title,
+        detail: source.detail,
+        lines: source.kind === "expense" ? (source.lines.length ? source.lines.map((l) => ({ item: l.item, amount: String(l.amount), ...(l.propertyId ? { propertyId: l.propertyId } : {}) })) : [{ item: source.title, amount: String(source.amount) }]) : [],
+        propertyId: source.propertyId ?? "",
+        workOrderId: "",
+        vendorId: "",
+        vendorName: "",
+        vatOn: false,
+        whtPercent: 0,
+        files: [],
+        category: source.category ?? "",
+        noReceipt: null,
+      }
+    : undefined;
   const kinds = KINDS.filter((k) => (k === "expense" || k === "cash_advance" ? true : viewer.canFileOthers));
   const [people, properties, workOrders, vendors, settings, me] = await Promise.all([
     viewer.canFileOthers ? listPeople(session.orgId) : Promise.resolve([]),
@@ -48,11 +75,12 @@ export default async function NewRequestPage({ searchParams }: { searchParams: P
           return `เบิกวันนี้ → หักคืนในเงินเดือนรอบ ${periodLabel(p)} (${thaiDate(d.startsOn, false)}–${thaiDate(d.endsOn, false)} จ่าย ${thaiDate(d.payDate, false)})`;
         })
       : null;
-  const initialKind = KINDS.includes(sp.kind as RequestKind) ? (sp.kind as RequestKind) : null;
+  const initialKind = source ? source.kind : KINDS.includes(sp.kind as RequestKind) ? (sp.kind as RequestKind) : null;
 
   return (
-    <AppScaffold title="ยื่นคำขอ" backHref="/requests" width="max-w-none">
+    <AppScaffold title={source ? `เบิกซ้ำ: ${source.title}` : "ยื่นคำขอ"} backHref="/requests" width="max-w-none">
       <RequestForm
+        initial={repeat}
         kinds={kinds}
         initialKind={initialKind}
         me={{ userId: session.userId, name: me?.name ?? "" }}

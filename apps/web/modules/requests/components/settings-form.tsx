@@ -7,13 +7,14 @@ import { Loader2, Plus, Trash2 } from "lucide-react";
 import { saveSettingsAction } from "../actions";
 import { KIND_META, KINDS, routeText, type AdvanceCapMode, type ApprovalRoute, type OtRate, type OtRateMode, type RequestKind, type RequestSettings } from "../lib/types";
 import { Notice } from "./ui";
+import { WorkloadSettings, type WorkloadState } from "./workload-settings";
 
 import { useCeoTitle } from "@/lib/ceo-title-client";
 import { ceoText } from "@/lib/ceo-title-shared";
 const field = "h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm text-(--ink)";
 const fieldNoW = field.replace("w-full ", "");
 
-export function SettingsForm({ initial }: { initial: RequestSettings }) {
+export function SettingsForm({ initial, people = [] }: { initial: RequestSettings; people?: { userId: string; name: string; isWorker: boolean }[] }) {
   const ceo = useCeoTitle();
   const router = useRouter();
   const [busy, start] = useTransition();
@@ -35,6 +36,13 @@ export function SettingsForm({ initial }: { initial: RequestSettings }) {
   const [otRoundBaht, setOtRoundBaht] = useState(initial.otRoundBaht);
   const [otRateMode, setOtRateMode] = useState<OtRateMode>(initial.otRateMode);
   const [clearDays, setClearDays] = useState(String(initial.clearDueDays));
+  const [workload, setWorkload] = useState<WorkloadState>({
+    spendLimits: initial.spendLimits,
+    cashConfirmMode: initial.cashConfirmMode,
+    noReceiptOn: initial.noReceiptMax !== null,
+    noReceiptMax: initial.noReceiptMax === null ? "" : String(initial.noReceiptMax),
+    autoCloseClear: initial.autoCloseClear,
+  });
 
   function save() {
     setError(null);
@@ -52,6 +60,10 @@ export function SettingsForm({ initial }: { initial: RequestSettings }) {
         pettySpendReview: pettyReview,
         otRoundBaht,
         otRateMode,
+        spendLimits: workload.spendLimits,
+        cashConfirmMode: workload.cashConfirmMode,
+        noReceiptMax: workload.noReceiptOn ? Number(workload.noReceiptMax.replace(/,/g, "")) : null,
+        autoCloseClear: workload.autoCloseClear,
       });
       if (!res.ok) {
         setError(res.error);
@@ -204,6 +216,8 @@ export function SettingsForm({ initial }: { initial: RequestSettings }) {
           </label>
         )}
       </section>
+
+      <WorkloadSettings value={workload} onChange={setWorkload} people={people} />
 
       <section className="flex flex-col gap-2 rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4">
         <h2 className="text-sm font-bold text-(--ink)">เงินสดย่อย</h2>

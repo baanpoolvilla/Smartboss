@@ -34,7 +34,7 @@ function TaxLine({ tax, paid }: { tax: { bill: number; vat: number; whtPercent: 
   );
 }
 
-const KIND_LABEL = { top_up: "รับเงินเติม", spend: "จ่ายเงิน", return: "รับเงินทอนคืน", adjust: "ปรับยอด (นับเงินจริง)" } as const;
+const KIND_LABEL = { top_up: "รับเงินเติม", spend: "จ่ายเงิน", return: "รับเงินทอนคืน", adjust: "ปรับยอด (นับเงินจริง)", income: "รับเงินเข้า" } as const;
 
 /**
  * เงินสดย่อย — แอดมิน/HR แต่ละคนถือเงินก้อนของตัวเอง ยอดคงเหลือ = เติม + รับคืน − จ่าย ± ปรับ
@@ -171,7 +171,7 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
                       <span className="font-semibold text-(--ink)">{e.holderName}</span>
                       {e.category && <span className="ml-1.5 rounded-full bg-(--bg-soft) px-2 py-0.5 text-xs text-(--ink-soft)">{e.category}</span>}
                       <div className="text-(--ink)">{e.note}</div>
-                      {e.tax && <TaxLine tax={e.tax} paid={-e.delta} />}
+                      {e.tax && <TaxLine tax={e.tax} paid={-e.delta} />}{e.noReceipt && <span className="ml-1 rounded-full bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-900">ไม่มีบิล · ใบรับรองแทนใบเสร็จ ({e.noReceipt.seller})</span>}
                     </div>
                     <div className="shrink-0 text-sm font-bold tabular-nums text-(--danger)">{baht(-e.delta)}</div>
                   </div>
@@ -231,7 +231,7 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
               const isMe = h.userId === session.userId;
               return (
                 <PettyHolderCard
-                  tax={{ review: reqSettings.pettySpendReview, vatPercent: reqSettings.vatPercent, whtRates: reqSettings.whtRates.filter((r) => r > 0) }}
+                  tax={{ review: reqSettings.pettySpendReview, vatPercent: reqSettings.vatPercent, whtRates: reqSettings.whtRates.filter((r) => r > 0), noReceiptMax: reqSettings.noReceiptMax }}
                   key={h.userId}
                   holder={h}
                   isMe={isMe && viewer.isPettyHolder}
@@ -401,7 +401,7 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
                       </>
                     )}
                   </div>
-                  {e.tax && <TaxLine tax={e.tax} paid={-e.delta} />}
+                  {e.tax && <TaxLine tax={e.tax} paid={-e.delta} />}{e.noReceipt && <span className="ml-1 rounded-full bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-900">ไม่มีบิล · ใบรับรองแทนใบเสร็จ ({e.noReceipt.seller})</span>}
                   {e.voided && <div className="text-xs font-medium text-red-700">ยกเลิก · {e.voided.byName} · {e.voided.reason}</div>}
                   {!e.voided && !e.requestId && (petty.adjust || (e.holderUserId === session.userId && (!e.review || e.review.status === "pending"))) && <VoidPettyButton id={e.id} />}
                 </li>

@@ -3,6 +3,7 @@ import { prisma } from "@smartboss/database";
 
 import { notifyUsers, usersWithPermission } from "@/modules/maintenance/data/notify";
 import { REQ_PERMS } from "../permissions";
+import { pettyHolderIds } from "./holders";
 import { KIND_META, baht, type ApproverLevel, type RequestKind } from "./types";
 
 /**
@@ -48,7 +49,8 @@ export async function notifyApprovers(orgId: string, r: Brief, level: ApproverLe
 }
 
 export async function notifyPayers(orgId: string, r: Brief, exclude: string[]) {
-  const ids = await usersWithPermission(orgId, REQ_PERMS.pay);
+  // คนถือเงินสดย่อยจ่ายจากเงินในมือได้ — ได้แจ้งเตือนด้วย เคสรีบไม่ต้องรอ HR คนเดียว (ผู้ใช้ 22/11/2569)
+  const ids = [...new Set([...(await usersWithPermission(orgId, REQ_PERMS.pay)), ...(await pettyHolderIds(orgId))])];
   await notifyUsers(
     orgId,
     ids.filter((id) => !exclude.includes(id)),

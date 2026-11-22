@@ -5,7 +5,8 @@ import { REQ_PERMS } from "@/modules/requests/permissions";
 import { usersWithPermission } from "@/modules/maintenance/data/notify";
 import { pettyBalances, withRequestsTenant } from "@/modules/requests/lib/db";
 import { listPettyHolders } from "@/modules/requests/lib/holders";
-import { canDecide, canSetOtAmount, listVisibleRequests, needsOtAmount } from "@/modules/requests/lib/data";
+import { canDecide, canSetOtAmount, listVisibleRequests, loadSettings, needsOtAmount } from "@/modules/requests/lib/data";
+import { PayQueue, type QueueItem } from "@/modules/requests/components/pay-queue";
 import { beneficiaryLabel, isOpen, payableByHolder, pettyAccess, requestsPage, statusOf } from "@/modules/requests/lib/page";
 import { RequestsHome, type ListRow } from "@/modules/requests/components/request-list";
 import { canSeePay, maskRequest, payPrivacy } from "@/modules/requests/lib/pay-privacy";
@@ -52,7 +53,8 @@ export default async function RequestsPage({ searchParams }: { searchParams: Pro
     : [];
   const ceoIds = new Set(await usersWithPermission(session.orgId, REQ_PERMS.approveCeo));
   const pureHr = (await usersWithPermission(session.orgId, REQ_PERMS.approve)).filter((id) => !ceoIds.has(id));
-  return <Body all={all} viewer={viewer} today={today} month={month} petty={petty} pureHr={pureHr} createdCount={createdCount} awaitingAmount={awaitingAmount} />;
+  const cashConfirm = (await loadSettings(session.orgId)).cashConfirmMode;
+  return <Body all={all} viewer={viewer} today={today} month={month} petty={petty} pureHr={pureHr} createdCount={createdCount} awaitingAmount={awaitingAmount} cashConfirm={cashConfirm} />;
 }
 
 async function Body({
@@ -64,6 +66,7 @@ async function Body({
   pureHr,
   createdCount,
   awaitingAmount,
+  cashConfirm,
 }: {
   all: ReturnType<typeof maskRequest>[] | null;
   viewer: Awaited<ReturnType<typeof requestsPage>>["viewer"];
@@ -73,6 +76,7 @@ async function Body({
   pureHr: string[];
   createdCount: number;
   awaitingAmount: Map<string, boolean>;
+  cashConfirm: boolean;
 }) {
   const ceo = await ceoTitle();
   if (!all) {
@@ -130,6 +134,17 @@ async function Body({
     };
   });
   const seesAll = viewer.canViewAll || viewer.canApprove || viewer.canApproveCeo || viewer.canPay;
+  // คิวจ่ายรวดเดียว (ผู้ใช้ 22/11/2569) — บริษัทเปิด "จ่ายเงินสดไม่ต้องถ่ายรูป" · พนักงานที่มีบัญชี · ใบที่อนุมัติแล้ว หรือที่ฉันอนุมัติพร้อมจ่ายได้
+  const queueItems: QueueItem[] =
+    cashConfirm && (viewer.canPay || viewer.isPettyHolder)
+      ? live
+          .filter(
+            (r) =>
+              (r.kind === "expense" || r.kind === "cash_advance" || r.kind === "advance") && r.beneficiaryKind === "staff" && !!r.beneficiaryUserId && r.beneficiaryUserId !== viewer.userId && !r.payHidden &&
+              ((r.status === "approved" && round2(r.netAmount - r.paidTotal) > 0.005) || (r.status === "pending" && r.approverLevel === "hr" && !r.needCeo && canDecide(r, viewer))),
+          )
+          .map((r) => ({ id: r.id, code: r.code, title: r.title, beneficiaryName: r.beneficiaryName, meta: [r.propertyName, r.category].filter(Boolean).join(" · "), amount: round2(r.netAmount - r.paidTotal), pending: r.status === "pending", autoApproved: !!r.limitRuleId }))
+      : [];
 
   const stats = [
     {
@@ -158,6 +173,7 @@ async function Body({
       showPayTab={viewer.canPay || viewer.isPettyHolder}
       showAllTab={seesAll}
       showApproveTab={viewer.canApprove || viewer.canApproveCeo}
+      queue={queueItems.length > 0 ? <PayQueue items={queueItems} holders={petty} canPayCash={viewer.canPay} myUserId={viewer.userId} /> : null}
     />
   );
 }

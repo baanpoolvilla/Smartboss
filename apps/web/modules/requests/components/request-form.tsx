@@ -19,7 +19,9 @@ import {
   type RequestKind,
   type RequestSettings,
   activeOtRates,
+  PETTY_CATEGORIES,
 } from "../lib/types";
+import { NO_RECEIPT_REASONS } from "../lib/spend-rules";
 import { FilePicker } from "./file-picker";
 import { PersonPicker, type PickItem } from "./person-picker";
 import { KindChip, MoneyRow, Notice } from "./ui";
@@ -57,7 +59,7 @@ export interface EditInitial {
   amount: string;
   title: string;
   detail: string;
-  lines: { item: string; amount: string }[];
+  lines: { item: string; amount: string; propertyId?: string }[];
   propertyId: string;
   workOrderId: string;
   vendorId: string;
@@ -65,6 +67,10 @@ export interface EditInitial {
   vatOn: boolean;
   whtPercent: number;
   files: UploadedFile[];
+  /** หมวดค่าใช้จ่าย (เบิกค่าใช้จ่าย/เบิกไปซื้อของ) */
+  category?: string;
+  /** ร้านไม่มีบิล (ใบรับรองแทนใบเสร็จ) */
+  noReceipt?: { seller: string; sellerAddress: string; reason: string } | null;
 }
 
 export function RequestForm({
@@ -117,7 +123,15 @@ export function RequestForm({
   const [amount, setAmount] = useState(initial?.amount ?? "");
   const [title, setTitle] = useState(initial?.title ?? "");
   const [detail, setDetail] = useState(initial?.detail ?? "");
-  const [lines, setLines] = useState<{ item: string; amount: string }[]>(initial?.lines.length ? initial.lines : [{ item: "", amount: "" }]);
+  const [lines, setLines] = useState<{ item: string; amount: string; propertyId?: string }[]>(initial?.lines.length ? initial.lines : [{ item: "", amount: "" }]);
+  const [category, setCategory] = useState(initial?.category ?? "");
+  // ซื้อของให้หลายบ้านในใบเดียว — เลือกบ้านต่อรายการ (ผู้ใช้ 22/11/2569)
+  const [multiHouse, setMultiHouse] = useState(Boolean(initial?.lines.some((l) => l.propertyId)));
+  // ร้านไม่มีบิล — ใบรับรองแทนใบเสร็จ (บริษัทเปิดในตั้งค่า)
+  const [noBill, setNoBill] = useState(Boolean(initial?.noReceipt));
+  const [nrSeller, setNrSeller] = useState(initial?.noReceipt?.seller ?? "");
+  const [nrAddress, setNrAddress] = useState(initial?.noReceipt?.sellerAddress ?? "");
+  const [nrReason, setNrReason] = useState(initial?.noReceipt?.reason ?? NO_RECEIPT_REASONS[0]);
   // ใบเสร็จที่อ่านยอดได้แล้ว นับต่อยอดเงิน — แยกแถวที่พิมพ์เองไว้ก่อนแนบ ออกจากแถวที่ใบเสร็จใบใหม่ต้องเพิ่ม
   const receiptAmountsRead = useRef(new Map<number, number>());
   const [propertyId, setPropertyId] = useState(initial?.propertyId ?? "");
@@ -160,6 +174,9 @@ export function RequestForm({
     setExtraPreviews({});
     setPendingNames([]);
     setTyping(null);
+    setCategory("");
+    setMultiHouse(false);
+    setNoBill(false);
   }
 
   const linesTotal = useMemo(() => round2(lines.reduce((s, l) => s + (Number.isFinite(parseMoney(l.amount)) ? parseMoney(l.amount) : 0), 0)), [lines]);
@@ -189,13 +206,14 @@ export function RequestForm({
         otRateId: rateId,
         amount: Number.isFinite(routeAmount) ? routeAmount : 0,
         exceptRequestId: editId,
+        category: category || null,
       });
       if (n !== seq.current) return;
       setChecking(false);
       if (res.ok) setPreview(res.preview);
     }, 350);
     return () => clearTimeout(t);
-  }, [kind, effectiveBeneficiary, workDate, otStart, otEnd, rateId, routeAmount, editId]);
+  }, [kind, effectiveBeneficiary, workDate, otStart, otEnd, rateId, routeAmount, editId, category]);
 
   // คนที่ทำด้วยกัน: ตรวจ + คิดเงินทีละคน (กติกาเดียวกับคนแรก)
   const groupMode = kind === "ot" && !editId;
@@ -280,12 +298,17 @@ export function RequestForm({
         otEnd,
         otRateId: rateId,
         amount: kind === "contractor" || kind === "advance" || kind === "cash_advance" ? parseMoney(amount) : usesLines ? linesTotal : undefined,
-        lines: usesLines ? lines.map((l) => ({ item: l.item, amount: parseMoney(l.amount) })) : undefined,
+        lines: usesLines ? lines.map((l) => ({ item: l.item, amount: parseMoney(l.amount), propertyId: multiHouse ? l.propertyId || null : null })) : undefined,
         propertyId: propertyId || null,
         workOrderId: workOrderId || null,
         vatOn,
         whtPercent,
-        attachments: files,
+        attachments: noBill ? files.filter((f) => f.role !== "receipt") : files,
+        category: selfKind ? category || null : null,
+        noReceipt:
+          kind === "expense" && noBill
+            ? { date: workDate, seller: nrSeller, sellerAddress: nrAddress, reason: nrReason, items: lines.map((l) => ({ item: l.item, amount: parseMoney(l.amount) })) }
+            : undefined,
       };
       if (groupCount > 0) {
         const wages: Record<string, number> = {};
@@ -624,6 +647,38 @@ export function RequestForm({
           {/* เบิกค่าใช้จ่าย */}
           {kind === "expense" && (
             <>
+              {settings.noReceiptMax !== null && (
+                <label className="flex items-start gap-3 rounded-(--radius) border border-(--line) px-3 py-2.5 text-sm">
+                  <input type="checkbox" className="mt-1 h-4 w-4" checked={noBill} onChange={(e) => setNoBill(e.target.checked)} />
+                  <span>
+                    ร้านไม่มีบิล (ตลาด / ร้านเล็ก)
+                    <span className="block text-xs text-(--ink-soft)">กรอกใบรับรองแทนใบเสร็จ + ถ่ายรูปของที่ซื้อ · ใบละไม่เกิน {baht(settings.noReceiptMax)}</span>
+                  </span>
+                </label>
+              )}
+              {noBill ? (
+                <div className="flex flex-col gap-3 rounded-(--radius) border border-amber-200 bg-amber-50/60 p-3">
+                  <div className="text-sm font-semibold text-(--ink)">ใบรับรองแทนใบเสร็จรับเงิน</div>
+                  <label className={labelCls}>
+                    <span className={labelText}>ซื้อจากร้าน / คนขาย</span>
+                    <input className={field} value={nrSeller} onChange={(e) => setNrSeller(e.target.value)} placeholder="เช่น แผงผักป้าแดง ตลาดเช้าบ่อผุด" maxLength={120} />
+                  </label>
+                  <label className={labelCls}>
+                    <span className={labelText}>ที่ตั้งร้าน <span className="font-normal text-(--ink-soft)">(ถ้ามี)</span></span>
+                    <input className={field} value={nrAddress} onChange={(e) => setNrAddress(e.target.value)} maxLength={200} />
+                  </label>
+                  <label className={labelCls}>
+                    <span className={labelText}>ทำไมไม่มีบิล</span>
+                    <select className={field} value={nrReason} onChange={(e) => setNrReason(e.target.value)}>
+                      {NO_RECEIPT_REASONS.map((r) => (
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <FilePicker role="evidence" files={files} onChange={setFiles} label="รูปของที่ซื้อ หรือรูปหน้าร้าน *" hint="แทนบิล — ให้เห็นของและจำนวนชัด ๆ" today={today} />
+                  <span className="text-xs text-(--ink-soft)">รายการและยอดด้านล่างคือรายการในใบรับรอง · คนยื่นเป็นผู้รับรอง</span>
+                </div>
+              ) : (
               <FilePicker
                 role="receipt"
                 files={files}
@@ -654,18 +709,43 @@ export function RequestForm({
                   setTitle((t) => t || f.ai?.vendor || "");
                 }}
               />
+              )}
               <label className={labelCls}>
                 <span className={labelText}>เบิกค่าอะไร</span>
                 <input className={field} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="เช่น ค่าทางด่วน ไป–กลับ ร้านอะไหล่" maxLength={160} />
+              </label>
+              <label className={labelCls}>
+                <span className={labelText}>หมวด</span>
+                <select className={field} value={category} onChange={(e) => setCategory(e.target.value)} aria-label="หมวดค่าใช้จ่าย">
+                  <option value="">— เลือกหมวด —</option>
+                  {PETTY_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
               </label>
               <label className={labelCls}>
                 <span className={labelText}>วันที่จ่าย (ตามใบเสร็จ)</span>
                 <input type="date" className={field} value={workDate} max={today} onChange={(e) => setWorkDate(e.target.value)} />
               </label>
               <div className="flex flex-col gap-2">
-                <span className="text-sm font-semibold text-(--ink)">รายการ</span>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-(--ink)">รายการ</span>
+                  {properties.length > 1 && (
+                    <label className="flex items-center gap-2 text-xs text-(--ink-soft)">
+                      <input type="checkbox" className="h-4 w-4" checked={multiHouse} onChange={(e) => setMultiHouse(e.target.checked)} /> ซื้อให้หลายบ้าน (เลือกบ้านต่อรายการ)
+                    </label>
+                  )}
+                </div>
                 {lines.map((l, i) => (
-                  <div key={i} className="flex gap-2">
+                  <div key={i} className="flex flex-wrap gap-2 sm:flex-nowrap">
+                    {multiHouse && (
+                      <select className={`${fieldNoW} w-full sm:w-40`} value={l.propertyId ?? ""} aria-label={`บ้านของรายการที่ ${i + 1}`} onChange={(e) => setLines(lines.map((x, j) => (j === i ? { ...x, propertyId: e.target.value } : x)))}>
+                        <option value="">บ้าน…</option>
+                        {properties.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                    )}
                     <input className={`${fieldNoW} min-w-0 flex-1`} placeholder="รายการ" value={l.item} aria-label={`รายการที่ ${i + 1}`} onChange={(e) => setLines(lines.map((x, j) => (j === i ? { ...x, item: e.target.value } : x)))} />
                     <input className={`${fieldNoW} w-28 shrink-0 text-right`} inputMode="decimal" placeholder="บาท" value={l.amount} aria-label={`จำนวนเงินรายการที่ ${i + 1}`} onChange={(e) => setLines(lines.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))} />
                     {lines.length > 1 && (
@@ -697,6 +777,15 @@ export function RequestForm({
               <label className={labelCls}>
                 <span className={labelText}>ขอเงิน (บาท)</span>
                 <input inputMode="decimal" className={field} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" />
+              </label>
+              <label className={labelCls}>
+                <span className={labelText}>หมวด</span>
+                <select className={field} value={category} onChange={(e) => setCategory(e.target.value)} aria-label="หมวดค่าใช้จ่าย">
+                  <option value="">— เลือกหมวด —</option>
+                  {PETTY_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
               </label>
               {placeFields}
               <label className={labelCls}>
@@ -856,7 +945,18 @@ export function RequestForm({
             )}
           </div>
 
-          {preview?.approverLevel && (
+          {preview?.limit && (
+            <div className={`rounded-(--radius-lg) border p-4 text-sm ${preview.limit.auto ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
+              <div className="text-xs text-(--ink-soft)">วงเงินของ{onBehalf && person ? ` ${person.name}` : "ฉัน"} · {preview.limit.name}</div>
+              <div className="mt-0.5 text-lg font-bold tabular-nums text-(--ink)">เหลือ {baht(preview.limit.left)}</div>
+              <div className="text-xs text-(--ink-soft)">จาก {baht(preview.limit.perWeek)} ต่อสัปดาห์ · ครั้งละไม่เกิน {baht(preview.limit.perRequest)}</div>
+              <div className={`mt-2 font-semibold ${preview.limit.auto ? "text-emerald-800" : "text-amber-900"}`}>
+                {preview.limit.auto ? "อยู่ในวงเงิน · ผ่านทันที ไม่ต้องรออนุมัติ" : (preview.limit.reason ?? "ใส่ยอดเพื่อดูว่าอยู่ในวงเงินไหม")}
+              </div>
+            </div>
+          )}
+
+          {preview?.approverLevel && !preview.limit?.auto && (
             <div className="rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4 text-sm">
               <div className="font-bold text-(--ink)">ใครอนุมัติ</div>
               <div className="mt-1 text-(--ink-soft)">
@@ -888,7 +988,7 @@ export function RequestForm({
             className="inline-flex h-12 items-center justify-center gap-2 rounded-(--radius) bg-(--app) px-4 text-base font-semibold text-white hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-            {editId ? `บันทึกการแก้ไข${total > 0 ? ` ${baht(total)}` : ""}` : kind === "ot" ? (groupCount > 0 ? `ส่งให้ HR (${groupCount} คน)` : "ส่งให้ HR ตรวจ") : `ส่งขออนุมัติ${total > 0 ? ` ${baht(total)}` : ""}`}
+            {editId ? `บันทึกการแก้ไข${total > 0 ? ` ${baht(total)}` : ""}` : kind === "ot" ? (groupCount > 0 ? `ส่งให้ HR (${groupCount} คน)` : "ส่งให้ HR ตรวจ") : preview?.limit?.auto ? `ส่งคำขอ ${baht(total)} · ผ่านทันที` : `ส่งขออนุมัติ${total > 0 ? ` ${baht(total)}` : ""}`}
           </button>
           <p className="text-center text-xs text-(--ink-soft)">
             {thaiDate(workDate)} · แก้ไขได้จนกว่าจะมีคนอนุมัติ

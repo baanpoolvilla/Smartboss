@@ -15,6 +15,7 @@ import {
   type UploadedFile,
 } from "../actions";
 import { METHOD_LABEL, SIMILAR_SLIP_PREFIX, baht, parseMoney, round2, thaiDate, type PaymentMethod } from "../lib/types";
+import { NO_RECEIPT_REASONS } from "../lib/spend-rules";
 import { FilePicker } from "./file-picker";
 import { MoneyRow, Notice } from "./ui";
 
@@ -92,6 +93,7 @@ export function PayPanel({
   today,
   payrollPeriod,
   title = "บันทึกการจ่ายเงิน",
+  noPhotoOk = false,
 }: {
   id: string;
   outstanding: number;
@@ -101,6 +103,8 @@ export function PayPanel({
   today: string;
   payrollPeriod: string;
   title?: string;
+  /** จ่ายเงินสด/เงินสดย่อยไม่ต้องแนบรูป — ผู้รับกด "ได้รับเงินแล้ว" เอง (บริษัทเปิดในตั้งค่า + ผู้รับเป็นพนักงานที่มีบัญชี) */
+  noPhotoOk?: boolean;
 }) {
   const { busy, error, run } = useRun();
   const [amount, setAmount] = useState(String(outstanding));
@@ -170,7 +174,14 @@ export function PayPanel({
         </label>
       )}
       {method !== "payroll" && (
-        <FilePicker role="slip" files={slips} onChange={setSlips} label={method === "transfer" ? "สลิปโอน" : "หลักฐานรับเงิน"} hint={method === "transfer" ? "แคปหน้าจอสลิปจากแอปธนาคาร" : "รูปผู้รับเซ็นรับเงิน หรือรูปตอนส่งเงิน"} today={today} />
+        <FilePicker
+          role="slip"
+          files={slips}
+          onChange={setSlips}
+          label={method === "transfer" ? "สลิปโอน" : noPhotoOk ? "หลักฐานรับเงิน (ไม่บังคับ)" : "หลักฐานรับเงิน"}
+          hint={method === "transfer" ? "แคปหน้าจอสลิปจากแอปธนาคาร" : noPhotoOk ? "ไม่ต้องถ่ายก็ได้ — ผู้รับจะได้แจ้งเตือนให้กด “ได้รับเงินแล้ว” ในมือถือ" : "รูปผู้รับเซ็นรับเงิน หรือรูปตอนส่งเงิน"}
+          today={today}
+        />
       )}
       {slipMismatch && <Notice tone="warn">ยอดในสลิป {baht(slipTotal!)} ไม่ตรงกับยอดที่จะบันทึก {baht(amt)} — ตรวจสลิปอีกครั้ง</Notice>}
       {short && (
@@ -199,7 +210,7 @@ export function PayPanel({
       <button
         type="button"
         className={primary}
-        disabled={busy || !Number.isFinite(amt) || amt <= 0 || pettyShort || (method !== "payroll" && slips.length === 0) || (short && !note.trim())}
+        disabled={busy || !Number.isFinite(amt) || amt <= 0 || pettyShort || (method !== "payroll" && slips.length === 0 && !(noPhotoOk && (method === "cash" || method === "petty_cash"))) || (short && !note.trim())}
         onClick={() => pay(false)}
       >
         {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
@@ -280,12 +291,18 @@ export function ConfirmReceivedButton({ id, amount }: { id: string; amount: numb
 
 /* ───────── เคลียร์เงินที่เบิกไปก่อน ───────── */
 
-export function ClearingSubmit({ id, paid, dueDate, today, maxAgeDays }: { id: string; paid: number; dueDate: string | null; today: string; maxAgeDays: number }) {
+export function ClearingSubmit({ id, paid, dueDate, today, maxAgeDays, noReceiptMax = null, title = "" }: { id: string; paid: number; dueDate: string | null; today: string; maxAgeDays: number; noReceiptMax?: number | null; title?: string }) {
   const { busy, error, run } = useRun();
   const [spent, setSpent] = useState("");
   const [returned, setReturned] = useState("");
   const [note, setNote] = useState("");
   const [receipts, setReceipts] = useState<UploadedFile[]>([]);
+  // ร้านไม่มีบิล — ใบรับรองแทนใบเสร็จ (บริษัทเปิดในตั้งค่า)
+  const [noBill, setNoBill] = useState(false);
+  const [photos, setPhotos] = useState<UploadedFile[]>([]);
+  const [nrSeller, setNrSeller] = useState("");
+  const [nrItem, setNrItem] = useState(title);
+  const [nrReason, setNrReason] = useState<string>(NO_RECEIPT_REASONS[0]);
   const s = parseMoney(spent);
   const r = parseMoney(returned || "0");
   const diff = Number.isFinite(s) && Number.isFinite(r) ? round2(paid - s - r) : null;
@@ -297,18 +314,50 @@ export function ClearingSubmit({ id, paid, dueDate, today, maxAgeDays }: { id: s
         <h2 className="text-base font-bold text-(--ink)">ส่งใบเสร็จ + เงินทอน <span className="font-normal text-(--ink-soft)">(เบิกไป {baht(paid)})</span></h2>
         {dueDate && <p className={`text-xs ${overdue ? "font-semibold text-red-700" : "text-(--ink-soft)"}`}>{overdue ? "เลยกำหนดส่งแล้ว" : "ส่งภายใน"} {thaiDate(dueDate)}</p>}
       </div>
-      <FilePicker
-        role="clearing"
-        files={receipts}
-        onChange={setReceipts}
-        label="ใบเสร็จของที่ซื้อ"
-        today={today}
-        claimDate={today}
-        maxAgeDays={maxAgeDays}
-        onAiRead={(f) => {
-          if (!spent && f.ai?.amount) setSpent(String(f.ai.amount));
-        }}
-      />
+      {noReceiptMax !== null && (
+        <label className="flex items-start gap-3 rounded-(--radius) border border-(--line) px-3 py-2.5 text-sm">
+          <input type="checkbox" className="mt-1 h-4 w-4" checked={noBill} onChange={(e) => setNoBill(e.target.checked)} />
+          <span>
+            ร้านไม่มีบิล (ตลาด / ร้านเล็ก)
+            <span className="block text-xs text-(--ink-soft)">กรอกใบรับรองแทนใบเสร็จ + ถ่ายรูปของที่ซื้อ · ใบละไม่เกิน {baht(noReceiptMax)}</span>
+          </span>
+        </label>
+      )}
+      {noBill ? (
+        <div className="flex flex-col gap-3 rounded-(--radius) border border-amber-200 bg-amber-50/60 p-3">
+          <div className="text-sm font-semibold text-(--ink)">ใบรับรองแทนใบเสร็จรับเงิน</div>
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="font-semibold text-(--ink)">ซื้อจากร้าน / คนขาย</span>
+            <input className={field} value={nrSeller} onChange={(e) => setNrSeller(e.target.value)} placeholder="เช่น แผงผักป้าแดง ตลาดเช้าบ่อผุด" />
+          </label>
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="font-semibold text-(--ink)">ซื้ออะไร</span>
+            <input className={field} value={nrItem} onChange={(e) => setNrItem(e.target.value)} />
+          </label>
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="font-semibold text-(--ink)">ทำไมไม่มีบิล</span>
+            <select className={field} value={nrReason} onChange={(e) => setNrReason(e.target.value)}>
+              {NO_RECEIPT_REASONS.map((x) => (
+                <option key={x} value={x}>{x}</option>
+              ))}
+            </select>
+          </label>
+          <FilePicker role="evidence" files={photos} onChange={setPhotos} label="รูปของที่ซื้อ หรือรูปหน้าร้าน *" hint="แทนบิล — ให้เห็นของและจำนวนชัด ๆ" today={today} />
+        </div>
+      ) : (
+        <FilePicker
+          role="clearing"
+          files={receipts}
+          onChange={setReceipts}
+          label="ใบเสร็จของที่ซื้อ"
+          today={today}
+          claimDate={today}
+          maxAgeDays={maxAgeDays}
+          onAiRead={(f) => {
+            if (!spent && f.ai?.amount) setSpent(String(f.ai.amount));
+          }}
+        />
+      )}
       <div className="grid grid-cols-2 gap-3">
         <label className="flex flex-col gap-1.5 text-sm">
           <span className="font-semibold text-(--ink)">ใช้จริง (บาท)</span>
@@ -333,8 +382,39 @@ export function ClearingSubmit({ id, paid, dueDate, today, maxAgeDays }: { id: s
         <input className={field} value={note} onChange={(e) => setNote(e.target.value)} />
       </label>
       {error && <Notice tone="danger">{error}</Notice>}
-      <button type="button" className={primary} disabled={busy || !Number.isFinite(s) || s < 0 || (s > 0 && receipts.length === 0)} onClick={() => run(() => submitClearingAction({ id, spent: s, returned: Number.isFinite(r) ? r : 0, note, receipts }))}>
-        {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}ส่งให้ HR ตรวจ
+      <button
+        type="button"
+        className={primary}
+        disabled={busy || !Number.isFinite(s) || s < 0 || (s > 0 && (noBill ? photos.length === 0 || !nrSeller.trim() || !nrItem.trim() : receipts.length === 0))}
+        onClick={() =>
+          run(() =>
+            submitClearingAction({
+              id,
+              spent: s,
+              returned: Number.isFinite(r) ? r : 0,
+              note,
+              receipts: noBill ? photos : receipts,
+              noReceipt: noBill && s > 0 ? { date: today, seller: nrSeller, sellerAddress: "", reason: nrReason, items: [{ item: nrItem, amount: s }] } : undefined,
+            }),
+          )
+        }
+      >
+        {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}ส่งใบเสร็จ + เงินทอน
+      </button>
+    </section>
+  );
+}
+
+/** คนถือเงินสดย่อยที่จ่ายใบนี้ — ยอดตรงแล้ว กดรับเงินทอนครั้งเดียว ใบปิดเอง (ไม่ต้องรอ HR ตรวจ) */
+export function HolderChangeButton({ id, returned, spent }: { id: string; returned: number; spent: number }) {
+  const { busy, error, run } = useRun();
+  return (
+    <section className="flex flex-col gap-2 rounded-(--radius-lg) border-2 border-(--app) bg-(--bg) p-4">
+      <h2 className="text-base font-bold text-(--ink)">รับเงินทอน {baht(returned)}</h2>
+      <p className="text-xs text-(--ink-soft)">ใบเสร็จ {baht(spent)} + เงินทอน ตรงกับที่จ่ายไป · ได้รับเงินแล้วกด ใบนี้ปิดเอง เงินทอนเข้าเงินในมือของคุณ</p>
+      {error && <Notice tone="danger">{error}</Notice>}
+      <button type="button" className={primary} disabled={busy} onClick={() => run(() => confirmClearingAction({ id, returnedTo: null, note: "" }))}>
+        {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}ได้รับเงินทอน {baht(returned)}
       </button>
     </section>
   );
