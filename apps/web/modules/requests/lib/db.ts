@@ -297,6 +297,7 @@ export async function readSettings(tx: Tx, orgId: string): Promise<RequestSettin
     otRates: rates.length > 0 ? rates : DEFAULT_SETTINGS.otRates,
     advanceCapMode: (s.advanceCapMode as AdvanceCapMode) ?? "baht",
     advanceCapValue: num0(s.advanceCapValue),
+    unlinkedAllowed: s.unlinkedAllowed,
     advanceRules:
       parseAdvanceRules(s.advanceRules) ??
       legacyAdvanceRules((s.advanceCapMode as AdvanceCapMode) ?? "baht", num0(s.advanceCapValue), s.advanceCapPeriod === "half" ? "half" : "month", s.advanceWorkersOnly),

@@ -69,6 +69,9 @@ export interface EditInitial {
   whtPercent: number;
   /** จ่ายร้านไปเต็มแล้ว บริษัทออกภาษีให้ */
   whtBorne?: boolean;
+  /** คนที่ยังไม่มีในระบบ (พิมพ์ชื่อไว้ก่อน) */
+  pendingName?: string;
+  pendingKind?: "worker" | "staff";
   files: UploadedFile[];
   /** หมวดค่าใช้จ่าย (เบิกค่าใช้จ่าย/เบิกไปซื้อของ) */
   category?: string;
@@ -160,7 +163,13 @@ export function RequestForm({
   const [pendingWages, setPendingWages] = useState<Record<string, string>>({});
 
   const selfKind = kind === "expense" || kind === "cash_advance";
-  const effectiveBeneficiary = kind === "contractor" ? null : selfKind && !onBehalf ? me.userId : beneficiary || null;
+  // คนที่ยังไม่มีในระบบ: พิมพ์ชื่อไว้ก่อน ผูกทีหลัง (ทาง ข 22/11/2569 · บริษัทเปิดในตั้งค่า)
+  const [pendingName, setPendingName] = useState<string | null>(initial?.pendingName ?? null);
+  const [pendingKind, setPendingKind] = useState<"worker" | "staff">(initial?.pendingKind ?? "staff");
+  const canPend = settings.unlinkedAllowed && canFileOthers && (kind === "expense" || kind === "cash_advance" || kind === "advance");
+  const pendingActive = canPend && pendingName !== null && (kind === "advance" || onBehalf);
+  const pendingTyped = pendingActive ? (pendingName ?? "").trim() : "";
+  const effectiveBeneficiary = kind === "contractor" || pendingActive ? null : selfKind && !onBehalf ? me.userId : beneficiary || null;
   const person = people.find((p) => p.userId === effectiveBeneficiary) ?? null;
   const vendor = vendors.find((v) => v.id === vendorId) ?? null;
 
@@ -183,6 +192,7 @@ export function RequestForm({
     setCategory("");
     setMultiHouse(false);
     setNoBill(false);
+    setPendingName(null);
   }
 
   const linesTotal = useMemo(() => round2(lines.reduce((s, l) => s + (Number.isFinite(parseMoney(l.amount)) ? parseMoney(l.amount) : 0), 0)), [lines]);
@@ -196,7 +206,7 @@ export function RequestForm({
   const seq = useRef(0);
   useEffect(() => {
     if (!kind) return;
-    if (kind !== "contractor" && !effectiveBeneficiary) {
+    if (kind !== "contractor" && !effectiveBeneficiary && !pendingTyped) {
       setPreview(null);
       return;
     }
@@ -214,13 +224,14 @@ export function RequestForm({
         exceptRequestId: editId,
         category: category || null,
         whtBorne,
+        ...(pendingTyped ? { pendingName: pendingTyped, pendingKind } : {}),
       });
       if (n !== seq.current) return;
       setChecking(false);
       if (res.ok) setPreview(res.preview);
     }, 350);
     return () => clearTimeout(t);
-  }, [kind, effectiveBeneficiary, workDate, otStart, otEnd, rateId, routeAmount, editId, category, whtBorne]);
+  }, [kind, effectiveBeneficiary, workDate, otStart, otEnd, rateId, routeAmount, editId, category, whtBorne, pendingTyped, pendingKind]);
 
   // คนที่ทำด้วยกัน: ตรวจ + คิดเงินทีละคน (กติกาเดียวกับคนแรก)
   const groupMode = kind === "ot" && !editId;
@@ -312,6 +323,7 @@ export function RequestForm({
         vatOn,
         whtPercent,
         whtBorne,
+        ...(pendingTyped ? { pendingName: pendingTyped, pendingKind } : {}),
         attachments: noBill ? files.filter((f) => f.role !== "receipt") : files,
         category: selfKind ? category || null : null,
         noReceipt:
@@ -378,6 +390,41 @@ export function RequestForm({
       </div>
     );
   }
+
+  const pendingKinds = (["worker", "staff"] as const).filter((k) => kind !== "advance" || settings.advanceRules.who === "all" || settings.advanceRules.who === k);
+  const pendingBox = (
+    <div className="flex flex-col gap-2 rounded-(--radius) border border-amber-300 bg-amber-50 p-3">
+      <label className={labelCls}>
+        <span className={labelText}>ชื่อคนที่ยังไม่มีในระบบ</span>
+        <input className={field} value={pendingName ?? ""} onChange={(e) => setPendingName(e.target.value)} placeholder="ชื่อ-นามสกุล หรือชื่อที่เรียก" maxLength={120} autoFocus />
+      </label>
+      <div className="flex flex-wrap gap-2" role="group" aria-label="เป็นคนงานหรือพนักงาน">
+        {pendingKinds.map((k) => (
+          <button key={k} type="button" aria-pressed={pendingKind === k} onClick={() => setPendingKind(k)} className={`h-9 rounded-full px-3.5 text-sm ${pendingKind === k ? "bg-(--brand-navy) font-semibold text-white" : "border border-(--line) bg-(--bg)"}`}>
+            {k === "worker" ? "คนงานรายวัน" : "พนักงานรายเดือน"}
+          </button>
+        ))}
+      </div>
+      <span className="text-xs text-(--ink-soft)">อนุมัติและจ่ายได้ตามปกติ · เพิ่มคนนี้เข้าระบบแล้วกดผูกชื่อในใบ{kind === "advance" ? ` · เบิกล่วงหน้าต้องให้ ${ceo} อนุมัติ ยังไม่นับเพดานจนกว่าจะผูก` : ""}</span>
+      <button type="button" className="self-start text-xs font-medium text-(--app-strong) hover:underline" onClick={() => setPendingName(null)}>
+        เลือกจากรายชื่อแทน
+      </button>
+    </div>
+  );
+  const pendingLink =
+    canPend && !pendingActive ? (
+      <button
+        type="button"
+        className="-mt-1 self-start text-xs font-medium text-(--app-strong) hover:underline"
+        onClick={() => {
+          setPendingName("");
+          setBeneficiary("");
+          setPendingKind(pendingKinds.includes(kind === "advance" ? "worker" : "staff") ? (kind === "advance" ? "worker" : "staff") : pendingKinds[0]!);
+        }}
+      >
+        ＋ ยังไม่มีในระบบ? พิมพ์ชื่อไว้ก่อน
+      </button>
+    ) : null;
 
   // รายชื่อสำหรับช่องค้นหา — บรรทัดรองแยกคนชื่อซ้ำ (แผนก · บทบาท · อีเมล)
   const peopleItems = (exclude: string | null): PickItem[] =>
@@ -482,10 +529,15 @@ export function RequestForm({
                     </button>
                   )}
                 </div>
+              ) : pendingActive ? (
+                pendingBox
               ) : (
                 <PersonPicker label="ยื่นแทนใคร" items={peopleItems(null)} value={beneficiary} onChange={setBeneficiary} />
               )}
+              {onBehalf && pendingLink}
             </div>
+          ) : kind === "advance" && pendingActive ? (
+            pendingBox
           ) : (
             <PersonPicker
               label={kind === "ot" ? "ใครทำ OT" : "เบิกให้ใคร"}
@@ -495,6 +547,7 @@ export function RequestForm({
               hint={kind === "ot" ? "ลง OT ให้ตัวเองไม่ได้" : kind === "advance" && settings.advanceRules.who !== "all" ? (settings.advanceRules.who === "worker" ? "เบิกล่วงหน้าได้เฉพาะคนงานรายวัน" : "เบิกล่วงหน้าได้เฉพาะพนักงานรายเดือน") : "ขอให้ตัวเองไม่ได้"}
             />
           )}
+          {kind === "advance" && pendingLink}
           {groupMode && (effectiveBeneficiary || pendingList.length > 0 || typing !== null) && (
             <div className="flex flex-col gap-2 rounded-(--radius) border border-dashed border-(--line) p-3">
               {pendingList.length > 0 && (

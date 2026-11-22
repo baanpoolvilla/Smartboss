@@ -307,6 +307,8 @@ model MoneyRequestSettings {
   advanceWorkersOnly Boolean @default(false) @map("advance_workers_only")
   /// กติกาเบิกล่วงหน้า {who, monthStartDay, weekStart, worker:{mode,value,period,maxCount}, staff:{…}} — null = ใช้เพดานเดิมด้านบน
   advanceRules      Json?    @map("advance_rules")
+  /// เบิกค่าใช้จ่าย/เบิกไปซื้อของ/เบิกล่วงหน้า ให้คนที่ยังไม่มีในระบบได้ (พิมพ์ชื่อไว้ก่อน ผูกทีหลัง) — ปิด = แบบเดิม
+  unlinkedAllowed   Boolean  @default(false) @map("unlinked_allowed")
   /// [0,1,2,3,5] — % หัก ณ ที่จ่ายให้เลือก
   whtRates          Json     @map("wht_rates")
   vatPercent        Decimal  @default(7) @map("vat_percent") @db.Decimal(5, 2)

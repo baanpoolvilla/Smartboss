@@ -3,6 +3,7 @@
 import { Plus, Trash2 } from "lucide-react";
 
 import type { CompanyAccount } from "../lib/company-accounts";
+import { useCeoTitle } from "@/lib/ceo-title-client";
 
 const field = "h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) px-3 text-sm text-(--ink)";
 
@@ -20,6 +21,7 @@ export interface AccountsState {
  * บัญชีธนาคารบริษัท → เลือกตอนบันทึกโอน · สวิตช์ "หัก ณ ที่จ่ายต้องโอนจากบัญชีบริษัท" (ปิด = แบบเดิม)
  */
 export function CompanyAccountsSettings({ value, onChange }: { value: AccountsState; onChange: (v: AccountsState) => void }) {
+  const ceo = useCeoTitle();
   const set = (patch: Partial<AccountsState>) => onChange({ ...value, ...patch });
   const setAcc = (i: number, patch: Partial<CompanyAccount>) => set({ companyAccounts: value.companyAccounts.map((a, j) => (j === i ? { ...a, ...patch } : a)) });
   return (
@@ -58,7 +60,7 @@ export function CompanyAccountsSettings({ value, onChange }: { value: AccountsSt
         <input type="checkbox" className="mt-1 h-4 w-4" checked={value.whtBorneAllowed} onChange={(e) => set({ whtBorneAllowed: e.target.checked })} />
         <span>
           ให้ลงใบที่จ่ายร้านไปเต็มแล้ว (ไม่ได้หัก) — บริษัทออกภาษีให้
-          <span className="block text-xs text-(--ink-soft)">ใบ “จ่ายช่าง / ร้านค้า” มีช่องติ๊ก “จ่ายไปเต็มแล้ว” · ระบบคิดภาษีที่บริษัทต้องนำส่งเอง (เช่น จ่ายไป 1,500 → ภาษี 46.39) · ต้องให้ CEO อนุมัติทุกใบ · 50 ทวิ ติ๊ก “ออกให้ครั้งเดียว”</span>
+          <span className="block text-xs text-(--ink-soft)">ใบ “จ่ายช่าง / ร้านค้า” มีช่องติ๊ก “จ่ายไปเต็มแล้ว” · ระบบคิดภาษีที่บริษัทต้องนำส่งเอง (เช่น จ่ายไป 1,500 → ภาษี 46.39) · ต้องให้ {ceo} อนุมัติทุกใบ · 50 ทวิ ติ๊ก “ออกให้ครั้งเดียว”</span>
         </span>
       </label>
 

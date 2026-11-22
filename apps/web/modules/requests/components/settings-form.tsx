@@ -30,6 +30,7 @@ export function SettingsForm({ initial, people = [] }: { initial: RequestSetting
   const setRoute = (k: RequestKind, patch: Partial<{ mode: "hr" | "ceo"; above: string }>) => setRoutes((r) => ({ ...r, [k]: { ...r[k], ...patch } }));
   const toRoute = (k: RequestKind): ApprovalRoute => ({ mode: routes[k].mode, ceoAbove: routes[k].mode === "ceo" || routes[k].above.trim() === "" ? null : Number(routes[k].above.replace(/,/g, "")) });
   const [adv, setAdv] = useState<AdvanceRulesState>(() => toAdvanceForm(initial.advanceRules));
+  const [unlinkedAllowed, setUnlinkedAllowed] = useState(initial.unlinkedAllowed);
   const todayBkk = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
   const [wht, setWht] = useState(initial.whtRates.join(", "));
   const [vat, setVat] = useState(String(initial.vatPercent));
@@ -65,6 +66,7 @@ export function SettingsForm({ initial, people = [] }: { initial: RequestSetting
         advanceCapMode: initial.advanceCapMode,
         advanceCapValue: initial.advanceCapValue,
         advanceRules: fromAdvanceForm(adv),
+        unlinkedAllowed,
         whtRates: wht.split(/[,\s]+/).filter(Boolean).map(Number),
         vatPercent: Number(vat),
         receiptMaxAgeDays: Number(maxAge),
@@ -186,6 +188,17 @@ export function SettingsForm({ initial, people = [] }: { initial: RequestSetting
       </section>
 
       <AdvanceRulesSettings value={adv} onChange={setAdv} today={todayBkk} />
+
+      <section className="flex flex-col gap-3 rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4">
+        <h2 className="text-sm font-bold text-(--ink)">คนที่ยังไม่มีในระบบ</h2>
+        <label className="flex items-start gap-3 text-sm text-(--ink)">
+          <input type="checkbox" className="mt-1 h-4 w-4" checked={unlinkedAllowed} onChange={(e) => setUnlinkedAllowed(e.target.checked)} />
+          <span>
+            ยื่นเบิกให้คนที่ยังไม่มีในระบบได้ (พิมพ์ชื่อไว้ก่อน ผูกทีหลัง)
+            <span className="block text-xs text-(--ink-soft)">ใช้กับเบิกค่าใช้จ่าย · เบิกไปซื้อของ · เบิกล่วงหน้า · คนที่ยื่นแทนคนอื่นได้เท่านั้น · อนุมัติและจ่ายได้ตามปกติ ใบจะมีป้าย “ยังไม่มีในระบบ” จนกว่าจะผูกชื่อ · เบิกล่วงหน้าต้องให้ {ceo} อนุมัติ และยังไม่นับเพดาน/ยังไม่หักคืนจนกว่าจะผูก (ผูกแล้วลงยอดหักคืนให้เอง)</span>
+          </span>
+        </label>
+      </section>
 
       <WorkloadSettings value={workload} onChange={setWorkload} people={people} />
 

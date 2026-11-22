@@ -11,7 +11,8 @@ import { withWorkforceTenant } from "@/modules/report_task/lib/db/workforce-cale
 import { loadScorePeriodConfig } from "@/lib/score-period-config";
 import { scorePeriodOf } from "@/lib/score-period";
 import { REQ_PERMS } from "@/modules/requests/permissions";
-import { canDecide, canSee, canSetOtAmount, isUnlinkedOt, listPeople, needsOtAmount, workerRateOn } from "@/modules/requests/lib/data";
+import { canDecide, canSee, canSetOtAmount, isUnlinkedOt, isUnlinkedPerson, listPeople, needsOtAmount, workerRateOn } from "@/modules/requests/lib/data";
+import { LinkPersonPanel } from "@/modules/requests/components/link-person";
 import { LinkWorkerPanel } from "@/modules/requests/components/link-worker";
 import { SetOtAmountPanel } from "@/modules/requests/components/set-ot-amount";
 import { EditStaffOtAmountPanel } from "@/modules/requests/components/edit-staff-ot-amount";
@@ -196,7 +197,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
   // ยอดซ่อน = จ่ายผ่านรอบเงินเดือน (ผู้ดูแลเงินเดือนทำ) ไม่ใช่ที่หน้านี้ — จ่ายเงินโดยไม่รู้ยอดไม่ได้
   const canPayHere = r.status === "approved" && !workerOt && !isBeneficiary && !payHidden && (viewer.canPay || viewer.isPettyHolder) && outstanding > 0.005;
   const methods: PaymentMethod[] = viewer.canPay
-    ? (["transfer", "cash", ...(holders.length ? (["petty_cash"] as PaymentMethod[]) : []), ...(r.beneficiaryKind === "staff" && r.kind !== "advance" && !(await usesSalaryModule(orgId)) ? (["payroll"] as PaymentMethod[]) : [])] as PaymentMethod[])
+    ? (["transfer", "cash", ...(holders.length ? (["petty_cash"] as PaymentMethod[]) : []), ...(r.beneficiaryKind === "staff" && !!r.beneficiaryUserId && r.kind !== "advance" && !(await usesSalaryModule(orgId)) ? (["payroll"] as PaymentMethod[]) : [])] as PaymentMethod[])
     : ["petty_cash"];
   const payHolders = viewer.canPay ? holders : holders.filter((h) => h.userId === session.userId);
   const manager = viewer.canApprove || viewer.canApproveCeo || viewer.canPay;
@@ -245,8 +246,9 @@ export default async function RequestDetailPage({ params, searchParams }: { para
     else {
       steps.push({ title: "HR จ่ายเงิน + หลักฐาน", sub: payHidden ? (r.kind === "ot" ? "รวมกับเงินเดือน (ผู้ดูแลเงินเดือนทำ)" : undefined) : r.paidTotal > 0 ? `จ่ายแล้ว ${baht(r.paidTotal)}${outstanding > 0.005 ? ` · เหลือ ${baht(outstanding)}` : ""}` : undefined, state: r.status === "paid" ? "done" : r.status === "approved" ? "now" : "todo" });
       if (r.kind === "cash_advance") steps.push({ title: "คนเบิกส่งใบเสร็จ + เงินทอน → HR ตรวจ", sub: r.clearedAt ? `ตรวจแล้ว · ${r.clearedByName}` : r.clearStatus === "submitted" ? "ส่งแล้ว รอ HR ตรวจ" : r.clearDueDate ? `ภายใน ${thaiDate(r.clearDueDate)}` : undefined, state: r.clearedAt ? "done" : r.status === "paid" ? "now" : "todo" });
-      if (r.beneficiaryKind !== "vendor" && !noAccount) steps.push({ title: "ผู้รับยืนยันได้รับเงิน", sub: r.receivedAt ? thaiDateTime(r.receivedAt) : undefined, state: r.receivedAt ? "done" : r.paidTotal > 0 && !r.payments.every((p) => p.method === "payroll") ? "now" : "todo" });
-      if (r.kind === "advance" && r.beneficiaryKind === "worker") steps.push({ title: "หักคืนจากค่าแรงอัตโนมัติ", sub: "ลงเป็น \"เบิกล่วงหน้า\" ในบัญชีค่าแรงแล้ว", state: r.status === "paid" ? "done" : "todo" });
+      if (r.beneficiaryKind !== "vendor" && !noAccount && !!r.beneficiaryUserId) steps.push({ title: "ผู้รับยืนยันได้รับเงิน", sub: r.receivedAt ? thaiDateTime(r.receivedAt) : undefined, state: r.receivedAt ? "done" : r.paidTotal > 0 && !r.payments.every((p) => p.method === "payroll") ? "now" : "todo" });
+      if (r.kind === "advance" && !r.beneficiaryUserId) steps.push({ title: "ผูกชื่อกับคนในระบบ แล้วระบบลงยอดหักคืนให้เอง", sub: "ยังไม่มีในระบบ — ยังไม่ได้หักคืน", state: r.status === "paid" ? "now" : "todo" });
+      else if (r.kind === "advance" && r.beneficiaryKind === "worker") steps.push({ title: "หักคืนจากค่าแรงอัตโนมัติ", sub: "ลงเป็น \"เบิกล่วงหน้า\" ในบัญชีค่าแรงแล้ว", state: r.status === "paid" ? "done" : "todo" });
       else if (r.deductAmount > 0) steps.push({ title: r.beneficiaryKind === "worker" ? "หักคืนจากค่าแรงอัตโนมัติ" : "หักคืนในงวดเงินเดือน", sub: r.deductedAt ? `หักแล้ว งวด ${r.deductedPeriod && PERIOD_RE.test(r.deductedPeriod) ? salaryPeriodLabel(r.deductedPeriod) : r.deductedPeriod}` : `${baht(r.deductAmount)}${deductRound ? ` · ${deductRound}` : ""}`, state: r.deductedAt || r.beneficiaryKind === "worker" ? "done" : "now" });
     }
   }
@@ -259,6 +261,15 @@ export default async function RequestDetailPage({ params, searchParams }: { para
     ? (await listPeople(orgId))
         .filter((p) => p.isWorker && p.userId !== r.createdBy)
         .map((p) => ({ id: p.userId, name: p.name, badge: "คนงาน", sub: [p.departmentName, p.email].filter(Boolean).join(" · "), keywords: p.email ?? "" }))
+    : [];
+  // ใบเบิกที่พิมพ์ชื่อไว้ก่อน (ทาง ข 22/11/2569) — คนลงใบ / HR / คนจ่าย ผูกกับคนในระบบได้ทุกสถานะ
+  const unlinkedPerson = isUnlinkedPerson(r);
+  const canLinkPerson = unlinkedPerson && (r.createdBy === session.userId || viewer.canApprove || viewer.canApproveCeo || viewer.canPay);
+  const linkPeople = canLinkPerson
+    ? (await listPeople(orgId))
+        .filter((p) => p.userId !== r.createdBy)
+        .sort((a, b) => Number(b.isWorker === (r.beneficiaryKind === "worker")) - Number(a.isWorker === (r.beneficiaryKind === "worker")))
+        .map((p) => ({ id: p.userId, name: p.name, badge: p.isWorker ? "คนงาน" : undefined, sub: [p.departmentName, p.isWorker ? "คนงานรายวัน" : "พนักงาน", p.email].filter(Boolean).join(" · "), keywords: p.email ?? "" }))
     : [];
   // HR ใส่เงินค่า OT ในใบ (คนลงใบใส่แค่ชื่อ+เวลา) — HR/CEO ที่ไม่ใช่คนลงใบ
   // + พนักงานที่ยังไม่มีเงินเดือนในระบบ ยื่นแบบไม่มียอด (ผู้ใช้ 8/11/2569) — ยอดพนักงานประจำใส่ได้เฉพาะคนที่เห็นยอด
@@ -331,7 +342,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
                 </div>
               </div>
               <dl className="mt-4 grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-                <div><dt className="text-xs text-(--ink-soft)">ของใคร</dt><dd className="font-medium text-(--ink)">{r.beneficiaryName} <span className="font-normal text-(--ink-soft)">({beneficiaryLabel(r)})</span>{unlinked && <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-900">ยังไม่มีในระบบ</span>}</dd></div>
+                <div><dt className="text-xs text-(--ink-soft)">ของใคร</dt><dd className="font-medium text-(--ink)">{r.beneficiaryName} <span className="font-normal text-(--ink-soft)">({beneficiaryLabel(r)})</span>{(unlinked || unlinkedPerson) && <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-900">ยังไม่มีในระบบ</span>}</dd></div>
                 <div><dt className="text-xs text-(--ink-soft)">ผู้ยื่น</dt><dd className="text-(--ink)">{r.createdByName} · {thaiDateTime(r.createdAt)}</dd></div>
                 <div><dt className="text-xs text-(--ink-soft)">{r.kind === "ot" ? "วันที่ทำ" : r.kind === "advance" ? "วันที่ขอ" : "วันที่"}</dt><dd className="text-(--ink)">{thaiDate(r.workDate)}{r.kind === "ot" && r.otMinutes ? ` · ${r.otStart}–${r.otEnd} (${hoursText(r.otMinutes)})` : ""}</dd></div>
                 {r.category && <div><dt className="text-xs text-(--ink-soft)">หมวด</dt><dd className="text-(--ink)">{r.category}</dd></div>}
@@ -529,6 +540,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
             {otEdit?.show && <EditStaffOtAmountPanel id={r.id} current={r.netAmount} canEdit={otEdit.canEdit} reason={otEdit.reason} />}
             {canSetWorker && <WorkerOtAmountPanel id={r.id} system={workerSystem} current={{ manual: r.otBaseKind === "manual", amount: r.netAmount }} />}
             {canLink && <LinkWorkerPanel id={r.id} typedName={r.beneficiaryName} workers={linkWorkers} optional />}
+            {canLinkPerson && <LinkPersonPanel id={r.id} typedName={r.beneficiaryName} typedKind={r.beneficiaryKind === "worker" ? "worker" : "staff"} people={linkPeople} paid={r.paidTotal > 0} />}
             {noAccount && r.status === "pending" && r.netAmount > 0 && canDecide(r, viewer) && (
               <Notice tone="warn">
                 <b>{r.beneficiaryName}</b> ยังไม่มีในระบบ — อนุมัติตอนนี้ได้เลย แล้วจ่ายเป็นเงินสด/โอน (ไม่เข้าบัญชีค่าแรง) · ถ้าอยากให้จ่ายพร้อมค่าแรง ให้ผูกชื่อก่อนแล้วค่อยอนุมัติ

@@ -215,6 +215,14 @@ export function canSee(r: RequestView, viewer: Viewer): boolean {
 }
 
 /** OT ที่ลงให้คนงานที่ยังไม่มีในระบบ (พิมพ์ชื่อไว้ก่อน) — ต้องผูกกับพนักงานจริงก่อนถึงจะอนุมัติ/คิดเงินได้ */
+/** ประเภทที่ยื่นให้คนที่ยังไม่มีในระบบได้ (พิมพ์ชื่อไว้ก่อน) — บริษัทเปิดในตั้งค่า */
+export const UNLINKABLE_KINDS = ["expense", "cash_advance", "advance"] as const;
+
+/** ใบเบิกของคนที่ยังไม่มีในระบบ ที่ยังรอผูกชื่อ (ยกเลิก/ไม่อนุมัติแล้วไม่ต้องผูก) */
+export function isUnlinkedPerson(r: { kind: string; status: string; beneficiaryUserId: string | null }): boolean {
+  return (UNLINKABLE_KINDS as readonly string[]).includes(r.kind) && !r.beneficiaryUserId && r.status !== "cancelled" && r.status !== "rejected";
+}
+
 export function isUnlinkedOt(r: { kind: string; status: string; beneficiaryUserId: string | null }): boolean {
   return r.kind === "ot" && r.status === "pending" && !r.beneficiaryUserId;
 }

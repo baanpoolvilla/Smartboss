@@ -393,6 +393,10 @@ export function statusInfo(r: {
       return { label: "อนุมัติ · รอจ่าย", tone: "info", next: "HR บันทึกจ่าย + แนบสลิป" };
     }
     case "paid": {
+      // พิมพ์ชื่อไว้ก่อน (ยังไม่มีในระบบ) — ยังไม่ได้ลงยอดหักคืน จนกว่าจะผูกชื่อ
+      if (r.beneficiaryUserId === null && r.kind === "advance") {
+        return { label: "จ่ายแล้ว · รอผูกชื่อก่อนหักคืน", tone: "warn", next: "เพิ่มคนนี้เข้าระบบ แล้วกดผูกชื่อในใบ" };
+      }
       if (r.kind === "ot" && r.beneficiaryKind === "worker" && r.beneficiaryUserId !== null) return { label: "เข้าบัญชีค่าแรงแล้ว", tone: "ok", next: "จ่ายพร้อมค่าแรงที่หน้าจ่ายเงินคนงาน" };
       if (r.kind === "advance" && r.beneficiaryKind === "worker") return { label: "จ่ายแล้ว · หักจากค่าแรงอัตโนมัติ", tone: "ok", next: "ระบบคนงานหักจากค่าแรงวันถัดไปเอง" };
       if (r.kind === "cash_advance" && r.clearStatus !== "cleared") {
@@ -470,6 +474,8 @@ export interface RequestSettings {
   advanceCapValue: number;
   /** กติกาเบิกล่วงหน้า (ใครเบิกได้ · เพดานแยกคนงาน/พนักงาน · รอบ · จำนวนครั้ง) — ไม่เคยตั้ง = แปลงจากเพดานเดิม */
   advanceRules: AdvanceRules;
+  /** ยื่นเบิกให้คนที่ยังไม่มีในระบบได้ (พิมพ์ชื่อไว้ก่อน ผูกทีหลัง) — ปิด = แบบเดิม */
+  unlinkedAllowed: boolean;
   whtRates: number[];
   vatPercent: number;
   receiptMaxAgeDays: number;
@@ -512,6 +518,7 @@ export const DEFAULT_SETTINGS: RequestSettings = {
     worker: { mode: "baht", value: 3000, period: "month", maxCount: null },
     staff: { mode: "baht", value: 3000, period: "month", maxCount: null },
   },
+  unlinkedAllowed: false,
   whtRates: [0, 1, 2, 3, 5],
   vatPercent: 7,
   receiptMaxAgeDays: 60,

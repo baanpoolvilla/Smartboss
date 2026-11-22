@@ -16,6 +16,8 @@ import {
   approverLevelFor,
   canDecide,
   canSee,
+  isUnlinkedPerson,
+  UNLINKABLE_KINDS,
   eligibleApprovers,
   employmentOf,
   monthlySalaryOn,
@@ -245,6 +247,9 @@ export interface PreviewInput {
   category?: string | null;
   /** ช่าง/ร้าน: จ่ายไปเต็มแล้ว บริษัทออกภาษีให้ — ต้องให้ CEO อนุมัติ */
   whtBorne?: boolean;
+  /** คนที่ยังไม่มีในระบบ (พิมพ์ชื่อไว้ก่อน) — เบิกค่าใช้จ่าย/เบิกไปซื้อของ/เบิกล่วงหน้า */
+  pendingName?: string;
+  pendingKind?: "worker" | "staff";
 }
 
 export interface Preview {
@@ -435,9 +440,17 @@ async function computePreview(session: OrgSession, input: PreviewInput, settings
     }
   }
 
-  if (who || input.kind === "contractor") {
+  // คนที่ยังไม่มีในระบบ: ยังไม่นับเพดาน/วงเงิน (ไม่รู้ว่าเป็นใคร) · เบิกล่วงหน้าต้องให้ CEO อนุมัติ
+  const pending = !who && (UNLINKABLE_KINDS as readonly string[]).includes(input.kind) && !!input.pendingName?.trim() && settings.unlinkedAllowed;
+  if (pending) {
+    p.beneficiaryName = input.pendingName!.trim();
+    p.beneficiaryKind = input.pendingKind === "worker" ? "worker" : "staff";
+    if (input.kind === "advance" && !canAdvance(settings.advanceRules, p.beneficiaryKind)) p.blocks.push(settings.advanceRules.who === "worker" ? "บริษัทตั้งให้เบิกล่วงหน้าได้เฉพาะคนงานรายวัน" : "บริษัทตั้งให้เบิกล่วงหน้าได้เฉพาะพนักงานรายเดือน");
+    p.warns.push(input.kind === "advance" ? `ยังไม่มีในระบบ — ยังไม่นับเพดาน และยังไม่หักคืนจนกว่าจะผูกชื่อ · ใบนี้ต้องให้ ${ceo} อนุมัติ` : "ยังไม่มีในระบบ — ผูกชื่อในใบได้ทีหลัง เมื่อเพิ่มคนนี้เข้าระบบแล้ว");
+  }
+  if (who || input.kind === "contractor" || pending) {
     const amt = input.kind === "ot" ? (p.amount ?? (Number(input.amount) || 0)) : Number(input.amount) || 0;
-    const route = input.kind === "contractor" && input.whtBorne && settings.whtBorneAllowed ? { level: "ceo" as const, needCeo: false } : await approverLevelFor(orgId, input.kind, session.userId, who?.userId ?? null, amt, settings.approvalRoutes);
+    const route = (input.kind === "contractor" && input.whtBorne && settings.whtBorneAllowed) || (pending && input.kind === "advance") ? { level: "ceo" as const, needCeo: false } : await approverLevelFor(orgId, input.kind, session.userId, who?.userId ?? null, amt, settings.approvalRoutes);
     p.approverLevel = route.level;
     p.needCeo = route.needCeo;
     const ids = await eligibleApprovers(orgId, p.approverLevel, session.userId, who?.userId ?? null);
@@ -535,6 +548,9 @@ export interface CreateInput {
   noReceipt?: unknown;
   /** ช่าง/ร้าน: จ่ายไปเต็มแล้ว ไม่ได้หัก — บริษัทออกภาษีให้ (บริษัทเปิดในตั้งค่า · CEO อนุมัติ) */
   whtBorne?: boolean;
+  /** คนที่ยังไม่มีในระบบ (พิมพ์ชื่อไว้ก่อน ผูกทีหลัง) — บริษัทเปิดในตั้งค่า */
+  pendingName?: string;
+  pendingKind?: "worker" | "staff";
 }
 
 /** ข้อมูลของใบที่ผ่านการตรวจแล้ว — ใช้ทั้งตอนยื่นและตอนแก้ไข (กติกาเดียวกันทุกข้อ) */
@@ -586,7 +602,11 @@ async function prepareRequest(session: OrgSession, input: CreateInput, exceptReq
   if (!KIND_META[kind]) return { error: "ประเภทคำขอไม่ถูกต้อง" };
   const fileOthers = hasPermission(session, REQ_PERMS.fileOthers);
   if ((kind === "ot" || kind === "advance" || kind === "contractor") && !fileOthers) return { error: "ไม่มีสิทธิ์ลงรายการนี้ให้คนอื่น" };
-  const beneficiaryUserId = kind === "contractor" ? null : (input.beneficiaryUserId || session.userId);
+  // คนที่ยังไม่มีในระบบ: พิมพ์ชื่อไว้ก่อน (ต้องมีสิทธิ์ยื่นแทนคนอื่น · บริษัทเปิดในตั้งค่า — ตรวจด้านล่าง)
+  const pendingName = (UNLINKABLE_KINDS as readonly string[]).includes(kind) && !input.beneficiaryUserId ? String(input.pendingName ?? "").trim().slice(0, 120) : "";
+  if (pendingName && !fileOthers) return { error: "ไม่มีสิทธิ์ยื่นแทนคนอื่น" };
+  const pendingKind: BeneficiaryKind = input.pendingKind === "worker" ? "worker" : "staff";
+  const beneficiaryUserId = kind === "contractor" || pendingName ? null : (input.beneficiaryUserId || session.userId);
   if (beneficiaryUserId && beneficiaryUserId !== session.userId && !fileOthers) return { error: "ยื่นเบิกได้เฉพาะของตัวเอง" };
 
   const title = input.title.trim().slice(0, 160);
@@ -598,9 +618,10 @@ async function prepareRequest(session: OrgSession, input: CreateInput, exceptReq
   if (workDate > today) return { error: "เลือกวันที่ในอนาคตไม่ได้" };
 
   const settings = await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId));
+  if (pendingName && !settings.unlinkedAllowed) return { error: "บริษัทยังไม่เปิดให้ยื่นให้คนที่ยังไม่มีในระบบ (ตั้งค่า OT & เบิกจ่าย)" };
   const preview = await computePreview(
     session,
-    { kind, beneficiaryUserId, workDate, otStart: input.otStart, otEnd: input.otEnd, otRateId: input.otRateId, amount: input.amount, exceptRequestId },
+    { kind, beneficiaryUserId, workDate, otStart: input.otStart, otEnd: input.otEnd, otRateId: input.otRateId, amount: input.amount, exceptRequestId, pendingName, pendingKind: pendingKind === "worker" ? "worker" : "staff" },
     settings,
   );
   if (preview.blocks.length > 0) return { error: preview.blocks[0]! };
@@ -697,7 +718,7 @@ async function prepareRequest(session: OrgSession, input: CreateInput, exceptReq
   // ช่างภายนอก: เทียบเกณฑ์ CEO กับยอดตามบิลร้าน (ค่าจ้าง + VAT ก่อนหัก ณ ที่จ่าย) — ผู้ใช้ 30/10/2569 "ตามยอดจริงก่อนหักลบ"
   const routeAmount = kind === "contractor" ? round2(amount + vat.vat) : net;
   // บริษัทออกภาษีให้ = CEO อนุมัติเท่านั้น (เสียเงินเพิ่ม · กันกลายเป็นทางจ่ายเงินสดเรื่อย ๆ)
-  const { level, needCeo } = whtBorne ? { level: "ceo" as const, needCeo: false } : await approverLevelFor(orgId, kind, session.userId, beneficiaryUserId, routeAmount, settings.approvalRoutes);
+  const { level, needCeo } = whtBorne || (pendingName && kind === "advance") ? { level: "ceo" as const, needCeo: false } : await approverLevelFor(orgId, kind, session.userId, beneficiaryUserId, routeAmount, settings.approvalRoutes);
   const isOt = kind === "ot";
   return {
     workDate,
@@ -773,7 +794,7 @@ export async function createRequestAction(input: CreateInput): Promise<Result<{ 
         const summary =
           kind === "ot"
             ? `ลง OT ให้ ${f.beneficiaryName} ${thai(prep.workDate)} ${f.otStart}–${f.otEnd} (${hoursText(f.otMinutes ?? 0)}) ${awaitingAmountLabel(kind, f) ? "· รอ HR ใส่ยอด" : baht(f.netAmount)}`
-            : `ยื่น${KIND_META[kind].label} ${baht(f.netAmount)} ให้ ${f.beneficiaryName}${f.whtBorne ? ` · จ่ายร้านไปแล้ว บริษัทออกภาษีให้ ${baht(f.whtAmount)}` : ""}`;
+            : `ยื่น${KIND_META[kind].label} ${baht(f.netAmount)} ให้ ${f.beneficiaryName}${!f.beneficiaryUserId && kind !== "contractor" ? " (ยังไม่มีในระบบ — รอผูกชื่อ)" : ""}${f.whtBorne ? ` · จ่ายร้านไปแล้ว บริษัทออกภาษีให้ ${baht(f.whtAmount)}` : ""}`;
         await insertEvent(tx, orgId, { requestId: row.id, byUserId: session.userId, byName, action: "create", summary });
         if (autoRule && lim?.shown) {
           await insertEvent(tx, orgId, { requestId: row.id, byUserId: session.userId, byName: "ระบบ", action: "approve", summary: `ผ่านอัตโนมัติ · อยู่ในวงเงิน “${autoRule.name}” (ครั้งละไม่เกิน ${baht(autoRule.perRequest)} · สัปดาห์นี้ใช้แล้ว ${baht(lim.shown.used)} จาก ${baht(autoRule.perWeek)})` });
@@ -975,6 +996,76 @@ async function prepareUnlinkedOt(session: OrgSession, input: CreateInput, name: 
  * ผูกใบ OT "รอผูกชื่อ" กับคนงานที่เพิ่มเข้าระบบแล้ว — ตรวจใหม่ทุกข้อเหมือนตอนลง (ลงเวลาเข้างาน เวลาทับ ลง OT ซ้ำในหน้าคนงาน)
  * ผ่านแล้วคิดค่า OT จากค่าแรงของคนงาน แล้วเข้าคิวอนุมัติตามปกติ · ทำได้: คนที่ลงใบนี้ หรือ HR/CEO
  */
+/**
+ * ผูกใบเบิก (เบิกค่าใช้จ่าย/เบิกไปซื้อของ/เบิกล่วงหน้า) ที่พิมพ์ชื่อไว้ก่อน กับคนในระบบ (ผู้ใช้ 22/11/2569 ทาง ข)
+ * ผูกได้ทุกสถานะ (รออนุมัติ / อนุมัติ / จ่ายแล้ว) — ยอดเดิมไม่เปลี่ยน
+ * จ่ายไปแล้ว: เบิกล่วงหน้าคนงาน = ลงบัญชีค่าแรง (หักจากค่าแรงเอง) · พนักงาน = ตั้งยอดรอหักเงินเดือน
+ *   เบิกไปซื้อของที่ตรวจแล้วขาดคืน: เหมือนกัน · ชนิดที่พิมพ์ไว้ผิด (คนงาน↔พนักงาน) แก้ตามคนจริง
+ * เบิกล่วงหน้า: เกินเพดาน/จำนวนครั้งของรอบ = ผูกได้ แต่จดในประวัติให้เห็น (ใบอนุมัติ/จ่ายไปแล้ว)
+ */
+export async function linkPersonAction(input: { id: string; userId: string }): Promise<Result> {
+  try {
+    const session = await guard();
+    const orgId = session.orgId;
+    const viewer = await viewerOf(session);
+    const r = await withRequestsTenant(orgId, (tx) => loadOne(tx, orgId, input.id));
+    if (!r || !canSee(r, viewer)) return { error: "ไม่พบคำขอ" };
+    if (!isUnlinkedPerson(r)) return { error: "ใบนี้ผูกชื่อแล้ว หรือไม่ได้รอผูกชื่อ" };
+    if (r.createdBy !== session.userId && !(viewer.canApprove || viewer.canApproveCeo || viewer.canPay)) return { error: "ผูกชื่อได้เฉพาะคนที่ลงใบนี้ หรือ HR" };
+    if (!input.userId || input.userId === r.createdBy) return { error: "เลือกคน (ผูกกับคนที่ลงใบเองไม่ได้)" };
+    const settings = await withRequestsTenant(orgId, (tx) => readSettings(tx, orgId));
+    const preview = await computePreview(session, { kind: r.kind, beneficiaryUserId: input.userId, workDate: r.workDate, amount: r.netAmount, exceptRequestId: r.id }, settings);
+    if (!preview.beneficiaryKind || !preview.beneficiaryName) return { error: "ไม่พบคนนี้ในระบบ" };
+    const kindNow = preview.beneficiaryKind;
+    const capNote = r.kind === "advance" ? preview.blocks.find((b) => b.startsWith("เกินเพดาน") || b.includes("เบิกได้ไม่เกิน") || b.startsWith("บริษัทตั้งให้เบิกล่วงหน้าได้เฉพาะ")) : undefined;
+    const byName = await nameOf(session.userId);
+    const ceo = await ceoTitle(orgId);
+    const saved = await withRequestsTenant(orgId, async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`req-pay:${r.id}`}))`;
+      const fresh = await loadOne(tx, orgId, r.id);
+      if (!fresh || !isUnlinkedPerson(fresh)) return false;
+      // ยอดที่ต้องหักคืนจากคนนี้ (จ่ายไปแล้ว): เบิกล่วงหน้า = ที่จ่าย · เบิกไปซื้อของที่ตรวจแล้ว = ที่ขาดคืน
+      const owed =
+        fresh.kind === "advance" ? fresh.paidTotal : fresh.kind === "cash_advance" && fresh.clearStatus === "cleared" ? Math.max(0, round2(fresh.paidTotal - (fresh.clearSpent ?? 0) - (fresh.clearReturned ?? 0))) : 0;
+      let dwPaymentId: string | null = null;
+      let deductAmount: number | undefined;
+      const notDeducted = !fresh.deductedAt;
+      if (owed > 0.005 && kindNow === "worker" && preview.employmentId && !fresh.dwPaymentId) {
+        const dw = await tx.dailyWorkerPayment.create({
+          data: { orgId, employmentId: preview.employmentId, payDate: dateOnly(bangkokToday()), amount: owed, kind: "advance", note: `${fresh.code} ${fresh.kind === "advance" ? "เบิกล่วงหน้า" : "เบิกไปก่อนแล้วไม่ได้คืน"} (ผูกชื่อทีหลัง): ${fresh.title}`.slice(0, 200), byUserId: session.userId, byName },
+        });
+        dwPaymentId = dw.id;
+        await insertDwAudit(tx, orgId, { byUserId: session.userId, byName, action: "payment", employmentIds: [preview.employmentId], workDate: bangkokToday(), summary: `เบิกล่วงหน้า ${baht(owed, false)} บาท จากคำขอ ${fresh.code} (ผูกชื่อทีหลัง · ${ceoText(approvedByText(fresh), ceo)})` });
+        if (notDeducted && fresh.deductAmount > 0) deductAmount = 0; // ตอนพิมพ์ชื่อเลือกเป็นพนักงาน แต่คนจริงเป็นคนงาน = หักจากค่าแรงแทน
+      } else if (owed > 0.005 && kindNow === "staff" && notDeducted && fresh.deductAmount < owed - 0.005) {
+        deductAmount = owed; // ตอนพิมพ์ชื่อเลือกเป็นคนงาน แต่คนจริงเป็นพนักงาน = รอหักเงินเดือน
+      }
+      await tx.moneyRequest.update({
+        where: { id: fresh.id },
+        data: {
+          beneficiaryUserId: input.userId,
+          beneficiaryName: preview.beneficiaryName!,
+          beneficiaryKind: kindNow,
+          employmentId: preview.employmentId,
+          ...(dwPaymentId ? { dwPaymentId } : {}),
+          ...(deductAmount !== undefined ? { deductAmount } : {}),
+        },
+      });
+      const parts = [`ผูกชื่อ "${fresh.beneficiaryName}" กับ ${preview.beneficiaryName} (${kindNow === "worker" ? "คนงานรายวัน" : "พนักงาน"})`];
+      if (dwPaymentId) parts.push(`ลงบัญชีค่าแรง หักคืน ${baht(owed)}`);
+      else if (deductAmount) parts.push(`รอหักเงินเดือน ${baht(deductAmount)}`);
+      if (capNote) parts.push(`หมายเหตุ: ${capNote}`);
+      await insertEvent(tx, orgId, { requestId: fresh.id, byUserId: session.userId, byName, action: "edit", summary: parts.join(" · ") });
+      return true;
+    });
+    if (!saved) return { error: "มีคนผูกชื่อใบนี้ไปก่อนแล้ว — รีเฟรช" };
+    refresh(r.id);
+    return { ok: true };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
 export async function linkOtWorkerAction(input: { id: string; userId: string }): Promise<Result> {
   try {
     const session = await guard();
@@ -1449,6 +1540,7 @@ export async function recordPaymentAction(input: PayInput): Promise<Result> {
     if (!allowed) return { error: "ไม่มีสิทธิ์บันทึกจ่ายเงิน (คนถือเงินสดย่อยจ่ายได้จากเงินสดย่อยของตัวเอง)" };
     if (pettyHolderId && !(await isPettyHolder(orgId, pettyHolderId))) return { error: "คนนี้ไม่ได้ถือเงินสดย่อยแล้ว" };
     if (method === "payroll" && r.beneficiaryKind !== "staff") return { error: "รวมกับเงินเดือนได้เฉพาะพนักงานประจำ" };
+    if (method === "payroll" && !r.beneficiaryUserId) return { error: "ยังไม่ได้ผูกชื่อกับคนในระบบ — จ่ายเป็นเงินสด/โอน หรือผูกชื่อก่อน" };
     if (method === "payroll" && r.kind === "advance") return { error: "เบิกล่วงหน้าต้องจ่ายเป็นเงินจริง (หักคืนทีหลังในเงินเดือน)" };
     if (method === "payroll" && (await usesSalaryModule(orgId))) return { error: PAYROLL_METHOD_BLOCKED };
     const paidOn = normalizeDate(input.paidOn);
@@ -1538,7 +1630,8 @@ export async function recordPaymentAction(input: PayInput): Promise<Result> {
           ...(full ? { status: "paid" } : {}),
           ...(short && input.closeShort ? { netAmount: paidTotal } : {}),
           ...(dwPaymentId ? { dwPaymentId } : {}),
-          ...(r.kind === "advance" && r.beneficiaryKind === "staff" ? { deductAmount: round2(r.deductAmount + amount) } : {}),
+          // ยังไม่ผูกชื่อ = ยังไม่ตั้งยอดรอหักเงินเดือน (ไม่รู้ว่าหักใคร) — ผูกชื่อแล้วตั้งให้ที่ linkPersonAction
+          ...(r.kind === "advance" && r.beneficiaryKind === "staff" && r.beneficiaryUserId ? { deductAmount: round2(r.deductAmount + amount) } : {}),
           ...(r.kind === "cash_advance" && !r.clearDueDate ? { clearDueDate: dateOnly(addDays(paidOn, settings.clearDueDays)) } : {}),
         },
       });
@@ -1876,7 +1969,7 @@ async function confirmClearingCore(orgId: string, r: RequestView, by: { userId: 
         clearedAt: new Date(),
         clearedByName: by.name,
         ...(owedMore > 0.005 ? { netAmount: spent, status: "approved" } : {}),
-        ...(shortage > 0.005 && r.beneficiaryKind !== "worker" ? { deductAmount: shortage } : {}),
+        ...(shortage > 0.005 && r.beneficiaryKind !== "worker" && r.beneficiaryUserId ? { deductAmount: shortage } : {}),
         ...(dwPaymentId ? { dwPaymentId } : {}),
       },
     });
@@ -2543,6 +2636,7 @@ export async function saveSettingsAction(input: RequestSettings): Promise<Result
       companyAccounts: companyAccounts as unknown as object,
       whtCompanyOnly: !!input.whtCompanyOnly,
       whtBorneAllowed: !!input.whtBorneAllowed,
+      unlinkedAllowed: !!input.unlinkedAllowed,
       payerName: String(input.payerName ?? "").trim().slice(0, 160),
       payerTaxId,
       payerAddress: String(input.payerAddress ?? "").trim().slice(0, 300),
@@ -2570,7 +2664,7 @@ export async function saveSettingsAction(input: RequestSettings): Promise<Result
         byUserId: session.userId,
         byName,
         action: "settings",
-        summary: `ตั้งค่า: อนุมัติ ${(Object.keys(approvalRoutes) as RequestKind[]).map((k) => `${KIND_META[k].short} ${ceoText(routeText(approvalRoutes[k]), ceo)}`).join(", ")} · OT ${rates.map((r) => `${r.label} ${r.percent}%`).join(", ")} · เพดานเบิกล่วงหน้า ${input.advanceCapMode === "none" ? "ไม่จำกัด" : input.advanceCapMode === "baht" ? baht(capValue) : `${capValue} วัน`} · VAT ${vat}% · ซื้อของเองจากเงินสดย่อย${input.pettySpendReview ? "ต้องมีคนตรวจ" : "ไม่ต้องตรวจ"} · ค่า OT ${input.otRoundBaht ? "ปัดขึ้นเป็นบาท" : "คิดถึงสตางค์"} · วิธีคิด OT ${input.otRateMode === "flat" ? "อัตราเดียว (ไม่คูณ %)" : "ตามตาราง %"} · วงเงินรายคน ${spendLimits.filter((r) => r.active).length ? spendLimits.filter((r) => r.active).map((r) => `${r.name} ครั้งละ ${baht(r.perRequest)} สัปดาห์ละ ${baht(r.perWeek)} (${r.userIds.length} คน)`).join(", ") : "ไม่ใช้"} · ใบรับรองแทนใบเสร็จ ${noReceiptMax === null ? "ไม่เปิด" : `ใบละไม่เกิน ${baht(noReceiptMax)}`} · จ่ายเงินสด${input.cashConfirmMode ? "ให้ผู้รับกดยืนยัน" : "ต้องแนบรูป"} · ยอดตรงปิดเอง ${input.autoCloseClear ? "เปิด" : "ปิด"} · บัญชีบริษัท ${companyAccounts.length ? companyAccounts.map(accountLabel).join(", ") : "ไม่มี"} · หัก ณ ที่จ่าย${input.whtCompanyOnly ? "ต้องโอนจากบัญชีบริษัท" : "จ่ายช่องทางใดก็ได้"} · เบิกล่วงหน้า ${advanceRules.who === "worker" ? "เฉพาะคนงาน" : advanceRules.who === "staff" ? "เฉพาะพนักงานรายเดือน" : "ทุกคน"}${advanceRules.who !== "staff" ? ` คนงาน${ruleText(advanceRules.worker)}` : ""}${advanceRules.who !== "worker" ? ` พนักงาน${ruleText(advanceRules.staff)}` : ""} รอบเดือนเริ่มวันที่ ${advanceRules.monthStartDay} สัปดาห์เริ่มวัน${WEEKDAY_NAMES[advanceRules.weekStart]} · ใบที่จ่ายร้านไปเต็มแล้ว (บริษัทออกภาษีให้) ${input.whtBorneAllowed ? "ลงได้ ต้องให้ CEO อนุมัติ" : "ไม่เปิด"}`,
+        summary: `ตั้งค่า: อนุมัติ ${(Object.keys(approvalRoutes) as RequestKind[]).map((k) => `${KIND_META[k].short} ${ceoText(routeText(approvalRoutes[k]), ceo)}`).join(", ")} · OT ${rates.map((r) => `${r.label} ${r.percent}%`).join(", ")} · เพดานเบิกล่วงหน้า ${input.advanceCapMode === "none" ? "ไม่จำกัด" : input.advanceCapMode === "baht" ? baht(capValue) : `${capValue} วัน`} · VAT ${vat}% · ซื้อของเองจากเงินสดย่อย${input.pettySpendReview ? "ต้องมีคนตรวจ" : "ไม่ต้องตรวจ"} · ค่า OT ${input.otRoundBaht ? "ปัดขึ้นเป็นบาท" : "คิดถึงสตางค์"} · วิธีคิด OT ${input.otRateMode === "flat" ? "อัตราเดียว (ไม่คูณ %)" : "ตามตาราง %"} · วงเงินรายคน ${spendLimits.filter((r) => r.active).length ? spendLimits.filter((r) => r.active).map((r) => `${r.name} ครั้งละ ${baht(r.perRequest)} สัปดาห์ละ ${baht(r.perWeek)} (${r.userIds.length} คน)`).join(", ") : "ไม่ใช้"} · ใบรับรองแทนใบเสร็จ ${noReceiptMax === null ? "ไม่เปิด" : `ใบละไม่เกิน ${baht(noReceiptMax)}`} · จ่ายเงินสด${input.cashConfirmMode ? "ให้ผู้รับกดยืนยัน" : "ต้องแนบรูป"} · ยอดตรงปิดเอง ${input.autoCloseClear ? "เปิด" : "ปิด"} · บัญชีบริษัท ${companyAccounts.length ? companyAccounts.map(accountLabel).join(", ") : "ไม่มี"} · หัก ณ ที่จ่าย${input.whtCompanyOnly ? "ต้องโอนจากบัญชีบริษัท" : "จ่ายช่องทางใดก็ได้"} · เบิกล่วงหน้า ${advanceRules.who === "worker" ? "เฉพาะคนงาน" : advanceRules.who === "staff" ? "เฉพาะพนักงานรายเดือน" : "ทุกคน"}${advanceRules.who !== "staff" ? ` คนงาน${ruleText(advanceRules.worker)}` : ""}${advanceRules.who !== "worker" ? ` พนักงาน${ruleText(advanceRules.staff)}` : ""} รอบเดือนเริ่มวันที่ ${advanceRules.monthStartDay} สัปดาห์เริ่มวัน${WEEKDAY_NAMES[advanceRules.weekStart]} · ยื่นให้คนที่ยังไม่มีในระบบ ${input.unlinkedAllowed ? "ได้" : "ไม่ได้"} · ใบที่จ่ายร้านไปเต็มแล้ว (บริษัทออกภาษีให้) ${input.whtBorneAllowed ? "ลงได้ ต้องให้ CEO อนุมัติ" : "ไม่เปิด"}`,
       });
     });
     revalidatePath("/requests");

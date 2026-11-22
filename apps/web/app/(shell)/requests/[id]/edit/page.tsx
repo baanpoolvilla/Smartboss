@@ -47,6 +47,8 @@ export default async function EditRequestPage({ params }: { params: Promise<{ id
   const initial: EditInitial = {
     beneficiaryUserId: r.beneficiaryUserId ?? "",
     onBehalf: selfKind && r.beneficiaryUserId !== session.userId,
+    pendingName: !r.beneficiaryUserId && r.kind !== "contractor" && r.kind !== "ot" ? r.beneficiaryName : undefined,
+    pendingKind: r.beneficiaryKind === "worker" ? "worker" : "staff",
     workDate: r.workDate,
     otStart: r.otStart ?? "",
     otEnd: r.otEnd ?? "",
