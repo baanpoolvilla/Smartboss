@@ -305,6 +305,8 @@ model MoneyRequestSettings {
   advanceCapPeriod  String   @default("month") @map("advance_cap_period")
   /// เบิกล่วงหน้าได้เฉพาะคนงานรายวัน — ปิด = แบบเดิม (ทุกคน)
   advanceWorkersOnly Boolean @default(false) @map("advance_workers_only")
+  /// กติกาเบิกล่วงหน้า {who, monthStartDay, weekStart, worker:{mode,value,period,maxCount}, staff:{…}} — null = ใช้เพดานเดิมด้านบน
+  advanceRules      Json?    @map("advance_rules")
   /// [0,1,2,3,5] — % หัก ณ ที่จ่ายให้เลือก
   whtRates          Json     @map("wht_rates")
   vatPercent        Decimal  @default(7) @map("vat_percent") @db.Decimal(5, 2)

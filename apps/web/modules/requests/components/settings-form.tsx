@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 
 import { saveSettingsAction } from "../actions";
-import { KIND_META, KINDS, routeText, type AdvanceCapMode, type ApprovalRoute, type OtRate, type OtRateMode, type RequestKind, type RequestSettings } from "../lib/types";
+import { KIND_META, KINDS, routeText, type ApprovalRoute, type OtRate, type OtRateMode, type RequestKind, type RequestSettings } from "../lib/types";
 import { Notice } from "./ui";
 import { WorkloadSettings, type WorkloadState } from "./workload-settings";
 import { CompanyAccountsSettings, type AccountsState } from "./company-accounts-settings";
+import { AdvanceRulesSettings, fromAdvanceForm, toAdvanceForm, type AdvanceRulesState } from "./advance-rules-settings";
 
 import { useCeoTitle } from "@/lib/ceo-title-client";
 import { ceoText } from "@/lib/ceo-title-shared";
@@ -28,10 +29,8 @@ export function SettingsForm({ initial, people = [] }: { initial: RequestSetting
   );
   const setRoute = (k: RequestKind, patch: Partial<{ mode: "hr" | "ceo"; above: string }>) => setRoutes((r) => ({ ...r, [k]: { ...r[k], ...patch } }));
   const toRoute = (k: RequestKind): ApprovalRoute => ({ mode: routes[k].mode, ceoAbove: routes[k].mode === "ceo" || routes[k].above.trim() === "" ? null : Number(routes[k].above.replace(/,/g, "")) });
-  const [capMode, setCapMode] = useState<AdvanceCapMode>(initial.advanceCapMode);
-  const [capValue, setCapValue] = useState(String(initial.advanceCapValue || ""));
-  const [capPeriod, setCapPeriod] = useState(initial.advanceCapPeriod);
-  const [workersOnly, setWorkersOnly] = useState(initial.advanceWorkersOnly);
+  const [adv, setAdv] = useState<AdvanceRulesState>(() => toAdvanceForm(initial.advanceRules));
+  const todayBkk = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
   const [wht, setWht] = useState(initial.whtRates.join(", "));
   const [vat, setVat] = useState(String(initial.vatPercent));
   const [maxAge, setMaxAge] = useState(String(initial.receiptMaxAgeDays));
@@ -62,10 +61,10 @@ export function SettingsForm({ initial, people = [] }: { initial: RequestSetting
       const res = await saveSettingsAction({
         approvalRoutes: Object.fromEntries(KINDS.map((k) => [k, toRoute(k)])) as Record<RequestKind, ApprovalRoute>,
         otRates: rates,
-        advanceCapMode: capMode,
-        advanceCapValue: Number(capValue) || 0,
-        advanceCapPeriod: capPeriod,
-        advanceWorkersOnly: workersOnly,
+        // เพดานแบบเดิม (ก่อนมีกติกา) คงค่าเดิมไว้ · กติกาใหม่อยู่ใน advanceRules
+        advanceCapMode: initial.advanceCapMode,
+        advanceCapValue: initial.advanceCapValue,
+        advanceRules: fromAdvanceForm(adv),
         whtRates: wht.split(/[,\s]+/).filter(Boolean).map(Number),
         vatPercent: Number(vat),
         receiptMaxAgeDays: Number(maxAge),
@@ -186,69 +185,7 @@ export function SettingsForm({ initial, people = [] }: { initial: RequestSetting
         </label>
       </section>
 
-      <section className="flex flex-col gap-3 rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4">
-        <div>
-          <h2 className="text-sm font-bold text-(--ink)">เบิกล่วงหน้า</h2>
-          <p className="text-xs text-(--ink-soft)">เฉพาะใบ &quot;เบิกล่วงหน้า&quot; (ไม่เกี่ยวกับเบิกค่าใช้จ่าย/OT)</p>
-        </div>
-        <label className="flex items-start gap-3 text-sm text-(--ink)">
-          <input type="checkbox" className="mt-1 h-4 w-4" checked={workersOnly} onChange={(e) => setWorkersOnly(e.target.checked)} />
-          <span>
-            เบิกล่วงหน้าได้เฉพาะคนงานรายวัน
-            <span className="block text-xs text-(--ink-soft)">ไม่ติ๊ก = พนักงานรายเดือนเบิกได้ด้วย (แบบเดิม)</span>
-          </span>
-        </label>
-        <label className="flex items-start gap-3 text-sm text-(--ink)">
-          <input
-            type="checkbox"
-            className="mt-1 h-4 w-4"
-            checked={capMode !== "none"}
-            onChange={(e) => {
-              if (!e.target.checked) {
-                setCapMode("none");
-                setCapValue("");
-              } else setCapMode("baht");
-            }}
-          />
-          <span>
-            จำกัดยอดเบิกล่วงหน้า
-            <span className="block text-xs text-(--ink-soft)">
-              {capMode === "none" ? "ปิดอยู่ — เบิกได้ไม่จำกัด HR/ผู้อนุมัติเป็นคนดูเอง · ติ๊กเมื่ออยากตั้งเพดาน" : `ยื่นเกินเพดานไม่ได้ (นับรวมที่รออนุมัติ/อนุมัติ/จ่ายแล้วใน${capPeriod === "half" ? "รอบนั้น" : "เดือนนั้น"})`}
-            </span>
-          </span>
-        </label>
-        {capMode !== "none" && <div className="flex flex-wrap gap-2">
-          {(
-            [
-              ["baht", "ไม่เกิน … บาท"],
-              ["days", "ไม่เกิน … วันของค่าแรง"],
-            ] as [AdvanceCapMode, string][]
-          ).map(([m, label]) => (
-            <button key={m} type="button" aria-pressed={capMode === m} onClick={() => setCapMode(m)} className={`h-9 rounded-full px-3.5 text-sm ${capMode === m ? "bg-(--brand-navy) font-semibold text-white" : "border border-(--line)"}`}>
-              {label}
-            </button>
-          ))}
-        </div>}
-        {capMode !== "none" && (
-          <div className="flex flex-col gap-1.5 text-sm">
-            <span className="font-semibold">นับเพดาน</span>
-            <div className="flex flex-wrap gap-2">
-              {([["month", "ต่อเดือน"], ["half", "ต่อรอบ 15 วัน (1–15 / 16–สิ้นเดือน)"]] as const).map(([m, label]) => (
-                <button key={m} type="button" aria-pressed={capPeriod === m} onClick={() => setCapPeriod(m)} className={`h-9 rounded-full px-3.5 text-sm ${capPeriod === m ? "bg-(--brand-navy) font-semibold text-white" : "border border-(--line)"}`}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        {capMode !== "none" && (
-          <label className="flex max-w-xs flex-col gap-1.5 text-sm">
-            <span className="font-semibold">{capMode === "baht" ? "เพดาน (บาท)" : "จำนวนวัน"}</span>
-            <input inputMode="decimal" className={field} value={capValue} onChange={(e) => setCapValue(e.target.value)} />
-            <span className="text-xs text-(--ink-soft)">{capMode === "days" ? "คนงาน = ค่าแรงต่อวัน · พนักงาน = เงินเดือน ÷ 30" : "เท่ากันทุกคน"}</span>
-          </label>
-        )}
-      </section>
+      <AdvanceRulesSettings value={adv} onChange={setAdv} today={todayBkk} />
 
       <WorkloadSettings value={workload} onChange={setWorkload} people={people} />
 

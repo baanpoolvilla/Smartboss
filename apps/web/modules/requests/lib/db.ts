@@ -16,6 +16,7 @@ import {
 } from "./types";
 import { parseNoReceipt, parseSpendLimits, type NoReceipt, type RequestLine } from "./spend-rules";
 import { parseCompanyAccounts } from "./company-accounts";
+import { legacyAdvanceRules, parseAdvanceRules } from "./advance-rules";
 
 /**
  * ที่เก็บของโมดูลเบิกจ่าย & OT — schema requests (migration 20261021120000_requests_module)
@@ -296,8 +297,9 @@ export async function readSettings(tx: Tx, orgId: string): Promise<RequestSettin
     otRates: rates.length > 0 ? rates : DEFAULT_SETTINGS.otRates,
     advanceCapMode: (s.advanceCapMode as AdvanceCapMode) ?? "baht",
     advanceCapValue: num0(s.advanceCapValue),
-    advanceCapPeriod: s.advanceCapPeriod === "half" ? "half" : "month",
-    advanceWorkersOnly: s.advanceWorkersOnly,
+    advanceRules:
+      parseAdvanceRules(s.advanceRules) ??
+      legacyAdvanceRules((s.advanceCapMode as AdvanceCapMode) ?? "baht", num0(s.advanceCapValue), s.advanceCapPeriod === "half" ? "half" : "month", s.advanceWorkersOnly),
     whtRates: wht.length > 0 ? wht : DEFAULT_SETTINGS.whtRates,
     vatPercent: num0(s.vatPercent),
     receiptMaxAgeDays: s.receiptMaxAgeDays,

@@ -1,5 +1,6 @@
 import type { SpendLimitRule } from "./spend-rules";
 import type { CompanyAccount } from "./company-accounts";
+import type { AdvanceRules } from "./advance-rules";
 /**
  * กติกาบริสุทธิ์ของโมดูลเบิกจ่าย & OT (ไม่แตะฐานข้อมูล — ทดสอบได้ตรง ๆ ดู types.test.ts)
  * ตัวเลขเงินทุกตัวที่หน้าจอแสดงมาจากฟังก์ชันในไฟล์นี้ ไม่คำนวณซ้ำในหน้าเว็บ
@@ -426,22 +427,6 @@ export const KIND_CLASS: Record<RequestKind, string> = {
 /* ───────────── เพดานเบิกล่วงหน้า ───────────── */
 
 export type AdvanceCapMode = "none" | "baht" | "days";
-/** month = นับต่อเดือน (แบบเดิม) · half = นับต่อรอบครึ่งเดือน 1–15 / 16–สิ้นเดือน (ผู้ใช้ 22/11/2569 "1,500 ต่อรอบ ทุก 15 วัน") */
-export type AdvanceCapPeriod = "month" | "half";
-
-/** รอบเพดานของวันที่เบิก — from ถึง to (รวมทั้งสองวัน) */
-export function advanceRoundOf(ymd: string, period: AdvanceCapPeriod): { from: string; to: string; label: string } {
-  const month = ymd.slice(0, 7);
-  const last = `${month}-${String(daysInMonthOf(month)).padStart(2, "0")}`;
-  if (period === "half") {
-    const first = Number(ymd.slice(8, 10)) <= 15;
-    const from = first ? `${month}-01` : `${month}-16`;
-    const to = first ? `${month}-15` : last;
-    return { from, to, label: `รอบ ${Number(from.slice(8))}–${Number(to.slice(8))} ${thaiDate(to).split(" ").slice(1).join(" ")}` };
-  }
-  return { from: `${month}-01`, to: last, label: `เดือน ${thaiDate(last).split(" ").slice(1).join(" ")}` };
-}
-
 /** เพดานของคนนี้เดือนนี้ (บาท) — null = ไม่จำกัด · days ใช้ค่าแรงต่อวัน (พนักงาน = เงินเดือน ÷ 30) */
 export function advanceCap(mode: AdvanceCapMode, value: number, dailyRate: number | null): number | null {
   if (mode === "none") return null;
@@ -483,10 +468,8 @@ export interface RequestSettings {
   otRates: OtRate[];
   advanceCapMode: AdvanceCapMode;
   advanceCapValue: number;
-  /** เพดานนับต่อเดือน / ต่อรอบครึ่งเดือน */
-  advanceCapPeriod: AdvanceCapPeriod;
-  /** เบิกล่วงหน้าได้เฉพาะคนงานรายวัน — ปิด = แบบเดิม */
-  advanceWorkersOnly: boolean;
+  /** กติกาเบิกล่วงหน้า (ใครเบิกได้ · เพดานแยกคนงาน/พนักงาน · รอบ · จำนวนครั้ง) — ไม่เคยตั้ง = แปลงจากเพดานเดิม */
+  advanceRules: AdvanceRules;
   whtRates: number[];
   vatPercent: number;
   receiptMaxAgeDays: number;
@@ -522,8 +505,13 @@ export const DEFAULT_SETTINGS: RequestSettings = {
   otRates: DEFAULT_OT_RATES,
   advanceCapMode: "baht",
   advanceCapValue: 3000,
-  advanceCapPeriod: "month",
-  advanceWorkersOnly: false,
+  advanceRules: {
+    who: "all",
+    monthStartDay: 1,
+    weekStart: 1,
+    worker: { mode: "baht", value: 3000, period: "month", maxCount: null },
+    staff: { mode: "baht", value: 3000, period: "month", maxCount: null },
+  },
   whtRates: [0, 1, 2, 3, 5],
   vatPercent: 7,
   receiptMaxAgeDays: 60,
