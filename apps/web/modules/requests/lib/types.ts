@@ -129,6 +129,19 @@ export function pettyTax(bill: number, vatIncluded: boolean, whtPercent: number,
   return { bill: b, vat, base, whtPercent, wht, paid: round2(b - wht) };
 }
 
+/**
+ * จ่ายร้านไปเต็มแล้ว ไม่ได้หัก ณ ที่จ่าย — บริษัทออกภาษีให้ครั้งเดียว (ผู้ใช้ 22/11/2569)
+ * ภาษีคิดแบบบวกเพิ่ม: ค่าจ้างที่ร้านได้ × อัตรา ÷ (100 − อัตรา) เช่น 1,500 × 3/97 = 46.39
+ * เงินได้ใน 50 ทวิ = ค่าจ้าง + ภาษีที่ออกให้ (1,546.39 × 3% = 46.39) · ค่าใช้จ่ายบริษัท = ที่จ่ายร้าน + ภาษี
+ * เก็บลงใบแบบเดิม: amount = เงินได้ · wht = ภาษีที่ออกให้ · net = amount + VAT − wht = ที่จ่ายร้านไปแล้ว
+ */
+export function borneBreakdown(paidBase: number, vatPercent: number, whtPercent: number) {
+  const b = round2(paidBase);
+  const vat = round2((b * vatPercent) / 100);
+  const tax = whtPercent > 0 && whtPercent < 100 ? round2((b * whtPercent) / (100 - whtPercent)) : 0;
+  return { paidBase: b, vatPercent, vat, paid: round2(b + vat), whtPercent, tax, income: round2(b + tax), cost: round2(b + vat + tax) };
+}
+
 export function contractorBreakdown(base: number, vatPercent: number, whtPercent: number): ContractorBreakdown {
   const b = round2(base);
   const vat = round2((b * vatPercent) / 100);
@@ -477,6 +490,8 @@ export interface RequestSettings {
   companyAccounts: CompanyAccount[];
   /** รายการหัก ณ ที่จ่าย ต้องโอนจากบัญชีบริษัท — ปิด = แบบเดิม */
   whtCompanyOnly: boolean;
+  /** ให้ลงใบจ่ายช่าง/ร้านที่จ่ายไปเต็มแล้ว บริษัทออกภาษีให้ (CEO อนุมัติ) — ปิด = แบบเดิม */
+  whtBorneAllowed: boolean;
   /** ผู้จ่ายเงินใน 50 ทวิ */
   payerName: string;
   payerTaxId: string;
@@ -501,6 +516,7 @@ export const DEFAULT_SETTINGS: RequestSettings = {
   autoCloseClear: false,
   companyAccounts: [],
   whtCompanyOnly: false,
+  whtBorneAllowed: false,
   payerName: "",
   payerTaxId: "",
   payerAddress: "",

@@ -40,6 +40,7 @@ import {
   advanceCap,
   bangkokToday,
   baht,
+  borneBreakdown,
   contractorBreakdown,
   hoursText,
   minutesBetween,
@@ -241,6 +242,8 @@ export interface PreviewInput {
   exceptRequestId?: string;
   /** หมวด (เบิกค่าใช้จ่าย/เบิกไปซื้อของ) — ดูวงเงินรายคน */
   category?: string | null;
+  /** ช่าง/ร้าน: จ่ายไปเต็มแล้ว บริษัทออกภาษีให้ — ต้องให้ CEO อนุมัติ */
+  whtBorne?: boolean;
 }
 
 export interface Preview {
@@ -414,7 +417,7 @@ async function computePreview(session: OrgSession, input: PreviewInput, settings
 
   if (who || input.kind === "contractor") {
     const amt = input.kind === "ot" ? (p.amount ?? (Number(input.amount) || 0)) : Number(input.amount) || 0;
-    const route = await approverLevelFor(orgId, input.kind, session.userId, who?.userId ?? null, amt, settings.approvalRoutes);
+    const route = input.kind === "contractor" && input.whtBorne && settings.whtBorneAllowed ? { level: "ceo" as const, needCeo: false } : await approverLevelFor(orgId, input.kind, session.userId, who?.userId ?? null, amt, settings.approvalRoutes);
     p.approverLevel = route.level;
     p.needCeo = route.needCeo;
     const ids = await eligibleApprovers(orgId, p.approverLevel, session.userId, who?.userId ?? null);
@@ -510,6 +513,8 @@ export interface CreateInput {
   category?: string | null;
   /** ร้านไม่มีบิล: ใบรับรองแทนใบเสร็จ (เบิกค่าใช้จ่าย) */
   noReceipt?: unknown;
+  /** ช่าง/ร้าน: จ่ายไปเต็มแล้ว ไม่ได้หัก — บริษัทออกภาษีให้ (บริษัทเปิดในตั้งค่า · CEO อนุมัติ) */
+  whtBorne?: boolean;
 }
 
 /** ข้อมูลของใบที่ผ่านการตรวจแล้ว — ใช้ทั้งตอนยื่นและตอนแก้ไข (กติกาเดียวกันทุกข้อ) */
@@ -539,6 +544,7 @@ interface Prepared {
     vatAmount: number;
     whtPercent: number;
     whtAmount: number;
+    whtBorne: boolean;
     netAmount: number;
     lines: RequestLine[] | null;
     attachments: Attachment[];
@@ -594,6 +600,7 @@ async function prepareRequest(session: OrgSession, input: CreateInput, exceptReq
   let vat = { vatPercent: 0, vat: 0, whtPercent: 0, wht: 0, net: 0 };
   let lines: RequestLine[] | null = null;
   let vendor: { id: string | null; name: string } | null = null;
+  let whtBorne = false;
   if (kind === "ot") {
     // ไม่มีเงินเดือนในระบบ = ยื่นแบบไม่มียอด รอ HR ใส่ตอนตรวจ (ผู้ใช้ 8/11/2569) — ยอดที่ส่งมาจากฟอร์มไม่ใช้
     amount = preview.baseKind === "manual" ? 0 : (preview.amount ?? 0);
@@ -611,9 +618,18 @@ async function prepareRequest(session: OrgSession, input: CreateInput, exceptReq
     if (!Number.isFinite(base) || base <= 0) return { error: "กรอกค่าจ้าง (ก่อน VAT)" };
     const whtPercent = Number(input.whtPercent ?? 0);
     if (!Number.isFinite(whtPercent) || whtPercent < 0 || whtPercent > 15) return { error: "% หัก ณ ที่จ่ายไม่ถูกต้อง" };
-    const b = contractorBreakdown(base, input.vatOn ? settings.vatPercent : 0, whtPercent);
-    amount = b.base;
-    vat = { vatPercent: b.vatPercent, vat: b.vat, whtPercent: b.whtPercent, wht: b.wht, net: b.net };
+    if (input.whtBorne && whtPercent > 0) {
+      // จ่ายร้านไปเต็มแล้ว: บริษัทออกภาษีให้ (คิดแบบบวกเพิ่ม 3/97) — เฉพาะบริษัทที่เปิดในตั้งค่า
+      if (!settings.whtBorneAllowed) return { error: "บริษัทยังไม่เปิดให้ลงใบที่จ่ายไปเต็มแล้ว (ตั้งค่า OT & เบิกจ่าย)" };
+      const g = borneBreakdown(base, input.vatOn ? settings.vatPercent : 0, whtPercent);
+      whtBorne = true;
+      amount = g.income;
+      vat = { vatPercent: g.vatPercent, vat: g.vat, whtPercent: g.whtPercent, wht: g.tax, net: g.paid };
+    } else {
+      const b = contractorBreakdown(base, input.vatOn ? settings.vatPercent : 0, whtPercent);
+      amount = b.base;
+      vat = { vatPercent: b.vatPercent, vat: b.vat, whtPercent: b.whtPercent, wht: b.wht, net: b.net };
+    }
   } else {
     const rawLines = (input.lines ?? [])
       .map((l) => ({ item: String(l.item ?? "").trim().slice(0, 120), amount: round2(Number(l.amount)), propertyId: typeof l.propertyId === "string" && l.propertyId ? l.propertyId : null }))
@@ -660,7 +676,8 @@ async function prepareRequest(session: OrgSession, input: CreateInput, exceptReq
   // เส้นทางคิดจากยอดจริงที่จะบันทึก (ไม่ใช้ของ preview ที่คิดจากยอดตอนพิมพ์)
   // ช่างภายนอก: เทียบเกณฑ์ CEO กับยอดตามบิลร้าน (ค่าจ้าง + VAT ก่อนหัก ณ ที่จ่าย) — ผู้ใช้ 30/10/2569 "ตามยอดจริงก่อนหักลบ"
   const routeAmount = kind === "contractor" ? round2(amount + vat.vat) : net;
-  const { level, needCeo } = await approverLevelFor(orgId, kind, session.userId, beneficiaryUserId, routeAmount, settings.approvalRoutes);
+  // บริษัทออกภาษีให้ = CEO อนุมัติเท่านั้น (เสียเงินเพิ่ม · กันกลายเป็นทางจ่ายเงินสดเรื่อย ๆ)
+  const { level, needCeo } = whtBorne ? { level: "ceo" as const, needCeo: false } : await approverLevelFor(orgId, kind, session.userId, beneficiaryUserId, routeAmount, settings.approvalRoutes);
   const isOt = kind === "ot";
   return {
     workDate,
@@ -689,6 +706,7 @@ async function prepareRequest(session: OrgSession, input: CreateInput, exceptReq
       vatAmount: vat.vat,
       whtPercent: vat.whtPercent,
       whtAmount: vat.wht,
+      whtBorne,
       netAmount: net,
       lines,
       attachments,
@@ -735,7 +753,7 @@ export async function createRequestAction(input: CreateInput): Promise<Result<{ 
         const summary =
           kind === "ot"
             ? `ลง OT ให้ ${f.beneficiaryName} ${thai(prep.workDate)} ${f.otStart}–${f.otEnd} (${hoursText(f.otMinutes ?? 0)}) ${awaitingAmountLabel(kind, f) ? "· รอ HR ใส่ยอด" : baht(f.netAmount)}`
-            : `ยื่น${KIND_META[kind].label} ${baht(f.netAmount)} ให้ ${f.beneficiaryName}`;
+            : `ยื่น${KIND_META[kind].label} ${baht(f.netAmount)} ให้ ${f.beneficiaryName}${f.whtBorne ? ` · จ่ายร้านไปแล้ว บริษัทออกภาษีให้ ${baht(f.whtAmount)}` : ""}`;
         await insertEvent(tx, orgId, { requestId: row.id, byUserId: session.userId, byName, action: "create", summary });
         if (autoRule && lim?.shown) {
           await insertEvent(tx, orgId, { requestId: row.id, byUserId: session.userId, byName: "ระบบ", action: "approve", summary: `ผ่านอัตโนมัติ · อยู่ในวงเงิน “${autoRule.name}” (ครั้งละไม่เกิน ${baht(autoRule.perRequest)} · สัปดาห์นี้ใช้แล้ว ${baht(lim.shown.used)} จาก ${baht(autoRule.perWeek)})` });
@@ -921,6 +939,7 @@ async function prepareUnlinkedOt(session: OrgSession, input: CreateInput, name: 
       vatAmount: 0,
       whtPercent: 0,
       whtAmount: 0,
+      whtBorne: false,
       netAmount: est?.amount ?? 0,
       lines: null,
       attachments,
@@ -1152,6 +1171,7 @@ export async function updateRequestAction(id: string, input: CreateInput): Promi
     if (added) changes.push(`แนบไฟล์เพิ่ม ${added}`);
     if (removed) changes.push(`เอาไฟล์ออก ${removed}`);
     if (old.detail !== f.detail) changes.push("แก้รายละเอียด");
+    if (old.whtBorne !== f.whtBorne) changes.push(f.whtBorne ? `จ่ายร้านไปแล้ว บริษัทออกภาษีให้ ${baht(f.whtAmount)}` : "ไม่ใช่ใบที่บริษัทออกภาษีให้แล้ว");
     if ((old.propertyId ?? null) !== f.propertyId || (old.workOrderId ?? null) !== f.workOrderId) changes.push("แก้บ้าน/ใบงาน");
     if (old.approverLevel !== f.approverLevel || old.needCeo !== f.needCeo) {
       changes.push(f.needCeo ? `ยอดเกินเกณฑ์ ต้องผ่าน ${ceo} ด้วย` : f.approverLevel === "ceo" ? `ผู้อนุมัติเปลี่ยนเป็น ${ceo}` : "ผู้อนุมัติเปลี่ยนเป็น HR");
@@ -1425,7 +1445,7 @@ export async function recordPaymentAction(input: PayInput): Promise<Result> {
     // จ่ายเงินสดให้พนักงานที่มีบัญชี: บริษัทเปิด "ให้ผู้รับกดยืนยัน" = ไม่ต้องถ่ายรูป (ผู้ใช้ 22/11/2569) — คนงาน/ช่างภายนอกยังต้องแนบรูป
     const confirmByReceiver = cashConfirmAllowed(settings, method, r);
     // ช่องทางการเงิน (แนว PEAK): หัก ณ ที่จ่าย + บริษัทเปิดสวิตช์ = โอนจากบัญชีบริษัทเท่านั้น · บริษัทตั้งบัญชีไว้ = โอนต้องเลือกบัญชีทุกครั้ง
-    const needCompanyAccount = mustUseCompanyAccount(settings, r.whtAmount);
+    const needCompanyAccount = mustUseCompanyAccount(settings, r.whtAmount, r.whtBorne);
     if (needCompanyAccount && method !== "transfer") return { error: `ใบนี้หัก ณ ที่จ่าย ${baht(r.whtAmount)} — ต้องโอนจากบัญชีบริษัท (จ่ายเงินสด/เงินสดย่อยไม่ได้ เพราะเอาไปหักภาษีไม่ได้ชัด)` };
     const companyAccount = method === "transfer" && input.companyAccountId ? (settings.companyAccounts.find((a) => a.id === input.companyAccountId) ?? null) : null;
     if (method === "transfer" && input.companyAccountId && !companyAccount) return { error: "ไม่พบบัญชีบริษัทที่เลือก — รีเฟรชหน้า" };
@@ -2500,6 +2520,7 @@ export async function saveSettingsAction(input: RequestSettings): Promise<Result
     const data = {
       companyAccounts: companyAccounts as unknown as object,
       whtCompanyOnly: !!input.whtCompanyOnly,
+      whtBorneAllowed: !!input.whtBorneAllowed,
       payerName: String(input.payerName ?? "").trim().slice(0, 160),
       payerTaxId,
       payerAddress: String(input.payerAddress ?? "").trim().slice(0, 300),
@@ -2526,7 +2547,7 @@ export async function saveSettingsAction(input: RequestSettings): Promise<Result
         byUserId: session.userId,
         byName,
         action: "settings",
-        summary: `ตั้งค่า: อนุมัติ ${(Object.keys(approvalRoutes) as RequestKind[]).map((k) => `${KIND_META[k].short} ${ceoText(routeText(approvalRoutes[k]), ceo)}`).join(", ")} · OT ${rates.map((r) => `${r.label} ${r.percent}%`).join(", ")} · เพดานเบิกล่วงหน้า ${input.advanceCapMode === "none" ? "ไม่จำกัด" : input.advanceCapMode === "baht" ? baht(capValue) : `${capValue} วัน`} · VAT ${vat}% · ซื้อของเองจากเงินสดย่อย${input.pettySpendReview ? "ต้องมีคนตรวจ" : "ไม่ต้องตรวจ"} · ค่า OT ${input.otRoundBaht ? "ปัดขึ้นเป็นบาท" : "คิดถึงสตางค์"} · วิธีคิด OT ${input.otRateMode === "flat" ? "อัตราเดียว (ไม่คูณ %)" : "ตามตาราง %"} · วงเงินรายคน ${spendLimits.filter((r) => r.active).length ? spendLimits.filter((r) => r.active).map((r) => `${r.name} ครั้งละ ${baht(r.perRequest)} สัปดาห์ละ ${baht(r.perWeek)} (${r.userIds.length} คน)`).join(", ") : "ไม่ใช้"} · ใบรับรองแทนใบเสร็จ ${noReceiptMax === null ? "ไม่เปิด" : `ใบละไม่เกิน ${baht(noReceiptMax)}`} · จ่ายเงินสด${input.cashConfirmMode ? "ให้ผู้รับกดยืนยัน" : "ต้องแนบรูป"} · ยอดตรงปิดเอง ${input.autoCloseClear ? "เปิด" : "ปิด"} · บัญชีบริษัท ${companyAccounts.length ? companyAccounts.map(accountLabel).join(", ") : "ไม่มี"} · หัก ณ ที่จ่าย${input.whtCompanyOnly ? "ต้องโอนจากบัญชีบริษัท" : "จ่ายช่องทางใดก็ได้"}`,
+        summary: `ตั้งค่า: อนุมัติ ${(Object.keys(approvalRoutes) as RequestKind[]).map((k) => `${KIND_META[k].short} ${ceoText(routeText(approvalRoutes[k]), ceo)}`).join(", ")} · OT ${rates.map((r) => `${r.label} ${r.percent}%`).join(", ")} · เพดานเบิกล่วงหน้า ${input.advanceCapMode === "none" ? "ไม่จำกัด" : input.advanceCapMode === "baht" ? baht(capValue) : `${capValue} วัน`} · VAT ${vat}% · ซื้อของเองจากเงินสดย่อย${input.pettySpendReview ? "ต้องมีคนตรวจ" : "ไม่ต้องตรวจ"} · ค่า OT ${input.otRoundBaht ? "ปัดขึ้นเป็นบาท" : "คิดถึงสตางค์"} · วิธีคิด OT ${input.otRateMode === "flat" ? "อัตราเดียว (ไม่คูณ %)" : "ตามตาราง %"} · วงเงินรายคน ${spendLimits.filter((r) => r.active).length ? spendLimits.filter((r) => r.active).map((r) => `${r.name} ครั้งละ ${baht(r.perRequest)} สัปดาห์ละ ${baht(r.perWeek)} (${r.userIds.length} คน)`).join(", ") : "ไม่ใช้"} · ใบรับรองแทนใบเสร็จ ${noReceiptMax === null ? "ไม่เปิด" : `ใบละไม่เกิน ${baht(noReceiptMax)}`} · จ่ายเงินสด${input.cashConfirmMode ? "ให้ผู้รับกดยืนยัน" : "ต้องแนบรูป"} · ยอดตรงปิดเอง ${input.autoCloseClear ? "เปิด" : "ปิด"} · บัญชีบริษัท ${companyAccounts.length ? companyAccounts.map(accountLabel).join(", ") : "ไม่มี"} · หัก ณ ที่จ่าย${input.whtCompanyOnly ? "ต้องโอนจากบัญชีบริษัท" : "จ่ายช่องทางใดก็ได้"} · ใบที่จ่ายร้านไปเต็มแล้ว (บริษัทออกภาษีให้) ${input.whtBorneAllowed ? "ลงได้ ต้องให้ CEO อนุมัติ" : "ไม่เปิด"}`,
       });
     });
     revalidatePath("/requests");

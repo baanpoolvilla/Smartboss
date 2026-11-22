@@ -34,7 +34,7 @@ export async function GET(req: Request) {
   const vendors = new Map((await withRequestsTenant(session.orgId, (tx) => tx.moneyVendor.findMany({ where: { orgId: session.orgId }, select: { id: true, taxId: true, kind: true } }))).map((v) => [v.id, v]));
   const head = [
     "วันที่", "เลขที่", "ประเภท", "ของใคร", "ประเภทผู้รับ", "รายการ", "บ้าน", "ใบงาน", "เวลา OT", "ชั่วโมง OT",
-    "ยอดก่อนภาษี", "VAT", "หัก ณ ที่จ่าย", "ยอดสุทธิ", "ค่าใช้จ่ายจริง", "จ่ายแล้ว", "วิธีจ่าย", "โอนจากบัญชี", "เลขผู้เสียภาษีผู้รับ", "ผู้รับเป็น", "รอหักคืน", "สถานะ", "ผู้ยื่น", "ผู้อนุมัติ",
+    "ยอดก่อนภาษี", "VAT", "หัก ณ ที่จ่าย", "ยอดสุทธิ", "ค่าใช้จ่ายจริง", "จ่ายแล้ว", "วิธีจ่าย", "โอนจากบัญชี", "เลขผู้เสียภาษีผู้รับ", "ผู้รับเป็น", "บริษัทออกภาษีให้", "รอหักคืน", "สถานะ", "ผู้ยื่น", "ผู้อนุมัติ",
   ];
   const esc = (v: unknown) => {
     const s = v === null || v === undefined ? "" : String(v);
@@ -62,6 +62,7 @@ export async function GET(req: Request) {
       [...new Set(r.payments.filter((p) => !p.voided && p.companyAccountLabel).map((p) => p.companyAccountLabel))].join(" + "),
       r.vendorId ? (vendors.get(r.vendorId)?.taxId ?? "") : "",
       r.whtAmount > 0 ? (r.vendorId && vendors.get(r.vendorId)?.kind === "company" ? "นิติบุคคล (ภ.ง.ด.53)" : "บุคคล (ภ.ง.ด.3)") : "",
+      r.whtBorne ? "ใช่ (ออกให้ครั้งเดียว)" : "",
       r.deductAmount > 0 && !r.deductedAt ? r.deductAmount.toFixed(2) : "",
       statusOf(r, ceo).label,
       r.createdByName,

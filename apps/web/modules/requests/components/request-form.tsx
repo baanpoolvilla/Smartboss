@@ -10,6 +10,7 @@ import {
   KIND_META,
   amountMismatch,
   baht,
+  borneBreakdown,
   contractorBreakdown,
   hoursText,
   minutesBetween,
@@ -66,6 +67,8 @@ export interface EditInitial {
   vendorName: string;
   vatOn: boolean;
   whtPercent: number;
+  /** จ่ายร้านไปเต็มแล้ว บริษัทออกภาษีให้ */
+  whtBorne?: boolean;
   files: UploadedFile[];
   /** หมวดค่าใช้จ่าย (เบิกค่าใช้จ่าย/เบิกไปซื้อของ) */
   category?: string;
@@ -140,6 +143,9 @@ export function RequestForm({
   const [vendorName, setVendorName] = useState(initial?.vendorName ?? "");
   const [vatOn, setVatOn] = useState(initial?.vatOn ?? false);
   const [whtPercent, setWhtPercent] = useState(initial?.whtPercent ?? 3);
+  // จ่ายร้านไปเต็มแล้ว (ไม่ได้หัก) — บริษัทออกภาษีให้ · มีเฉพาะบริษัทที่เปิดในตั้งค่า
+  const [whtBorneTick, setWhtBorne] = useState(initial?.whtBorne ?? false);
+  const whtBorne = kind === "contractor" && settings.whtBorneAllowed && whtPercent > 0 && whtBorneTick;
   const [files, setFiles] = useState<UploadedFile[]>(initial?.files ?? []);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [checking, setChecking] = useState(false);
@@ -207,13 +213,14 @@ export function RequestForm({
         amount: Number.isFinite(routeAmount) ? routeAmount : 0,
         exceptRequestId: editId,
         category: category || null,
+        whtBorne,
       });
       if (n !== seq.current) return;
       setChecking(false);
       if (res.ok) setPreview(res.preview);
     }, 350);
     return () => clearTimeout(t);
-  }, [kind, effectiveBeneficiary, workDate, otStart, otEnd, rateId, routeAmount, editId, category]);
+  }, [kind, effectiveBeneficiary, workDate, otStart, otEnd, rateId, routeAmount, editId, category, whtBorne]);
 
   // คนที่ทำด้วยกัน: ตรวจ + คิดเงินทีละคน (กติกาเดียวกับคนแรก)
   const groupMode = kind === "ot" && !editId;
@@ -257,6 +264,7 @@ export function RequestForm({
   const receipts = files.filter((f) => f.role === "receipt");
   const mismatch = usesLines && receipts.length > 0 ? amountMismatch(receipts, linesTotal) : null;
   const breakdown = kind === "contractor" && Number.isFinite(parseMoney(amount)) ? contractorBreakdown(parseMoney(amount), vatOn ? settings.vatPercent : 0, whtPercent) : null;
+  const borne = whtBorne && Number.isFinite(parseMoney(amount)) ? borneBreakdown(parseMoney(amount), vatOn ? settings.vatPercent : 0, whtPercent) : null;
   const otMinutes = /^\d{2}:\d{2}$/.test(otStart) && /^\d{2}:\d{2}$/.test(otEnd) ? minutesBetween(otStart, otEnd) : 0;
   const manualOt = kind === "ot" && preview?.baseKind === "manual";
   // ไม่มีเงินเดือนในระบบ = ยื่นแบบไม่มียอด HR ใส่ตอนตรวจ (ผู้ใช้ 8/11/2569)
@@ -280,7 +288,7 @@ export function RequestForm({
   const fileBlock = files.some((f) => f.duplicateOf);
 
   const total =
-    kind === "contractor" ? (breakdown?.net ?? 0) : kind === "ot" ? (Number.isFinite(otAmount ?? NaN) ? (otAmount as number) : 0) : Number.isFinite(numericAmount) ? numericAmount : 0;
+    kind === "contractor" ? (borne ? borne.paid : (breakdown?.net ?? 0)) : kind === "ot" ? (Number.isFinite(otAmount ?? NaN) ? (otAmount as number) : 0) : Number.isFinite(numericAmount) ? numericAmount : 0;
 
   function submit() {
     if (!kind) return;
@@ -303,6 +311,7 @@ export function RequestForm({
         workOrderId: workOrderId || null,
         vatOn,
         whtPercent,
+        whtBorne,
         attachments: noBill ? files.filter((f) => f.role !== "receipt") : files,
         category: selfKind ? category || null : null,
         noReceipt:
@@ -847,10 +856,19 @@ export function RequestForm({
                   </select>
                 </label>
               </div>
+              {settings.whtBorneAllowed && whtPercent > 0 && (
+                <label className={`flex items-start gap-2 rounded-(--radius) border px-3 py-2.5 text-sm ${whtBorne ? "border-amber-300 bg-amber-50" : "border-(--line)"}`}>
+                  <input type="checkbox" checked={whtBorneTick} onChange={(e) => setWhtBorne(e.target.checked)} className="mt-0.5 h-4 w-4" />
+                  <span>
+                    <span className="font-semibold text-(--ink)">จ่ายร้านไปเต็มจำนวนแล้ว ไม่ได้หัก {whtPercent}%</span>
+                    <span className="block text-xs text-(--ink-soft)">บริษัทต้องออกภาษีให้เอง (เสียเพิ่ม) · ใบนี้ต้องให้ {ceoText("CEO", ceo)} อนุมัติ · ใส่ค่าจ้างที่จ่ายร้านไปจริง · ใบนี้จะคืนเงินให้คนที่สำรองจ่าย</span>
+                  </span>
+                </label>
+              )}
               {placeFields}
               <label className={labelCls}>
                 <span className={labelText}>รายละเอียด</span>
-                <textarea rows={2} className={`${field} h-auto py-2`} value={detail} onChange={(e) => setDetail(e.target.value)} />
+                <textarea rows={2} className={`${field} h-auto py-2`} value={detail} onChange={(e) => setDetail(e.target.value)} placeholder={whtBorne ? "ใครสำรองจ่าย ทำไมจ่ายไปก่อน (เช่น ซ่อมด่วน ช่างไม่รอ)" : undefined} />
               </label>
               <FilePicker role="evidence" files={files} onChange={setFiles} label="หลักฐาน (อย่างน้อย 1)" hint="ใบเสนอราคา ใบแจ้งหนี้ ใบเสร็จ รูปงาน" today={today} />
             </>
@@ -934,7 +952,16 @@ export function RequestForm({
                 {preview.cap === null ? "ไม่จำกัดเพดาน" : `เพดานเดือนนี้ ${baht(preview.cap)} · ใช้ไปแล้ว ${baht(preview.capUsed)} · เหลือ ${baht(Math.max(0, preview.cap - preview.capUsed))}`}
               </div>
             )}
-            {kind === "contractor" && breakdown && (
+            {kind === "contractor" && borne && (
+              <>
+                <MoneyRow label="ค่าจ้างที่จ่ายร้านไป (ก่อน VAT)" value={borne.paidBase} />
+                {borne.vat > 0 && <MoneyRow label={`VAT ${borne.vatPercent}%`} value={borne.vat} />}
+                <MoneyRow strong label="จ่ายร้านไปแล้ว (คืนคนสำรองจ่าย)" value={borne.paid} />
+                <MoneyRow label={`บริษัทออกภาษีให้ ${borne.whtPercent}%`} hint={`${baht(borne.paidBase)} × ${borne.whtPercent}/${100 - borne.whtPercent} · บริษัทนำส่งเอง · 50 ทวิ เงินได้ ${baht(borne.income)}`} value={borne.tax} />
+                <MoneyRow label="ค่าใช้จ่ายบริษัทรวม" value={borne.cost} />
+              </>
+            )}
+            {kind === "contractor" && breakdown && !borne && (
               <>
                 <MoneyRow label="ค่าจ้าง (ก่อน VAT)" value={breakdown.base} />
                 {breakdown.vat > 0 && <MoneyRow label={`VAT ${breakdown.vatPercent}%`} value={breakdown.vat} />}

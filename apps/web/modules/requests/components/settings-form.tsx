@@ -47,6 +47,7 @@ export function SettingsForm({ initial, people = [] }: { initial: RequestSetting
   const [accounts, setAccounts] = useState<AccountsState>({
     companyAccounts: initial.companyAccounts,
     whtCompanyOnly: initial.whtCompanyOnly,
+    whtBorneAllowed: initial.whtBorneAllowed,
     payerName: initial.payerName,
     payerTaxId: initial.payerTaxId,
     payerAddress: initial.payerAddress,

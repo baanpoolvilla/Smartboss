@@ -52,6 +52,8 @@ model MoneyRequest {
   vatAmount       Decimal   @default(0) @map("vat_amount") @db.Decimal(12, 2)
   whtPercent      Decimal   @default(0) @map("wht_percent") @db.Decimal(5, 2)
   whtAmount       Decimal   @default(0) @map("wht_amount") @db.Decimal(12, 2)
+  /// จ่ายร้านไปเต็มแล้ว ไม่ได้หัก — บริษัทออกภาษีให้ (50 ทวิ ช่อง 3 ออกให้ครั้งเดียว) · amount = เงินได้รวมภาษีที่ออกให้ · wht = ภาษีที่บริษัทนำส่งเอง
+  whtBorne        Boolean   @default(false) @map("wht_borne")
   /// ยอดที่ต้องจ่ายจริง = amount + vat − wht
   netAmount       Decimal   @map("net_amount") @db.Decimal(12, 2)
   /// รายการย่อย [{item, amount}]
@@ -326,6 +328,8 @@ model MoneyRequestSettings {
   companyAccounts   Json?    @map("company_accounts")
   /// รายการที่หัก ณ ที่จ่าย ต้องโอนจากบัญชีบริษัท (ห้ามเงินสด/เงินสดย่อย) — ปิด = แบบเดิม
   whtCompanyOnly    Boolean  @default(false) @map("wht_company_only")
+  /// ให้ลงใบจ่ายช่าง/ร้านที่จ่ายไปเต็มแล้ว บริษัทออกภาษีให้ (ต้องให้ CEO อนุมัติ) — ปิด = แบบเดิม
+  whtBorneAllowed   Boolean  @default(false) @map("wht_borne_allowed")
   /// ผู้จ่ายเงินในหนังสือรับรองการหักภาษี ณ ที่จ่าย (50 ทวิ) — ชื่อ / เลขผู้เสียภาษี / ที่อยู่บริษัท
   payerName         String   @default("") @map("payer_name")
   payerTaxId        String   @default("") @map("payer_tax_id")

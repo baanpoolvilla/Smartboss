@@ -9,6 +9,7 @@ const field = "h-11 w-full rounded-(--radius) border border-(--line) bg-(--bg) p
 export interface AccountsState {
   companyAccounts: CompanyAccount[];
   whtCompanyOnly: boolean;
+  whtBorneAllowed: boolean;
   payerName: string;
   payerTaxId: string;
   payerAddress: string;
@@ -50,6 +51,14 @@ export function CompanyAccountsSettings({ value, onChange }: { value: AccountsSt
         <span>
           รายการที่หัก ณ ที่จ่าย ต้องโอนจากบัญชีบริษัทเท่านั้น
           <span className="block text-xs text-(--ink-soft)">ค่าช่าง/ค่าบริการที่หักภาษี (เช่น 3%) จ่ายเงินสด/เงินสดย่อย/บัญชีส่วนตัวไม่ได้ ต้องเลือกบัญชีบริษัท + แนบสลิป · เงินสดย่อย “ซื้อของเอง” ที่มีหัก ณ ที่จ่ายจะให้ลงเป็นใบ “จ่ายช่าง / ร้านค้า” แทน</span>
+        </span>
+      </label>
+
+      <label className="flex items-start gap-3 text-sm text-(--ink)">
+        <input type="checkbox" className="mt-1 h-4 w-4" checked={value.whtBorneAllowed} onChange={(e) => set({ whtBorneAllowed: e.target.checked })} />
+        <span>
+          ให้ลงใบที่จ่ายร้านไปเต็มแล้ว (ไม่ได้หัก) — บริษัทออกภาษีให้
+          <span className="block text-xs text-(--ink-soft)">ใบ “จ่ายช่าง / ร้านค้า” มีช่องติ๊ก “จ่ายไปเต็มแล้ว” · ระบบคิดภาษีที่บริษัทต้องนำส่งเอง (เช่น จ่ายไป 1,500 → ภาษี 46.39) · ต้องให้ CEO อนุมัติทุกใบ · 50 ทวิ ติ๊ก “ออกให้ครั้งเดียว”</span>
         </span>
       </label>
 

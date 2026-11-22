@@ -287,7 +287,9 @@ export default async function RequestDetailPage({ params, searchParams }: { para
     steps.splice(1, 0, { title: `(ไม่บังคับ) ผูกชื่อ "${r.beneficiaryName}" กับคนงาน`, sub: "ผูกก่อนอนุมัติ = เข้าบัญชีค่าแรง · ไม่ผูก = อนุมัติแล้ว HR จ่ายเงินสด/โอนเอง", state: "todo" });
   }
 
-  const breakdown = r.kind === "contractor" ? contractorBreakdown(r.amount, r.vatPercent, r.whtPercent) : null;
+  const breakdown = r.kind === "contractor" && !r.whtBorne ? contractorBreakdown(r.amount, r.vatPercent, r.whtPercent) : null;
+  // จ่ายร้านไปเต็มแล้ว บริษัทออกภาษีให้: amount = เงินได้ (รวมภาษี) · wht = ภาษีที่นำส่งเอง · net = ที่จ่ายร้านไป
+  const borne = r.kind === "contractor" && r.whtBorne ? { paidBase: round2(r.amount - r.whtAmount), vat: r.vatAmount, paid: r.netAmount, tax: r.whtAmount, income: r.amount, cost: round2(r.netAmount + r.whtAmount) } : null;
   const vendor = r.vendorId ? await withRequestsTenant(orgId, (tx) => tx.moneyVendor.findFirst({ where: { orgId, id: r.vendorId! } })) : null;
 
   return (
@@ -311,7 +313,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
                   <div className="text-xs text-(--ink-soft)">{r.code} · {meta.label}</div>
                 </div>
                 <div className="sm:text-right">
-                  <div className="text-xs text-(--ink-soft)">{r.kind === "contractor" ? "จ่ายร้านจริง" : "ยอด"}</div>
+                  <div className="text-xs text-(--ink-soft)">{r.kind === "contractor" ? (r.whtBorne ? "คืนคนที่สำรองจ่าย" : "จ่ายร้านจริง") : "ยอด"}</div>
                   {unlinked ? (
                     r.netAmount > 0 ? (
                       <div>
@@ -440,6 +442,21 @@ export default async function RequestDetailPage({ params, searchParams }: { para
                   {r.clearNoReceipt && <NoReceiptCard nr={r.clearNoReceipt} />}
                 </>
               )}
+              {borne && (
+                <>
+                  <Notice tone="warn">จ่ายร้านไปเต็มจำนวนแล้ว ไม่ได้หัก {r.whtPercent}% — บริษัทเสียภาษีแทน {baht(borne.tax)} (นำส่งภายในวันที่ 7 เดือนถัดไป)</Notice>
+                  <MoneyRow label="ค่าจ้างที่จ่ายร้านไป (ก่อน VAT)" value={borne.paidBase} />
+                  {borne.vat > 0 && <MoneyRow label={`VAT ${r.vatPercent}%`} value={borne.vat} />}
+                  <MoneyRow strong label="จ่ายร้านไปแล้ว (คืนคนสำรองจ่าย)" value={borne.paid} />
+                  <MoneyRow label={`บริษัทออกภาษีให้ ${r.whtPercent}%`} hint={`${baht(borne.paidBase)} × ${r.whtPercent}/${100 - r.whtPercent} · 50 ทวิ เงินได้ ${baht(borne.income)} ติ๊ก “ออกให้ครั้งเดียว”`} value={borne.tax} />
+                  <MoneyRow label="ค่าใช้จ่ายบริษัทรวม" value={borne.cost} />
+                  {vendor && (
+                    <div className="mt-1 rounded-(--radius) bg-(--bg-soft) px-3 py-2 text-xs text-(--ink-soft)">
+                      {vendor.name}{vendor.taxId ? ` · เลขผู้เสียภาษี ${vendor.taxId}` : " · ยังไม่มีเลขผู้เสียภาษี"}
+                    </div>
+                  )}
+                </>
+              )}
               {breakdown && (
                 <>
                   <MoneyRow label="ค่าจ้าง (ก่อน VAT)" value={breakdown.base} />
@@ -532,7 +549,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
                 title={r.kind === "cash_advance" && r.clearedAt ? "จ่ายส่วนต่างที่ใช้เกิน" : "บันทึกการจ่ายเงิน"}
                 noPhotoOk={settings.cashConfirmMode && r.beneficiaryKind === "staff" && !!r.beneficiaryUserId}
                 companyAccounts={settings.companyAccounts}
-                needCompanyAccount={settings.whtCompanyOnly && r.whtAmount > 0.005}
+                needCompanyAccount={settings.whtCompanyOnly && r.whtAmount > 0.005 && !r.whtBorne}
               />
             )}
             {r.kind === "cash_advance" && r.status === "paid" && !r.clearStatus && (isBeneficiary || r.createdBy === session.userId) && (

@@ -107,6 +107,8 @@ export interface RequestView {
   vatAmount: number;
   whtPercent: number;
   whtAmount: number;
+  /** จ่ายร้านไปเต็มแล้ว บริษัทออกภาษีให้ (wht = ภาษีที่นำส่งเอง ไม่ได้หักจากร้าน) */
+  whtBorne: boolean;
   netAmount: number;
   lines: RequestLine[];
   attachments: Attachment[];
@@ -210,6 +212,7 @@ export function toRequest(r: RequestRow, payments: PaymentRow[]): RequestView {
     vatAmount: num0(r.vatAmount),
     whtPercent: num0(r.whtPercent),
     whtAmount: num0(r.whtAmount),
+    whtBorne: r.whtBorne,
     netAmount: num0(r.netAmount),
     lines: (r.lines as RequestLine[] | null) ?? [],
     attachments: (r.attachments as unknown as Attachment[]) ?? [],
@@ -306,6 +309,7 @@ export async function readSettings(tx: Tx, orgId: string): Promise<RequestSettin
     autoCloseClear: s.autoCloseClear,
     companyAccounts: parseCompanyAccounts(s.companyAccounts),
     whtCompanyOnly: s.whtCompanyOnly,
+    whtBorneAllowed: s.whtBorneAllowed,
     payerName: s.payerName,
     payerTaxId: s.payerTaxId,
     payerAddress: s.payerAddress,

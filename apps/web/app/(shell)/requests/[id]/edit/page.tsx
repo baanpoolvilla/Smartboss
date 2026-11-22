@@ -6,7 +6,7 @@ import { listLinkableWorkOrders, listPeople, listProperties, loadSettings } from
 import { canManageVendors, requestsPage } from "@/modules/requests/lib/page";
 import { loadRequests, toVendor, withRequestsTenant } from "@/modules/requests/lib/db";
 import { RequestForm, type EditInitial } from "@/modules/requests/components/request-form";
-import { activeOtRates, bangkokToday } from "@/modules/requests/lib/types";
+import { activeOtRates, bangkokToday, round2 } from "@/modules/requests/lib/types";
 import { ceoTitle } from "@/lib/ceo-title";
 import { ceoText } from "@/lib/ceo-title-shared";
 
@@ -51,7 +51,7 @@ export default async function EditRequestPage({ params }: { params: Promise<{ id
     otStart: r.otStart ?? "",
     otEnd: r.otEnd ?? "",
     rateId: activeOtRates(settings).find((x) => x.label === r.otRateLabel)?.id ?? "",
-    amount: r.kind === "ot" ? (r.otBaseKind === "manual" ? String(r.amount) : "") : r.kind === "expense" ? "" : String(r.amount),
+    amount: r.kind === "ot" ? (r.otBaseKind === "manual" ? String(r.amount) : "") : r.kind === "expense" ? "" : r.whtBorne ? String(round2(r.amount - r.whtAmount)) : String(r.amount),
     title: r.title,
     detail: r.detail,
     lines: r.kind === "expense" ? (r.lines.length ? r.lines.map((l) => ({ item: l.item, amount: String(l.amount), ...(l.propertyId ? { propertyId: l.propertyId } : {}) })) : [{ item: r.title, amount: String(r.amount) }]) : [],
@@ -63,6 +63,7 @@ export default async function EditRequestPage({ params }: { params: Promise<{ id
     vendorName: r.kind === "contractor" && !r.vendorId ? r.beneficiaryName : "",
     vatOn: r.vatPercent > 0,
     whtPercent: r.whtPercent,
+    whtBorne: r.whtBorne,
     files: r.attachments.map((a) => ({ ...a, duplicateOf: null })),
   };
 

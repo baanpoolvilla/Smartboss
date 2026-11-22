@@ -96,7 +96,7 @@ export default async function WhtCertPage({ params }: { params: Promise<{ id: st
           </tr>
         </tbody>
       </table>
-      <div className="pay">ผู้จ่ายเงิน: ☑ (1) หัก ณ ที่จ่าย ☐ (2) ออกให้ตลอดไป ☐ (3) ออกให้ครั้งเดียว ☐ (4) อื่น ๆ</div>
+      <div className="pay">ผู้จ่ายเงิน: {r.whtBorne ? "☐" : "☑"} (1) หัก ณ ที่จ่าย ☐ (2) ออกให้ตลอดไป {r.whtBorne ? "☑" : "☐"} (3) ออกให้ครั้งเดียว ☐ (4) อื่น ๆ</div>
       <div className="sign">
         <div>ขอรับรองว่าข้อความและตัวเลขดังกล่าวข้างต้นถูกต้องตรงกับความจริงทุกประการ</div>
         <div className="line">ลงชื่อ ............................................................ ผู้จ่ายเงิน</div>
@@ -131,7 +131,7 @@ export default async function WhtCertPage({ params }: { params: Promise<{ id: st
       `}</style>
       <div className="bar">
         <div>
-          <b>50 ทวิ · {r.code}</b> · {vendor?.name ?? r.beneficiaryName} · หัก {r.whtPercent}% {baht(r.whtAmount)}
+          <b>50 ทวิ · {r.code}</b> · {vendor?.name ?? r.beneficiaryName} · {r.whtBorne ? "บริษัทออกภาษีให้" : "หัก"} {r.whtPercent}% {baht(r.whtAmount)}
         </div>
         <PrintButton />
       </div>

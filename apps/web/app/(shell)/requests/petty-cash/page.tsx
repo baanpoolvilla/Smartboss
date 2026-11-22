@@ -233,7 +233,7 @@ export default async function PettyCashPage({ searchParams }: { searchParams: Pr
               const isMe = h.userId === session.userId;
               return (
                 <PettyHolderCard
-                  tax={{ review: reqSettings.pettySpendReview, vatPercent: reqSettings.vatPercent, whtRates: reqSettings.whtRates.filter((r) => r > 0), noReceiptMax: reqSettings.noReceiptMax, whtCompanyOnly: reqSettings.whtCompanyOnly }}
+                  tax={{ review: reqSettings.pettySpendReview, vatPercent: reqSettings.vatPercent, whtRates: reqSettings.whtRates.filter((r) => r > 0), noReceiptMax: reqSettings.noReceiptMax, whtCompanyOnly: reqSettings.whtCompanyOnly, whtBorneAllowed: reqSettings.whtBorneAllowed }}
                   key={h.userId}
                   holder={h}
                   isMe={isMe && viewer.isPettyHolder}

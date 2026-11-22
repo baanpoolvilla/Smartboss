@@ -72,7 +72,10 @@ function accountNoMatches(slipNo: string, accDigits: string): boolean | null {
   return runs.length > 0 && runs.every((run) => accDigits.includes(run));
 }
 
-/** รายการนี้ต้องโอนจากบัญชีบริษัทไหม (บริษัทเปิดสวิตช์ + มีหัก ณ ที่จ่าย) */
-export function mustUseCompanyAccount(settings: { whtCompanyOnly: boolean }, whtAmount: number): boolean {
-  return settings.whtCompanyOnly && whtAmount > 0.005;
+/**
+ * รายการนี้ต้องโอนจากบัญชีบริษัทไหม (บริษัทเปิดสวิตช์ + มีหัก ณ ที่จ่าย)
+ * borne = จ่ายร้านไปแล้ว บริษัทออกภาษีให้ — ที่เหลือคือคืนเงินคนที่สำรองจ่าย ไม่ใช่จ่ายร้าน จึงไม่บังคับ
+ */
+export function mustUseCompanyAccount(settings: { whtCompanyOnly: boolean }, whtAmount: number, borne = false): boolean {
+  return settings.whtCompanyOnly && whtAmount > 0.005 && !borne;
 }

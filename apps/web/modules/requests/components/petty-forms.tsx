@@ -338,6 +338,7 @@ export interface PettyTaxSettings {
   noReceiptMax?: number | null;
   /** บริษัทบังคับ หัก ณ ที่จ่ายต้องโอนจากบัญชีบริษัท — ซื้อของเองที่มีหัก ณ ที่จ่ายลงไม่ได้ */
   whtCompanyOnly?: boolean;
+  whtBorneAllowed?: boolean;
 }
 
 function PayModal({ holder, today, payable, tax, onClose }: { holder: PettyHolderView; today: string; payable: PettyPayableItem[]; tax: PettyTaxSettings; onClose: () => void }) {
@@ -556,7 +557,7 @@ function SpendForm({ balance, today, taxSettings, onClose }: { balance: number; 
               </div>
             )}
             {taxSettings.whtCompanyOnly && whtPercent > 0 && (
-              <Notice tone="warn">ค่าบริการที่หัก ณ ที่จ่าย ต้องโอนจากบัญชีบริษัท — จ่ายจากเงินสดย่อยไม่ได้ ให้ลงเป็นใบ “จ่ายช่าง / ร้านค้า” ที่เมนูยื่นคำขอแทน</Notice>
+              <Notice tone="warn">ค่าบริการที่หัก ณ ที่จ่าย ต้องโอนจากบัญชีบริษัท — จ่ายจากเงินสดย่อยไม่ได้ ให้ลงเป็นใบ “จ่ายช่าง / ร้านค้า” ที่เมนูยื่นคำขอแทน{taxSettings.whtBorneAllowed ? " · ถ้าจ่ายร้านไปเต็มแล้ว ติ๊ก “จ่ายร้านไปเต็มจำนวนแล้ว” ในใบนั้น" : ""}</Notice>
             )}
             {tax && (vatIncluded || whtPercent > 0) && (
               <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5 rounded-(--radius) bg-(--bg-soft) px-3 py-2 text-sm tabular-nums">
