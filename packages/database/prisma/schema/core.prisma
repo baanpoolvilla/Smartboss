@@ -526,6 +526,12 @@ model PerformanceSetting {
    */
   gradeThresholds Json @default("{}") @map("grade_thresholds")
 
+  /**
+   * เกณฑ์เกรดชุดเก่า — [{ "until": "2026-11", "thresholds": { "A": 90, ... } }] รอบที่ ≤ until ใช้ชุดนั้น
+   * เปลี่ยนเกณฑ์แล้วรอบที่ผ่านมาไม่เปลี่ยนเกรดตาม (ค่าคอมย้อนหลังคงเดิม) · ว่าง = ทุกรอบใช้ gradeThresholds
+   */
+  gradeThresholdHistory Json @default("[]") @map("grade_threshold_history")
+
   updatedAt DateTime @updatedAt @map("updated_at")
   updatedBy String?  @map("updated_by")
 

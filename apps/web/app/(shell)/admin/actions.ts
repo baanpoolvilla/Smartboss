@@ -15,7 +15,9 @@ import {
 import { prisma } from "@smartboss/database";
 import { ADMIN_PERMS } from "@/modules/admin/permissions";
 import { organizationExists } from "@/modules/admin/data/orgs";
-import { PERFORMANCE_CATEGORIES } from "@/lib/performance";
+import { PERFORMANCE_CATEGORIES, loadPerformanceSettings } from "@/lib/performance";
+import { historyToJson, nextGradeHistory, sortThresholds } from "@/lib/grade-thresholds";
+import { shiftMonth } from "@/lib/performance-month";
 import { clampIdleLogout, clampSecuritySetting, loadSecuritySettings, parseIpList } from "@/lib/security-settings";
 import { notifyUser } from "@/modules/maintenance/data/notify";
 import { nextOrganizationCode } from "@/lib/document-code";
@@ -33,7 +35,7 @@ import {
   ORG_ROLES,
   ROLE_GRANTS,
 } from "@smartboss/database/defaults";
-import { editableScorePeriodMonths } from "@/lib/score-period";
+import { editableScorePeriodMonths, scorePeriodOf } from "@/lib/score-period";
 import { loadScorePeriodConfig, saveScorePeriodConfig } from "@/lib/score-period-config";
 import { ceoTitle, CEO_TITLE_KEY, forgetCeoTitle } from "@/lib/ceo-title";
 import { normalizeCeoTitle } from "@/lib/ceo-title-shared";
@@ -803,6 +805,15 @@ export async function savePerformanceSettingsAction(formData: FormData) {
     throw new Error("ต้องมีเกณฑ์เกรดอย่างน้อยหนึ่งระดับ");
   }
 
+  // เกณฑ์เปลี่ยน → รอบก่อน "เริ่มใช้" คงเกณฑ์เดิม (ค่าคอม/เกรดย้อนหลังไม่เปลี่ยนตาม) · "all" = ทุกรอบรวมย้อนหลัง (แบบเดิม)
+  const before = await loadPerformanceSettings(orgId);
+  const gradeFromRaw = String(formData.get("gradeFrom") ?? "current");
+  const currentRound = scorePeriodOf(await loadScorePeriodConfig(orgId), new Date());
+  const effectiveFrom = gradeFromRaw === "all" ? null : gradeFromRaw === "next" ? shiftMonth(currentRound, 1) : currentRound;
+  const gradeThresholdHistory = historyToJson(
+    nextGradeHistory(before.gradeThresholds, before.gradeHistory, sortThresholds(gradeThresholds), effectiveFrom),
+  );
+
   const startRaw = String(formData.get("scoringStartDate") ?? "").trim();
   if (startRaw && !/^\d{4}-\d{2}-\d{2}$/.test(startRaw)) {
     throw new Error("วันที่เริ่มนับคะแนนไม่ถูกต้อง");
@@ -816,6 +827,7 @@ export async function savePerformanceSettingsAction(formData: FormData) {
     missingPunchCountsAsAbsent: formData.get("missingPunchCountsAsAbsent") === "1",
     rulePoints,
     gradeThresholds,
+    gradeThresholdHistory,
     updatedBy: session.userId,
   };
 

@@ -34,7 +34,7 @@ export default async function HrScoringSettingsPage() {
             <div className="min-w-0 flex-1">
               <div className="flex flex-col gap-4">
                 <ScorePeriodForm period={period} />
-                <PerformanceSettingsForm settings={settings} />
+                <PerformanceSettingsForm settings={settings} orgId={session.orgId} />
               </div>
             </div>
           </div>

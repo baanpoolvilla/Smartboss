@@ -37,6 +37,8 @@ export interface CommissionMonth {
   weights: Record<string, number>;
   /** บริษัทเคยตั้งตัวคูณเองแล้วหรือยัง — ยัง = ใช้ค่าตั้งต้น */
   weightsCustomized: boolean;
+  /** เกรดที่บริษัทตั้งตัวคูณไว้แล้วบางเกรด แต่เกรดนี้ยังไม่ได้ตั้ง (เช่นเพิ่งเพิ่มเกรดบวก) — ใช้ค่าตั้งต้นอยู่ */
+  weightsUnsetGrades: string[];
   /** แบ่ง Pool เฉพาะคนที่ได้ค่าคอม (วิธี pool) */
   split: CommissionSplit;
   method: CommissionMethod;
@@ -176,6 +178,7 @@ export async function loadCommissionMonth(orgId: string, month: string): Promise
     gradeOrder: order,
     weights,
     weightsCustomized: Object.keys(saved).length > 0,
+    weightsUnsetGrades: Object.keys(saved).length > 0 ? order.filter((g) => !(g in saved)) : [],
     split: splitCommissionPool(poolSatang, members, weights),
     method,
     values,

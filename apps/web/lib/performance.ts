@@ -1,4 +1,5 @@
 import "server-only";
+import { parseGradeHistory, thresholdsForRound, type GradeHistoryEntry } from "@/lib/grade-thresholds";
 import { workerUserIds } from "@/lib/worker-role";
 import { WORKER_ROLE_CODE } from "@/modules/daily_worker/permissions";
 import { prisma } from "@smartboss/database";
@@ -98,6 +99,8 @@ export interface PerformanceSettings {
   rulePoints: Record<PerformanceCategory, number>;
   /** เรียงจากคะแนนสูงไปต่ำแล้ว — ตัวแรกที่ผ่านคือเกรดที่ได้ */
   gradeThresholds: [string, number][];
+  /** เกณฑ์ชุดเก่าของรอบที่ผ่านมา (lib/grade-thresholds.ts) — ว่าง = ทุกรอบใช้ gradeThresholds */
+  gradeHistory: GradeHistoryEntry[];
 }
 
 /*
@@ -124,6 +127,7 @@ const FALLBACK: PerformanceSettings = {
   missingPunchCountsAsAbsent: false,
   rulePoints: DEFAULT_RULE_POINTS,
   gradeThresholds: Object.entries(DEFAULT_GRADE_THRESHOLDS).sort((a, b) => b[1] - a[1]),
+  gradeHistory: [],
 };
 
 function toNumberMap(value: unknown): Record<string, number> {
@@ -166,6 +170,7 @@ export async function loadPerformanceSettings(orgId: string): Promise<Performanc
       Object.keys(grades).length > 0
         ? Object.entries(grades).sort((a, b) => b[1] - a[1])
         : FALLBACK.gradeThresholds,
+    gradeHistory: parseGradeHistory(row.gradeThresholdHistory),
   };
 }
 
@@ -200,6 +205,7 @@ export async function loadPerformanceSettingsMap(
         Object.keys(grades).length > 0
           ? Object.entries(grades).sort((a, b) => b[1] - a[1])
           : FALLBACK.gradeThresholds,
+      gradeHistory: parseGradeHistory(row.gradeThresholdHistory),
     });
   }
   return byOrg;
@@ -444,6 +450,12 @@ export function eventDay(at: Date): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(at);
 }
 
+/** การตั้งค่าที่ gradeThresholds เป็นเกณฑ์ของรอบ `month` (รอบที่ผ่านมาอาจเป็นชุดเก่า) */
+export function settingsForRound(settings: PerformanceSettings, month: string): PerformanceSettings {
+  const t = thresholdsForRound(settings.gradeThresholds, settings.gradeHistory, month);
+  return t === settings.gradeThresholds ? settings : { ...settings, gradeThresholds: t };
+}
+
 /** เกรดจากคะแนนตามเกณฑ์ของบริษัท — ต่ำกว่าเกณฑ์สุดท้ายได้ F */
 export function gradeOf(score: number, thresholds: [string, number][]): string {
   for (const [grade, min] of thresholds) {
@@ -510,7 +522,9 @@ export async function buildScorecards(
   /** รอบเกรด (score-period.ts) — ใส่มา = นับเฉพาะที่บันทึกก่อนรอบปิด (ล็อกแล้วจบ) */
   period?: { config: ScorePeriodConfig; month: string },
 ): Promise<{ settings: PerformanceSettings; cards: UserScorecard[] }> {
-  const settings = await loadPerformanceSettings(orgId);
+  const loaded = await loadPerformanceSettings(orgId);
+  // รอบที่ผ่านมาใช้เกณฑ์ของรอบนั้น (เปลี่ยนเกณฑ์แล้วเกรดเก่าไม่เปลี่ยนตาม) — ผู้เรียกที่ใช้ settings.gradeThresholds ได้ชุดของรอบนี้
+  const settings = period ? settingsForRound(loaded, period.month) : loaded;
   const start =
     settings.scoringStartDate && settings.scoringStartDate > from ? settings.scoringStartDate : from;
   const select = {
@@ -686,6 +700,6 @@ export async function buildUserMonthlyScores(
     }
     const s = sum.get(month) ?? { points: 0, count: 0 };
     const score = settings.baseScore + s.points;
-    return { month, score, grade: gradeOf(score, settings.gradeThresholds), eventCount: s.count };
+    return { month, score, grade: gradeOf(score, thresholdsForRound(settings.gradeThresholds, settings.gradeHistory, month)), eventCount: s.count };
   });
 }

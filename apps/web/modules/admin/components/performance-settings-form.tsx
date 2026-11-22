@@ -9,6 +9,10 @@ import {
   type PerformanceSettings,
 } from "@/lib/performance";
 import { savePerformanceSettingsAction } from "@/app/(shell)/admin/actions";
+import { GradeThresholdsEditor } from "@/modules/admin/components/grade-thresholds-editor";
+import { scorePeriodOf } from "@/lib/score-period";
+import { loadScorePeriodConfig } from "@/lib/score-period-config";
+import { monthDisplay, shiftMonth } from "@/lib/performance-month";
 
 /**
  * ฟอร์มตั้งเกณฑ์คะแนนผลงานของบริษัท — ใช้ร่วมกันสองที่:
@@ -20,8 +24,6 @@ import { savePerformanceSettingsAction } from "@/app/(shell)/admin/actions";
  * เพราะแต่ละบริษัทมีมาตรฐานคนละแบบ บางที่สาย 5 นาทีถือว่าสาย บางที่ผ่อนผัน 30 นาที
  */
 
-/** แถวเกรดว่างที่เตรียมไว้ให้กรอกเพิ่ม */
-const GRADE_SPARE_ROWS = 2;
 
 /**
  * task_late / task_manual_dock ไม่มีกลุ่มในนี้ — สองตัวนี้ไม่เคยถูก rulePoints
@@ -60,12 +62,9 @@ const GROUPS: { title: string; hint: string; keys: PerformanceCategory[] }[] = [
   },
 ];
 
-export function PerformanceSettingsForm({ settings: s }: { settings: PerformanceSettings }) {
-  // แถวว่างท้ายรายการไว้เพิ่มระดับใหม่ — ฟอร์มเป็น server component จึงไม่มีปุ่ม "เพิ่มแถว"
-  const gradeRows: ([string, number] | null)[] = [
-    ...s.gradeThresholds,
-    ...Array.from<null>({ length: GRADE_SPARE_ROWS }).fill(null),
-  ];
+export async function PerformanceSettingsForm({ settings: s, orgId }: { settings: PerformanceSettings; orgId: string }) {
+  const currentRound = scorePeriodOf(await loadScorePeriodConfig(orgId), new Date());
+  const lastOld = s.gradeHistory[s.gradeHistory.length - 1];
 
   return (
     <form action={savePerformanceSettingsAction} className="flex flex-col gap-4">
@@ -107,33 +106,15 @@ export function PerformanceSettingsForm({ settings: s }: { settings: Performance
         <p className="mb-2 text-xs text-(--ink-soft)">
           ชื่อเกรดตั้งเองได้ (A–F, ผ่าน/ไม่ผ่าน, ดีมาก/ดี/พอใช้ …) —
           ระบบไล่จากคะแนนสูงลงต่ำ ตัวแรกที่ถึงเกณฑ์คือเกรดที่ได้
-          ต่ำกว่าทุกเกณฑ์ได้ F · เว้นชื่อว่างเพื่อลบระดับนั้น
+          ต่ำกว่าทุกเกณฑ์ได้ F
         </p>
-        <div className="flex flex-col gap-2">
-          {gradeRows.map((row, i) => (
-            <div key={i} className="grid grid-cols-[1fr_1fr] gap-3">
-              <input
-                type="text"
-                name="gradeName"
-                defaultValue={row?.[0] ?? ""}
-                maxLength={20}
-                placeholder="ชื่อเกรด"
-                aria-label={`ชื่อเกรดระดับที่ ${i + 1}`}
-                className={inputClass}
-              />
-              <input
-                type="number"
-                name="gradeMin"
-                defaultValue={row?.[1] ?? ""}
-                min={0}
-                max={1000}
-                placeholder="คะแนนขั้นต่ำ"
-                aria-label={`คะแนนขั้นต่ำระดับที่ ${i + 1}`}
-                className={inputClass}
-              />
-            </div>
-          ))}
-        </div>
+        <GradeThresholdsEditor
+          initial={s.gradeThresholds}
+          baseScore={s.baseScore}
+          currentRoundLabel={monthDisplay(currentRound)}
+          nextRoundLabel={monthDisplay(shiftMonth(currentRound, 1))}
+          historyNote={lastOld ? `รอบ ${monthDisplay(lastOld.until)} และก่อนหน้า ใช้เกณฑ์ชุดเดิม (${lastOld.thresholds.map(([g, m]) => `${g} ${m}`).join(" · ")})` : null}
+        />
       </SectionCard>
 
       <SectionCard

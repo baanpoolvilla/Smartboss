@@ -12,6 +12,7 @@ import {
   inputClass,
 } from "@/modules/hr/components/ui";
 import { gradeColor } from "@/lib/performance";
+import { HalfStepWeightsButton } from "@/modules/hr/components/half-step-weights-button";
 import { monthDisplay, shiftMonth } from "@/lib/performance-month";
 import { scorePeriodOf } from "@/lib/score-period";
 import { loadScorePeriodConfig, loadScorePeriodReadyAt } from "@/lib/score-period-config";
@@ -346,9 +347,11 @@ export async function renderCommissionTab(
             <SectionCard
               title={method === "grade_tier" ? "คะแนน Grade (ตัวคูณตามเกรด)" : "ตัวคูณตามเกรด"}
               description={
-                data.weightsCustomized
-                  ? "ใช้ตัวคูณที่บริษัทตั้งไว้ — มีผลกับทุกเดือนที่เปิดดู"
-                  : "ยังไม่เคยตั้ง — ตอนนี้ใช้ค่าตั้งต้นไล่ลงตามอันดับเกรด"
+                data.weightsUnsetGrades.length > 0
+                  ? `⚠ เกรด ${data.weightsUnsetGrades.join(", ")} ยังไม่ได้ตั้งตัวคูณ — ตอนนี้ใช้ค่าตั้งต้นของระบบ กรอกแล้วกดบันทึก`
+                  : data.weightsCustomized
+                    ? "ใช้ตัวคูณที่บริษัทตั้งไว้ — มีผลกับทุกเดือนที่เปิดดู"
+                    : "ยังไม่เคยตั้ง — ตอนนี้ใช้ค่าตั้งต้นไล่ลงตามอันดับเกรด"
               }
             >
               <form action={saveCommissionWeightsAction} className="flex flex-col gap-3">
@@ -392,9 +395,12 @@ export async function renderCommissionTab(
                 {canManage && (
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-xs text-(--ink-soft)">ตัวคูณ 0 = ไม่ได้ค่าคอม · ตัวอย่าง A = 1, B = 0.8 → คนเกรด B ได้ 80% ของคนเกรด A</p>
-                    <Button type="submit" size="sm" variant="outline">
-                      บันทึกตัวคูณ
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <HalfStepWeightsButton grades={gradeOrder} />
+                      <Button type="submit" size="sm" variant="outline">
+                        บันทึกตัวคูณ
+                      </Button>
+                    </div>
                   </div>
                 )}
               </form>
