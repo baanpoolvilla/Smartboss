@@ -301,6 +301,10 @@ model MoneyRequestSettings {
   /// none | baht | days — เพดานเบิกล่วงหน้าต่อคนต่อเดือน
   advanceCapMode    String   @default("baht") @map("advance_cap_mode")
   advanceCapValue   Decimal  @default(3000) @map("advance_cap_value") @db.Decimal(12, 2)
+  /// month | half — เพดานนับต่อเดือน (แบบเดิม) หรือต่อรอบครึ่งเดือน (1–15 / 16–สิ้นเดือน)
+  advanceCapPeriod  String   @default("month") @map("advance_cap_period")
+  /// เบิกล่วงหน้าได้เฉพาะคนงานรายวัน — ปิด = แบบเดิม (ทุกคน)
+  advanceWorkersOnly Boolean @default(false) @map("advance_workers_only")
   /// [0,1,2,3,5] — % หัก ณ ที่จ่ายให้เลือก
   whtRates          Json     @map("wht_rates")
   vatPercent        Decimal  @default(7) @map("vat_percent") @db.Decimal(5, 2)

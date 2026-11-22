@@ -296,6 +296,8 @@ export async function readSettings(tx: Tx, orgId: string): Promise<RequestSettin
     otRates: rates.length > 0 ? rates : DEFAULT_SETTINGS.otRates,
     advanceCapMode: (s.advanceCapMode as AdvanceCapMode) ?? "baht",
     advanceCapValue: num0(s.advanceCapValue),
+    advanceCapPeriod: s.advanceCapPeriod === "half" ? "half" : "month",
+    advanceWorkersOnly: s.advanceWorkersOnly,
     whtRates: wht.length > 0 ? wht : DEFAULT_SETTINGS.whtRates,
     vatPercent: num0(s.vatPercent),
     receiptMaxAgeDays: s.receiptMaxAgeDays,

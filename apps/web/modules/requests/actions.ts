@@ -38,6 +38,7 @@ import {
   METHOD_LABEL,
   addDays,
   advanceCap,
+  advanceRoundOf,
   bangkokToday,
   baht,
   borneBreakdown,
@@ -263,6 +264,8 @@ export interface Preview {
   /** เบิกล่วงหน้า */
   cap: number | null;
   capUsed: number;
+  /** รอบที่นับเพดาน เช่น "รอบ 16–30 พ.ย. 2569" */
+  capLabel: string | null;
   /** ปัญหาที่ส่งไม่ได้ / ข้อเตือน */
   blocks: string[];
   warns: string[];
@@ -288,10 +291,10 @@ async function beneficiaryOf(orgId: string, userId: string | null) {
   return { userId: u.id, name: u.name, email: u.email, kind: (isWorker ? "worker" : "staff") as BeneficiaryKind };
 }
 
-/** เบิกล่วงหน้าเดือนนั้นของคนนี้ที่ยังมีผล (รออนุมัติ/อนุมัติ/จ่ายแล้ว) */
-async function advanceUsed(tx: Tx, orgId: string, userId: string, month: string, exceptId?: string): Promise<number> {
-  const from = dateOnly(`${month}-01`);
-  const to = dateOnly(addDays(`${month}-28`, 4).slice(0, 7) + "-01");
+/** เบิกล่วงหน้าในรอบนั้นของคนนี้ที่ยังมีผล (รออนุมัติ/อนุมัติ/จ่ายแล้ว) — รอบ = เดือน หรือครึ่งเดือน ตามตั้งค่า */
+async function advanceUsed(tx: Tx, orgId: string, userId: string, round: { from: string; to: string }, exceptId?: string): Promise<number> {
+  const from = dateOnly(round.from);
+  const to = dateOnly(addDays(round.to, 1));
   const rows = await tx.moneyRequest.findMany({
     where: { orgId, kind: "advance", beneficiaryUserId: userId, status: { in: ["pending", "approved", "paid"] }, workDate: { gte: from, lt: to }, ...(exceptId ? { id: { not: exceptId } } : {}) },
     select: { netAmount: true },
@@ -316,6 +319,7 @@ async function computePreview(session: OrgSession, input: PreviewInput, settings
     needsManual: null,
     cap: null,
     capUsed: 0,
+    capLabel: null,
     blocks: [],
     warns: [],
     approverLevel: null,
@@ -397,6 +401,9 @@ async function computePreview(session: OrgSession, input: PreviewInput, settings
     }
   }
 
+  if (input.kind === "advance" && who && settings.advanceWorkersOnly && who.kind !== "worker") {
+    p.blocks.push("บริษัทตั้งให้เบิกล่วงหน้าได้เฉพาะคนงานรายวัน");
+  }
   if (input.kind === "advance" && who) {
     let daily: number | null = null;
     if (p.employmentId) {
@@ -408,10 +415,12 @@ async function computePreview(session: OrgSession, input: PreviewInput, settings
     }
     p.cap = advanceCap(settings.advanceCapMode, settings.advanceCapValue, daily);
     if (settings.advanceCapMode === "days" && p.cap === null) p.warns.push("ยังไม่มีค่าแรง/เงินเดือนในระบบ — คิดเพดานแบบจำนวนวันไม่ได้");
-    p.capUsed = await withRequestsTenant(orgId, (tx) => advanceUsed(tx, orgId, who.userId, date.slice(0, 7), input.exceptRequestId));
+    const round = advanceRoundOf(date, settings.advanceCapPeriod);
+    p.capLabel = round.label;
+    p.capUsed = await withRequestsTenant(orgId, (tx) => advanceUsed(tx, orgId, who.userId, round, input.exceptRequestId));
     const amt = Number(input.amount) || 0;
     if (p.cap !== null && p.capUsed + amt > p.cap + 0.005) {
-      p.blocks.push(`เกินเพดานเบิกล่วงหน้าเดือนนี้ ${baht(p.cap)} (ใช้ไปแล้ว ${baht(p.capUsed)} เหลือ ${baht(Math.max(0, p.cap - p.capUsed))})`);
+      p.blocks.push(`เกินเพดานเบิกล่วงหน้า${round.label} ${baht(p.cap)} (ใช้ไปแล้ว ${baht(p.capUsed)} เหลือ ${baht(Math.max(0, p.cap - p.capUsed))})`);
     }
   }
 
@@ -2532,6 +2541,8 @@ export async function saveSettingsAction(input: RequestSettings): Promise<Result
       otRates: rates,
       advanceCapMode: input.advanceCapMode,
       advanceCapValue: input.advanceCapMode === "none" ? 0 : capValue,
+      advanceCapPeriod: input.advanceCapPeriod === "half" ? "half" : "month",
+      advanceWorkersOnly: !!input.advanceWorkersOnly,
       whtRates: wht.length ? wht : [0, 3],
       vatPercent: vat,
       receiptMaxAgeDays: maxAge,
@@ -2547,7 +2558,7 @@ export async function saveSettingsAction(input: RequestSettings): Promise<Result
         byUserId: session.userId,
         byName,
         action: "settings",
-        summary: `ตั้งค่า: อนุมัติ ${(Object.keys(approvalRoutes) as RequestKind[]).map((k) => `${KIND_META[k].short} ${ceoText(routeText(approvalRoutes[k]), ceo)}`).join(", ")} · OT ${rates.map((r) => `${r.label} ${r.percent}%`).join(", ")} · เพดานเบิกล่วงหน้า ${input.advanceCapMode === "none" ? "ไม่จำกัด" : input.advanceCapMode === "baht" ? baht(capValue) : `${capValue} วัน`} · VAT ${vat}% · ซื้อของเองจากเงินสดย่อย${input.pettySpendReview ? "ต้องมีคนตรวจ" : "ไม่ต้องตรวจ"} · ค่า OT ${input.otRoundBaht ? "ปัดขึ้นเป็นบาท" : "คิดถึงสตางค์"} · วิธีคิด OT ${input.otRateMode === "flat" ? "อัตราเดียว (ไม่คูณ %)" : "ตามตาราง %"} · วงเงินรายคน ${spendLimits.filter((r) => r.active).length ? spendLimits.filter((r) => r.active).map((r) => `${r.name} ครั้งละ ${baht(r.perRequest)} สัปดาห์ละ ${baht(r.perWeek)} (${r.userIds.length} คน)`).join(", ") : "ไม่ใช้"} · ใบรับรองแทนใบเสร็จ ${noReceiptMax === null ? "ไม่เปิด" : `ใบละไม่เกิน ${baht(noReceiptMax)}`} · จ่ายเงินสด${input.cashConfirmMode ? "ให้ผู้รับกดยืนยัน" : "ต้องแนบรูป"} · ยอดตรงปิดเอง ${input.autoCloseClear ? "เปิด" : "ปิด"} · บัญชีบริษัท ${companyAccounts.length ? companyAccounts.map(accountLabel).join(", ") : "ไม่มี"} · หัก ณ ที่จ่าย${input.whtCompanyOnly ? "ต้องโอนจากบัญชีบริษัท" : "จ่ายช่องทางใดก็ได้"} · ใบที่จ่ายร้านไปเต็มแล้ว (บริษัทออกภาษีให้) ${input.whtBorneAllowed ? "ลงได้ ต้องให้ CEO อนุมัติ" : "ไม่เปิด"}`,
+        summary: `ตั้งค่า: อนุมัติ ${(Object.keys(approvalRoutes) as RequestKind[]).map((k) => `${KIND_META[k].short} ${ceoText(routeText(approvalRoutes[k]), ceo)}`).join(", ")} · OT ${rates.map((r) => `${r.label} ${r.percent}%`).join(", ")} · เพดานเบิกล่วงหน้า ${input.advanceCapMode === "none" ? "ไม่จำกัด" : input.advanceCapMode === "baht" ? baht(capValue) : `${capValue} วัน`} · VAT ${vat}% · ซื้อของเองจากเงินสดย่อย${input.pettySpendReview ? "ต้องมีคนตรวจ" : "ไม่ต้องตรวจ"} · ค่า OT ${input.otRoundBaht ? "ปัดขึ้นเป็นบาท" : "คิดถึงสตางค์"} · วิธีคิด OT ${input.otRateMode === "flat" ? "อัตราเดียว (ไม่คูณ %)" : "ตามตาราง %"} · วงเงินรายคน ${spendLimits.filter((r) => r.active).length ? spendLimits.filter((r) => r.active).map((r) => `${r.name} ครั้งละ ${baht(r.perRequest)} สัปดาห์ละ ${baht(r.perWeek)} (${r.userIds.length} คน)`).join(", ") : "ไม่ใช้"} · ใบรับรองแทนใบเสร็จ ${noReceiptMax === null ? "ไม่เปิด" : `ใบละไม่เกิน ${baht(noReceiptMax)}`} · จ่ายเงินสด${input.cashConfirmMode ? "ให้ผู้รับกดยืนยัน" : "ต้องแนบรูป"} · ยอดตรงปิดเอง ${input.autoCloseClear ? "เปิด" : "ปิด"} · บัญชีบริษัท ${companyAccounts.length ? companyAccounts.map(accountLabel).join(", ") : "ไม่มี"} · หัก ณ ที่จ่าย${input.whtCompanyOnly ? "ต้องโอนจากบัญชีบริษัท" : "จ่ายช่องทางใดก็ได้"} · เบิกล่วงหน้า${input.advanceWorkersOnly ? "เฉพาะคนงาน" : "ทุกคน"} นับเพดาน${input.advanceCapPeriod === "half" ? "ต่อรอบครึ่งเดือน" : "ต่อเดือน"} · ใบที่จ่ายร้านไปเต็มแล้ว (บริษัทออกภาษีให้) ${input.whtBorneAllowed ? "ลงได้ ต้องให้ CEO อนุมัติ" : "ไม่เปิด"}`,
       });
     });
     revalidatePath("/requests");

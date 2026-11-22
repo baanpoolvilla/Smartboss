@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { borneBreakdown } from "./types";
+import { advanceRoundOf, borneBreakdown } from "./types";
 import { mustUseCompanyAccount } from "./company-accounts";
 
 describe("จ่ายร้านไปเต็มแล้ว บริษัทออกภาษีให้", () => {
@@ -21,5 +21,16 @@ describe("จ่ายร้านไปเต็มแล้ว บริษั
   it("ใบที่บริษัทออกภาษีให้ ไม่บังคับโอนจากบัญชีบริษัท (เป็นการคืนเงินคนสำรองจ่าย)", () => {
     expect(mustUseCompanyAccount({ whtCompanyOnly: true }, 46.39, true)).toBe(false);
     expect(mustUseCompanyAccount({ whtCompanyOnly: true }, 60, false)).toBe(true);
+  });
+});
+
+describe("เพดานเบิกล่วงหน้าต่อรอบ", () => {
+  it("ครึ่งเดือน: 1–15 และ 16–สิ้นเดือน", () => {
+    expect(advanceRoundOf("2026-11-15", "half")).toMatchObject({ from: "2026-11-01", to: "2026-11-15", label: "รอบ 1–15 พ.ย. 2569" });
+    expect(advanceRoundOf("2026-11-16", "half")).toMatchObject({ from: "2026-11-16", to: "2026-11-30" });
+    expect(advanceRoundOf("2027-02-20", "half").to).toBe("2027-02-28");
+  });
+  it("ต่อเดือน = แบบเดิม", () => {
+    expect(advanceRoundOf("2026-11-20", "month")).toMatchObject({ from: "2026-11-01", to: "2026-11-30" });
   });
 });

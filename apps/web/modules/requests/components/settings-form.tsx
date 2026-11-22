@@ -30,6 +30,8 @@ export function SettingsForm({ initial, people = [] }: { initial: RequestSetting
   const toRoute = (k: RequestKind): ApprovalRoute => ({ mode: routes[k].mode, ceoAbove: routes[k].mode === "ceo" || routes[k].above.trim() === "" ? null : Number(routes[k].above.replace(/,/g, "")) });
   const [capMode, setCapMode] = useState<AdvanceCapMode>(initial.advanceCapMode);
   const [capValue, setCapValue] = useState(String(initial.advanceCapValue || ""));
+  const [capPeriod, setCapPeriod] = useState(initial.advanceCapPeriod);
+  const [workersOnly, setWorkersOnly] = useState(initial.advanceWorkersOnly);
   const [wht, setWht] = useState(initial.whtRates.join(", "));
   const [vat, setVat] = useState(String(initial.vatPercent));
   const [maxAge, setMaxAge] = useState(String(initial.receiptMaxAgeDays));
@@ -62,6 +64,8 @@ export function SettingsForm({ initial, people = [] }: { initial: RequestSetting
         otRates: rates,
         advanceCapMode: capMode,
         advanceCapValue: Number(capValue) || 0,
+        advanceCapPeriod: capPeriod,
+        advanceWorkersOnly: workersOnly,
         whtRates: wht.split(/[,\s]+/).filter(Boolean).map(Number),
         vatPercent: Number(vat),
         receiptMaxAgeDays: Number(maxAge),
@@ -184,9 +188,16 @@ export function SettingsForm({ initial, people = [] }: { initial: RequestSetting
 
       <section className="flex flex-col gap-3 rounded-(--radius-lg) border border-(--line) bg-(--bg) p-4">
         <div>
-          <h2 className="text-sm font-bold text-(--ink)">เพดานเบิกล่วงหน้า ต่อคน ต่อเดือน</h2>
-          <p className="text-xs text-(--ink-soft)">ใช้กับทั้งคนงานรายวันและพนักงานรายเดือน · เฉพาะใบ &quot;เบิกล่วงหน้า&quot; (ไม่เกี่ยวกับเบิกค่าใช้จ่าย/OT)</p>
+          <h2 className="text-sm font-bold text-(--ink)">เบิกล่วงหน้า</h2>
+          <p className="text-xs text-(--ink-soft)">เฉพาะใบ &quot;เบิกล่วงหน้า&quot; (ไม่เกี่ยวกับเบิกค่าใช้จ่าย/OT)</p>
         </div>
+        <label className="flex items-start gap-3 text-sm text-(--ink)">
+          <input type="checkbox" className="mt-1 h-4 w-4" checked={workersOnly} onChange={(e) => setWorkersOnly(e.target.checked)} />
+          <span>
+            เบิกล่วงหน้าได้เฉพาะคนงานรายวัน
+            <span className="block text-xs text-(--ink-soft)">ไม่ติ๊ก = พนักงานรายเดือนเบิกได้ด้วย (แบบเดิม)</span>
+          </span>
+        </label>
         <label className="flex items-start gap-3 text-sm text-(--ink)">
           <input
             type="checkbox"
@@ -202,7 +213,7 @@ export function SettingsForm({ initial, people = [] }: { initial: RequestSetting
           <span>
             จำกัดยอดเบิกล่วงหน้า
             <span className="block text-xs text-(--ink-soft)">
-              {capMode === "none" ? "ปิดอยู่ — เบิกได้ไม่จำกัด HR/ผู้อนุมัติเป็นคนดูเอง · ติ๊กเมื่ออยากตั้งเพดาน" : "ยื่นเกินเพดานไม่ได้ (นับรวมที่รออนุมัติ/อนุมัติ/จ่ายแล้วในเดือนนั้น)"}
+              {capMode === "none" ? "ปิดอยู่ — เบิกได้ไม่จำกัด HR/ผู้อนุมัติเป็นคนดูเอง · ติ๊กเมื่ออยากตั้งเพดาน" : `ยื่นเกินเพดานไม่ได้ (นับรวมที่รออนุมัติ/อนุมัติ/จ่ายแล้วใน${capPeriod === "half" ? "รอบนั้น" : "เดือนนั้น"})`}
             </span>
           </span>
         </label>
@@ -218,6 +229,18 @@ export function SettingsForm({ initial, people = [] }: { initial: RequestSetting
             </button>
           ))}
         </div>}
+        {capMode !== "none" && (
+          <div className="flex flex-col gap-1.5 text-sm">
+            <span className="font-semibold">นับเพดาน</span>
+            <div className="flex flex-wrap gap-2">
+              {([["month", "ต่อเดือน"], ["half", "ต่อรอบ 15 วัน (1–15 / 16–สิ้นเดือน)"]] as const).map(([m, label]) => (
+                <button key={m} type="button" aria-pressed={capPeriod === m} onClick={() => setCapPeriod(m)} className={`h-9 rounded-full px-3.5 text-sm ${capPeriod === m ? "bg-(--brand-navy) font-semibold text-white" : "border border-(--line)"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {capMode !== "none" && (
           <label className="flex max-w-xs flex-col gap-1.5 text-sm">
             <span className="font-semibold">{capMode === "baht" ? "เพดาน (บาท)" : "จำนวนวัน"}</span>

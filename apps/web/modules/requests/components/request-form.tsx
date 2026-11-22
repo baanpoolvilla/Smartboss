@@ -489,10 +489,10 @@ export function RequestForm({
           ) : (
             <PersonPicker
               label={kind === "ot" ? "ใครทำ OT" : "เบิกให้ใคร"}
-              items={peopleItems(me.userId)}
+              items={kind === "advance" && settings.advanceWorkersOnly ? peopleItems(me.userId).filter((i) => people.find((p) => p.userId === i.id)?.isWorker) : peopleItems(me.userId)}
               value={beneficiary}
               onChange={setBeneficiary}
-              hint={kind === "ot" ? "ลง OT ให้ตัวเองไม่ได้" : "ขอให้ตัวเองไม่ได้"}
+              hint={kind === "ot" ? "ลง OT ให้ตัวเองไม่ได้" : kind === "advance" && settings.advanceWorkersOnly ? "เบิกล่วงหน้าได้เฉพาะคนงานรายวัน" : "ขอให้ตัวเองไม่ได้"}
             />
           )}
           {groupMode && (effectiveBeneficiary || pendingList.length > 0 || typing !== null) && (
@@ -949,7 +949,7 @@ export function RequestForm({
             )}
             {kind === "advance" && preview && (
               <div className="rounded-(--radius) bg-(--bg-soft) px-2.5 py-2 text-xs text-(--ink-soft)">
-                {preview.cap === null ? "ไม่จำกัดเพดาน" : `เพดานเดือนนี้ ${baht(preview.cap)} · ใช้ไปแล้ว ${baht(preview.capUsed)} · เหลือ ${baht(Math.max(0, preview.cap - preview.capUsed))}`}
+                {preview.cap === null ? "ไม่จำกัดเพดาน" : `เพดาน${preview.capLabel ?? "เดือนนี้"} ${baht(preview.cap)} · ใช้ไปแล้ว ${baht(preview.capUsed)} · เหลือ ${baht(Math.max(0, preview.cap - preview.capUsed))}`}
               </div>
             )}
             {kind === "contractor" && borne && (
