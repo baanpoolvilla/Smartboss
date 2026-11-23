@@ -216,8 +216,8 @@ export default function AiInsightDetailPage() {
                                 className={cn(
                                   "text-[10px] font-medium rounded-full px-2 py-0.5",
                                   it.domain === "task"
-                                    ? "bg-[color-mix(in_srgb,var(--chart-blue)_10%,white)] text-[var(--chart-blue)]"
-                                    : "bg-[color-mix(in_srgb,var(--chart-violet)_10%,white)] text-[var(--chart-violet)]"
+                                    ? "bg-[color-mix(in_srgb,var(--chart-blue)_10%,var(--mix-paper,white))] text-[var(--chart-blue)]"
+                                    : "bg-[color-mix(in_srgb,var(--chart-violet)_10%,var(--mix-paper,white))] text-[var(--chart-violet)]"
                                 )}
                               >
                                 {it.label} {it.count}
@@ -267,8 +267,8 @@ export default function AiInsightDetailPage() {
                               className={cn(
                                 "text-[10px] font-medium rounded-full px-2 py-0.5",
                                 it.domain === "task"
-                                  ? "bg-[color-mix(in_srgb,var(--chart-blue)_10%,white)] text-[var(--chart-blue)]"
-                                  : "bg-[color-mix(in_srgb,var(--chart-violet)_10%,white)] text-[var(--chart-violet)]"
+                                  ? "bg-[color-mix(in_srgb,var(--chart-blue)_10%,var(--mix-paper,white))] text-[var(--chart-blue)]"
+                                  : "bg-[color-mix(in_srgb,var(--chart-violet)_10%,var(--mix-paper,white))] text-[var(--chart-violet)]"
                               )}
                             >
                               {it.label} {it.count}

@@ -183,7 +183,7 @@ export function WoCard(p: WoCardProps) {
       ? "bg-orange-50 text-orange-700 ring-orange-200"
       : doneTone === "gray"
         ? "bg-(--bg-soft) text-(--ink-soft) ring-(--line)"
-        : "bg-[color-mix(in_srgb,var(--brand-green)_14%,white)] text-[var(--brand-green-dark)] ring-transparent";
+        : "bg-[color-mix(in_srgb,var(--brand-green)_14%,var(--mix-paper,white))] text-[var(--brand-green-dark)] ring-transparent";
   const showMetaRow = (open && !p.autoCreated) || p.pendingDue > 0 || p.commentCount > 0 || unreadComments > 0 || !!p.score || !!p.stickers;
 
   return (

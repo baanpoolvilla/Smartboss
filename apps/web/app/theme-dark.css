@@ -234,7 +234,7 @@
 /* ตัวหนังสือสีประจำโมดูล (ตัวย่อชื่อในรูปโปรไฟล์ ฯลฯ) — สีโมดูลบางตัวเป็น navy เข้ม จึงยกให้สว่างบนพื้นมืด */
 [data-theme="dark"] .text-\[var\(--module-color\)\]:not([data-paper] *),
 [data-theme="dark"] .text-\(--module-color\):not([data-paper] *) {
-  color: color-mix(in oklab, var(--module-color) 55%, #ffffff);
+  color: color-mix(in oklab, var(--module-color) 35%, #ffffff);
 }
 
 /* ป้าย "🔧 ใบงานซ่อม" (เขียวอมฟ้า #0d9488 ตัวขาว) — เข้มขึ้นให้ตัวขาวอ่านได้ตามเกณฑ์ */
@@ -251,6 +251,7 @@
 :root[data-theme="dark"] {
   --mix-paper: var(--bg);
   --mix-ink: #ffffff;
+  --chip-mix: 58%;
 }
 
 /* โลโก้: ธีมมืดใช้ไฟล์ที่คำว่า Boss เป็นสีสว่าง (components/logo.tsx) */

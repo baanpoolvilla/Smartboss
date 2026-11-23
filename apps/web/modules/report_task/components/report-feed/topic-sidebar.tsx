@@ -1733,7 +1733,7 @@ export function TopicSidebar({
           // white is enough on its own to read as "a different area" next to
           // the room panel's white, the same way Notion/Linear separate a nav
           // rail from its content with color contrast, not a drawn line.
-          "h-full w-full bg-[color-mix(in_srgb,var(--bg-soft)_55%,white)] flex flex-col min-h-0 overflow-hidden"
+          "h-full w-full bg-[color-mix(in_srgb,var(--bg-soft)_55%,var(--mix-paper,white))] flex flex-col min-h-0 overflow-hidden"
         )}
       >
       {/* Header separated by spacing (extra bottom padding) instead of a

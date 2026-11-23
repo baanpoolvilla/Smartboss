@@ -90,7 +90,7 @@ const GridRow = memo(
         <TableRow
           className={cn(
             "group cursor-pointer border-b border-[var(--line)]/70 transition-colors",
-            isSelected ? "bg-[color-mix(in_srgb,var(--brand-green)_8%,white)]" : "hover:bg-[var(--accent)]/40"
+            isSelected ? "bg-[color-mix(in_srgb,var(--brand-green)_8%,var(--mix-paper,white))]" : "hover:bg-[var(--accent)]/40"
           )}
           onClick={() => onOpen(rowId)}
           role="button"
@@ -105,7 +105,7 @@ const GridRow = memo(
           <TableCell
             className={cn(
               "pl-4 pr-0 w-10 sticky left-0 z-10",
-              isSelected ? "bg-[color-mix(in_srgb,var(--brand-green)_8%,white)]" : "bg-white"
+              isSelected ? "bg-[color-mix(in_srgb,var(--brand-green)_8%,var(--mix-paper,white))]" : "bg-white"
             )}
             onClick={(e) => {
               e.stopPropagation();
@@ -123,7 +123,7 @@ const GridRow = memo(
                 // frozen at the same left offset (40px, the checkbox
                 // column's own width) as the row scrolls horizontally.
                 cell.column.id === "title" &&
-                  cn("sticky left-10 z-10", isSelected ? "bg-[color-mix(in_srgb,var(--brand-green)_8%,white)]" : "bg-white")
+                  cn("sticky left-10 z-10", isSelected ? "bg-[color-mix(in_srgb,var(--brand-green)_8%,var(--mix-paper,white))]" : "bg-white")
               )}
             >
               {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -816,7 +816,7 @@ export function TaskGrid({
 
       {/* Bulk-action bar — appears when rows are selected */}
       {selCount > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--brand-green)] bg-[color-mix(in_srgb,var(--brand-green)_8%,white)] px-3 py-2 text-sm">
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--brand-green)] bg-[color-mix(in_srgb,var(--brand-green)_8%,var(--mix-paper,white))] px-3 py-2 text-sm">
           <span className="font-medium">เลือก {selCount} งาน</span>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <DropdownMenu>

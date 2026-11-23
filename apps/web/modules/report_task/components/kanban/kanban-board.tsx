@@ -546,7 +546,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
                   className="flex h-5 min-w-5 items-center justify-center rounded-md px-1.5 text-[11.5px] font-bold tabular-nums"
                   style={
                     active
-                      ? { backgroundColor: `color-mix(in srgb, ${column.accent} 82%, black)`, color: "white" }
+                      ? { backgroundColor: `color-mix(in srgb, ${column.accent} var(--chip-mix, 82%), black)`, color: "white" }
                       : { backgroundColor: "var(--bg-soft)", color: "var(--ink)" }
                   }
                 >

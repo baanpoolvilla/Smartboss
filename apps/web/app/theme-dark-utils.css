@@ -21,6 +21,8 @@
 [data-theme="dark"] .border-red-100:not([data-paper] *),
 [data-theme="dark"] .border-red-200:not([data-paper] *),
 [data-theme="dark"] .border-red-300:not([data-paper] *) { border-color: color-mix(in oklab, var(--color-red-500) 40%, var(--line)); }
+[data-theme="dark"] .bg-red-500.text-white:not([data-paper] *),
+[data-theme="dark"] .bg-red-600.text-white:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-red-600) 78%, #000000); }
 [data-theme="dark"] .bg-orange-50:not([data-paper] *),
 [data-theme="dark"] .hover\:bg-orange-50:hover:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-orange-500) 12%, var(--bg)); }
 [data-theme="dark"] .bg-orange-100:not([data-paper] *),
@@ -43,6 +45,8 @@
 [data-theme="dark"] .border-orange-100:not([data-paper] *),
 [data-theme="dark"] .border-orange-200:not([data-paper] *),
 [data-theme="dark"] .border-orange-300:not([data-paper] *) { border-color: color-mix(in oklab, var(--color-orange-500) 40%, var(--line)); }
+[data-theme="dark"] .bg-orange-500.text-white:not([data-paper] *),
+[data-theme="dark"] .bg-orange-600.text-white:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-orange-600) 78%, #000000); }
 [data-theme="dark"] .bg-amber-50:not([data-paper] *),
 [data-theme="dark"] .hover\:bg-amber-50:hover:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-amber-500) 12%, var(--bg)); }
 [data-theme="dark"] .bg-amber-100:not([data-paper] *),
@@ -65,6 +69,8 @@
 [data-theme="dark"] .border-amber-100:not([data-paper] *),
 [data-theme="dark"] .border-amber-200:not([data-paper] *),
 [data-theme="dark"] .border-amber-300:not([data-paper] *) { border-color: color-mix(in oklab, var(--color-amber-500) 40%, var(--line)); }
+[data-theme="dark"] .bg-amber-500.text-white:not([data-paper] *),
+[data-theme="dark"] .bg-amber-600.text-white:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-amber-600) 78%, #000000); }
 [data-theme="dark"] .bg-yellow-50:not([data-paper] *),
 [data-theme="dark"] .hover\:bg-yellow-50:hover:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-yellow-500) 12%, var(--bg)); }
 [data-theme="dark"] .bg-yellow-100:not([data-paper] *),
@@ -87,6 +93,8 @@
 [data-theme="dark"] .border-yellow-100:not([data-paper] *),
 [data-theme="dark"] .border-yellow-200:not([data-paper] *),
 [data-theme="dark"] .border-yellow-300:not([data-paper] *) { border-color: color-mix(in oklab, var(--color-yellow-500) 40%, var(--line)); }
+[data-theme="dark"] .bg-yellow-500.text-white:not([data-paper] *),
+[data-theme="dark"] .bg-yellow-600.text-white:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-yellow-600) 78%, #000000); }
 [data-theme="dark"] .bg-lime-50:not([data-paper] *),
 [data-theme="dark"] .hover\:bg-lime-50:hover:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-lime-500) 12%, var(--bg)); }
 [data-theme="dark"] .bg-lime-100:not([data-paper] *),
@@ -109,6 +117,8 @@
 [data-theme="dark"] .border-lime-100:not([data-paper] *),
 [data-theme="dark"] .border-lime-200:not([data-paper] *),
 [data-theme="dark"] .border-lime-300:not([data-paper] *) { border-color: color-mix(in oklab, var(--color-lime-500) 40%, var(--line)); }
+[data-theme="dark"] .bg-lime-500.text-white:not([data-paper] *),
+[data-theme="dark"] .bg-lime-600.text-white:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-lime-600) 78%, #000000); }
 [data-theme="dark"] .bg-green-50:not([data-paper] *),
 [data-theme="dark"] .hover\:bg-green-50:hover:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-green-500) 12%, var(--bg)); }
 [data-theme="dark"] .bg-green-100:not([data-paper] *),
@@ -131,6 +141,8 @@
 [data-theme="dark"] .border-green-100:not([data-paper] *),
 [data-theme="dark"] .border-green-200:not([data-paper] *),
 [data-theme="dark"] .border-green-300:not([data-paper] *) { border-color: color-mix(in oklab, var(--color-green-500) 40%, var(--line)); }
+[data-theme="dark"] .bg-green-500.text-white:not([data-paper] *),
+[data-theme="dark"] .bg-green-600.text-white:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-green-600) 78%, #000000); }
 [data-theme="dark"] .bg-emerald-50:not([data-paper] *),
 [data-theme="dark"] .hover\:bg-emerald-50:hover:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-emerald-500) 12%, var(--bg)); }
 [data-theme="dark"] .bg-emerald-100:not([data-paper] *),
@@ -153,6 +165,8 @@
 [data-theme="dark"] .border-emerald-100:not([data-paper] *),
 [data-theme="dark"] .border-emerald-200:not([data-paper] *),
 [data-theme="dark"] .border-emerald-300:not([data-paper] *) { border-color: color-mix(in oklab, var(--color-emerald-500) 40%, var(--line)); }
+[data-theme="dark"] .bg-emerald-500.text-white:not([data-paper] *),
+[data-theme="dark"] .bg-emerald-600.text-white:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-emerald-600) 78%, #000000); }
 [data-theme="dark"] .bg-teal-50:not([data-paper] *),
 [data-theme="dark"] .hover\:bg-teal-50:hover:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-teal-500) 12%, var(--bg)); }
 [data-theme="dark"] .bg-teal-100:not([data-paper] *),
@@ -175,6 +189,8 @@
 [data-theme="dark"] .border-teal-100:not([data-paper] *),
 [data-theme="dark"] .border-teal-200:not([data-paper] *),
 [data-theme="dark"] .border-teal-300:not([data-paper] *) { border-color: color-mix(in oklab, var(--color-teal-500) 40%, var(--line)); }
+[data-theme="dark"] .bg-teal-500.text-white:not([data-paper] *),
+[data-theme="dark"] .bg-teal-600.text-white:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-teal-600) 78%, #000000); }
 [data-theme="dark"] .bg-cyan-50:not([data-paper] *),
 [data-theme="dark"] .hover\:bg-cyan-50:hover:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-cyan-500) 12%, var(--bg)); }
 [data-theme="dark"] .bg-cyan-100:not([data-paper] *),
@@ -197,6 +213,8 @@
 [data-theme="dark"] .border-cyan-100:not([data-paper] *),
 [data-theme="dark"] .border-cyan-200:not([data-paper] *),
 [data-theme="dark"] .border-cyan-300:not([data-paper] *) { border-color: color-mix(in oklab, var(--color-cyan-500) 40%, var(--line)); }
+[data-theme="dark"] .bg-cyan-500.text-white:not([data-paper] *),
+[data-theme="dark"] .bg-cyan-600.text-white:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-cyan-600) 78%, #000000); }
 [data-theme="dark"] .bg-sky-50:not([data-paper] *),
 [data-theme="dark"] .hover\:bg-sky-50:hover:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-sky-500) 12%, var(--bg)); }
 [data-theme="dark"] .bg-sky-100:not([data-paper] *),
@@ -219,6 +237,8 @@
 [data-theme="dark"] .border-sky-100:not([data-paper] *),
 [data-theme="dark"] .border-sky-200:not([data-paper] *),
 [data-theme="dark"] .border-sky-300:not([data-paper] *) { border-color: color-mix(in oklab, var(--color-sky-500) 40%, var(--line)); }
+[data-theme="dark"] .bg-sky-500.text-white:not([data-paper] *),
+[data-theme="dark"] .bg-sky-600.text-white:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-sky-600) 78%, #000000); }
 [data-theme="dark"] .bg-blue-50:not([data-paper] *),
 [data-theme="dark"] .hover\:bg-blue-50:hover:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-blue-500) 12%, var(--bg)); }
 [data-theme="dark"] .bg-blue-100:not([data-paper] *),
@@ -241,6 +261,8 @@
 [data-theme="dark"] .border-blue-100:not([data-paper] *),
 [data-theme="dark"] .border-blue-200:not([data-paper] *),
 [data-theme="dark"] .border-blue-300:not([data-paper] *) { border-color: color-mix(in oklab, var(--color-blue-500) 40%, var(--line)); }
+[data-theme="dark"] .bg-blue-500.text-white:not([data-paper] *),
+[data-theme="dark"] .bg-blue-600.text-white:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-blue-600) 78%, #000000); }
 [data-theme="dark"] .bg-indigo-50:not([data-paper] *),
 [data-theme="dark"] .hover\:bg-indigo-50:hover:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-indigo-500) 12%, var(--bg)); }
 [data-theme="dark"] .bg-indigo-100:not([data-paper] *),
@@ -263,6 +285,8 @@
 [data-theme="dark"] .border-indigo-100:not([data-paper] *),
 [data-theme="dark"] .border-indigo-200:not([data-paper] *),
 [data-theme="dark"] .border-indigo-300:not([data-paper] *) { border-color: color-mix(in oklab, var(--color-indigo-500) 40%, var(--line)); }
+[data-theme="dark"] .bg-indigo-500.text-white:not([data-paper] *),
+[data-theme="dark"] .bg-indigo-600.text-white:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-indigo-600) 78%, #000000); }
 [data-theme="dark"] .bg-violet-50:not([data-paper] *),
 [data-theme="dark"] .hover\:bg-violet-50:hover:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-violet-500) 12%, var(--bg)); }
 [data-theme="dark"] .bg-violet-100:not([data-paper] *),
@@ -285,6 +309,8 @@
 [data-theme="dark"] .border-violet-100:not([data-paper] *),
 [data-theme="dark"] .border-violet-200:not([data-paper] *),
 [data-theme="dark"] .border-violet-300:not([data-paper] *) { border-color: color-mix(in oklab, var(--color-violet-500) 40%, var(--line)); }
+[data-theme="dark"] .bg-violet-500.text-white:not([data-paper] *),
+[data-theme="dark"] .bg-violet-600.text-white:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-violet-600) 78%, #000000); }
 [data-theme="dark"] .bg-purple-50:not([data-paper] *),
 [data-theme="dark"] .hover\:bg-purple-50:hover:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-purple-500) 12%, var(--bg)); }
 [data-theme="dark"] .bg-purple-100:not([data-paper] *),
@@ -307,6 +333,8 @@
 [data-theme="dark"] .border-purple-100:not([data-paper] *),
 [data-theme="dark"] .border-purple-200:not([data-paper] *),
 [data-theme="dark"] .border-purple-300:not([data-paper] *) { border-color: color-mix(in oklab, var(--color-purple-500) 40%, var(--line)); }
+[data-theme="dark"] .bg-purple-500.text-white:not([data-paper] *),
+[data-theme="dark"] .bg-purple-600.text-white:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-purple-600) 78%, #000000); }
 [data-theme="dark"] .bg-fuchsia-50:not([data-paper] *),
 [data-theme="dark"] .hover\:bg-fuchsia-50:hover:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-fuchsia-500) 12%, var(--bg)); }
 [data-theme="dark"] .bg-fuchsia-100:not([data-paper] *),
@@ -329,6 +357,8 @@
 [data-theme="dark"] .border-fuchsia-100:not([data-paper] *),
 [data-theme="dark"] .border-fuchsia-200:not([data-paper] *),
 [data-theme="dark"] .border-fuchsia-300:not([data-paper] *) { border-color: color-mix(in oklab, var(--color-fuchsia-500) 40%, var(--line)); }
+[data-theme="dark"] .bg-fuchsia-500.text-white:not([data-paper] *),
+[data-theme="dark"] .bg-fuchsia-600.text-white:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-fuchsia-600) 78%, #000000); }
 [data-theme="dark"] .bg-pink-50:not([data-paper] *),
 [data-theme="dark"] .hover\:bg-pink-50:hover:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-pink-500) 12%, var(--bg)); }
 [data-theme="dark"] .bg-pink-100:not([data-paper] *),
@@ -351,6 +381,8 @@
 [data-theme="dark"] .border-pink-100:not([data-paper] *),
 [data-theme="dark"] .border-pink-200:not([data-paper] *),
 [data-theme="dark"] .border-pink-300:not([data-paper] *) { border-color: color-mix(in oklab, var(--color-pink-500) 40%, var(--line)); }
+[data-theme="dark"] .bg-pink-500.text-white:not([data-paper] *),
+[data-theme="dark"] .bg-pink-600.text-white:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-pink-600) 78%, #000000); }
 [data-theme="dark"] .bg-rose-50:not([data-paper] *),
 [data-theme="dark"] .hover\:bg-rose-50:hover:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-rose-500) 12%, var(--bg)); }
 [data-theme="dark"] .bg-rose-100:not([data-paper] *),
@@ -373,6 +405,8 @@
 [data-theme="dark"] .border-rose-100:not([data-paper] *),
 [data-theme="dark"] .border-rose-200:not([data-paper] *),
 [data-theme="dark"] .border-rose-300:not([data-paper] *) { border-color: color-mix(in oklab, var(--color-rose-500) 40%, var(--line)); }
+[data-theme="dark"] .bg-rose-500.text-white:not([data-paper] *),
+[data-theme="dark"] .bg-rose-600.text-white:not([data-paper] *) { background-color: color-mix(in oklab, var(--color-rose-600) 78%, #000000); }
 [data-theme="dark"] .bg-slate-50:not([data-paper] *),
 [data-theme="dark"] .hover\:bg-slate-50:hover:not([data-paper] *) { background-color: var(--bg-soft); }
 [data-theme="dark"] .bg-slate-100:not([data-paper] *),

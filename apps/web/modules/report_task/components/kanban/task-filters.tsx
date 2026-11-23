@@ -1075,7 +1075,7 @@ export function TaskFilters({
           className={cn(
             "flex h-[42px] items-center gap-2 rounded-2xl border px-3.5 text-sm font-medium transition-colors",
             activeFilterCount > 0
-              ? "border-[var(--brand-green-dark)]/30 bg-[color-mix(in_srgb,var(--brand-green)_22%,white)] text-[var(--ink)]"
+              ? "border-[var(--brand-green-dark)]/30 bg-[color-mix(in_srgb,var(--brand-green)_22%,var(--mix-paper,white))] text-[var(--ink)]"
               : "border-[var(--line)] bg-white text-[var(--ink)] hover:bg-[var(--bg-soft)]"
           )}
         >

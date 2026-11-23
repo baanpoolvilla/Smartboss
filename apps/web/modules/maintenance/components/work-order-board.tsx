@@ -432,7 +432,7 @@ function ColumnHeader({
       <span className="relative flex h-full items-center gap-2 px-2">
         <span
           className="flex h-6 min-w-[26px] shrink-0 items-center justify-center rounded-[7px] px-1.5 text-[13px] font-bold tabular-nums text-white"
-          style={{ backgroundColor: `color-mix(in srgb, ${col.color} 82%, black)` }}
+          style={{ backgroundColor: `color-mix(in srgb, ${col.color} var(--chip-mix, 82%), black)` }}
         >
           {total}
         </span>

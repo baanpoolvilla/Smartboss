@@ -1187,7 +1187,7 @@ export function TaskDetailSheet({
                   // board's own "รอตรวจสอบ" column and the card's badge
                   // (task-card.tsx), so this reads as the same state everywhere
                   // instead of inventing its own color language on this sheet.
-                  task.reviewedBy ? "bg-[var(--accent)]" : "bg-[color-mix(in_srgb,var(--chart-green)_10%,white)]"
+                  task.reviewedBy ? "bg-[var(--accent)]" : "bg-[color-mix(in_srgb,var(--chart-green)_10%,var(--mix-paper,white))]"
                 )}
               >
                 <span

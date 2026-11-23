@@ -239,7 +239,8 @@ export function KanbanColumn({
           ]
         : statusCounts.filter((x) => x.count > 0).map((x) => ({ pct: (x.count / total) * 100, color: statusMeta[x.status].accentColor }));
   // ป้ายจำนวนสีทึบ — สีอ่อน (รอตรวจสอบ = เขียวอ่อน) เข้มขึ้นนิดให้ตัวเลขสีขาวอ่านออก
-  const chipColor = `color-mix(in srgb, ${accent} 82%, black)`;
+  // --chip-mix: ธีมขาวไม่ตั้ง = 82% แบบเดิม · ธีมมืดเข้มขึ้นให้ตัวเลขขาวอ่านได้ (theme-dark.css)
+  const chipColor = `color-mix(in srgb, ${accent} var(--chip-mix, 82%), black)`;
   // รายละเอียดที่เอาออกจากหน้าหัว (ป้าย "เลย", ตัวหนังสือใต้หลอด) อยู่ใน tooltip แทน
   const headerTitle = [
     onHeaderClick ? (headerClickTitle ?? "ดูงานของคนนี้แยกตามหมวดงาน") : null,
@@ -415,7 +416,7 @@ export function KanbanColumn({
               type="button"
               onClick={() => onBreakdownClick?.(row.id)}
               disabled={!onBreakdownClick}
-              className="flex items-center gap-2.5 rounded-lg border border-[var(--line)] bg-white px-3 py-2.5 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-colors hover:border-[var(--brand-green)] hover:bg-[color-mix(in_srgb,var(--brand-green)_4%,white)] disabled:hover:border-[var(--line)] disabled:hover:bg-white disabled:cursor-default"
+              className="flex items-center gap-2.5 rounded-lg border border-[var(--line)] bg-white px-3 py-2.5 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-colors hover:border-[var(--brand-green)] hover:bg-[color-mix(in_srgb,var(--brand-green)_4%,var(--mix-paper,white))] disabled:hover:border-[var(--line)] disabled:hover:bg-white disabled:cursor-default"
             >
               <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: row.accent }} />
               <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--ink)]">{row.label}</span>

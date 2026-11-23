@@ -54,7 +54,7 @@ export function mobileFieldRowTriggerClass(active: boolean) {
     "flex !h-[52px] w-full items-center gap-3 rounded-2xl border-none px-3.5 text-left shadow-none outline-none transition-colors",
     "focus-visible:ring-2 focus-visible:ring-[var(--accent-foreground)]/30 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--bg-soft)]",
     active
-      ? "bg-[color-mix(in_srgb,var(--brand-green)_20%,white)]"
+      ? "bg-[color-mix(in_srgb,var(--brand-green)_20%,var(--mix-paper,white))]"
       : "bg-[var(--bg-soft)] hover:bg-[var(--line)]/70"
   );
 }
@@ -116,7 +116,7 @@ export function QuickFilterChip({
         !active && "border-[var(--line)] bg-white text-[var(--ink)] [&_svg]:text-[var(--ink-soft)] hover:bg-[var(--bg-soft)]",
         active &&
           !warn &&
-          "border-[var(--brand-green-dark)]/30 bg-[color-mix(in_srgb,var(--brand-green)_18%,white)] text-[var(--brand-green-dark)] [&_svg]:text-[var(--brand-green-dark)]",
+          "border-[var(--brand-green-dark)]/30 bg-[color-mix(in_srgb,var(--brand-green)_18%,var(--mix-paper,white))] text-[var(--brand-green-dark)] [&_svg]:text-[var(--brand-green-dark)]",
         active && warn && "border-red-200 bg-red-50 text-[var(--chart-red)] [&_svg]:text-[var(--chart-red)]"
       )}
     >

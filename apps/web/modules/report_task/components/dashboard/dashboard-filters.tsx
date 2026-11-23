@@ -267,7 +267,7 @@ export function DashboardFilters() {
         className={cn(
           "flex items-center gap-1.5 h-9 px-3 rounded-lg border text-sm font-medium transition-colors",
           activeFilterCount > 0
-            ? "border-[var(--brand-green-dark)]/30 bg-[color-mix(in_srgb,var(--brand-green)_8%,white)] text-[var(--brand-green-dark)]"
+            ? "border-[var(--brand-green-dark)]/30 bg-[color-mix(in_srgb,var(--brand-green)_8%,var(--mix-paper,white))] text-[var(--brand-green-dark)]"
             : "border-[var(--line)] bg-white text-[var(--ink)] hover:bg-[var(--bg-soft)]"
         )}
       >

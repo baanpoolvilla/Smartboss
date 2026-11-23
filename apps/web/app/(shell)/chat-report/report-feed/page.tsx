@@ -169,7 +169,7 @@ function ReportFeedSkeleton() {
             first moment of every page load, so leaving the old bordered-card
             look here would flash the "gรอบซ้อนกัน" look right back on every
             visit even after the real content underneath was already fixed. */}
-        <div className="hidden lg:block w-[280px] shrink-0 border-r border-[var(--line)] bg-[color-mix(in_srgb,var(--bg-soft)_55%,white)]" />
+        <div className="hidden lg:block w-[280px] shrink-0 border-r border-[var(--line)] bg-[color-mix(in_srgb,var(--bg-soft)_55%,var(--mix-paper,white))]" />
         <div className="flex-1 bg-white" />
       </div>
     </div>

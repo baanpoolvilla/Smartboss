@@ -307,7 +307,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
             switching to the darker "เสร็จสิ้น" only once someone's actually
             checked it. */}
         {isReviewedDone ? (
-            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-[color-mix(in_srgb,var(--brand-green)_14%,white)] text-[var(--brand-green-dark)]">
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-[color-mix(in_srgb,var(--brand-green)_14%,var(--mix-paper,white))] text-[var(--brand-green-dark)]">
               <Check className="h-2.5 w-2.5" strokeWidth={3} />
               เสร็จสิ้น
             </span>
@@ -328,8 +328,8 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
                   // forced 50/50 split) with nowrap on both halves — an even
                   // split at this card width squeezed "รอตรวจสอบ" onto two
                   // lines, which read as broken/blurry rather than a clean pill.
-                  <span className="inline-flex items-stretch text-[10px] font-semibold rounded-full overflow-hidden ring-1 ring-inset ring-[color-mix(in_srgb,var(--chart-green)_30%,white)] whitespace-nowrap">
-                    <span className="flex items-center gap-1 px-2.5 py-1 bg-[color-mix(in_srgb,var(--chart-green)_10%,white)] text-[var(--chart-green)]">
+                  <span className="inline-flex items-stretch text-[10px] font-semibold rounded-full overflow-hidden ring-1 ring-inset ring-[color-mix(in_srgb,var(--chart-green)_30%,var(--mix-paper,white))] whitespace-nowrap">
+                    <span className="flex items-center gap-1 px-2.5 py-1 bg-[color-mix(in_srgb,var(--chart-green)_10%,var(--mix-paper,white))] text-[var(--chart-green)]">
                       <Check className="h-2.5 w-2.5 shrink-0" strokeWidth={3} />
                       เสร็จ
                     </span>

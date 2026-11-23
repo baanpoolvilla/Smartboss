@@ -25,6 +25,8 @@ for (const h of hues) {
   rule([`text-${h}-600`, `text-${h}-700`, `hover:text-${h}-700`], `color: var(--color-${h}-300);`);
   rule([`text-${h}-800`, `text-${h}-900`, `text-${h}-950`], `color: var(--color-${h}-200);`);
   rule([`border-${h}-100`, `border-${h}-200`, `border-${h}-300`], `border-color: color-mix(in oklab, var(--color-${h}-500) 40%, var(--line));`);
+  // พื้นสีกลาง (500/600) + ตัวขาว — ธีมมืดหรี่ลงให้ตัวขาวผ่านเกณฑ์
+  out.push([500, 600].map((s2) => `${D} ${cls(`bg-${h}-${s2}`)}.text-white${NP}`).join(",\n") + ` { background-color: color-mix(in oklab, var(--color-${h}-600) 78%, #000000); }`);
 }
 for (const h of neutrals) {
   rule([`bg-${h}-50`, `hover:bg-${h}-50`], `background-color: var(--bg-soft);`);
