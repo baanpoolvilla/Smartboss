@@ -109,7 +109,7 @@ console.log(`files ${files.length} · arbitrary hex classes ${arb.size} (rules $
 
 // ── พื้นปุ่ม/ป้ายที่ใช้สีเน้นเป็นพื้น + ตัวขาว (bg-(--brand-green), bg-(--danger,#dc2626) …) ──
 // ในธีมมืดโทเคนสีเน้นถูกยกให้สว่าง (เพื่อใช้เป็นตัวหนังสือ) — พื้นปุ่มจึงต้องหรี่ลงให้ตัวขาวยังอ่านได้ (แบบ GitHub: fg สว่าง · fill เข้ม)
-const FILL_TOKENS = ["brand-green", "brand-green-dark", "chart-blue", "chart-green", "brand-navy", "danger", "app", "app-accent", "module-color", "chat-accent", "chat-accent-strong", "tone-ok", "tone-info", "tone-warn", "tone-danger", "mod-hr", "mod-maintenance", "mod-financial"];
+const FILL_TOKENS = ["brand-green", "brand-green-dark", "chart-blue", "chart-green", "chart-red", "chart-violet", "chart-amber", "brand-navy", "danger", "app", "app-accent", "module-color", "chat-accent", "chat-accent-strong", "tone-ok", "tone-info", "tone-warn", "tone-danger", "mod-hr", "mod-maintenance", "mod-financial"];
 const fills = new Set();
 for (const f of files) {
   const src = fs.readFileSync(f, "utf8");

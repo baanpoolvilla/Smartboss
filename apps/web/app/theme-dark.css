@@ -57,14 +57,14 @@
   /* กราฟ/ป้ายสถานะ (report_task) — -dark = ตัวหนังสือบนพื้นอมสี จึงต้องสว่าง */
   --chart-blue: #388bfd;
   --chart-blue-dark: #79c0ff;
-  --chart-violet: #8957e5;
+  --chart-violet: #a371f7;
   --chart-green: #2ea043;
   --chart-green-dark: #56d364;
   --chart-green-light: #e3b341;
   --chart-amber: #d29922;
   --chart-amber-dark: #e3b341;
   --chart-amber-light: #bb8009;
-  --chart-red: #da3633;
+  --chart-red: #f85149;
   --chart-red-dark: #ff7b72;
   --chart-red-light: #8e1519;
   --chart-gray: #848d97;
@@ -256,3 +256,23 @@
 /* โลโก้: ธีมมืดใช้ไฟล์ที่คำว่า Boss เป็นสีสว่าง (components/logo.tsx) */
 [data-theme="dark"] img[data-logo="light"] { display: none; }
 [data-theme="dark"] img[data-logo="dark"] { display: block; }
+
+/* ปุ่ม/ชิปที่เลือกอยู่แบบ "พื้น --ink ตัวขาว" (เช่น ตัวกรอง "ทุกคน") — ธีมมืด --ink เป็นสีสว่าง จึงใช้พื้น navy ของสถานะ "เลือกอยู่" แทน */
+[data-theme="dark"] .bg-\[var\(--ink\)\].text-white:not([data-paper] *),
+[data-theme="dark"] .bg-\(--ink\).text-white:not([data-paper] *) {
+  background-color: var(--brand-navy-fill);
+  border-color: var(--brand-navy-fill);
+}
+
+/* ป้ายตัวเลขแดง/ส้มตัวขาว (เมนูล่างมือถือ · หัวคอลัมน์ใบงาน) — เข้มขึ้นให้ตัวขาวอ่านได้ */
+[data-theme="dark"] .bg-\[\#ef4444\]:not([data-paper] *),
+[data-theme="dark"] [style*="background-color: rgb(239, 68, 68)"]:not([data-paper] *),
+[data-theme="dark"] [style*="background-color:#ef4444" i]:not([data-paper] *),
+[data-theme="dark"] [style*="background-color: rgb(244, 67, 54)"]:not([data-paper] *),
+[data-theme="dark"] [style*="background-color:#f44336" i]:not([data-paper] *) {
+  background-color: #da3633 !important;
+}
+[data-theme="dark"] [style*="background-color: rgb(255, 152, 0)"]:not([data-paper] *),
+[data-theme="dark"] [style*="background-color:#ff9800" i]:not([data-paper] *) {
+  background-color: #b35900 !important;
+}

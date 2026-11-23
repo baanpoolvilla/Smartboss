@@ -2013,8 +2013,12 @@
 [data-theme="dark"] .bg-\[var\(--brand-green-dark\)\]:not([data-paper] *) { background-color: color-mix(in oklab, var(--brand-green-dark) 62%, #000000); }
 [data-theme="dark"] .bg-\[var\(--brand-navy\)\]:not([data-paper] *) { background-color: var(--brand-navy-fill); }
 [data-theme="dark"] .bg-\[var\(--brand-navy\,\#1f3a5f\)\]:not([data-paper] *) { background-color: var(--brand-navy-fill); }
+[data-theme="dark"] .bg-\[var\(--chart-amber\)\]:not([data-paper] *) { background-color: color-mix(in oklab, var(--chart-amber) 62%, #000000); }
 [data-theme="dark"] .bg-\[var\(--chart-blue\)\]:not([data-paper] *) { background-color: color-mix(in oklab, var(--chart-blue) 62%, #000000); }
 [data-theme="dark"] .bg-\[var\(--chart-green\)\]:not([data-paper] *) { background-color: color-mix(in oklab, var(--chart-green) 62%, #000000); }
+[data-theme="dark"] .bg-\[var\(--chart-red\)\]:not([data-paper] *) { background-color: color-mix(in oklab, var(--chart-red) 62%, #000000); }
+[data-theme="dark"] .bg-\[var\(--chart-red\,\#dc2626\)\]:not([data-paper] *) { background-color: color-mix(in oklab, var(--chart-red) 62%, #000000); }
+[data-theme="dark"] .bg-\[var\(--chart-violet\)\]:not([data-paper] *) { background-color: color-mix(in oklab, var(--chart-violet) 62%, #000000); }
 [data-theme="dark"] .bg-\[var\(--danger\)\]:not([data-paper] *) { background-color: color-mix(in oklab, var(--danger) 62%, #000000); }
 [data-theme="dark"] .bg-\[var\(--tone-ok\)\]:not([data-paper] *) { background-color: color-mix(in oklab, var(--tone-ok) 62%, #000000); }
 [data-theme="dark"] .bg-\[var\(--tone-warn\)\]:not([data-paper] *) { background-color: color-mix(in oklab, var(--tone-warn) 62%, #000000); }
@@ -2036,6 +2040,18 @@
 [data-theme="dark"] [style*="background-color: var(--chart-green)"]:not([data-paper] *),
 [data-theme="dark"] [style*="background:var(--chart-green)"]:not([data-paper] *),
 [data-theme="dark"] [style*="background: var(--chart-green)"]:not([data-paper] *) { background-color: color-mix(in oklab, var(--chart-green) 62%, #000000) !important; }
+[data-theme="dark"] [style*="background-color:var(--chart-red)"]:not([data-paper] *),
+[data-theme="dark"] [style*="background-color: var(--chart-red)"]:not([data-paper] *),
+[data-theme="dark"] [style*="background:var(--chart-red)"]:not([data-paper] *),
+[data-theme="dark"] [style*="background: var(--chart-red)"]:not([data-paper] *) { background-color: color-mix(in oklab, var(--chart-red) 62%, #000000) !important; }
+[data-theme="dark"] [style*="background-color:var(--chart-violet)"]:not([data-paper] *),
+[data-theme="dark"] [style*="background-color: var(--chart-violet)"]:not([data-paper] *),
+[data-theme="dark"] [style*="background:var(--chart-violet)"]:not([data-paper] *),
+[data-theme="dark"] [style*="background: var(--chart-violet)"]:not([data-paper] *) { background-color: color-mix(in oklab, var(--chart-violet) 62%, #000000) !important; }
+[data-theme="dark"] [style*="background-color:var(--chart-amber)"]:not([data-paper] *),
+[data-theme="dark"] [style*="background-color: var(--chart-amber)"]:not([data-paper] *),
+[data-theme="dark"] [style*="background:var(--chart-amber)"]:not([data-paper] *),
+[data-theme="dark"] [style*="background: var(--chart-amber)"]:not([data-paper] *) { background-color: color-mix(in oklab, var(--chart-amber) 62%, #000000) !important; }
 [data-theme="dark"] [style*="background-color:var(--brand-navy)"]:not([data-paper] *),
 [data-theme="dark"] [style*="background-color: var(--brand-navy)"]:not([data-paper] *),
 [data-theme="dark"] [style*="background:var(--brand-navy)"]:not([data-paper] *),
