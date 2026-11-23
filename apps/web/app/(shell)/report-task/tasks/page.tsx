@@ -138,7 +138,7 @@ function TasksPageContent() {
     if (filters.departmentId !== "all") params.set("dept", filters.departmentId);
     if (filters.assigneeId !== "all") params.set("assignee", filters.assigneeId);
     if (filters.penalty !== "all") params.set("penalty", filters.penalty);
-    // บอร์ดไม่มีงานโปรเจกต์เสมอ (projectId ล็อก "none" ด้านล่าง) — ไม่ต้องใส่ใน URL
+    // projectId ล็อก "all" ด้านล่าง (ซ่อน/แสดงงานโปรเจกต์ด้วยช่องติ๊ก) — ไม่ต้องใส่ใน URL
     if (view !== "board") params.set("view", view);
     const query = params.toString();
     // ไม่มีอะไรเปลี่ยน = ไม่ต้องเขียนทับ (ไม่ไปกวนการนำทางที่กำลังเกิดขึ้น)
@@ -161,11 +161,10 @@ function TasksPageContent() {
     if (filters.quickView !== "all") setFilters({ quickView: "all" });
   }, [filters.quickView, setFilters]);
 
-  // งานโปรเจกต์อยู่หน้าโปรเจกต์อย่างเดียว ไม่ขึ้นบนบอร์ด ("เอาโปรเจกออกจาก task ไปอยู่ของโปรเจกเอง กันงง")
-  // ช่อง "โปรเจกต์" ในตัวกรองเอาออกแล้ว — ลิงก์เก่า ?project= หรือค่าที่จำไว้ในเครื่องก็ไม่ดึงงานโปรเจกต์กลับมา
-  // (FILTER_URL_KEYS ยังมี "project" ไว้ลบคีย์เก่าออกจาก URL) · มุมมองภาระงานยังนับงานโปรเจกต์ตามเดิม (workload-view.tsx)
+  // งานโปรเจกต์ขึ้นบอร์ดด้วย (ผู้ใช้ 23/11/2569 กลับจาก 18/10) — เปิด/ปิดที่ "แสดงบนบอร์ด › งานโปรเจกต์"
+  // (use-board-maintenance.ts) · ค่าเก่าที่จำไว้ในเครื่อง/ลิงก์ ?project= ("none") ถูกล้างเป็น "all" ตรงนี้
   useEffect(() => {
-    if (filters.projectId !== "none") setFilters({ projectId: "none" });
+    if (filters.projectId !== "all") setFilters({ projectId: "all" });
   }, [filters.projectId, setFilters]);
 
   // ตัวกรองช่วงเวลา (กำหนดส่ง วันนี้/สัปดาห์/เดือน/กำหนดเอง) ตัดทิ้งแล้ว (ผู้ใช้ขอ 18/10/2569) — ลิงก์เก่า ?preset=

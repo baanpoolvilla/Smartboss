@@ -16,7 +16,8 @@ import type { Task, TaskPriority } from "@/modules/report_task/types";
  * ไม่นับในตัวเลขสรุปด้านบนของบอร์ด/คะแนน/สถิติงาน ตัวกรองเดิมของบอร์ดใช้กับมันผ่าน matchesMaintenanceFilters
  */
 export type MaintenanceKind = "wo";
-export type BoardKind = "task" | MaintenanceKind;
+/** "project" = งานในโปรเจกต์ (ยังเป็น Task) — แยกช่องติ๊กจากงานทั่วไปให้เห็นชัด (ผู้ใช้ 23/11/2569) */
+export type BoardKind = "task" | "project" | MaintenanceKind;
 export type MaintenanceColumn = "todo" | "in_progress" | "review" | "done";
 
 /**

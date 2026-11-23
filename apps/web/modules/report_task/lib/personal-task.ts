@@ -21,6 +21,21 @@ export function isPersonalTask(task: Pick<Task, "assignedById" | "assigneeIds"> 
   return !!task.assignedById && task.assigneeIds.length === 1 && task.assigneeIds[0] === task.assignedById;
 }
 
+/** คนสร้างเป็นผู้รับงานคนเดียว (ไม่มีคนอื่นพ่วง) — ไม่สนว่าอยู่ในโปรเจกต์หรือไม่ */
+export function isSelfOnlyTask(task: Pick<Task, "assignedById" | "assigneeIds">): boolean {
+  return !!task.assignedById && task.assigneeIds.length === 1 && task.assigneeIds[0] === task.assignedById;
+}
+
+/**
+ * งานที่ไม่มีผลกับคะแนน (ไม่หักเลยกำหนด สติกเกอร์ไม่ลงคะแนน)
+ *   - งานส่วนตัว (isPersonalTask) — กติกาเดิม
+ *   - งานในโปรเจกต์ที่มอบให้ตัวเองคนเดียว (ผู้ใช้ 23/11/2569 "ต้องกับตัวเองเท่านั้น ถ้ามีคนอื่นด้วยก็โดนหักเหมือนเดิม")
+ *     ยังเป็นงานโปรเจกต์ปกติ: สมาชิกเห็น · ตรวจงาน/แจ้งเตือนตามเดิม — เปลี่ยนแค่เรื่องคะแนน
+ */
+export function isScoreFreeTask(task: Pick<Task, "assignedById" | "assigneeIds"> & { project?: Task["project"]; personalGroup?: boolean }): boolean {
+  return isPersonalTask(task) || (!!task.project && isSelfOnlyTask(task));
+}
+
 /** งานส่วนตัวของคนอื่น = มองไม่เห็น · งานอื่น ๆ ไม่ตัดสินที่นี่ (ใช้กติกาสิทธิ์ปกติ) */
 export function isOthersPersonalTask(task: Pick<Task, "assignedById" | "assigneeIds"> & { project?: Task["project"]; personalGroup?: boolean }, userId: string): boolean {
   return isPersonalTask(task) && task.assignedById !== userId && !task.assigneeIds.includes(userId);

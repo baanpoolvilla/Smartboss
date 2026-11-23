@@ -527,8 +527,8 @@ const defaultFilters: TaskFilters = {
   customFrom: "",
   customTo: "",
   quickView: "all",
-  // งานโปรเจกต์อยู่หน้าโปรเจกต์ ไม่ปนบนบอร์ดงาน — เลือก "ทุกงาน" ในตัวกรองเพื่อดูรวม
-  projectId: "none",
+  // งานโปรเจกต์ขึ้นบอร์ดงานด้วย (ผู้ใช้ 23/11/2569) — ซ่อน/แสดงที่ "แสดงบนบอร์ด › งานโปรเจกต์" (use-board-maintenance.ts)
+  projectId: "all",
 };
 
 export const useTaskStore = create<TaskStore>((set, get) => ({

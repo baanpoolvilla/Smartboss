@@ -9,7 +9,7 @@ import { publishToOrg } from "@/lib/realtime/server";
 import { listDirectory } from "./employee-directory";
 import type { Sticker, Task, TaskReaction } from "../../types";
 import { reactionRecipients } from "@/modules/report_task/lib/sticker-target";
-import { isOthersPersonalTask, isPersonalTask } from "@/modules/report_task/lib/personal-task";
+import { isOthersPersonalTask, isScoreFreeTask } from "@/modules/report_task/lib/personal-task";
 import { closePendingScoreRequests } from "@/lib/score-request-store";
 
 /**
@@ -307,7 +307,7 @@ export async function writeTasks(
         }
       }
       // งานส่วนตัวไม่มีผลกับคะแนน (personal-task.ts)
-      if (newReactions.length > 0 && !isPersonalTask(task)) stickerChanges.push({ task, newReactions });
+      if (newReactions.length > 0 && !isScoreFreeTask(task)) stickerChanges.push({ task, newReactions });
 
       const keptReactionIds = new Set((task.reactions ?? []).map((r) => r.id));
       for (const gone of priorById.get(task.id)?.reactions ?? []) {

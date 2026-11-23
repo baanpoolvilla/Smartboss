@@ -125,7 +125,8 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
         ...(specialIds.length > 0 ? { id: { notIn: specialIds } } : {}),
         AND: [
           vis ?? {},
-          { OR: [{ status: { in: ["open", "in_progress"] } }, { status: "completed", completedAt: { gte: since } }] },
+          // รอตรวจ: ค้างนานแค่ไหนก็ต้องขึ้นจนกว่าจะตรวจ (เหมือนงานรอตรวจสอบ) — ไม่อยู่ใต้เงื่อนไข 7 วัน
+          { OR: [{ status: { in: ["open", "in_progress"] } }, { status: "completed", completedAt: { gte: since } }, { status: "completed", reviewState: "pending" }] },
         ],
       },
       select,
@@ -177,7 +178,9 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
         ...(w.autoCreated ? (["auto"] as const) : []),
         ...((w._count?.purchaseOrders ?? 0) > 0 ? (["po"] as const) : []),
       ];
-      const column: MaintenanceColumn = done ? "done" : w.status === "in_progress" ? "in_progress" : "todo";
+      // ซ่อมเสร็จแต่ผู้เปิดยังไม่ตรวจ → คอลัมน์ "รอตรวจสอบ" เดียวกับงาน (เดิมไปกองอยู่ "เสร็จสิ้น" ดูเหมือนไม่ได้ดึงมา — ผู้ใช้ 23/11/2569)
+      const awaitingReviewCol = w.status === "completed" && w.reviewState === "pending";
+      const column: MaintenanceColumn = awaitingReviewCol ? "review" : done ? "done" : w.status === "in_progress" ? "in_progress" : "todo";
       const expenseDue = expensePending && tracking ? expenseDueAt({ ...w, clockFrom: clockFrom.get(w.id) }, tracking) : null;
       items.push({
         kind: "wo",

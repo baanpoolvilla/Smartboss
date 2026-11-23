@@ -43,6 +43,27 @@ describe("sweepAutoPenalties", () => {
     expect(result.notifications).toHaveLength(0);
   });
 
+  // ผู้ใช้ 23/11/2569: งานโปรเจกต์ที่มอบให้ตัวเองคนเดียวไม่หัก · มีคนอื่นพ่วงหักตามเดิม
+  it("never docks a project task the creator assigned only to themself", () => {
+    const project = { projectId: "p1", sectionId: "s1" } as Task["project"];
+    const result = sweepAutoPenalties([makeTask({ project, assigneeIds: ["usr-01"], originalDueDate: daysFromNow(-3) })]);
+    expect(result.changed).toBe(false);
+    expect(result.tasks[0]!.penalty).toBeFalsy();
+  });
+
+  it("still docks a project task assigned to someone else, or to the creator plus others", () => {
+    const project = { projectId: "p1", sectionId: "s1" } as Task["project"];
+    const other = sweepAutoPenalties([makeTask({ project, assigneeIds: ["usr-02"], originalDueDate: daysFromNow(-1) })]);
+    expect(other.tasks[0]!.penalty?.points).toBe(LATE_PENALTY_POINTS);
+    const withMe = sweepAutoPenalties([makeTask({ project, taskMode: "individual", assigneeIds: ["usr-01", "usr-02"], originalDueDate: daysFromNow(-1) })]);
+    expect(withMe.changed).toBe(true);
+  });
+
+  it("still docks a normal task the creator shares with someone else", () => {
+    const result = sweepAutoPenalties([makeTask({ assigneeIds: ["usr-01", "usr-02"], originalDueDate: daysFromNow(-1) })]);
+    expect(result.changed).toBe(true);
+  });
+
   it("is a no-op for a task that isn't overdue", () => {
     const result = sweepAutoPenalties([makeTask({ originalDueDate: daysFromNow(5) })]);
     expect(result.changed).toBe(false);

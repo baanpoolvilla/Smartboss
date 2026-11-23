@@ -45,7 +45,8 @@ export function useBoardMaintenance(filteredTasks: Task[], filters: TaskFilterSt
 
   useEffect(() => {
     setCounts({
-      task: filteredTasks.length,
+      task: filteredTasks.filter((t) => !t.project).length,
+      project: filteredTasks.filter((t) => !!t.project).length,
       wo: mxTyped.length,
     });
     const typeCounts = Object.fromEntries(WO_TYPES.map((t) => [t.id, 0])) as Record<WoType, number>;
@@ -53,7 +54,11 @@ export function useBoardMaintenance(filteredTasks: Task[], filters: TaskFilterSt
     setWoTypeCounts(typeCounts);
   }, [filteredTasks, mxFiltered, mxTyped, setCounts, setWoTypeCounts]);
 
-  const shownTasks = useMemo(() => (kinds.task ? filteredTasks : []), [kinds.task, filteredTasks]);
+  // งานโปรเจกต์ปนในบอร์ดได้ แต่ติ๊กแยกจากงานทั่วไป (ผู้ใช้ 23/11/2569 — "แยกกันแบบชัดเจนจะได้ไม่งง")
+  const shownTasks = useMemo(
+    () => filteredTasks.filter((t) => (t.project ? kinds.project !== false : kinds.task)),
+    [kinds.task, kinds.project, filteredTasks]
+  );
   const shownMx = useMemo(() => mxTyped.filter((i) => kinds[i.kind]), [mxTyped, kinds]);
   return { shownTasks, shownMx };
 }

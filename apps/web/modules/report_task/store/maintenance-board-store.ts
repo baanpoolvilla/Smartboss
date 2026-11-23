@@ -45,8 +45,8 @@ export const useMaintenanceBoardStore = create<MaintenanceBoardState>()(
     (set) => ({
       items: [],
       loaded: false,
-      kinds: { task: true, wo: true },
-      counts: { task: 0, wo: 0 },
+      kinds: { task: true, project: true, wo: true },
+      counts: { task: 0, project: 0, wo: 0 },
       woTypes: ALL_WO_TYPES,
       woTypeCounts: { normal: 0, pm: 0, auto: 0, po: 0 },
       toggleWoType: (t) =>
@@ -80,7 +80,7 @@ export const useMaintenanceBoardStore = create<MaintenanceBoardState>()(
         set((s) => {
           const next = { ...s.kinds, [kind]: !s.kinds[kind] };
           // เอาออกหมดไม่ได้ — บอร์ดว่างเปล่าแล้วงงว่าทำไม
-          if (!next.task && !next.wo) return s;
+          if (!next.task && !next.project && !next.wo) return s;
           return { kinds: next };
         }),
       react: async (workOrderId, stickerId) => {
@@ -120,7 +120,7 @@ export const useMaintenanceBoardStore = create<MaintenanceBoardState>()(
       },
       setCounts: (counts) =>
         set((s) =>
-          s.counts.task === counts.task && s.counts.wo === counts.wo ? s : { counts }
+          s.counts.task === counts.task && s.counts.project === counts.project && s.counts.wo === counts.wo ? s : { counts }
         ),
     }),
     {
@@ -130,12 +130,13 @@ export const useMaintenanceBoardStore = create<MaintenanceBoardState>()(
       merge: (persisted, current) => {
         const p = persisted as { kinds?: Partial<Record<BoardKind, boolean>>; woTypes?: Partial<Record<WoType, boolean>> } | undefined;
         const k = p?.kinds;
-        const kinds = { task: k?.task ?? true, wo: k?.wo ?? true };
+        // project ไม่เคยจำไว้ (เพิ่ม 23/11/2569) → ค่าเริ่มต้นแสดง
+        const kinds = { task: k?.task ?? true, project: k?.project ?? true, wo: k?.wo ?? true };
         const w = p?.woTypes;
         const woTypes = { normal: w?.normal ?? true, pm: w?.pm ?? true, auto: w?.auto ?? true, po: w?.po ?? true };
         return {
           ...current,
-          kinds: kinds.task || kinds.wo ? kinds : current.kinds,
+          kinds: kinds.task || kinds.project || kinds.wo ? kinds : current.kinds,
           woTypes: Object.values(woTypes).some(Boolean) ? woTypes : current.woTypes,
         };
       },

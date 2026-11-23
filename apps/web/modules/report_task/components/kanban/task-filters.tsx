@@ -43,6 +43,7 @@ const GROUP_BY_CHOICES: GroupBy[] = ["status", "priority"];
 /** "แสดงบนบอร์ด" ในเมนูจัดกลุ่ม — ใบงานซ่อมปนกับงานบนบอร์ด (lib/maintenance-board.ts) */
 const BOARD_KINDS: { id: BoardKind; icon: string; label: string }[] = [
   { id: "task", icon: "📋", label: "งาน" },
+  { id: "project", icon: "📁", label: "งานโปรเจกต์" },
   { id: "wo", icon: "🔧", label: "ใบงานซ่อม" },
 ];
 
@@ -132,7 +133,8 @@ const defaultFilters = {
   preset: "all",
   customFrom: "",
   customTo: "",
-  projectId: "none",
+  // งานโปรเจกต์ขึ้นบอร์ดแล้ว (เปิด/ปิดที่ "แสดงบนบอร์ด › งานโปรเจกต์") — ผู้ใช้ 23/11/2569
+  projectId: "all",
 } as const;
 
 /** จำนวนตัวกรองที่ตั้งอยู่ — เลขบนปุ่ม "ตัวกรอง" ของมือถือ (ปุ่มอยู่บนแถบหัวของหน้า ไม่ได้อยู่ในคอมโพเนนต์นี้) */
