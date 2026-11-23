@@ -245,7 +245,7 @@ export async function renderCommissionTab(
                               // เช็กในเบราว์เซอร์ก่อนส่ง — ช่องผิดช่องเดียวไม่ทำให้ที่พิมพ์ไว้ทั้งฟอร์มหาย (รูปแบบเดียวกับ parseTierScore)
                               pattern={TIER_INPUT_PATTERN}
                               title="ใส่ตัวเลขไม่ติดลบ ทศนิยมไม่เกิน 2 ตำแหน่ง เช่น 16, 12.5 หรือ 16%"
-                              className={`${inputClass} h-9 w-24 ${saved === null ? "border-amber-400 bg-amber-50" : ""} user-invalid:border-(--danger) user-invalid:bg-(--danger)/10`}
+                              className={`${inputClass} h-9 w-24 ${saved === null ? "border-amber-400 bg-amber-50" : ""} user-invalid:bg-(--danger)/10 user-invalid:ring-2 user-invalid:ring-(--danger)`}
                             />
                             {saved === null && <span className="mt-0.5 block text-[11px] text-amber-800">{prev !== null ? "ยังไม่บันทึก (เติมจากรอบก่อน)" : "ยังไม่ใส่"}</span>}
                           </Td>
