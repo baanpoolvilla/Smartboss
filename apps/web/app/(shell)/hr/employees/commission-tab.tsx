@@ -30,6 +30,9 @@ import {
   saveCommissionWeightsAction,
 } from "../actions";
 
+/** ช่องยอดค่าคอมรวม — ว่างได้ (ยังไม่รู้ยอด) · ตรงกับ parseBahtToSatang (ตัด , ช่องว่าง ฿) */
+const AMOUNT_INPUT_PATTERN = String.raw`\s*฿?\s*(\d[\d,]*(\.\d{1,2})?)?\s*`;
+
 /** สตางค์แบบไม่ปัด → บาท ทศนิยมไม่เกิน 4 ตำแหน่ง (การ์ดมือถือของตาราง Tier) */
 const fmt4 = (satang: number) => (satang / 100).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 
@@ -238,7 +241,18 @@ export async function renderCommissionTab(
                 <input type="hidden" name="month" value={month} />
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_2fr]">
                   <Field label="ค่าคอมรวมประจำรอบ (บาท)">
-                    <input id="commission-round-amount" name="amount" inputMode="decimal" placeholder="เช่น 10000 (ไม่มีค่าคอม ใส่ 0)" defaultValue={pool === null ? "" : (pool.satang / 100).toFixed(2)} disabled={!canManage} className={inputClass} />
+                    <input
+                      id="commission-round-amount"
+                      name="amount"
+                      inputMode="decimal"
+                      placeholder="ยังไม่รู้ยอด เว้นว่างไว้ก่อนได้ · ไม่มีค่าคอม ใส่ 0"
+                      defaultValue={pool === null ? "" : (pool.satang / 100).toFixed(2)}
+                      disabled={!canManage}
+                      // เช็กในเบราว์เซอร์ก่อนส่ง — พิมพ์ผิดแล้วไม่ขึ้นหน้า error (รูปแบบเดียวกับ parseBahtToSatang)
+                      pattern={AMOUNT_INPUT_PATTERN}
+                      title="ใส่ตัวเลข ทศนิยมไม่เกิน 2 ตำแหน่ง เช่น 10000 หรือ 10,000.50 · ยังไม่รู้ยอดเว้นว่างได้"
+                      className={`${inputClass} user-invalid:bg-(--danger)/10 user-invalid:ring-2 user-invalid:ring-(--danger)`}
+                    />
                   </Field>
                   <Field label="หมายเหตุ">
                     <input id="commission-round-note" name="note" maxLength={500} placeholder="เช่น ยอดขายรวม ต.ค. × 3%" defaultValue={pool?.note ?? ""} disabled={!canManage} className={inputClass} />

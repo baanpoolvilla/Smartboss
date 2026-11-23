@@ -582,7 +582,8 @@ model CommissionPool {
   /** "YYYY-MM" */
   month String
 
-  amount Decimal @db.Decimal(14, 2)
+  /// ว่าง = ยังไม่ใส่ยอด (กรอกคะแนน Tier ไว้ก่อนได้) · 0 = รอบนี้ไม่มีค่าคอม
+  amount Decimal? @db.Decimal(14, 2)
   note   String?
   /// วิธี grade_tier: { "<core.users.id>": คะแนน Tier } — ไม่มีคีย์ = ยังไม่ได้ใส่
   tierScores Json @default("{}") @map("tier_scores")

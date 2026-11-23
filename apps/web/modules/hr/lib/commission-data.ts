@@ -165,7 +165,9 @@ export async function loadCommissionMonth(orgId: string, month: string): Promise
   });
   const members = all.filter((m) => m.eligible).map(({ userId, name, email, grade, score }) => ({ userId, name, email, grade, score }));
 
-  const poolSatang = pool === null ? 0 : Math.round(Number(pool.amount.toString()) * 100);
+  // แถวที่มีแต่คะแนน Tier (ยังไม่ใส่ยอด) = ยังไม่ใส่ยอดรวม เหมือนไม่มีแถว — คะแนน Tier ยังอ่านจากแถวนั้น
+  const amountSet = pool !== null && pool.amount !== null;
+  const poolSatang = amountSet ? Math.round(Number(pool.amount!.toString()) * 100) : 0;
   const gradeShare = setting ? Number(setting.gradeShare.toString()) : 70;
   const tierScores = toTierScores(pool?.tierScores);
 
@@ -174,7 +176,7 @@ export async function loadCommissionMonth(orgId: string, month: string): Promise
     tierScores,
     gradeTier: splitGradeTier(poolSatang, gradeShare, members, weights, tierScores),
     month,
-    pool: pool === null ? null : { satang: poolSatang, note: pool.note, updatedAt: pool.updatedAt },
+    pool: amountSet ? { satang: poolSatang, note: pool!.note, updatedAt: pool!.updatedAt } : null,
     gradeOrder: order,
     weights,
     weightsCustomized: Object.keys(saved).length > 0,
@@ -246,7 +248,11 @@ export async function saveCommissionPool(input: {
   if (!MONTH.test(input.month)) throw new Error("เดือนไม่ถูกต้อง");
 
   if (input.amount.trim() === "") {
-    await prisma.commissionPool.deleteMany({ where: { orgId: input.orgId, month: input.month } });
+    // มีคะแนน Tier ค้างอยู่ (เคยใช้วิธี Grade + Tier) — ล้างแค่ยอด ไม่ลบคะแนนที่กรอกไว้
+    const row = await prisma.commissionPool.findUnique({ where: { orgId_month: { orgId: input.orgId, month: input.month } }, select: { tierScores: true } });
+    const hasTiers = !!row && typeof row.tierScores === "object" && row.tierScores !== null && Object.keys(row.tierScores).length > 0;
+    if (hasTiers) await prisma.commissionPool.update({ where: { orgId_month: { orgId: input.orgId, month: input.month } }, data: { amount: null, note: null, updatedBy: input.userId } });
+    else await prisma.commissionPool.deleteMany({ where: { orgId: input.orgId, month: input.month } });
     return;
   }
   const satang = parseBahtToSatang(input.amount.trim());
@@ -268,7 +274,8 @@ export async function saveCommissionPool(input: {
 
 /**
  * วิธี grade_tier: บันทึกยอดรวมประจำรอบ + คะแนน Tier รายคนพร้อมกัน (ฟอร์มเดียว)
- * ยอดรวมต้องใส่เสมอ (ไม่มีค่าคอม = 0) · คะแนนว่าง = ยังไม่ใส่ (ระบบไม่ให้สรุปรอบจนกว่าจะครบ)
+ * ยอดรวมว่างได้ = ยังไม่รู้ยอด บันทึกแค่คะแนน Tier ไว้ก่อน (งวดเงินเดือนยังส่งไม่ได้จนกว่าจะใส่) · ไม่มีค่าคอม = 0
+ * คะแนนว่าง = ยังไม่ใส่ (ระบบไม่ให้สรุปรอบจนกว่าจะครบ)
  * รับเฉพาะ id ผู้ใช้ของบริษัทนี้
  */
 export async function saveCommissionRound(input: {
@@ -281,8 +288,9 @@ export async function saveCommissionRound(input: {
   tierValues: string[];
 }): Promise<void> {
   if (!MONTH.test(input.month)) throw new Error("เดือนไม่ถูกต้อง");
-  const satang = parseBahtToSatang(input.amount.trim());
-  if (satang === null) throw new Error("ยอดค่าคอมรวมไม่ถูกต้อง — ใส่ตัวเลข ทศนิยมไม่เกิน 2 ตำแหน่ง (รอบนี้ไม่มีค่าคอม ใส่ 0)");
+  const amountRaw = input.amount.trim();
+  const satang = amountRaw === "" ? null : parseBahtToSatang(amountRaw);
+  if (amountRaw !== "" && satang === null) throw new Error("ยอดค่าคอมรวมไม่ถูกต้อง — ใส่ตัวเลข ทศนิยมไม่เกิน 2 ตำแหน่ง (รอบนี้ไม่มีค่าคอม ใส่ 0)");
   const known = new Set(
     (await prisma.user.findMany({ where: { orgId: input.orgId, id: { in: input.tierUserIds } }, select: { id: true } })).map((u) => u.id),
   );
@@ -294,7 +302,7 @@ export async function saveCommissionRound(input: {
     if (v !== undefined) tierScores[id] = v;
   });
   const data = {
-    amount: (satang / 100).toFixed(2),
+    amount: satang === null ? null : (satang / 100).toFixed(2),
     note: input.note.trim().slice(0, 500) || null,
     tierScores,
     updatedBy: input.userId,
