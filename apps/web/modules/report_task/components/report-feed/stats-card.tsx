@@ -25,7 +25,7 @@ export function StatsCard({
     >
       <span
         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-        style={{ backgroundColor: `color-mix(in srgb, ${color} 14%, white)`, color }}
+        style={{ backgroundColor: `color-mix(in srgb, ${color} 14%, var(--mix-paper, white))`, color }}
       >
         <Icon className="h-4 w-4" />
       </span>

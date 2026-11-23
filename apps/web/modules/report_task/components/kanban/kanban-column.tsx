@@ -189,7 +189,7 @@ export function KanbanColumn({
   // it for text specifically so every column stays legible regardless of
   // how light its own accent is, while the background tint and the little
   // dot (still solid `accent`) keep the light/dark cue between columns.
-  const textAccent = `color-mix(in srgb, ${accent} 55%, black)`;
+  const textAccent = `color-mix(in srgb, ${accent} 55%, var(--mix-ink, black))`;
 
   // A column can mix statuses (every assignee column does; the derived
   // "รอตรวจสอบ" column is always 100% "done" though, so this stays flat
@@ -342,7 +342,7 @@ export function KanbanColumn({
                       className="h-full transition-[width] duration-300"
                       style={{
                         width: `${seg.pct}%`,
-                        backgroundColor: `color-mix(in srgb, ${seg.color} 24%, white)`,
+                        backgroundColor: `color-mix(in srgb, ${seg.color} 24%, var(--mix-paper, white))`,
                         boxShadow: i > 0 ? "inset 1.5px 0 0 white" : undefined,
                       }}
                     />
@@ -421,7 +421,7 @@ export function KanbanColumn({
               <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--ink)]">{row.label}</span>
               <span
                 className="text-[11px] font-semibold rounded-full h-5 min-w-5 px-1.5 flex items-center justify-center tabular-nums shrink-0"
-                style={{ backgroundColor: `color-mix(in srgb, ${row.accent} 14%, white)`, color: `color-mix(in srgb, ${row.accent} 55%, black)` }}
+                style={{ backgroundColor: `color-mix(in srgb, ${row.accent} 14%, var(--mix-paper, white))`, color: `color-mix(in srgb, ${row.accent} 55%, var(--mix-ink, black))` }}
               >
                 {row.count}
               </span>
@@ -443,7 +443,7 @@ export function KanbanColumn({
                   <span
                     key={name}
                     className="max-w-[150px] truncate rounded-full px-2 py-0.5 text-[11px] font-medium"
-                    style={{ backgroundColor: `color-mix(in srgb, ${accent} 14%, white)`, color: textAccent }}
+                    style={{ backgroundColor: `color-mix(in srgb, ${accent} 14%, var(--mix-paper, white))`, color: textAccent }}
                     title={name}
                   >
                     {name}

@@ -11,6 +11,7 @@ import { ReportNotificationSync } from "@/modules/report_task/components/shared/
 import { NotificationBellPopover } from "@/modules/report_task/components/shared/notification-bell-popover";
 import { useShell } from "@/components/shell/shell-context";
 import { WorkerLangToggle } from "@/modules/daily_worker/components/lang-toggle";
+import { ThemeToggleButton } from "@/components/shell/theme-picker";
 
 /**
  * ปุ่มขวาสุดของ AppBar — NotificationBell + ปุ่มออกจากระบบ (พร้อมกล่องยืนยัน)
@@ -44,6 +45,8 @@ export function AppBarActions() {
       {/* คนงาน: เลือกภาษา (พม่า/ไทย/อังกฤษ) มุมขวาบน */}
       {workerLang && <WorkerLangToggle lang={workerLang} />}
       <InstallAppButton className="hidden sm:inline-flex" />
+      {/* ธีมสว่าง/มืด — มือถือเปลี่ยนที่ บัญชีของฉัน (แถบบนแคบ) */}
+      <ThemeToggleButton className="hidden sm:inline-flex" />
       <IssueReportBarButton />
       <ReportNotificationSync />
 

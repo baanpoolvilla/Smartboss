@@ -228,7 +228,7 @@ export function ReportFeed({
           <div className="h-full flex flex-col items-center justify-center gap-3 text-center px-6">
             <div
               className="h-14 w-14 rounded-full flex items-center justify-center"
-              style={{ backgroundColor: `color-mix(in srgb, ${topic.color} 14%, white)` }}
+              style={{ backgroundColor: `color-mix(in srgb, ${topic.color} 14%, var(--mix-paper, white))` }}
             >
               <MessageSquareText className="h-6 w-6" style={{ color: topic.color }} />
             </div>

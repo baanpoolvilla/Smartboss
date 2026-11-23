@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+import { cookies } from "next/headers";
+import { parseThemePref, SYSTEM_THEME_SCRIPT, THEME_COLOR, THEME_COOKIE } from "@/lib/theme";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -12,20 +14,31 @@ export const metadata: Metadata = {
 
 // ไม่ใส่ viewport-fit=cover — เมนูล่างของ Shell ยังไม่ได้เว้นขอบ home indicator ของ iPhone
 // interactiveWidget: Android Chrome ย่อหน้าเว็บตามคีย์บอร์ด — ไม่งั้นช่องพิมพ์ที่อยู่ล่างจอ (แชท/ฟอร์ม) โดนคีย์บอร์ดบัง
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  themeColor: "#ffffff",
-  interactiveWidget: "resizes-content",
-};
+export async function generateViewport(): Promise<Viewport> {
+  const pref = parseThemePref((await cookies()).get(THEME_COOKIE)?.value);
+  return {
+    width: "device-width",
+    initialScale: 1,
+    themeColor: pref === "dark" ? THEME_COLOR.dark : THEME_COLOR.light,
+    interactiveWidget: "resizes-content",
+  };
+}
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // ธีมหน้าจอ (lib/theme.ts) — ตั้งตั้งแต่ HTML แรก ไม่กระพริบ · ไม่เคยเลือก = สว่างแบบเดิม
+  const pref = parseThemePref((await cookies()).get(THEME_COOKIE)?.value);
+  const dark = pref === "dark";
   return (
-    <html lang="th">
+    <html lang="th" data-theme-pref={pref} data-theme={dark ? "dark" : "light"} className={dark ? "dark" : undefined} suppressHydrationWarning>
+      {pref === "system" && (
+        <head>
+          <script dangerouslySetInnerHTML={{ __html: SYSTEM_THEME_SCRIPT }} />
+        </head>
+      )}
       {/* spellcheck สืบทอดลงทุกช่องพิมพ์ — ปิดที่ body ที่เดียว ไม่มีเส้นแดงใต้คำไทย/ชื่อคนอีก */}
       <body spellCheck={false}>{children}</body>
     </html>

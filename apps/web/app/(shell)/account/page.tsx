@@ -6,6 +6,7 @@ import { Button } from "@smartboss/ui/components/button";
 import { Avatar } from "@smartboss/ui/components/avatar";
 import { LauncherPage } from "@/components/shell/launcher-page";
 import { Field, SectionCard, inputClass } from "@/modules/admin/components/ui";
+import { ThemePicker } from "@/components/shell/theme-picker";
 import { loadSecuritySettings } from "@/lib/security-settings";
 import { AccountTabs } from "./account-tabs";
 import { changeOwnPasswordAction, removeOwnAvatarAction, updateOwnProfileAction } from "./actions";
@@ -63,6 +64,11 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
           อีเมลใช้เป็นชื่อผู้ใช้สำหรับเข้าระบบ · ต้องการเปลี่ยนอีเมลหรือบทบาท
           ให้แจ้งผู้ดูแลของบริษัท
         </p>
+      </SectionCard>
+
+      {/* ธีมหน้าจอ (ผู้ใช้ 23/11/2569) — จำในเครื่องนี้ · มือถือเปลี่ยนได้ที่นี่ที่เดียว */}
+      <SectionCard title="ธีมหน้าจอ" description="สว่าง · มืด · หรือตามที่ตั้งไว้ในเครื่อง (มือถือ/คอมสลับโหมดเองตามเวลา) — จำไว้ในเครื่องนี้">
+        <ThemePicker />
       </SectionCard>
 
       {/* ทางเข้าหน้าตั้งค่าแจ้งเตือนอีกทาง (มือถือ: แท็บ "บัญชี") — ระดับปัจจุบันอยู่ในหน้านั้น */}

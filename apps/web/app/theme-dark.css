@@ -1,0 +1,258 @@
+/*
+ * ธีมมืด (ผู้ใช้ 23/11/2569 "ตามหลักสากล แบบเจ้าอื่น")
+ * เปิดเมื่อ <html data-theme="dark"> (lib/theme.ts — เลือกที่ บัญชีของฉัน › ธีมหน้าจอ / ปุ่มบนแถบบน) · ไม่ตั้ง = ธีมขาวเดิมทุกพิกเซล
+ *
+ * หลักที่ใช้ (GitHub / Material / Apple HIG):
+ *   - พื้นไม่ดำสนิท: เทาอมน้ำเงินเข้ม · ชั้นที่ลอยสูงกว่า (การ์ด → ป๊อปอัป) สว่างขึ้นทีละขั้นแทนการใช้เงา
+ *   - ตัวหนังสือไม่ขาวจ้า (#e6edf3) · ตัวรองยังผ่าน WCAG AA 4.5:1 บนการ์ด
+ *   - สีเน้น/สีสถานะ ยกความสว่างขึ้นและลดความสด ให้อ่านบนพื้นเข้มได้
+ *   - color-scheme: dark → ช่องกรอก/สกรอลบาร์/ปฏิทินของเบราว์เซอร์เป็นแบบมืดตาม
+ * คลาสสีที่ใส่ตายตัว (bg-amber-50, text-[#0F766E] …) แปลงใน theme-dark-utils.css (สร้างจาก scripts/gen-dark-utils.cjs)
+ */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* พื้น 3 ชั้น: หน้า → การ์ด → ป๊อปอัป */
+  --bg-soft: #0d1117;
+  --bg: #161b22;
+  --bg-raised: #1c2128;
+  --ink: #e6edf3;
+  --ink-soft: #9198a1;
+  --ink-faint: #848d97;
+  --line: #30363d;
+  --border-strong: #484f58;
+
+  --brand-green: #3fb950;
+  --brand-green-dark: #56d364;
+  /* navy ใช้ทั้งเป็นตัวหนังสือและพื้นปุ่มที่เลือก — ตัวหนังสือใช้ค่านี้ (สว่าง) · พื้นแยกด้านล่าง */
+  --brand-navy: #8cb4ff;
+  --brand-navy-fill: #2f5aa8;
+
+  --mod-report: #8b949e;
+  --mod-hr: #58a6ff;
+  --mod-financial: #a371f7;
+  --mod-maintenance: #2dd4bf;
+  --mod-sale: #f778ba;
+  --mod-marketing: #f0883e;
+  --mod-report-bg: #1b2028;
+  --mod-hr-bg: #142338;
+  --mod-financial-bg: #211a36;
+  --mod-maintenance-bg: #10262a;
+  --mod-sale-bg: #2b1626;
+  --mod-marketing-bg: #2b1d12;
+  --module-color-bg: color-mix(in oklab, var(--module-color) 16%, var(--bg));
+
+  --danger: #ff7b72;
+  --danger-bg: #2d1416;
+  --danger-line: #6e2b2b;
+  --tone-ok: #3fb950;
+  --tone-info: #58a6ff;
+  --tone-warn: #f0883e;
+  --tone-danger: #f85149;
+  --tone-muted: #8b949e;
+
+  --shadow-card: 0 0 0 1px rgba(240, 246, 252, 0.04), 0 1px 3px rgba(1, 4, 9, 0.6);
+  --shadow-pop: 0 0 0 1px var(--line), 0 12px 32px rgba(1, 4, 9, 0.7);
+
+  /* กราฟ/ป้ายสถานะ (report_task) — -dark = ตัวหนังสือบนพื้นอมสี จึงต้องสว่าง */
+  --chart-blue: #388bfd;
+  --chart-blue-dark: #79c0ff;
+  --chart-violet: #8957e5;
+  --chart-green: #2ea043;
+  --chart-green-dark: #56d364;
+  --chart-green-light: #e3b341;
+  --chart-amber: #d29922;
+  --chart-amber-dark: #e3b341;
+  --chart-amber-light: #bb8009;
+  --chart-red: #da3633;
+  --chart-red-dark: #ff7b72;
+  --chart-red-light: #8e1519;
+  --chart-gray: #848d97;
+  --chart-gray-dark: #9198a1;
+  --chart-gray-light: #30363d;
+
+  /* ค่าตั้งต้นของสีโมดูล — ที่ใช้นอกพื้นที่โมดูล (มีค่าสำรองสีอ่อนเขียนไว้ในโค้ด เช่น bg-(--app-soft,#CCFBF1)) */
+  --app: #8b949e;
+  --app-strong: #c9d1d9;
+  --app-accent: #6e7681;
+  --app-soft: #262c36;
+  --app-pale: #1b2028;
+
+  /* แถบเมนูซ้าย (report_task / shadcn) */
+  --sidebar: var(--bg);
+  --sidebar-foreground: #c9d1d9;
+  --sidebar-muted: #8b949e;
+  --sidebar-accent: color-mix(in oklab, var(--brand-green) 16%, var(--bg));
+  --sidebar-accent-foreground: var(--brand-green-dark);
+  --sidebar-border: var(--line);
+
+  /* FullCalendar */
+  --fc-page-bg-color: var(--bg);
+  --fc-neutral-bg-color: var(--bg-soft);
+  --fc-border-color: var(--line);
+  --fc-list-event-hover-bg-color: var(--bg-raised);
+}
+
+/* shadcn (report_task) ใช้คลาส .dark ด้วย — ชี้กลับมาที่โทเคนชุดเดียวกัน ไม่ใช้ค่าดำสนิทเดิมในไฟล์นั้น */
+:root[data-theme="dark"].dark {
+  --background: var(--bg);
+  --foreground: var(--ink);
+  --card: var(--bg);
+  --card-foreground: var(--ink);
+  --popover: var(--bg-raised);
+  --popover-foreground: var(--ink);
+  --primary-foreground: #ffffff;
+  --secondary: var(--bg-soft);
+  --secondary-foreground: var(--ink);
+  --muted: var(--bg-soft);
+  --muted-foreground: var(--ink-soft);
+  --border: var(--line);
+  --input: var(--line);
+  --sidebar: var(--bg);
+  --sidebar-foreground: #c9d1d9;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: color-mix(in oklab, var(--brand-green) 16%, var(--bg));
+  --sidebar-accent-foreground: var(--brand-green-dark);
+  --sidebar-border: var(--line);
+}
+
+/* สีประจำโมดูล — ค่าที่เป็น "ตัวหนังสือบนพื้นอ่อน" (app-strong) ต้องสว่าง · พื้นอ่อน (app-soft/pale) ต้องเข้ม */
+[data-theme="dark"] [data-app="hr"] {
+  --app: #58a6ff;
+  --app-strong: #79c0ff;
+  --app-accent: #1f6feb;
+  --app-soft: #1a3355;
+  --app-pale: #142338;
+  --brand-green: #58a6ff;
+}
+[data-theme="dark"] [data-app="requests"],
+[data-theme="dark"] [data-app="salary"] {
+  --app: #a371f7;
+  --app-strong: #d2a8ff;
+  --app-accent: #8957e5;
+  --app-soft: #2e2350;
+  --app-pale: #211a36;
+  --brand-green: #a371f7;
+}
+[data-theme="dark"] [data-app="report_task"] {
+  --app: #8b949e;
+  --app-strong: #c9d1d9;
+  --app-accent: #6e7681;
+  --app-soft: #262c36;
+  --app-pale: #1b2028;
+  --brand-green: #8b949e;
+  --module-color-bg: #1b2028;
+}
+[data-theme="dark"] [data-app="maintenance"] {
+  --bg: #13201f;
+  --bg-soft: #0b1514;
+  --ink: #e2efec;
+  --ink-soft: #93a9a5;
+  --line: #24403b;
+  --app: #2dd4bf;
+  --app-strong: #5eead4;
+  --app-accent: #0f766e;
+  --app-soft: #123d38;
+  --app-pale: #0f2a27;
+  --brand-green: #2dd4bf;
+  --shadow-card: none;
+}
+
+/* แชท (ชุดสีแบบ LINE) */
+[data-theme="dark"] .chat-ui {
+  --chat-accent: #3fb950;
+  --chat-accent-strong: #56d364;
+  --chat-accent-soft: #15301d;
+  --chat-room-bg: #0d1117;
+  --chat-bubble-me: #1f4a2a;
+  --chat-bubble-me-ink: #e6edf3;
+  --chat-bubble-other: #21262d;
+  --chat-meta: #8b949e;
+  --chat-mention: #58a6ff;
+}
+
+/* พื้นปุ่ม/แท็บที่เลือกสี navy (ตัวขาว) — โทเคนเป็นสีสว่างสำหรับตัวหนังสือแล้ว พื้นจึงใช้เฉดเข้ม */
+[data-theme="dark"] .bg-\(--brand-navy\),
+[data-theme="dark"] .bg-\[var\(--brand-navy\)\],
+[data-theme="dark"] .has-\[\:checked\]\:bg-\(--brand-navy\):has(:checked),
+[data-theme="dark"] .data-\[state\=active\]\:bg-\(--brand-navy\)[data-state="active"] {
+  background-color: var(--brand-navy-fill);
+}
+
+/* เส้นขอบกลาง — อยู่นอก layer ใน globals เดิมไม่ได้ จึงตั้งตามธีมที่นี่ผ่านโทเคน --line อยู่แล้ว */
+
+/* รูป/โลโก้สีเข้มบนพื้นมืด: ป้าย data-dark-invert ให้กลับสี (ใช้กับไฟล์รูปที่เป็นตัวอักษรสีเข้มล้วน) */
+[data-theme="dark"] [data-dark-invert] {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* ทั้งหน้า */
+[data-theme="dark"] body {
+  background: var(--bg-soft);
+}
+
+/* พื้นห้องแชท: ผู้ใช้เลือกสีพื้นเองได้ (สีอ่อน) — ธีมมืดคงกลิ่นสีที่เลือกไว้บนพื้นเข้ม · รูปพื้นหลังที่อัปโหลดเองไม่แตะ */
+[data-theme="dark"] .chat-room-surface {
+  background-color: color-mix(in oklab, var(--chat-room-bg) 10%, var(--bg-soft));
+}
+
+/* เอกสารที่พิมพ์ได้ (data-paper: สลิปเงินเดือน · ใบหัก ณ ที่จ่าย · รายงานเซ็นรับเงิน) — คงเป็นกระดาษขาวแบบดูตัวอย่าง PDF */
+[data-theme="dark"] [data-paper] {
+  color-scheme: light;
+  --bg: #ffffff;
+  --bg-soft: #f7f9fc;
+  --ink: #1b2537;
+  --ink-soft: #64748b;
+  --ink-faint: #7f93a6;
+  --line: #e5e9f0;
+  --brand-navy: #1b2537;
+  --danger: #dc2626;
+  background-color: #ffffff;
+  color: #1b2537;
+}
+
+/* ปฏิทินงาน (report_task theme.css) — วันนี้: พื้นเขียวตัวขาว ต้องเป็นเขียวเข้มพอให้ตัวขาวอ่านได้ · วันอาทิตย์: แดงสว่าง */
+[data-theme="dark"] .ebw-calendar {
+  --brand-green-dark: #238636;
+}
+[data-theme="dark"] .ebw-calendar .fc-col-header-cell.fc-day-sun .fc-col-header-cell-cushion,
+[data-theme="dark"] .ebw-calendar .fc-day-sun:not(.fc-day-today) .fc-daygrid-day-number {
+  color: #ff7b72;
+}
+[data-theme="dark"] .ebw-calendar .fc-day-other.fc-day-sun:not(.fc-day-today) .fc-daygrid-day-number {
+  color: color-mix(in srgb, #ff7b72 55%, var(--ink-faint));
+}
+/* ป้าย "+N รายการ" ใช้พื้น --ink ตัวขาว — ธีมมืด --ink สว่าง จึงกลับเป็นพื้นเทาเข้มตัวขาว */
+[data-theme="dark"] .ebw-calendar .fc-daygrid-more-link {
+  background: #30363d;
+  color: #ffffff;
+}
+[data-theme="dark"] .ebw-calendar .fc-daygrid-more-link:hover {
+  background: #484f58;
+}
+
+/* ตัวหนังสือสีประจำโมดูล (ตัวย่อชื่อในรูปโปรไฟล์ ฯลฯ) — สีโมดูลบางตัวเป็น navy เข้ม จึงยกให้สว่างบนพื้นมืด */
+[data-theme="dark"] .text-\[var\(--module-color\)\]:not([data-paper] *),
+[data-theme="dark"] .text-\(--module-color\):not([data-paper] *) {
+  color: color-mix(in oklab, var(--module-color) 55%, #ffffff);
+}
+
+/* ป้าย "🔧 ใบงานซ่อม" (เขียวอมฟ้า #0d9488 ตัวขาว) — เข้มขึ้นให้ตัวขาวอ่านได้ตามเกณฑ์ */
+[data-theme="dark"] .bg-\[\#0d9488\]:not([data-paper] *),
+[data-theme="dark"] [style*="background-color:#0d9488" i]:not([data-paper] *),
+[data-theme="dark"] [style*="background-color: rgb(13, 148, 136)"]:not([data-paper] *),
+[data-theme="dark"] [style*="background:#0d9488" i]:not([data-paper] *),
+[data-theme="dark"] [style*="background: rgb(13, 148, 136)"]:not([data-paper] *) {
+  background-color: #0f766e !important;
+}
+
+/* สีที่คำนวณในโค้ดด้วย color-mix(..., var(--mix-paper, white)) / var(--mix-ink, black)
+   ธีมขาวไม่ได้ตั้งค่า → ได้ white/black เหมือนเดิมทุกพิกเซล · ธีมมืด: พื้นผสมกับพื้นการ์ด ตัวหนังสือผสมกับขาวให้สว่าง */
+:root[data-theme="dark"] {
+  --mix-paper: var(--bg);
+  --mix-ink: #ffffff;
+}
+
+/* โลโก้: ธีมมืดใช้ไฟล์ที่คำว่า Boss เป็นสีสว่าง (components/logo.tsx) */
+[data-theme="dark"] img[data-logo="light"] { display: none; }
+[data-theme="dark"] img[data-logo="dark"] { display: block; }

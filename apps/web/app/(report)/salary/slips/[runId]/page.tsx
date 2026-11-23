@@ -49,7 +49,7 @@ export default async function PrintSlips({ params, searchParams }: { params: Pro
         <PrintButton />
       </div>
       {slips.map((s, i) => (
-        <div key={s.line.employmentId} className="mx-auto mb-6 max-w-5xl bg-(--bg) shadow-sm print:mb-0 print:max-w-none print:break-after-page print:shadow-none">
+        <div key={s.line.employmentId} data-paper className="mx-auto mb-6 max-w-5xl bg-(--bg) shadow-sm print:mb-0 print:max-w-none print:break-after-page print:shadow-none">
           {s.status !== "paid" && <p className="px-8 pt-4 text-sm font-semibold text-amber-800 print:px-0">ตัวอย่าง — รอบนี้ยังไม่จ่าย</p>}
           <PayslipDocument s={s} company={org?.name ?? ""} companyTaxId={settings.companyTaxId} position={positions[i]} />
         </div>

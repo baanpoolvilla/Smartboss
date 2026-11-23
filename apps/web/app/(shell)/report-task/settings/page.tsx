@@ -223,14 +223,14 @@ function SettingsPageInner() {
                   )}
                   style={
                     active
-                      ? { backgroundColor: `color-mix(in srgb, ${t.color} 14%, white)`, color: t.color }
+                      ? { backgroundColor: `color-mix(in srgb, ${t.color} 14%, var(--mix-paper, white))`, color: t.color }
                       : undefined
                   }
                 >
                   <span
                     className="flex h-7 w-7 items-center justify-center rounded-md shrink-0"
                     style={{
-                      backgroundColor: active ? `color-mix(in srgb, ${t.color} 22%, white)` : `color-mix(in srgb, ${t.color} 12%, white)`,
+                      backgroundColor: active ? `color-mix(in srgb, ${t.color} 22%, var(--mix-paper, white))` : `color-mix(in srgb, ${t.color} 12%, var(--mix-paper, white))`,
                       color: t.color,
                     }}
                   >

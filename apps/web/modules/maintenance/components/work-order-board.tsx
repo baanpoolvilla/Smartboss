@@ -418,7 +418,7 @@ function ColumnHeader({
               <span
                 key={i}
                 className="h-full"
-                style={{ width: `${seg.pct}%`, backgroundColor: `color-mix(in srgb, ${seg.color} 18%, white)`, boxShadow: i > 0 ? "inset 1.5px 0 0 white" : undefined }}
+                style={{ width: `${seg.pct}%`, backgroundColor: `color-mix(in srgb, ${seg.color} 18%, var(--mix-paper, white))`, boxShadow: i > 0 ? "inset 1.5px 0 0 white" : undefined }}
               />
             ))}
           </span>

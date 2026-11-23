@@ -18,15 +18,29 @@ export function Logo({
     md: "h-6",
     lg: "h-9",
   };
+  // ธีมมืดใช้ไฟล์ logo-dark.png (คำว่า Boss เป็นสีสว่าง) — สลับด้วย CSS ใน theme-dark.css ไม่ต้องรอ JS
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src="/logo.png"
-      alt="SmartBoss"
-      width={652}
-      height={96}
-      draggable={false}
-      className={cn("w-auto select-none", heights[size], className)}
-    />
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/logo.png"
+        alt="SmartBoss"
+        width={652}
+        height={96}
+        draggable={false}
+        data-logo="light"
+        className={cn("w-auto select-none", heights[size], className)}
+      />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/logo-dark.png"
+        alt="SmartBoss"
+        width={652}
+        height={96}
+        draggable={false}
+        data-logo="dark"
+        className={cn("hidden w-auto select-none", heights[size], className)}
+      />
+    </>
   );
 }

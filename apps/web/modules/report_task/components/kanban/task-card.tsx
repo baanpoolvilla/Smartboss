@@ -211,7 +211,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
     <span
       title={`${pillKind}: ${pillMeta.label}`}
       className="shrink-0 whitespace-nowrap text-[10px] font-semibold leading-none"
-      style={{ color: `color-mix(in srgb, ${pillMeta.accentColor} 80%, black)` }}
+      style={{ color: `color-mix(in srgb, ${pillMeta.accentColor} 80%, var(--mix-ink, black))` }}
     >
       {pillMeta.label}
     </span>
@@ -341,7 +341,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
                         darker text is what keeps it legible. */}
                     <span
                       className="flex items-center gap-1 px-2.5 py-1"
-                      style={{ backgroundColor: chartColors.greenPale, color: `color-mix(in srgb, ${chartColors.greenPale} 45%, black)` }}
+                      style={{ backgroundColor: chartColors.greenPale, color: `color-mix(in srgb, ${chartColors.greenPale} 45%, var(--mix-ink, black))` }}
                     >
                       <Clock className="h-2.5 w-2.5 shrink-0" />
                       รอตรวจสอบ
@@ -387,7 +387,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
                   )}
                   style={
                     myPartDone && isPendingReview
-                      ? { backgroundColor: chartColors.greenPale, color: `color-mix(in srgb, ${chartColors.greenPale} 45%, black)` }
+                      ? { backgroundColor: chartColors.greenPale, color: `color-mix(in srgb, ${chartColors.greenPale} 45%, var(--mix-ink, black))` }
                       : undefined
                   }
                 >

@@ -106,7 +106,7 @@ export default async function WhtCertPage({ params }: { params: Promise<{ id: st
   );
 
   return (
-    <main className="wrap">
+    <main className="wrap" data-paper>
       <style>{`
         .wrap{max-width:820px;margin:0 auto;padding:24px 16px;font-family:"IBM Plex Sans Thai",system-ui,sans-serif;color:#111;background:#fff}
         .bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:16px}

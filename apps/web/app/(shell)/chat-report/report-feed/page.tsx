@@ -1684,7 +1684,7 @@ function PendingTopicsPanel({
             >
               <span
                 className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full"
-                style={{ backgroundColor: `color-mix(in srgb, ${e.topicColor} 16%, white)`, color: e.topicColor }}
+                style={{ backgroundColor: `color-mix(in srgb, ${e.topicColor} 16%, var(--mix-paper, white))`, color: e.topicColor }}
               >
                 <Hash className="h-3.5 w-3.5" />
               </span>

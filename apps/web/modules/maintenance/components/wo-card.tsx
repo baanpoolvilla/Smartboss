@@ -268,7 +268,7 @@ export function WoCard(p: WoCardProps) {
               <span
                 title={`ความสำคัญ: ${dot.label}`}
                 className="mr-auto shrink-0 whitespace-nowrap text-[10px] font-semibold leading-none"
-                style={{ color: `color-mix(in srgb, ${dot.color} 80%, black)` }}
+                style={{ color: `color-mix(in srgb, ${dot.color} 80%, var(--mix-ink, black))` }}
               >
                 {dot.label}
               </span>

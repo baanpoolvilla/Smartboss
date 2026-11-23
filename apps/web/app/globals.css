@@ -10,6 +10,10 @@
  */
 @import '../modules/report_task/theme.css';
 
+/* ธีมมืด (data-theme="dark") — import แบบไม่ใส่ layer จึงชนะคลาสสีของ Tailwind ที่อยู่ใน layer */
+@import './theme-dark.css';
+@import './theme-dark-utils.css';
+
 /*
  * v4 หา source เองจากโฟลเดอร์ของไฟล์ CSS นี้ขึ้นไป แต่ไม่ข้ามออกนอก apps/web
  * คอมโพเนนต์กลางอยู่คนละแพ็กเกจ ต้องบอกทางเอง ไม่งั้นคลาสที่ใช้เฉพาะที่นั่นจะไม่ถูก generate
@@ -159,3 +163,4 @@ h1, h2, h3, h4, h5, h6 {
   .sb-float, .sb-life, .sb-ping, .sb-think, .sb-bubble { animation: none !important; }
   .sb-mascot-btn:hover .sb-life, .sb-mascot-btn:active .sb-life { transform: none; }
 }
+

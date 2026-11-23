@@ -56,7 +56,7 @@ export default async function PayReportPage({ searchParams }: { searchParams: Pr
         </div>
       </div>
 
-      <main className="doc mx-auto my-6 max-w-[210mm] bg-white px-6 py-8 text-black shadow print:m-0 print:max-w-none print:p-0 print:shadow-none sm:px-10">
+      <main data-paper className="doc mx-auto my-6 max-w-[210mm] bg-white px-6 py-8 text-black shadow print:m-0 print:max-w-none print:p-0 print:shadow-none sm:px-10">
         {monthMode ? (
           <>
             <h1 className="text-lg font-bold">สรุปค่าแรงคนงาน · {thMonth(month)}</h1>

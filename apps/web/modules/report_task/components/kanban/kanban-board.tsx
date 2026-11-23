@@ -537,7 +537,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
                 )}
                 style={
                   active
-                    ? { borderColor: column.accent, backgroundColor: `color-mix(in srgb, ${column.accent} 24%, white)` }
+                    ? { borderColor: column.accent, backgroundColor: `color-mix(in srgb, ${column.accent} 24%, var(--mix-paper, white))` }
                     : undefined
                 }
               >

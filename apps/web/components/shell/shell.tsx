@@ -30,6 +30,7 @@ import { StickerManagerHost } from "@/components/sticker-manager";
 import { setEmojiRecentOwner } from "@/components/emoji-picker";
 import { LogoutButton } from "./logout-button";
 import { InstallAppButton, InstallGate } from "./app-install";
+import { ThemeToggleButton } from "@/components/shell/theme-picker";
 import { AppUpdateNotice } from "./app-update-notice";
 import { NotificationSetup } from "./notification-setup";
 import { SaveFeedback } from "./save-feedback";
@@ -194,6 +195,7 @@ function LauncherFrame({
           {/* คนงาน: เลือกภาษา (พม่า/ไทย/อังกฤษ) มุมขวาบน */}
           {user.workerLang && <WorkerLangToggle lang={user.workerLang} />}
           <InstallAppButton />
+          <ThemeToggleButton className="hidden sm:inline-flex" />
           <IssueReportBarButton />
           <ReportNotificationSync />
           <NotificationBellPopover />

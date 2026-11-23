@@ -1476,7 +1476,7 @@ function StatCard({
 }) {
   return (
     <div className="flex min-w-0 flex-col items-center gap-0.5 rounded-xl border border-[var(--line)] px-1 py-1.5 text-center sm:flex-row sm:items-center sm:gap-3 sm:p-3.5 sm:text-left" title={title}>
-      <div className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:flex" style={{ backgroundColor: `color-mix(in srgb, ${color} 14%, white)` }}>
+      <div className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:flex" style={{ backgroundColor: `color-mix(in srgb, ${color} 14%, var(--mix-paper, white))` }}>
         <Icon className="h-4 w-4" style={{ color }} />
       </div>
       <div className="min-w-0">
