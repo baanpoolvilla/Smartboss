@@ -52,8 +52,14 @@ h1, h2, h3, h4, h5, h6 {
  * v4 เปลี่ยนสีเส้นขอบ default จาก gray-200 เป็น currentColor
  * บรรทัดนี้มีมาก่อนอยู่แล้วและยังจำเป็น — ไม่มีแล้วขอบทุกอันจะกลายเป็นสีตัวอักษร
  */
-* {
-  border-color: var(--line);
+/*
+ * อยู่ใน @layer base — ถ้าอยู่นอก layer จะชนะคลาสสีขอบของ Tailwind ทุกอัน (border-amber-400, has-[:checked]:border-…,
+ * border-(--danger)/35 ฯลฯ) ทำให้ขอบทุกอันเป็นสีเทาหมด (เจอ 23/11/2569)
+ */
+@layer base {
+  * {
+    border-color: var(--line);
+  }
 }
 
 /*

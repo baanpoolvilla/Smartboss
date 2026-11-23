@@ -30,6 +30,9 @@ import {
   saveCommissionWeightsAction,
 } from "../actions";
 
+/** สตางค์แบบไม่ปัด → บาท ทศนิยมไม่เกิน 4 ตำแหน่ง (การ์ดมือถือของตาราง Tier) */
+const fmt4 = (satang: number) => (satang / 100).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+
 /** คิดจากอะไร · ทุกรอบต้องทำอะไร · ตัวอย่าง — แต่ละบริษัทเลือกต่างกัน คนตั้งค่าต้องอ่านแล้วรู้ทันที */
 function MethodDetails({ m }: { m: (typeof COMMISSION_METHODS)[number] }) {
   const rows: [string, string][] = [
@@ -88,6 +91,9 @@ export async function renderCommissionTab(
         a.name.localeCompare(b.name, "th"),
     );
   const receiving = rows.filter((r) => r.comm !== null).length;
+  // ตัวหาร = คนที่มีสิทธิ์ได้ค่าคอม — คนที่ติ๊กว่าไม่ได้ (ยังไม่ผ่านโปร/ยกเว้น) ไม่นับ ไม่งั้นดูเหมือนมีคนตกหล่น
+  const notEligible = members.length - eligibleMembers.length;
+  const receivingHint = notEligible > 0 ? `คน · ไม่นับ ${notEligible} คนที่ไม่ได้ค่าคอม` : "คน";
   const totalSatang = rows.reduce((sum, r) => sum + (r.comm?.kind === "amount" ? r.comm.satang : 0), 0);
 
   const monthLink = (m: string) => `${base}${base.includes("?") ? "&" : "?"}month=${m}`;
@@ -175,7 +181,7 @@ export async function renderCommissionTab(
               <StatCard label="ค่าคอมรวมประจำรอบ" value={pool === null ? "—" : formatSatang(pool.satang)} hint={pool === null ? "ยังไม่ได้ใส่ยอด" : "บาท"} tone={pool === null ? "var(--ink-soft)" : "var(--app-strong)"} />
               <StatCard label={`ก้อน Grade ${gt.gradeShare}%`} value={pool === null ? "—" : formatSatang(gt.gradePoolSatang)} hint={`คะแนน Grade รวม ${gt.totalGrade.toLocaleString("th-TH")}`} />
               <StatCard label={`ก้อน Tier ${Math.round((100 - gt.gradeShare) * 100) / 100}%`} value={pool === null ? "—" : formatSatang(gt.tierPoolSatang)} hint={`คะแนน Tier รวม ${gt.totalTier.toLocaleString("th-TH")}`} />
-              <StatCard label="ได้รับค่าคอม" value={`${gtReady ? gt.shares.filter((x) => x.totalSatang > 0).length : 0}/${members.length}`} hint="คน" />
+              <StatCard label="ได้รับค่าคอม" value={`${gtReady ? gt.shares.filter((x) => x.totalSatang > 0).length : 0}/${eligibleMembers.length}`} hint={receivingHint} />
             </div>
           ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -189,7 +195,7 @@ export async function renderCommissionTab(
             ) : (
               <StatCard label="วิธีคิด" value={method === "percent" ? "% เงินเดือน" : "บาทต่อเกรด"} hint="ตั้งไว้ด้านบน" />
             )}
-            <StatCard label="ได้รับค่าคอม" value={`${receiving}/${members.length}`} hint="คน" />
+            <StatCard label="ได้รับค่าคอม" value={`${receiving}/${eligibleMembers.length}`} hint={receivingHint} />
             {method === "pool" ? (
               <>
                 <StatCard label="หน่วยรวม" value={split.totalUnits.toLocaleString("th-TH")} hint="ผลรวมตัวคูณคนที่ได้" />
@@ -241,65 +247,89 @@ export async function renderCommissionTab(
                 {eligibleMembers.length === 0 ? (
                   <EmptyState>ยังไม่มีพนักงานที่ได้ค่าคอมในรอบนี้</EmptyState>
                 ) : (
-                  <DataTable head={["พนักงาน", "Grade", "คะแนน Grade", "คะแนน Tier", "ค่าคอม Grade", "ค่าคอม Tier", "รวม (จ่ายจริง)"]}>
+                  <DataTable
+                    stackOnMobile
+                    headAlign={["left", "left", "right", "left", "right", "right", "right"]}
+                    head={["พนักงาน", "Grade", "คะแนน Grade", "คะแนน Tier", "ค่าคอม Grade", "ค่าคอม Tier", "รวม (จ่ายจริง)"]}
+                  >
+                    {/* มือถือ: แต่ละคนเป็นการ์ด — ชื่อ+เกรด · ช่องคะแนน Tier · ยอดที่ได้ ไม่ต้องปัดตารางไปขวาเพื่อดูเงิน */}
                     {eligibleMembers.map((m) => {
                       const s = gt.shares.find((x) => x.userId === m.userId);
                       const saved = s?.tier ?? null;
                       const prev = typeof prevTiers[m.userId] === "number" ? (prevTiers[m.userId] as number) : null;
+                      const ready = !!s && gtReady;
                       return (
-                        <tr key={m.userId} className="hover:bg-(--bg-soft)">
-                          <Td>
+                        <tr key={m.userId} className="hover:bg-(--bg-soft) max-sm:flex max-sm:flex-col max-sm:gap-2 max-sm:p-3">
+                          <Td className="max-sm:flex max-sm:items-center max-sm:gap-2 max-sm:p-0">
                             <span className="font-medium">{m.name}</span>
+                            <span className="sm:hidden">
+                              <Pill tone={gradeColor(m.grade, rankOrder)}>{m.grade}</Pill>
+                            </span>
+                            <span className="text-xs text-(--ink-soft) sm:hidden">คะแนน Grade {weights[m.grade] ?? 0}</span>
                             <input type="hidden" name="tierUserId" value={m.userId} />
                           </Td>
-                          <Td>
+                          <Td className="max-sm:hidden">
                             <Pill tone={gradeColor(m.grade, rankOrder)}>{m.grade}</Pill>
                           </Td>
-                          <Td align="right" className="font-mono">
+                          <Td align="right" className="font-mono max-sm:hidden">
                             {weights[m.grade] ?? 0}
                           </Td>
-                          <Td>
-                            <input
-                              name="tier"
-                              inputMode="decimal"
-                              aria-label={`คะแนน Tier ${m.name}`}
-                              defaultValue={saved !== null ? String(saved) : prev !== null ? String(prev) : ""}
-                              disabled={!canManage}
-                              // เช็กในเบราว์เซอร์ก่อนส่ง — ช่องผิดช่องเดียวไม่ทำให้ที่พิมพ์ไว้ทั้งฟอร์มหาย (รูปแบบเดียวกับ parseTierScore)
-                              pattern={TIER_INPUT_PATTERN}
-                              title="ใส่ตัวเลขไม่ติดลบ ทศนิยมไม่เกิน 2 ตำแหน่ง เช่น 16, 12.5 หรือ 16%"
-                              className={`${inputClass} h-9 w-24 ${saved === null ? "border-amber-400 bg-amber-50" : ""} user-invalid:bg-(--danger)/10 user-invalid:ring-2 user-invalid:ring-(--danger)`}
-                            />
+                          <Td className="max-sm:p-0">
+                            <label className="max-sm:flex max-sm:items-center max-sm:gap-2">
+                              <span className="text-xs text-(--ink-soft) sm:hidden">คะแนน Tier</span>
+                              <input
+                                name="tier"
+                                inputMode="decimal"
+                                aria-label={`คะแนน Tier ${m.name}`}
+                                defaultValue={saved !== null ? String(saved) : prev !== null ? String(prev) : ""}
+                                disabled={!canManage}
+                                // เช็กในเบราว์เซอร์ก่อนส่ง — ช่องผิดช่องเดียวไม่ทำให้ที่พิมพ์ไว้ทั้งฟอร์มหาย (รูปแบบเดียวกับ parseTierScore)
+                                pattern={TIER_INPUT_PATTERN}
+                                title="ใส่ตัวเลขไม่ติดลบ ทศนิยมไม่เกิน 2 ตำแหน่ง เช่น 16, 12.5 หรือ 16%"
+                                className={`${inputClass} h-9 w-24 ${saved === null ? "border-amber-400 bg-amber-50" : ""} user-invalid:bg-(--danger)/10 user-invalid:ring-2 user-invalid:ring-(--danger)`}
+                              />
+                            </label>
                             {saved === null && <span className="mt-0.5 block text-[11px] text-amber-800">{prev !== null ? "ยังไม่บันทึก (เติมจากรอบก่อน)" : "ยังไม่ใส่"}</span>}
                           </Td>
-                          <Td align="right" className="font-mono text-xs">
-                            {s && gtReady ? formatExact(s.gradeExact) : "—"}
+                          <Td align="right" className="font-mono text-xs max-sm:hidden">
+                            {ready ? formatExact(s.gradeExact) : "—"}
                           </Td>
-                          <Td align="right" className="font-mono text-xs">
-                            {s && gtReady ? formatExact(s.tierExact) : "—"}
+                          <Td align="right" className="font-mono text-xs max-sm:hidden">
+                            {ready ? formatExact(s.tierExact) : "—"}
                           </Td>
-                          <Td align="right" className="font-mono font-semibold">
-                            {s && gtReady ? formatSatang(s.totalSatang) : "—"}
+                          <Td align="right" className="font-mono font-semibold max-sm:p-0 max-sm:text-left max-sm:font-sans">
+                            <span className="max-sm:hidden">{ready ? formatSatang(s.totalSatang) : "—"}</span>
+                            <span className="flex flex-wrap items-baseline justify-between gap-x-3 sm:hidden">
+                              <span className="text-xs font-normal text-(--ink-soft)">
+                                {/* ทศนิยม 4 ตำแหน่ง ไม่งั้น 1,000.00 + 473.68 ดูไม่เท่ากับ 1,473.69 (ระบบปัดขึ้นจากยอดเต็ม) */}
+                                {ready ? `Grade ${fmt4(s.gradeExact)} + Tier ${fmt4(s.tierExact)} ปัดขึ้น` : "ยังคิดไม่ได้"}
+                              </span>
+                              <span>จ่ายจริง <span className="font-mono">{ready ? formatSatang(s.totalSatang) : "—"}</span></span>
+                            </span>
                           </Td>
                         </tr>
                       );
                     })}
                     {gtReady && (
-                      <tr className="border-t border-(--line)">
-                        <Td className="font-semibold">รวม</Td>
-                        <Td>{""}</Td>
-                        <Td align="right" className="font-mono">
+                      <tr className="border-t border-(--line) max-sm:flex max-sm:flex-wrap max-sm:justify-between max-sm:gap-x-3 max-sm:gap-y-1 max-sm:bg-(--bg-soft) max-sm:p-3">
+                        <Td className="font-semibold max-sm:p-0">รวม</Td>
+                        <Td className="max-sm:hidden">{""}</Td>
+                        <Td align="right" className="font-mono max-sm:hidden">
                           {gt.totalGrade}
                         </Td>
-                        <Td className="font-mono">{gt.totalTier}</Td>
-                        <Td align="right" className="font-mono text-xs">
+                        <Td className="font-mono max-sm:p-0 max-sm:font-sans max-sm:text-xs max-sm:text-(--ink-soft)">
+                          <span className="sm:hidden">คะแนน Tier รวม </span>
+                          {gt.totalTier}
+                        </Td>
+                        <Td align="right" className="font-mono text-xs max-sm:hidden">
                           {formatSatang(gt.gradePoolSatang)}
                         </Td>
-                        <Td align="right" className="font-mono text-xs">
+                        <Td align="right" className="font-mono text-xs max-sm:hidden">
                           {formatSatang(gt.tierPoolSatang)}
                         </Td>
-                        <Td align="right" className="font-mono font-semibold">
-                          {formatSatang(gt.shares.reduce((n, x) => n + x.totalSatang, 0))}
+                        <Td align="right" className="font-mono font-semibold max-sm:w-full max-sm:p-0 max-sm:text-left max-sm:font-sans">
+                          <span className="sm:hidden">จ่ายจริงรวม </span>
+                          <span className="font-mono">{formatSatang(gt.shares.reduce((n, x) => n + x.totalSatang, 0))}</span>
                         </Td>
                       </tr>
                     )}
