@@ -30,6 +30,25 @@ import {
   saveCommissionWeightsAction,
 } from "../actions";
 
+/** คิดจากอะไร · ทุกรอบต้องทำอะไร · ตัวอย่าง — แต่ละบริษัทเลือกต่างกัน คนตั้งค่าต้องอ่านแล้วรู้ทันที */
+function MethodDetails({ m }: { m: (typeof COMMISSION_METHODS)[number] }) {
+  const rows: [string, string][] = [
+    ["คิดจาก", m.from],
+    ["ทุกรอบต้องทำ", m.each],
+    ["ตัวอย่าง", m.example],
+  ];
+  return (
+    <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
+      {rows.map(([k, v]) => (
+        <div key={k} className="contents">
+          <dt className="whitespace-nowrap text-(--ink-soft)">{k}</dt>
+          <dd className="m-0 text-(--ink)">{v}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 /**
  * แท็บ "ค่าคอม" ของหน้าพนักงาน — บริษัทเลือกวิธีคิดเอง (Pool ÷ ตัวคูณ · % ของเงินเดือน · บาทต่อเกรด · ไม่คิดจากเกรด)
  * และเลือกคนที่ได้ (บางแผนก · ยกเว้นรายคน) · ยอดเข้างวดเงินเดือนเดือนเดียวกันอัตโนมัติ (โมดูลเงินเดือน)
@@ -121,13 +140,16 @@ export async function renderCommissionTab(
                   className="flex cursor-pointer items-start gap-3 rounded-(--radius) border border-(--line) p-3 has-[:checked]:border-(--brand-navy) has-[:checked]:bg-(--bg-soft)"
                 >
                   <input type="radio" name="method" value={m.id} defaultChecked={m.id === method} className="mt-1 h-4 w-4" />
-                  <span className="flex flex-col gap-0.5">
+                  <span className="flex min-w-0 flex-col gap-1.5">
                     <span className="text-sm font-semibold text-(--ink)">{m.label}</span>
-                    <span className="text-xs text-(--ink-soft)">{m.hint}</span>
+                    <MethodDetails m={m} />
                   </span>
                 </label>
               ))}
             </div>
+            <p className="text-xs text-(--ink-soft)">
+              เปลี่ยนวิธีได้ทุกเมื่อ — มีผลกับงวดเงินเดือนที่ยังเป็นร่าง (กดคำนวณใหม่ในงวดนั้น) · งวดที่ส่งอนุมัติหรือจ่ายแล้วไม่เปลี่ยน · ทุกวิธีใช้เกรดของรอบเดียวกัน และให้เฉพาะคนที่ติ๊กไว้ในส่วน &ldquo;ใครได้ค่าคอม&rdquo; ด้านล่าง
+            </p>
             <div className="flex justify-end">
               <Button type="submit" size="sm">
                 บันทึกวิธีคิด
@@ -135,9 +157,10 @@ export async function renderCommissionTab(
             </div>
           </form>
         ) : (
-          <p className="text-sm text-(--ink)">
-            {methodInfo.label} — <span className="text-(--ink-soft)">{methodInfo.hint}</span>
-          </p>
+          <div className="flex flex-col gap-1.5">
+            <p className="text-sm font-semibold text-(--ink)">{methodInfo.label}</p>
+            <MethodDetails m={methodInfo} />
+          </div>
         )}
       </SectionCard>
 
