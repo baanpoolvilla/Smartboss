@@ -18,7 +18,7 @@ import { scorePeriodOf } from "@/lib/score-period";
 import { loadScorePeriodConfig, loadScorePeriodReadyAt } from "@/lib/score-period-config";
 import { ScorePeriodStatus } from "@/components/score-period-status";
 import { prisma } from "@smartboss/database";
-import { COMMISSION_METHODS, formatExact, formatSatang } from "@/modules/hr/lib/commission";
+import { COMMISSION_METHODS, TIER_INPUT_PATTERN, formatExact, formatSatang } from "@/modules/hr/lib/commission";
 import { commissionForUser, loadCommissionMonth } from "@/modules/hr/lib/commission-data";
 import {
   saveCommissionEligibilityAction,
@@ -242,7 +242,10 @@ export async function renderCommissionTab(
                               aria-label={`คะแนน Tier ${m.name}`}
                               defaultValue={saved !== null ? String(saved) : prev !== null ? String(prev) : ""}
                               disabled={!canManage}
-                              className={`${inputClass} h-9 w-24 ${saved === null ? "border-amber-400 bg-amber-50" : ""}`}
+                              // เช็กในเบราว์เซอร์ก่อนส่ง — ช่องผิดช่องเดียวไม่ทำให้ที่พิมพ์ไว้ทั้งฟอร์มหาย (รูปแบบเดียวกับ parseTierScore)
+                              pattern={TIER_INPUT_PATTERN}
+                              title="ใส่ตัวเลขไม่ติดลบ ทศนิยมไม่เกิน 2 ตำแหน่ง เช่น 16, 12.5 หรือ 16%"
+                              className={`${inputClass} h-9 w-24 ${saved === null ? "border-amber-400 bg-amber-50" : ""} user-invalid:border-(--danger) user-invalid:bg-(--danger)/10`}
                             />
                             {saved === null && <span className="mt-0.5 block text-[11px] text-amber-800">{prev !== null ? "ยังไม่บันทึก (เติมจากรอบก่อน)" : "ยังไม่ใส่"}</span>}
                           </Td>

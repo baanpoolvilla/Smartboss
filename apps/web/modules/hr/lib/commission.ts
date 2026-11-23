@@ -173,11 +173,20 @@ export function toCommissionMethod(v: unknown): CommissionMethod {
 /** คะแนน Tier สูงสุดที่รับ — กันพิมพ์ผิดเกินจริง */
 export const MAX_TIER_SCORE = 100_000;
 
-/** ช่องคะแนน Tier — ว่าง = ยังไม่ใส่ (undefined) · ทศนิยมไม่เกิน 2 ตำแหน่ง ไม่ติดลบ · ผิด = null */
+/**
+ * รูปแบบช่องคะแนน Tier สำหรับ <input pattern> — ต้องรับเท่ากับ parseTierScore (ยกเว้นเพดาน MAX_TIER_SCORE ที่เช็กฝั่งเซิร์ฟเวอร์)
+ * ไม่ใช้ [...] ที่มีอักขระพิเศษ เพราะเบราว์เซอร์คอมไพล์ pattern ด้วย flag v
+ */
+export const TIER_INPUT_PATTERN = String.raw`\s*(\d[\d,]*(\.\d{0,2})?|\.\d{1,2})?\s*%?\s*`;
+
+/**
+ * ช่องคะแนน Tier — ว่าง = ยังไม่ใส่ (undefined) · ทศนิยมไม่เกิน 2 ตำแหน่ง ไม่ติดลบ · ผิด = null
+ * รับ "16%" (= 16 — ระบบหารด้วยคะแนนรวมอยู่แล้ว), ".5" (= 0.5) และ "12." (= 12) ด้วย
+ */
 export function parseTierScore(input: string): number | undefined | null {
-  const raw = input.replace(/[,\s]/g, "");
+  const raw = input.replace(/[,\s]/g, "").replace(/%$/, "");
   if (raw === "") return undefined;
-  if (!/^\d+(\.\d{1,2})?$/.test(raw)) return null;
+  if (!/^(\d+(\.\d{0,2})?|\.\d{1,2})$/.test(raw)) return null;
   const value = Number(raw);
   return value <= MAX_TIER_SCORE ? value : null;
 }
@@ -252,7 +261,8 @@ export function splitGradeTier(
   if (members.length === 0) problems.push("ไม่มีพนักงานที่ได้ค่าคอมในรอบนี้");
   else {
     if (gradePoolSatang > 0 && totalGrade <= 0) problems.push("คะแนน Grade รวมเป็น 0 — หารไม่ได้ ตรวจตัวคูณเกรด/ผลเกรดของรอบนี้");
-    if (missingTier.length > 0) problems.push(`ยังไม่ได้ใส่คะแนน Tier: ${missingTier.join(", ")}`);
+    // ก้อน Tier เป็น 0 (ตั้ง Grade 100%) — คะแนน Tier ไม่มีผลกับเงิน ไม่ต้องบังคับกรอก
+    if (tierPoolSatang > 0 && missingTier.length > 0) problems.push(`ยังไม่ได้ใส่คะแนน Tier: ${missingTier.join(", ")}`);
     else if (tierPoolSatang > 0 && totalTier <= 0) problems.push("คะแนน Tier รวมเป็น 0 — หารไม่ได้ ใส่คะแนน Tier ก่อน");
   }
   const shares: GradeTierShare[] = rows.map((r) => {

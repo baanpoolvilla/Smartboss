@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatExact, splitGradeTier, toCommissionMethod } from "@/modules/hr/lib/commission";
+import { TIER_INPUT_PATTERN, formatExact, parseTierScore, splitGradeTier, toCommissionMethod } from "@/modules/hr/lib/commission";
 import { applyDiligencePartial, computePay, diligenceStep, leaveCountsAgainstDiligence, type ComputeInput } from "./compute";
 import { reportRow } from "./report";
 import type { LineInfo } from "./run";
@@ -58,6 +58,27 @@ describe("ค่าคอม Grade + Tier", () => {
     const r = splitGradeTier(1_000_000, 70, members, W, partial);
     expect(r.missingTier).toEqual(["คน4"]);
     expect(r.problems.join()).toContain("ยังไม่ได้ใส่คะแนน Tier: คน4");
+  });
+
+  it("Grade 100% (ก้อน Tier 0) ไม่ต้องกรอกคะแนน Tier", () => {
+    const r = splitGradeTier(1_000_000, 100, mk(["A", "B"]), W, {});
+    expect(r.problems).toEqual([]);
+    expect(r.shares.map((s) => s.totalSatang)).toEqual([571_429, 428_572]);
+    // ก้อน Tier > 0 ยังบังคับเหมือนเดิม
+    expect(splitGradeTier(1_000_000, 99, mk(["A", "B"]), W, {}).problems.join()).toContain("ยังไม่ได้ใส่คะแนน Tier");
+  });
+
+  it("ช่องคะแนน Tier รับ 16% / .5 / 12. และรูปแบบในเบราว์เซอร์รับเท่ากับฝั่งเซิร์ฟเวอร์", () => {
+    expect(parseTierScore("16%")).toBe(16);
+    expect(parseTierScore(" 16 % ")).toBe(16);
+    expect(parseTierScore(".5")).toBe(0.5);
+    expect(parseTierScore("12.")).toBe(12);
+    expect(parseTierScore("1,000.25")).toBe(1000.25);
+    expect(parseTierScore("%")).toBeUndefined();
+    for (const bad of ["12.345", "-1", "abc", ".", "1.2.3", "16%%", "100001"]) expect(parseTierScore(bad)).toBeNull();
+    const re = new RegExp(`^(?:${TIER_INPUT_PATTERN})$`, "v");
+    const samples = ["", " ", "0", "16", "16%", " 16 % ", ".5", "12.", "12.25", "1,000", "1,000.25", "%", "12.345", "-1", "abc", ".", "1.2.3", "16%%", "1e3", "١٢"];
+    for (const s of samples) expect([s, re.test(s)]).toEqual([s, parseTierScore(s) !== null]);
   });
 
   it("คะแนน Tier รวม 0 / คะแนน Grade รวม 0 = หารไม่ได้ ห้ามสรุป", () => {
