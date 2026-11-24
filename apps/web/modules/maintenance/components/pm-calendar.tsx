@@ -30,8 +30,10 @@ import { Button } from "@smartboss/ui/components/button";
 import { Modal } from "./dialog";
 import { NO_CATEGORY } from "./work-order-board";
 import {
-  groupByDueDate,
   monthGrid,
+  occurrencesInMonth,
+  type PmHistoryRound,
+  type PmOccurrence,
   monthOfIso,
   parseIso,
   pmStatusOf,
@@ -91,6 +93,12 @@ export interface PmRow {
   assetId: string | null;
   assetName: string | null;
   frequencyLabel: string;
+  /** รหัสความถี่ (weekly, monthly, …) — ไล่รอบที่จะถึงบนปฏิทิน */
+  frequency: string;
+  /** วันตั้งต้นของแผน YYYY-MM-DD */
+  anchorInput: string | null;
+  /** ใบงานของแต่ละรอบ (ย้อนหลัง 13 เดือน + ที่ยังเปิดอยู่) — วางลงวันของรอบบนปฏิทิน */
+  history: PmHistoryRound[];
   mode: "continuous" | "yearlyRounds" | "limitedCount";
   roundsDone: number;
   totalRounds: number | null;
@@ -124,6 +132,14 @@ export interface PmRow {
   earlyRounds?: { value: string; label: string; dueLabel: string }[];
   /** แผนเดินแบบนับรอบ — ใบขึ้นเองในวันของรอบ ไม่ต้องกด "สร้างใบงาน" ตอนใกล้ถึง */
   roundMode?: boolean;
+}
+
+/** รอบที่ใบงานปิดแล้ว (บนปฏิทิน) — เขียวเดียวกับ "ตามกำหนด" แต่มี ✓ และวันที่ผ่านไปแล้วจางลง */
+const DONE_COLOR = "#2E7D32";
+const OCC_LABEL = { done: "ทำแล้ว", open: "เปิดใบงานแล้ว", planned: "รอบที่จะถึง" } as const;
+/** จำนวนวันจาก a ถึง b (YYYY-MM-DD) */
+function daysBetween(a: string, b: string): number {
+  return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
 }
 
 /** ลิงก์สร้างใบงานจาก PM — คัดลอกรูปแบบ description ของเดิมทั้งหมด */
@@ -234,7 +250,22 @@ export function PmCalendar({
     return schedules.filter((s) => (s.categoryName ?? NO_CATEGORY) === group);
   }, [schedules, group, propertyId]);
 
-  const byDate = useMemo(() => groupByDueDate(visible), [visible]);
+  // ทุกรอบของเดือนที่เปิดดู: ใบที่ทำแล้ว/เปิดอยู่ตามวันของรอบ + รอบที่จะถึงตามความถี่ (lib/pm-calendar.ts)
+  const occByDate = useMemo(() => occurrencesInMonth(visible, ym), [visible, ym]);
+  // วันที่เลือกอาจอยู่คนละเดือนกับที่เปิดดู (เลือกแล้วเลื่อนเดือน) — คิดรอบของเดือนนั้นแยก
+  const pickIso = pick.kind === "day" ? pick.iso : null;
+  const occOfPick = useMemo(() => {
+    if (!pickIso) return [];
+    const pm = monthOfIso(pickIso);
+    const map = pm.year === ym.year && pm.month === ym.month ? occByDate : occurrencesInMonth(visible, pm);
+    return map.get(pickIso) ?? [];
+  }, [pickIso, ym, occByDate, visible]);
+  const occColor = (o: PmOccurrence<PmRow>, iso: string) => {
+    if (o.kind === "done") return DONE_COLOR;
+    if (o.kind === "open") return PM_STATUS.hasWorkOrder.color;
+    if (iso < todayIso) return PM_STATUS.overdue.color;
+    return daysBetween(todayIso, iso) <= 7 ? PM_STATUS.dueSoon.color : PM_STATUS.onTrack.color;
+  };
 
   /**
    * เกินกำหนด/รอนัดวัน ต้องดึงออกมาจากทุกเดือน ไม่ใช่เฉพาะเดือนที่เปิดดูอยู่
@@ -273,7 +304,7 @@ export function PmCalendar({
             title: `${shortThaiDate(pick.iso)}${
               pick.iso === todayIso ? " (วันนี้)" : ""
             }`,
-            rows: byDate.get(pick.iso) ?? [],
+            rows: [...new Map(occOfPick.map((o) => [o.row.id, o.row])).values()],
             empty: "ไม่มีงาน PM ในวันที่เลือก",
           };
 
@@ -445,29 +476,38 @@ export function PmCalendar({
         </div>
         <div className="grid grid-cols-7">
           {cells.map((cell, i) => {
-            const rows = byDate.get(cell.iso) ?? [];
+            // วันของเดือนก่อน/ถัดไป — ช่องว่าง ไม่มีเลขวัน ไม่มีรายการ (ผู้ใช้ 24/11/2569 "แยกเป็นเดือน ๆ ไปเลย จะได้ไม่งง")
+            if (!cell.inMonth) {
+              return (
+                <div
+                  key={cell.iso}
+                  aria-hidden="true"
+                  className={`min-h-[62px] bg-(--bg-soft) sm:min-h-[94px] ${i % 7 !== 0 ? "border-l border-(--line)" : ""} ${i >= 7 ? "border-t border-(--line)" : ""}`}
+                />
+              );
+            }
+            const occs = occByDate.get(cell.iso) ?? [];
             const isToday = cell.iso === todayIso;
             const isPicked = cell.iso === selectedIso;
+            // วันที่ผ่านไปแล้ว — ยังแสดงรอบของวันนั้น แต่จางลง
+            // ใบที่ยังเปิดค้างไม่จาง — ยังเป็นงานที่ต้องทำ
+            const isPast = cell.iso < todayIso;
+            const fadeOf = (o: PmOccurrence<PmRow>) => (isPast && o.kind !== "open" ? 0.5 : 1);
             return (
               <button
                 key={cell.iso}
                 type="button"
                 onClick={() => setPick({ kind: "day", iso: cell.iso })}
                 aria-pressed={isPicked}
-                aria-label={`${shortThaiDate(cell.iso)} — ${rows.length} งาน PM`}
+                aria-label={`${shortThaiDate(cell.iso)} — ${occs.length} งาน PM`}
                 className={`flex min-h-[62px] flex-col gap-1 p-1.5 text-left transition-colors sm:min-h-[94px] ${
                   i % 7 !== 0 ? "border-l border-(--line)" : ""
                 } ${i >= 7 ? "border-t border-(--line)" : ""} ${
                   isPicked ? "" : "hover:bg-(--bg-soft)"
                 }`}
                 style={{
-                  backgroundColor: isPicked
-                    ? "var(--app-pale)"
-                    : cell.inMonth
-                      ? undefined
-                      : "var(--bg-soft)",
+                  backgroundColor: isPicked ? "var(--app-pale)" : undefined,
                   boxShadow: isPicked ? "inset 0 0 0 2px var(--app)" : undefined,
-                  opacity: cell.inMonth ? 1 : 0.55,
                 }}
               >
                 <span
@@ -482,40 +522,41 @@ export function PmCalendar({
                 </span>
 
                 {/* มือถือ: จุดสีพอ — ชิปตัวหนังสือในช่องกว้าง 50px อ่านไม่ออกอยู่ดี */}
-                {rows.length > 0 && (
+                {occs.length > 0 && (
                   <span className="flex flex-wrap gap-0.5 sm:hidden">
-                    {rows.slice(0, 4).map((s) => (
+                    {occs.slice(0, 4).map((o) => (
                       <span
-                        key={s.id}
+                        key={`${o.row.id}-${o.kind}-${o.workOrderId ?? ""}`}
                         className="h-1.5 w-1.5 rounded-full"
-                        style={{ backgroundColor: PM_STATUS[pmStatusOf(s)].color }}
+                        style={{ backgroundColor: occColor(o, cell.iso), opacity: fadeOf(o) }}
                       />
                     ))}
-                    {rows.length > 4 && (
+                    {occs.length > 4 && (
                       <span className="text-[9px] leading-none text-(--ink-soft)">
-                        +{rows.length - 4}
+                        +{occs.length - 4}
                       </span>
                     )}
                   </span>
                 )}
 
                 <span className="hidden min-w-0 flex-col gap-0.5 sm:flex">
-                  {rows.slice(0, 2).map((s) => {
-                    const color = PM_STATUS[pmStatusOf(s)].color;
+                  {occs.slice(0, 2).map((o) => {
+                    const color = occColor(o, cell.iso);
                     return (
                       <span
-                        key={s.id}
+                        key={`${o.row.id}-${o.kind}-${o.workOrderId ?? ""}`}
                         className="truncate rounded px-1 py-0.5 text-[10px] leading-tight"
-                        style={{ backgroundColor: `${color}1a`, color }}
-                        title={`${s.title} · ${s.propertyName}`}
+                        style={{ backgroundColor: `${color}1a`, color, opacity: fadeOf(o) }}
+                        title={`${o.row.title} · ${o.row.propertyName} · ${OCC_LABEL[o.kind]}`}
                       >
-                        {s.propertyName || s.title}
+                        {o.kind === "done" ? "✓ " : ""}
+                        {o.row.propertyName || o.row.title}
                       </span>
                     );
                   })}
-                  {rows.length > 2 && (
+                  {occs.length > 2 && (
                     <span className="px-1 text-[10px] text-(--ink-soft)">
-                      +{rows.length - 2} รายการ
+                      +{occs.length - 2} รายการ
                     </span>
                   )}
                 </span>
@@ -527,6 +568,10 @@ export function PmCalendar({
 
       {/* ─── คำอธิบายสี ─── */}
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+        <span className="inline-flex items-center gap-1.5 text-[11px] text-(--ink-soft)" title="ใบงานของรอบนั้นปิดแล้ว">
+          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: DONE_COLOR }} />
+          ✓ ทำแล้ว
+        </span>
         {(Object.keys(PM_STATUS) as PmStatusKey[]).map((k) => (
           <span
             key={k}
@@ -562,9 +607,22 @@ export function PmCalendar({
       ) : (
         // มือถือ: เว้นท้ายรายการให้การ์ดสุดท้ายเลื่อนพ้นปุ่ม "เพิ่ม PM" ที่ลอยอยู่ (ปุ่มลบเคยโดนบัง)
         <div className="flex flex-col gap-2 pb-20 lg:pb-0">
-          {panel.rows.map((s) => (
+          {panel.rows.map((s) => {
+            // วันที่เลือก: รอบของวันนั้นเป็นแบบไหน (ทำแล้ว / เปิดใบงานแล้ว / รอบที่จะถึง)
+            const occ = occOfPick.find((o) => o.row.id === s.id);
+            return (
+            <div key={s.id} className="flex flex-col gap-1">
+            {occ && (
+              <span className="self-start rounded-full px-2.5 py-0.5 text-[11px] font-semibold" style={{ color: occColor(occ, pick.kind === "day" ? pick.iso : todayIso), backgroundColor: `${occColor(occ, pick.kind === "day" ? pick.iso : todayIso)}1a` }}>
+                รอบวันนี้: {occ.kind === "done" ? "✓ " : ""}{OCC_LABEL[occ.kind]}
+                {occ.workOrderId && (
+                  <a href={`/maintenance/work-orders/${occ.workOrderId}`} className="ml-1.5 underline">
+                    เปิดใบงาน
+                  </a>
+                )}
+              </span>
+            )}
             <PmDetailCard
-              key={s.id}
               s={s}
               canManage={canManage}
               selfIdForAssign={selfIdForAssign}
@@ -574,7 +632,9 @@ export function PmCalendar({
               earlyRoundAction={earlyRoundAction}
               windowDays={windowDays}
             />
-          ))}
+            </div>
+            );
+          })}
         </div>
       )}
 

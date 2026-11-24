@@ -25,7 +25,7 @@ import {
   PmCalendar,
   type PmRow,
 } from "@/modules/maintenance/components/pm-calendar";
-import { isoOf } from "@/modules/maintenance/lib/pm-calendar";
+import { isoOf, type PmHistoryRound } from "@/modules/maintenance/lib/pm-calendar";
 import {
   AppScaffold,
   AppBarLink,
@@ -39,6 +39,11 @@ import {
 } from "./actions";
 import { earlyRoundOptions, loadRoundOrg } from "@/modules/maintenance/data/pm-rounds";
 import { pmUsesRounds, roundDueAt, ymd } from "@/modules/maintenance/lib/pm-rounds";
+
+/** ประวัติรอบบนปฏิทิน PM ย้อนหลังราว 13 เดือน */
+function historyStart(): Date {
+  return new Date(Date.now() - 400 * 86_400_000);
+}
 
 function daysUntil(due: Date): number {
   const today = new Date();
@@ -91,6 +96,36 @@ export default async function PmListPage({
     for (const id of w.pmScheduleIds) pending.set(id, w.id);
   }
 
+  // ประวัติรอบบนปฏิทิน (ผู้ใช้ 24/11/2569): ใบ PM ย้อนหลัง 13 เดือน + ใบที่ยังเปิดอยู่ทุกใบ → วางลงวันของรอบ
+  // (pmRoundDate · ใบแบบเดิมที่ไม่มีวันรอบใช้วันกำหนดส่ง) — เดิมปฏิทินวางแค่ nextDueDate รอบที่เปิดใบแล้วเลยหาย
+  const scheduleIds = schedules.map((s) => s.id);
+  const historyFrom = historyStart();
+  const historyWos = scheduleIds.length
+    ? await prisma.workOrder.findMany({
+        where: {
+          orgId,
+          status: { not: "cancelled" },
+          AND: [
+            { OR: [{ pmScheduleId: { in: scheduleIds } }, { pmScheduleIds: { hasSome: scheduleIds } }] },
+            { OR: [{ status: { in: ["open", "in_progress"] } }, { pmRoundDate: { gte: historyFrom } }, { dueDate: { gte: historyFrom } }] },
+          ],
+        },
+        select: { id: true, status: true, pmScheduleId: true, pmScheduleIds: true, pmRoundDate: true, dueDate: true, createdAt: true },
+      })
+    : [];
+  const historyBy = new Map<string, PmHistoryRound[]>();
+  for (const w of historyWos) {
+    const when = w.pmRoundDate ?? w.dueDate ?? w.createdAt;
+    // pmRoundDate = @db.Date (เที่ยงคืน UTC) ตัดตรง ๆ · วันกำหนด/วันสร้างเป็นเวลาจริง → วันตามเวลาไทย
+    const iso = w.pmRoundDate ? w.pmRoundDate.toISOString().slice(0, 10) : new Date(when.getTime() + 7 * 3600e3).toISOString().slice(0, 10);
+    const round: PmHistoryRound = { iso, kind: w.status === "completed" ? "done" : "open", workOrderId: w.id };
+    for (const id of new Set([w.pmScheduleId, ...w.pmScheduleIds].filter((x): x is string => !!x))) {
+      const list = historyBy.get(id);
+      if (list) list.push(round);
+      else historyBy.set(id, [round]);
+    }
+  }
+
   // แผนที่มีใบรอบซึ่งคนนี้มองไม่เห็น — แก้วันไม่ได้ (updatePmAction) ล็อกช่องพร้อมบอกเหตุผลก่อนกดบันทึก
   const hiddenRoundPms = await pmIdsWithHiddenOpenRounds(session, schedules.map((s) => s.id));
 
@@ -116,6 +151,9 @@ export default async function PmListPage({
     assetId: s.assetId,
     assetName: s.assetId ? (assetNames[s.assetId] ?? null) : null,
     frequencyLabel: freqLabel(s.frequency),
+    frequency: s.frequency,
+    anchorInput: s.anchorDate ? toDateInput(s.anchorDate) : null,
+    history: historyBy.get(s.id) ?? [],
     mode: pmMode(s),
     roundsDone: s.roundsDone,
     totalRounds: s.totalRounds,
