@@ -1,5 +1,6 @@
 import { prisma } from "@smartboss/database";
 import { wfFetch, type Paged, type Person } from "./api";
+import { tidyThaiMarks } from "@/modules/shared-text/tidy-thai";
 
 /**
  * เขียนชื่อที่แสดงกลับไปที่บัญชีผู้ใช้ Smartboss (core.users.name)
@@ -27,7 +28,7 @@ export async function syncUserName(
 
   await prisma.user.updateMany({
     where: { orgId, email: { equals: target, mode: "insensitive" } },
-    data: { name: displayName.trim() },
+    data: { name: tidyThaiMarks(displayName.trim()) },
   });
 }
 
@@ -65,7 +66,7 @@ export async function syncAllUserNames(orgId: string): Promise<number> {
         // ไม่เขียนทับแถวที่ชื่อตรงอยู่แล้ว — updatedAt จะขยับทั้งบริษัทโดยไม่มีอะไรเปลี่ยน
         name: { not: person.display_name.trim() },
       },
-      data: { name: person.display_name.trim() },
+      data: { name: tidyThaiMarks(person.display_name.trim()) },
     });
     changed += result.count;
   }

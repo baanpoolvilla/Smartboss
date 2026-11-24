@@ -12,6 +12,7 @@ import { notifyUser } from "@/modules/maintenance/data/notify";
 import { sniffMime } from "@/modules/report_task/lib/upload-sniff";
 
 import { fileTooLargeMessage } from "@/lib/file-limits";
+import { tidyThaiMarks } from "@/modules/shared-text/tidy-thai";
 /**
  * บัญชีของตัวเอง — ทุกคนที่ล็อกอินได้ใช้หน้านี้ได้ ไม่ต้องมีสิทธิ์อะไรเพิ่ม
  *
@@ -275,7 +276,7 @@ export async function updateOwnNameAction(input: { firstName: string; lastName: 
 
   // ชื่อบัญชีตามชื่อที่ระบบบุคคลประกอบ (ตามอีเมลในทะเบียน) — ถ้าไม่มีอีเมลในทะเบียน เขียนให้บัญชีนี้ตรง ๆ
   if (person.email) await syncUserName(session.orgId, person.email, person.display_name);
-  else await prisma.user.update({ where: { id: session.userId }, data: { name: person.display_name } });
+  else await prisma.user.update({ where: { id: session.userId }, data: { name: tidyThaiMarks(person.display_name) } });
 
   await audit({ userId: session.userId, action: "USER_UPDATED", targetId: session.userId });
   revalidatePath("/account");

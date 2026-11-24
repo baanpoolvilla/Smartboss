@@ -42,6 +42,7 @@ import { loadScorePeriodConfig, saveScorePeriodConfig } from "@/lib/score-period
 import { ceoTitle, CEO_TITLE_KEY, forgetCeoTitle } from "@/lib/ceo-title";
 import { normalizeCeoTitle } from "@/lib/ceo-title-shared";
 import { readStore, writeStore } from "@/modules/report_task/lib/db/org-store";
+import { tidyThaiMarks } from "@/modules/shared-text/tidy-thai";
 
 /** ทุก action ต้องผ่านด่านนี้ก่อน — คืน session ที่มี orgId แน่นอน */
 async function guard(permission: string) {
@@ -119,7 +120,7 @@ export async function createUserAction(formData: FormData) {
   const security = await loadSecuritySettings(session.orgId);
   const parsed = createUserSchema(security.passwordMinLength).parse({
     email: String(formData.get("email") ?? "").trim().toLowerCase(),
-    name: String(formData.get("name") ?? "").trim(),
+    name: tidyThaiMarks(String(formData.get("name") ?? "").trim()),
     password: String(formData.get("password") ?? ""),
     roleId: String(formData.get("roleId") ?? ""),
   });
@@ -162,7 +163,7 @@ export async function updateUserAction(formData: FormData) {
   const userId = String(formData.get("userId") ?? "");
   const target = await assertManageableUser(session, userId);
 
-  const name = String(formData.get("name") ?? "").trim();
+  const name = tidyThaiMarks(String(formData.get("name") ?? "").trim());
   const lineUserId = String(formData.get("lineUserId") ?? "").trim();
   if (!name) throw new Error("กรุณากรอกชื่อ");
 

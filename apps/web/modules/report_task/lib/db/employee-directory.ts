@@ -3,6 +3,7 @@ import { prisma } from "@smartboss/database";
 
 import { readStore, writeStore } from "./org-store";
 import { withWorkforceTenant } from "./workforce-calendar";
+import { tidyThaiMarks } from "@/modules/shared-text/tidy-thai";
 
 /**
  * รายชื่อพนักงานของโมดูล — สร้างจาก `core.users` ของบริษัท ไม่ใช่รายชื่อแยกของตัวเอง
@@ -125,7 +126,8 @@ export async function listDirectory(orgId: string): Promise<DirectoryUser[]> {
     const roleDerived = codes.some((c) => OWNER_ROLE_CODES.has(c));
     return {
       id: u.id,
-      name: u.name,
+      // วรรณยุกต์ซ้ำผิดปกติในชื่อ ("เซี้้้้…ย") แสดงเป็นแท่งตัวอักษรพุ่งทับเนื้อหา — จัดก่อนแสดง (lib/tidy-thai.ts)
+      name: tidyThaiMarks(u.name),
       email: u.email,
       avatar: p.avatar || initialsOf(u.name),
       avatarUrl: u.avatarUrl,
