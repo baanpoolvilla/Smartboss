@@ -3,6 +3,7 @@ import Link from "next/link";
 import { CeoWord } from "@/lib/ceo-word";
 import { cn } from "@/modules/report_task/lib/utils";
 import { Square, SquareCheckBig } from "lucide-react";
+import { tidyThaiMarks } from "@/modules/shared-text/tidy-thai";
 
 export type MentionType = "user" | "topic" | "dept" | "everyone" | "role";
 
@@ -403,7 +404,8 @@ const mentionChipClass = "inline-flex items-center rounded bg-[#5865f2]/15 text-
 
 /** Renders **bold**, *italic*, __underline__, `code`, bare http(s) links, and `@[label](type:id)` mentions written via the bullet toolbar. A topic mention links straight to that room; person/department mentions are just a styled highlight — nothing to navigate to. */
 export function renderRichBulletText(text: string): ReactNode[] {
-  return renderRichHeld(holdStars(text));
+  // สระ/วรรณยุกต์ซ้อนผิดปกติ (ไม้โท 29 ตัวนำหน้าคอมเมนต์ 24/11/2569) ซ้อนเป็นแท่งพุ่งทับโพสต์อื่น — จัดก่อนแสดง
+  return renderRichHeld(holdStars(tidyThaiMarks(text)));
 }
 
 function renderRichHeld(text: string): ReactNode[] {

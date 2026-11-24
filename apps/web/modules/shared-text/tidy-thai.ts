@@ -5,6 +5,8 @@
  * เพราะเครื่องหมายพวกนี้ไม่มีความกว้างของตัวเอง ซ้อนขึ้นไปเรื่อย ๆ — ข้อความภาษาไทยปกติมีซ้อนไม่เกิน 2 ตัว
  * (สระบน + วรรณยุกต์ เช่น "กี้")
  *
+ *  - เครื่องหมายที่ไม่มีตัวอักษรรองรับ (ต้นข้อความ/หลังเว้นวรรค/ขึ้นบรรทัด) → ตัดออก
+ *    (24/11/2569 คอมเมนต์ขึ้นต้นด้วยไม้โท 29 ตัว ซ้อนเป็นแท่งพุ่งทับโพสต์ด้านบน)
  *  - เครื่องหมายเดียวกันซ้ำติดกัน → เหลือตัวเดียว
  *  - เครื่องหมายต่างกันเกิน 2 ตัวติดกัน → เก็บ 2 ตัวแรก
  * ข้อความปกติไม่เปลี่ยนเลย
@@ -12,8 +14,9 @@
 const MARK = "[\\u0E31\\u0E34-\\u0E3A\\u0E47-\\u0E4E]";
 const SAME_REPEAT = new RegExp(`(${MARK})\\1+`, "g");
 const TOO_MANY = new RegExp(`(${MARK}{2})${MARK}+`, "g");
+const NO_BASE = new RegExp(`(^|\\s)${MARK}+`, "g");
 
 export function tidyThaiMarks(text: string): string {
   if (!text) return text;
-  return text.replace(SAME_REPEAT, "$1").replace(TOO_MANY, "$1");
+  return text.replace(NO_BASE, "$1").replace(SAME_REPEAT, "$1").replace(TOO_MANY, "$1");
 }

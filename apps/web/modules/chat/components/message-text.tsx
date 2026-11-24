@@ -4,6 +4,7 @@ import { Fragment, type ReactNode } from "react";
 import type { ChatUser } from "../types";
 import { DEPT_MENTION_PREFIX } from "../constants";
 import { displayUrl } from "../lib/display-url";
+import { tidyThaiMarks } from "@/modules/shared-text/tidy-thai";
 
 const URL_RE = /(https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]])/g;
 
@@ -43,7 +44,7 @@ function linkify(text: string, keyPrefix: string): ReactNode[] {
  * ไม่แปลง HTML ใด ๆ — ข้อความเป็นตัวอักษรล้วน ปลอดภัยจากการฝังสคริปต์
  */
 export function MessageText({
-  body,
+  body: rawBody,
   mentions,
   users,
   meId,
@@ -53,6 +54,8 @@ export function MessageText({
   users: Record<string, ChatUser>;
   meId: string;
 }) {
+  // สระ/วรรณยุกต์ซ้อนผิดปกติ (เช่น ไม้โทนำหน้าข้อความหลายสิบตัว) ซ้อนเป็นแท่งพุ่งทับข้อความอื่น — จัดก่อนแสดง
+  const body = tidyThaiMarks(rawBody);
   const myDept = users[meId]?.departmentId ?? null;
   const names = mentions
     .map((id) => {

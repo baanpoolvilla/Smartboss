@@ -10,6 +10,10 @@ describe("tidyThaiMarks — วรรณยุกต์/สระซ้อนผ
       expect(tidyThaiMarks(s)).toBe(s);
     }
   });
+  it("ไม้โทนำหน้าข้อความ 29 ตัว (ไม่มีตัวอักษรรองรับ) → ตัดออกหมด", () => {
+    expect(tidyThaiMarks("้".repeat(29) + " @Thunchanok-Nam รบกวนกดอนุมัติ")).toBe(" @Thunchanok-Nam รบกวนกดอนุมัติ");
+    expect(tidyThaiMarks("ทดสอบ\n" + "้".repeat(5) + "บรรทัดสอง")).toBe("ทดสอบ\nบรรทัดสอง");
+  });
   it("เครื่องหมายต่างกันเกิน 2 ตัวติดกัน → เก็บ 2 ตัวแรก", () => {
     expect(tidyThaiMarks("กี้่๊")).toBe("กี้");
   });
