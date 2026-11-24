@@ -57,6 +57,8 @@ import {
   deletePoAction,
 } from "../actions";
 import { ceoTitle } from "@/lib/ceo-title";
+import { MentionText } from "@/modules/maintenance/components/mention-text";
+import { orgMentionPeople } from "@/modules/maintenance/data/wo-mentions";
 
 function TimelineRow({
   icon,
@@ -133,6 +135,8 @@ export default async function PoDetailPage({
   // ดำเนินการ/รับของ/คืนของ/ลบความเห็นของคนอื่น — CEO + ผู้ดูแลโมดูล (IT) · อนุมัติ/ปฏิเสธยังเป็นของ CEO
   // คนเดียว (isCeo) — เดิมใช้ isCeo ทั้งหมด ⇒ ADMIN ต้องมีสิทธิ์อนุมัติถึงจะจัดการได้ เลยได้แจ้งเตือน PR ทุกใบ
   const canManagePo = isCeo || hasPermission(session, MAINT_PERMS.admin);
+  // คนที่ @ ได้ในคอมเมนต์ใบสั่งซื้อ (ทุกคนในบริษัท) — กล่องพิมพ์เลือกคน + ชื่อในข้อความขึ้นสีเด่น
+  const mentionPeople = await orgMentionPeople(session.orgId);
   const isAdmin = isSuperAdmin(session);
   // ต้องรวมผู้รับของที่ถูกมอบหมายด้วย ไม่งั้นเขาจะไม่เห็นปุ่ม "รับของ"
   // (ฝั่ง action เช็คซ้ำด้วยเกณฑ์เดียวกัน — ดู assertCanProcess)
@@ -460,9 +464,7 @@ export default async function PoDetailPage({
                     </p>
                     <div className="mt-1 rounded-[8px] bg-(--bg-soft) px-2.5 py-2">
                       {c.content !== "📷" && (
-                        <p className="whitespace-pre-wrap text-sm text-(--ink)">
-                          {c.content}
-                        </p>
+                        <MentionText text={c.content} names={mentionPeople.map((p) => p.name)} />
                       )}
                       {c.imageUrls.length > 0 && (
                         <div className="mt-1.5">
@@ -476,7 +478,7 @@ export default async function PoDetailPage({
             })
           )}
         </div>
-        <CommentComposer action={addPoCommentAction.bind(null, id)} />
+        <CommentComposer action={addPoCommentAction.bind(null, id)} mentionPeople={mentionPeople.filter((p) => p.id !== session.userId)} />
       </SectionCard>
 
       {isAdmin && (

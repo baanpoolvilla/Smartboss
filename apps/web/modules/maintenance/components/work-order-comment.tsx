@@ -6,6 +6,7 @@ import { Button } from "@smartboss/ui/components/button";
 import { PhotoStrip } from "./photos";
 import { CommentDeleteButton } from "./comment-delete-button";
 import { CommentTextarea } from "./comment-textarea";
+import { MentionText } from "./mention-text";
 
 type Action = (formData: FormData) => void | Promise<void>;
 
@@ -28,7 +29,10 @@ export function WorkOrderComment({
   canDelete,
   editAction,
   deleteAction,
+  mentionPeople,
 }: {
+  /** คนที่ @ ได้ — ชื่อในข้อความขึ้นสีเด่น และกล่องแก้ไขพิมพ์ @ เลือกคนได้ */
+  mentionPeople?: { id: string; name: string }[];
   commentId: string;
   authorName: string;
   timeLabel: string;
@@ -124,6 +128,7 @@ export function WorkOrderComment({
               defaultValue={isPhotoOnly ? "" : content}
               autoFocus
               ariaLabel="แก้ไขความเห็น"
+              mentionPeople={mentionPeople}
             />
             <div className="flex items-center gap-2">
               <Button type="submit" size="sm">
@@ -136,7 +141,7 @@ export function WorkOrderComment({
           </form>
         ) : (
           !isPhotoOnly && (
-            <p className="whitespace-pre-wrap text-sm text-(--ink)">{content}</p>
+            <MentionText text={content} names={(mentionPeople ?? []).map((p) => p.name)} />
           )
         )}
         {imageUrls.length > 0 && (

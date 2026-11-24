@@ -67,6 +67,8 @@ import {
 } from "@/modules/maintenance/lib/po";
 
 import { ceoTitle } from "@/lib/ceo-title";
+import { mentionedIn, orgMentionPeople } from "@/modules/maintenance/data/wo-mentions";
+import { PO_MENTION_MARK } from "@/modules/notifications/prefs";
 function readItems(formData: FormData, withPricing: boolean): PoItem[] {
   const names = formData.getAll("itemName").map(String);
   const qtys = formData.getAll("itemQty").map(String);
@@ -675,6 +677,21 @@ export async function addPoCommentAction(poId: string, formData: FormData) {
     imageUrls
   );
   const commented = await getPurchaseOrder(s.orgId, poId);
+  // คนที่ถูก @ ได้แจ้งเตือน "แท็กคุณในใบสั่งซื้อ" (ผู้ใช้ 24/11/2569 — เดิมคอมเมนต์ใบสั่งซื้อแท็กไม่ได้เลย)
+  if (commented && content) {
+    const mentioned = mentionedIn(content, await orgMentionPeople(s.orgId)).filter((uid) => uid !== s.userId);
+    if (mentioned.length > 0) {
+      const actor = (await notifyActorName(s.userId)) ?? "มีคน";
+      const label = commented.code ? `${commented.code} ${commented.title ?? ""}`.trim() : (commented.title ?? "ใบสั่งซื้อ");
+      await notifyUsers(s.orgId, mentioned, {
+        title: `📣 ${actor} ${PO_MENTION_MARK}: ${label}`,
+        body: content,
+        type: "purchase_order",
+        referenceId: poId,
+        line: `📣 ${actor} ${PO_MENTION_MARK}\n📝 ${label}\n${content}`,
+      });
+    }
+  }
   if (commented) {
     await poLog(
       s,

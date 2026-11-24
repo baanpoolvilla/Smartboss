@@ -165,6 +165,8 @@ export default async function WorkOrderDetailPage({
   const canCreatePo = hasPermission(session, MAINT_PERMS.poCreate);
   // ใบงานที่ยกเลิกไปแล้ว / ใบส่วนตัว (กันลืม ไม่นับเป็นงานบริษัท — ค่าใช้จ่ายจาก PR จะไปนับ) ไม่เปิดใบสั่งซื้อ
   const canOpenPoHere = canCreatePo && wo.status !== "cancelled" && !wo.isPrivate;
+  // คนที่ @ ได้ในคอมเมนต์ — ใช้ทั้งกล่องพิมพ์ (เลือกคน) และตอนแสดง (ชื่อขึ้นสีเด่น)
+  const mentionPeople = await workOrderMentionPeople(orgId, wo);
   const isSuperAdmin = hasPermission(session, MAINT_PERMS.admin);
   const isTechnicianOnly = !canManage;
 
@@ -1006,13 +1008,14 @@ export default async function WorkOrderDetailPage({
                   canDelete={c.userId === session.userId || canManage}
                   editAction={editCommentAction.bind(null, id)}
                   deleteAction={deleteCommentAction.bind(null, id)}
+                  mentionPeople={mentionPeople}
                 />
               </div>
             ))
           )}
         </div>
         <div className="border-t border-(--line) pt-3">
-          <CommentComposer action={addCommentAction.bind(null, id)} mentionPeople={(await workOrderMentionPeople(orgId, wo)).filter((p) => p.id !== session.userId)} />
+          <CommentComposer action={addCommentAction.bind(null, id)} mentionPeople={mentionPeople.filter((p) => p.id !== session.userId)} />
         </div>
       </SectionCard>
       </aside>
