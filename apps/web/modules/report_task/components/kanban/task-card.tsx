@@ -211,7 +211,7 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
     <span
       title={`${pillKind}: ${pillMeta.label}`}
       className="shrink-0 whitespace-nowrap text-[10px] font-semibold leading-none"
-      style={{ color: `color-mix(in srgb, ${pillMeta.accentColor} 80%, var(--mix-ink, black))` }}
+      style={{ color: `color-mix(in srgb, ${pillMeta.accentColor} var(--pill-ink-mix, 62%), var(--mix-ink, black))` }}
     >
       {pillMeta.label}
     </span>

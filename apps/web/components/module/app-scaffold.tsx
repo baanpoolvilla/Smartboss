@@ -202,7 +202,8 @@ export function Fab({
           ? `${base} h-14 gap-2 rounded-2xl px-5 text-[15px] font-medium`
           : `${base} h-14 w-14 rounded-2xl`
       }
-      style={{ backgroundColor: color ?? "var(--app-accent)" }}
+      // หน้าที่ไม่มีสีโมดูล (เช่น /admin) ไม่มี --app-accent → เดิมปุ่มโปร่ง ตัวขาวบนพื้นขาว มองไม่เห็น — ใช้กรมท่าแทน
+      style={{ backgroundColor: color ?? "var(--app-accent, var(--brand-navy-fill, var(--brand-navy)))" }}
     >
       {icon ?? <Plus className="h-5 w-5" />}
       {label}

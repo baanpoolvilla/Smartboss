@@ -13,6 +13,8 @@
 /* ธีมมืด (data-theme="dark") — import แบบไม่ใส่ layer จึงชนะคลาสสีของ Tailwind ที่อยู่ใน layer */
 @import './theme-dark.css';
 @import './theme-dark-utils.css';
+/* ธีมสว่าง: เข้มขึ้นเฉพาะสีตัวหนังสือ/ปุ่มที่อ่านยาก (scripts/gen-light-contrast.cjs) — ไม่แตะเลย์เอาต์ */
+@import './theme-light-contrast.css';
 
 /*
  * v4 หา source เองจากโฟลเดอร์ของไฟล์ CSS นี้ขึ้นไป แต่ไม่ข้ามออกนอก apps/web
@@ -78,7 +80,7 @@ h1, h2, h3, h4, h5, h6 {
   --chat-bubble-me: #c9f2b1;
   --chat-bubble-me-ink: #12260f;
   --chat-bubble-other: #ffffff;
-  --chat-meta: #7b8794;
+  --chat-meta: #5f6b78; /* เข้มขึ้นจาก #7b8794 (24/11/2569) ให้อ่านได้บนพื้นห้องแชท */
   --chat-mention: #1d6fd6;
 }
 

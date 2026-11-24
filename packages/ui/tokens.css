@@ -3,7 +3,8 @@
   --bg: #ffffff;
   --bg-soft: #f7f9fc;
   --ink: #1b2537; /* navy จากโลโก้ Boss */
-  --ink-soft: #64748b;
+  /* เข้มขึ้นจาก #64748b (24/11/2569) — บนพื้นอ่อนอมสี (ชมพู/เขียว/ครีม) เดิมได้ 4.0–4.3 ไม่ถึงเกณฑ์อ่าน 4.5 */
+  --ink-soft: #566479;
   --line: #e5e9f0;
   --brand-green: #4cb93f; /* green จากโลโก้ Easy */
   --brand-navy: #1b2537;
@@ -34,10 +35,11 @@
   --danger-line: #fecaca;
 
   /* Status tone — ใช้กับป้ายสถานะทุกโมดูล เพื่อไม่ต้อง hardcode hex ใน component */
-  --tone-ok: #16a34a;
+  /* ตัวหนังสือสถานะ — เฉด 700 (24/11/2569) เดิม 600 อ่านยากบนพื้นขาว/พื้นอ่อน (3.3:1) · ธีมมืดมีค่าของตัวเอง */
+  --tone-ok: #166534;
   --tone-info: #2563eb;
-  --tone-warn: #ea580c;
-  --tone-danger: #dc2626;
+  --tone-warn: #9a3412;
+  --tone-danger: #b91c1c;
   --tone-muted: #6b7280;
 
   /* Radius & shadow */
