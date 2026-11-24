@@ -30,7 +30,7 @@
   --module-color-bg: #f3fbf1;
 
   /* Feedback */
-  --danger: #dc2626;
+  --danger: #b91c1c; /* เข้มขึ้นจาก #dc2626 (24/11/2569) — ตัวหนังสือแดงบนพื้นแดงอ่อนเดิมได้ 4.0:1 */
   --danger-bg: #fef2f2;
   --danger-line: #fecaca;
 

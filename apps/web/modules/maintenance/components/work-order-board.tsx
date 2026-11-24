@@ -1,5 +1,6 @@
 "use client";
 
+import { chipFill } from "@/lib/chip-mix";
 import type { WorkOrderScoreChip } from "@/modules/maintenance/data/work-order-score-chips";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
@@ -432,7 +433,7 @@ function ColumnHeader({
       <span className="relative flex h-full items-center gap-2 px-2">
         <span
           className="flex h-6 min-w-[26px] shrink-0 items-center justify-center rounded-[7px] px-1.5 text-[13px] font-bold tabular-nums text-white"
-          style={{ backgroundColor: `color-mix(in srgb, ${col.color} var(--chip-mix, 82%), black)` }}
+          style={{ backgroundColor: chipFill(col.color) }}
         >
           {total}
         </span>

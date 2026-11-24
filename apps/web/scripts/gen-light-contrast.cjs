@@ -21,7 +21,7 @@ const hues = ["red", "orange", "amber", "yellow", "lime", "green", "emerald", "t
 const warm = new Set(["orange", "amber", "yellow", "lime"]);
 for (const h of hues) {
   const to = warm.has(h) ? 800 : 700;
-  const shades = h === "pink" || h === "fuchsia" || h === "purple" || h === "violet" || h === "indigo" || h === "blue" ? [400, 500] : [400, 500, 600];
+  const shades = h === "pink" || h === "fuchsia" || h === "purple" || h === "violet" || h === "indigo" || h === "blue" ? [400, 500] : warm.has(h) ? [400, 500, 600, 700] : [400, 500, 600];
   const list = shades.flatMap((s) => [`text-${h}-${s}`, `hover:text-${h}-${s}`]);
   out.push(`${sel(list.map((c) => cls(c) + (c.startsWith("hover:") ? ":hover" : "")))} { color: var(--color-${h}-${to}); }`);
 }
@@ -32,7 +32,7 @@ for (const n of ["slate", "gray", "zinc", "neutral", "stone"]) {
 
 // ── 2) ตัวหนังสือที่อ้างโทเคนสีแบรนด์/โมดูล (เขียวโลโก้ #4cb93f · ฟ้า HR · เขียวอมฟ้าแจ้งซ่อม) → เข้มขึ้นจากสีเดิม ──
 const darkText = (v, p = 68) => `color: color-mix(in oklab, var(${v}) ${p}%, #000);`;
-for (const v of ["--brand-green", "--chart-green", "--module-color", "--app", "--app-accent", "--chat-accent", "--tone-ok"]) {
+for (const v of ["--brand-green", "--chart-green", "--module-color", "--app", "--app-accent", "--chat-accent", "--tone-ok", "--accent-foreground"]) {
   out.push(`${sel([cls(`text-[var(${v})]`), cls(`text-(${v})`), cls(`hover:text-[var(${v})]`) + ":hover", cls(`hover:text-(${v})`) + ":hover"])} { ${darkText(v)} }`);
 }
 for (const v of ["--chart-amber", "--chart-orange", "--chart-yellow"]) {
@@ -75,13 +75,13 @@ out.push(`${sel(['.text-white[style*="background-color: var(--app-accent"]', '.t
 // [style^="color: …"] / [style*="; color: …"] = เฉพาะสีตัวหนังสือ (ไม่โดน background-color ที่มีคำว่า color อยู่ข้างใน)
 const HEX = {
   "#3b82f6": "#1d4ed8", "#60a5fa": "#1d4ed8", "#2563eb": "#1d4ed8",
-  "#16a34a": "#15803d", "#22c55e": "#15803d", "#4cb93f": "#2f7d24", "#2fa84f": "#1f7a39",
+  "#16a34a": "#166534", "#22c55e": "#166534", "#65a30d": "#3f6212", "#84cc16": "#3f6212", "#4cb93f": "#2f7d24", "#2fa84f": "#1f7a39",
   "#0d9488": "#0f766e", "#14b8a6": "#0f766e", "#10b981": "#047857", "#059669": "#047857",
-  "#ea580c": "#c2410c", "#f97316": "#c2410c", "#fb923c": "#c2410c",
-  "#d97706": "#b45309", "#f59e0b": "#b45309", "#eab308": "#a16207", "#ca8a04": "#a16207",
-  "#8b5cf6": "#6d28d9", "#a855f7": "#7e22ce", "#ec4899": "#be185d", "#06b6d4": "#0e7490", "#0ea5e9": "#0369a1",
+  "#ea580c": "#9a3412", "#f97316": "#9a3412", "#fb923c": "#9a3412", "#c2410c": "#9a3412",
+  "#d97706": "#92400e", "#f59e0b": "#92400e", "#b45309": "#92400e", "#eab308": "#a16207", "#ca8a04": "#a16207",
+  "#8b5cf6": "#6d28d9", "#4f46e5": "#3730a3", "#6366f1": "#4338ca", "#6b7280": "#4b5563", "#a855f7": "#7e22ce", "#ec4899": "#be185d", "#06b6d4": "#0e7490", "#0ea5e9": "#0369a1",
   "#ef4444": "#b91c1c", "#dc2626": "#b91c1c", "#f43f5e": "#be123c",
-  "#94a3b8": "#64748b", "#9ca3af": "#6b7280", "#b0bec5": "#64748b", "#a5b0c2": "#64748b", "#7f93a6": "#64748b", "#9e9e9e": "#6b7280",
+  "#94a3b8": "#64748b", "#9ca3af": "#6b7280", "#b0bec5": "#64748b", "#a5b0c2": "#64748b", "#7f93a6": "#64748b", "#9e9e9e": "#4b5563",
 };
 const rgb = (hex) => { const h = hex.slice(1); return `rgb(${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4, 6), 16)})`; };
 for (const [from, to] of Object.entries(HEX)) {
@@ -95,6 +95,21 @@ for (const [from, to] of Object.entries(FILL)) {
   const r = rgb(from);
   out.push(`${sel([`${cls(`bg-[${from}]`)}.text-white`, `${cls(`bg-[${from.toUpperCase()}]`)}.text-white`, `.text-white[style*="background-color: ${r}"]`, `.text-white[style*="background: ${r}"]`, `.text-white[style*="background-color:${from}" i]`, `.text-white[style*="background:${from}" i]`])} { background-color: ${to} !important; }`);
 }
+
+// ── 5) จุดเฉพาะ ──
+// ปุ่ม "เดือน/สัปดาห์" ของปฏิทิน (พื้น --chart-blue ตัวขาว 4.4:1)
+out.push(`${sel([cls("bg-[var(--chart-blue)]") + ".text-white", cls("bg-(--chart-blue)") + ".text-white"])} { background-color: color-mix(in oklab, var(--chart-blue) 82%, #000); }`);
+// เลขวันบนปฏิทิน PM (พื้นสีโมดูล ตัวขาว — style="background-color:var(--app);color:#fff")
+out.push(`${sel(['[style*="background-color:var(--app);color:#fff"]', '[style*="background-color: var(--app); color: rgb(255, 255, 255)"]'])} { background-color: color-mix(in oklab, var(--app) 74%, #000) !important; }`);
+// ตัวกรองที่เลือกอยู่ (ไอคอนในช่อง)
+out.push(`${sel([cls("[&_svg]:text-[var(--accent-foreground)]") + " svg"])} { color: color-mix(in oklab, var(--accent-foreground) 68%, #000); }`);
+// ปุ่มหลักของโมดูลรายงาน (shadcn bg-primary): พื้นเทา slate #64748b + ตัวกรมท่า = 3.2:1 → ตัวขาว 4.8:1
+out.push(`${L} [data-app="report_task"] { --primary-foreground: #ffffff; }`);
+// ปุ่ม "เพิ่มสิ่งที่ต้องทำ" ในปฏิทิน: พื้น --brand-green (= เทา slate ในโมดูลรายงาน) + ตัวกรมท่าที่เขียนตายตัว → ตัวขาว
+out.push(`${sel([`[data-app="report_task"] ${cls("bg-[var(--brand-green)]")}${cls("text-[var(--ink)]")}`])} { color: #ffffff; }`);
+// ปฏิทิน: เลขวันของเดือนก่อน/เดือนถัดไป — ยังจางกว่าวันของเดือนนี้ (สีเกือบดำ) แต่อ่านออก (เดิม #a5b0c2 = 2.1:1)
+out.push(`${sel([".ebw-calendar .fc-day-other .fc-daygrid-day-number"])} { color: #5f6b7f; }`);
+out.push(`${sel([".ebw-calendar .fc-day-other.fc-day-sun:not(.fc-day-today) .fc-daygrid-day-number"])} { color: #b44949; }`);
 
 fs.writeFileSync(path.join(__dirname, "../app/theme-light-contrast.css"), out.join("\n") + "\n");
 console.log(`theme-light-contrast.css: ${out.length - 1} rules`);

@@ -1,5 +1,6 @@
 "use client";
 
+import { chipFill } from "@/lib/chip-mix";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
@@ -549,7 +550,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
                   className="flex h-5 min-w-5 items-center justify-center rounded-md px-1.5 text-[11.5px] font-bold tabular-nums"
                   style={
                     active
-                      ? { backgroundColor: `color-mix(in srgb, ${column.accent} var(--chip-mix, 64%), black)`, color: "white" }
+                      ? { backgroundColor: chipFill(column.accent), color: "white" }
                       : { backgroundColor: "var(--bg-soft)", color: "var(--ink)" }
                   }
                 >

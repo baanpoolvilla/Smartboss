@@ -1220,13 +1220,14 @@ export function CalendarView() {
               onShowAll={() => setHiddenScheduleKeys(new Set())}
               shownCount={shownGroupCount}
             />
-            <span className="flex items-center gap-1.5 text-[11px] text-[var(--ink-soft)] ml-1 opacity-60">
-              <span className="h-2 w-2 rounded-full bg-[var(--chart-red)]" />
+            {/* จางเฉพาะจุดตัวอย่าง (บอกว่า "ผ่านไปแล้ว") ตัวหนังสือไม่จาง ให้อ่านออก (24/11/2569) */}
+            <span className="flex items-center gap-1.5 text-[11px] text-[var(--ink-soft)] ml-1">
+              <span className="h-2 w-2 rounded-full bg-[var(--chart-red)] opacity-60" />
               ผ่านไปแล้ว = สีจางลง
             </span>
             {canManage(viewingAsUserId) && (
-              <span className="flex items-center gap-1.5 text-[11px] text-[var(--ink-soft)] opacity-60">
-                <span className="h-2 w-2 rounded-full border-[1.5px] border-[var(--chart-red)]" />
+              <span className="flex items-center gap-1.5 text-[11px] text-[var(--ink-soft)]">
+                <span className="h-2 w-2 rounded-full border-[1.5px] border-[var(--chart-red)] opacity-60" />
                 จุดกลวง = งานของคนอื่น
               </span>
             )}

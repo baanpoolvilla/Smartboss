@@ -1,5 +1,6 @@
 "use client";
 
+import { chipFill } from "@/lib/chip-mix";
 import { TaskCard } from "./task-card";
 import { MaintenanceCard } from "./maintenance-card";
 import type { BoardEntry } from "@/modules/report_task/lib/maintenance-board";
@@ -240,7 +241,7 @@ export function KanbanColumn({
         : statusCounts.filter((x) => x.count > 0).map((x) => ({ pct: (x.count / total) * 100, color: statusMeta[x.status].accentColor }));
   // ป้ายจำนวนสีทึบ — สีอ่อน (รอตรวจสอบ = เขียวอ่อน) เข้มขึ้นนิดให้ตัวเลขสีขาวอ่านออก
   // --chip-mix: ธีมขาวไม่ตั้ง = 82% แบบเดิม · ธีมมืดเข้มขึ้นให้ตัวเลขขาวอ่านได้ (theme-dark.css)
-  const chipColor = `color-mix(in srgb, ${accent} var(--chip-mix, 64%), black)`;
+  const chipColor = chipFill(accent);
   // รายละเอียดที่เอาออกจากหน้าหัว (ป้าย "เลย", ตัวหนังสือใต้หลอด) อยู่ใน tooltip แทน
   const headerTitle = [
     onHeaderClick ? (headerClickTitle ?? "ดูงานของคนนี้แยกตามหมวดงาน") : null,
