@@ -142,6 +142,18 @@ describe("แจ้งเตือนงานใกล้ครบกำหน�
     expect(r.notifications.filter((n) => n.message.includes('งาน "test"')).map((n) => n.recipients)).toEqual([["u1"]]);
   });
 
+  it("งานโปรเจกต์เตือนใกล้ครบกำหนดเหมือนงานบนบอร์ด — ทั้งงานที่มอบให้คนอื่นและงานที่ทำเองคนเดียว (24/11/2569)", () => {
+    vi.setSystemTime(new Date("2026-10-02T09:00:00"));
+    const project = { projectId: "p1", sectionId: "s1", dependsOn: [] } as unknown as Task["project"];
+    const assigned = due({ id: "tp1", project, assigneeIds: ["u1"], assignedById: "boss" });
+    const solo = due({ id: "tp2", project, assigneeIds: ["u2"], assignedById: "u2" });
+    const r = run({ tasks: [assigned, solo] });
+    const byTask = (id: string) => r.notifications.find((n) => n.link?.includes(id))?.recipients;
+    expect(byTask("tp1")).toEqual(["u1"]);
+    expect(byTask("tp2")).toEqual(["u2"]);
+    expect(r.notifications.every((n) => n.message.includes("ครบกำหนดวันนี้"))).toBe(true);
+  });
+
   it("ไม่เตือนคนมอบหมายงาน แม้ตั้งค่าเดิมเปิดไว้ — เตือนเฉพาะผู้รับผิดชอบ", () => {
     vi.setSystemTime(new Date("2026-10-02T09:00:00"));
     const r = run({ tasks: [due()], settings: { task: { ...defaultReminderSettings.task, notifyAssignee: true, notifyAssigner: true } } });
