@@ -54,7 +54,7 @@ export const hrManifest: ModuleManifest = {
     { group: "บุคคล & เวลา", label: "ลงเวลาผิดปกติ", path: "/hr/checkin-review", permission: HR_PERMS.employeeManage, icon: "ShieldCheck" },
     { group: "บุคคล & เวลา", label: "พนักงาน", path: "/hr/employees", permission: HR_PERMS.employeeView, icon: "Users" },
     // "รอบจ่าย" (เงินเดือนตัวเก่าของระบบบุคคล) และ "ของฉัน" (สลิปเก่า) เอาออกจากเมนู 30/10/2569 — ใช้ "การเงินพนักงาน" ด้านล่างแทน
-    // หน้าเดิมยังอยู่ที่ /hr/payroll, /hr/my-payslips (เปิดจากลิงก์ตรงได้ ไม่ลบข้อมูล)
+    // หน้าเดิม /hr/payroll, /hr/my-payslips ลบออกแล้ว 24/11/2569 (ไม่มีส่วนไหนใช้ · ข้อมูลใน workforce ไม่ได้ลบ)
     // ทุกคนเข้าได้ (HR_PERMS.access เดียวกับเมนู "ของฉัน") — คนละสิทธิ์กับหน้า
     // "คะแนน & เกรด" ของทั้งบริษัท (core.performance.view, ADMIN/CEO/MANAGER
     // เท่านั้น) หน้านี้เห็น "คะแนนของฉัน" คนเดียว ยื่นคำร้องขอแก้ไขได้เอง

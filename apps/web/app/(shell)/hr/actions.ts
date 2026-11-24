@@ -144,62 +144,10 @@ function toMessage(error: unknown): string {
   return error instanceof Error ? error.message : "ดำเนินการไม่สำเร็จ";
 }
 
-/* ═══════════════════ Timesheet ═══════════════════ */
-
-export async function generateTimesheetAction(formData: FormData) {
-  await guard(HR_PERMS.employeeManage);
-  const id = String(formData.get("periodId") ?? "");
-  if (!id) throw new Error("ไม่พบงวด");
-
-  try {
-    await wfFetch(`/timesheet-periods/${id}/generate`, { method: "POST" });
-  } catch (error) {
-    throw new Error(toMessage(error));
-  }
-  revalidatePath("/hr/payroll");
-}
-
-export async function closeTimesheetAction(formData: FormData) {
-  await guard(HR_PERMS.employeeManage);
-  const id = String(formData.get("periodId") ?? "");
-  const reason = String(formData.get("reason") ?? "").trim();
-  if (!id) throw new Error("ไม่พบงวด");
-  if (!reason) throw new Error("ต้องระบุเหตุผลในการปิดงวด");
-
-  try {
-    await wfFetch(`/timesheet-periods/${id}/close`, {
-      method: "POST",
-      body: { reason },
-    });
-  } catch (error) {
-    throw new Error(toMessage(error));
-  }
-  revalidatePath("/hr/payroll");
-}
-
-/* ═══════════════════ งวดเงินเดือน ═══════════════════ */
-
-/**
- * เปลี่ยนสถานะงวด — workforce บังคับลำดับ state machine เอง
- * และห้ามคนเตรียมงวดอนุมัติงวดตัวเอง (แยกหน้าที่ระดับ permission)
+/*
+ * รอบจ่าย/งวด timesheet/สลิปของระบบบุคคลตัวเก่า (workforce payroll) ถอดหน้าจอออกแล้ว 24/11/2569 —
+ * เงินเดือนใช้โมดูล salary ของเราเอง (/salary) ข้อมูลเก่าใน workforce ไม่ได้ลบ
  */
-export async function payrollTransitionAction(formData: FormData) {
-  const action = String(formData.get("action") ?? "");
-  const runId = String(formData.get("runId") ?? "");
-  if (!runId || !action) throw new Error("ข้อมูลไม่ครบ");
-
-  // calculate = งานของผู้จัดทำ · approve/lock = งานของผู้อนุมัติ
-  const needsApprove = ["approve", "lock", "reject"].includes(action);
-  await guard(needsApprove ? HR_PERMS.payrollApprove : HR_PERMS.payrollManage);
-
-  try {
-    await wfFetch(`/payroll-runs/${runId}/${action}`, { method: "POST" });
-  } catch (error) {
-    throw new Error(toMessage(error));
-  }
-  revalidatePath(`/hr/payroll/${runId}`);
-  revalidatePath("/hr/payroll");
-}
 
 /*
  * createCompanyAction ถูกถอดออกแล้ว — นิติบุคคลถูกสร้างให้อัตโนมัติตอนเปิดบริษัท
@@ -2016,29 +1964,6 @@ export async function seedLeaveTypesAction(formData: FormData) {
   }
   revalidatePath("/hr");
   revalidatePath("/hr/settings");
-}
-
-/* ═══════════════════ งวด timesheet ═══════════════════ */
-
-export async function createTimesheetPeriodAction(formData: FormData) {
-  await guard(HR_PERMS.employeeManage);
-  const companyId = String(formData.get("company_id") ?? "");
-  const name = String(formData.get("name") ?? "").trim();
-  const startsOn = String(formData.get("starts_on") ?? "");
-  const endsOn = String(formData.get("ends_on") ?? "");
-
-  if (!companyId) throw new Error("ยังไม่มีบริษัทในระบบ workforce");
-  if (!name || !startsOn || !endsOn) throw new Error("ข้อมูลไม่ครบ");
-
-  try {
-    await wfFetch("/timesheet-periods", {
-      method: "POST",
-      body: { company_id: companyId, name, starts_on: startsOn, ends_on: endsOn },
-    });
-  } catch (error) {
-    throw new Error(toMessage(error));
-  }
-  revalidatePath("/hr/payroll");
 }
 
 /* ═══════════════════ สถานที่ทำงาน (geofence) ═══════════════════ */
