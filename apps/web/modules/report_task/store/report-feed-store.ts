@@ -11,6 +11,7 @@ import { uuid } from "@/modules/report_task/lib/uuid";
 import { legacyRoundsFromCutoffs } from "@/modules/report_task/lib/submission-rounds";
 import { submissionRoundChangeNotices } from "@/modules/report_task/lib/submission-round-notify";
 import { forgetUnsentPost, rememberUnsentPost } from "@/modules/report_task/lib/report-outbox-storage";
+import { tidyThaiMarks } from "@/modules/shared-text/tidy-thai";
 
 /** Rooms created at/after this pick their `feedViewMode` once in the
  * create-room dialog and can't change it afterward (see that field's own
@@ -667,6 +668,17 @@ interface ReportFeedStore {
 
 // Server-synced via ServerStoreSync (apiKey "report-feed") in
 // store-hydrator.tsx — shared across teammates, not per-browser.
+/** ชื่อโพสต์ + หัวข้อ/บรรทัดทุกส่วน ผ่านตัวจัดสระ/วรรณยุกต์ซ้อน (modules/shared-text/tidy-thai.ts) */
+function tidyPostFields<T extends { title?: string; sections?: { heading: string; bullets: string[] }[] }>(data: T): T {
+  return {
+    ...data,
+    ...(typeof data.title === "string" ? { title: tidyThaiMarks(data.title) } : {}),
+    ...(data.sections
+      ? { sections: data.sections.map((s) => ({ ...s, heading: tidyThaiMarks(s.heading), bullets: s.bullets.map(tidyThaiMarks) })) }
+      : {}),
+  };
+}
+
 export const useReportFeedStore = create<ReportFeedStore>()(
   (set, get) => ({
       topics: defaultTopics,
@@ -778,7 +790,9 @@ export const useReportFeedStore = create<ReportFeedStore>()(
         })),
       removeSubmitterGroup: (id) =>
         set((s) => ({ submitterGroups: s.submitterGroups.filter((g) => g.id !== id) })),
-      addPost: (topicId, authorId, data) => {
+      addPost: (topicId, authorId, rawData) => {
+        // สระ/วรรณยุกต์ซ้อนผิดปกติ (ไม้โทนำหน้า 29 ตัว 24/11/2569) ตัดตั้งแต่ตอนบันทึก — ไม่ให้เข้าข้อมูลอีก
+        const data = tidyPostFields(rawData);
         // Anyone @mentioned in the post gets a distinct "tagged you" notice —
         // same phrasing as the meeting-attendee tag elsewhere — instead of
         // being lumped into the generic broadcast below with everyone else.
@@ -879,7 +893,8 @@ export const useReportFeedStore = create<ReportFeedStore>()(
           }
         }
       },
-      editPost: (postId, data) => {
+      editPost: (postId, rawData) => {
+        const data = tidyPostFields(rawData);
         const before = get().posts.find((p) => p.id === postId);
         // คนที่เพิ่ง @แท็กเพิ่มตอนแก้ไข (ไม่มีในฉบับก่อน) ต้องได้แจ้งเตือนเหมือนตอนโพสต์ครั้งแรก
         // ("กดแก้ไขแล้ว @ชื่อ มันไม่เด้งแจ้งเตือน") — คนที่ถูกแท็กอยู่แล้วไม่แจ้งซ้ำ
@@ -1071,7 +1086,8 @@ export const useReportFeedStore = create<ReportFeedStore>()(
           ),
         }));
       },
-      addReply: (postId, authorId, body, extra) => {
+      addReply: (postId, authorId, rawBody, extra) => {
+        const body = tidyThaiMarks(rawBody);
         // Captured up front so notifications below can deep-link straight to
         // this exact reply (?topic=&post=&reply=), same shape ReportCard's
         // own "copy link on a comment" already produces.
@@ -1196,7 +1212,8 @@ export const useReportFeedStore = create<ReportFeedStore>()(
             .notifyMany(everyoneMentionReplyRecipients, authorId, `${actorName} แท็ก @ทุกคน ในความคิดเห็นของโพสต์ "${post.title}"`, undefined, link, repliedTopic?.name);
         }
       },
-      editReply: (postId, replyId, data) => {
+      editReply: (postId, replyId, rawData) => {
+        const data = { ...rawData, body: tidyThaiMarks(rawData.body) };
         const post = get().posts.find((p) => p.id === postId);
         const reply = post?.replies.find((r) => r.id === replyId);
         set((s) => ({

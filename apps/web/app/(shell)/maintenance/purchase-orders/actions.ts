@@ -69,6 +69,7 @@ import {
 import { ceoTitle } from "@/lib/ceo-title";
 import { mentionedIn, orgMentionPeople } from "@/modules/maintenance/data/wo-mentions";
 import { PO_MENTION_MARK } from "@/modules/notifications/prefs";
+import { tidyThaiMarks } from "@/modules/shared-text/tidy-thai";
 function readItems(formData: FormData, withPricing: boolean): PoItem[] {
   const names = formData.getAll("itemName").map(String);
   const qtys = formData.getAll("itemQty").map(String);
@@ -662,7 +663,7 @@ export async function selfReceiveAction(formData: FormData) {
 export async function addPoCommentAction(poId: string, formData: FormData) {
   const s = await requireOrg();
   if (!hasPermission(s, MAINT_PERMS.poView)) return;
-  const content = String(formData.get("content") ?? "").trim();
+  const content = tidyThaiMarks(String(formData.get("content") ?? "").trim());
   // กล่องความคิดเห็นส่งได้หลายรูป ("images") — "image" = ฟอร์มรุ่นเก่าที่ยังเปิดค้างอยู่ (รูปเดียว)
   const files = [...formData.getAll("images"), ...formData.getAll("image")]
     .filter((f): f is File => f instanceof File && f.size > 0)

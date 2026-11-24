@@ -86,6 +86,7 @@ import {
   skipPmSchedule,
   skipPmSchedulesByIds,
 } from "@/modules/maintenance/data/pm";
+import { tidyThaiMarks } from "@/modules/shared-text/tidy-thai";
 
 /**
  * วันครบกำหนดจาก input[type=date] → สิ้นวันตามเวลาไทย (23:59:59.999+07:00)
@@ -841,7 +842,7 @@ export async function addCommentAction(workOrderId: string, formData: FormData) 
   const wo = await getWorkOrder(s.orgId, workOrderId);
   if (!wo) return;
   if (!canSeeWorkOrder(await workOrderAccess(s), wo)) return;
-  const content = String(formData.get("content") ?? "").trim();
+  const content = tidyThaiMarks(String(formData.get("content") ?? "").trim());
   // หลายรูปต่อความคิดเห็น ("images") — "image" = ฟอร์มรุ่นเก่าที่ยังเปิดค้างอยู่ (รูปเดียว)
   const files = [...formData.getAll("images"), ...formData.getAll("image")]
     .filter((f): f is File => f instanceof File && f.size > 0)
@@ -921,7 +922,7 @@ export async function editCommentAction(
 ) {
   const s = await requireOrg();
   const commentId = String(formData.get("commentId") ?? "");
-  const content = String(formData.get("content") ?? "").trim();
+  const content = tidyThaiMarks(String(formData.get("content") ?? "").trim());
   if (!commentId || !content) return;
 
   const wo = await getWorkOrder(s.orgId, workOrderId);

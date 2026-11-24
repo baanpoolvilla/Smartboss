@@ -10,6 +10,7 @@ import { isAdsBotChannelId, type ChatAttachment, type ChatMessageDTO, type ChatR
 import { broadcastToChannel, channelMemberIds, getChannelAccess, orgChannelId } from "./channels";
 import { ChatError, hydrateMessages, reactionsFor, type ChatActor } from "./serialize";
 import { autoKeepOwnMessage } from "./keep";
+import { tidyThaiMarks } from "@/modules/shared-text/tidy-thai";
 
 export type { ChatAttachment, ChatMessageDTO };
 
@@ -128,7 +129,8 @@ export async function createMessage(
   const limited = await rateLimit(`chat:send:${actor.userId}`, SEND_LIMIT.count, SEND_LIMIT.windowSeconds);
   if (!limited.allowed) throw new ChatError("ส่งข้อความเร็วเกินไป รอสักครู่แล้วลองใหม่", 429);
 
-  const body = input.body?.trim().slice(0, MAX_BODY_LENGTH) || null;
+  // สระ/วรรณยุกต์ซ้อนผิดปกติ ตัดตั้งแต่ตอนบันทึก (24/11/2569)
+  const body = tidyThaiMarks(input.body?.trim().slice(0, MAX_BODY_LENGTH) ?? "") || null;
   const attachments = await validateAttachments(actor.orgId, input.attachments);
   if (!body && attachments.length === 0) throw new ChatError("พิมพ์ข้อความหรือแนบไฟล์อย่างน้อยหนึ่งอย่าง", 400);
 
