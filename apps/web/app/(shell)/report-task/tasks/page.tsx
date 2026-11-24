@@ -164,7 +164,8 @@ function TasksPageContent() {
   if (directoryLoaded && !isHead && view === "workload") setView("board");
 
   // Non-heads only ever see their own tasks (see canSeeTask).
-  const visibleTasks = useMemo(() => tasks.filter((t) => canSeeTask(t, viewingAsUserId)), [tasks, viewingAsUserId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- employees/departments อ่านผ่าน proxy ใน canSeeTask
+  const visibleTasks = useMemo(() => tasks.filter((t) => canSeeTask(t, viewingAsUserId)), [tasks, viewingAsUserId, employees, departments]);
 
   // แถวตัวเลข (TaskBoardKpis) เป็นที่เดียวที่ตั้ง/ล้าง quickView ได้ — เอาแถวออกแล้ว ค่าที่ค้างอยู่
   // (ใน store หรือที่จำไว้ในเครื่อง) จะซ่อนงานโดยไม่มีปุ่มให้ล้าง เลยล้างทิ้งเสมอ

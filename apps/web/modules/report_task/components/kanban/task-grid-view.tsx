@@ -7,6 +7,7 @@ import { matchesTaskFilters } from "@/modules/report_task/lib/task-filter";
 import { canSeeTask } from "@/modules/report_task/lib/permissions";
 import { useTaskSheetParam } from "@/modules/report_task/hooks/use-task-sheet-param";
 import { useBoardMaintenance } from "@/modules/report_task/hooks/use-board-maintenance";
+import { useDirectoryDeps } from "@/modules/report_task/hooks/use-visible-tasks";
 import { TaskGrid } from "./task-grid";
 import { TaskDetailSheet } from "./task-detail-sheet";
 
@@ -21,9 +22,11 @@ export function TaskGridView() {
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
   const { openTaskId, open: setOpenTaskId, close: closeTaskSheet } = useTaskSheetParam();
 
+  const [dirEmployees, dirDepartments] = useDirectoryDeps();
   const filtered = useMemo(
     () => storeTasks.filter((t) => canSeeTask(t, viewingAsUserId) && matchesTaskFilters(t, filters)),
-    [storeTasks, viewingAsUserId, filters]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- รายชื่อ/แผนกอ่านผ่าน proxy ใน canSeeTask (useDirectoryDeps)
+    [storeTasks, viewingAsUserId, filters, dirEmployees, dirDepartments]
   );
 
   const { shownTasks, shownMx } = useBoardMaintenance(filtered, filters);

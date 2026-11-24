@@ -25,6 +25,7 @@ import { useTaskBoardIntentStore } from "@/modules/report_task/store/task-board-
 import { Info, SearchX, ChevronLeft, ChevronRight } from "lucide-react";
 import { EmptyState } from "@/modules/report_task/components/shared/empty-state";
 import { useBoardMaintenance } from "@/modules/report_task/hooks/use-board-maintenance";
+import { useDirectoryDeps } from "@/modules/report_task/hooks/use-visible-tasks";
 import { sortBoardEntries, type BoardEntry } from "@/modules/report_task/lib/maintenance-board";
 
 export type GroupBy = "status" | "priority" | "assignee" | "department";
@@ -49,9 +50,11 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
   const unreadMxMap = useUnreadMxCommentMap();
   // A department head sees the whole board; everyone else only sees tasks
   // they're assigned to or created — a coworker's task no longer appears.
+  const [dirEmployees, dirDepartments] = useDirectoryDeps();
   const allTasks = useMemo(
     () => storeTasks.filter((t) => canSeeTask(t, viewingAsUserId)),
-    [storeTasks, viewingAsUserId]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- รายชื่อ/แผนกอ่านผ่าน proxy ใน canSeeTask (useDirectoryDeps)
+    [storeTasks, viewingAsUserId, dirEmployees, dirDepartments]
   );
 
   // Mirrored into the `?task=` URL param (see the hook) so the browser Back
@@ -546,7 +549,7 @@ export function KanbanBoard({ groupBy }: { groupBy: GroupBy }) {
                   className="flex h-5 min-w-5 items-center justify-center rounded-md px-1.5 text-[11.5px] font-bold tabular-nums"
                   style={
                     active
-                      ? { backgroundColor: `color-mix(in srgb, ${column.accent} var(--chip-mix, 82%), black)`, color: "white" }
+                      ? { backgroundColor: `color-mix(in srgb, ${column.accent} var(--chip-mix, 64%), black)`, color: "white" }
                       : { backgroundColor: "var(--bg-soft)", color: "var(--ink)" }
                   }
                 >
