@@ -279,3 +279,21 @@
 [data-theme="dark"] [style*="background-color:#ff9800" i]:not([data-paper] *) {
   background-color: #b35900 !important;
 }
+
+/* แดชบอร์ด (ผู้ใช้ 24/11/2569 "สีกราฟดูแปลก ๆ เวลาเป็นสีดำ ขอบแปลก ๆ") — ธีมขาวไม่เปลี่ยน
+   - ขอบการ์ด (#eef2f7) ผสมแล้วยังสว่าง ตัดพื้นดำเหมือนกรอบรูป → เส้นมาตรฐานของธีมมืด
+   - พื้นโซน "เสร็จ/ยังไม่เสร็จ" หลังกราฟแท่ง เป็นบล็อกเขียว/แดงทึบเต็มครึ่งจอ → เหลือแค่สีจาง ๆ ให้แท่งกราฟเด่น
+   - เส้นคั่นชิ้นโดนัทสีขาว → สีพื้นการ์ด (เห็นเป็นช่องว่างระหว่างสี แทนขีดขาว) */
+[data-theme="dark"] .rounded-\[18px\].border-\[\#eef2f7\]:not([data-paper] *) {
+  border-color: var(--line);
+}
+[data-theme="dark"] [data-chart-zone="done"] {
+  background-color: color-mix(in oklab, var(--chart-green) 7%, transparent) !important;
+}
+[data-theme="dark"] [data-chart-zone="todo"] {
+  background-color: color-mix(in oklab, var(--chart-red) 7%, transparent) !important;
+}
+[data-theme="dark"] .recharts-pie-sector [stroke="#ffffff"],
+[data-theme="dark"] .recharts-sector[stroke="#ffffff"] {
+  stroke: var(--bg);
+}

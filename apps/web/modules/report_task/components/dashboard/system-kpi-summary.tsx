@@ -500,8 +500,8 @@ export function SystemKpiSummary() {
                 Flex items already refuse to shrink under their own content
                 size by default, so no extra min-width is needed here. */}
             <div className="relative overflow-x-auto">
-              <div className="pointer-events-none absolute inset-0 left-0 w-1/2 rounded-l-xl bg-green-50/70" />
-              <div className="pointer-events-none absolute inset-0 left-1/2 w-1/2 rounded-r-xl bg-red-50/70" />
+              <div data-chart-zone="done" className="pointer-events-none absolute inset-0 left-0 w-1/2 rounded-l-xl bg-green-50/70" />
+              <div data-chart-zone="todo" className="pointer-events-none absolute inset-0 left-1/2 w-1/2 rounded-r-xl bg-red-50/70" />
               <div className="pointer-events-none absolute inset-y-0 left-1/2 border-l border-dashed border-[var(--line)]" />
               <div className="relative flex items-stretch pt-6" style={{ height: CHART_HEIGHT + 24 }}>
                 {data.groups.map((g) => (
