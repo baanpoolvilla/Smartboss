@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { X, FileText, Loader2 } from "lucide-react";
+import { X, FileText, Loader2, Pencil } from "lucide-react";
 import { uploadIssueAttachment } from "@/modules/report_task/lib/attachment-upload";
 import type { IssueAttachment } from "@/modules/report_task/types/issue";
 import { cn } from "@/modules/report_task/lib/utils";
 import { AttachMenu } from "@/modules/report_task/components/shared/attach-menu";
-import { hasClipboardText } from "@/lib/annotate/annotate";
+import { fileForEditing, hasClipboardText, openAnnotator, rememberOriginal } from "@/lib/annotate/annotate";
 
 const MAX_FILES = 10;
 
@@ -42,7 +42,10 @@ export function AttachmentPicker({
       const uploaded = await Promise.all(
         list.map(async (file) => {
           try {
-            return await uploadIssueAttachment(file, uploadedBy);
+            const up = await uploadIssueAttachment(file, uploadedBy);
+            // จำไฟล์ต้นฉบับไว้ — ปุ่มดินสอวาดบนไฟล์ในเครื่องได้เลย (รูปจากโดเมนไฟล์ส่งออกจาก canvas ไม่ได้)
+            rememberOriginal(up.url, file);
+            return up;
           } catch (err) {
             toast.error(err instanceof Error ? err.message : "อัปโหลดไฟล์ไม่สำเร็จ");
             return null;
@@ -53,6 +56,27 @@ export function AttachmentPicker({
       if (ok.length > 0) onChange([...attachments, ...ok]);
     } finally {
       setUploading((n) => n - list.length);
+    }
+  }
+
+  /**
+   * ดินสอบนรูปที่แนบ — วง/ขีด/เขียนบนรูป (หน้าต่างวาดเดียวกับแชท) แล้วรูปที่แก้แทนที่รูปเดิมในตำแหน่งเดิม
+   * (แจ้งบัค 24/11/2569 "แคปรูปจะวงยังทำไม่ได้")
+   */
+  async function annotate(a: IssueAttachment) {
+    try {
+      const edited = await openAnnotator(await fileForEditing(a.url, a.name));
+      if (!edited) return;
+      setUploading((n) => n + 1);
+      try {
+        const up = await uploadIssueAttachment(edited, uploadedBy);
+        rememberOriginal(up.url, edited);
+        onChange(attachments.map((x) => (x.id === a.id ? up : x)));
+      } finally {
+        setUploading((n) => n - 1);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "แก้ไขรูปนี้ไม่ได้");
     }
   }
 
@@ -104,11 +128,23 @@ export function AttachmentPicker({
                   <span className="text-[10px] text-[var(--ink-soft)] truncate w-full">{a.name}</span>
                 </a>
               )}
+              {!disabled && a.isPreviewable && (
+                <button
+                  type="button"
+                  onClick={() => void annotate(a)}
+                  title="วง/เขียนบนรูป"
+                  aria-label={`วง/เขียนบนรูป ${a.name}`}
+                  className="absolute -bottom-1.5 -right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--brand-navy)] text-white shadow ring-2 ring-white"
+                >
+                  <Pencil className="h-3 w-3" />
+                </button>
+              )}
               {!disabled && (
                 <button
                   type="button"
                   onClick={() => onChange(attachments.filter((x) => x.id !== a.id))}
-                  className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--ink)] text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                  // จอสัมผัสไม่มี hover — ปุ่มลบโผล่ตลอด
+                  className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--ink)] text-white opacity-0 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity"
                   aria-label={`ลบไฟล์ ${a.name}`}
                 >
                   <X className="h-3 w-3" />

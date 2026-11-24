@@ -36,6 +36,7 @@ import { ALL_ISSUE_CATEGORIES, type IssueAttachment, type IssueCategory, type Is
 import { getDepartment, getUser } from "@/modules/report_task/lib/directory";
 import { cn } from "@/modules/report_task/lib/utils";
 import { notifyNewIssueTicket } from "@/modules/report_task/lib/issue-notify";
+import { useAnnotatorStore } from "@/lib/annotate/annotate";
 
 /** Categories that often touch something private (pay/perf-adjacent access
  * issues) — "ให้หัวหน้าแผนกเห็น" starts unticked for these specifically,
@@ -149,6 +150,8 @@ export function IssueReportDialog({
   }
 
   function requestClose(next: boolean) {
+    // กำลังวงรูปอยู่ (หน้าต่างวาดเปิดทับ) — การกดในหน้าต่างวาดนับเป็น "กดนอกกรอบ" ของป๊อปอัปนี้ ห้ามปิด
+    if (!next && useAnnotatorStore.getState().file) return;
     if (!next && isDirty) {
       setConfirmDiscardOpen(true);
       return;
