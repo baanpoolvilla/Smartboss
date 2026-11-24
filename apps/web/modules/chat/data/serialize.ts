@@ -7,6 +7,7 @@ import { isKeepChannelId } from "../types";
 import { proposalViewer } from "@/modules/ads/data/proposal-view";
 import type { ChatApprovalInfo, ChatReviewInfo } from "../types";
 import { liveApprovalStatuses, liveReviewStatuses } from "./approval-status";
+import { readStore } from "@/modules/report_task/lib/db/org-store";
 
 /** ข้อผิดพลาดที่มีสถานะ HTTP — route แปลงเป็นคำตอบให้เอง (ดู lib/respond.ts) */
 export class ChatError extends Error {
@@ -99,6 +100,49 @@ export async function reactionsFor(orgId: string, messageId: string): Promise<Ch
  * ไม่ยิงทีละข้อความ ข้อความที่ยกเลิกแล้วเหลือแค่ร่องรอย (ไม่ส่งเนื้อหาออกไป)
  */
 /** การ์ดงาน (kind "task") — meta ที่ data/task-cards.ts เขียนไว้ · ข้อมูลไม่ครบ = null (การ์ดขึ้นเป็นข้อความธรรมดา) */
+/** ชื่อ/กำหนดส่ง/ชื่อโปรเจกต์ล่าสุดของการ์ดงาน — อ่านรวมครั้งเดียวต่อชุดข้อความ · หาไม่เจอ (ลบแล้ว) = คงค่าเดิม */
+async function refreshCardLabels(orgId: string, list: ChatTaskCard[]): Promise<void> {
+  const taskIds = [...new Set(list.filter((c) => c.target !== "work_order").map((c) => c.taskId))];
+  const woIds = [...new Set(list.filter((c) => c.target === "work_order").map((c) => c.taskId))];
+  const [tasks, wos] = await Promise.all([
+    taskIds.length
+      ? prisma.reportTask.findMany({ where: { orgId, id: { in: taskIds } }, select: { id: true, title: true, dueDate: true, data: true } })
+      : Promise.resolve([]),
+    woIds.length
+      ? prisma.workOrder.findMany({ where: { orgId, id: { in: woIds } }, select: { id: true, title: true, dueDate: true } })
+      : Promise.resolve([]),
+  ]);
+  const taskById = new Map(tasks.map((t) => [t.id, t]));
+  const woById = new Map(wos.map((w) => [w.id, w]));
+  const needProjects = list.some((c) => c.project);
+  type P = { id?: string; name?: string; sections?: { id?: string; name?: string }[] };
+  const projects = needProjects
+    ? await readStore<P[]>(orgId, "projects").then((r) => (Array.isArray(r.data) ? r.data : [])).catch(() => [] as P[])
+    : [];
+  for (const c of list) {
+    if (c.target === "work_order") {
+      const w = woById.get(c.taskId);
+      if (!w) continue;
+      if (w.title) c.title = w.title;
+      c.dueDate = w.dueDate ? w.dueDate.toISOString() : c.dueDate;
+      continue;
+    }
+    const t = taskById.get(c.taskId);
+    if (!t) continue;
+    if (t.title) c.title = t.title;
+    if (t.dueDate) c.dueDate = t.dueDate;
+    if (c.project) {
+      const data = t.data && typeof t.data === "object" ? (t.data as Record<string, unknown>) : null;
+      const link = data?.project && typeof data.project === "object" ? (data.project as Record<string, unknown>) : null;
+      const p = projects.find((x) => x?.id === (typeof link?.projectId === "string" ? link.projectId : c.project!.id));
+      if (p && typeof p.name === "string") {
+        const section = p.sections?.find((s) => s?.id === link?.sectionId)?.name;
+        c.project = { id: p.id ?? c.project.id, name: p.name.slice(0, 120), ...(typeof section === "string" && section ? { section: section.slice(0, 80) } : {}) };
+      }
+    }
+  }
+}
+
 function taskCard(row: MessageRow): ChatTaskCard | null {
   const m = row.meta && typeof row.meta === "object" ? (row.meta as Partial<ChatTaskCard>) : null;
   if (!m || typeof m.taskId !== "string" || typeof m.title !== "string") return null;
@@ -258,6 +302,8 @@ export async function hydrateMessages(orgId: string, rows: MessageRow[]): Promis
     const c = taskCard(row);
     if (c) cards.set(row.id, c);
   }
+  // ชื่องาน/ใบงาน กำหนดส่ง และชื่อโปรเจกต์ อ่านสดจากของจริง — แก้ชื่อทีหลัง การ์ดเก่าทุกใบเปลี่ยนตาม (ผู้ใช้ 24/11/2569)
+  if (cards.size) await refreshCardLabels(orgId, [...cards.values()]).catch(() => undefined);
   const approvalCards = [...cards.values()].filter((c) => c.approval);
   if (approvalCards.length) {
     const live = await liveApprovalStatuses(orgId, approvalCards).catch(() => new Map());

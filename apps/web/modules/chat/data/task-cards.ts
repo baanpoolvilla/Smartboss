@@ -248,10 +248,15 @@ async function projectOf(orgId: string, task: { data: unknown } | null): Promise
   }
 }
 
+/** สวิตช์ย้อนกลับ: false = กลับไปใช้แถบข้อความเทาแบบเดิม */
+const CARD_IN_PROJECT_ROOM = true;
+
 const TH_MON = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 
 /**
- * งานใหม่ในโปรเจกต์ → แถบข้อความระบบเล็ก ๆ ในห้องโปรเจกต์ (ผู้ใช้ 13/11/2569 "การ์ดเยอะไป ให้เตือนเบา ๆ ให้รู้")
+ * งานใหม่ในโปรเจกต์ → การ์ด "งานใหม่" ในห้องโปรเจกต์ ป้าย Task + โปรเจกต์ + ชื่อโปรเจกต์ (ผู้ใช้ 24/11/2569
+ * "ให้ขึ้นเป็นการ์ด ไม่เอาแบบนี้ … บอกว่าจาก task หรือโปรเจก หรือแจ้งซ่อม") — แทนแถบข้อความเทาเดิม (13/11/2569)
+ * แถบเทาเก่าที่ส่งไปแล้วยังอยู่ตามเดิม · เดิม: แถบข้อความระบบเล็ก ๆ ในห้องโปรเจกต์ ("การ์ดเยอะไป ให้เตือนเบา ๆ ให้รู้")
  * เช่น "กาย เพิ่มงาน "เช็คแอร์ทุกห้อง" ให้ ต้น · ส่ง 13 พ.ย." — ข้อความระบบไม่เด้ง/ไม่นับยังไม่อ่าน กระดิ่งแจ้งรายงานอยู่แล้ว
  * คนส่งต้องอยู่ในห้อง · เฉพาะงานที่ผูกกับโปรเจกต์ · ไม่ throw ออกไปถ้างานยังไม่ลงตาราง
  */
@@ -272,6 +277,10 @@ export async function postProjectTaskNotice(
     task = await readTask();
   }
   if (!task || !isProjectTask(task)) return { posted: false };
+  // การ์ดชุดเดียวกับเปิดงานจากห้อง (หัว "งานใหม่" + ป้าย Task/โปรเจกต์ + ชื่อโปรเจกต์ + มอบให้ใคร) — กันซ้ำด้วย room-task-<id>
+  if (CARD_IN_PROJECT_ROOM) {
+    return postTaskCardToRoom(orgId, { channelId: input.channelId, authorId: input.authorId, taskId: input.taskId, title: task.title, assigned: true });
+  }
   const [{ assignees }, actor] = await Promise.all([
     assigneeNames(orgId, task.assigneeIds ?? []),
     prisma.user.findUnique({ where: { id: input.authorId }, select: { name: true } }),
