@@ -35,11 +35,14 @@ import { TourOverlay } from "./tour-overlay";
 export function ReportTaskScaffold({
   currentUser,
   canOpenWorkOrder = false,
+  draftScope,
   children,
 }: {
   /** ผู้ใช้ที่ล็อกอิน — ประกอบจาก core.users ที่ layout ฝั่งเซิร์ฟเวอร์ */
   currentUser: User;
   canOpenWorkOrder?: boolean;
+  /** บริษัท:ผู้ใช้ — กุญแจของงานที่ยังบันทึกไม่ผ่านซึ่งเก็บไว้ในเครื่อง (TaskSync) ไม่ให้ข้ามบริษัท/ข้ามคน */
+  draftScope?: string;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -120,7 +123,7 @@ export function ReportTaskScaffold({
       {/* ตัวเติมข้อมูลให้ store ฝั่ง client — ต้องอยู่ระดับโมดูล ไม่ใช่รายหน้า
           ไม่งั้นจะโหลดใหม่ทุกครั้งที่เปลี่ยนหน้า */}
       <StoreHydrator />
-      <TaskSync />
+      <TaskSync draftScope={draftScope} />
       <ReopenDueDialog />
       <TourOverlay />
       {/* <Toaster /> ย้ายไปอยู่ที่ Shell แล้ว (components/shell/shell.tsx) — ครอบทุกโมดูล

@@ -24,6 +24,78 @@ const REALTIME_FALLBACK_MS = 60_000;
  */
 const OPEN_SHEET_POLL_MS = 3000;
 let openTaskSheets = 0;
+
+/**
+ * งานที่ยังบันทึกไม่ผ่าน เก็บลงเครื่องไว้ด้วย (ผู้ใช้ 24/11/2569) — เดิมตัวลองส่งใหม่อยู่แค่ในหน่วยความจำ
+ * ปิด/รีเฟรชหน้าตอนเซิร์ฟเวอร์ยังไม่ตอบ = งานที่เพิ่งแก้/สร้างหายเงียบ (2/11/2569 งาน "test" ไม่ลงฐานข้อมูล)
+ *
+ * เก็บเฉพาะงานที่ต่างจากที่เซิร์ฟเวอร์ยืนยันล่าสุด (changed + ตัวเดิมของมันเป็น base) และ id ที่ลบ — ไม่ใช่ทั้งก้อน
+ * เปิดหน้าครั้งหน้า: รวมแบบ 3 ทาง (mergeThreeWay) กับของล่าสุดบนเซิร์ฟเวอร์แล้วบันทึกต่อ · กุญแจแยกบริษัท+คน
+ * เก่ากว่า 7 วัน = ทิ้ง · localStorage ใช้ไม่ได้ (โหมดส่วนตัว/เต็ม) = ทำงานแบบเดิม
+ */
+const DRAFT_PREFIX = "sb.tasks.unsaved.v1:";
+const DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+interface TaskDraft {
+  savedAt: number;
+  /** งานที่แก้/สร้าง (ตัวในเครื่อง) */
+  changed: Task[];
+  /** ตัวเดิมของงานที่แก้ ตามที่เซิร์ฟเวอร์ยืนยันล่าสุด — งานใหม่ไม่มีในนี้ */
+  base: Task[];
+  removedIds: string[];
+}
+function buildDraft(base: Task[] | null, mine: Task[]): TaskDraft | null {
+  const baseById = new Map((base ?? []).map((t) => [t.id, t]));
+  const mineIds = new Set(mine.map((t) => t.id));
+  const changed: Task[] = [];
+  const baseOfChanged: Task[] = [];
+  for (const t of mine) {
+    const b = baseById.get(t.id);
+    if (b && JSON.stringify(b) === JSON.stringify(t)) continue;
+    changed.push(t);
+    if (b) baseOfChanged.push(b);
+  }
+  const removed = [...baseById.values()].filter((t) => !mineIds.has(t.id));
+  if (changed.length === 0 && removed.length === 0) return null;
+  return { savedAt: Date.now(), changed, base: [...baseOfChanged, ...removed], removedIds: removed.map((t) => t.id) };
+}
+function writeDraft(scope: string | undefined, draft: TaskDraft | null) {
+  if (!scope) return;
+  try {
+    if (draft) localStorage.setItem(DRAFT_PREFIX + scope, JSON.stringify(draft));
+    else localStorage.removeItem(DRAFT_PREFIX + scope);
+  } catch {
+    /* เต็ม/โหมดส่วนตัว — แค่ไม่ได้เก็บ */
+  }
+}
+function readDraft(scope: string | undefined): TaskDraft | null {
+  if (!scope) return null;
+  try {
+    const raw = localStorage.getItem(DRAFT_PREFIX + scope);
+    if (!raw) return null;
+    const d = JSON.parse(raw) as TaskDraft;
+    if (!d || !Array.isArray(d.changed) || !Array.isArray(d.base) || !Array.isArray(d.removedIds)) return null;
+    if (Date.now() - (d.savedAt || 0) > DRAFT_MAX_AGE_MS) {
+      localStorage.removeItem(DRAFT_PREFIX + scope);
+      return null;
+    }
+    return d;
+  } catch {
+    return null;
+  }
+}
+/** ใส่ของที่ค้างไว้ทับของล่าสุดบนเซิร์ฟเวอร์ — งานที่คนอื่นไม่ได้แตะ ใช้ของเรา · คนอื่นแก้ด้วย รวมทีละช่องตาม mergeThreeWay */
+export function applyTaskDraft(latest: Task[], draft: TaskDraft): Task[] {
+  const changedById = new Map(draft.changed.map((t) => [t.id, t]));
+  const baseById = new Map(draft.base.map((t) => [t.id, t]));
+  const removed = new Set(draft.removedIds);
+  const latestIds = new Set(latest.map((t) => t.id));
+  // base = ของล่าสุด แต่งานที่เราแตะ ใช้ตัวเดิมตอนที่เราเห็น (งานใหม่ของเราไม่มีใน base = เพิ่มเข้าไป)
+  const base = latest.map((t) => baseById.get(t.id) ?? t);
+  for (const b of draft.base) if (!latestIds.has(b.id)) base.push(b);
+  const mine = latest.filter((t) => !removed.has(t.id)).map((t) => changedById.get(t.id) ?? t);
+  for (const c of draft.changed) if (!latestIds.has(c.id) && !baseById.has(c.id)) mine.push(c);
+  return mergeThreeWay(base, mine, latest) as Task[];
+}
 export function markTaskSheetOpen(delta: 1 | -1) {
   openTaskSheets = Math.max(0, openTaskSheets + delta);
 }
@@ -57,7 +129,7 @@ const ENABLE_TASK_POLL = true;
  * Uses fetch with keepalive (not sendBeacon) for the unload-time flush so we
  * can still read the response — sendBeacon can only fire-and-forget.
  */
-export function TaskSync() {
+export function TaskSync({ draftScope }: { draftScope?: string } = {}) {
   const loadedRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Snapshot waiting to be written — set the moment a change comes in, only
@@ -95,13 +167,14 @@ export function TaskSync() {
     function scheduleRetry() {
       if (cancelled) return;
       pendingRef.current = useTaskStore.getState().tasks;
+      writeDraft(draftScope, buildDraft(baseRef.current, pendingRef.current));
       retryDelayRef.current = Math.min(retryDelayRef.current ? retryDelayRef.current * 2 : 2000, 30_000);
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
         timerRef.current = null;
         flushPending();
       }, retryDelayRef.current);
-      toast.warning("ยังบันทึกไม่สำเร็จ (เชื่อมต่อเซิร์ฟเวอร์ไม่ได้) — ระบบกำลังลองบันทึกใหม่ให้เอง อย่าเพิ่งปิดหน้านี้", {
+      toast.warning("ยังบันทึกไม่สำเร็จ (เชื่อมต่อเซิร์ฟเวอร์ไม่ได้) — ระบบกำลังลองบันทึกใหม่ให้เอง ถ้าปิดหน้าไป จะบันทึกต่อให้ตอนเปิดครั้งหน้า", {
         id: "tasksync-retry",
         duration: Infinity,
       });
@@ -143,15 +216,20 @@ export function TaskSync() {
       // hard-capped at ~64KB by Chromium, so this path stays off for every
       // normal in-page save.
       if (isUnload) {
+        const body = JSON.stringify({ tasks: snapshot, expectedVersion: versionRef.current });
+        // keepalive ส่งได้ไม่เกิน ~64KB (ทั้งบริษัทมักเกิน) — ส่งไม่ถึงแน่ ๆ ⇒ เก็บลงเครื่อง บันทึกต่อตอนเปิดครั้งหน้า
+        // ก้อนเล็กส่งได้ ไม่ต้องเก็บ (เก็บไว้แล้วส่งถึงด้วย ครั้งหน้าอาจเอาของเก่าไปทับที่คนอื่นแก้ต่อ) · ส่งไม่ผ่าน = scheduleRetry เก็บให้
+        if (body.length > 60_000) writeDraft(draftScope, buildDraft(baseRef.current, snapshot));
         try {
           const res = await fetch("/api/report-task/tasks", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ tasks: snapshot, expectedVersion: versionRef.current }),
+            body,
             keepalive: true,
           });
           // แค่สลับแท็บ/พับจอ (หน้ายังอยู่): ส่งไม่ผ่าน ⇒ อย่าทิ้ง กลับมาแล้วบันทึกต่อ (409 = ไปทาง merge ปกติ)
           if (!res.ok) scheduleRetry();
+          else writeDraft(draftScope, null); // ส่งถึงแล้ว (หน้ายังอยู่) — ไม่มีอะไรค้าง
         } catch {
           scheduleRetry(); // หน้าปิดจริง = ไม่มีผล · หน้ายังอยู่ = ลองใหม่เมื่อกลับมา
         }
@@ -283,6 +361,8 @@ export function TaskSync() {
           }
         }
         baseRef.current = mine; // this snapshot is now the server truth
+        // ของในเครื่องที่ค้างไว้ = บันทึกแล้ว · ยังมีของใหม่รอส่งอยู่ (pendingRef) ค่อยเก็บใหม่ถ้ารอบนั้นพลาด
+        writeDraft(draftScope, null);
         if (retryDelayRef.current) {
           retryDelayRef.current = 0;
           toast.success("บันทึกสำเร็จแล้ว", { id: "tasksync-retry", duration: 3000 });
@@ -357,6 +437,18 @@ export function TaskSync() {
         if (!cancelled && Array.isArray(tasks)) {
           applyRemoteTasks(tasks);
           baseRef.current = tasks;
+          // ของที่บันทึกไม่ผ่านจากครั้งก่อน (ปิดหน้าไปตอนเซิร์ฟเวอร์ไม่ตอบ) — รวมกับของล่าสุดแล้วบันทึกต่อ
+          const draft = readDraft(draftScope);
+          if (draft) {
+            const merged = applyTaskDraft(tasks, draft);
+            if (JSON.stringify(merged) === JSON.stringify(tasks)) {
+              writeDraft(draftScope, null); // ส่งตอนปิดหน้าไปถึงแล้ว — ไม่มีอะไรค้าง
+            } else {
+              applyRemoteTasks(merged);
+              pendingRef.current = merged;
+              toast.info("พบงานที่ยังบันทึกไม่สำเร็จจากครั้งก่อน — กำลังบันทึกให้", { id: "tasksync-draft", duration: 5000 });
+            }
+          }
         }
       })
       .catch(() => {
@@ -366,6 +458,7 @@ export function TaskSync() {
         loadedRef.current = true;
         if (!cancelled) {
           useTaskStore.setState({ loaded: true });
+          if (pendingRef.current) flushPending(); // ของที่กู้มาจากเครื่อง
           void runSweep();
           void runReminderSweep();
           void runReportPenaltySweep();
@@ -531,6 +624,8 @@ export function TaskSync() {
       window.removeEventListener("pagehide", flushOnUnload);
       flushPending();
     };
+    // draftScope (บริษัท:ผู้ใช้) คงที่ตลอด session — สลับบริษัทคือโหลดหน้าใหม่ทั้งหน้า ไม่ต้องตั้งตัวซิงก์ใหม่
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return null;

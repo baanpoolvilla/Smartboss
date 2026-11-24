@@ -17,6 +17,7 @@ import {
   writeStore,
 } from "@/modules/report_task/lib/db/org-store";
 import { recordReportStickerEvents, refundDeletedReportRoundEvents } from "@/modules/report_task/lib/db/report-feed-performance";
+import { findReportFormatViolations } from "@/modules/report_task/lib/report-format-guard";
 import type { Department } from "@/modules/report_task/types";
 import { DELTA_KEYS, deltasSince, rememberSnapshot, snapshotAt } from "@/modules/report_task/lib/db/store-delta-log";
 import { applyDelta, type StoreDelta } from "@/modules/report_task/lib/store-delta";
@@ -250,6 +251,17 @@ async function put(request: NextRequest, key: string) {
       ? null
       : (patchedBefore as { data: { posts?: unknown[]; topics?: unknown[] } | null; version: number } | null) ??
         (await readStore<{ posts?: unknown[]; topics?: unknown[] }>(session.orgId, key));
+  // รีพอตที่ขาดหัวข้อของรอบ (รอบที่ตั้ง "รูปแบบรายงาน") — ตรวจซ้ำที่นี่ ไม่ใช่แค่หน้าจอ (lib/report-format-guard.ts)
+  if (key === REPORT_FEED_KEY) {
+    const violations = findReportFormatViolations(before?.data ?? null, body.data as { posts?: unknown; topics?: unknown } | null);
+    if (violations.length > 0) {
+      const v = violations[0]!;
+      return Response.json(
+        { error: `รีพอต "${v.title.slice(0, 60)}" ยังไม่ครบตามรูปแบบของรอบ — ${v.problem}`, code: "report_format", violations },
+        { status: 400 }
+      );
+    }
+  }
   // ประชุมที่ถูกลบในรอบนี้ — ต้องรู้ก้อนเก่าเพื่อลบแจ้งเตือนของประชุมนั้นจากกระดิ่งทุกคน
   const meetingsBefore = key === MEETINGS_KEY ? await readStore<{ id?: unknown }[]>(session.orgId, key) : null;
   const projectsBefore = key === "projects" ? await readStore<{ id?: unknown }[]>(session.orgId, key) : null;

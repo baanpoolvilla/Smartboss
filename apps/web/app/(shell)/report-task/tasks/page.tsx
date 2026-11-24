@@ -10,6 +10,8 @@ import { TaskGridView } from "@/modules/report_task/components/kanban/task-grid-
 import { WorkloadView } from "@/modules/report_task/components/kanban/workload-view";
 import { useTaskStore, type PenaltyFilter } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
+import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
+import { useDepartmentStore } from "@/modules/report_task/store/department-store";
 import { canManage } from "@/modules/report_task/lib/directory";
 import { canSeeTask } from "@/modules/report_task/lib/permissions";
 import { matchesTaskFilters } from "@/modules/report_task/lib/task-filter";
@@ -75,7 +77,15 @@ function TasksPageContent() {
   const setFilters = useTaskStore((s) => s.setFilters);
   const resetFilters = useTaskStore((s) => s.resetFilters);
   const viewingAsUserId = useIdentityStore((s) => s.viewingAsUserId);
-  const isHead = canManage(viewingAsUserId);
+  // canManage อ่านรายชื่อ/แผนกผ่าน proxy ที่ไม่ reactive — ต้อง subscribe สองร้านนี้เอง ไม่งั้นตอนรายชื่อยังไม่มา
+  // หัวหน้าถูกมองเป็นพนักงาน แท็บ "ภาระงาน" หาย/โผล่ และหน้าถูกเด้งกลับไปบอร์ด (จอกระพริบ)
+  const employees = useEmployeeStore((s) => s.employees);
+  const employeesLoaded = useEmployeeStore((s) => s.loaded);
+  const departments = useDepartmentStore((s) => s.departments);
+  // แผนกมาคนละก้อนกับรายชื่อ — ต้องมาทั้งคู่ (บริษัทที่ไม่มีแผนกเลย มีแต่เจ้าของบริษัทที่เห็นภาระงานอยู่แล้ว)
+  const directoryLoaded = employeesLoaded && departments.length > 0;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- employees/departments อ่านผ่าน proxy ใน canManage
+  const isHead = useMemo(() => canManage(viewingAsUserId), [viewingAsUserId, employees, departments]);
 
   // Seed filters from the URL once on mount (a shared link or a refresh mid-
   // visit should restore them) · ไม่มีตัวกรองใน URL = ใช้ที่จำไว้ในเครื่อง (ดู SAVED_KEY)
@@ -150,7 +160,8 @@ function TasksPageContent() {
   // same as the dashboard's leaderboard/department chart. Bounce off it
   // (adjusted during render, not an effect) if a non-head is on it when
   // they switch identity away from being a head.
-  if (!isHead && view === "workload") setView("board");
+  // รอรายชื่อจริงโหลดเสร็จก่อนค่อยตัดสิน — เดิมเด้งทันทีตอนรายชื่อยังว่าง แล้วแท็บภาระงานกระพริบ/หายไปเอง
+  if (directoryLoaded && !isHead && view === "workload") setView("board");
 
   // Non-heads only ever see their own tasks (see canSeeTask).
   const visibleTasks = useMemo(() => tasks.filter((t) => canSeeTask(t, viewingAsUserId)), [tasks, viewingAsUserId]);
@@ -189,7 +200,7 @@ function TasksPageContent() {
   const tabs: { id: TaskView; label: string; icon: typeof LayoutGrid }[] = [
     { id: "board", label: "บอร์ด", icon: LayoutGrid },
     { id: "grid", label: "ตาราง", icon: Table2 },
-    ...(isHead ? [{ id: "workload" as const, label: "ภาระงาน", icon: Users }] : []),
+    ...(isHead || (!directoryLoaded && view === "workload") ? [{ id: "workload" as const, label: "ภาระงาน", icon: Users }] : []),
   ];
 
   // Drilled into one person's own topic board (kanban-board.tsx's
@@ -265,7 +276,7 @@ function TasksPageContent() {
     ),
     // tabs สร้างใหม่ทุกครั้งที่ render แต่ขึ้นกับ isHead อย่างเดียว
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [view, isHead, personBoardId, groupBy, filteredTaskCount, mobileFilterOpen, newTaskOpen]
+    [view, isHead, directoryLoaded, personBoardId, groupBy, filteredTaskCount, mobileFilterOpen, newTaskOpen]
   );
   useSetAppBarLeading(appBarLeading);
 

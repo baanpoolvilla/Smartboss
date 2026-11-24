@@ -622,6 +622,8 @@ export const MessageBubble = memo(function MessageBubble(props: MessageBubblePro
     );
   }
 
+  // การ์ดงานของงานที่ถูกลบ (removeTaskCards) — หายไปเลย ไม่ต้องขึ้น "ยกเลิกข้อความ" (ผู้ใช้ 24/11/2569)
+  if (m.deleted && m.kind === "task") return null;
   if (m.deleted) {
     return (
       <div className="chat-row flex justify-center px-4 py-1">

@@ -250,11 +250,15 @@ export function ServerStoreSync<T, S>({
           // เซิร์ฟเวอร์กลับมาทับ" โพสต์ที่เพิ่งกดส่งระหว่าง deploy เลยหาย
           if (res.status !== 400 && res.status !== 413) return false;
           // ปฏิเสธจริง — ส่งซ้ำก็ไม่ผ่าน ให้หน้าจอตรงกับเซิร์ฟเวอร์
+          // รีพอตไม่ครบรูปแบบ (report-format-guard.ts) — บอกเหตุผลจากเซิร์ฟเวอร์ตรง ๆ
+          const rejected = (await res.json().catch(() => null)) as { code?: string; error?: string } | null;
           toast.error(
             res.status === 413
               ? "ข้อมูลใหญ่เกินกว่าที่บันทึกได้ — แจ้งผู้ดูแลระบบ (การเปลี่ยนแปลงล่าสุดไม่ถูกบันทึก)"
-              : "บันทึกข้อมูลไม่สำเร็จ กำลังโหลดข้อมูลล่าสุดกลับมา",
-            { id: `storesync-save-error-${apiKey}` }
+              : rejected?.code === "report_format" && rejected.error
+                ? `${rejected.error} (ยังไม่ได้บันทึก)`
+                : "บันทึกข้อมูลไม่สำเร็จ กำลังโหลดข้อมูลล่าสุดกลับมา",
+            { id: `storesync-save-error-${apiKey}`, duration: rejected?.code === "report_format" ? 10_000 : undefined }
           );
           await load();
           return true;

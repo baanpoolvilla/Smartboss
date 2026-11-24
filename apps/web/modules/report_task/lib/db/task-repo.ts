@@ -5,6 +5,7 @@ import { nextTaskCode } from "@/lib/document-code";
 import { recordPerformanceEvents, type PerformanceEventInput } from "@/lib/performance";
 import { defaultStickers } from "../../data/stickers";
 import { readStore, removeNotificationsFor } from "./org-store";
+import { removeTaskCards } from "@/modules/chat/data/task-cards";
 import { publishToOrg } from "@/lib/realtime/server";
 import { listDirectory } from "./employee-directory";
 import type { Sticker, Task, TaskReaction } from "../../types";
@@ -388,6 +389,8 @@ export async function writeTasks(
     await recordWaiverUndoEvents(orgId, waivers, userId);
     // งานที่ถูกลบ — แจ้งเตือนของงานนั้นในกระดิ่งของทุกคนหายไปด้วย (เครื่องคนลบล้างได้แค่ของตัวเอง)
     await removeNotificationsFor(orgId, { taskIds: result.removedIds });
+    // การ์ดของงานนั้นในแชท (DM งานใหม่ / ห้องกลุ่ม / รอตรวจ / ขอเลื่อน) หายไปด้วย
+    await removeTaskCards(orgId, result.removedIds);
     const { removedIds: _removedIds, ...response } = result;
     return response;
   }

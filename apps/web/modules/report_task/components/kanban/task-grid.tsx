@@ -51,6 +51,7 @@ import { cn } from "@/modules/report_task/lib/utils";
 import { useStickerStore } from "@/modules/report_task/store/sticker-store";
 import { useTaskStore } from "@/modules/report_task/store/task-store";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
+import { useProjectStore } from "@/modules/report_task/store/project-store";
 import { ArrowDown, ArrowUp, ArrowUpDown, MessageSquare, Paperclip, ListTodo, ChevronDown, X, CheckCircle2, SearchX, Info, SlidersHorizontal } from "lucide-react";
 import { EmptyState } from "@/modules/report_task/components/shared/empty-state";
 import type { Task, TaskStatus, TaskPriority } from "@/modules/report_task/types";
@@ -59,12 +60,13 @@ import { useRouter } from "next/navigation";
 import { MAINTENANCE_KIND, MaintenanceCard } from "./maintenance-card";
 import { sortBoardEntries, type MaintenanceBoardItem } from "@/modules/report_task/lib/maintenance-board";
 
-type GroupBy = "none" | "status" | "priority";
+type GroupBy = "none" | "status" | "priority" | "kind";
 
 const groupByLabels: Record<GroupBy, string> = {
   none: "ไม่จัดกลุ่ม",
   status: "จัดกลุ่ม: สถานะ",
   priority: "จัดกลุ่ม: ความสำคัญ",
+  kind: "จัดกลุ่ม: งาน / โปรเจกต์",
 };
 
 interface GridRowProps {
@@ -261,6 +263,16 @@ function MxGridRow({
 
 const EMPTY_MX: MaintenanceBoardItem[] = [];
 
+/** ป้าย "📁 โปรเจกต์ · ชื่อโปรเจกต์" เหนือชื่องาน — งานโปรเจกต์ปนอยู่ในตารางเดียวกับงานทั่วไป ต้องดูออกว่าอันไหน (ผู้ใช้ 24/11/2569) */
+function ProjectTag({ projectId }: { projectId: string }) {
+  const name = useProjectStore((s) => s.projects.find((p) => p.id === projectId)?.name);
+  return (
+    <span className="block truncate text-[10.5px] font-semibold text-[var(--brand-navy)]" title={name ? `โปรเจกต์: ${name}` : "งานโปรเจกต์"}>
+      📁 โปรเจกต์{name ? ` · ${name}` : ""}
+    </span>
+  );
+}
+
 /**
  * Grid (table) view of the same task data behind the Kanban board — the
  * "Planner Grid / ClickUp List" view: sortable, groupable, with a checklist
@@ -342,6 +354,7 @@ export function TaskGrid({
         header: "ชื่องาน",
         cell: ({ row }) => (
           <div className="max-w-[280px]">
+            {row.original.project && <ProjectTag projectId={row.original.project.projectId} />}
             <p
               className={cn(
                 "font-medium truncate",
@@ -635,15 +648,20 @@ export function TaskGrid({
   // Manual grouping: TanStack's grouped/expanded row models loop under this
   // project's React Compiler, so we group the already-sorted rows ourselves —
   // a stable sort by group key keeps each row's in-group order (e.g. due date).
-  const groupValue = (r: Row<Task>) => (groupBy === "status" ? r.original.status : r.original.priority);
+  const groupValue = (r: Row<Task>) =>
+    groupBy === "status" ? r.original.status : groupBy === "kind" ? (r.original.project ? "project" : "task") : r.original.priority;
   const groupOrder = (v: string) =>
     groupBy === "status"
       ? taskStatusOrder.indexOf(v as Task["status"])
-      : taskPriorityOrder.indexOf(v as Task["priority"]);
+      : groupBy === "kind"
+        ? (v === "task" ? 0 : 1)
+        : taskPriorityOrder.indexOf(v as Task["priority"]);
   const groupLabel = (v: string) =>
     groupBy === "status"
       ? statusMeta[v as Task["status"]]?.label ?? v
-      : priorityMeta[v as Task["priority"]]?.label ?? v;
+      : groupBy === "kind"
+        ? (v === "project" ? "📁 งานโปรเจกต์" : "📋 งาน")
+        : priorityMeta[v as Task["priority"]]?.label ?? v;
 
   const baseRows = table.getRowModel().rows;
   const rows =
@@ -1081,9 +1099,12 @@ export function TaskGrid({
                         className="flex w-full flex-col gap-2 rounded-xl border border-[var(--line)] bg-white p-3.5 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)] hover:bg-[var(--bg-soft)]"
                       >
                         <div className="flex items-center gap-2">
-                          <p className={cn("min-w-0 flex-1 truncate text-sm font-medium", t.status === "done" && "line-through text-[var(--ink-soft)]")}>
-                            {t.title}
-                          </p>
+                          <div className="min-w-0 flex-1">
+                            {t.project && <ProjectTag projectId={t.project.projectId} />}
+                            <p className={cn("truncate text-sm font-medium", t.status === "done" && "line-through text-[var(--ink-soft)]")}>
+                              {t.title}
+                            </p>
+                          </div>
                           {assignees.length > 0 && (
                             <div className="flex items-center -space-x-1.5 shrink-0">
                               {assignees.slice(0, 3).map((a) => (

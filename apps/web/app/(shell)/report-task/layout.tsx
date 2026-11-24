@@ -68,7 +68,7 @@ export default async function ReportTaskLayout({
     })) > 0;
 
   return (
-    <ReportTaskScaffold currentUser={currentUser} canOpenWorkOrder={canOpenWorkOrder}>
+    <ReportTaskScaffold currentUser={currentUser} canOpenWorkOrder={canOpenWorkOrder} draftScope={`${session.orgId}:${session.userId}`}>
       {children}
     </ReportTaskScaffold>
   );

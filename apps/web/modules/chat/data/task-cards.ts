@@ -29,19 +29,21 @@ export async function postTaskCard(
       prisma.reportTask
         .findUnique({ where: { orgId_id: { orgId, id: input.taskId } }, select: { title: true, dueDate: true, code: true, parentId: true, data: true } })
         .catch(() => null);
+    // ไม่เจองานเลยหลังรอ ~10 วิ = บันทึกงานพลาด (เช่น P2028 2/11/2569) หรือถูกลบไปแล้ว — ไม่โพสต์การ์ดของงานที่ไม่มีอยู่จริง
     let task = await readTask();
-    if (!task) {
-      await new Promise((r) => setTimeout(r, 2500));
+    for (let i = 0; i < 8 && !task; i++) {
+      await new Promise((r) => setTimeout(r, 1250));
       task = await readTask();
     }
+    if (!task) return;
     // งานในโปรเจกต์ไม่ลงแชท (ผู้ใช้ 13/11/2569 "ไม่ขึ้นบนบอร์ดก็ไม่ต้องขึ้นในแชท งั้นงง") — แจ้งเตือนกระดิ่งยังมีตามปกติ
     if (isProjectTask(task)) return;
     const card: ChatTaskCard = {
       taskId: input.taskId,
-      title: task?.title ?? input.title,
-      dueDate: task?.dueDate || null,
+      title: task.title || input.title,
+      dueDate: task.dueDate || null,
       link: input.link,
-      ...(task?.code ? { code: task.code } : {}),
+      ...(task.code ? { code: task.code } : {}),
       tags: taskTags(task),
       ...(await projectOf(orgId, task)),
     };
@@ -308,4 +310,41 @@ export function taskTags(task: { parentId: string | null; data: unknown } | null
   if (project && typeof project.projectId === "string" && project.projectId) tags.push("โปรเจกต์");
   if (task && isSubtask(task)) tags.push("งานย่อย");
   return tags;
+}
+
+/**
+ * ลบงานแล้ว การ์ดของงานนั้นในแชทหายไปด้วย (ผู้ใช้ 24/11/2569 "ต้องหายไปด้วยสิ") — การ์ดงานใหม่ใน DM (task-<id>),
+ * การ์ดในห้องกลุ่ม (room-task-<id>), การ์ดรอตรวจ (rev-task-<id>-…) และการ์ดขอเลื่อนกำหนดส่งของงานนั้น (meta.taskId)
+ * ใช้ยกเลิกแบบเดียวกับ unsend (deletedAt + broadcast chat.message.deleted) · การ์ดใบแจ้งซ่อม (target work_order) ไม่แตะ
+ * ไม่ throw — การลบงานสำเร็จไปแล้ว
+ */
+export async function removeTaskCards(orgId: string, taskIds: string[]): Promise<void> {
+  const ids = [...new Set(taskIds.filter(Boolean))];
+  if (ids.length === 0) return;
+  try {
+    const rows = await prisma.chatMessage.findMany({
+      where: {
+        orgId,
+        kind: "task",
+        deletedAt: null,
+        OR: [
+          { clientId: { in: ids.flatMap((id) => [`task-${id}`, `room-task-${id}`]) } },
+          ...ids.map((id) => ({ clientId: { startsWith: `rev-task-${id}-` } })),
+          ...ids.map((id) => ({ meta: { path: ["taskId"], equals: id } })),
+        ],
+      },
+      select: { id: true, channelId: true, meta: true },
+    });
+    const targets = rows.filter((r) => {
+      const meta = r.meta && typeof r.meta === "object" ? (r.meta as Record<string, unknown>) : {};
+      return meta.target !== "work_order";
+    });
+    if (targets.length === 0) return;
+    await prisma.chatMessage.updateMany({ where: { orgId, id: { in: targets.map((r) => r.id) } }, data: { deletedAt: new Date() } });
+    for (const r of targets) {
+      await broadcastToChannel(orgId, r.channelId, { type: "chat.message.deleted", channelId: r.channelId, messageId: r.id }).catch(() => {});
+    }
+  } catch (err) {
+    console.error("[chat] remove task cards failed", err);
+  }
 }
