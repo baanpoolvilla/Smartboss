@@ -25,6 +25,7 @@ import type { MaintenanceBoardItem } from "@/modules/report_task/lib/maintenance
 import type { Task } from "@/modules/report_task/types";
 import { MAINTENANCE_KIND } from "./maintenance-card";
 import { TaskDetailSheet } from "./task-detail-sheet";
+import { taskDockedPoints, workOrderDockedPoints } from "@/modules/report_task/lib/docked-points";
 
 /** ประเภทในภาระงานรายคน — งานทั่วไป / งานโปรเจกต์ / ใบงานซ่อม (ผู้ใช้ 24/11/2569 ให้เห็นครบทั้งสามในรายคน) */
 const KIND_META = {
@@ -44,6 +45,8 @@ interface WorkItem {
   due: string | null;
   overdue: boolean;
   status: "todo" | "in_progress";
+  /** คะแนนที่โดนหักจากรายการนี้ (ส่วนของคนนี้) */
+  docked: number;
   open: () => void;
 }
 
@@ -147,6 +150,10 @@ export function WorkloadView() {
         const total = mine.length + mx.length;
         const open = total - done;
         const projectCount = mine.filter((t) => !!t.project).length;
+        // คะแนนที่โดนหักของคนนี้ — งาน/งานโปรเจกต์ (ส่วนของคนนี้) + ใบงานซ่อมที่คนนี้รับผิดชอบ
+        const docked =
+          mine.reduce((sum, t) => sum + taskDockedPoints(t, u.id), 0) +
+          mx.filter((i) => i.responsibleId === u.id).reduce((sum, i) => sum + workOrderDockedPoints(i), 0);
         return {
           user: u,
           total,
@@ -158,6 +165,7 @@ export function WorkloadView() {
           wo: mx.length,
           taskCount: mine.length - projectCount,
           projectCount,
+          docked,
           openTasks: mine.filter((t) => t.status !== "done"),
           openMx: mx.filter((i) => i.column !== "done"),
         };
@@ -195,6 +203,7 @@ export function WorkloadView() {
         due: t.dueDate || null,
         overdue: dueUrgency(t) === "overdue",
         status: t.status === "in_progress" ? "in_progress" : "todo",
+        docked: taskDockedPoints(t, r.user.id),
         open: () => openTask(t.id),
       };
     };
@@ -206,6 +215,7 @@ export function WorkloadView() {
       due: i.dueDate,
       overdue: i.overdue,
       status: i.column === "in_progress" ? "in_progress" : "todo",
+      docked: i.responsibleId === r.user.id ? workOrderDockedPoints(i) : 0,
       open: () => router.push(`${i.href}?from=tasks`),
     });
     return [...r.openTasks.map(fromTask), ...r.openMx.map(fromMx)].sort(sortItems);
@@ -254,11 +264,16 @@ export function WorkloadView() {
                   <p className="text-[11px] text-[var(--ink-soft)] truncate">{getDepartment(r.user.departmentId)?.name}</p>
                 </div>
 
+                {r.docked > 0 && (
+                  <span className="ml-auto shrink-0 rounded-md bg-red-600 px-1.5 py-1 text-xs font-semibold tabular-nums text-white sm:hidden" title={`โดนหักรวม ${r.docked} คะแนน`}>
+                    −{r.docked}
+                  </span>
+                )}
                 {/* Mobile-only — same total badge as the desktop one at the
                     end of the row (below), just pulled up onto line 1 here
                     since mobile's line order is avatar/name/total, then bar. */}
                 <span
-                  className="ml-auto shrink-0 text-xs font-semibold tabular-nums rounded-md ring-1 ring-inset ring-[var(--line)] bg-[var(--bg-soft)] text-[var(--ink)] px-2 py-1 sm:hidden"
+                  className={cn("shrink-0 text-xs font-semibold tabular-nums rounded-md ring-1 ring-inset ring-[var(--line)] bg-[var(--bg-soft)] text-[var(--ink)] px-2 py-1 sm:hidden", r.docked > 0 ? "" : "ml-auto")}
                   title="งานทั้งหมดของคนนี้"
                 >
                   {r.total} {unit}
@@ -355,6 +370,14 @@ export function WorkloadView() {
                   this view is about workload volume, not performance
                   (score/rating still lives on the Reports page). Hidden on
                   mobile since the copy above (line 1) already shows it. */}
+              {r.docked > 0 && (
+                <span
+                  className="hidden shrink-0 rounded-md bg-red-600 px-1.5 py-1 text-xs font-semibold tabular-nums text-white sm:inline-block"
+                  title={`โดนหักรวม ${r.docked} คะแนน (งาน + โปรเจกต์ + ใบงานซ่อม)`}
+                >
+                  −{r.docked}
+                </span>
+              )}
               <span
                 className="hidden shrink-0 text-xs font-semibold tabular-nums rounded-md ring-1 ring-inset ring-[var(--line)] bg-[var(--bg-soft)] text-[var(--ink)] px-2 py-1 sm:inline-block"
                 title="งานทั้งหมดของคนนี้"
@@ -412,6 +435,11 @@ function PersonItemList({ items, doneCount }: { items: WorkItem[]; doneCount: nu
                   <span className="block truncate text-[13px] font-medium text-[var(--ink)]">{it.title}</span>
                   {it.sub && <span className="block truncate text-[11px] text-[var(--ink-soft)]">{it.sub}</span>}
                 </span>
+                {it.docked > 0 && (
+                  <span className="shrink-0 rounded-md bg-red-600 px-1.5 text-[10px] font-semibold leading-5 tabular-nums text-white" title={`ถูกหัก ${it.docked} คะแนน`}>
+                    −{it.docked}
+                  </span>
+                )}
                 <span className="hidden shrink-0 text-[11px] text-[var(--ink-soft)] sm:inline">
                   {it.status === "in_progress" ? "กำลังทำ" : "รอดำเนินการ"}
                 </span>

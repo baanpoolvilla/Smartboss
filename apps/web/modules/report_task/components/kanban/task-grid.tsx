@@ -59,6 +59,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { MAINTENANCE_KIND, MaintenanceCard } from "./maintenance-card";
 import { sortBoardEntries, type MaintenanceBoardItem } from "@/modules/report_task/lib/maintenance-board";
+import { taskDockedPoints, workOrderDockedPoints } from "@/modules/report_task/lib/docked-points";
 
 type GroupBy = "none" | "status" | "priority" | "kind";
 
@@ -232,10 +233,19 @@ function MxGridRow({
           </span>
         </TableCell>
         <TableCell className="px-4 py-3 whitespace-nowrap">
-          {reactionCounts.size === 0 ? (
+          {reactionCounts.size === 0 && workOrderDockedPoints(item) === 0 ? (
             dash
           ) : (
             <div className="flex flex-wrap items-center gap-1">
+              {/* คะแนนที่หักจากใบงานนี้ — ป้ายเดียวกับแถวงาน (ผู้ใช้ 24/11/2569 ให้แสดงเหมือนกันทุกประเภท) */}
+              {workOrderDockedPoints(item) > 0 && (
+                <span
+                  title={`ถูกหัก ${workOrderDockedPoints(item)} คะแนน (เลยกำหนด)`}
+                  className="inline-flex items-center h-5 rounded-md px-1.5 text-[10px] font-semibold text-white bg-red-600 tabular-nums"
+                >
+                  −{workOrderDockedPoints(item)}
+                </span>
+              )}
               {[...reactionCounts].map(([stickerId, count]) => {
                 const sticker = stickers.find((x) => x.id === stickerId);
                 if (!sticker) return null;
