@@ -674,7 +674,7 @@ function tidyPostFields<T extends { title?: string; sections?: { heading: string
     ...data,
     ...(typeof data.title === "string" ? { title: tidyThaiMarks(data.title) } : {}),
     ...(data.sections
-      ? { sections: data.sections.map((s) => ({ ...s, heading: tidyThaiMarks(s.heading), bullets: s.bullets.map(tidyThaiMarks) })) }
+      ? { sections: data.sections.map((s) => ({ ...s, heading: tidyThaiMarks(s.heading), bullets: s.bullets.map((b) => tidyThaiMarks(b)) })) }
       : {}),
   };
 }

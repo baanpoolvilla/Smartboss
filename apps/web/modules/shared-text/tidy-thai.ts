@@ -15,8 +15,16 @@ const MARK = "[\\u0E31\\u0E34-\\u0E3A\\u0E47-\\u0E4E]";
 const SAME_REPEAT = new RegExp(`(${MARK})\\1+`, "g");
 const TOO_MANY = new RegExp(`(${MARK}{2})${MARK}+`, "g");
 const NO_BASE = new RegExp(`(^|\\s)${MARK}+`, "g");
+const NO_BASE_AFTER_SPACE = new RegExp(`(\\s)${MARK}+`, "g");
 
-export function tidyThaiMarks(text: string): string {
+/**
+ * @param opts.midText ข้อความนี้อาจเป็นท่อนกลางคำ (ข้อความหนึ่งก้อนในช่องเขียนแบบจัดรูปแบบ ที่ตัวหนา/สีแบ่งคำเป็นหลายก้อน)
+ *   — ไม่ตัดเครื่องหมายที่อยู่ต้นก้อน (ตัวอักษรรองรับอาจอยู่ก้อนก่อนหน้า) ตัดเฉพาะหลังเว้นวรรค
+ */
+export function tidyThaiMarks(text: string, opts?: { midText?: boolean }): string {
   if (!text) return text;
-  return text.replace(NO_BASE, "$1").replace(SAME_REPEAT, "$1").replace(TOO_MANY, "$1");
+  return text
+    .replace(opts?.midText ? NO_BASE_AFTER_SPACE : NO_BASE, "$1")
+    .replace(SAME_REPEAT, "$1")
+    .replace(TOO_MANY, "$1");
 }

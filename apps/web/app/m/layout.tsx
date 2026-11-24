@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { ThaiMarkGuard } from "@/components/shell/thai-mark-guard";
 
 /**
  * โครงหน้าจอของ Mini App — ตั้งใจให้ "ไม่มีอะไรเลย"
@@ -45,6 +46,7 @@ export default function MiniAppLayout({
       className="mx-auto flex min-h-dvh w-full max-w-lg flex-col bg-(--bg) text-(--ink)"
     >
       {children}
+      <ThaiMarkGuard />
     </div>
   );
 }

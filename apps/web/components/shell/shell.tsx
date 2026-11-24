@@ -20,6 +20,7 @@ import { NavigationProgress } from "@/components/shell/navigation-progress";
 import { NavTracker } from "@/components/shell/nav-tracker";
 import { NavSkeleton } from "@/components/shell/nav-skeleton";
 import { ImageAnnotatorHost } from "@/components/annotate/image-annotator-host";
+import { ThaiMarkGuard } from "@/components/shell/thai-mark-guard";
 import { Icon } from "@/components/icon";
 import { IssueReportBarButton } from "@/modules/report_task/components/issue-report/issue-report-bar-button";
 import { ReportNotificationSync } from "@/modules/report_task/components/shared/report-notification-sync";
@@ -107,6 +108,8 @@ export function Shell({
       </Suspense>
       {/* หน้าต่างวาด/เขียนบนรูปก่อนส่ง — เปิดจากปุ่มปากกาในทุกช่องพิมพ์ */}
       <ImageAnnotatorHost />
+      {/* กันสระ/วรรณยุกต์ซ้อนผิดปกติตั้งแต่ตอนพิมพ์ ทุกช่องพิมพ์ */}
+      <ThaiMarkGuard />
       {/* ไฟล์ใหญ่เกิน — เตือนขนาดจริง/เพดาน ก่อนส่งฟอร์มที่แนบไฟล์ทุกหน้า */}
       <FileSizeGuard />
       {/* เปิดหน้าที่แจ้งเตือนชี้มาเอง (ไม่ได้กดจากกระดิ่ง) ก็นับว่าอ่านแล้ว */}
