@@ -55,7 +55,9 @@ import {
   addPoCommentAction,
   deletePoCommentAction,
   deletePoAction,
+  updatePoItemsAction,
 } from "../actions";
+import { PoItemsEditButton } from "@/modules/maintenance/components/po-items-editor";
 import { ceoTitle } from "@/lib/ceo-title";
 import { MentionText } from "@/modules/maintenance/components/mention-text";
 import { orgMentionPeople } from "@/modules/maintenance/data/wo-mentions";
@@ -144,6 +146,9 @@ export default async function PoDetailPage({
     po.poAssignedTo === session.userId ||
     po.createdBy === session.userId ||
     po.receiverAssignedTo === session.userId;
+
+  // แก้รายการอุปกรณ์ได้เฉพาะตอนรออนุมัติ — คนเปิด PR หรือคนจัดการ PR/PO (action เช็คซ้ำ)
+  const canEditItems = po.status === "pending" && (po.createdBy === session.userId || canManagePo);
 
   const meta = poStatusMeta(po.status, ceo);
   const items = poItemsFromJson(po.items);
@@ -277,11 +282,8 @@ export default async function PoDetailPage({
       </Card>
 
       {/* ─── รายการอุปกรณ์ ─── */}
-      {items.length > 0 && (
-        <>
-          <h2 className="mb-2 text-base font-bold text-(--ink)">
-            รายการอุปกรณ์
-          </h2>
+      {(() => {
+        const box = (
           <Card className="mb-4 p-3">
             {total === 0 ? (
               <>
@@ -335,8 +337,21 @@ export default async function PoDetailPage({
               </div>
             )}
           </Card>
-        </>
-      )}
+        );
+        if (canEditItems) {
+          return (
+            <PoItemsEditButton id={id} items={items} withPricing={po.isEmergencyPurchase} action={updatePoItemsAction}>
+              {items.length > 0 ? box : <p className="mb-4 text-sm text-(--ink-soft)">ยังไม่มีรายการ</p>}
+            </PoItemsEditButton>
+          );
+        }
+        return items.length > 0 ? (
+          <>
+            <h2 className="mb-2 text-base font-bold text-(--ink)">รายการอุปกรณ์</h2>
+            {box}
+          </>
+        ) : null;
+      })()}
 
       {/* ─── รูปประกอบ PR ─── */}
       {po.prImageUrls.length > 0 && (

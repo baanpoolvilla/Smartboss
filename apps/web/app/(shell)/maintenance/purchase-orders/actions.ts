@@ -88,6 +88,35 @@ function readItems(formData: FormData, withPricing: boolean): PoItem[] {
   return items;
 }
 
+/**
+ * แก้รายการอุปกรณ์ของ PR ที่ยังรออนุมัติ (ผู้ใช้ 25/11/2569 "ยังไม่อนุมัติ อยากให้แก้รายการอุปกรณ์ได้
+ * แต่ถ้าอนุมัติแล้วไม่สามารถแก้ได้") — คนเปิด PR หรือคนที่จัดการ PR/PO ได้ (อนุมัติ/ผู้ดูแลโมดูล)
+ * บันทึกเฉพาะตอนสถานะยังเป็น pending (transitionPurchaseOrder) ⇒ อนุมัติตัดหน้าไปแล้ว = แก้ไม่ลง
+ * PR ฉุกเฉินมีจำนวน/ราคา ⇒ ยอดรวมคำนวณใหม่ · เก็บเก่า→ใหม่ไว้ใน Log การใช้งาน ไม่แจ้งใคร
+ */
+export async function updatePoItemsAction(formData: FormData): Promise<{ ok: boolean; error?: string }> {
+  const s = await requireOrg();
+  const id = String(formData.get("id") ?? "");
+  if (!id) return { ok: false, error: "ไม่พบ PR" };
+  const po = await getPurchaseOrder(s.orgId, id);
+  if (!po) return { ok: false, error: "ไม่พบ PR" };
+  const canManage = hasPermission(s, MAINT_PERMS.poApprove) || hasPermission(s, MAINT_PERMS.admin);
+  if (po.createdBy !== s.userId && !canManage) return { ok: false, error: "ไม่มีสิทธิ์แก้รายการ" };
+  if (po.status !== "pending") return { ok: false, error: "PR นี้อนุมัติแล้ว แก้รายการไม่ได้" };
+  const items = readItems(formData, po.isEmergencyPurchase).map((it) => ({ ...it, name: tidyThaiMarks(it.name).slice(0, 200) }));
+  if (items.length === 0) return { ok: false, error: "ต้องมีอุปกรณ์อย่างน้อย 1 รายการ" };
+  const oldItems = poItemsFromJson(po.items);
+  const changed = await transitionPurchaseOrder(s.orgId, id, ["pending"], {
+    items: poItemsToJson(items),
+    ...(po.isEmergencyPurchase ? { totalPrice: poItemsTotal(items) } : {}),
+  });
+  if (!changed) return { ok: false, error: "PR นี้อนุมัติแล้ว แก้รายการไม่ได้" };
+  await poLog(s, po, "update", "แก้รายการอุปกรณ์", { before: oldItems, after: items });
+  revalidatePath(`/maintenance/purchase-orders/${id}`);
+  revalidatePath("/maintenance/purchase-orders");
+  return { ok: true };
+}
+
 const createSchema = z.object({
   title: z.string().trim().min(1, "กรอกหัวข้อ").max(200),
   description: z.string().trim().max(1000).optional(),
