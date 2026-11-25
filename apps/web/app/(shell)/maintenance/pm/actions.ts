@@ -359,7 +359,7 @@ export async function deletePmAction(formData: FormData) {
   // ใบที่ถูกยกเลิกไปกับแผน แจ้งเตือนต้องหายด้วย ไม่งั้นกดแล้วไปเจอใบที่ไม่มีงานแล้ว
   const cancelledWos = await prisma.workOrder.findMany({
     where: { orgId, pmScheduleId: id, autoCreated: true, status: { in: ["open", "in_progress"] } },
-    select: { id: true, overdueScore: true },
+    select: { id: true, code: true, title: true, overdueScore: true },
   });
   // ใบที่โดนหักแล้ว: จดว่าเก็บคะแนน ไม่งั้นงานหักคะแนนเห็นใบถูกยกเลิกแล้วคืนให้เอง
   // ถ้าไม่ควรโดนให้ขอแก้ไขคะแนน (ผู้ใช้ 5/11/2569) · ใบที่ CEO ยกเว้นไว้แล้วคงเดิม
@@ -374,14 +374,37 @@ export async function deletePmAction(formData: FormData) {
         select: { refId: true },
       })
     : [];
+  const hasDock = (woId: string) =>
+    dockedRefs.some((d) => d.refId === woId || d.refId?.startsWith(`${woId}:`) || d.refId?.split(":")[2] === woId);
   const keepIds = cancelledWos
-    .filter((w) => w.overdueScore === null && dockedRefs.some((d) => d.refId === w.id || d.refId?.startsWith(`${w.id}:`) || d.refId?.split(":")[2] === w.id))
+    .filter((w) => w.overdueScore === null && hasDock(w.id))
     .map((w) => w.id);
   if (keepIds.length > 0) await prisma.workOrder.updateMany({ where: { orgId, id: { in: keepIds } }, data: { overdueScore: "kept" } });
+  // ใบที่ไม่เคยโดนหักคะแนน: ลบทิ้งไปกับแผนเลย ไม่ต้องค้างเป็นใบยกเลิกในรายการ/แดชบอร์ด
+  // เหลือร่องรอยแค่ใน Log การใช้งาน (ผู้ใช้ 25/11/2569 "ลบออกและหายไปเลย ไปแสดงใน log พอ")
+  // ใบที่มีคะแนนผูกอยู่ยังยกเลิกไว้เหมือนเดิม — คะแนนที่หักต้องมีใบให้ย้อนดูได้
+  const droppedWos = cancelledWos.filter((w) => !hasDock(w.id));
+  if (droppedWos.length > 0) {
+    await prisma.workOrder.deleteMany({ where: { orgId, id: { in: droppedWos.map((w) => w.id) } } });
+  }
   await closeAutoWorkOrdersOfPm(orgId, id, "cancelled");
   await Promise.all(cancelledWos.map((w) => deleteNotificationsByReference(w.id, "work_order")));
   await deletePmSchedule(orgId, id);
-  if (pm) await pmLog(orgId, pm, "delete", "ลบแผน PM");
+  if (pm) {
+    await pmLog(orgId, pm, "delete", "ลบแผน PM", droppedWos.length ? { deletedWorkOrders: droppedWos.map((w) => w.code) } : undefined);
+    const session = await requireOrg();
+    for (const w of droppedWos) {
+      await logActivity(orgId, {
+        userId: session.userId,
+        entity: "work_order",
+        entityId: w.id,
+        entityCode: w.code,
+        action: "delete",
+        summary: `ลบใบงาน ${w.code} "${w.title}" (ลบไปพร้อมแผน PM)`,
+        detail: { pmScheduleId: id, pm: pm.title },
+      });
+    }
+  }
   revalidatePath("/maintenance/work-orders");
   // referenceId ของแจ้งเตือน "pm" ยังคือ pm.id เดิม (ดู cron.ts's
   // notifyDuePmSchedules) แม้ลิงก์จะพาไปหน้ารายการรวมเสมอ (maintenanceHrefFor
