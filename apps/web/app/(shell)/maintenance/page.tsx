@@ -95,7 +95,17 @@ function SectionHeader({ title, href }: { title: string; href: string }) {
 }
 
 /** แดชบอร์ด — port จาก dashboard_screen.dart */
-export default async function MaintenanceDashboardPage() {
+/** งานล่าสุด: เริ่ม 5 ใบ กด "ดูเพิ่ม" ทีละ 5 (จำนวนอยู่ใน ?recent= — ไม่ต้องมีโค้ดฝั่ง client) */
+const RECENT_STEP = 5;
+const RECENT_MAX = 100;
+
+export default async function MaintenanceDashboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ recent?: string }>;
+}) {
+  const sp = (await searchParams) ?? {};
+  const recentLimit = Math.min(RECENT_MAX, Math.max(RECENT_STEP, Number.parseInt(sp.recent ?? "", 10) || RECENT_STEP));
   const ceo = await ceoTitle();
   const session = await requireOrg();
   if (!hasPermission(session, MAINT_PERMS.access)) redirect("/");
@@ -104,11 +114,12 @@ export default async function MaintenanceDashboardPage() {
   const now = new Date();
   // ใบงานบนแดชบอร์ดกรองด้วยกติกาเดียวกับหน้ารายการ (data/work-order-access.ts)
   const access = await workOrderAccess(session);
-  const [stats, noExpense, recent, properties, propCats, monthExpenses, scoreWatch, pileups] =
+  const [stats, noExpense, recentPlusOne, properties, propCats, monthExpenses, scoreWatch, pileups] =
     await Promise.all([
       dashboardStats(orgId, access),
       noExpenseWorkOrderCount(orgId, access),
-      recentWorkOrders(orgId, access, 5),
+      // ขอเกินมา 1 ใบ ไว้รู้ว่ายังมีให้ดูเพิ่มไหม
+      recentWorkOrders(orgId, access, recentLimit + 1),
       listProperties(orgId),
       propertyCategoryMap(orgId),
       listExpensesForMonth(orgId, now.getFullYear(), now.getMonth() + 1),
@@ -117,6 +128,9 @@ export default async function MaintenanceDashboardPage() {
       // PM ค้างหลายรอบ (แบบนับรอบ) — CEO เป็นคนตัดสิน คนอื่นไม่ต้องเห็นกล่องนี้
       canViewAll(session) ? countPileups(orgId) : Promise.resolve(0),
     ]);
+
+  const recent = recentPlusOne.slice(0, recentLimit);
+  const recentHasMore = recentPlusOne.length > recentLimit && recentLimit < RECENT_MAX;
 
   const propNames: Record<string, string> = Object.fromEntries(
     properties.map((p) => [p.id, p.name])
@@ -263,6 +277,25 @@ export default async function MaintenanceDashboardPage() {
               </Link>
             );
           })}
+          {(recentHasMore || recentLimit > RECENT_STEP) && (
+            <div className="flex justify-center gap-4 pt-1 text-sm">
+              {recentHasMore && (
+                <Link
+                  href={`/maintenance?recent=${recentLimit + RECENT_STEP}`}
+                  scroll={false}
+                  className="rounded-full border border-(--line) px-4 py-1.5 text-(--ink) hover:bg-(--bg-soft)"
+                  data-testid="recent-more"
+                >
+                  ดูเพิ่ม
+                </Link>
+              )}
+              {recentLimit > RECENT_STEP && (
+                <Link href="/maintenance" scroll={false} className="px-2 py-1.5 text-(--ink-soft) hover:text-(--ink)">
+                  ย่อกลับ
+                </Link>
+              )}
+            </div>
+          )}
         </div>
       )}
     </AppScaffold>
