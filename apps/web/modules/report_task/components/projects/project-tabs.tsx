@@ -23,6 +23,7 @@ import type { Attachment, Project, TaskStatus } from "@/modules/report_task/type
 import { addChannelMembers, createGroupChannel, deleteChannel, fetchMessages, sendMessage, updateChannel } from "@/modules/chat/lib/api";
 import { CHAT_PAGE_PATH } from "@/modules/chat/constants";
 import type { ChatChannelDetail, ChatMessageDTO } from "@/modules/chat/types";
+import { SoloProjectBadge } from "@/modules/report_task/components/shared/solo-project-badge";
 import { PersonDot, STATE_COLOR, STATE_LABEL, StatePill, TH_MONTH_SHORT, ensureProjectMembers, fmtDay } from "./project-ui";
 
 const seg = (on: boolean) => cn("rounded-md px-3 py-1 text-xs", on ? "bg-[var(--bg)] font-semibold shadow-sm" : "text-[var(--ink-soft)]");
@@ -130,6 +131,7 @@ export function ListTab({ project, items, canEdit = false, canPlan = false, onOp
                     <span className="pt-0.5"><DoneBox i={i} /></span>
                     {i.kind === "milestone" && <span style={{ color: "var(--chart-violet)" }}>◆</span>}
                     <span className={cn("min-w-0 flex-1 text-[15px] font-semibold leading-snug", i.state === "done" && "font-normal text-[var(--ink-soft)] line-through")}>{i.name}</span>
+                    <SoloProjectBadge task={i.task} className="mt-0.5" />
                     <StatePill state={i.state} />
                   </span>
                   <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[var(--ink-soft)]">
@@ -169,6 +171,7 @@ export function ListTab({ project, items, canEdit = false, canPlan = false, onOp
                         {i.parentId && shownIds.has(i.parentId) && <span className="text-[var(--ink-soft)]" aria-label="งานย่อย">↳</span>}
                         <DoneBox i={i} />
                         <InlineName item={i} onSave={(t) => saveTaskDetails(i.id, t, i.task?.description ?? "", me)} />
+                        <SoloProjectBadge task={i.task} />
                         <button type="button" className="shrink-0 rounded px-1.5 text-[var(--ink-soft)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)]" aria-label={`เปิดงาน ${i.name}`} title="เปิดรายละเอียดงาน" onClick={(e) => { e.stopPropagation(); onOpen(i.id); }}>↗</button>
                       </div>
                     ) : canEdit && i.kind === "milestone" ? (
@@ -177,6 +180,7 @@ export function ListTab({ project, items, canEdit = false, canPlan = false, onOp
                       <span className="inline-flex items-center gap-2">
                         <DoneBox i={i} />
                         <span className={cn("px-1", i.state === "done" && "text-[var(--ink-soft)] line-through")}>{i.kind === "milestone" ? "◆ " : ""}{i.name}</span>
+                        <SoloProjectBadge task={i.task} />
                       </span>
                     )}
                   </td>

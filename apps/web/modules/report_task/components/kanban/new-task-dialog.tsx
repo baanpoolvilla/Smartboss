@@ -1369,7 +1369,11 @@ export function NewTaskDialog({
                   )}
                   {!(personalMode && taskMode === "group") && isPersonalTask({ assignedById: viewingAsUserId, assigneeIds }) && (
                     <p className="text-[11px] text-[var(--brand-green-dark)] flex items-center gap-1">
-                      <Lock className="h-3 w-3" /> เลือกตัวเองคนเดียว = งานส่วนตัว · เห็นเฉพาะคุณกับ {ceo} ไม่มีผลกับคะแนน
+                      <Lock className="h-3 w-3" />
+                      {/* ในโปรเจกต์ สมาชิกยังเห็นงาน — บอกให้ตรง (ผู้ใช้ 26/11/2569) · นอกโปรเจกต์ข้อความเดิม */}
+                      {project
+                        ? "เลือกตัวเองคนเดียว = งานส่วนตัว · สมาชิกโปรเจกต์ยังเห็น ไม่มีผลกับคะแนน"
+                        : <>เลือกตัวเองคนเดียว = งานส่วนตัว · เห็นเฉพาะคุณกับ {ceo} ไม่มีผลกับคะแนน</>}
                     </p>
                   )}
                 </div>

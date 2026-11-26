@@ -1,5 +1,6 @@
 "use client";
 
+import { SoloProjectBadge } from "@/modules/report_task/components/shared/solo-project-badge";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
@@ -71,6 +72,7 @@ export function MyProjectTasks({ onOpen, pending = [] }: { onOpen: (taskId: stri
                         {t.parentId ? <span className="mr-1 text-[var(--ink-soft)]">↳</span> : null}
                         {t.title}
                       </span>
+                      <SoloProjectBadge task={t} />
                       <PendingTag items={pending.filter((i) => i.taskId === t.id)} />
                       <span className="shrink-0 tabular-nums text-[12.5px] text-[var(--ink-soft)]">{fmtDay(t.dueDate)}</span>
                       <StatePill state={stateOf(t, today)} />

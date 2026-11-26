@@ -27,6 +27,14 @@ export function isSelfOnlyTask(task: Pick<Task, "assignedById" | "assigneeIds">)
 }
 
 /**
+ * งานโปรเจกต์ที่เปิดให้ตัวเองคนเดียว — ขึ้นป้าย "ส่วนตัว" เหมือนงานส่วนตัวบนบอร์ด (ผู้ใช้ 26/11/2569
+ * "แอดงานให้ตัวเองก็เท่ากับเป็นส่วนตัว") · ต่างจากงานส่วนตัวบนบอร์ดแค่สมาชิกโปรเจกต์ยังเห็น · ไม่มีผลกับคะแนน (isScoreFreeTask)
+ */
+export function isSoloProjectTask(task: Pick<Task, "assignedById" | "assigneeIds"> & { project?: Task["project"] }): boolean {
+  return !!task.project && isSelfOnlyTask(task);
+}
+
+/**
  * งานที่ไม่มีผลกับคะแนน (ไม่หักเลยกำหนด สติกเกอร์ไม่ลงคะแนน)
  *   - งานส่วนตัว (isPersonalTask) — กติกาเดิม
  *   - งานในโปรเจกต์ที่มอบให้ตัวเองคนเดียว (ผู้ใช้ 23/11/2569 "ต้องกับตัวเองเท่านั้น ถ้ามีคนอื่นด้วยก็โดนหักเหมือนเดิม")

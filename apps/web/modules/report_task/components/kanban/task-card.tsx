@@ -51,6 +51,7 @@ function ProjectChip({ projectId, sectionId }: { projectId: string; sectionId: s
   );
 }
 import { isPersonalTask } from "@/modules/report_task/lib/personal-task";
+import { SoloProjectBadge } from "@/modules/report_task/components/shared/solo-project-badge";
 import { useCeoTitle } from "@/lib/ceo-title-client";
 import { showStickerToast } from "@/modules/report_task/lib/sticker-toast";
 import { StickerConfirmDialog } from "@/modules/report_task/components/shared/sticker-confirm-dialog";
@@ -581,6 +582,8 @@ function TaskCardBody({ task, onOpen, showOriginalStatus, groupedByPriority, dim
               {task.personalGroup ? "ส่วนตัว · กลุ่ม" : "ส่วนตัว"}
             </span>
           )}
+          {/* งานโปรเจกต์ที่เปิดให้ตัวเอง — ป้าย "ส่วนตัว" แบบเดียวกัน (ไม่มีผลกับคะแนน) */}
+          <SoloProjectBadge task={task} />
           {isWatching && (
             <span
               className="flex items-center justify-center h-5 w-5 rounded-full bg-[var(--brand-green-dark)]/12 text-[var(--brand-green-dark)] shrink-0"

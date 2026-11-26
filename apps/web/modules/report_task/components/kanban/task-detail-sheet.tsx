@@ -43,6 +43,8 @@ import { TimePickerField } from "@/modules/report_task/components/shared/time-pi
 import { MemberPenaltyWaiveButton, PenaltyChip } from "@/modules/report_task/components/shared/penalty-chip";
 import { TaskRecurrenceSection } from "@/modules/report_task/components/kanban/task-recurrence-section";
 import { TaskProjectInfo } from "@/modules/report_task/components/projects/task-project-info";
+import { SoloProjectBadge, SOLO_PROJECT_HINT } from "@/modules/report_task/components/shared/solo-project-badge";
+import { isSoloProjectTask } from "@/modules/report_task/lib/personal-task";
 import { SubtasksSection } from "@/modules/report_task/components/kanban/subtasks-section";
 import { canManageSeries } from "@/modules/report_task/lib/task-recurrence";
 import { canDecideTaskDueRequest } from "@/modules/report_task/lib/pending-due-request";
@@ -1544,6 +1546,12 @@ export function TaskDetailSheet({
           {task.project && (
             <>
               <TaskProjectInfo task={task} />
+              {isSoloProjectTask(task) && (
+                <p className="m-0 flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--ink-soft)]" data-testid="solo-project-hint">
+                  <SoloProjectBadge task={task} />
+                  {SOLO_PROJECT_HINT.replace(/^งานส่วนตัวในโปรเจกต์ /, "")}
+                </p>
+              )}
               <Separator />
             </>
           )}

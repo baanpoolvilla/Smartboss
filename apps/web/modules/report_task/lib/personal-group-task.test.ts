@@ -109,3 +109,21 @@ describe("งานส่วนตัวแบบกลุ่ม", () => {
     expect(notifsFor(CEO)).toHaveLength(0);
   });
 });
+
+import { isSoloProjectTask as soloProj, isScoreFreeTask as scoreFree } from "@/modules/report_task/lib/personal-task";
+describe("งานโปรเจกต์ที่เปิดให้ตัวเอง = ป้ายส่วนตัว + ไม่มีผลคะแนน (26/11/2569)", () => {
+  const project = { projectId: "p1" } as never;
+  it("self only in project → solo + score-free", () => {
+    const t = { assignedById: "A", assigneeIds: ["A"], project };
+    expect(soloProj(t)).toBe(true);
+    expect(scoreFree(t)).toBe(true);
+  });
+  it("someone else in it → not solo, scored", () => {
+    const t = { assignedById: "A", assigneeIds: ["A", "B"], project };
+    expect(soloProj(t)).toBe(false);
+    expect(scoreFree(t)).toBe(false);
+  });
+  it("board task (no project) → not this badge", () => {
+    expect(soloProj({ assignedById: "A", assigneeIds: ["A"] })).toBe(false);
+  });
+});
