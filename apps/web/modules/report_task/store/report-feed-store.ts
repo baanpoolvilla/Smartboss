@@ -1191,16 +1191,39 @@ export const useReportFeedStore = create<ReportFeedStore>()(
           ...everyoneMentionReplyRecipients,
         ]);
         const canStillSee = new Set(otherReplyMemberIds);
+        // + คนที่ถูกแท็กในโพสต์ หรือในคอมเมนต์ก่อนหน้า (ติดตามโพสต์แบบเฟซบุ๊ก — ผู้ใช้ 26/11/2569) ไม่นับ @ทุกคน
+        // (taggedUserIds ไม่รวม @ทุกคน — โพสต์ประกาศ @ทุกคน จะไม่ทำให้ทุกคอมเมนต์แจ้งทั้งห้อง)
+        const earlierReplies = post.replies.filter((r) => r.id !== replyId);
+        const taggedEarlier = [
+          ...taggedUserIds(post.sections.flatMap((s) => s.bullets).join("\n"), repliedTopic),
+          ...earlierReplies.flatMap((r) => taggedUserIds(r.body ?? "", repliedTopic)),
+        ];
         const threadParticipants = [
-          ...new Set(post.replies.filter((r) => r.id !== replyId).map((r) => r.authorId)),
+          ...new Set([...earlierReplies.map((r) => r.authorId), ...taggedEarlier]),
         ].filter((id) => !alreadyNotified.has(id) && canStillSee.has(id));
-        if (threadParticipants.length > 0) {
+        // เคยคอมเมนต์ = ข้อความเดิม · ถูกแท็กอย่างเดียว (ยังไม่เคยคอมเมนต์) = "ในโพสต์ที่คุณถูกแท็ก"
+        const commented = new Set(earlierReplies.map((r) => r.authorId));
+        const threadCommenters = threadParticipants.filter((id) => commented.has(id));
+        const threadTaggedOnly = threadParticipants.filter((id) => !commented.has(id));
+        if (threadCommenters.length > 0) {
           useNotificationStore
             .getState()
             .notifyMany(
-              threadParticipants,
+              threadCommenters,
               authorId,
               `${actorName} ตอบกลับในโพสต์ที่คุณแสดงความคิดเห็น "${post.title}"${preview ? `: ${preview}` : ""}`,
+              undefined,
+              link,
+              repliedTopic?.name
+            );
+        }
+        if (threadTaggedOnly.length > 0) {
+          useNotificationStore
+            .getState()
+            .notifyMany(
+              threadTaggedOnly,
+              authorId,
+              `${actorName} ตอบกลับในโพสต์ที่คุณถูกแท็ก "${post.title}"${preview ? `: ${preview}` : ""}`,
               undefined,
               link,
               repliedTopic?.name

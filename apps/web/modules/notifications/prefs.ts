@@ -269,7 +269,9 @@ export function topicForReportNotification(n: { message: string; kind?: string |
   // ปิดแยกจากคอมเมนต์ที่มีคำถามได้ (27/10/2569 "หัวหน้าเอาเฉพาะที่มีแอ็คชั่น") · ถูกแท็กยังเป็นหมวดแท็กตามเดิม
   // คอมเมนต์ในงานไม่ใช้กฎนี้ (29/10/2569 "ถ้าเป็นของ ceo หรือเกี่ยวข้องต้องเห็นนะ") — ผู้รับคอมเมนต์งานคือคนในงานนั้นอยู่แล้ว
   // (ผู้รับผิดชอบ/คนมอบหมาย/คนที่เคยคอมเมนต์) และคอมเมนต์ที่ยังไม่อ่านของงานเดียวกันรวมเป็นแถวเดียว (comment-notif-group.ts) ไม่เด้งรัว
-  if (ACK_TAIL.test(m) && !m.includes("แท็ก") && n.kind !== "task_comment" && !m.includes("แสดงความคิดเห็นในงาน")) {
+  // "ตอบกลับในโพสต์ที่คุณถูกแท็ก" (ติดตามโพสต์ 26/11/2569) = คนคุยต่อในโพสต์ที่เราถูกแท็กไว้ ไม่ใช่การแท็กครั้งใหม่ ⇒ จัดเหมือนตอบกลับ
+  const threadTagged = m.includes("ในโพสต์ที่คุณถูกแท็ก");
+  if (ACK_TAIL.test(m) && (!m.includes("แท็ก") || threadTagged) && n.kind !== "task_comment" && !m.includes("แสดงความคิดเห็นในงาน")) {
     return m.includes("ในงาน") ? "pm.activity" : "rp.reaction";
   }
   if (n.kind === "task_assigned") return "pm.assigned";
@@ -296,6 +298,7 @@ export function topicForReportNotification(n: { message: string; kind?: string |
   // คำร้องรอ CEO อนุมัติ — ต้องมาก่อนกฎ "คะแนน" ข้างล่าง ไม่งั้นตกไป pm.activity ที่หัวหน้าปิดไว้ แล้วไม่เห็นคำร้องเลย
   if (m.includes("คำร้องขอแก้ไขคะแนน")) return "hr.correction_pending";
   if (m.includes("แท็กคุณในงาน")) return "pm.mention";
+  if (threadTagged) return "rp.reply";
   if (m.includes("แท็ก")) return "rp.mention";
   if (m.includes("ทำเครื่องหมาย") && (m.includes("ให้โพสต์") || m.includes("ให้ความคิดเห็น"))) return "rp.reaction";
   if (m.includes("ตอบกลับ")) return "rp.reply";
