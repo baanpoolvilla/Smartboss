@@ -174,7 +174,7 @@ export function EmployeeDayOffCalendar({
 
       <div className="grid max-w-md grid-cols-7 gap-1 text-center">
         {DOW.map((d) => (
-          <span key={d} className="text-[11px] text-(--ink-soft)">
+          <span key={d} className="text-[11px] font-semibold text-(--ink)">
             {d}
           </span>
         ))}

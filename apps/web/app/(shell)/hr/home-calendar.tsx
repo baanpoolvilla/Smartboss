@@ -296,7 +296,8 @@ export async function renderCalendarTab(
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <div className="flex items-center gap-1">
                 <Link href="/hr?tab=calendar">
-                  <Button size="sm" variant="outline" className="h-8 px-3" disabled={month === currentMonth()}>
+                  {/* ไม่ปิดปุ่มตอนอยู่เดือนนี้ — ปุ่มที่ปิดจางจนมองไม่เห็นในธีมมืด (ผู้ใช้ 26/11/2569) · กดแล้วก็อยู่เดือนเดิม */}
+                  <Button size="sm" variant="outline" className="h-8 px-3 font-semibold text-(--ink)">
                     วันนี้
                   </Button>
                 </Link>

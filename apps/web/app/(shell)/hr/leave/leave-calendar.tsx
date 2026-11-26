@@ -654,7 +654,8 @@ export function LeaveCalendar({
               {DOW.map((d, i) => (
                 <span
                   key={d}
-                  className="text-center text-xs font-medium text-(--ink-soft)"
+                  // สีหลักแทนสีจาง — ธีมมืดมองไม่ออก (ผู้ใช้ 26/11/2569)
+                  className="text-center text-xs font-semibold text-(--ink)"
                   title={DOW_FULL[i]}
                 >
                   {d}
@@ -704,7 +705,7 @@ export function LeaveCalendar({
                         style={
                           isToday
                             ? { backgroundColor: "var(--app)", color: "white", fontWeight: 700 }
-                            : { color: "var(--ink-soft)" }
+                            : { color: "var(--ink)", fontWeight: 600 }
                         }
                       >
                         {cell.day}
