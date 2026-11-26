@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { Search, X } from "lucide-react";
 import { saveExpenseTrackingAction } from "@/app/(shell)/maintenance/settings/actions";
+import { useCeoTitle } from "@/lib/ceo-title-client";
 
 /**
  * ตั้งค่า "เตือนลงบิลค่าใช้จ่าย" แบบอ่านง่าย (ผู้ใช้ 18/11/2569 "งง ทำไมใช้ยากจัง" · mockup Bj91zJ7eiZCxXbW6dnUDat)
@@ -38,6 +39,7 @@ export function ExpenseTrackingForm({
   initialFrom,
   initialDays,
   initialRecorderIds,
+  initialRecorderOnly = false,
   options,
   allowedIds,
   names,
@@ -48,6 +50,8 @@ export function ExpenseTrackingForm({
   initialFrom: string | null;
   initialDays: number;
   initialRecorderIds: string[];
+  /** เฉพาะคนลงบิลที่เลือก + Boss ลงค่าใช้จ่ายของใบงานได้ (ผู้ใช้ 26/11/2569) */
+  initialRecorderOnly?: boolean;
   /** คนที่มีสิทธิ์ลงบิล (ไม่รวมผู้ดูแลระบบสูงสุด) */
   options: RecorderOption[];
   /** ทุกคนที่ถือสิทธิ์ลงบิล (รวมผู้ดูแลระบบสูงสุดที่เคยติ๊กไว้) — ฝั่ง server เก็บเฉพาะคนกลุ่มนี้ */
@@ -60,6 +64,8 @@ export function ExpenseTrackingForm({
   const [on, setOn] = useState(initialFrom !== null);
   const [picked, setPicked] = useState<string[]>(initialRecorderIds);
   const [days, setDays] = useState(initialDays);
+  const [recorderOnly, setRecorderOnly] = useState(initialRecorderOnly);
+  const ceo = useCeoTitle();
   const [query, setQuery] = useState("");
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -96,6 +102,7 @@ export function ExpenseTrackingForm({
     const fd = new FormData();
     fd.set("from", from ?? "");
     fd.set("days", String(days));
+    if (recorderOnly) fd.set("recorderOnly", "1");
     for (const id of picked) fd.append("recorderIds", id);
     start(async () => {
       try {
@@ -243,6 +250,39 @@ export function ExpenseTrackingForm({
                 }`}
               >
                 {n} วัน
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-2 text-sm font-semibold text-(--ink)">3. ใครลงค่าใช้จ่ายของใบงานได้?</p>
+          <div className="flex flex-col gap-2" role="radiogroup" aria-label="ใครลงค่าใช้จ่ายของใบงานได้">
+            {([
+              [false, "ทุกคนที่มีสิทธิ์ลงค่าใช้จ่าย", "แบบเดิม · คนลงบิลที่เลือกข้างบนแค่ได้แจ้งเตือนและรับผิดชอบกำหนดส่ง"],
+              [true, `เฉพาะคนลงบิลที่เลือก + ${ceo}`, `คนอื่นเปิดใบงานแล้วไม่เห็นปุ่มลงค่าใช้จ่าย · ${ceo} ลงได้แต่ไม่ได้รับแจ้งเตือน · ค่าใช้จ่ายทั่วไปที่ไม่ผูกใบงานยังลงได้ตามสิทธิ์เดิม`],
+            ] as [boolean, string, string][]).map(([v, title, sub]) => (
+              <button
+                key={String(v)}
+                type="button"
+                role="radio"
+                aria-checked={recorderOnly === v}
+                onClick={() => setRecorderOnly(v)}
+                data-testid={v ? "recorder-only-on" : "recorder-only-off"}
+                className={`flex items-start gap-2.5 rounded-lg border px-3 py-2 text-left ${
+                  recorderOnly === v ? "border-(--brand-navy) bg-(--bg-soft)" : "border-(--line)"
+                }`}
+              >
+                <span
+                  className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full border-[1.5px] ${recorderOnly === v ? "border-(--brand-navy)" : "border-(--ink-soft)"}`}
+                  aria-hidden
+                >
+                  {recorderOnly === v && <span className="h-2 w-2 rounded-full bg-(--brand-navy)" />}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-(--ink)">{title}</span>
+                  <span className="block text-xs text-(--ink-soft)">{sub}</span>
+                </span>
               </button>
             ))}
           </div>

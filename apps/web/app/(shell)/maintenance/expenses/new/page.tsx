@@ -3,7 +3,9 @@ import { requireOrg, hasPermission } from "@smartboss/auth";
 import { prisma } from "@smartboss/database";
 import { Card } from "@smartboss/ui/components/card";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
-import { listWorkOrders, workOrderIdsWithExpenses } from "@/modules/maintenance/data/work-orders";
+import { getWorkOrder, listWorkOrders, workOrderIdsWithExpenses } from "@/modules/maintenance/data/work-orders";
+import { loadExpenseTracking, sessionMayRecordWoExpense } from "@/modules/maintenance/data/expense-tracking";
+import { userNameMap } from "@/modules/maintenance/data/users";
 import { listProperties } from "@/modules/maintenance/data/properties";
 import { listActivePmSchedules } from "@/modules/maintenance/data/pm";
 import { ExpenseForm } from "@/modules/maintenance/components/expense-form";
@@ -43,6 +45,22 @@ export default async function NewExpensePage({
         </Card>
       </AppScaffold>
     );
+  }
+
+  // ใบงานที่ต้องลงบิล + บริษัทเปิด "เฉพาะผู้บันทึกและ Boss" (ผู้ใช้ 26/11/2569) — บอกตั้งแต่เปิดฟอร์ม ไม่ต้องกรอกแล้วค่อยโดนปฏิเสธ
+  if (workOrderId) {
+    const lockedFor = await getWorkOrder(session.orgId, workOrderId);
+    if (lockedFor && !(await sessionMayRecordWoExpense(session, lockedFor))) {
+      const tracking = await loadExpenseTracking(session.orgId);
+      const recorderNames = Object.values(await userNameMap(session.orgId, tracking.recorderIds)).join(", ");
+      return (
+        <AppScaffold title="เพิ่มค่าใช้จ่าย" width="max-w-none" backHref={returnTo}>
+          <Card className="p-6 text-center text-sm text-(--ink-soft)" data-testid="recorder-only-block">
+            ค่าใช้จ่ายของใบงานนี้ ให้ <b className="text-(--ink)">{recorderNames || "ผู้บันทึกค่าใช้จ่าย"}</b> หรือ {ceo} เป็นคนลง
+          </Card>
+        </AppScaffold>
+      );
+    }
   }
 
   const [orders, pms, properties, withExpense] = await Promise.all([

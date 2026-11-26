@@ -1,7 +1,8 @@
 import "server-only";
 import { cache } from "react";
 import { prisma } from "@smartboss/database";
-import type { ExpenseTracking } from "@/modules/maintenance/lib/expense-deadline";
+import { hasRole, isSuperAdmin, type OrgSession, type Session } from "@smartboss/auth";
+import { mayRecordWoExpense, type ExpenseTracking } from "@/modules/maintenance/lib/expense-deadline";
 import { realExpenseTotal } from "@/modules/maintenance/lib/expense-batches";
 import { deleteActionNotifications, usersWithPermission } from "@/modules/maintenance/data/notify";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
@@ -12,10 +13,28 @@ import { withRequestsTenant } from "@/modules/requests/lib/db";
 export const loadExpenseTracking = cache(async (orgId: string): Promise<ExpenseTracking> => {
   const row = await prisma.performanceSetting.findUnique({
     where: { orgId },
-    select: { expenseTrackFrom: true, expenseTrackDays: true, expenseRecorderIds: true },
+    select: { expenseTrackFrom: true, expenseTrackDays: true, expenseRecorderIds: true, expenseRecorderOnly: true },
   });
-  return { from: row?.expenseTrackFrom ?? null, days: row?.expenseTrackDays ?? 14, recorderIds: row?.expenseRecorderIds ?? [] };
+  return {
+    from: row?.expenseTrackFrom ?? null,
+    days: row?.expenseTrackDays ?? 14,
+    recorderIds: row?.expenseRecorderIds ?? [],
+    recorderOnly: row?.expenseRecorderOnly ?? false,
+  };
 });
+
+/** Boss / ผู้ดูแลระบบสูงสุด — ลงค่าใช้จ่ายของใบงานได้เสมอ (ไม่ได้รับแจ้งเตือน) */
+export function isExpenseBoss(session: Session): boolean {
+  return hasRole(session, "CEO") || isSuperAdmin(session);
+}
+
+/** session นี้ลง/แก้ค่าใช้จ่ายของใบงานนี้ได้ไหม — กติกาอยู่ที่ lib/expense-deadline.ts mayRecordWoExpense */
+export async function sessionMayRecordWoExpense(
+  session: OrgSession,
+  wo: { requiresExpense: boolean; isPrivate?: boolean | null }
+): Promise<boolean> {
+  return mayRecordWoExpense({ userId: session.userId, isBoss: isExpenseBoss(session) }, wo, await loadExpenseTracking(session.orgId));
+}
 
 /** PR/PO ที่ยังไม่จบ — จบแล้วระบบลงยอดให้เอง */
 const PO_OPEN = ["pending", "approved", "ordered"];

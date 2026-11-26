@@ -33,6 +33,7 @@ export async function saveExpenseTrackingAction(formData: FormData) {
     expenseTrackFrom: fromRaw ? new Date(`${fromRaw}T00:00:00.000Z`) : null,
     expenseTrackDays: days,
     expenseRecorderIds: recorderIds,
+    expenseRecorderOnly: formData.get("recorderOnly") === "1",
   };
   await prisma.performanceSetting.upsert({ where: { orgId }, create: { orgId, ...data }, update: data });
   await logActivity(orgId, {

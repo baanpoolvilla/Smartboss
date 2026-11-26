@@ -87,10 +87,10 @@ import { WorkOrderDueRequest, type DueRequestView } from "@/modules/maintenance/
 import { buildScoreQueue } from "@/lib/score-request-views";
 import { ScoreRequestCard } from "@/app/(shell)/hr/penalty-requests/score-requests-queue";
 import { listDueRequests } from "@/modules/maintenance/data/work-order-due-requests";
-import { expenseHasSource, expenseLinks, listExpenseDueRequests, loadExpenseTracking, requestsOfExpenses } from "@/modules/maintenance/data/expense-tracking";
+import { expenseHasSource, expenseLinks, isExpenseBoss, listExpenseDueRequests, loadExpenseTracking, requestsOfExpenses } from "@/modules/maintenance/data/expense-tracking";
 import { groupExpenseBatches, realExpenseTotal } from "@/modules/maintenance/lib/expense-batches";
 import type { ReceiptData } from "@/modules/maintenance/lib/receipt-read";
-import { expenseDaysLeft, expenseDueAt, isExpenseBacklog, trackingActive } from "@/modules/maintenance/lib/expense-deadline";
+import { expenseDaysLeft, expenseDueAt, isExpenseBacklog, mayRecordWoExpense, trackingActive } from "@/modules/maintenance/lib/expense-deadline";
 import { paymentMethodLabel } from "@/modules/maintenance/lib/receipt-read";
 import { ExpenseDeadlineBox, type ExpenseRequestView } from "@/modules/maintenance/components/expense-deadline-box";
 import { canDecideDueRequest, canEditDueDate } from "@/modules/maintenance/lib/due-request-access";
@@ -302,6 +302,8 @@ export default async function WorkOrderDetailPage({
   }));
   // รอบันทึกค่าใช้จ่าย + เปิดใช้กำหนดบันทึกแล้ว — กล่องบอกเหลือกี่วัน ปุ่มบันทึก ขอเลื่อน/อนุมัติ
   const tracking = await loadExpenseTracking(orgId);
+  // ปุ่มลง/แก้ค่าใช้จ่ายของใบนี้ — บริษัทเปิด "เฉพาะผู้บันทึกและ Boss" แล้ว คนอื่นไม่เห็นปุ่ม (ผู้ใช้ 26/11/2569)
+  const canRecordExpense = canExpense && mayRecordWoExpense({ userId: session.userId, isBoss: isExpenseBoss(session) }, wo, tracking);
   const expenseOn = trackingActive(tracking);
   const noExpenseYet = expenseOn && wo.status === "completed" && wo.reviewState !== "pending" && wo.requiresExpense && !wo.isPrivate && !hasExpense;
   const expenseLink = noExpenseYet ? (await expenseLinks(orgId, [id])).get(id) : undefined;
@@ -366,7 +368,7 @@ export default async function WorkOrderDetailPage({
           dueDate={ymdBkk(expenseDue)}
           daysLeft={expenseDaysLeft(expenseDue)}
           closedLabel={wo.completedAt ? fmtThaiDate(wo.completedAt) : "-"}
-          recordHref={canExpense ? recordExpenseHref : null}
+          recordHref={canRecordExpense ? recordExpenseHref : null}
           canRequest={tracking.recorderIds.includes(session.userId)}
           canDecide={hasRole(session, "CEO") || isTopAdmin(session)}
           myId={session.userId}
@@ -704,7 +706,7 @@ export default async function WorkOrderDetailPage({
           )}
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-bold text-emerald-800">✅ บันทึกค่าใช้จ่ายแล้ว ฿{expenseTotal.toLocaleString()}</h2>
-            {canExpense && wo.status === "completed" && (
+            {canRecordExpense && wo.status === "completed" && (
               <Link href={recordExpenseHref} className="text-sm text-[#0F766E] hover:underline">
                 + เพิ่มรายการ
               </Link>
@@ -759,7 +761,7 @@ export default async function WorkOrderDetailPage({
                   ) : expenseHasSource(e) ? (
                     <span className="text-(--ink-soft)">มาจากใบเบิก</span>
                   ) : (
-                    canExpense && (
+                    canRecordExpense && (
                       <Link href={`/maintenance/expenses/${e.id}/edit`} className="font-medium text-[#0F766E] hover:underline">
                         แก้ไข
                       </Link>
@@ -1022,7 +1024,7 @@ export default async function WorkOrderDetailPage({
       {/* ─── ปุ่มดำเนินการ ─── */}
       {/* จอเล็ก: ข้อมูล → ความคิดเห็น → ปุ่ม (ลำดับเดิม) · จอใหญ่: ปุ่มอยู่ใต้ข้อมูลฝั่งซ้าย */}
       <div className="flex min-w-0 flex-col gap-2 lg:col-start-1">
-        {wo.status === "completed" && !hasExpense && canExpense && !expenseDue && !expenseHeld && (
+        {wo.status === "completed" && !hasExpense && canRecordExpense && !expenseDue && !expenseHeld && (
           <Link
             href={`/maintenance/expenses/new?workOrderId=${id}${
               pmForExpense ? `&pmScheduleId=${pmForExpense}` : ""

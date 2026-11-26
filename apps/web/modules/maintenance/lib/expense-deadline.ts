@@ -11,6 +11,23 @@ export interface ExpenseTracking {
   from: Date | null;
   days: number;
   recorderIds: string[];
+  /** เปิด = ค่าใช้จ่ายของใบงานที่ต้องลงบิล ลงได้เฉพาะผู้บันทึก + Boss (performance_settings.expense_recorder_only) */
+  recorderOnly?: boolean;
+}
+
+/**
+ * คนนี้ลง/แก้ค่าใช้จ่ายของใบงานนี้ได้ไหม (ผู้ใช้ 26/11/2569 "ตรงนี้อยากให้พี่เซี้ยคนเดียวทำได้ และพวก boss ทำได้อยู่แล้ว")
+ * จำกัดเฉพาะเมื่อบริษัทเปิดสวิตช์ + ระบบเตือนลงบิลเปิดอยู่ + ใบงานต้องลงบิล (requiresExpense) และไม่ใช่ใบส่วนตัว
+ * นอกนั้น = กติกาเดิม (ใครมีสิทธิ์ลงค่าใช้จ่ายก็ลงได้) · Boss/ผู้ดูแลระบบสูงสุดลงได้เสมอ แต่ไม่ได้รับแจ้งเตือน (ไม่อยู่ในรายชื่อผู้บันทึก)
+ */
+export function mayRecordWoExpense(
+  who: { userId: string; isBoss: boolean },
+  wo: { requiresExpense: boolean; isPrivate?: boolean | null },
+  t: ExpenseTracking,
+  now: Date = new Date()
+): boolean {
+  if (!t.recorderOnly || !trackingActive(t, now) || !wo.requiresExpense || wo.isPrivate) return true;
+  return who.isBoss || t.recorderIds.includes(who.userId);
 }
 
 const DAY = 86_400_000;

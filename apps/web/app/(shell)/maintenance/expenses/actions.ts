@@ -5,11 +5,12 @@ import { z } from "zod";
 import { prisma, Prisma } from "@smartboss/database";
 import { receiptDataFromForm } from "@/modules/maintenance/lib/receipt-read";
 import { revalidatePath } from "next/cache";
-import { closeExpenseRequests, expenseHasSource, loadExpenseTracking } from "@/modules/maintenance/data/expense-tracking";
+import { closeExpenseRequests, expenseHasSource, loadExpenseTracking, sessionMayRecordWoExpense } from "@/modules/maintenance/data/expense-tracking";
 import { trackingActive } from "@/modules/maintenance/lib/expense-deadline";
 import { redirect } from "next/navigation";
 import { requireOrg, hasPermission, isSuperAdmin } from "@smartboss/auth";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
+import { ceoTitle } from "@/lib/ceo-title";
 import {
   createExpensesForProperties,
   deleteExpense,
@@ -58,6 +59,7 @@ export async function createNoExpenseAction(
 
 /** เพดานคอลัมน์ amount Decimal(12,2) — เกินแล้วฐานข้อมูลโยน error หน้าจอไม่บอกสาเหตุ */
 const MAX_EXPENSE = 9_999_999_999.99;
+const recorderOnlyError = async () => `ค่าใช้จ่ายของใบงานนี้ ให้ผู้บันทึกค่าใช้จ่ายหรือ ${await ceoTitle()} เป็นคนลง (ตั้งไว้ที่ ตั้งค่าโมดูล)`;
 
 /** "1,500" / "฿ 1,500.50" → 1500.5 — เดิม Number("1,500") ได้ NaN แล้วถูกทิ้งเงียบ ๆ */
 function parseAmount(raw: string | undefined): number {
@@ -125,6 +127,9 @@ async function saveExpense(
       workOrderId = (await findWorkOrderForPmExpense(s.orgId, pm))?.id ?? null;
     }
   }
+
+  // ใบงานที่ต้องลงบิล + บริษัทเปิด "เฉพาะผู้บันทึกและ Boss" — คนอื่นลงไม่ได้ (lib/expense-deadline.ts mayRecordWoExpense)
+  if (linkedWo && !(await sessionMayRecordWoExpense(s, linkedWo))) return { error: await recorderOnlyError() };
 
   const amount = isNoExpense ? 0 : parseAmount(d.amount);
   if (!isNoExpense && amount > MAX_EXPENSE) return { error: "จำนวนเงินเกินกว่าที่ระบบรับได้ ตรวจว่าพิมพ์เลขถูกไหม" };
@@ -291,6 +296,10 @@ export async function updateExpenseAction(_prev: ExpenseFormState, formData: For
   const before = await getExpense(s.orgId, String(formData.get("expenseId") ?? ""));
   if (!before) return { error: "ไม่พบรายการนี้ — อาจถูกลบไปแล้ว" };
   if (expenseHasSource(before)) return { error: "รายการนี้มาจาก PR/PO หรือใบเบิก — แก้ที่ต้นทาง ไม่งั้นยอดจะไม่ตรงกัน" };
+  if (before.workOrderId) {
+    const wo = await getWorkOrder(s.orgId, before.workOrderId);
+    if (wo && !(await sessionMayRecordWoExpense(s, wo))) return { error: await recorderOnlyError() };
+  }
   const rawAmount = String(formData.get("amount") ?? "");
   const amount = parseAmount(rawAmount);
   if (!Number.isFinite(amount) || amount <= 0) return { error: "จำนวนเงินต้องเป็นตัวเลขมากกว่า 0" };

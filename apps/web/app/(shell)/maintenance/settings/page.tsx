@@ -78,6 +78,7 @@ export default async function MaintenanceSettingsPage() {
           initialFrom={tracking.from ? tracking.from.toISOString().slice(0, 10) : null}
           initialDays={tracking.days}
           initialRecorderIds={tracking.recorderIds}
+          initialRecorderOnly={tracking.recorderOnly ?? false}
           options={recorderOptions}
           allowedIds={expenseHolders}
           names={holderNames}
