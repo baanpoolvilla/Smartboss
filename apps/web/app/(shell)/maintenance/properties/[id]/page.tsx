@@ -7,6 +7,7 @@ import {
   ClipboardList,
   CalendarClock,
   ChevronRight,
+  Wallet,
 } from "lucide-react";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { Card } from "@smartboss/ui/components/card";
@@ -14,6 +15,8 @@ import { Button } from "@smartboss/ui/components/button";
 import { Input } from "@smartboss/ui/components/input";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { getProperty, propertyDependentCounts } from "@/modules/maintenance/data/properties";
+import { propertyExpenseSummary } from "@/modules/maintenance/data/expenses";
+import { formatBaht, categoryLabel } from "@/modules/maintenance/lib/expense";
 import { categoryNameById } from "@/modules/maintenance/data/categories";
 import { listAssets, lastMaintenanceDates } from "@/modules/maintenance/data/assets";
 import { userNameMap } from "@/modules/maintenance/data/users";
@@ -55,6 +58,9 @@ export default async function PropertyDetailPage({
   const depCounts = canManageProp ? await propertyDependentCounts(orgId, id) : { workOrders: 0, pm: 0, assets: 0 };
 
   const assets = await listAssets(orgId, id);
+  // ค่าใช้จ่ายของบ้านนี้ — เห็นเฉพาะคนที่ดูค่าใช้จ่ายได้ (สิทธิ์เดียวกับเมนูค่าใช้จ่าย)
+  const canSeeExpense = hasPermission(session, MAINT_PERMS.expenseView);
+  const expenseSum = canSeeExpense ? await propertyExpenseSummary(orgId, id) : null;
   const [caretakerNames, lastMaint, categoryNames] = await Promise.all([
     userNameMap(orgId, [property.caretakerId]),
     lastMaintenanceDates(orgId, assets.map((a) => a.id)),
@@ -134,6 +140,56 @@ export default async function PropertyDetailPage({
           </Card>
         </Link>
       </div>
+
+      {/* ค่าใช้จ่ายของบ้านนี้ (ผู้ใช้ 26/11/2569) — ลงราคาจากใบงาน/ใบสั่งซื้อ/PM แล้วขึ้นที่นี่ */}
+      {expenseSum && (
+        <Card className="mb-6 p-5" data-testid="property-expenses">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-(--ink)">
+              <Wallet className="h-4 w-4" style={{ color: "#0D9488" }} /> ค่าใช้จ่ายของบ้านนี้
+            </h2>
+            <Link href="/maintenance/expenses" className="text-xs font-medium text-(--app-strong) hover:underline">ดูทุกบ้าน ›</Link>
+          </div>
+          <div className="mb-3 grid grid-cols-3 gap-2">
+            {([
+              ["เดือนนี้", expenseSum.month],
+              ["ปีนี้", expenseSum.year],
+              ["ทั้งหมด", expenseSum.all],
+            ] as const).map(([label, v]) => (
+              <div key={label} className="rounded-(--radius) bg-(--bg-soft) px-3 py-2">
+                <div className="text-xs text-(--ink-soft)">{label}</div>
+                <div className="text-base font-semibold tabular-nums text-(--ink)">{formatBaht(v.total)}</div>
+                <div className="text-[11px] text-(--ink-soft)">{v.count} รายการ</div>
+              </div>
+            ))}
+          </div>
+          {expenseSum.recent.length === 0 ? (
+            <p className="m-0 text-sm text-(--ink-soft)">ยังไม่มีค่าใช้จ่ายของบ้านนี้</p>
+          ) : (
+            <ul className="m-0 grid list-none gap-1 p-0">
+              {expenseSum.recent.map((e) => {
+                const title = e.workOrder ? `${e.workOrder.code} ${e.workOrder.title}` : e.description?.trim() || categoryLabel(e.category);
+                const href = e.workOrderId ? `/maintenance/work-orders/${e.workOrderId}` : e.purchaseOrderId ? `/maintenance/purchase-orders/${e.purchaseOrderId}` : null;
+                return (
+                  <li key={e.id} className="flex items-center gap-3 rounded-md px-2 py-1.5 text-sm hover:bg-(--bg-soft)">
+                    <span className="w-20 shrink-0 text-xs tabular-nums text-(--ink-soft)">{fmtDate(e.expenseDate)}</span>
+                    <span className="min-w-0 flex-1">
+                      {href ? <Link href={href} className="block truncate hover:underline">{title}</Link> : <span className="block truncate">{title}</span>}
+                      {e.workOrder && e.description?.trim() && <span className="block truncate text-xs text-(--ink-soft)">{e.description}</span>}
+                    </span>
+                    {e.receiptUrl ? (
+                      <a href={e.receiptUrl} target="_blank" rel="noreferrer" className="shrink-0 text-xs font-medium text-(--app-strong) hover:underline">ดูบิล</a>
+                    ) : e.noReceipt ? (
+                      <span className="shrink-0 text-xs text-(--ink-soft)">ไม่มีบิล</span>
+                    ) : null}
+                    <span className="w-24 shrink-0 text-right font-semibold tabular-nums">{formatBaht(e.amount)}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Card>
+      )}
 
       {/* อุปกรณ์ */}
       <div className="mb-2 flex items-center justify-between">

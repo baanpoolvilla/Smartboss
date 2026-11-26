@@ -42,6 +42,41 @@ export function listExpensesForMonth(orgId: string, year: number, month: number)
   });
 }
 
+/**
+ * ค่าใช้จ่ายของบ้านหนึ่งหลัง — กล่องในหน้าบ้าน (ผู้ใช้ 26/11/2569 "จ่ายแล้วมันต้องขึ้นในหน้าบ้านสิ")
+ * ยอดเดือนนี้ / ปีนี้ (ตามเวลาไทย · ไม่นับแถว "ไม่มีค่าใช้จ่าย") + รายการล่าสุด · แถวเดียวกับรายงานค่าใช้จ่าย ยอดจึงตรงกัน
+ */
+export async function propertyExpenseSummary(orgId: string, propertyId: string, take = 10) {
+  const bkk = new Date(Date.now() + 7 * 3600_000);
+  const y = bkk.getUTCFullYear(), m = bkk.getUTCMonth();
+  const monthStart = new Date(Date.UTC(y, m, 1));
+  const yearStart = new Date(Date.UTC(y, 0, 1));
+  const real = { orgId, propertyId, isNoExpense: false };
+  const [month, year, all, recent] = await Promise.all([
+    prisma.expense.aggregate({ where: { ...real, expenseDate: { gte: monthStart } }, _sum: { amount: true }, _count: true }),
+    prisma.expense.aggregate({ where: { ...real, expenseDate: { gte: yearStart } }, _sum: { amount: true }, _count: true }),
+    prisma.expense.aggregate({ where: real, _sum: { amount: true }, _count: true }),
+    prisma.expense.findMany({
+      where: real,
+      orderBy: [{ expenseDate: "desc" }, { createdAt: "desc" }],
+      take,
+      select: { id: true, amount: true, description: true, category: true, expenseDate: true, receiptUrl: true, noReceipt: true, workOrderId: true, purchaseOrderId: true, pmScheduleId: true },
+    }),
+  ]);
+  // ชื่อใบงานที่ค่าใช้จ่ายผูกอยู่ — แสดงแทนคำอธิบาย (เหมือนหน้าค่าใช้จ่าย)
+  const woIds = [...new Set(recent.map((e) => e.workOrderId).filter((x): x is string => !!x))];
+  const wos = woIds.length
+    ? await prisma.workOrder.findMany({ where: { orgId, id: { in: woIds } }, select: { id: true, code: true, title: true } })
+    : [];
+  const woById = new Map(wos.map((w) => [w.id, w]));
+  return {
+    month: { total: Number(month._sum.amount ?? 0), count: month._count },
+    year: { total: Number(year._sum.amount ?? 0), count: year._count },
+    all: { total: Number(all._sum.amount ?? 0), count: all._count },
+    recent: recent.map((e) => ({ ...e, amount: Number(e.amount), workOrder: e.workOrderId ? woById.get(e.workOrderId) ?? null : null })),
+  };
+}
+
 export interface ExpenseInput {
   workOrderId?: string | null;
   pmScheduleId?: string | null;
