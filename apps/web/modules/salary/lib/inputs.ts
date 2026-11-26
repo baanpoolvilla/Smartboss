@@ -12,6 +12,7 @@ import { loadScorePeriodConfig, loadScorePeriodReadyAt } from "@/lib/score-perio
 import type { AutoItem, CommissionInput, RecurringItem, SalarySegment } from "./compute";
 import { num, ymd, type Tx } from "./db";
 import { daysBetweenInclusive, fmtBaht, periodLabel, thaiDate, type AllowanceEntry, type ItemKind, type PayChannel, type SettingsView, type TaxMode } from "./types";
+import { prevNote, resolvePrevDiligence, type PrevChain } from "./diligence-chain";
 
 /**
  * ข้อมูลที่ใช้คิดเงินเดือนของหนึ่งงวด — ดึงจากระบบอื่นทั้งหมด ไม่มีใครต้องพิมพ์ซ้ำ:
@@ -104,8 +105,9 @@ export async function loadPeriodInputs(
   tx: Tx,
   orgId: string,
   run: { id: string | null; period: string; startsOn: string; endsOn: string; payDate: string },
-  settings?: Pick<SettingsView, "otMode" | "diligenceEnabled" | "diligenceSteps" | "diligencePartial">,
-): Promise<{ staff: StaffInput[]; skipped: { name: string; reason: string }[] }> {
+  settings?: Pick<SettingsView, "otMode" | "diligenceEnabled" | "diligenceSteps" | "diligencePartial" | "diligenceFromPeriod" | "cutoffDay" | "payDay">,
+  chainDepth = 0,
+): Promise<{ staff: StaffInput[]; skipped: { name: string; reason: string }[]; chain: PrevChain }> {
   const { startsOn, endsOn, payDate } = run;
 
   /* ── ระบบบุคคล ── */
@@ -219,20 +221,28 @@ export async function loadPeriodInputs(
       : [];
   // หักตามรอบของวันที่เบิก: เบิกหลังวันตัดรอบ → รอหักรอบถัดไป (ใบเก่าที่ยังค้างหักรอบนี้)
   const advReqs = await loadRequests(tx, orgId, { beneficiaryKind: "staff", deductedAt: null, deductAmount: { gt: 0 }, workDate: { lte: new Date(`${endsOn}T00:00:00Z`) } }, 2000);
-  // เบี้ยขยัน: ขั้นของรอบล่าสุดที่จ่ายแล้ว (ก่อนงวดนี้) ต่อคน — มีรอบที่ยังไม่จ่ายได้ทีละรอบ จึงไม่มีรอบค้างคั่นกลาง
-  const prevDiligence = new Map<string, number>();
-  if (settings?.diligenceEnabled) {
-    const rows = await tx.$queryRawUnsafe<{ employment_id: string; amount: string | null; has: boolean }[]>(
-      `SELECT DISTINCT ON (l.employment_id) l.employment_id,
-              (l.info->'diligence'->>'amount') AS amount, (l.info ? 'diligence') AS has
-         FROM salary.run_lines l JOIN salary.runs r ON r.id = l.run_id
-        WHERE r.org_id = $1 AND r.status = 'paid' AND r.period < $2 AND l.info ? 'diligence'
-        ORDER BY l.employment_id, r.period DESC`,
-      orgId,
-      run.period,
-    );
-    for (const r of rows) if (r.amount !== null && Number.isFinite(Number(r.amount))) prevDiligence.set(r.employment_id, Number(r.amount));
-  }
+  // เบี้ยขยัน: ขั้นรอบก่อน = งวดก่อนหน้าโดยตรง ไม่ต้องรอจ่าย · เดือนที่ไม่ได้ทำ คิดจากการลงเวลาจริง (lib/diligence-chain.ts)
+  const chain: PrevChain = settings?.diligenceEnabled
+    ? await resolvePrevDiligence(
+        tx,
+        orgId,
+        run.period,
+        {
+          diligenceEnabled: true,
+          diligenceSteps: settings.diligenceSteps,
+          diligencePartial: settings.diligencePartial,
+          diligenceFromPeriod: settings.diligenceFromPeriod ?? null,
+          cutoffDay: settings.cutoffDay ?? 25,
+          payDay: settings.payDay ?? 0,
+          otMode: settings.otMode,
+        },
+        async (p, dates) => {
+          const v = await loadPeriodInputs(tx, orgId, { id: null, period: p, ...dates }, settings, chainDepth + 1);
+          return new Map(v.staff.filter((x) => x.diligence).map((x) => [x.employmentId, x.diligence!.amount]));
+        },
+        chainDepth,
+      )
+    : { byEmp: new Map(), prevRun: null, virtualPeriods: [], block: null };
 
   /* ── ค่าคอม Pool ตามเกรด (ระบบบุคคล › พนักงาน › ค่าคอม) — เดือนเดียวกับงวด ── */
   const commission = await loadCommissionFor(orgId, run.period, items);
@@ -386,7 +396,8 @@ export async function loadPeriodInputs(
     const p0 = profileBy.get(e.employment_id);
     const probationWait = settings?.diligenceEnabled && (p0?.diligenceEligible ?? null) === null && isNewHire(e.hired_on, probationFrom);
     if (settings?.diligenceEnabled && (p0?.diligenceEligible ?? !probationWait) && segments.length > 0) {
-      const fromRun = prevDiligence.get(e.employment_id);
+      const prevEntry = chain.byEmp.get(e.employment_id);
+      const fromRun = prevEntry?.amount;
       const opening = p0?.diligenceOpening !== null && p0?.diligenceOpening !== undefined ? num(p0.diligenceOpening) : null;
       const prev = fromRun ?? opening;
       diligence = diligenceStep(settings.diligenceSteps, prev, fromRun !== undefined ? "run" : opening !== null ? "opening" : "none", {
@@ -394,6 +405,8 @@ export async function loadPeriodInputs(
         lateCount: att?.late_days ?? 0,
         absentDays: att?.absent_days ?? 0,
       });
+      const note = prevNote(prevEntry, chain);
+      if (note) diligence = { ...diligence, how: `${diligence.how}${note}` };
       // เข้างาน/ลาออกกลางรอบ (from/to = ช่วงที่ทำงานอยู่ในงวด)
       diligence = applyDiligencePartial(diligence, settings.diligencePartial ?? "none", daysBetweenInclusive(from, to), daysBetweenInclusive(startsOn, endsOn));
     }
@@ -468,7 +481,7 @@ export async function loadPeriodInputs(
     });
   }
   staff.sort((a, b) => a.name.localeCompare(b.name, "th"));
-  return { staff, skipped };
+  return { staff, skipped, chain };
 }
 
 export { ymd };

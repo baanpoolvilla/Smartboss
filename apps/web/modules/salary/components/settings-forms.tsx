@@ -214,6 +214,20 @@ export function GeneralSettingsForm({ initial }: { initial: SettingsInput }) {
               <label className={radio(v.diligencePartial === "prorate")}><input type="radio" className="h-4 w-4" checked={v.diligencePartial === "prorate"} onChange={() => set({ diligencePartial: "prorate" })} /> เฉลี่ยตามวันที่ทำงาน</label>
               <label className={radio(v.diligencePartial === "full")}><input type="radio" className="h-4 w-4" checked={v.diligencePartial === "full"} onChange={() => set({ diligencePartial: "full" })} /> ได้เต็มขั้น</label>
             </div>
+            <label className="flex flex-col gap-1">
+              <span className="text-sm font-semibold text-(--ink)">เริ่มนับขั้นตั้งแต่งวด</span>
+              <input
+                type="month"
+                className="w-48 rounded-(--radius) border border-(--line) bg-(--bg) px-3 py-2 text-sm"
+                value={v.diligenceFromPeriod ?? ""}
+                onChange={(e) => set({ diligenceFromPeriod: e.target.value })}
+                aria-label="เริ่มนับขั้นเบี้ยขยันตั้งแต่งวด"
+              />
+              <span className={hint}>
+                ขั้นรอบก่อนดูจากงวดก่อนหน้าโดยตรง (ไม่ต้องรอกดจ่าย) · งวดก่อนเดือนนี้ เช่น งวดทดลอง ไม่นับ — ทุกคนเริ่มขั้นแรก (หรือขั้นยกมา) ในงวดนี้ ·
+                เดือนที่ไม่ได้ทำงวดในระบบ ระบบนับจากการลงเวลาจริงของเดือนนั้นให้ · ส่งงวดใหม่ได้เมื่องวดก่อนหน้าอนุมัติแล้ว · ว่าง = นับทุกงวด
+              </span>
+            </label>
             <p className={hint}>คนที่เคยได้ขั้นสูงกว่าขั้นแรกในระบบเดิม ใส่ &quot;ขั้นรอบล่าสุดจากระบบเดิม&quot; ที่หน้าพนักงานแต่ละคนก่อนรอบแรก · ยอดรายคนปรับเองได้ในรอบเงินเดือน (กดชื่อ › เบี้ยขยัน › ปรับยอด)</p>
           </div>
         )}

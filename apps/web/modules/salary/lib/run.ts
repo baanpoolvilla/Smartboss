@@ -5,6 +5,7 @@ import { computePay, type Adjustment, type DiligenceResult, type Override, type 
 import type { CommissionParts } from "@/modules/hr/lib/commission";
 import { dateOnly, insertEvent, num, readRates, readSettings, withSalaryTenant, ymd, type Tx } from "./db";
 import { loadPeriodInputs } from "./inputs";
+import { resolvePrevDiligence } from "./diligence-chain";
 import {
   DEFAULT_SSO,
   DEFAULT_TAX,
@@ -84,6 +85,8 @@ export interface ExcludedEntry {
   reason: string;
   byName: string;
   at: string;
+  /** เบี้ยขยันที่คิดจากการลงเวลาจริงของงวดนี้ (ไม่ได้จ่าย) — งวดหน้าใช้เป็นขั้นรอบก่อน (lib/diligence-chain.ts) */
+  diligence?: number | null;
 }
 
 export interface RunTotals {
@@ -149,7 +152,7 @@ export async function computeRun(orgId: string, runId: string, actor: Actor): Pr
     const settings = await readSettings(tx, orgId);
     const rates = await readRates(tx, orgId);
     const period = { startsOn: ymd(run.startsOn), endsOn: ymd(run.endsOn), payDate: ymd(run.payDate) };
-    const { staff, skipped } = await loadPeriodInputs(tx, orgId, { id: run.id, period: run.period, ...period }, settings);
+    const { staff, skipped, chain } = await loadPeriodInputs(tx, orgId, { id: run.id, period: run.period, ...period }, settings);
     const sso = rateOn(rates.sso, period.payDate, DEFAULT_SSO);
     const tax = rateOn(rates.tax, period.payDate, DEFAULT_TAX);
 
@@ -157,8 +160,13 @@ export async function computeRun(orgId: string, runId: string, actor: Actor): Pr
     const prevBy = new Map(existing.map((l) => [l.employmentId, l]));
     const keep = new Set<string>();
     // "ไม่จ่ายงวดนี้" (เลือกไว้พร้อมเหตุผล) — ไม่อยู่ในรอบ OT/เบิกของคนนั้นยกไปงวดหน้าเอง
-    const excluded = (run.excluded as unknown as ExcludedEntry[]) ?? [];
+    const excludedRaw = (run.excluded as unknown as ExcludedEntry[]) ?? [];
+    // คนที่ "ไม่จ่ายงวดนี้" ยังคิดเบี้ยขยันจากการลงเวลาจริงเก็บไว้ — งวดหน้านับขั้นต่อได้ถูก (ผู้ใช้ 26/11/2569)
+    const staffBy = new Map(staff.map((x) => [x.employmentId, x]));
+    const excluded = excludedRaw.map((x) => ({ ...x, diligence: staffBy.get(x.employmentId)?.diligence?.amount ?? null }));
     const excludedIds = new Set(excluded.map((x) => x.employmentId));
+    // งวดก่อนหน้ายังไม่อนุมัติ — ขั้นเบี้ยขยันยังเปลี่ยนได้ ⇒ กันส่งรอบนี้ (ขึ้นในกล่อง "ยังสรุป/ส่งรอบนี้ไม่ได้")
+    const chainBlocks = chain.block && staff.some((x) => x.diligence) ? [chain.block] : [];
     const totals: RunTotals = { ...EMPTY_TOTALS, skipped: [...skipped, ...excluded.map((x) => ({ name: x.name, reason: `ไม่จ่ายงวดนี้ — ${x.reason}` }))] };
     const add = (k: keyof Pick<RunTotals, "gross" | "deductions" | "net" | "ssoEmployee" | "ssoEmployer" | "tax" | "transferNet" | "cashNet">, v: number) => {
       totals[k] = (toSatang(totals[k]) + toSatang(v)) / 100;
@@ -210,7 +218,7 @@ export async function computeRun(orgId: string, runId: string, actor: Actor): Pr
           : {}),
         ...(s.commissionParts && !overrides.commission ? { commissionParts: s.commissionParts } : {}),
         ...(s.otDaysPay ? { otDaysPay: s.otDaysPay } : {}),
-        blocks: r.blocks,
+        blocks: s.diligence ? [...r.blocks, ...chainBlocks] : r.blocks,
         hiredOn: s.hiredOn,
         terminatedOn: s.terminatedOn,
         opening: s.opening,
@@ -260,7 +268,10 @@ export async function computeRun(orgId: string, runId: string, actor: Actor): Pr
     if (gone.length) {
       await tx.salaryRunLine.deleteMany({ where: { orgId, runId, id: { in: gone.map((l) => l.id) } } });
     }
-    await tx.salaryRun.update({ where: { id: runId }, data: { totals: totals as unknown as object, computedAt: new Date() } });
+    await tx.salaryRun.update({
+      where: { id: runId },
+      data: { totals: totals as unknown as object, computedAt: new Date(), ...(excludedRaw.length ? { excluded: excluded as unknown as object } : {}) },
+    });
     await insertEvent(tx, orgId, {
       runId,
       byUserId: actor.userId,
@@ -364,6 +375,24 @@ export async function submitRun(orgId: string, actor: Actor, runId: string): Pro
     const blocked = [...new Set(lines.flatMap((l) => (l.info as unknown as LineInfo)?.blocks ?? []))];
     if (blocked.length) throw new Error(`ยังส่งไม่ได้ — ${blocked.slice(0, 3).join(" · ")} (แก้แล้วกด "ดึงข้อมูลใหม่")`);
     const settings = await readSettings(tx, orgId);
+    // เบี้ยขยัน: งวดก่อนหน้าต้องอนุมัติแล้ว และยอดไม่เปลี่ยนหลังคำนวณรอบนี้ (ผู้ใช้ 26/11/2569 — กันขั้นเพี้ยน)
+    if (settings.diligenceEnabled && lines.some((l) => (l.info as unknown as LineInfo)?.diligence)) {
+      const chain = await resolvePrevDiligence(tx, orgId, run.period, settings, async (p, dates) => {
+        const v = await loadPeriodInputs(tx, orgId, { id: null, period: p, ...dates }, settings, 1);
+        return new Map(v.staff.filter((x) => x.diligence).map((x) => [x.employmentId, x.diligence!.amount]));
+      });
+      if (chain.block) throw new Error(chain.block);
+      const stale = lines.filter((l) => {
+        const d = (l.info as unknown as LineInfo)?.diligence;
+        if (!d) return false;
+        const e = chain.byEmp.get(l.employmentId);
+        if (e) return d.prevSource !== "run" || Math.abs((d.prev ?? -1) - e.amount) > 0.004;
+        return d.prevSource === "run";
+      });
+      if (stale.length) {
+        throw new Error(`ขั้นเบี้ยขยันของงวดก่อนเปลี่ยนหลังคำนวณรอบนี้ (${stale.slice(0, 3).map((l) => l.name).join(", ")}${stale.length > 3 ? " …" : ""}) — กด "ดึงข้อมูลใหม่" ก่อนส่ง`);
+      }
+    }
     const totals = run.totals as unknown as RunTotals;
     let auto = false;
     if (settings.approvalMode === "hr") auto = true;

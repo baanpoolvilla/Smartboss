@@ -66,6 +66,7 @@ export async function readSettings(tx: Tx, orgId: string): Promise<SettingsView>
     diligenceEnabled: row.diligenceEnabled,
     diligenceSteps: normalizeDiligenceSteps(row.diligenceSteps) ?? DEFAULT_SETTINGS.diligenceSteps,
     diligencePartial: row.diligencePartial === "prorate" || row.diligencePartial === "full" ? row.diligencePartial : "none",
+    diligenceFromPeriod: row.diligenceFromPeriod && /^\d{4}-\d{2}$/.test(row.diligenceFromPeriod) ? row.diligenceFromPeriod : null,
     editorUserIds: row.editorUserIds,
     superAdminAccess: row.superAdminAccess,
     editorsEditOwn: row.editorsEditOwn,

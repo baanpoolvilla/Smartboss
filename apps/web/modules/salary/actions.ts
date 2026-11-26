@@ -200,6 +200,8 @@ export interface SettingsInput {
   diligenceEnabled: boolean;
   diligenceSteps: number[];
   diligencePartial: DiligencePartial;
+  /** YYYY-MM หรือ "" = นับทุกงวด */
+  diligenceFromPeriod?: string;
   companyTaxId: string;
   ssoEmployerNo: string;
   ssoBranch: string;
@@ -228,6 +230,8 @@ export async function saveSettingsAction(input: SettingsInput): Promise<Result> 
     const diligenceSteps = normalizeDiligenceSteps(input.diligenceSteps);
     if (!diligenceSteps) return { error: "ขั้นเบี้ยขยันต้องเป็นตัวเลขมากกว่า 0 เรียงจากน้อยไปมาก 1–6 ขั้น (เช่น 500, 800, 1000)" };
     if (!["none", "prorate", "full"].includes(input.diligencePartial)) return { error: "ตัวเลือกเบี้ยขยันคนเข้า/ออกกลางรอบไม่ถูกต้อง" };
+    const fromPeriod = (input.diligenceFromPeriod ?? "").trim();
+    if (fromPeriod && !PERIOD_RE.test(fromPeriod)) return { error: "งวดเริ่มนับเบี้ยขยันไม่ถูกต้อง" };
     const data = {
       cutoffDay,
       payDay,
@@ -247,6 +251,7 @@ export async function saveSettingsAction(input: SettingsInput): Promise<Result> 
       diligenceEnabled: !!input.diligenceEnabled,
       diligenceSteps,
       diligencePartial: input.diligencePartial,
+      ...(input.diligenceFromPeriod !== undefined ? { diligenceFromPeriod: fromPeriod || null } : {}),
       companyTaxId: taxId,
       ssoEmployerNo: ssoNo,
       ssoBranch: branch,

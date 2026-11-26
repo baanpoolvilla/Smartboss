@@ -55,6 +55,8 @@ model SalarySettings {
   diligenceSteps     Json     @default("[500, 800, 1000]") @map("diligence_steps")
   /// เข้างาน/ลาออกกลางรอบ: none = ไม่ได้ (ต้องครบรอบ) · prorate = เฉลี่ยตามวัน · full = ได้เต็มขั้น
   diligencePartial   String   @default("none") @map("diligence_partial")
+  /// งวดแรกที่นับขั้นเบี้ยขยัน (YYYY-MM) — งวดก่อนหน้านี้ไม่ใช้เป็น "ขั้นรอบก่อน" · null = นับทุกงวด (ผู้ใช้ 26/11/2569)
+  diligenceFromPeriod String? @map("diligence_from_period")
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   updatedByName      String   @default("") @map("updated_by_name")
 

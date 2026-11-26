@@ -228,6 +228,8 @@ export interface SettingsView {
   diligenceSteps: number[];
   /** เข้างาน/ลาออกกลางรอบ: none = ไม่ได้ (ต้องครบรอบ) · prorate = เฉลี่ยตามวัน · full = ได้เต็มขั้น */
   diligencePartial: DiligencePartial;
+  /** งวดแรกที่นับขั้นเบี้ยขยัน (YYYY-MM) · งวดก่อนหน้านี้ไม่ใช้เป็นขั้นรอบก่อน · null = นับทุกงวด */
+  diligenceFromPeriod: string | null;
   editorUserIds: string[];
   superAdminAccess: boolean;
   /** คนที่ CEO เลือก แก้เงินเดือนของตัวเองได้ — ปิด = ล็อกแบบเดิม (สวิตช์รายบริษัท 8/11/2569) */
@@ -259,6 +261,7 @@ export const DEFAULT_SETTINGS: SettingsView = {
   diligenceEnabled: false,
   diligenceSteps: [500, 800, 1000],
   diligencePartial: "none",
+  diligenceFromPeriod: null,
   editorUserIds: [],
   superAdminAccess: true,
   editorsEditOwn: false,
