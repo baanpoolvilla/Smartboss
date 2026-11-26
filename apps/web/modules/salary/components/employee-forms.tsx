@@ -14,7 +14,7 @@ import { useCeoTitle } from "@/lib/ceo-title-client";
 const BANKS = ["กสิกรไทย", "ไทยพาณิชย์", "กรุงเทพ", "กรุงไทย", "กรุงศรีอยุธยา", "ทหารไทยธนชาต (ttb)", "ออมสิน", "ธ.ก.ส.", "ยูโอบี", "ซีไอเอ็มบี", "เกียรตินาคินภัทร", "แลนด์ แอนด์ เฮ้าส์", "อื่นๆ"];
 
 /** 1. เงินเดือน — ตั้ง/ขึ้นเงินเดือน (มีวันมีผล เก็บประวัติ) */
-export function SalarySection({ employmentId, salary, history, hiredOn, today }: { employmentId: string; salary: number | null; history: { amount: number; from: string; to: string | null; note: string }[]; hiredOn: string; today: string }) {
+export function SalarySection({ employmentId, salary, history, hiredOn, today, log = [] }: { employmentId: string; salary: number | null; history: { amount: number; from: string; to: string | null; note: string }[]; hiredOn: string; today: string; log?: { at: string; byName: string; summary: string }[] }) {
   const [amount, setAmount] = useState(salary !== null ? String(salary) : "");
   const [from, setFrom] = useState(salary === null ? hiredOn : today);
   const [reason, setReason] = useState("");
@@ -54,7 +54,7 @@ export function SalarySection({ employmentId, salary, history, hiredOn, today }:
               {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} บันทึกเงินเดือน
             </button>
           </div>
-          <p className={`${hint} sm:col-span-3`}>มีผลกลางงวด = งวดนั้นคิดถัวตามจำนวนวันของแต่ละอัตรา · ประวัติเดิมเก็บไว้ ไม่ทับ</p>
+          <p className={`${hint} sm:col-span-3`}>มีผลกลางงวด = งวดนั้นคิดถัวตามจำนวนวันของแต่ละอัตรา · ประวัติเดิมเก็บไว้ ไม่ทับ · ลงยอดผิด = ใส่วันที่มีผลเดิม ({(() => { const open = history.find((h) => !h.to); return open ? thaiDate(open.from) : "วันเดิม"; })()}) แล้วใส่ยอดที่ถูก ระบบแก้ยอดของช่วงนั้นให้ และเก็บประวัติว่าใครแก้</p>
         </div>
       )}
       {error && <Notice tone="danger">{error}</Notice>}
@@ -66,6 +66,20 @@ export function SalarySection({ employmentId, salary, history, hiredOn, today }:
               <li key={i} className="flex justify-between gap-3">
                 <span>{thaiDate(h.from)} – {h.to ? thaiDate(h.to) : "ปัจจุบัน"}{h.note ? ` · ${h.note}` : ""}</span>
                 <span className="tabular-nums">{fmtBaht(h.amount)}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {log.length > 0 && (
+        <details className="text-sm" data-testid="salary-rate-log">
+          <summary className="cursor-pointer text-(--ink-soft)">ประวัติการตั้ง/แก้เงินเดือน ({log.length})</summary>
+          <ul className="mt-2 flex flex-col gap-1.5">
+            {log.map((l, i) => (
+              <li key={i} className="flex flex-wrap gap-x-3 gap-y-0.5">
+                <span className="tabular-nums text-(--ink-soft)">{new Date(l.at).toLocaleString("th-TH", { timeZone: "Asia/Bangkok", dateStyle: "medium", timeStyle: "short" })}</span>
+                <span className="font-medium">{l.byName}</span>
+                <span>{l.summary}</span>
               </li>
             ))}
           </ul>

@@ -1,5 +1,7 @@
 "use server";
 
+import { RateSaveError, saveCompensationRate } from "@/modules/salary/lib/rate-save";
+import { actorOf } from "@/modules/salary/lib/page";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireOrg, hasPermission } from "@smartboss/auth";
@@ -433,30 +435,34 @@ export async function importEmployeesAction(formData: FormData) {
 
 export async function addCompensationRateAction(formData: FormData) {
   const ceo = await ceoTitle();
-  await guardSalary();
+  const session = await guardSalary();
   const employmentId = String(formData.get("employment_id") ?? "");
-  const amount = String(formData.get("amount") ?? "").trim();
+  const amountRaw = String(formData.get("amount") ?? "").replace(/[,\s฿]/g, "").trim();
   const effectiveFrom = String(formData.get("effective_from") ?? "");
 
   if (!employmentId) throw new Error("ไม่พบพนักงาน");
-  if (amount === "") throw new Error("กรุณาระบุจำนวนเงิน");
+  if (amountRaw === "") throw new Error("กรุณาระบุจำนวนเงิน");
   if (!effectiveFrom) throw new Error("กรุณาระบุวันที่มีผล");
+  const amount = Number(amountRaw);
+  if (!Number.isFinite(amount) || amount < 0 || amount > 10_000_000) throw new Error("จำนวนเงินไม่ถูกต้อง");
+  const basisRaw = String(formData.get("pay_basis") ?? "MONTHLY");
+  const payBasis = basisRaw === "DAILY" || basisRaw === "HOURLY" ? basisRaw : "MONTHLY";
+  const note = String(formData.get("note") ?? "").trim().slice(0, 200);
 
+  // วันที่มีผลตรงกับช่วงล่าสุด = แก้ยอดช่วงนั้น · หลังจากนั้น = ช่วงใหม่ (ปิดช่วงเดิมให้) · เก็บประวัติทุกครั้ง (ผู้ใช้ 26/11/2569)
   try {
-    await wfFetch("/compensation-rates", {
-      method: "POST",
-      body: {
-        employment_id: employmentId,
-        pay_basis: String(formData.get("pay_basis") ?? "MONTHLY"),
-        amount,
-        currency: "THB",
-        effective_from: effectiveFrom,
-        note: String(formData.get("note") ?? "").trim(),
-        // ปิดช่วงเดิมให้อัตโนมัติ ไม่งั้น trigger กันช่วงซ้อนจะปฏิเสธ
-        supersede_current: true,
-      },
+    await saveCompensationRate({
+      orgId: session.orgId,
+      actor: await actorOf(session.userId),
+      employmentId,
+      payBasis,
+      amount,
+      effectiveFrom,
+      reason: note,
+      note,
     });
   } catch (error) {
+    if (error instanceof RateSaveError) throw new Error(error.message);
     if (error instanceof WorkforceError && error.status === 403) {
       throw new Error(
         `ระบบบุคคลยังไม่ได้เปิดสิทธิ์ฐานเงินเดือนให้บัญชีนี้ — ให้ ${ceo} เอาชื่อออกแล้วเพิ่มใหม่ที่ เงินเดือน › ตั้งค่า ` +
@@ -466,6 +472,7 @@ export async function addCompensationRateAction(formData: FormData) {
     throw new Error(toMessage(error));
   }
   revalidatePath(`/hr/employees/${employmentId}`);
+  revalidatePath(`/salary/employees/${employmentId}`);
 }
 
 /* ═══════════════════ ค่าคอม Pool ═══════════════════ */

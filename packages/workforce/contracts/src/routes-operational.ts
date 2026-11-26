@@ -407,6 +407,14 @@ export const OPERATIONAL_ROUTES: readonly Omit<RouteDefinition, 'response'>[] = 
     successStatus: 201,
   },
   {
+    operationId: 'update_patch',
+    method: 'patch',
+    path: '/compensation-rates/{rateId}',
+    summary: 'PATCH /compensation-rates/{rateId}',
+    tag: 'compensation',
+    permissions: ['workforce.compensation.manage'] as Permission[],
+  },
+  {
     operationId: 'listEnrollments_get',
     method: 'get',
     path: '/biometric-enrollments',

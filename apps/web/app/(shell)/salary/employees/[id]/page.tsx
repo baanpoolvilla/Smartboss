@@ -8,6 +8,7 @@ import { ownSalaryLocked } from "@/modules/salary/lib/access";
 import { salaryPage } from "@/modules/salary/lib/page";
 import { lastPaidDiligence, listStaff } from "@/modules/salary/lib/views";
 import { savingsForEmployee } from "@/modules/salary/lib/savings";
+import { rateLog } from "@/modules/salary/lib/rate-save";
 import { SavingsSection } from "@/modules/salary/components/savings-section";
 import { bangkokToday, periodDates, shiftPeriod, thaiDate } from "@/modules/salary/lib/types";
 
@@ -31,6 +32,7 @@ export default async function SalaryEmployeePage({ params }: { params: Promise<{
   const p = today.slice(0, 7);
   const lastDiligence = settings.diligenceEnabled ? await lastPaidDiligence(orgId, row.employmentId) : null;
   const savings = await savingsForEmployee(orgId, row.employmentId);
+  const salaryLog = await rateLog(orgId, row.employmentId);
   // คนทำเงินเดือน (ไม่ใช่ CEO) ดูของตัวเองได้แต่แก้ไม่ได้ — server ก็กันซ้ำใน actions
   const ownLocked = ownSalaryLocked(access, row.userId === session.userId);
   const thisPeriod = periodDates(p, settings.cutoffDay, settings.payDay).endsOn >= today ? p : shiftPeriod(p, 1);
@@ -51,7 +53,7 @@ export default async function SalaryEmployeePage({ params }: { params: Promise<{
           </div>
         ) : (
         <>
-        <SalarySection employmentId={row.employmentId} salary={row.salary} history={row.history} hiredOn={row.hiredOn} today={today} />
+        <SalarySection employmentId={row.employmentId} salary={row.salary} history={row.history} hiredOn={row.hiredOn} today={today} log={salaryLog} />
         <ProfileSection
           employmentId={row.employmentId}
           year={Number(today.slice(0, 4))}

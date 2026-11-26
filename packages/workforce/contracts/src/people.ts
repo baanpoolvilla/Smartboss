@@ -171,6 +171,22 @@ export const createCompensationSchema = z.object({
   supersede_current: z.boolean().default(false),
 });
 
+/**
+ * แก้แถวฐานค่าจ้างที่ลงผิด (พิมพ์ยอดผิด เลือกฐานผิด) — ไม่แตะช่วงวันที่ (ขึ้นเงินเดือน = เพิ่มช่วงใหม่ตามเดิม)
+ * ต้องมีเหตุผลเสมอ เก็บใน audit พร้อมค่าก่อน/หลัง (ผู้ใช้ 26/11/2569 "เก็บ log ไว้ด้วยว่าใครแก้อะไรยังไง")
+ */
+export const updateCompensationSchema = z
+  .object({
+    pay_basis: payBasisSchema.optional(),
+    amount: moneySchema.optional(),
+    note: z.string().trim().max(500).optional(),
+    reason: z.string().trim().min(1).max(300),
+    expected_version: z.number().int().positive().optional(),
+  })
+  .refine((v) => v.pay_basis !== undefined || v.amount !== undefined || v.note !== undefined, {
+    message: 'nothing to update',
+  });
+
 export const compensationSchema = z
   .object({
     id: uuidSchema,
@@ -199,4 +215,5 @@ export type Employment = z.infer<typeof employmentSchema>;
 export type CreateAssignmentInput = z.infer<typeof createAssignmentSchema>;
 export type Assignment = z.infer<typeof assignmentSchema>;
 export type CreateCompensationInput = z.infer<typeof createCompensationSchema>;
+export type UpdateCompensationInput = z.infer<typeof updateCompensationSchema>;
 export type Compensation = z.infer<typeof compensationSchema>;

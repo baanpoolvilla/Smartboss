@@ -35,6 +35,7 @@ export const REASON_REQUIRED_ACTIONS: ReadonlySet<string> = new Set([
   'principal.impersonate',
   'support.access.grant',
   'retention.legal-hold.apply',
+  'compensation.rate.update',
 ]);
 
 export function requiresReason(action: string): boolean {

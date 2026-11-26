@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { rateLog } from "@/modules/salary/lib/rate-save";
 import { notFound } from "next/navigation";
 import { requireOrg, hasPermission } from "@smartboss/auth";
 import { Button } from "@smartboss/ui/components/button";
@@ -129,6 +130,8 @@ export default async function EmployeeDetailPage({
   const canManageSalary = (await salaryAccess(session)).canEdit;
   const canSeeCommission = canManageSalary;
   const tabs = TABS.filter((t) => t.id !== "wage" || canManageSalary);
+  // ประวัติการตั้ง/แก้เงินเดือน (ใครแก้ เมื่อไหร่ จากเท่าไหร่เป็นเท่าไหร่) — ผู้ใช้ 26/11/2569
+  const wageLog = canManageSalary && session.orgId ? await rateLog(session.orgId, id).catch(() => []) : [];
   const tab: TabId = tabs.some((t) => t.id === sp.tab) ? (sp.tab as TabId) : "info";
 
   return (
@@ -740,9 +743,27 @@ export default async function EmployeeDetailPage({
                     </Field>
                   </form>
                   <p className="mt-2 text-xs text-(--ink-soft)">
-                    ระบบจะปิดช่วงของอัตราเดิมให้อัตโนมัติ — ช่วงเวลาห้ามซ้อนกัน
+                    ขึ้นเงินเดือน = ใส่วันที่มีผลใหม่ ระบบปิดช่วงเดิมให้เอง · <b>ลงยอดผิด</b> = ใส่วันที่มีผลเดิมของแถวล่าสุด แล้วใส่ยอดที่ถูก
+                    ระบบแก้ยอดของแถวนั้นให้ (ใส่เหตุผลในช่องหมายเหตุ) · ทุกครั้งเก็บประวัติว่าใครแก้
                   </p>
                 </details>
+              )}
+
+              {wageLog.length > 0 && (
+                <div className="mt-4" data-testid="wage-log">
+                  <p className="mb-1.5 text-sm font-semibold text-(--ink)">ประวัติการตั้ง/แก้เงินเดือน</p>
+                  <ul className="flex flex-col gap-1.5 text-sm">
+                    {wageLog.map((l, i) => (
+                      <li key={i} className="flex flex-wrap gap-x-3 gap-y-0.5 border-b border-(--line)/60 pb-1.5 last:border-b-0">
+                        <span className="tabular-nums text-(--ink-soft)">
+                          {new Date(l.at).toLocaleString("th-TH", { timeZone: "Asia/Bangkok", dateStyle: "medium", timeStyle: "short" })}
+                        </span>
+                        <span className="font-medium text-(--ink)">{l.byName}</span>
+                        <span className="text-(--ink)">{l.summary}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </SectionCard>
             )}

@@ -11,6 +11,7 @@ import { notifyUsers } from "@/modules/maintenance/data/notify";
 import { isOwnEmployment, ownSalaryLocked, salaryAccess, type SalaryAccess } from "./lib/access";
 import type { Adjustment } from "./lib/compute";
 import { insertEvent, readSettings, withSalaryTenant } from "./lib/db";
+import { RateSaveError, saveCompensationRate } from "./lib/rate-save";
 import { actorOf } from "./lib/page";
 import { savingsBooksTx } from "./lib/savings";
 import { computeRun, createRun, decideRun, deleteRun, editLine, markPaid, setExcluded, setRunNote, submitRun, type Actor } from "./lib/run";
@@ -439,29 +440,18 @@ export async function setSalaryAction(input: { employmentId: string; amount: num
     if (amount <= 0) return { error: "ใส่เงินเดือน" };
     if (!DATE_RE.test(input.effectiveFrom)) return { error: "วันที่มีผลไม่ถูกต้อง" };
     const reason = text(input.reason, 200);
+    // วันที่มีผลตรงกับช่วงล่าสุด = แก้ยอดช่วงนั้น · หลังจากนั้น = ช่วงใหม่ · เก็บประวัติทุกครั้ง (lib/rate-save.ts)
+    let saved: Awaited<ReturnType<typeof saveCompensationRate>>;
     try {
-      await wfFetch("/compensation-rates", {
-        method: "POST",
-        body: {
-          employment_id: input.employmentId,
-          pay_basis: "MONTHLY",
-          amount: amount.toFixed(2),
-          currency: "THB",
-          effective_from: input.effectiveFrom,
-          note: reason || "ตั้งจากโมดูลเงินเดือน",
-          supersede_current: true,
-        },
-      });
+      saved = await saveCompensationRate({ orgId, actor, employmentId: input.employmentId, payBasis: "MONTHLY", amount, effectiveFrom: input.effectiveFrom, reason, note: reason || "ตั้งจากโมดูลเงินเดือน" });
     } catch (error) {
+      if (error instanceof RateSaveError) return { error: error.message };
       if (error instanceof WorkforceError && error.status === 403) {
         return { error: `ระบบบุคคลยังไม่ได้เปิดสิทธิ์ฐานเงินเดือนให้บัญชีนี้ — ให้ ${ceo} เอาชื่อออกแล้วเพิ่มใหม่ที่ ตั้งค่า › คนที่เห็นเงินเดือน แล้วลองอีกครั้ง` };
       }
       throw error;
     }
-    await withSalaryTenant(orgId, (tx) =>
-      insertEvent(tx, orgId, { byUserId: actor.userId, byName: actor.name, action: "employee", summary: `ตั้งเงินเดือน ${fmtBaht(amount)} มีผล ${input.effectiveFrom}${reason ? ` · ${reason}` : ""} (${input.employmentId.slice(0, 8)})` }),
-    );
-    await noteSelfEdit(g, input.employmentId, `ตั้งเงินเดือน ${fmtBaht(Number(input.amount))} มีผล ${input.effectiveFrom}`);
+    await noteSelfEdit(g, input.employmentId, saved.mode === "edited" ? `แก้เงินเดือน ${fmtBaht(saved.before ?? 0)} → ${fmtBaht(Number(input.amount))}` : `ตั้งเงินเดือน ${fmtBaht(Number(input.amount))} มีผล ${input.effectiveFrom}`);
     refresh();
     return { ok: true };
   } catch (error) {

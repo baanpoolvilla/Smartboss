@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { Compensation, CreateCompensationInput } from '@workforce/contracts';
+import type { Compensation, CreateCompensationInput, UpdateCompensationInput } from '@workforce/contracts';
 import { schema, type Tx } from '@workforce/db';
 import { AppError, EffectivePeriod, LocalDate, Money, uuidv7 } from '@workforce/domain';
 import { and, asc, desc, eq, gt, isNull, or, sql } from 'drizzle-orm';
@@ -54,6 +54,20 @@ export class CompensationRepository {
     return rows[0];
   }
 
+  async findById(tx: Tx, id: string): Promise<CompensationRow | undefined> {
+    const rows = await tx.select().from(schema.compensationRates).where(eq(schema.compensationRates.id, id)).limit(1);
+    return rows[0];
+  }
+
+  async update(
+    tx: Tx,
+    id: string,
+    values: Partial<Pick<CompensationRow, 'payBasis' | 'amount' | 'note'>>,
+  ): Promise<CompensationRow> {
+    const rows = await tx.update(schema.compensationRates).set(values).where(eq(schema.compensationRates.id, id)).returning();
+    return rows[0] as CompensationRow;
+  }
+
   async close(tx: Tx, id: string, effectiveTo: string): Promise<void> {
     await tx
       .update(schema.compensationRates)
@@ -76,6 +90,10 @@ export class CompensationService {
     private readonly repository: CompensationRepository,
     private readonly people: PeopleRepository,
   ) {}
+
+  async update(rateId: string, input: UpdateCompensationInput): Promise<Compensation> {
+    return updateCompensationRate({ uow: this.uow, repository: this.repository, people: this.people }, rateId, input);
+  }
 
   async list(query: {
     employmentId: string;
@@ -173,6 +191,55 @@ export class CompensationService {
       return toCompensation(row);
     });
   }
+}
+
+/**
+ * แก้แถวที่ลงผิด (ยอด/ฐาน/หมายเหตุ) — ช่วงวันที่ไม่เปลี่ยน · เก็บ audit ค่าก่อน/หลัง + เหตุผล (ผู้ใช้ 26/11/2569)
+ * แยกเป็นฟังก์ชันของ service เพื่อไม่ให้ไปปนกับ create ที่ปิดช่วงเดิม/เปิดช่วงใหม่
+ */
+export async function updateCompensationRate(
+  service: { uow: UnitOfWork; repository: CompensationRepository; people: PeopleRepository },
+  rateId: string,
+  input: UpdateCompensationInput,
+): Promise<Compensation> {
+  return service.uow.run(async (uow) => {
+    const before = await service.repository.findById(uow.tx, rateId);
+    if (before === undefined) throw AppError.notFound('compensation_rate');
+    if (input.expected_version !== undefined && input.expected_version !== before.version) {
+      throw AppError.conflict('compensation rate was changed by someone else — reload and try again');
+    }
+    const employment = await service.people.lockEmployment(uow.tx, before.employmentId);
+    if (employment === undefined) throw AppError.notFound('employment');
+
+    const values: Partial<Pick<CompensationRow, 'payBasis' | 'amount' | 'note'>> = {};
+    if (input.pay_basis !== undefined) values.payBasis = input.pay_basis;
+    if (input.amount !== undefined) {
+      const amount = Money.of(input.amount, before.currency);
+      if (amount.isNegative()) throw AppError.validation('amount must not be negative');
+      values.amount = amount.toString();
+    }
+    if (input.note !== undefined) values.note = input.note;
+
+    const after = await service.repository.update(uow.tx, rateId, values);
+    await uow.audit({
+      action: 'compensation.rate.update',
+      resourceType: 'compensation_rate',
+      resourceId: after.id,
+      resourceVersion: after.version,
+      outcome: 'SUCCESS',
+      companyId: employment.companyId,
+      reason: input.reason,
+      before: { employment_id: before.employmentId, pay_basis: before.payBasis, amount: before.amount, note: before.note, effective_from: before.effectiveFrom, effective_to: before.effectiveTo },
+      after: { employment_id: after.employmentId, pay_basis: after.payBasis, amount: after.amount, note: after.note, effective_from: after.effectiveFrom, effective_to: after.effectiveTo },
+    });
+    await uow.publish({
+      aggregateType: 'employment',
+      aggregateId: after.employmentId,
+      eventType: 'compensation.rate.updated',
+      payload: { employment_id: after.employmentId, effective_from: after.effectiveFrom, pay_basis: after.payBasis },
+    });
+    return toCompensation(after);
+  });
 }
 
 function toCompensation(row: CompensationRow): Compensation {

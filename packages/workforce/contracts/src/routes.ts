@@ -46,6 +46,7 @@ import {
   compensationSchema,
   createAssignmentSchema,
   createCompensationSchema,
+  updateCompensationSchema,
   createEmploymentSchema,
   createPersonSchema,
   employmentSchema,
@@ -394,6 +395,16 @@ export const ROUTES: readonly RouteDefinition[] = [
     body: createCompensationSchema,
     response: compensationSchema,
     successStatus: 201,
+  },
+  {
+    operationId: 'updateCompensationRate',
+    method: 'patch',
+    path: '/compensation-rates/{rateId}',
+    summary: 'แก้ฐานค่าจ้างที่ลงผิด (ยอด/ฐาน/หมายเหตุ) พร้อมเหตุผล',
+    tag: 'compensation',
+    permissions: ['workforce.compensation.manage'],
+    body: updateCompensationSchema,
+    response: compensationSchema,
   },
 
   // --- devices (Phase 2) ---

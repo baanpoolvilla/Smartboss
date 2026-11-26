@@ -1,12 +1,15 @@
-import { Body, Controller, Get, HttpCode, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import {
   createCompensationSchema,
   listCompensationQuerySchema,
   type Compensation,
   type CreateCompensationInput,
+  type UpdateCompensationInput,
+  updateCompensationSchema,
 } from '@workforce/contracts';
 import type { z } from 'zod';
 import { Idempotent, RequirePermissions } from '../shared/decorators';
+import { requireUuid } from '../organization/organization.controller';
 import { decodeCursor, type PageResult } from '../shared/pagination';
 import { zodPipe } from '../shared/zod-validation.pipe';
 import { CompensationService } from './compensation.service';
@@ -36,5 +39,15 @@ export class CompensationController {
     @Body(zodPipe(createCompensationSchema)) body: CreateCompensationInput,
   ): Promise<Compensation> {
     return this.service.create(body);
+  }
+
+  /** แก้แถวที่ลงผิด — ยอด/ฐาน/หมายเหตุ ต้องมีเหตุผล · ช่วงวันที่ไม่เปลี่ยน (ขึ้นเงินเดือน = POST ช่วงใหม่) */
+  @Patch('compensation-rates/:rateId')
+  @RequirePermissions('workforce.compensation.manage')
+  async update(
+    @Param('rateId') rateId: string,
+    @Body(zodPipe(updateCompensationSchema)) body: UpdateCompensationInput,
+  ): Promise<Compensation> {
+    return this.service.update(requireUuid(rateId, 'rateId'), body);
   }
 }
