@@ -6,7 +6,7 @@ import { PrintButton } from "@/modules/daily_worker/components/print-button";
 import { PayslipDocument } from "@/modules/salary/components/payslip-document";
 import { salaryAccess } from "@/modules/salary/lib/access";
 import { readSettings, withSalaryTenant } from "@/modules/salary/lib/db";
-import { loadSlip, positionOf, type SlipData } from "@/modules/salary/lib/views";
+import { legalNameOf, loadSlip, positionOf, type SlipData } from "@/modules/salary/lib/views";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "สลิปเงินเดือน · Smartboss" };
@@ -42,6 +42,7 @@ export default async function PrintSlips({ params, searchParams }: { params: Pro
   const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { name: true } });
   const settings = await withSalaryTenant(orgId, (tx) => readSettings(tx, orgId));
   const positions = await Promise.all(slips.map((s) => positionOf(orgId, s.line.employmentId, s.endsOn)));
+  const legalNames = await Promise.all(slips.map((s) => legalNameOf(orgId, s.line.employmentId)));
   return (
     <div className="min-h-screen bg-(--bg-soft) py-6 text-(--ink) print:bg-white print:py-0">
       <style>{"@page { size: A4 landscape; margin: 12mm; }"}</style>
@@ -51,7 +52,7 @@ export default async function PrintSlips({ params, searchParams }: { params: Pro
       {slips.map((s, i) => (
         <div key={s.line.employmentId} data-paper className="mx-auto mb-6 max-w-5xl bg-(--bg) shadow-sm print:mb-0 print:max-w-none print:break-after-page print:shadow-none">
           {s.status !== "paid" && <p className="px-8 pt-4 text-sm font-semibold text-amber-800 print:px-0">ตัวอย่าง — รอบนี้ยังไม่จ่าย</p>}
-          <PayslipDocument s={s} company={org?.name ?? ""} companyTaxId={settings.companyTaxId} position={positions[i]} />
+          <PayslipDocument s={s} company={org?.name ?? ""} companyTaxId={settings.companyTaxId} position={positions[i]} legalName={legalNames[i]} />
         </div>
       ))}
     </div>

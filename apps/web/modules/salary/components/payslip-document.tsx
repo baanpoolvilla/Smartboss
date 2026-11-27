@@ -125,12 +125,15 @@ export function PayslipDocument({
   company,
   companyTaxId,
   position,
+  legalName,
 }: {
   s: SlipData;
   company: string;
   companyTaxId?: string;
   /** ตำแหน่งจากระบบบุคคล — ไม่มีใช้แผนก */
   position?: string | null;
+  /** ชื่อจริง-นามสกุลจากระบบบุคคล — ไม่มีใช้ชื่อในรอบเงินเดือน */
+  legalName?: string | null;
 }) {
   const l = s.line;
   const year = Number(s.payDate.slice(0, 4));
@@ -152,7 +155,7 @@ export function PayslipDocument({
   return (
     <article
       className="mx-auto w-full max-w-[60rem] bg-(--bg) px-5 py-6 text-(--ink) sm:px-8 print:max-w-none print:px-0 print:py-0"
-      aria-label={`สลิปเงินเดือน ${l.name}`}
+      aria-label={`สลิปเงินเดือน ${legalName || l.name}`}
     >
       {/* หัวเอกสาร */}
       <header className="flex flex-col-reverse gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -167,7 +170,7 @@ export function PayslipDocument({
 
       <div className="mt-4 grid grid-cols-1 gap-x-10 gap-y-2 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
-          <Field th="ชื่อ-นามสกุล (รหัส)" en="Emp. name (Code)" value={`${l.name}${l.employeeCode ? ` (${l.employeeCode})` : ""}`} />
+          <Field th="ชื่อ-นามสกุล (รหัส)" en="Emp. name (Code)" value={`${legalName || l.name}${l.employeeCode ? ` (${l.employeeCode})` : ""}`} />
           <Field th={position ? "ตำแหน่ง" : "แผนก"} en={position ? "Position" : "Department"} value={position || l.department} />
         </div>
         <div className="flex flex-col gap-2">

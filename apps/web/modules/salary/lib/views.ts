@@ -406,6 +406,22 @@ export async function lastPaidDiligence(orgId: string, employmentId: string): Pr
   });
 }
 
+/**
+ * ชื่อจริง-นามสกุลจากระบบบุคคล (workforce.people) สำหรับหัวสลิป — ไม่ใช่ชื่อบัญชี/ชื่อเล่น (ผู้ใช้ 27/11/2569)
+ * ไม่มี/ว่าง = null (สลิปใช้ชื่อในรอบเงินเดือนเหมือนเดิม)
+ */
+export async function legalNameOf(orgId: string, employmentId: string): Promise<string | null> {
+  const rows = await withWorkforceTenant(orgId, (wtx) =>
+    wtx.$queryRawUnsafe<{ first_name: string; last_name: string }[]>(
+      `SELECT pe.first_name, pe.last_name FROM workforce.employments e JOIN workforce.people pe ON pe.id = e.person_id
+        WHERE e.id = $1::uuid LIMIT 1`,
+      employmentId,
+    ),
+  ).catch(() => []);
+  const name = rows[0] ? `${rows[0].first_name} ${rows[0].last_name}`.replace(/\s+/g, " ").trim() : "";
+  return name || null;
+}
+
 /** ตำแหน่งปัจจุบันจากระบบบุคคล (employment_assignments → positions) — ไม่มี = null (สลิปใช้แผนกแทน) */
 export async function positionOf(orgId: string, employmentId: string, onDate: string): Promise<string | null> {
   const rows = await withWorkforceTenant(orgId, (wtx) =>

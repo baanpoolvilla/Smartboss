@@ -9,7 +9,7 @@ import { SlipTabs } from "@/modules/salary/components/slip-tabs";
 import { SlipView } from "@/modules/salary/components/slip-view";
 import { readSettings, withSalaryTenant } from "@/modules/salary/lib/db";
 import { salaryPage } from "@/modules/salary/lib/page";
-import { loadSlip, positionOf } from "@/modules/salary/lib/views";
+import { legalNameOf, loadSlip, positionOf } from "@/modules/salary/lib/views";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +25,7 @@ export default async function RunSlipPage({ params, searchParams }: { params: Pr
   const org = await prisma.organization.findUnique({ where: { id: session.orgId }, select: { name: true } });
   const settings = await withSalaryTenant(session.orgId, (tx) => readSettings(tx, session.orgId));
   const position = await positionOf(session.orgId, employmentId, slip.endsOn);
+  const legalName = await legalNameOf(session.orgId, employmentId);
   const base = `/salary/runs/${id}/slip/${employmentId}`;
   return (
     <AppScaffold title="สลิปเงินเดือน" backHref={`/salary/runs/${id}?edit=${employmentId}`} width="max-w-none">
@@ -35,7 +36,7 @@ export default async function RunSlipPage({ params, searchParams }: { params: Pr
           <SlipView s={slip} company={org?.name ?? ""} />
         ) : (
           <div className="overflow-hidden rounded-(--radius-lg) border border-(--line)">
-            <PayslipDocument s={slip} company={org?.name ?? ""} companyTaxId={settings.companyTaxId} position={position} />
+            <PayslipDocument s={slip} company={org?.name ?? ""} companyTaxId={settings.companyTaxId} position={position} legalName={legalName} />
           </div>
         )}
       </div>

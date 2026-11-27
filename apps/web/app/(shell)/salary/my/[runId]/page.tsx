@@ -10,7 +10,7 @@ import { SlipView } from "@/modules/salary/components/slip-view";
 import { outline } from "@/modules/salary/components/ui";
 import { readSettings, withSalaryTenant } from "@/modules/salary/lib/db";
 import { salaryPage } from "@/modules/salary/lib/page";
-import { loadSlip, positionOf } from "@/modules/salary/lib/views";
+import { legalNameOf, loadSlip, positionOf } from "@/modules/salary/lib/views";
 import { periodLabel } from "@/modules/salary/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +26,7 @@ export default async function MySlipPage({ params, searchParams }: { params: Pro
   // ตั้งค่าเงินเดือนอ่านได้ผ่าน RLS ของบริษัท (เลขผู้เสียภาษีบริษัทบนหัวสลิป — ไม่ใช่ข้อมูลเงินเดือนของใคร)
   const settings = await withSalaryTenant(session.orgId, (tx) => readSettings(tx, session.orgId));
   const position = await positionOf(session.orgId, slip.line.employmentId, slip.endsOn);
+  const legalName = await legalNameOf(session.orgId, slip.line.employmentId);
   const base = `/salary/my/${runId}`;
   return (
     <AppScaffold title={`สลิป ${periodLabel(slip.period)}`} backHref="/salary/my" width="max-w-none">
@@ -35,7 +36,7 @@ export default async function MySlipPage({ params, searchParams }: { params: Pro
           <SlipView s={slip} company={org?.name ?? ""} />
         ) : (
           <div className="overflow-hidden rounded-(--radius-lg) border border-(--line)">
-            <PayslipDocument s={slip} company={org?.name ?? ""} companyTaxId={settings.companyTaxId} position={position} />
+            <PayslipDocument s={slip} company={org?.name ?? ""} companyTaxId={settings.companyTaxId} position={position} legalName={legalName} />
           </div>
         )}
         {slip.line.payChannel === "cash" && <CashConfirm runId={runId} />}
