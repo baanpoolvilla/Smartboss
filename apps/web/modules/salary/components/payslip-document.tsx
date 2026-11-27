@@ -126,10 +126,22 @@ export function PayslipDocument({
   companyTaxId,
   position,
   legalName,
+  companyBranch,
+  companyAddress,
+  slipNo,
+  nationalIdMasked,
 }: {
   s: SlipData;
   company: string;
   companyTaxId?: string;
+  /** ลำดับที่สาขา (000000 = สำนักงานใหญ่) — แสดงต่อท้ายเลขผู้เสียภาษี */
+  companyBranch?: string;
+  /** ที่อยู่บริษัท · ว่าง = ไม่แสดง (27/11/2569) */
+  companyAddress?: string;
+  /** เลขที่สลิป PS-2569-12-0010 (27/11/2569) */
+  slipNo?: string;
+  /** เลขบัตรประชาชนแบบปิดบางหลัก · ไม่มี = ไม่แสดงช่องนี้ */
+  nationalIdMasked?: string | null;
   /** ตำแหน่งจากระบบบุคคล — ไม่มีใช้แผนก */
   position?: string | null;
   /** ชื่อจริง-นามสกุลจากระบบบุคคล — ไม่มีใช้ชื่อในรอบเงินเดือน */
@@ -161,16 +173,24 @@ export function PayslipDocument({
       <header className="flex flex-col-reverse gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 flex-col gap-0.5">
           <div className="text-base font-bold">{company}</div>
-          {companyTaxId && <div className="text-xs text-(--ink-soft)">เลขประจำตัวผู้เสียภาษี {companyTaxId}</div>}
+          {companyTaxId && (
+            <div className="text-xs text-(--ink-soft)">
+              เลขประจำตัวผู้เสียภาษี {companyTaxId}
+              {companyBranch ? ` · ${companyBranch === "000000" ? "สำนักงานใหญ่" : `สาขา ${companyBranch}`}` : ""}
+            </div>
+          )}
+          {companyAddress && <div className="whitespace-pre-line text-xs text-(--ink-soft)">{companyAddress}</div>}
         </div>
         <div className="sm:text-right">
           <h1 className="text-xl font-bold tracking-tight">สลิปเงินเดือน / Pay Slip</h1>
+          {slipNo && <div className="text-xs tabular-nums text-(--ink-soft)">เลขที่ / No. {slipNo}</div>}
         </div>
       </header>
 
       <div className="mt-4 grid grid-cols-1 gap-x-10 gap-y-2 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
           <Field th="ชื่อ-นามสกุล (รหัส)" en="Emp. name (Code)" value={`${legalName || l.name}${l.employeeCode ? ` (${l.employeeCode})` : ""}`} />
+          {nationalIdMasked && <Field th="เลขประจำตัวประชาชน" en="ID No." value={nationalIdMasked} />}
           <Field th={position ? "ตำแหน่ง" : "แผนก"} en={position ? "Position" : "Department"} value={position || l.department} />
         </div>
         <div className="flex flex-col gap-2">

@@ -75,6 +75,7 @@ export async function readSettings(tx: Tx, orgId: string): Promise<SettingsView>
     ssoBranch: row.ssoBranch,
     payBankName: row.payBankName,
     payBankAccount: row.payBankAccount,
+    companyAddress: row.companyAddress,
     updatedByName: row.updatedByName,
   };
 }

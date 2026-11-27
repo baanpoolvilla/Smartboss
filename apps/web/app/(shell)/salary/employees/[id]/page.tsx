@@ -6,7 +6,10 @@ import { ProfileSection, RecurringSection, SalarySection } from "@/modules/salar
 import { readSettings, withSalaryTenant } from "@/modules/salary/lib/db";
 import { ownSalaryLocked } from "@/modules/salary/lib/access";
 import { salaryPage } from "@/modules/salary/lib/page";
-import { lastPaidDiligence, listStaff } from "@/modules/salary/lib/views";
+import { lastPaidDiligence, listStaff, loadPayCompanies } from "@/modules/salary/lib/views";
+import { PayCompanySelect } from "@/modules/salary/components/company-forms";
+import { card } from "@/modules/salary/components/ui";
+import { companyKey, hasMultipleCompanies } from "@/modules/salary/lib/companies";
 import { savingsForEmployee } from "@/modules/salary/lib/savings";
 import { rateLog } from "@/modules/salary/lib/rate-save";
 import { SavingsSection } from "@/modules/salary/components/savings-section";
@@ -33,6 +36,7 @@ export default async function SalaryEmployeePage({ params }: { params: Promise<{
   const lastDiligence = settings.diligenceEnabled ? await lastPaidDiligence(orgId, row.employmentId) : null;
   const savings = await savingsForEmployee(orgId, row.employmentId);
   const salaryLog = await rateLog(orgId, row.employmentId);
+  const companies = await loadPayCompanies(orgId);
   // คนทำเงินเดือน (ไม่ใช่ CEO) ดูของตัวเองได้แต่แก้ไม่ได้ — server ก็กันซ้ำใน actions
   const ownLocked = ownSalaryLocked(access, row.userId === session.userId);
   const thisPeriod = periodDates(p, settings.cutoffDay, settings.payDay).endsOn >= today ? p : shiftPeriod(p, 1);
@@ -53,6 +57,15 @@ export default async function SalaryEmployeePage({ params }: { params: Promise<{
           </div>
         ) : (
         <>
+        {hasMultipleCompanies(companies) && (
+          <section className={`${card} flex flex-col gap-2 p-4 sm:p-5`}>
+            <h2 className="text-base font-bold text-(--ink)">ออกเงินเดือนในนามบริษัท</h2>
+            <div className="max-w-md">
+              <PayCompanySelect employmentId={row.employmentId} value={companyKey(row.profile.payCompanyId)} companies={companies} name={row.name} />
+            </div>
+            <p className="text-xs text-(--ink-soft)">ใช้กับหัวสลิป ไฟล์ประกันสังคม ภ.ง.ด.1 และไฟล์โอน · มีผลกับรอบที่ยังเป็นร่างเมื่อกดคำนวณใหม่ · รอบที่ส่งอนุมัติ/จ่ายแล้วไม่เปลี่ยน</p>
+          </section>
+        )}
         <SalarySection employmentId={row.employmentId} salary={row.salary} history={row.history} hiredOn={row.hiredOn} today={today} log={salaryLog} />
         <ProfileSection
           employmentId={row.employmentId}

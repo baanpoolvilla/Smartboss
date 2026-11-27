@@ -239,6 +239,8 @@ export interface SettingsView {
   ssoBranch: string;
   payBankName: string;
   payBankAccount: string;
+  /** ที่อยู่บริษัทหลักบนหัวสลิป · ว่าง = ไม่แสดง */
+  companyAddress: string;
   updatedByName: string;
 }
 
@@ -270,6 +272,7 @@ export const DEFAULT_SETTINGS: SettingsView = {
   ssoBranch: "000000",
   payBankName: "",
   payBankAccount: "",
+  companyAddress: "",
   updatedByName: "",
 };
 

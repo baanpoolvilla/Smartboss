@@ -37,6 +37,8 @@ model SalarySettings {
   ssoBranch          String   @default("000000") @map("sso_branch")
   payBankName        String   @default("") @map("pay_bank_name")
   payBankAccount     String   @default("") @map("pay_bank_account")
+  /// ที่อยู่บริษัทหลักบนหัวสลิป · ว่าง = ไม่แสดง
+  companyAddress     String   @default("") @map("company_address")
   /// ค่า OT นับเป็นค่าจ้างคิดประกันสังคม
   otSsoBase          Boolean  @default(true) @map("ot_sso_base")
   /// ค่าคอมจากเกรด นับเป็นค่าจ้างคิดประกันสังคม (เดิมอ่านจากรายการ "คอมมิชชั่น" — ย้ายมาที่นี่ 20/11/2569)
@@ -158,6 +160,8 @@ model SalaryProfile {
   diligenceEligible Boolean? @map("diligence_eligible")
   /// ขั้นเบี้ยขยันรอบล่าสุดจากระบบเดิม (บาท) — ใช้เมื่อยังไม่มีรอบที่จ่ายผ่านระบบนี้ · null = เริ่มขั้นแรก
   diligenceOpening  Decimal? @map("diligence_opening") @db.Decimal(12, 2)
+  /// ออกเงินเดือนในนามบริษัทไหน (salary.companies.id) · null = บริษัทหลัก (ข้อมูลใน settings)
+  payCompanyId      String?  @map("pay_company_id")
   updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   updatedByName   String   @default("") @map("updated_by_name")
 
@@ -241,6 +245,8 @@ model SalaryRunLine {
   /// transfer | cash ณ ตอนคำนวณ
   payChannel    String   @default("transfer") @map("pay_channel")
   updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  /// บริษัทที่ออกเงินเดือน ณ ตอนคำนวณ (salary.companies.id) · null = บริษัทหลัก
+  companyId     String?  @map("company_id")
   /// เงินสด: พนักงานกดได้รับเงินแล้ว
   receivedAt    DateTime? @map("received_at") @db.Timestamptz(6)
 
@@ -288,5 +294,28 @@ model SalarySavingsEntry {
 
   @@index([orgId, employmentId])
   @@map("savings_entries")
+  @@schema("salary")
+}
+
+/// บริษัทอื่นที่ออกเงินเดือน (นอกจากบริษัทหลักใน settings) — ผู้ใช้ 27/11/2569 มี 3 บริษัท
+/// เลิกใช้ = retired_at (ไม่ลบ รอบเก่ายังอ้างถึง)
+model SalaryCompany {
+  id             String    @id @default(uuid())
+  orgId          String    @map("org_id")
+  name           String
+  taxId          String    @default("") @map("tax_id")
+  /// ลำดับที่สาขา (สำนักงานใหญ่ = 000000) — ใช้ทั้งภาษีและประกันสังคม
+  branch         String    @default("000000")
+  ssoEmployerNo  String    @default("") @map("sso_employer_no")
+  payBankName    String    @default("") @map("pay_bank_name")
+  payBankAccount String    @default("") @map("pay_bank_account")
+  address        String    @default("")
+  retiredAt      DateTime? @map("retired_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  updatedByName  String    @default("") @map("updated_by_name")
+
+  @@index([orgId])
+  @@map("companies")
   @@schema("salary")
 }

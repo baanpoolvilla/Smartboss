@@ -3,6 +3,9 @@ import { prisma } from "@smartboss/database";
 import { AppScaffold } from "@/components/module/app-scaffold";
 import { AccessForm, GeneralSettingsForm, ItemsList, SsoRates, TaxAndItemsSwitch, TaxRates } from "@/modules/salary/components/settings-forms";
 import { SalaryTabs } from "@/modules/salary/components/tabs";
+import { CompaniesSection } from "@/modules/salary/components/company-forms";
+import { companyKey } from "@/modules/salary/lib/companies";
+import { listStaff, loadPayCompanies } from "@/modules/salary/lib/views";
 import { readRates, readSettings, withSalaryTenant } from "@/modules/salary/lib/db";
 import { ensureDefaultItems } from "@/modules/salary/lib/items";
 import { salaryPage } from "@/modules/salary/lib/page";
@@ -28,6 +31,10 @@ export default async function SalarySettingsPage() {
     orderBy: { name: "asc" },
   });
   const today = bangkokToday();
+  const [companies, staff] = await Promise.all([loadPayCompanies(orgId), listStaff(orgId)]);
+  const people: Record<string, number> = {};
+  // นับทุกคนในรายชื่อเงินเดือน (รวมคนที่เพิ่งออก — งวดสุดท้ายยังออกในนามบริษัทนี้) ให้ตรงกับเงื่อนไข "เลิกใช้ได้เมื่อไม่มีพนักงานผูกอยู่"
+  for (const s of staff) people[companyKey(s.profile.payCompanyId)] = (people[companyKey(s.profile.payCompanyId)] ?? 0) + 1;
   return (
     <AppScaffold title="เงินเดือน" width="max-w-none">
       <div className="flex flex-col gap-4">
@@ -65,8 +72,10 @@ export default async function SalarySettingsPage() {
             ssoBranch: settings.ssoBranch,
             payBankName: settings.payBankName,
             payBankAccount: settings.payBankAccount,
+            companyAddress: settings.companyAddress,
           }}
         />
+        <CompaniesSection companies={companies} people={people} />
         <SsoRates current={rateOn(rates.sso, today, DEFAULT_SSO)} isDefault={rates.sso.length === 0} history={rates.sso.map((r) => ({ from: r.effectiveFrom, p: r.params }))} />
         <TaxAndItemsSwitch taxEnabled={settings.taxEnabled} activeItems={items.filter((i) => i.active).length} totalItems={items.length} />
         {settings.taxEnabled && <TaxRates current={rateOn(rates.tax, today, DEFAULT_TAX)} isDefault={rates.tax.length === 0} />}

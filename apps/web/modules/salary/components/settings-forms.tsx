@@ -111,6 +111,9 @@ export function GeneralSettingsForm({ initial }: { initial: SettingsInput }) {
               <input aria-label="เลขบัญชี" inputMode="numeric" className={field} value={v.payBankAccount} onChange={(e) => set({ payBankAccount: e.target.value })} placeholder="เลขบัญชี" />
             </div>
           </label>
+          <label className={`${label} sm:col-span-2`}><span className={labelText}>ที่อยู่บริษัท (แสดงบนหัวสลิป · เว้นว่างได้)</span>
+            <textarea rows={2} className={`${field} h-auto py-2`} value={v.companyAddress ?? ""} onChange={(e) => set({ companyAddress: e.target.value })} />
+          </label>
         </div>
       </section>
 

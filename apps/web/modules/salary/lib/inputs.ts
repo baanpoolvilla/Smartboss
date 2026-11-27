@@ -65,6 +65,8 @@ export interface StaffInput {
     prevTax: number;
     prevSso: number;
     prevYear: number | null;
+    /** salary.companies.id · null = บริษัทหลัก */
+    payCompanyId?: string | null;
   };
   ytd: { taxable: number; tax: number; sso: number; periods: number; gapPeriods: number };
   /** ยอดยกมาที่กรอกไว้ (ใช้ตอนคำนวณงวดนี้) — เก็บลงบรรทัดไว้ให้สลิปแสดงยอดสะสมทั้งปีได้ถูก */
@@ -452,6 +454,7 @@ export async function loadPeriodInputs(
         prevTax: num(p?.prevTax),
         prevSso: num(p?.prevSso),
         prevYear: p?.prevYear ?? null,
+        payCompanyId: p?.payCompanyId ?? null,
       },
       ytd: {
         taxable: num(y?.taxable) + (prevApplies ? num(p?.prevIncome) : 0),

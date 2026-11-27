@@ -5,7 +5,8 @@ import { salaryAccess } from "@/modules/salary/lib/access";
 import { insertEvent, readSettings, withSalaryTenant } from "@/modules/salary/lib/db";
 import { actorOf } from "@/modules/salary/lib/page";
 import { exactText, reportRow } from "@/modules/salary/lib/report";
-import { loadRun } from "@/modules/salary/lib/views";
+import { loadPayCompanies, loadRun } from "@/modules/salary/lib/views";
+import { companyKey } from "@/modules/salary/lib/companies";
 
 import { ceoTitle } from "@/lib/ceo-title";
 /**
@@ -14,6 +15,7 @@ import { ceoTitle } from "@/lib/ceo-title";
  *   sso     สรุปประกันสังคม (ค่าจ้างที่ใช้คิด · ลูกจ้าง · บริษัท) — ยังไม่ใช่ไฟล์ยื่นออนไลน์ สปส.1-10
  *   pnd1    สรุปภาษีหัก ณ ที่จ่าย (เงินได้ · ภาษี) — ยังไม่ใช่ไฟล์ RD Prep
  *   summary ทุกคน ทุกรายการ ให้ฝ่ายบัญชี
+ *   ?company=<id> (27/11/2569) เฉพาะคนที่ออกเงินเดือนในนามบริษัทนั้น + เลขภาษี/เลขนายจ้าง/บัญชีของบริษัทนั้น · ไม่ส่ง = ทั้งรอบเหมือนเดิม
  *   report  รายงานเงินเดือนตามสูตร HR (ฐาน · ค่าคอม Grade/Tier · เบี้ยขยัน · OT วัน · รายเพิ่ม/หัก · ประกันสังคม · สุทธิ) — โหลดได้ตั้งแต่ร่าง (ใช้ตรวจ)
  * ดาวน์โหลดได้เฉพาะ CEO + คนที่ CEO เลือก · บันทึกว่าใครดาวน์โหลดเมื่อไหร่ · ห้ามแคช
  */
@@ -32,6 +34,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     return new NextResponse(`รอบนี้ยังไม่ได้อนุมัติ — ดาวน์โหลดไฟล์ได้หลัง ${ceo} อนุมัติ`, { status: 409, headers: { "content-type": "text/plain; charset=utf-8" } });
   }
   const settings = await withSalaryTenant(orgId, (tx) => readSettings(tx, orgId));
+  const companyParam = new URL(req.url).searchParams.get("company");
+  const companies = companyParam ? await loadPayCompanies(orgId) : [];
+  const company = companyParam ? companies.find((c) => c.id === companyParam) : undefined;
+  if (companyParam && !company) return new NextResponse("Not found", { status: 404 });
+  // ไม่เลือกบริษัท = ค่าเดิมจากตั้งค่า (บริษัทหลัก) ทุกตัว
+  const co = company ?? { taxId: settings.companyTaxId, ssoEmployerNo: settings.ssoEmployerNo, branch: settings.ssoBranch, payBankName: settings.payBankName, payBankAccount: settings.payBankAccount };
 
   const esc = (v: unknown) => {
     const s = v === null || v === undefined ? "" : String(v);
@@ -43,7 +51,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const n = (v: number) => v.toFixed(2);
   let head: string[] = [];
   let rows: unknown[][] = [];
-  const lines = run.lines;
+  const lines = company ? run.lines.filter((l) => companyKey(l.companyId) === company.id) : run.lines;
 
   if (type === "bank") {
     head = ["ลำดับ", "ชื่อบัญชี", "ธนาคาร", "เลขที่บัญชี", "จำนวนเงิน", "ชื่อพนักงาน", "รหัสพนักงาน"];
@@ -55,7 +63,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       rows.push([], ["ไม่อยู่ในไฟล์โอน (จ่ายเงินสด / ไม่มีเลขบัญชี / ยอด 0)"]);
       for (const l of left) rows.push(["", l.name, l.payChannel === "cash" ? "เงินสด" : "ไม่มีเลขบัญชี", "", n(l.net)]);
     }
-    rows.push([], [`บัญชีบริษัทที่ใช้จ่าย: ${settings.payBankName} ${settings.payBankAccount}`.trim()]);
+    rows.push([], [`${company ? `${company.name} · ` : ""}บัญชีบริษัทที่ใช้จ่าย: ${co.payBankName} ${co.payBankAccount}`.trim()]);
   } else if (type === "sso") {
     head = ["ลำดับ", "รหัสพนักงาน", "ชื่อ", "ค่าจ้างที่ใช้คิด", "เงินสมทบลูกจ้าง", "เงินสมทบนายจ้าง", "รวม"];
     const insured = lines.filter((l) => l.ssoEmployee > 0 || l.ssoEmployer > 0);
@@ -63,13 +71,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const se = insured.reduce((s, l) => s + l.ssoEmployee, 0);
     const sr = insured.reduce((s, l) => s + l.ssoEmployer, 0);
     rows.push([], ["", "", "รวม", "", n(se), n(sr), n(se + sr)]);
-    rows.push([], [`เลขบัญชีนายจ้าง ${settings.ssoEmployerNo || "(ยังไม่ได้ตั้ง)"} สาขา ${settings.ssoBranch}`], ["หมายเหตุ: ไฟล์สรุป ไม่ใช่ไฟล์ยื่นออนไลน์ สปส.1-10 — กรอกในระบบ e-service ประกันสังคมจากไฟล์นี้"]);
+    rows.push([], [`${company ? `${company.name} · ` : ""}เลขบัญชีนายจ้าง ${co.ssoEmployerNo || "(ยังไม่ได้ตั้ง)"} สาขา ${co.branch}`], ["หมายเหตุ: ไฟล์สรุป ไม่ใช่ไฟล์ยื่นออนไลน์ สปส.1-10 — กรอกในระบบ e-service ประกันสังคมจากไฟล์นี้"]);
   } else if (type === "pnd1") {
     head = ["ลำดับ", "รหัสพนักงาน", "ชื่อ", "เงินได้ที่จ่าย (คิดภาษี)", "ภาษีที่หัก"];
     const taxed = lines.filter((l) => l.taxable > 0);
     rows = taxed.map((l, i) => [i + 1, l.employeeCode, l.name, n(l.taxable), n(l.tax)]);
     rows.push([], ["", "", "รวม", n(taxed.reduce((s, l) => s + l.taxable, 0)), n(taxed.reduce((s, l) => s + l.tax, 0))]);
-    rows.push([], [`เลขผู้เสียภาษีบริษัท ${settings.companyTaxId || "(ยังไม่ได้ตั้ง)"}`], ["หมายเหตุ: ไฟล์สรุป ไม่ใช่ไฟล์ยื่น RD Prep — ใช้กรอก ภ.ง.ด.1 ของเดือนที่จ่าย"]);
+    rows.push([], [`${company ? `${company.name} · ` : ""}เลขผู้เสียภาษีบริษัท ${co.taxId || "(ยังไม่ได้ตั้ง)"}`], ["หมายเหตุ: ไฟล์สรุป ไม่ใช่ไฟล์ยื่น RD Prep — ใช้กรอก ภ.ง.ด.1 ของเดือนที่จ่าย"]);
   } else if (type === "report") {
     const rs = lines.map((l) => reportRow(l));
     head = [
@@ -102,19 +110,24 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         l.lines.filter((x) => x.kind === "deduction" && x.amount > 0).map((x) => `${x.label} ${n(x.amount)}`).join(" | "),
       ];
     });
-    const t = run.totals;
+    // เลือกบริษัท = รวมเฉพาะคนในบริษัทนั้น · ทั้งรอบ = ยอดรวมของรอบเหมือนเดิม
+    const sum = (f: (l: (typeof lines)[number]) => number) => lines.reduce((m, l) => m + Math.round(f(l) * 100), 0) / 100;
+    const t = company
+      ? { gross: sum((l) => l.gross), ssoEmployee: sum((l) => l.ssoEmployee), tax: sum((l) => l.tax), deductions: sum((l) => l.deductions), net: sum((l) => l.net), ssoEmployer: sum((l) => l.ssoEmployer) }
+      : run.totals;
     rows.push([], ["", "", "รวม", "", "", "", "", "", n(t.gross), n(t.ssoEmployee), n(t.tax), "", n(t.deductions), n(t.net), n(t.ssoEmployer)]);
+    if (company) rows.push([], [`บริษัท: ${company.name}${company.taxId ? ` · เลขผู้เสียภาษี ${company.taxId}` : ""}`]);
   }
 
   const actor = await actorOf(session.userId);
-  await withSalaryTenant(orgId, (tx) => insertEvent(tx, orgId, { runId: id, byUserId: actor.userId, byName: actor.name, action: "export", summary: `ดาวน์โหลดไฟล์ ${type}` }));
+  await withSalaryTenant(orgId, (tx) => insertEvent(tx, orgId, { runId: id, byUserId: actor.userId, byName: actor.name, action: "export", summary: `ดาวน์โหลดไฟล์ ${type}${company ? ` (${company.name})` : ""}` }));
   // ลงประวัติกลางของบริษัทด้วย (หลังบ้าน › ประวัติการใช้งาน) — เดิมเห็นเฉพาะในประวัติของรอบเงินเดือน
-  await audit({ userId: session.userId, action: "SALARY_EXPORTED", targetId: id, detail: { type, period: run.period } });
+  await audit({ userId: session.userId, action: "SALARY_EXPORTED", targetId: id, detail: { type, period: run.period, ...(company ? { company: company.id } : {}) } });
   const csv = "﻿" + [head.map(esc).join(","), ...rows.map((r) => r.map(esc).join(","))].join("\r\n");
   return new NextResponse(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="salary-${run.period}-${type}.csv"`,
+      "Content-Disposition": `attachment; filename="salary-${run.period}-${type}${company ? `-${company.main ? "main" : company.id.slice(0, 8)}` : ""}.csv"`,
       "Cache-Control": "private, no-store",
     },
   });

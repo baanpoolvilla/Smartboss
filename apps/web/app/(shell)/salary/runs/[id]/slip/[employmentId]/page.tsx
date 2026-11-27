@@ -9,7 +9,7 @@ import { SlipTabs } from "@/modules/salary/components/slip-tabs";
 import { SlipView } from "@/modules/salary/components/slip-view";
 import { readSettings, withSalaryTenant } from "@/modules/salary/lib/db";
 import { salaryPage } from "@/modules/salary/lib/page";
-import { legalNameOf, loadSlip, positionOf } from "@/modules/salary/lib/views";
+import { legalNameOf, loadSlip, maskedNationalIdOf, positionOf, slipHeaders } from "@/modules/salary/lib/views";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +25,10 @@ export default async function RunSlipPage({ params, searchParams }: { params: Pr
   const org = await prisma.organization.findUnique({ where: { id: session.orgId }, select: { name: true } });
   const settings = await withSalaryTenant(session.orgId, (tx) => readSettings(tx, session.orgId));
   const position = await positionOf(session.orgId, employmentId, slip.endsOn);
+  // หัวสลิป = บริษัทที่ออกเงินเดือนของคนนี้ (หลายบริษัท 27/11/2569) + เลขที่สลิป
+  const head = (await slipHeaders(session.orgId, id)).get(slip.line.employmentId);
   const legalName = await legalNameOf(session.orgId, employmentId);
+  const nationalId = await maskedNationalIdOf(session.orgId, employmentId);
   const base = `/salary/runs/${id}/slip/${employmentId}`;
   return (
     <AppScaffold title="สลิปเงินเดือน" backHref={`/salary/runs/${id}?edit=${employmentId}`} width="max-w-none">
@@ -33,10 +36,10 @@ export default async function RunSlipPage({ params, searchParams }: { params: Pr
         {slip.status !== "paid" && <Notice tone="warn">ตัวอย่างสลิป — รอบนี้ยังไม่จ่าย ตัวเลขอาจเปลี่ยน · พนักงานยังไม่เห็น</Notice>}
         <SlipTabs docHref={base} detailHref={`${base}?view=detail`} detail={detail} printHref={`/salary/slips/${id}?only=${employmentId}`} />
         {detail ? (
-          <SlipView s={slip} company={org?.name ?? ""} />
+          <SlipView s={slip} company={head?.company.name ?? org?.name ?? ""} />
         ) : (
           <div className="overflow-hidden rounded-(--radius-lg) border border-(--line)">
-            <PayslipDocument s={slip} company={org?.name ?? ""} companyTaxId={settings.companyTaxId} position={position} legalName={legalName} />
+            <PayslipDocument s={slip} company={head?.company.name ?? org?.name ?? ""} companyTaxId={head ? head.company.taxId : settings.companyTaxId} companyBranch={head?.company.branch} companyAddress={head?.company.address} slipNo={head?.slipNo} nationalIdMasked={nationalId} position={position} legalName={legalName} />
           </div>
         )}
       </div>

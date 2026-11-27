@@ -10,7 +10,7 @@ import { SlipView } from "@/modules/salary/components/slip-view";
 import { outline } from "@/modules/salary/components/ui";
 import { readSettings, withSalaryTenant } from "@/modules/salary/lib/db";
 import { salaryPage } from "@/modules/salary/lib/page";
-import { legalNameOf, loadSlip, positionOf } from "@/modules/salary/lib/views";
+import { legalNameOf, loadSlip, maskedNationalIdOf, positionOf, slipHeaders } from "@/modules/salary/lib/views";
 import { periodLabel } from "@/modules/salary/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -26,17 +26,20 @@ export default async function MySlipPage({ params, searchParams }: { params: Pro
   // ตั้งค่าเงินเดือนอ่านได้ผ่าน RLS ของบริษัท (เลขผู้เสียภาษีบริษัทบนหัวสลิป — ไม่ใช่ข้อมูลเงินเดือนของใคร)
   const settings = await withSalaryTenant(session.orgId, (tx) => readSettings(tx, session.orgId));
   const position = await positionOf(session.orgId, slip.line.employmentId, slip.endsOn);
+  // หัวสลิป = บริษัทที่ออกเงินเดือนของคนนี้ (หลายบริษัท 27/11/2569) + เลขที่สลิป
+  const head = (await slipHeaders(session.orgId, runId)).get(slip.line.employmentId);
   const legalName = await legalNameOf(session.orgId, slip.line.employmentId);
+  const nationalId = await maskedNationalIdOf(session.orgId, slip.line.employmentId);
   const base = `/salary/my/${runId}`;
   return (
     <AppScaffold title={`สลิป ${periodLabel(slip.period)}`} backHref="/salary/my" width="max-w-none">
       <div className="flex flex-col gap-3">
         <SlipTabs docHref={base} detailHref={`${base}?view=detail`} detail={detail} />
         {detail ? (
-          <SlipView s={slip} company={org?.name ?? ""} />
+          <SlipView s={slip} company={head?.company.name ?? org?.name ?? ""} />
         ) : (
           <div className="overflow-hidden rounded-(--radius-lg) border border-(--line)">
-            <PayslipDocument s={slip} company={org?.name ?? ""} companyTaxId={settings.companyTaxId} position={position} legalName={legalName} />
+            <PayslipDocument s={slip} company={head?.company.name ?? org?.name ?? ""} companyTaxId={head ? head.company.taxId : settings.companyTaxId} companyBranch={head?.company.branch} companyAddress={head?.company.address} slipNo={head?.slipNo} nationalIdMasked={nationalId} position={position} legalName={legalName} />
           </div>
         )}
         {slip.line.payChannel === "cash" && <CashConfirm runId={runId} />}

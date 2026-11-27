@@ -4,7 +4,9 @@ import { AppScaffold } from "@/components/module/app-scaffold";
 import { SalaryTabs } from "@/modules/salary/components/tabs";
 import { card } from "@/modules/salary/components/ui";
 import { salaryPage } from "@/modules/salary/lib/page";
-import { listStaff } from "@/modules/salary/lib/views";
+import { listStaff, loadPayCompanies } from "@/modules/salary/lib/views";
+import { BulkCompanyMove, PayCompanySelect } from "@/modules/salary/components/company-forms";
+import { companyKey, hasMultipleCompanies } from "@/modules/salary/lib/companies";
 import { fmtBaht, thaiDate } from "@/modules/salary/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +14,9 @@ export const dynamic = "force-dynamic";
 /** รายชื่อพนักงานรายเดือน (ตั้งครั้งเดียว) — บอกชัดว่าใครข้อมูลยังไม่ครบ */
 export default async function SalaryEmployeesPage() {
   const { session } = await salaryPage({ edit: true });
-  const staff = await listStaff(session.orgId);
+  const [staff, companies] = await Promise.all([listStaff(session.orgId), loadPayCompanies(session.orgId)]);
+  // มีบริษัทเดียว = หน้าตาเดิม ไม่มีคอลัมน์บริษัท
+  const multi = hasMultipleCompanies(companies);
   const incomplete = staff.filter((s) => s.problems.length > 0).length;
   return (
     <AppScaffold title="เงินเดือน" width="max-w-none">
@@ -25,11 +29,13 @@ export default async function SalaryEmployeesPage() {
             {incomplete > 0 && <strong className="text-amber-800"> · ข้อมูลยังไม่ครบ {incomplete} คน</strong>}
           </p>
         </div>
+        {multi && <BulkCompanyMove staff={staff.map((s) => ({ employmentId: s.employmentId, name: s.name, companyId: companyKey(s.profile.payCompanyId) }))} companies={companies} />}
         <section className={`${card} relative overflow-x-auto`}>
           <table className="w-full min-w-[860px] text-sm">
             <thead className="bg-(--bg-soft) text-left text-xs text-(--ink-soft)">
               <tr>
                 <th className="px-4 py-2.5 font-semibold">พนักงาน</th>
+                {multi && <th className="px-3 py-2.5 font-semibold">ออกเงินเดือนในนาม</th>}
                 <th className="px-3 py-2.5 text-right font-semibold">เงินเดือน</th>
                 <th className="px-3 py-2.5 font-semibold">รายการประจำ</th>
                 <th className="px-3 py-2.5 font-semibold">รับเงินทาง</th>
@@ -49,6 +55,11 @@ export default async function SalaryEmployeesPage() {
                       {s.terminatedOn ? ` · ออก ${thaiDate(s.terminatedOn)}` : ""}
                     </div>
                   </td>
+                  {multi && (
+                    <td className="px-3 py-3">
+                      <PayCompanySelect employmentId={s.employmentId} value={companyKey(s.profile.payCompanyId)} companies={companies} name={s.name} />
+                    </td>
+                  )}
                   <td className="px-3 py-3 text-right font-semibold tabular-nums">{s.salary === null ? <span className="text-red-700">ยังไม่ใส่</span> : fmtBaht(s.salary)}</td>
                   <td className="px-3 py-3 text-xs text-(--ink-soft)">{s.recurring.length ? s.recurring.map((r) => `${r.name} ${r.kind === "earning" ? "+" : "−"}${fmtBaht(r.amount)}`).join(" · ") : "—"}</td>
                   <td className="px-3 py-3 text-xs">{s.profile.payChannel === "cash" ? "เงินสด" : s.profile.bankAccount ? `${s.profile.bankName} •••${s.profile.bankAccount.slice(-4)}` : <span className="text-amber-800">ยังไม่ใส่บัญชี</span>}</td>
@@ -67,7 +78,7 @@ export default async function SalaryEmployeesPage() {
                 </tr>
               ))}
               {staff.length === 0 && (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-(--ink-soft)">ยังไม่มีพนักงานรายเดือนในระบบบุคคล — เพิ่มพนักงานที่ ระบบบุคคล › พนักงาน ก่อน</td></tr>
+                <tr><td colSpan={multi ? 9 : 8} className="px-4 py-8 text-center text-(--ink-soft)">ยังไม่มีพนักงานรายเดือนในระบบบุคคล — เพิ่มพนักงานที่ ระบบบุคคล › พนักงาน ก่อน</td></tr>
               )}
             </tbody>
           </table>

@@ -11,6 +11,7 @@ import { notifyUsers } from "@/modules/maintenance/data/notify";
 import { isOwnEmployment, ownSalaryLocked, salaryAccess, type SalaryAccess } from "./lib/access";
 import type { Adjustment } from "./lib/compute";
 import { insertEvent, readSettings, withSalaryTenant } from "./lib/db";
+import { companyDbId, findCompany, readCompanies } from "./lib/companies";
 import { RateSaveError, saveCompensationRate } from "./lib/rate-save";
 import { actorOf } from "./lib/page";
 import { savingsBooksTx } from "./lib/savings";
@@ -207,6 +208,8 @@ export interface SettingsInput {
   ssoBranch: string;
   payBankName: string;
   payBankAccount: string;
+  /** ไม่ส่งมา = ไม่แตะ (ฟอร์มเก่า) */
+  companyAddress?: string;
 }
 
 export async function saveSettingsAction(input: SettingsInput): Promise<Result> {
@@ -257,6 +260,7 @@ export async function saveSettingsAction(input: SettingsInput): Promise<Result> 
       ssoBranch: branch,
       payBankName: text(input.payBankName, 60),
       payBankAccount: text(input.payBankAccount, 30).replace(/[^\d-]/g, ""),
+      ...(input.companyAddress !== undefined ? { companyAddress: text(input.companyAddress, 300) } : {}),
       updatedByName: actor.name,
     };
     await withSalaryTenant(orgId, async (tx) => {
@@ -896,6 +900,156 @@ export async function runNoteAction(input: { runId: string; note: string }): Pro
     await setRunNote(orgId, actor, input.runId, text(input.note, 2000));
     refresh(input.runId);
     return { ok: true };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/* ═════════════════════════ บริษัทที่ออกเงินเดือน (27/11/2569) ═════════════════════════ */
+
+export interface CompanyInput {
+  /** ไม่มี = เพิ่มใหม่ · บริษัทหลักแก้ที่กล่อง "ข้อมูลบริษัท" ไม่ใช่ที่นี่ */
+  id?: string;
+  name: string;
+  taxId: string;
+  branch: string;
+  ssoEmployerNo: string;
+  payBankName: string;
+  payBankAccount: string;
+  address: string;
+}
+
+const COMPANY_LABELS: Record<keyof Omit<CompanyInput, "id">, string> = {
+  name: "ชื่อบริษัท",
+  taxId: "เลขผู้เสียภาษี",
+  branch: "สาขา",
+  ssoEmployerNo: "เลขนายจ้างประกันสังคม",
+  payBankName: "ธนาคารที่ใช้จ่าย",
+  payBankAccount: "เลขบัญชีที่ใช้จ่าย",
+  address: "ที่อยู่",
+};
+
+export async function saveCompanyAction(input: CompanyInput): Promise<Result<{ id: string }>> {
+  try {
+    const { orgId, actor } = await guard("canEdit");
+    const name = text(input.name, 120);
+    if (!name) return { error: "ใส่ชื่อบริษัท" };
+    const taxId = text(input.taxId, 20).replace(/\D/g, "");
+    if (taxId && taxId.length !== 13) return { error: "เลขผู้เสียภาษีต้องมี 13 หลัก" };
+    const ssoNo = text(input.ssoEmployerNo, 20).replace(/\D/g, "");
+    if (ssoNo && ssoNo.length !== 10) return { error: "เลขบัญชีนายจ้างประกันสังคมต้องมี 10 หลัก" };
+    const data = {
+      name,
+      taxId,
+      branch: (text(input.branch, 6).replace(/\D/g, "") || "0").padStart(6, "0"),
+      ssoEmployerNo: ssoNo,
+      payBankName: text(input.payBankName, 60),
+      payBankAccount: text(input.payBankAccount, 30).replace(/[^\d-]/g, ""),
+      address: text(input.address, 300),
+    };
+    const id = await withSalaryTenant(orgId, async (tx) => {
+      if (input.id) {
+        const before = await tx.salaryCompany.findFirst({ where: { orgId, id: input.id } });
+        if (!before) throw new Error("ไม่พบบริษัทนี้ — โหลดหน้าใหม่");
+        await tx.salaryCompany.update({ where: { id: before.id }, data: { ...data, updatedByName: actor.name } });
+        const changes = (Object.keys(data) as (keyof typeof data)[])
+          .filter((k) => before[k] !== data[k])
+          .map((k) => ({ label: COMPANY_LABELS[k], before: before[k] || "—", after: data[k] || "—" }));
+        if (changes.length) {
+          await insertEvent(tx, orgId, { byUserId: actor.userId, byName: actor.name, action: "settings", summary: `แก้ข้อมูลบริษัทที่ออกเงินเดือน "${name}"`, detail: { companyId: before.id, changes } });
+        }
+        return before.id;
+      }
+      const created = await tx.salaryCompany.create({ data: { orgId, ...data, updatedByName: actor.name } });
+      await insertEvent(tx, orgId, {
+        byUserId: actor.userId,
+        byName: actor.name,
+        action: "settings",
+        summary: `เพิ่มบริษัทที่ออกเงินเดือน "${name}"`,
+        detail: { companyId: created.id, changes: (Object.keys(data) as (keyof typeof data)[]).filter((k) => data[k]).map((k) => ({ label: COMPANY_LABELS[k], before: null, after: data[k] })) },
+      });
+      return created.id;
+    });
+    refresh();
+    return { ok: true, id };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/** เลิกใช้ได้เมื่อไม่มีพนักงานผูกอยู่ · กลับมาใช้ใหม่ได้ · ไม่ลบ (รอบเก่ายังอ้างถึง) */
+export async function retireCompanyAction(input: { id: string; retire: boolean }): Promise<Result> {
+  try {
+    const { orgId, actor } = await guard("canEdit");
+    await withSalaryTenant(orgId, async (tx) => {
+      const c = await tx.salaryCompany.findFirst({ where: { orgId, id: input.id } });
+      if (!c) throw new Error("ไม่พบบริษัทนี้ — โหลดหน้าใหม่");
+      if (input.retire) {
+        const people = await tx.salaryProfile.count({ where: { orgId, payCompanyId: c.id } });
+        if (people > 0) throw new Error(`ยังมีพนักงาน ${people} คนออกเงินเดือนในนามบริษัทนี้ — ย้ายไปบริษัทอื่นก่อน`);
+      }
+      await tx.salaryCompany.update({ where: { id: c.id }, data: { retiredAt: input.retire ? new Date() : null, updatedByName: actor.name } });
+      await insertEvent(tx, orgId, {
+        byUserId: actor.userId,
+        byName: actor.name,
+        action: "settings",
+        summary: `${input.retire ? "เลิกใช้" : "กลับมาใช้"}บริษัทที่ออกเงินเดือน "${c.name}"`,
+        detail: { companyId: c.id },
+      });
+    });
+    refresh();
+    return { ok: true };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/**
+ * เลือกว่าพนักงานออกเงินเดือนในนามบริษัทไหน (ทีละคนหรือหลายคน)
+ * มีผลกับรอบที่ยังเป็นร่างเมื่อกดคำนวณใหม่ · รอบที่ส่ง/อนุมัติ/จ่ายแล้วไม่เปลี่ยน · ลง Log การบันทึกระบบบุคคล
+ */
+export async function setPayCompanyAction(input: { employmentIds: string[]; companyId: string }): Promise<Result<{ changed: number }>> {
+  try {
+    const ids = [...new Set(input.employmentIds)].filter((x) => typeof x === "string" && x).slice(0, 500);
+    if (ids.length === 0) return { error: "ยังไม่ได้เลือกพนักงาน" };
+    const { orgId, actor, access, session } = await guard("canEdit");
+    // คนทำเงินเดือนที่ไม่ใช่ CEO ย้ายบริษัทของตัวเองไม่ได้ (หลักเดียวกับ guardFor)
+    for (const id of ids) {
+      if (ownSalaryLocked(access, await isOwnEmployment(orgId, session.userId, id))) {
+        throw new Error(`แก้ข้อมูลเงินเดือนของตัวเองไม่ได้ — ให้ ${await ceoTitle()} เป็นคนแก้ให้ (กันการแก้ให้ตัวเอง)`);
+      }
+    }
+    const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { name: true } });
+    const changed = await withSalaryTenant(orgId, async (tx) => {
+      const settings = await readSettings(tx, orgId);
+      const list = await readCompanies(tx, orgId, org?.name ?? "บริษัทหลัก", settings);
+      const target = list.find((c) => c.id === input.companyId);
+      if (!target || target.retired) throw new Error("ไม่พบบริษัทนี้ หรือเลิกใช้แล้ว — โหลดหน้าใหม่");
+      const to = companyDbId(target.id);
+      const profiles = await tx.salaryProfile.findMany({ where: { orgId, employmentId: { in: ids } }, select: { employmentId: true, payCompanyId: true } });
+      const byId = new Map(profiles.map((p) => [p.employmentId, p]));
+      let n = 0;
+      for (const employmentId of ids) {
+        const from = byId.get(employmentId)?.payCompanyId ?? null;
+        if (from === to) continue;
+        await tx.salaryProfile.upsert({
+          where: { orgId_employmentId: { orgId, employmentId } },
+          create: { orgId, employmentId, payCompanyId: to, updatedByName: actor.name },
+          update: { payCompanyId: to, updatedByName: actor.name },
+        });
+        await insertEvent(tx, orgId, {
+          byUserId: actor.userId,
+          byName: actor.name,
+          action: "profile",
+          summary: `ย้ายไปออกเงินเดือนในนาม "${target.name}"`,
+          detail: { employmentId, changes: [{ label: "ออกเงินเดือนในนามบริษัท", before: findCompany(list, from).name, after: target.name }] },
+        });
+        n += 1;
+      }
+      return n;
+    });
+    refresh();
+    return { ok: true, changed };
   } catch (error) {
     return fail(error);
   }

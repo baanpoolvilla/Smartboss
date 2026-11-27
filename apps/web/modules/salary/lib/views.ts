@@ -5,7 +5,8 @@ import { withWorkforceTenant } from "@/modules/report_task/lib/db/workforce-cale
 import { fillSubjectsByEmail } from "./people";
 import { isNewHire, loadProbationFrom } from "./probation";
 import type { Adjustment, PayLine } from "./compute";
-import { num, readRates, ymd, withSalaryTenant, type Tx } from "./db";
+import { findCompany, readCompanies, slipNumber, slipOrder, type PayCompany } from "./companies";
+import { num, readRates, readSettings, ymd, withSalaryTenant, type Tx } from "./db";
 import { previousPaid, selfEditsForRun, type ExcludedEntry, type LineInfo, type RunTotals } from "./run";
 import { DEFAULT_SSO, bangkokToday, rateOn, type AllowanceEntry, type PayChannel, type RunStatus, type SsoParams, type TaxMode } from "./types";
 
@@ -60,6 +61,8 @@ export interface LineView {
   bankAccount: string;
   accountName: string;
   payChannel: PayChannel;
+  /** salary.companies.id ณ ตอนคำนวณ · null = บริษัทหลัก */
+  companyId: string | null;
   updatedAt: string;
 }
 
@@ -86,6 +89,7 @@ export function toLineView(l: Awaited<ReturnType<Tx["salaryRunLine"]["findFirstO
     bankAccount: l.bankAccount,
     accountName: l.accountName,
     payChannel: l.payChannel === "cash" ? "cash" : "transfer",
+    companyId: l.companyId ?? null,
     updatedAt: l.updatedAt.toISOString(),
   };
 }
@@ -232,6 +236,8 @@ export interface StaffRow {
     /** พนักงานใหม่ที่ยังไม่ได้เลือก — ตั้งต้นไม่ได้เบี้ยขยัน (probation.ts) */
     diligenceProbationDefault: boolean;
     diligenceOpening: number | null;
+    /** salary.companies.id · null = บริษัทหลัก */
+    payCompanyId: string | null;
   };
   recurring: { id: string; itemId: string; name: string; kind: string; amount: number; fromPeriod: string; toPeriod: string | null; note: string }[];
   problems: string[];
@@ -302,6 +308,7 @@ export async function listStaff(orgId: string, onlyEmploymentId?: string): Promi
       diligenceEligible: p?.diligenceEligible ?? !isNewHire(e.hired_on, probationFrom),
       diligenceProbationDefault: (p?.diligenceEligible ?? null) === null && isNewHire(e.hired_on, probationFrom),
       diligenceOpening: p?.diligenceOpening !== null && p?.diligenceOpening !== undefined ? num(p.diligenceOpening) : null,
+      payCompanyId: p?.payCompanyId ?? null,
     };
     const problems: string[] = [];
     if (!current) problems.push("ไม่มีเงินเดือน");
@@ -355,11 +362,14 @@ export async function loadSlip(orgId: string, runId: string, by: { employmentId?
     const ytd = await tx.$queryRawUnsafe<{ gross: string | null; tax: string | null; sso: string | null; net: string | null }[]>(
       `SELECT sum(l.gross)::text AS gross, sum(l.tax)::text AS tax, sum(l.sso_employee)::text AS sso, sum(l.net)::text AS net
          FROM salary.run_lines l JOIN salary.runs r ON r.id = l.run_id
-        WHERE r.org_id = $1 AND r.status = 'paid' AND l.employment_id = $2 AND date_part('year', r.pay_date) = $3 AND r.pay_date <= $4::date`,
+        WHERE r.org_id = $1 AND r.status = 'paid' AND l.employment_id = $2 AND date_part('year', r.pay_date) = $3 AND r.pay_date <= $4::date
+          AND l.company_id IS NOT DISTINCT FROM $5::text`,
       orgId,
       line.employmentId,
       year,
       ymd(run.payDate),
+      // ยอดสะสมทั้งปีนับแยกตามบริษัทที่ออกเงินเดือน (ย้ายบริษัทกลางปี แต่ละบริษัทเห็นเฉพาะยอดของตัวเอง) · บริษัทเดียว = ทุกแถว null เท่าเดิม
+      line.companyId ?? null,
     );
     return {
       runId: run.id,
@@ -434,4 +444,69 @@ export async function positionOf(orgId: string, employmentId: string, onDate: st
     ),
   ).catch(() => []);
   return rows[0]?.title ?? null;
+}
+
+/** บริษัทที่ออกเงินเดือน (บริษัทหลัก + ที่เพิ่มเอง) — companies.ts */
+export async function loadPayCompanies(orgId: string): Promise<PayCompany[]> {
+  const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { name: true } });
+  return withSalaryTenant(orgId, async (tx) => readCompanies(tx, orgId, org?.name ?? "", await readSettings(tx, orgId)));
+}
+
+export interface SlipHeader {
+  company: PayCompany;
+  /** PS-2569-12-0010 */
+  slipNo: string;
+}
+
+/** หัวสลิปของแต่ละคนในรอบ: บริษัทที่ออกเงินเดือน (ณ ตอนคำนวณ) + เลขที่สลิป */
+export async function slipHeaders(orgId: string, runId: string): Promise<Map<string, SlipHeader>> {
+  const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { name: true } });
+  return withSalaryTenant(orgId, async (tx) => {
+    const run = await tx.salaryRun.findFirst({ where: { orgId, id: runId }, select: { period: true } });
+    const out = new Map<string, SlipHeader>();
+    if (!run) return out;
+    const companies = await readCompanies(tx, orgId, org?.name ?? "", await readSettings(tx, orgId));
+    const lines = await tx.salaryRunLine.findMany({ where: { orgId, runId }, select: { employmentId: true, employeeCode: true, name: true, companyId: true } });
+    for (const l of lines) out.set(l.employmentId, { company: findCompany(companies, l.companyId), slipNo: slipNumber(run.period, slipOrder(lines, l.employmentId)) });
+    return out;
+  });
+}
+
+/**
+ * เลขบัตรประชาชนแบบปิดบางหลักสำหรับสลิป เช่น x-xxxx-xxxx6-78-9 (ผู้ใช้ 27/11/2569)
+ * ถอดรหัส (workforce.people.national_id_encrypted — กุญแจเดียวกับ FIELD_ENCRYPTION_KEY) ในเซิร์ฟเวอร์
+ * แล้วคืนเฉพาะรูปที่ปิดหลักแล้ว — เลขเต็มไม่ออกจากเซิร์ฟเวอร์ ไม่ส่งไปหน้าเว็บ ไม่ลง log
+ * ไม่มีเลข/ไม่มีกุญแจ/ถอดไม่ได้ = null (สลิปไม่แสดงช่องนี้)
+ */
+export async function maskedNationalIdOf(orgId: string, employmentId: string): Promise<string | null> {
+  const raw = process.env.FIELD_ENCRYPTION_KEY;
+  if (!raw) return null;
+  const key = Buffer.from(raw, "base64");
+  if (key.length !== 32) return null;
+  const rows = await withWorkforceTenant(orgId, (wtx) =>
+    wtx.$queryRawUnsafe<{ enc: Uint8Array | null }[]>(
+      `SELECT pe.national_id_encrypted AS enc FROM workforce.employments e JOIN workforce.people pe ON pe.id = e.person_id WHERE e.id = $1::uuid LIMIT 1`,
+      employmentId,
+    ),
+  ).catch(() => []);
+  const enc = rows[0]?.enc;
+  if (!enc) return null;
+  try {
+    const { createDecipheriv } = await import("node:crypto");
+    // รูปแบบของระบบบุคคล: [version=1][iv:12][tag:16][ciphertext] (apps/workforce-api/.../field-encryption.ts)
+    const b = Buffer.from(enc);
+    if (b.length < 29 || b[0] !== 1) return null;
+    const d = createDecipheriv("aes-256-gcm", key, b.subarray(1, 13));
+    d.setAuthTag(b.subarray(13, 29));
+    const digits = Buffer.concat([d.update(b.subarray(29)), d.final()]).toString("utf8").replace(/\D/g, "");
+    return maskNationalId(digits);
+  } catch {
+    return null;
+  }
+}
+
+/** 13 หลัก → x-xxxx-xxxx6-78-9 (เห็น 4 หลักท้าย) · ไม่ใช่ 13 หลัก = null */
+export function maskNationalId(digits: string): string | null {
+  if (!/^\d{13}$/.test(digits)) return null;
+  return `x-xxxx-xxxx${digits[9]}-${digits.slice(10, 12)}-${digits[12]}`;
 }

@@ -248,6 +248,8 @@ export async function computeRun(orgId: string, runId: string, actor: Actor): Pr
         bankAccount: s.profile.bankAccount,
         accountName: s.profile.accountName,
         payChannel: s.profile.payChannel,
+        // บริษัทที่ออกเงินเดือน ณ ตอนคำนวณ — อนุมัติแล้วล็อกพร้อมตัวเลข (ย้ายบริษัททีหลังไม่กระทบรอบนี้)
+        companyId: s.profile.payCompanyId ?? null,
       };
       if (prev) await tx.salaryRunLine.update({ where: { id: prev.id }, data });
       else await tx.salaryRunLine.create({ data: { orgId, runId, employmentId: s.employmentId, adjustments: [], ...data } });

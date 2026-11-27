@@ -13,7 +13,9 @@ import { STATUS_LABEL, card, hint, outline } from "@/modules/salary/components/u
 import { readRates, readSettings, withSalaryTenant } from "@/modules/salary/lib/db";
 import { ownSalaryLocked } from "@/modules/salary/lib/access";
 import { salaryPage } from "@/modules/salary/lib/page";
-import { approvalSummary, loadRun, type ChangeItem } from "@/modules/salary/lib/views";
+import { approvalSummary, loadPayCompanies, loadRun, type ChangeItem } from "@/modules/salary/lib/views";
+import { CompanyBreakdown } from "@/modules/salary/components/company-breakdown";
+import { companyKey, hasMultipleCompanies } from "@/modules/salary/lib/companies";
 import { DEFAULT_SSO, TH_MONTH, fmtBaht, periodLabel, rateOn, shiftPeriod, thaiDate } from "@/modules/salary/lib/types";
 import { WorkDaysLine } from "@/modules/salary/components/work-days";
 import { loadRequests, withRequestsTenant } from "@/modules/requests/lib/db";
@@ -42,7 +44,7 @@ const TAG: Record<ChangeItem["tag"], { text: string; cls: string }> = {
  * วันที่ · ยอดรวมเงินเดือน/รวมจ่ายสุทธิตัวใหญ่ · ตารางรายคน (ช่องทาง · เงินเดือน · ปรับเพิ่ม ↑ · ปรับลด ↓ · สุทธิ · แก้ไข)
  * · สรุปยอดด้านล่าง · โน้ต · ประวัติ — CEO เห็นสรุป "สิ่งที่เปลี่ยน" + ปุ่มอนุมัติเมื่อรออนุมัติ
  */
-export default async function RunPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ edit?: string }> }) {
+export default async function RunPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ edit?: string; co?: string }> }) {
   const ceo = await ceoTitle();
   const { session, access } = await salaryPage({ edit: true });
   const { id } = await params;
@@ -67,6 +69,13 @@ export default async function RunPage({ params, searchParams }: { params: Promis
   const summary = run.status === "submitted" || run.status === "approved" ? await approvalSummary(orgId, run) : null;
   const salaryTotal = run.lines.reduce((s, l) => s + (l.lines.find((x) => x.source === "salary")?.amount ?? 0), 0);
   const editLine = sp.edit ? run.lines.find((l) => l.employmentId === sp.edit) : undefined;
+  // หลายบริษัท (27/11/2569): แถบเลือกดูทีละบริษัท — บริษัทเดียว = หน้าตาเดิม
+  const companies = await loadPayCompanies(orgId);
+  const runCompanyIds = new Set(run.lines.map((l) => companyKey(l.companyId)));
+  const multiCo = hasMultipleCompanies(companies) || runCompanyIds.size > 1;
+  const co = multiCo && sp.co && runCompanyIds.has(sp.co) ? sp.co : null;
+  const shownLines = co ? run.lines.filter((l) => companyKey(l.companyId) === co) : run.lines;
+  const coName = (id: string | null) => companies.find((c) => c.id === companyKey(id))?.name ?? "";
   const editor: EditorData | null = editLine
     ? {
         runId: run.id,
@@ -337,6 +346,18 @@ export default async function RunPage({ params, searchParams }: { params: Promis
           </section>
         )}
 
+        {multiCo && (
+          <CompanyBreakdown
+            runId={run.id}
+            selected={co}
+            companies={companies}
+            lines={run.lines}
+            filesReady={run.status === "approved" || run.status === "paid"}
+            paid={run.status === "paid"}
+            taxEnabled={settings.taxEnabled}
+          />
+        )}
+
         {/* ตารางรายคน */}
         <section className={`${card} relative overflow-x-auto`}>
           <table className="w-full min-w-[860px] text-sm">
@@ -344,6 +365,7 @@ export default async function RunPage({ params, searchParams }: { params: Promis
               <tr>
                 <th className="w-10 px-3 py-2.5 font-semibold">#</th>
                 <th className="px-3 py-2.5 font-semibold">ชื่อ / รหัสพนักงาน</th>
+                {multiCo && <th className="px-3 py-2.5 font-semibold">บริษัท</th>}
                 <th className="px-3 py-2.5 font-semibold">ช่องทางรับชำระ</th>
                 <th className="px-3 py-2.5 text-right font-semibold">เงินเดือน</th>
                 <th className="px-3 py-2.5 text-right font-semibold">รวมปรับเพิ่ม</th>
@@ -363,7 +385,7 @@ export default async function RunPage({ params, searchParams }: { params: Promis
               </tr>
             </thead>
             <tbody className="divide-y divide-(--line)">
-              {run.lines.map((l, i) => {
+              {shownLines.map((l, i) => {
                 const sal = l.lines.find((x) => x.source === "salary")?.amount ?? 0;
                 const plus = Math.round((l.gross - sal) * 100) / 100;
                 const manual = l.adjustments.length > 0 || Object.keys(l.info?.overrides ?? {}).length > 0;
@@ -393,6 +415,7 @@ export default async function RunPage({ params, searchParams }: { params: Promis
                         </div>
                       )}
                     </td>
+                    {multiCo && <td className="px-3 py-3 text-xs">{coName(l.companyId)}</td>}
                     <td className="px-3 py-3 text-xs">
                       {l.payChannel === "cash" ? "เงินสด" : l.bankAccount ? <>{l.bankName || "ธนาคาร"}<div className="text-(--ink-soft)">•••{l.bankAccount.slice(-4)}</div></> : <span className="text-amber-800">ยังไม่มีเลขบัญชี</span>}
                     </td>
@@ -409,7 +432,7 @@ export default async function RunPage({ params, searchParams }: { params: Promis
                 );
               })}
               {run.lines.length === 0 && (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-(--ink-soft)">ยังไม่มีพนักงานรายเดือนที่มีเงินเดือนในงวดนี้ — ใส่เงินเดือนที่ &quot;รายชื่อพนักงาน&quot; แล้วกด &quot;ดึงข้อมูลใหม่&quot;</td></tr>
+                <tr><td colSpan={multiCo ? 9 : 8} className="px-4 py-8 text-center text-(--ink-soft)">ยังไม่มีพนักงานรายเดือนที่มีเงินเดือนในงวดนี้ — ใส่เงินเดือนที่ &quot;รายชื่อพนักงาน&quot; แล้วกด &quot;ดึงข้อมูลใหม่&quot;</td></tr>
               )}
             </tbody>
           </table>

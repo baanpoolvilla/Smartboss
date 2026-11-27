@@ -71,6 +71,8 @@ export const DB_RLS_PROTECTED_MODELS = new Set<string>([
   "SalarySettings", "SalaryRate", "SalaryItem", "SalaryEmployeeItem", "SalaryProfile", "SalaryRun", "SalaryRunLine", "SalaryEvent",
   // สมุดเงินสะสม (20/11/2569) — RLS FORCE อยู่แล้ว (migration 20261120140000) แค่ลืมลงรายการนี้ (เจอจากเทสต์ 27/11/2569)
   "SalarySavingsEntry",
+  // บริษัทที่ออกเงินเดือน (27/11/2569) — RLS FORCE ใน migration 20261127150000
+  "SalaryCompany",
   // daily_worker (คนงานรายวัน)
   "DailyWorkerPayment", "DailyWorkerPayRate", "DailyWorkerTimeEdit", "DailyWorkerSettings", "DailyWorkerAuditEvent",
   // requests — เงินสดย่อย
