@@ -67,6 +67,8 @@ export function PenaltyChip({
   if (!penalty && isScoreFreeTask(task)) return null;
   // ยกเว้นแล้ว (เจ้าของระบบกดยกเลิก / คำขอแก้คะแนนได้รับอนุมัติ) — คะแนนคืนแล้ว ไม่มีอะไรให้กดต่อ
   if (penalty?.waived) {
+    // การ์ดบนบอร์ดไม่ต้องโชว์ "คืน +N" (ผู้ใช้ 27/11/2569 "ไปแสดงในรายละเอียดสิ") — ดูได้ในหน้ารายละเอียดงาน
+    if (variant === "card") return null;
     const who = penalty.waived.byUserId === SYSTEM_USER_ID ? "ระบบ" : (getUser(penalty.waived.byUserId)?.name ?? "—");
     return (
       <Tooltip>
@@ -79,7 +81,7 @@ export function PenaltyChip({
                 className
               )}
             >
-              {variant === "card" ? `คืน +${Math.abs(penalty.points)}` : `คืนคะแนนแล้ว +${Math.abs(penalty.points)}`}
+              {`คืนคะแนนแล้ว +${Math.abs(penalty.points)}`}
             </span>
           }
         />
