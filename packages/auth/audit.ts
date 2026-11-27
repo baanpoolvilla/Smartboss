@@ -58,6 +58,7 @@ export type AuditAction =
   | "PAYSLIP_VIEWED"
   | "SALARY_PROFILE_VIEWED"
   | "SALARY_EXPORTED"
+  | "HR_LOG_EXPORTED"
   | "SALARY_ACCESS_BLOCKED_IP"
   // ── เงินเดือน ──
   | "PAYROLL_RUN_CREATED"

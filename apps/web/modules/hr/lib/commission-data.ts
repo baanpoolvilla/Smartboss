@@ -26,6 +26,7 @@ import {
 } from "./commission";
 import { loadScorePeriodConfig } from "@/lib/score-period-config";
 import { isNewHire } from "@/modules/salary/lib/probation";
+import { insertEvent, withSalaryTenant } from "@/modules/salary/lib/db";
 
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 
@@ -237,6 +238,43 @@ export function commissionForUser(data: CommissionMonth, userId: string, label: 
   return { kind: "percent", percent: v, detail: `เกรด ${m.grade} ได้ ${v}% ของเงินเดือน · เกรด ${label}` };
 }
 
+/* ═════════ ประวัติการแก้ค่าคอม → Log การบันทึกระบบบุคคล (ผู้ใช้ 27/11/2569) ═════════ */
+
+type LogChange = { label: string; before: string | null; after: string | null };
+
+const METHOD_LABEL: Record<string, string> = { pool: "แบ่ง Pool ตามเกรด", grade_tier: "Grade + Tier", percent: "% ของเงินเดือนตามเกรด", fixed: "บาทต่อคนตามเกรด", off: "ไม่คิดจากเกรด" };
+
+function numText(v: unknown): string | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toLocaleString("th-TH", { maximumFractionDigits: 2 }) : String(v);
+}
+
+/** ค่าต่อคีย์ (เกรด/คน) ที่เปลี่ยน → แถวเดิม→ใหม่ */
+function mapChanges(before: Record<string, unknown>, after: Record<string, unknown>, label: (k: string) => string): LogChange[] {
+  const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])];
+  return keys
+    .filter((k) => numText(before[k]) !== numText(after[k]))
+    .map((k) => ({ label: label(k), before: numText(before[k]), after: numText(after[k]) }));
+}
+
+/** เก็บที่ salary.events (action "commission") — การบันทึกค่าคอมไม่ล้มเพราะเก็บประวัติไม่ได้ */
+async function logCommission(orgId: string, userId: string, summary: string, changes: LogChange[]): Promise<void> {
+  if (changes.length === 0) return;
+  try {
+    const by = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+    await withSalaryTenant(orgId, (tx) => insertEvent(tx, orgId, { byUserId: userId, byName: by?.name ?? "—", action: "commission", summary, detail: { changes } }));
+  } catch (error) {
+    console.error("[commission] log", error);
+  }
+}
+
+async function userNames(orgId: string, ids: string[]): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
+  const rows = await prisma.user.findMany({ where: { orgId, id: { in: ids } }, select: { id: true, name: true } });
+  return new Map(rows.map((u) => [u.id, u.name]));
+}
+
 /** ใส่/แก้ยอด Pool ของเดือน · ช่องยอดว่าง = ลบยอดของเดือนนั้น */
 export async function saveCommissionPool(input: {
   orgId: string;
@@ -246,6 +284,12 @@ export async function saveCommissionPool(input: {
   note: string;
 }): Promise<void> {
   if (!MONTH.test(input.month)) throw new Error("เดือนไม่ถูกต้อง");
+  const prev = await prisma.commissionPool.findUnique({ where: { orgId_month: { orgId: input.orgId, month: input.month } }, select: { amount: true, note: true } });
+  const logPool = (amount: string | null, note: string | null) =>
+    logCommission(input.orgId, input.userId, `แก้ยอด Pool ค่าคอม เดือน ${input.month}`, [
+      ...(numText(prev?.amount?.toString()) !== numText(amount) ? [{ label: "ยอด Pool (บาท)", before: numText(prev?.amount?.toString()), after: numText(amount) }] : []),
+      ...((prev?.note ?? null) !== note ? [{ label: "หมายเหตุ", before: prev?.note ?? null, after: note }] : []),
+    ]);
 
   if (input.amount.trim() === "") {
     // มีคะแนน Tier ค้างอยู่ (เคยใช้วิธี Grade + Tier) — ล้างแค่ยอด ไม่ลบคะแนนที่กรอกไว้
@@ -253,6 +297,7 @@ export async function saveCommissionPool(input: {
     const hasTiers = !!row && typeof row.tierScores === "object" && row.tierScores !== null && Object.keys(row.tierScores).length > 0;
     if (hasTiers) await prisma.commissionPool.update({ where: { orgId_month: { orgId: input.orgId, month: input.month } }, data: { amount: null, note: null, updatedBy: input.userId } });
     else await prisma.commissionPool.deleteMany({ where: { orgId: input.orgId, month: input.month } });
+    await logPool(null, null);
     return;
   }
   const satang = parseBahtToSatang(input.amount.trim());
@@ -270,6 +315,7 @@ export async function saveCommissionPool(input: {
     update: data,
     create: { orgId: input.orgId, month: input.month, ...data },
   });
+  await logPool(data.amount, data.note);
 }
 
 /**
@@ -307,17 +353,27 @@ export async function saveCommissionRound(input: {
     tierScores,
     updatedBy: input.userId,
   };
+  const prev = await prisma.commissionPool.findUnique({ where: { orgId_month: { orgId: input.orgId, month: input.month } }, select: { amount: true, note: true, tierScores: true } });
   await prisma.commissionPool.upsert({
     where: { orgId_month: { orgId: input.orgId, month: input.month } },
     update: data,
     create: { orgId: input.orgId, month: input.month, ...data },
   });
+  const prevTiers = toObject(prev?.tierScores);
+  const names = await userNames(input.orgId, [...new Set([...Object.keys(prevTiers), ...Object.keys(tierScores)])]);
+  await logCommission(input.orgId, input.userId, `แก้ค่าคอมรอบ ${input.month} (ยอดรวม / คะแนน Tier)`, [
+    ...(numText(prev?.amount?.toString()) !== numText(data.amount) ? [{ label: "ยอดค่าคอมรวม (บาท)", before: numText(prev?.amount?.toString()), after: numText(data.amount) }] : []),
+    ...((prev?.note ?? null) !== data.note ? [{ label: "หมายเหตุ", before: prev?.note ?? null, after: data.note }] : []),
+    ...mapChanges(prevTiers, tierScores, (id) => `คะแนน Tier · ${names.get(id) ?? id}`),
+  ]);
 }
 
 /** วิธี grade_tier: % ก้อน Grade (ที่เหลือเป็นก้อน Tier) */
 export async function saveCommissionGradeShare(input: { orgId: string; userId: string; gradeShare: string }): Promise<void> {
   const v = parseGradeShare(input.gradeShare);
   if (v === null) throw new Error("% ก้อน Grade ต้องเป็น 0–100");
+  const prevShare = await prisma.commissionSetting.findUnique({ where: { orgId: input.orgId }, select: { gradeShare: true } });
+  await logCommission(input.orgId, input.userId, "แก้ % ก้อน Grade ของค่าคอม", numText(prevShare?.gradeShare?.toString()) !== numText(v) ? [{ label: "% ก้อน Grade", before: numText(prevShare?.gradeShare?.toString()), after: numText(v) }] : []);
   await prisma.commissionSetting.upsert({
     where: { orgId: input.orgId },
     update: { gradeShare: v, updatedBy: input.userId },
@@ -343,6 +399,8 @@ export async function saveCommissionWeights(input: {
     gradeWeights[name] = value;
   });
 
+  const prevW = await prisma.commissionSetting.findUnique({ where: { orgId: input.orgId }, select: { gradeWeights: true } });
+  await logCommission(input.orgId, input.userId, "แก้ตัวคูณค่าคอมต่อเกรด", mapChanges(toObject(prevW?.gradeWeights), gradeWeights, (g) => `ตัวคูณเกรด ${g}`));
   await prisma.commissionSetting.upsert({
     where: { orgId: input.orgId },
     update: { gradeWeights, updatedBy: input.userId },
@@ -353,6 +411,9 @@ export async function saveCommissionWeights(input: {
 /** เลือกวิธีคิดค่าคอม */
 export async function saveCommissionMethod(input: { orgId: string; userId: string; method: string }): Promise<void> {
   const method = toCommissionMethod(input.method);
+  const prevM = await prisma.commissionSetting.findUnique({ where: { orgId: input.orgId }, select: { method: true } });
+  const was = toCommissionMethod(prevM?.method);
+  await logCommission(input.orgId, input.userId, "เปลี่ยนวิธีคิดค่าคอม", was !== method ? [{ label: "วิธีคิดค่าคอม", before: METHOD_LABEL[was] ?? was, after: METHOD_LABEL[method] ?? method }] : []);
   await prisma.commissionSetting.upsert({
     where: { orgId: input.orgId },
     update: { method, updatedBy: input.userId },
@@ -373,6 +434,7 @@ export async function saveCommissionValues(input: { orgId: string; userId: strin
     gradeValues[name] = value;
   });
   const all = { ...toObject(setting?.gradeValues), [method]: gradeValues };
+  await logCommission(input.orgId, input.userId, method === "percent" ? "แก้ค่าคอม % ของเงินเดือนต่อเกรด" : "แก้ค่าคอมบาทต่อคนต่อเกรด", mapChanges(toObject(toObject(setting?.gradeValues)[method]), gradeValues, (g) => `เกรด ${g}`));
   await prisma.commissionSetting.upsert({
     where: { orgId: input.orgId },
     update: { gradeValues: all, updatedBy: input.userId },
@@ -389,13 +451,28 @@ export async function saveCommissionEligibility(input: { orgId: string; userId: 
   // พนักงานใหม่ที่แสดงในหน้า: ไม่ติ๊ก = ผ่านโปรแล้ว (ได้ค่าคอม) · ติ๊ก = ยังไม่ผ่าน · คนที่ไม่อยู่ในหน้านี้คงค่าเดิม
   const shownNew = new Set(input.newHireUserIds ?? []);
   const excluded = new Set(users.map((u) => u.id));
-  const before = await prisma.commissionSetting.findUnique({ where: { orgId: input.orgId }, select: { probationPassedUserIds: true } });
+  const before = await prisma.commissionSetting.findUnique({ where: { orgId: input.orgId }, select: { probationPassedUserIds: true, eligibleDepartmentIds: true, excludedUserIds: true } });
   const probationPassedUserIds = [
     ...(before?.probationPassedUserIds ?? []).filter((id) => !shownNew.has(id)),
     ...[...shownNew].filter((id) => !excluded.has(id)),
   ];
   const data = { eligibleDepartmentIds: depts.map((d) => d.id), excludedUserIds: users.map((u) => u.id), probationPassedUserIds, updatedBy: input.userId };
   await prisma.commissionSetting.upsert({ where: { orgId: input.orgId }, update: data, create: { orgId: input.orgId, ...data } });
+  const names = await userNames(input.orgId, [...new Set([...(before?.excludedUserIds ?? []), ...data.excludedUserIds, ...(before?.probationPassedUserIds ?? []), ...probationPassedUserIds])]);
+  const deptIds = [...new Set([...(before?.eligibleDepartmentIds ?? []), ...data.eligibleDepartmentIds])];
+  const deptNames = new Map(
+    deptIds.length === 0 ? [] : (await prisma.department.findMany({ where: { orgId: input.orgId, id: { in: deptIds } }, select: { id: true, name: true } })).map((d) => [d.id, d.name] as const),
+  );
+  const listText = (ids: string[], m: Map<string, string>, empty: string) => (ids.length === 0 ? empty : ids.map((id) => m.get(id) ?? id).join(", "));
+  const same = (x: string[], y: string[]) => [...x].sort().join() === [...y].sort().join();
+  const wasDepts = before?.eligibleDepartmentIds ?? [];
+  const wasExcluded = before?.excludedUserIds ?? [];
+  const wasPassed = before?.probationPassedUserIds ?? [];
+  await logCommission(input.orgId, input.userId, "แก้คนที่ได้ค่าคอม", [
+    ...(!same(wasDepts, data.eligibleDepartmentIds) ? [{ label: "แผนกที่ได้ค่าคอม", before: listText(wasDepts, deptNames, "ทุกแผนก"), after: listText(data.eligibleDepartmentIds, deptNames, "ทุกแผนก") }] : []),
+    ...(!same(wasExcluded, data.excludedUserIds) ? [{ label: "ไม่ได้ค่าคอม (รายคน)", before: listText(wasExcluded, names, "—"), after: listText(data.excludedUserIds, names, "—") }] : []),
+    ...(!same(wasPassed, probationPassedUserIds) ? [{ label: "ผ่านโปรแล้ว (ได้ค่าคอม)", before: listText(wasPassed, names, "—"), after: listText(probationPassedUserIds, names, "—") }] : []),
+  ]);
 }
 
 /* ═════════ ค่าคอมต่อเกรด แก้พร้อมเกณฑ์เกรด (หน้าเกณฑ์คะแนน) ═════════ */

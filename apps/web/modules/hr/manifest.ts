@@ -80,6 +80,8 @@ export const hrManifest: ModuleManifest = {
     // ตั้งค่าบุคคลย้ายลงไปอยู่หมวดตั้งค่าเดียวกับตั้งค่าเงินเดือน/เบิกจ่าย (ผู้ใช้ 30/10/2569 "จะได้หมวดเดียวกัน")
     ...MONEY_MENUS.filter((m) => m.group !== SETTINGS_GROUP),
     { group: SETTINGS_GROUP, label: "ตั้งค่าบุคคล", path: "/hr/settings", permission: HR_PERMS.settingManage, icon: "Settings" },
+    // ใครแก้อะไรเมื่อไร ทุกเมนูของระบบบุคคล — เมนูแยก (ผู้ใช้ 27/11/2569 "ให้แยกออกมาเลยนะเป็น Log การบันทึกระบบบุคคล")
+    { group: SETTINGS_GROUP, label: "Log การบันทึกระบบบุคคล", path: "/hr/log", permission: HR_PERMS.settingManage, icon: "History" },
     ...MONEY_MENUS.filter((m) => m.group === SETTINGS_GROUP),
   ],
   permissions: Object.values(HR_PERMS),
