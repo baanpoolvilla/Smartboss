@@ -182,6 +182,7 @@ export function sortBoardEntries(entries: BoardEntry[]): BoardEntry[] {
       const done = t.status === "done" ? 1 : 0;
       return {
         pin: 1,
+        expenseFirst: 1,
         done,
         overdue: !done && dueUrgency(t) === "overdue" ? 0 : 1,
         reviewed: t.reviewedBy ? 1 : 0,
@@ -193,7 +194,10 @@ export function sortBoardEntries(entries: BoardEntry[]): BoardEntry[] {
     const i = e.item;
     const done = i.column === "done" ? 1 : 0;
     return {
-      pin: i.expensePending ? 0 : 1,
+      // เดิมปักการ์ดรอบันทึกค่าใช้จ่ายไว้บนสุดเสมอ (3/11/2569) — ใบค้าง 50+ ใบดันงานด่วนจมลงไป
+      // ผู้ใช้ 27/11/2569 "นับตามวันใกล้ถึงละกันจะได้เหมือนกับของงาน" ⇒ เรียงตามวันครบกำหนดรวมกับงาน · วันเดียวกันการ์ดลงบิลขึ้นก่อน (tie ด้านล่าง)
+      pin: 1,
+      expenseFirst: i.expensePending ? 0 : 1,
       done,
       overdue: i.overdue ? 0 : 1,
       reviewed: done,
@@ -209,6 +213,11 @@ export function sortBoardEntries(entries: BoardEntry[]): BoardEntry[] {
       if (a.k.done !== b.k.done) return a.k.done - b.k.done;
       if (a.k.overdue !== b.k.overdue) return a.k.overdue - b.k.overdue;
       if (a.k.done === 1 && a.k.reviewed !== b.k.reviewed) return a.k.reviewed - b.k.reviewed;
+      // วันเดียวกัน (ตามวันไทย) การ์ดลงบิลขึ้นก่อน — การ์ดลงบิลครบ 23:59 ส่วนงานครบเวลาอื่นในวันเดียวกัน
+      const dayA = Number.isFinite(a.k.due) ? Math.floor((a.k.due + 7 * 3_600_000) / 86_400_000) : Infinity;
+      const dayB = Number.isFinite(b.k.due) ? Math.floor((b.k.due + 7 * 3_600_000) / 86_400_000) : Infinity;
+      if (dayA !== dayB) return dayA - dayB;
+      if (a.k.expenseFirst !== b.k.expenseFirst) return a.k.expenseFirst - b.k.expenseFirst;
       if (a.k.due !== b.k.due) return a.k.due - b.k.due;
       if (a.k.pri !== b.k.pri) return a.k.pri - b.k.pri;
       return a.k.created - b.k.created;

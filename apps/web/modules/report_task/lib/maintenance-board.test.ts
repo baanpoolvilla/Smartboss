@@ -106,6 +106,17 @@ describe("เรียงงานกับใบซ่อมปนกัน", (
     ]);
     expect(sorted.map((e) => (e.type === "task" ? e.task.id : e.item.id))).toEqual(["w-soon-low", "t-mid", "t-later-critical", "w-nodue"]);
   });
+
+  // ผู้ใช้ 27/11/2569 "การ์ดลงบิลก็นับตามวันใกล้ถึงละกันจะได้เหมือนกับของงาน" — ไม่ปักบนสุดแล้ว · วันเดียวกันการ์ดลงบิลขึ้นก่อน
+  it("การ์ดรอบันทึกค่าใช้จ่ายเรียงตามวันครบรวมกับงาน · วันเดียวกันขึ้นก่อนงาน", () => {
+    const sorted = sortBoardEntries([
+      { type: "mx", item: wo({ id: "x-dec10", expensePending: true, dueDate: "2099-12-10T16:59:59.999Z" }) },
+      { type: "task", task: task({ id: "t-tomorrow", dueDate: "2099-11-28T03:00:00.000Z" }) },
+      { type: "task", task: task({ id: "t-dec10-morning", dueDate: "2099-12-10T02:00:00.000Z" }) },
+      { type: "task", task: task({ id: "t-dec20", dueDate: "2099-12-20T03:00:00.000Z" }) },
+    ]);
+    expect(sorted.map((e) => (e.type === "task" ? e.task.id : e.item.id))).toEqual(["t-tomorrow", "x-dec10", "t-dec10-morning", "t-dec20"]);
+  });
 });
 
 describe("applyRecorderView (Boss filters by the expense recorder, 27/11/2569)", async () => {
