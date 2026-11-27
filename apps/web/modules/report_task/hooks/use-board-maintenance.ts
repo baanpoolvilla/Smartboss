@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from "react";
 import { useMaintenanceBoardStore } from "@/modules/report_task/store/maintenance-board-store";
-import { matchesMaintenanceFilters, WO_TYPES, woTypesOf, type WoType } from "@/modules/report_task/lib/maintenance-board";
+import { applyRecorderView, matchesMaintenanceFilters, WO_TYPES, woTypesOf, type WoType } from "@/modules/report_task/lib/maintenance-board";
 import type { TaskFilterState } from "@/modules/report_task/lib/task-filter";
 import type { Task } from "@/modules/report_task/types";
 
@@ -36,7 +36,7 @@ export function useBoardMaintenance(filteredTasks: Task[], filters: TaskFilterSt
     };
   }, [load]);
 
-  const mxFiltered = useMemo(() => mxItems.filter((i) => matchesMaintenanceFilters(i, filters)), [mxItems, filters]);
+  const mxFiltered = useMemo(() => mxItems.map((i) => applyRecorderView(i, filters)).filter((i) => matchesMaintenanceFilters(i, filters)), [mxItems, filters]);
   // ประเภทย่อยของใบงานซ่อม (ซ่อมทั่วไป/PM/อัตโนมัติ/มี PO) — ใบที่มีหลายแบบ ขึ้นถ้าติ๊กแบบใดแบบหนึ่งไว้
   const mxTyped = useMemo(
     () => mxFiltered.filter((i) => i.kind !== "wo" || woTypesOf(i).some((t) => woTypes[t])),

@@ -31,6 +31,10 @@ vi.mock("@smartboss/database", () => ({
     pmSchedule: {
       findMany: vi.fn(async () => []),
     },
+    // กำหนดบันทึกค่าใช้จ่ายปิดอยู่ — ไม่มีงานรอบันทึกให้ผู้บันทึก
+    performanceSetting: {
+      findUnique: vi.fn(async () => null),
+    },
   },
 }));
 vi.mock("@/modules/maintenance/data/work-order-access", async (orig) => {

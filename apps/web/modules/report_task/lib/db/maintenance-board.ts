@@ -7,8 +7,8 @@ import { hasPermission, isSuperAdmin, type OrgSession } from "@smartboss/auth";
 import { MAINT_PERMS } from "@/modules/maintenance/permissions";
 import { canSeeWorkOrder, ownPmPlanIds, workOrderAccess, workOrderVisibilityWhere, type WorkOrderAccess } from "@/modules/maintenance/data/work-order-access";
 import type { MaintenanceBoardItem, MaintenanceColumn, WoType, WorkOrderReaction } from "@/modules/report_task/lib/maintenance-board";
-import { loadExpenseTracking, pendingExpenseWorkOrders, recordedExpenseWorkOrders } from "@/modules/maintenance/data/expense-tracking";
-import { expenseDueAt } from "@/modules/maintenance/lib/expense-deadline";
+import { loadExpenseTracking, pendingExpenseWorkOrders, recordedExpenseWorkOrders, workingRecorders } from "@/modules/maintenance/data/expense-tracking";
+import { expenseDueAt, trackingActive } from "@/modules/maintenance/lib/expense-deadline";
 import { listWorkOrderReactions } from "./work-order-reactions";
 import type { TaskPriority } from "@/modules/report_task/types";
 
@@ -156,6 +156,16 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
         ).filter((w) => !shownIds.has(w.id) && canSeeWorkOrder(full, w))
       : [];
     const awaitingMeIds = new Set(awaitingMe.map((w) => w.id));
+    // Boss/ผู้ดูแลสูงสุด (เห็นทุกใบ ไม่ใช่ผู้บันทึก): ใบรอบันทึกติดข้อมูลไว้ กรองชื่อผู้บันทึกแล้วขึ้นเป็นงานของเขา
+    // ใบที่ปิดเกิน 7 วันไม่อยู่ในชุดปกติ — ดึงเพิ่ม ซ่อนไว้จนกว่าจะกรองชื่อผู้บันทึก (ผู้ใช้ 27/11/2569)
+    const otherTracking = access.seeAll && !access.expensePendingIds ? await loadExpenseTracking(orgId) : null;
+    const otherRecorders = otherTracking && trackingActive(otherTracking) ? await workingRecorders(orgId, otherTracking.recorderIds) : [];
+    const otherPending = otherRecorders.length > 0 ? await pendingExpenseWorkOrders(orgId) : [];
+    const otherPendingById = new Map(otherPending.map((o) => [o.id, o] as const));
+    const shownNow = new Set([...rows, ...pendingRows, ...awaitingMe].map((w) => w.id));
+    const extraIds = otherPending.map((o) => o.id).filter((id) => !shownNow.has(id));
+    const extraRows = extraIds.length > 0 ? await prisma.workOrder.findMany({ where: { orgId, id: { in: extraIds } }, select }) : [];
+    const extraSet = new Set(extraIds);
     const tracking = pendingIds.length > 0 ? await loadExpenseTracking(orgId) : null;
     const clockFrom = new Map(tracking ? (await pendingExpenseWorkOrders(orgId)).map((o) => [o.id, o.clockFrom] as const) : []);
     // ใบ PM อัตโนมัติไม่มีคนเปิด เจ้าของคำขอคือคนสร้างแผน (เหมือน workOrderOwnerId)
@@ -165,8 +175,8 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
         ? (await prisma.pmSchedule.findMany({ where: { orgId, id: { in: planIds } }, select: { id: true, createdBy: true } })).map((p) => [p.id, p.createdBy] as const)
         : [],
     );
-    const scoreChips = await workOrderScoreChips(orgId, [...pendingRows, ...rows, ...awaitingMe]);
-    for (const w of [...pendingRows, ...rows, ...awaitingMe]) {
+    const scoreChips = await workOrderScoreChips(orgId, [...pendingRows, ...rows, ...awaitingMe, ...extraRows]);
+    for (const w of [...pendingRows, ...rows, ...awaitingMe, ...extraRows]) {
       const dueOwner = w.createdBy ?? (w.autoCreated && w.pmScheduleId ? (planOwner.get(w.pmScheduleId) ?? null) : null);
       const expensePending = pendingSet.has(w.id);
       const expenseRecordedTotal = recordedMap.get(w.id);
@@ -182,6 +192,8 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
       const awaitingReviewCol = w.status === "completed" && w.reviewState === "pending";
       const column: MaintenanceColumn = awaitingReviewCol ? "review" : done ? "done" : w.status === "in_progress" ? "in_progress" : "todo";
       const expenseDue = expensePending && tracking ? expenseDueAt({ ...w, clockFrom: clockFrom.get(w.id) }, tracking) : null;
+      const otherP = otherTracking ? otherPendingById.get(w.id) : undefined;
+      const otherDue = otherP && otherTracking ? expenseDueAt({ ...w, clockFrom: otherP.clockFrom }, otherTracking) : null;
       items.push({
         kind: "wo",
         id: w.id,
@@ -219,6 +231,8 @@ export async function listMaintenanceBoardItems(session: OrgSession): Promise<Ma
         // ตรวจงาน — แบบเดียวกับบอร์ดแจ้งซ่อม (data/work-order-board-rows.ts): ป้ายรอตรวจ + แถบแดงเฉพาะคนเปิดใบ
         awaitingReview: w.status === "completed" && w.reviewState === "pending",
         reviewWaitsMe: w.status === "completed" && w.reviewState === "pending" && w.createdBy === session.userId,
+        ...(otherDue ? { expenseTask: { recorderIds: otherRecorders, dueDate: otherDue.toISOString(), overdue: bangkokDay(otherDue) < today } } : {}),
+        ...(extraSet.has(w.id) ? { expenseTaskOnly: true } : {}),
       });
     }
   }

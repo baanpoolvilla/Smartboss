@@ -107,3 +107,26 @@ describe("เรียงงานกับใบซ่อมปนกัน", (
     expect(sorted.map((e) => (e.type === "task" ? e.task.id : e.item.id))).toEqual(["w-soon-low", "t-mid", "t-later-critical", "w-nodue"]);
   });
 });
+
+describe("applyRecorderView (Boss filters by the expense recorder, 27/11/2569)", async () => {
+  const { applyRecorderView } = await import("./maintenance-board");
+  const base = { kind: "wo", id: "w1", code: "WO-1", title: "t", column: "done", statusLabel: "ซ่อมเสร็จแล้ว", priority: "medium", dueDate: "2026-11-20T00:00:00.000Z", createdAt: "2026-11-01T00:00:00.000Z", overdue: false, responsibleId: "tech", assigneeId: "tech", createdById: "boss", involvedIds: [], place: null, href: "/x" } as unknown as MaintenanceBoardItem;
+  const pending = { ...base, expenseTask: { recorderIds: ["rec"], dueDate: "2026-12-10T16:59:59.999Z", overdue: false } } as MaintenanceBoardItem;
+  it("unfiltered or other person = card unchanged", () => {
+    expect(applyRecorderView(pending, { ...ALL })).toBe(pending);
+    expect(applyRecorderView(pending, { ...ALL, assigneeId: "tech" })).toBe(pending);
+  });
+  it("filter = recorder → todo with expense deadline, matches the filter", () => {
+    const v = applyRecorderView(pending, { ...ALL, assigneeId: "rec" });
+    expect(v.column).toBe("todo");
+    expect(v.dueDate).toBe("2026-12-10T16:59:59.999Z");
+    expect(v.expensePending).toBe(true);
+    expect(matchesMaintenanceFilters(v, { ...ALL, assigneeId: "rec" })).toBe(true);
+  });
+  it("hidden extra row shows only under the recorder filter", () => {
+    const extra = { ...pending, expenseTaskOnly: true } as MaintenanceBoardItem;
+    expect(matchesMaintenanceFilters(applyRecorderView(extra, { ...ALL }), { ...ALL })).toBe(false);
+    expect(matchesMaintenanceFilters(applyRecorderView(extra, { ...ALL, assigneeId: "tech" }), { ...ALL, assigneeId: "tech" })).toBe(false);
+    expect(matchesMaintenanceFilters(applyRecorderView(extra, { ...ALL, assigneeId: "rec" }), { ...ALL, assigneeId: "rec" })).toBe(true);
+  });
+});

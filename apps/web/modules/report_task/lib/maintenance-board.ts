@@ -99,6 +99,13 @@ export interface MaintenanceBoardItem {
   expensePending?: boolean;
   /** ผู้บันทึก: ใบที่บันทึกแล้วภายใน 7 วัน อยู่คอลัมน์เสร็จ บอกยอดรวม ให้กลับมาแก้ได้ */
   expenseRecordedTotal?: number;
+  /**
+   * คนอื่น (Boss/ผู้ดูแลสูงสุด) กรองดูผู้บันทึกค่าใช้จ่าย → ใบนี้ขึ้นเป็นงานรอบันทึกของคนนั้น (applyRecorderView)
+   * ไม่กรองชื่อผู้บันทึก = การ์ดเหมือนเดิม (ผู้ใช้ 27/11/2569 "อยากให้การ์ดที่ต้องบันทึกค่าใช้จ่ายมาแสดงใน task งาน")
+   */
+  expenseTask?: { recorderIds: string[]; dueDate: string; overdue: boolean };
+  /** ใบรอบันทึกที่ปกติไม่อยู่บนบอร์ด (ปิดเกิน 7 วัน) — ขึ้นเฉพาะตอนกรองชื่อผู้บันทึก */
+  expenseTaskOnly?: boolean;
   /** ส่งงานแล้ว รอคนเปิดใบตรวจ (ตรวจงาน 10/11/2569) */
   awaitingReview?: boolean;
   /** คนที่ดูอยู่คือคนเปิดใบ — แถบแดง "รอคุณตรวจ" บนการ์ด */
@@ -121,7 +128,15 @@ export function maintenanceDate(item: MaintenanceBoardItem): string {
 }
 
 /** ตัวกรองเดิมของบอร์ด แปลมาใช้กับใบงานซ่อม (ตารางที่ตกลงกันไว้) */
+/** กรองชื่อผู้บันทึกค่าใช้จ่าย → ใบรอบันทึกกลายเป็นงานของคนนั้น (คอลัมน์รอดำเนินการ · กำหนด = กำหนดบันทึก) */
+export function applyRecorderView(item: MaintenanceBoardItem, filters: TaskFilterState): MaintenanceBoardItem {
+  const t = item.expenseTask;
+  if (!t || filters.assigneeId === "all" || !t.recorderIds.includes(filters.assigneeId)) return item;
+  return { ...item, column: "todo", dueDate: t.dueDate, overdue: t.overdue, expensePending: true, responsibleId: filters.assigneeId, statusLabel: "รอบันทึกค่าใช้จ่าย", expenseTaskOnly: false };
+}
+
 export function matchesMaintenanceFilters(item: MaintenanceBoardItem, filters: TaskFilterState): boolean {
+  if (item.expenseTaskOnly) return false;
   // "งานของฉัน"/เลือกผู้รับผิดชอบ = ใบที่คนนั้น **ได้รับมอบหมาย** · "ที่ฉันมอบหมาย" = ใบที่คนนั้นเปิด
   // (ผู้ใช้ขอ 20/10/2569 — เดิม "งานของฉัน" จับทุกคนที่เกี่ยว รวมคนเปิดใบ/CC และ "ที่ฉันมอบหมาย" ไม่ขึ้นใบงานเลย)
   if (filters.assigneeId !== "all" && item.assigneeId !== filters.assigneeId && !item.groupMemberIds?.includes(filters.assigneeId) && !((item.expensePending || item.expenseRecordedTotal !== undefined) && item.responsibleId === filters.assigneeId)) return false;
