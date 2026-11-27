@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { setAppBadgePart } from "@/lib/app-badge";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, Settings } from "lucide-react";
+import { AlarmClock, Bell, Settings } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/report_task/components/ui/popover";
 import { useBackToClose, whenHistorySettled } from "@/lib/back-to-close";
 import { Avatar, AvatarFallback, AvatarImage } from "@/modules/report_task/components/ui/avatar";
@@ -197,7 +197,8 @@ export function NotificationBellPopover() {
           <div className="max-h-[24rem] overflow-y-auto py-1">
             {recent.map((n) => {
               const actor = n.byUserId ? empById.get(n.byUserId) : undefined;
-              const { Icon, color } = metaForCategory(n.category);
+              // ระบบเตือนเอง (ไม่มีคนทำ) → นาฬิกาปลุกสีส้ม ไม่ใช้ไอคอนหัวข้อ (ติ๊กถูกดูเหมือนงานผ่านแล้ว — ผู้ใช้ 27/11/2569)
+    const { Icon, color } = n.module === "report" && !actor ? { Icon: AlarmClock, color: "#F59E0B" } : metaForCategory(n.category);
               const row = (
                 <div
                   className="relative flex items-start gap-3 py-2.5 pr-3 pl-4 transition-colors hover:bg-(--bg-soft)"

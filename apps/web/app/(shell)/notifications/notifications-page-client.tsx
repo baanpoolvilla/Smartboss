@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Settings, X } from "lucide-react";
+import { AlarmClock, Settings, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useIdentityStore } from "@/modules/report_task/store/identity-store";
 import { useEmployeeStore } from "@/modules/report_task/store/employee-store";
@@ -141,7 +141,8 @@ export function NotificationsPageClient() {
 
   function Row({ n }: { n: UnifiedNotification }) {
     const actor = n.byUserId ? empById.get(n.byUserId) : undefined;
-    const { Icon, color } = metaForCategory(n.category);
+    // ระบบเตือนเอง (ไม่มีคนทำ) → นาฬิกาปลุกสีส้ม ไม่ใช้ไอคอนหัวข้อ (ติ๊กถูกดูเหมือนงานผ่านแล้ว — ผู้ใช้ 27/11/2569)
+    const { Icon, color } = n.module === "report" && !actor ? { Icon: AlarmClock, color: "#F59E0B" } : metaForCategory(n.category);
     const inner = (
       <div
         className="flex items-start gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-(--bg-soft)"
