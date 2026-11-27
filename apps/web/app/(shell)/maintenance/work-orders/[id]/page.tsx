@@ -578,6 +578,16 @@ export default async function WorkOrderDetailPage({
           label="สร้างเมื่อ"
           value={fmtThaiDateTime(wo.createdAt)}
         />
+        {/* คืนคะแนนแล้ว — การ์ดบนบอร์ดไม่โชว์ "คืน +N" มาแสดงที่นี่แทน (ผู้ใช้ 27/11/2569) */}
+        {scoreChip?.kind === "refunded" && (
+          <InfoRow
+            stacked
+            icon={<Info className="h-5 w-5" />}
+            label="คะแนน"
+            value={`คืนคะแนนแล้ว +${scoreChip.points} · ไม่นับการหักครั้งนี้`}
+            valueColor="#047857"
+          />
+        )}
         {wo.isPrivate && (
           <InfoRow
             stacked

@@ -184,7 +184,7 @@ export function WoCard(p: WoCardProps) {
       : doneTone === "gray"
         ? "bg-(--bg-soft) text-(--ink-soft) ring-(--line)"
         : "bg-[color-mix(in_srgb,var(--brand-green)_14%,var(--mix-paper,white))] text-[var(--brand-green-dark)] ring-transparent";
-  const showMetaRow = (open && !p.autoCreated) || p.pendingDue > 0 || p.commentCount > 0 || unreadComments > 0 || !!p.score || !!p.stickers;
+  const showMetaRow = (open && !p.autoCreated) || p.pendingDue > 0 || p.commentCount > 0 || unreadComments > 0 || (!!p.score && p.score.kind !== "refunded") || !!p.stickers;
 
   return (
     <Link
@@ -275,21 +275,20 @@ export function WoCard(p: WoCardProps) {
             )}
             {/* ไม่มีป้ายความสำคัญ (ปิดแล้ว/ใบอัตโนมัติ) ก็ยังชิดขวาเหมือนเดิม */}
             {p.stickers && <span className={open && !p.autoCreated ? "" : "ml-auto"}>{p.stickers}</span>}
-            {p.score && (
+            {/* คืนคะแนนแล้ว ไม่โชว์บนการ์ด — ดูในหน้ารายละเอียดใบงาน (ผู้ใช้ 27/11/2569 แบบการ์ดงาน) */}
+            {p.score && p.score.kind !== "refunded" && (
               <span
                 data-testid="wo-score-chip"
                 title={
                   p.score.kind === "docked"
                     ? `โดนหักคะแนน ${p.score.points} คะแนนแล้ว (เลยกำหนด)`
-                    : p.score.kind === "refunded"
-                      ? `คืนคะแนน ${p.score.points} คะแนนแล้ว · ไม่นับการหักครั้งนี้`
-                      : "ยกเว้นคะแนนใบนี้ · เลยกำหนดก็ไม่หัก แต่ยังต้องทำและปิดงานตามปกติ"
+                    : "ยกเว้นคะแนนใบนี้ · เลยกำหนดก็ไม่หัก แต่ยังต้องทำและปิดงานตามปกติ"
                 }
                 className={`inline-flex h-4 shrink-0 items-center whitespace-nowrap rounded-md px-1.5 text-[10px] font-semibold ring-1 ring-inset ${
                   p.score.kind === "docked" ? "bg-red-50 text-red-700 ring-red-200" : "bg-emerald-50 text-emerald-700 ring-emerald-200"
                 }`}
               >
-                {p.score.kind === "docked" ? `−${p.score.points}` : p.score.kind === "refunded" ? `คืน +${p.score.points}` : "ยกเว้นคะแนน"}
+                {p.score.kind === "docked" ? `−${p.score.points}` : "ยกเว้นคะแนน"}
               </span>
             )}
             {p.pendingDue > 0 && !p.pendingDueWaitsMe && (

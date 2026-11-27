@@ -841,8 +841,13 @@ export function WorkOrderBoard({
      */
     no_expense: visible
       .filter((w) => w.status === "completed" && w.reviewState !== "pending" && w.requiresExpense && !w.hasExpense)
-      // ครบกำหนดบันทึกใกล้สุดขึ้นก่อน (ใบที่ไม่มีกำหนดคงลำดับเดิม)
-      .sort((a, b) => (a.expenseDeadlineIso && b.expenseDeadlineIso ? a.expenseDeadlineIso.localeCompare(b.expenseDeadlineIso) : 0)),
+      // ครบกำหนดบันทึกใกล้สุดขึ้นก่อน · ใบที่ไม่มีกำหนด (รอ PR/PO หรือใบเบิกจบ) ไปท้าย คงลำดับเดิมในกลุ่ม
+      // (เดิมคืน 0 เมื่อฝั่งใดไม่มีกำหนด ลำดับเลยไม่แน่นอน ใบรอ PR/PO แทรกกลาง — ผู้ใช้ 27/11/2569)
+      .sort((a, b) =>
+        a.expenseDeadlineIso && b.expenseDeadlineIso
+          ? a.expenseDeadlineIso.localeCompare(b.expenseDeadlineIso)
+          : Number(!a.expenseDeadlineIso) - Number(!b.expenseDeadlineIso)
+      ),
   };
   const columns: (typeof COLUMNS)[number][] = expenseFirst ? [...COLUMNS.filter((c) => c.key === "no_expense"), ...COLUMNS.filter((c) => c.key !== "no_expense")] : [...COLUMNS];
   // กรองบ้าน/คนอยู่ ไม่รู้ว่าใบที่ไม่ได้แสดงเข้าเงื่อนไขกี่ใบ — ตัวเลขนับเฉพาะที่เห็น ลิงก์ดูต่อยังอยู่
