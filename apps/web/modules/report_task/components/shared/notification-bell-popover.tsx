@@ -216,7 +216,8 @@ export function NotificationBellPopover() {
                     {/* report items แนบคนที่ทำมาด้วยเสมอ → โชว์ avatar จริง +
                         แบดจ์ไอคอนมุมล่าง maintenance ไม่มีคนแนบ → ใช้วงกลม
                         ไอคอนสีตาม category แทนทั้งดวง */}
-                    {n.module === "report" ? (
+                    {/* ไม่มีคนทำ (ระบบเตือนเอง เช่น ใกล้ครบกำหนด) → ใช้วงไอคอน ไม่ใช่ avatar "?" (ผู้ใช้ 27/11/2569) */}
+                    {n.module === "report" && actor ? (
                       <>
                         <Avatar>
                           <AvatarImage src={actor?.avatarUrl ?? undefined} alt={actor?.name ?? ""} />

@@ -148,7 +148,8 @@ export function NotificationsPageClient() {
         style={!n.read ? { backgroundColor: "color-mix(in srgb, var(--brand-green) 7%, transparent)" } : undefined}
       >
         <div className="relative shrink-0">
-          {n.module === "report" ? (
+          {/* ไม่มีคนทำ (ระบบเตือนเอง) → วงไอคอนแทน avatar "?" */}
+          {n.module === "report" && actor ? (
             <>
               <Avatar size="lg">
                 <AvatarImage src={actor?.avatarUrl ?? undefined} alt={actor?.name ?? ""} />
