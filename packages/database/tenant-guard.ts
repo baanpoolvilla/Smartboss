@@ -69,6 +69,8 @@ export const TENANT_SCOPED_MODELS = new Set<string>([
 export const DB_RLS_PROTECTED_MODELS = new Set<string>([
   // salary (การเงินพนักงาน)
   "SalarySettings", "SalaryRate", "SalaryItem", "SalaryEmployeeItem", "SalaryProfile", "SalaryRun", "SalaryRunLine", "SalaryEvent",
+  // สมุดเงินสะสม (20/11/2569) — RLS FORCE อยู่แล้ว (migration 20261120140000) แค่ลืมลงรายการนี้ (เจอจากเทสต์ 27/11/2569)
+  "SalarySavingsEntry",
   // daily_worker (คนงานรายวัน)
   "DailyWorkerPayment", "DailyWorkerPayRate", "DailyWorkerTimeEdit", "DailyWorkerSettings", "DailyWorkerAuditEvent",
   // requests — เงินสดย่อย
