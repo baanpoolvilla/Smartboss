@@ -189,6 +189,8 @@ const ACTION_LABEL: Record<string, string> = {
   "device.activate": "เปิดใช้เครื่องสแกน",
   "device.activation-token.issue": "ออกรหัสเปิดใช้เครื่องสแกน",
   "device.clock.anomaly": "เวลาในเครื่องสแกนเพี้ยน",
+  "device.command.ack": "เครื่องสแกนทำคำสั่งสำเร็จ",
+  "device.command.fail": "เครื่องสแกนทำคำสั่งไม่สำเร็จ",
   "device.credential.revoke": "ยกเลิกสิทธิ์เครื่องสแกน",
   "device.provision": "เพิ่มเครื่องสแกน",
   "leave.balance.grant": "เพิ่มวันลาให้",
