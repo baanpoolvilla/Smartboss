@@ -1217,7 +1217,7 @@ export async function setDayOffQuotaAction(
   // ใครตั้งวันหยุดรายเดือนของใคร เดิม→ใหม่ → Log การบันทึกระบบบุคคล (ผู้ใช้ 27/11/2569) · เก็บไม่ได้ไม่ให้การบันทึกล้ม
   const logQuota = async (detail: Record<string, unknown>) => {
     try {
-      await audit({ userId: session.userId, action: "DAY_OFF_QUOTA_UPDATED", detail: { employmentId, ...detail } });
+      await audit({ userId: session.userId, action: "DAY_OFF_QUOTA_UPDATED", detail: { orgId: session.orgId, employmentId, ...detail } });
     } catch (error) {
       console.error("[day-off-quota] log", error);
     }

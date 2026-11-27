@@ -293,12 +293,17 @@ function quotaText(v: unknown): string | null {
 
 async function loadCore(orgId: string, q: ChangeLogQuery): Promise<{ entries: ChangeEntry[]; empIds: string[] }> {
   const users = await prisma.user.findMany({ where: { orgId }, select: { id: true, name: true } });
-  const nameById = new Map(users.map((u) => [u.id, u.name]));
+  // ผู้ดูแลระบบสูงสุดไม่สังกัดบริษัท — รายการที่ระบุบริษัทไว้ใน detail.orgId (ของใหม่ตั้งแต่ 27/11/2569) ยังขึ้น
+  const platform = await prisma.user.findMany({ where: { orgId: null }, select: { id: true, name: true } });
+  const nameById = new Map([...users, ...platform].map((u) => [u.id, u.name]));
   const logs = await prisma.auditLog.findMany({
     where: {
-      userId: { in: users.map((u) => u.id) },
       action: { in: [...Object.keys(CORE_ACTIONS), "DAY_OFF_QUOTA_UPDATED", "USER_DISABLED", "USER_UPDATED"] },
       createdAt: { gte: q.from, lt: q.to },
+      OR: [
+        { userId: { in: users.map((u) => u.id) } },
+        { userId: { in: platform.map((u) => u.id) }, detail: { path: ["orgId"], equals: orgId } },
+      ],
     },
     orderBy: { createdAt: "desc" },
     take: PER_SOURCE,

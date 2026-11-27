@@ -42,7 +42,7 @@ describe.skipIf(!RUN)("Log การบันทึกระบบบุคค�
     // วันหยุดรายเดือน — เรียก action จริงด้วย session ปลอมไม่ได้ จึงเขียน audit แบบเดียวกับ action แล้วดูว่าหน้า log อ่านออก
     const ceo = await prisma.user.findFirstOrThrow({ where: { orgId: ORG, roles: { some: { role: { code: "CEO" } } } }, select: { id: true } });
     const emp = entries.find((e) => e.target && !e.target.id.startsWith("user:"))!.target!;
-    const row = await prisma.auditLog.create({ data: { userId: ceo.id, action: "DAY_OFF_QUOTA_UPDATED", detail: { employmentId: emp.id, kind: "month", month: "2031-01", leaveTypeId: null, before: -1, after: 6, note: "เทส" } } });
+    const row = await prisma.auditLog.create({ data: { userId: ceo.id, action: "DAY_OFF_QUOTA_UPDATED", detail: { orgId: ORG, employmentId: emp.id, kind: "month", month: "2031-01", leaveTypeId: null, before: -1, after: 6, note: "เทส" } } });
     try {
       const again = await loadChangeLog(ORG, { from: new Date(Date.now() - 60_000), to: new Date(Date.now() + 60_000), includeCheckins: false });
       const hit = again.entries.find((e) => e.id === `core:${row.id}`);

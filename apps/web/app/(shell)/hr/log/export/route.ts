@@ -37,7 +37,7 @@ export async function GET(req: Request) {
         .join(","),
     ),
   ];
-  await audit({ userId: session.userId, action: "HR_LOG_EXPORTED", detail: { from: p.fromYmd, to: p.toYmd, rows: rows.length } });
+  await audit({ userId: session.userId, action: "HR_LOG_EXPORTED", detail: { orgId: session.orgId, from: p.fromYmd, to: p.toYmd, rows: rows.length } });
   return new NextResponse(`﻿${lines.join("\r\n")}`, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
