@@ -300,7 +300,7 @@ export async function editLine(
     }
     const next = change({ adjustments: (line.adjustments as unknown as Adjustment[]) ?? [], info: line.info as unknown as LineInfo });
     await tx.salaryRunLine.update({ where: { id: line.id }, data: { adjustments: next.adjustments as unknown as object, info: next.info as unknown as object } });
-    await insertEvent(tx, orgId, { runId: input.runId, byUserId: actor.userId, byName: actor.name, action: "adjust", summary: `${line.name}: ${next.summary}` });
+    await insertEvent(tx, orgId, { runId: input.runId, byUserId: actor.userId, byName: actor.name, action: "adjust", summary: `${line.name}: ${next.summary}`, detail: { employmentId: input.employmentId } });
   });
   await computeRun(orgId, input.runId, actor);
 }
@@ -515,7 +515,7 @@ export async function setExcluded(orgId: string, actor: Actor, runId: string, em
     const name = line?.name ?? before.find((x) => x.employmentId === employmentId)?.name ?? "พนักงาน";
     if (exclude) list.push({ employmentId, name, reason, byName: actor.name, at: new Date().toISOString() });
     await tx.salaryRun.update({ where: { id: runId }, data: { excluded: list as unknown as object } });
-    await insertEvent(tx, orgId, { runId, byUserId: actor.userId, byName: actor.name, action: "adjust", summary: exclude ? `${name}: ไม่จ่ายงวดนี้ · ${reason}` : `${name}: กลับมาจ่ายงวดนี้` });
+    await insertEvent(tx, orgId, { runId, byUserId: actor.userId, byName: actor.name, action: "adjust", summary: exclude ? `${name}: ไม่จ่ายงวดนี้ · ${reason}` : `${name}: กลับมาจ่ายงวดนี้`, detail: { employmentId } });
   });
   await computeRun(orgId, runId, actor);
 }

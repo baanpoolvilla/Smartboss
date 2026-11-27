@@ -4,7 +4,8 @@ import { RateSaveError, saveCompensationRate } from "@/modules/salary/lib/rate-s
 import { actorOf } from "@/modules/salary/lib/page";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireOrg, hasPermission } from "@smartboss/auth";
+import { audit, requireOrg, hasPermission } from "@smartboss/auth";
+import { prisma as corePrisma } from "@smartboss/database";
 import { HR_PERMS } from "@/modules/hr/permissions";
 import { REQ_PERMS } from "@/modules/requests/permissions";
 import { canSeeYearlyEntitlements } from "@/modules/hr/lib/yearly-entitlement-access";
@@ -1213,8 +1214,20 @@ export async function setDayOffQuotaAction(
   if (!employmentId) return { error: "กรุณาเลือกพนักงาน" };
 
   // ค่าประจำของคน (ระบบเดิม) ตั้งใหม่ไม่ได้แล้ว — เหลือแต่ล้างทิ้ง ให้กลับไปใช้ค่าของประเภท
+  // ใครตั้งวันหยุดรายเดือนของใคร เดิม→ใหม่ → Log การบันทึกระบบบุคคล (ผู้ใช้ 27/11/2569) · เก็บไม่ได้ไม่ให้การบันทึกล้ม
+  const logQuota = async (detail: Record<string, unknown>) => {
+    try {
+      await audit({ userId: session.userId, action: "DAY_OFF_QUOTA_UPDATED", detail: { employmentId, ...detail } });
+    } catch (error) {
+      console.error("[day-off-quota] log", error);
+    }
+  };
+  const quotaBefore = async (month: string, leaveTypeId: string) =>
+    (await corePrisma.employeeDayOffQuota.findFirst({ where: { orgId: session.orgId, employmentId, month, leaveTypeId }, select: { daysPerMonth: true } }))?.daysPerMonth ?? null;
+
   if (formData.get("scope") === "standing") {
     await clearEmployeeDayOffStanding(session.orgId, employmentId);
+    await logQuota({ kind: "standing_cleared" });
     revalidatePath(`/hr/employees/${employmentId}`);
     return { ok: true, cleared: true, scope: "standing" };
   }
@@ -1227,7 +1240,9 @@ export async function setDayOffQuotaAction(
 
   // ปุ่ม "กลับไปใช้ N วัน" = ล้างของเดือนนี้ ไม่สนค่าที่ค้างอยู่ในช่อง
   if (formData.get("reset") === "1") {
+    const was = await quotaBefore(month, leaveTypeId);
     await saveDayOffQuota(session.orgId, employmentId, month, leaveTypeId, null, "", session.userId);
+    await logQuota({ kind: "month", month, leaveTypeId, before: was, after: null });
     revalidatePath(`/hr/employees/${employmentId}`);
     return { ok: true, cleared: true, scope: "month" };
   }
@@ -1238,7 +1253,9 @@ export async function setDayOffQuotaAction(
     return { error: `จำนวนวันต้องเป็นจำนวนเต็ม ${DAYS_OFF_LIMITS.min}–${DAYS_OFF_LIMITS.max} วัน` };
   }
 
+  const was = await quotaBefore(month, leaveTypeId);
   await saveDayOffQuota(session.orgId, employmentId, month, leaveTypeId, days, note, session.userId);
+  await logQuota({ kind: "month", month, leaveTypeId, before: was, after: days, note });
   revalidatePath(`/hr/employees/${employmentId}`);
   return { ok: true, daysPerMonth: days, scope: "month" };
 }

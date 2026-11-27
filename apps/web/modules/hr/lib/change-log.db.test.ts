@@ -29,6 +29,31 @@ describe.skipIf(!RUN)("Log การบันทึกระบบบุคค�
     expect(withCheckins.entries.length).toBeGreaterThanOrEqual(entries.length);
   }, 60_000);
 
+  it("ครบทุกแหล่ง: คำร้องแก้คะแนน · เบิกจ่ายขึ้นชื่อพนักงาน · วันหยุดรายเดือนบันทึกแล้วขึ้น (แล้วคืนค่าเดิม)", async () => {
+    const { prisma } = await import("@smartboss/database");
+    const { loadChangeLog } = await import("./change-log");
+    const to = new Date(Date.now() + 86_400_000);
+    const from = new Date(Date.now() - 365 * 86_400_000);
+    const { entries } = await loadChangeLog(ORG, { from, to, includeCheckins: false });
+    const money = entries.filter((e) => e.id.startsWith("req:") && e.category !== "settings");
+    console.log("money rows", money.length, "with employee", money.filter((e) => e.target).length, "score rows", entries.filter((e) => e.id.startsWith("score:")).length);
+    expect(money.filter((e) => e.target).length).toBeGreaterThan(0);
+
+    // วันหยุดรายเดือน — เรียก action จริงด้วย session ปลอมไม่ได้ จึงเขียน audit แบบเดียวกับ action แล้วดูว่าหน้า log อ่านออก
+    const ceo = await prisma.user.findFirstOrThrow({ where: { orgId: ORG, roles: { some: { role: { code: "CEO" } } } }, select: { id: true } });
+    const emp = entries.find((e) => e.target && !e.target.id.startsWith("user:"))!.target!;
+    const row = await prisma.auditLog.create({ data: { userId: ceo.id, action: "DAY_OFF_QUOTA_UPDATED", detail: { employmentId: emp.id, kind: "month", month: "2031-01", leaveTypeId: null, before: -1, after: 6, note: "เทส" } } });
+    try {
+      const again = await loadChangeLog(ORG, { from: new Date(Date.now() - 60_000), to: new Date(Date.now() + 60_000), includeCheckins: false });
+      const hit = again.entries.find((e) => e.id === `core:${row.id}`);
+      expect(hit?.category).toBe("leave");
+      expect(hit?.target?.name).toBe(emp.name);
+      expect(hit?.details).toEqual([{ label: "วันต่อเดือน", before: "ตามค่าของประเภท", after: "6 วัน" }]);
+    } finally {
+      await prisma.auditLog.delete({ where: { id: row.id } });
+    }
+  }, 60_000);
+
   it("เปลี่ยนวิธีคิดค่าคอม → ขึ้นใน log หมวดค่าคอม เดิม→ใหม่ (แล้วคืนค่าเดิม)", async () => {
     const { prisma } = await import("@smartboss/database");
     const { saveCommissionMethod } = await import("./commission-data");
